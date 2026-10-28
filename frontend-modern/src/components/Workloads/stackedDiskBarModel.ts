@@ -322,13 +322,19 @@ export function buildStackedDiskBarPresentation(
     disks.length > 0
       ? (containerWidth - INLINE_DISK_SLOT_GAP_PX * (disks.length - 1)) / disks.length
       : 0;
-  const totalCapacity = hasDisks
+  // The producer owns aggregate capacity (including device-alias admission).
+  // Mount rows are a breakdown, not an independently additive inventory.
+  // Keep their observations for severity/tooltips and the explicit max mode;
+  // only fall back to summing measured rows when no usable aggregate exists.
+  const useAggregateSummary = !unavailable && aggregateMode && hasAggregateUsage;
+  const summarizeDisks = hasDisks && !useAggregateSummary;
+  const totalCapacity = summarizeDisks
     ? disks.reduce((sum, disk) => sum + (disk.total || 0), 0)
     : (aggregateDisk?.total ?? 0);
-  const totalUsed = hasDisks
+  const totalUsed = summarizeDisks
     ? disks.reduce((sum, disk) => sum + (disk.used || 0), 0)
     : (aggregateDisk?.used ?? 0);
-  const overallPercent = hasDisks
+  const overallPercent = summarizeDisks
     ? (totalUsed / totalCapacity) * 100
     : unavailable
       ? 0
@@ -354,7 +360,7 @@ export function buildStackedDiskBarPresentation(
     !Number.isFinite(totalUsed) ||
     !Number.isFinite(totalCapacity) ||
     totalCapacity <= 0 ||
-    (!hasDisks &&
+    (!summarizeDisks &&
       !(
         typeof aggregateDisk?.used === 'number' &&
         Number.isFinite(aggregateDisk.used) &&

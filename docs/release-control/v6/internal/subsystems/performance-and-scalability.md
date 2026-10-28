@@ -4586,3 +4586,17 @@ The reserve derives from the full keyed measured-height map plus table chrome,
 not a DOM height sampled while a window retires. Offscreen detail measurements
 remain in that map until the owning item is remeasured or removed, so a transient
 DOM extent cannot lower the reserve before its compensating spacer settles.
+
+### Workloads aggregate disk summaries do not re-sum device aliases
+
+Compact aggregate bars consume a usable producer aggregate for utilization and
+byte totals, without duplicating the capacity of aliases retained in the mount
+breakdown. Source-owned freshness, unknown readings, per-mount severity and
+explicit maximum summaries keep their existing semantics. Other rendering modes
+retain their geometry. Percentage-only aggregates cannot borrow mount bytes;
+missing/invalid aggregates retain measured-row fallback. The normal
+`StackedDiskBar.test.tsx` suite covers aliases, reorder, zero, fallback,
+percentage-only evidence, severity and live current/retained/unavailable changes.
+Desktop/narrow consuming proof uses production poll/broadcast frames through
+canonical resource and Workloads projection. No collection, query, resource
+identity, read cadence or native guest operation changes.

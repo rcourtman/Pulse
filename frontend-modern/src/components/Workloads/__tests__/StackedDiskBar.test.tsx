@@ -15,6 +15,7 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 }
 
 import { StackedDiskBar } from '../StackedDiskBar';
+import { buildStackedDiskBarPresentation } from '../stackedDiskBarModel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -694,5 +695,136 @@ describe('reactive disk reading decorations', () => {
     expect(getSingleBarFill(container)).toHaveAttribute('width', '0');
     expect(getSingleBarFill(container)).toHaveAttribute('fill', 'rgba(34, 197, 94, 0.6)');
     fireEvent.mouseLeave(getBarTrigger(container));
+  });
+});
+
+const mounts = (): Disk[] => [
+  { mountpoint: '/', device: '/dev/vda1', total: 1000, used: 200, usage: 20 },
+  { mountpoint: '/var/lib/containers', device: '/dev/vdb1', total: 9000, used: 8820, usage: 98 },
+  { mountpoint: '/data-alias', device: '/dev/vdb1', total: 9000, used: 6000, usage: 66.67 },
+];
+const aggregate = (): Disk => ({ total: 10_000, used: 9020, usage: 90.2 });
+const present = (aggregateDisk: Disk | undefined, disks = mounts()) =>
+  buildStackedDiskBarPresentation({ disks, aggregateDisk, mode: 'aggregate' }, 400);
+
+describe('source-owned aggregate disk summary', () => {
+  it.each([false, true])(
+    'uses the supplied aggregate without recounting aliases (reorder=%s)',
+    (reverse) => {
+      const disks = reverse ? mounts().reverse() : mounts();
+      const p = present(aggregate(), disks);
+      expect(p.displayPercentValue).toBe(90.2);
+      expect(p.barPercent).toBe(90.2);
+      expect(p.displaySublabel).toBe('8.81 KB/9.77 KB');
+      expect(p.barColor).toBe('rgba(239, 68, 68, 0.6)');
+      expect(p.tooltipContent.map((row) => row.label)).toEqual(
+        disks.map((disk) => disk.mountpoint),
+      );
+      expect(p.tooltipContent.find((row) => row.label === '/var/lib/containers')?.percent).toBe(
+        '98%',
+      );
+      expect(disks).toEqual(reverse ? mounts().reverse() : mounts());
+    },
+  );
+
+  it('preserves source zero rather than counting retained mount readings', () => {
+    expect(present({ total: 10_000, used: 0, usage: 0 }).displayPercentValue).toBe(0);
+    expect(present({ total: 10_000, used: 0, usage: 0 }).displaySublabel).toBe('0 B/9.77 KB');
+    expect(present({ total: 10_000, used: 200, usage: 2 }).displayPercentValue).toBe(2);
+  });
+
+  it.each([undefined, { total: 10_000 }, { total: 10_000, usage: -1 }, { usage: NaN }])(
+    'falls back to measured rows when the aggregate has no usable usage (%j)',
+    (value) => {
+      const p = present(value);
+      expect(p.displayPercentValue).toBeCloseTo((15_020 / 19_000) * 100);
+      expect(p.displaySublabel).toBe('14.7 KB/18.6 KB');
+    },
+  );
+
+  it.each([{ usage: 0.5 }, { total: Infinity, used: 50, usage: 50 }, { total: 100, usage: 25 }])(
+    'preserves independent aggregate percentages without borrowing mount bytes (%j)',
+    (value) => {
+      const p = present(value);
+      expect(p.displayPercentValue).toBe(value.usage);
+      expect(p.displaySublabel).toBe('');
+      expect(p.showSublabel).toBe(false);
+      expect(p.tooltipContent).toHaveLength(3);
+    },
+  );
+
+  it('retains max summary, per-filesystem colours and non-aggregate geometry', () => {
+    const props = { disks: mounts(), aggregateDisk: aggregate() };
+    const max = buildStackedDiskBarPresentation(
+      { ...props, mode: 'aggregate', summaryStrategy: 'max' },
+      400,
+    );
+    expect(max.displayPercentValue).toBe(98);
+    expect(max.displaySublabel).toBe('');
+    expect(max.maxLabelFull).toBe('Highest usage: /var/lib/containers 98%');
+    for (const mode of ['stacked', 'mini', 'vertical-bars'] as const) {
+      expect(buildStackedDiskBarPresentation({ ...props, mode }, 400)).toEqual(
+        buildStackedDiskBarPresentation({ disks: mounts(), mode }, 400),
+      );
+    }
+  });
+
+  it('does not confer freshness or usable bytes on unknown filesystems', () => {
+    const disks = mounts().map((disk) => ({ ...disk, usage: -1 }));
+    const retained = buildStackedDiskBarPresentation(
+      {
+        disks,
+        aggregateDisk: aggregate(),
+        mode: 'aggregate',
+        reading: { state: 'last-known', message: 'Retained, not live' },
+      },
+      400,
+    );
+    expect(retained.displayPercentValue).toBe(90.2);
+    expect(retained.barColor).toBe('rgba(148, 163, 184, 0.5)');
+    expect(retained.tooltipTitle).toBe('Last known disk breakdown');
+    expect(retained.tooltipContent.every((row) => row.used === '?' && row.percent === '—')).toBe(
+      true,
+    );
+    const missing = buildStackedDiskBarPresentation(
+      { disks, aggregateDisk: { total: 10_000 }, mode: 'aggregate' },
+      400,
+    );
+    expect(missing.displayLabel).toBe('N/A');
+  });
+
+  it('updates the mounted bar and open mount breakdown through source replacements', async () => {
+    const [disk, setDisk] = createSignal(aggregate());
+    const [disks, setDisks] = createSignal(mounts());
+    const [state, setState] = createSignal<'current' | 'last-known' | 'unavailable'>('current');
+    const { container } = render(() => (
+      <StackedDiskBar
+        mode="aggregate"
+        aggregateDisk={disk()}
+        disks={disks()}
+        reading={{ state: state(), message: null }}
+      />
+    ));
+    const shell = container.firstElementChild;
+    const fill = () => container.querySelector('[data-stacked-disk-fill="single"]');
+    expect(fill()).toHaveAttribute('width', '90.2');
+    await fireEvent.mouseEnter(container.querySelector('[data-stacked-disk-trigger]')!);
+    expect(await screen.findByText('/var/lib/containers')).toBeVisible();
+    expect(screen.getByText('/data-alias')).toBeVisible();
+    expect(screen.getByText('98%')).toBeVisible();
+    setDisks(mounts().reverse());
+    expect(fill()).toHaveAttribute('width', '90.2');
+    setDisk({ total: 10_000, used: 200, usage: 2 });
+    expect(fill()).toHaveAttribute('width', '2');
+    setState('last-known');
+    expect(fill()).toHaveAttribute('fill', 'rgba(148, 163, 184, 0.5)');
+    setState('unavailable');
+    expect(container.querySelector('[data-stacked-disk-unavailable]')).toHaveTextContent('N/A');
+    expect(fill()).toBeNull();
+    setState('current');
+    setDisk({ total: 10_000, used: 0, usage: 0 });
+    expect(fill()).toHaveAttribute('width', '0');
+    expect(container.firstElementChild).toBe(shell);
+    expect(screen.getByText('/data-alias')).toBeVisible();
   });
 });
