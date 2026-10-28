@@ -195,7 +195,9 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                 </span>
               </Show>
             </div>
-            <Show when={props.table.onToggleGlobalDisable}>
+            <Show
+              when={props.table.showAlertsColumn !== false && props.table.onToggleGlobalDisable}
+            >
               <TogglePrimitive
                 size="sm"
                 checked={!props.table.globalDisableFlag?.()}
@@ -334,7 +336,9 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
             >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3 min-w-0">
-                  <Show when={props.table.onToggleDisabled}>
+                  <Show
+                    when={props.table.showAlertsColumn !== false && props.table.onToggleDisabled}
+                  >
                     <div class="shrink-0 scale-90 origin-left">
                       <TogglePrimitive
                         size="sm"

@@ -70,7 +70,8 @@ interface AlertResourceTableDesktopProps {
 export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps) {
   const totalColumnCount = () =>
     props.table.columns.length +
-    3 +
+    2 +
+    (props.table.showAlertsColumn === false ? 0 : 1) +
     (props.table.showOfflineAlertsColumn ? 1 : 0) +
     (props.table.onBulkEdit ? 1 : 0);
 
@@ -152,6 +153,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
       onSaveEdit={props.table.onSaveEdit}
       onCancelEdit={props.table.onCancelEdit}
       onRemoveOverride={props.table.onRemoveOverride}
+      showAlertsColumn={props.table.showAlertsColumn}
       onToggleDisabled={props.table.onToggleDisabled}
       onToggleNodeConnectivity={props.table.onToggleNodeConnectivity}
       showOfflineAlertsColumn={props.table.showOfflineAlertsColumn}
@@ -199,9 +201,11 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                 />
               </TableHead>
             </Show>
-            <TableHead class={`${getPlatformTableHeadClassForKind('badge')} w-16`}>
-              Alerts
-            </TableHead>
+            <Show when={props.table.showAlertsColumn !== false}>
+              <TableHead class={`${getPlatformTableHeadClassForKind('badge')} w-16`}>
+                Alerts
+              </TableHead>
+            </Show>
             <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-1/4`}>
               Resource
             </TableHead>
@@ -245,30 +249,32 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   class={`${getPlatformTableCellClassForKind('badge')} border-r border-border`}
                 />
               </Show>
-              <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
-                <Show
-                  when={props.table.onToggleGlobalDisable}
-                  fallback={
-                    <span class="text-sm text-slate-400" aria-hidden="true">
-                      -
-                    </span>
-                  }
-                >
-                  <div class="flex items-center justify-center">
-                    <TogglePrimitive
-                      size="sm"
-                      checked={!props.table.globalDisableFlag?.()}
-                      onToggle={() => {
-                        props.table.onToggleGlobalDisable?.();
-                        props.table.setHasUnsavedChanges?.(true);
-                      }}
-                      class="-my-0.5"
-                      title="Global alerts toggle - disable all alerts for this resource type"
-                      ariaLabel="Global alerts toggle"
-                    />
-                  </div>
-                </Show>
-              </TableCell>
+              <Show when={props.table.showAlertsColumn !== false}>
+                <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
+                  <Show
+                    when={props.table.onToggleGlobalDisable}
+                    fallback={
+                      <span class="text-sm text-slate-400" aria-hidden="true">
+                        -
+                      </span>
+                    }
+                  >
+                    <div class="flex items-center justify-center">
+                      <TogglePrimitive
+                        size="sm"
+                        checked={!props.table.globalDisableFlag?.()}
+                        onToggle={() => {
+                          props.table.onToggleGlobalDisable?.();
+                          props.table.setHasUnsavedChanges?.(true);
+                        }}
+                        class="-my-0.5"
+                        title="Global alerts toggle - disable all alerts for this resource type"
+                        ariaLabel="Global alerts toggle"
+                      />
+                    </div>
+                  </Show>
+                </TableCell>
+              </Show>
               <TableCell class={getPlatformTableCellClassForKind('name')}>
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-semibold text-base-content">Global Defaults</span>
@@ -431,11 +437,13 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   class={`${getPlatformTableCellClassForKind('badge')} border-r border-border`}
                 />
               </Show>
-              <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
-                <span class="text-sm" aria-hidden="true">
-                  -
-                </span>
-              </TableCell>
+              <Show when={props.table.showAlertsColumn !== false}>
+                <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
+                  <span class="text-sm" aria-hidden="true">
+                    -
+                  </span>
+                </TableCell>
+              </Show>
               <TableCell class={`${getPlatformTableCellClassForKind('name')} align-middle`}>
                 <span class="text-xs font-semibold uppercase tracking-wide text-muted inline-flex items-center gap-1">
                   {getAlertResourceTableAlertDelayLabel()}

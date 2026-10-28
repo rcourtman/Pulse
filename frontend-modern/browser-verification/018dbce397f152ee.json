@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "14312fb645d202891b24f29beeb0f58843a0d037",
+  "verified_at": "2026-10-28T10:23:25.929866Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "24f2c986f757933f58013674a463ebee68d9d0c55cdbc446eeedf08428b70882",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "530b33a33a803335e75843c4e668165b9e05aaa348a339a2a067538547367af5",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "6ac7e1539fff3843387b7b3f2dd477197d160ab7048f8a5e670a2ceec45fa797",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx": "73506ac4371b9642c6e98ad6e179bc6c05569cd3da448e86f605bb5120c3f4a2",
+    "frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx": "1751bc98c34da257fd7685093fa10f2072f4a60cc54b8db68278bd4213945a91"
+  },
+  "routes": [
+    "/alerts/thresholds/docker",
+    "/alerts/thresholds/systems"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Exact assigned-main baseline reproduces inert runtime Alerts buttons on desktop Chromium and phone WebKit: On remains and neither dirty state nor a configuration write appears. Separate Offline Alerts already has a Disabled runtime.",
+    "Candidate connectivity-only runtime table has no all-alerts switches, empty Alerts column or metric bulk selection. Visible guidance distinguishes runtime disconnects from container/machine alerts and admits the absent single-runtime child mute.",
+    "Production projection, mutation, payload building, API client and save/reload consumer run against a local synthetic backend. Only selected runtime connectivity changes; the other runtime, same-named containers and existing machine CPU limit stay independent.",
+    "Existing per-container and machine alert buttons remain usable. Saving/reloading one container does not mute its namesake; inventory replacement and a newly added container do not inherit a mute. Machine save preserves 77 trigger / 72 clear hysteresis.",
+    "Six final captures inspected through native view_image with image content: light desktop, dark 390px and 320px. Runtime guidance wraps, Offline Alerts remains available and no page overflow occurs. Existing narrow machine-name ellipsis is not changed or claimed repaired."
+  ],
+  "interactions": [
+    "62 candidate checks and 10 completed baseline checks; keyboard Enter on the runtime Offline Alerts button; real Save Changes requests, reload, scoped search, inventory replacement/addition, platform navigation and independent machine button.",
+    "All network traffic remains on the local fixture origin. Candidate passes with no page errors or unmatched/off-origin requests. Existing destinations save calls remain synthetic and do not send notifications.",
+    "Playwright 1.56.1 matches tests/integration/package-lock.json. Final attempt6 freshly verifies the punctuation-corrected source at14312fb645, with four fresh native pixel inspections. Attempt5 remains an intermediate pass on prior copy; four authored browser failures/two build preparation errors remain retained."
+  ],
+  "evidence": "RECEIPTS.md / BROWSER-RESULT.json / BROWSER-BASELINE.json / BROWSER-FINAL.tar.xz / PIXEL-REVIEW.json; source runtime copies match final parent. This is not backend alert evaluation, native installation, recipient delivery, publication or fulfilment of the broader #2107/#3432 child-suppression demand."
+}

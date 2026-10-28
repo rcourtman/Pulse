@@ -1105,6 +1105,86 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('offers only runtime connectivity, with honest scope and independent container/machine drafts', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const runtime = (id: string) => ({
+      id,
+      type: 'docker-host',
+      name: id,
+      displayName: id,
+      platformId: id,
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 123,
+    });
+    const container = (parentId: string) => ({
+      id: `${parentId}-web`,
+      parentId,
+      type: 'app-container',
+      name: 'web',
+      displayName: 'Web',
+      platformId: parentId,
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'running',
+      lastSeen: 123,
+      docker: { containerId: `${parentId}-container` },
+    });
+    const machineOverride = {
+      id: 'machine-a',
+      name: 'Machine A',
+      type: 'agent',
+      disabled: false,
+      thresholds: { cpu: 77 },
+    };
+    const [overrides, setOverrides] = createSignal<any[]>([machineOverride]);
+    const [rawOverridesConfig, setRawOverridesConfig] = createSignal<any>({
+      'machine-a': { cpu: 77 },
+    });
+    const setHasUnsavedChanges = vi.fn();
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        containerRuntimes={[runtime('runtime-a'), runtime('runtime-b')]}
+        allResources={[container('runtime-a'), container('runtime-b')]}
+        overrides={overrides}
+        setOverrides={setOverrides}
+        rawOverridesConfig={rawOverridesConfig}
+        setRawOverridesConfig={setRawOverridesConfig}
+        setHasUnsavedChanges={setHasUnsavedChanges}
+      />
+    ));
+    expect(screen.queryByTestId('toggle-disabled-runtime-a')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('toggle-disabled-runtime-b')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Offline Alerts only controls runtime-disconnection alerts/),
+    ).toHaveTextContent('not container or machine alerts');
+    expect(screen.getByText(/Newly added containers need their own setting/)).toHaveTextContent(
+      'no single-runtime mute',
+    );
+    expect(setHasUnsavedChanges).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByTestId('toggle-connectivity-runtime-a'));
+    expect(rawOverridesConfig()).toEqual({
+      'machine-a': { cpu: 77 },
+      'runtime-a': { disableConnectivity: true },
+    });
+    expect(overrides().find((entry) => entry.id === 'runtime-a')).toMatchObject({
+      type: 'dockerHost',
+      disableConnectivity: true,
+    });
+    expect(overrides().find((entry) => entry.id === 'runtime-a')?.disabled).not.toBe(true);
+    await fireEvent.click(screen.getByTestId('toggle-disabled-docker:runtime-a/web'));
+    expect(rawOverridesConfig()).toEqual({
+      'machine-a': { cpu: 77 },
+      'runtime-a': { disableConnectivity: true },
+      'docker:runtime-a/web': { disabled: true },
+    });
+    expect(overrides().find((entry) => entry.id === 'machine-a')).toEqual(machineOverride);
+    expect(overrides().some((entry) => entry.id.includes('runtime-b'))).toBe(false);
+    expect(screen.getByTestId('toggle-disabled-docker:runtime-b/web')).toBeInTheDocument();
+  });
+
   it('removes docker host offline alerts using legacy compatibility IDs', async () => {
     setPathname('/alerts/thresholds/containers');
     const removeAlerts = vi.fn();

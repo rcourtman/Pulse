@@ -20,6 +20,28 @@
 
 ## Purpose
 
+### Runtime alert controls describe only supported scope (28 October 2026)
+
+Container Runtime rows expose their existing Offline Alerts control, not an
+all-alerts switch or metric bulk editor that cannot mutate runtime settings.
+Visible guidance explains that connectivity settings do not mute container or
+machine alerts, and directs operators to existing per-container Alerts switches
+and saving; newly added containers need their own setting. No single-runtime
+child mute, inheritance, policy evaluation, persistence or machine-wide mute is
+introduced. Existing global-disabled connectivity precedence remains intact.
+
+The shared resource table can omit the Alerts column for this connectivity-only
+surface, including row, group, default, delay and empty-state column counts;
+other tables retain their existing controls by default. Phone cards honour the
+same choice. `ResourceTable.test.tsx` and `ThresholdsTable.test.tsx` verify the
+omitted controls, remaining connectivity action, independent container drafts
+and preserved machine/other-runtime settings. Desktop and narrow browser proof
+must join the real projection, mutation hooks and consuming table, not an Off
+label unsupported by the producer. This is truthful control presentation, not
+fulfilment of discussion #3432/#2107 whole-runtime-and-children demand, recipient
+proof, installed recovery or release availability.
+
+
 ### Coverage evidence remains inspectable without a pointer
 
 The bounded Coverage preview includes undated source/state witnesses and a

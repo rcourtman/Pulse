@@ -228,6 +228,87 @@ describe('ResourceTable', () => {
     vi.clearAllMocks();
   });
 
+  it.each([false, true])(
+    'omits unavailable all-alert controls but retains connectivity (mobile=%s)',
+    (mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const onToggleDisabled = vi.fn();
+      const onToggleNodeConnectivity = vi.fn();
+      render(() => (
+        <ResourceTable
+          {...makeProps({
+            resources: [
+              makeResource({
+                id: 'runtime-a',
+                name: 'Runtime A',
+                type: 'dockerHost',
+                editable: false,
+              }),
+            ],
+            columns: [],
+            showAlertsColumn: false,
+            showOfflineAlertsColumn: true,
+            onToggleDisabled,
+            onToggleNodeConnectivity,
+          })}
+        />
+      ));
+      expect(
+        screen.queryByRole('switch', { name: 'Alerts for Runtime A' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('columnheader', { name: 'Alerts' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Offline alerts for Runtime A: On' }));
+      expect(onToggleNodeConnectivity).toHaveBeenCalledWith('runtime-a');
+      expect(onToggleDisabled).not.toHaveBeenCalled();
+      if (!mobile) {
+        expect(screen.getAllByRole('columnheader')).toHaveLength(3);
+        expect(screen.getAllByRole('cell')).toHaveLength(3);
+      }
+    },
+  );
+
+  it('keeps grouped, default, delay and empty rows aligned without an Alerts column', () => {
+    const { unmount } = render(() => (
+      <ResourceTable
+        {...makeProps({
+          resources: undefined,
+          groupedResources: { runtimes: [makeResource()] },
+          columns: ['CPU %'],
+          showAlertsColumn: false,
+          showOfflineAlertsColumn: true,
+          globalDefaults: { cpu: 80 },
+          setGlobalDefaults: vi.fn(),
+          setHasUnsavedChanges: vi.fn(),
+          onToggleGlobalDisable: vi.fn(),
+          showDelayColumn: true,
+          onMetricDelayChange: vi.fn(),
+        })}
+      />
+    ));
+    expect(screen.queryByRole('switch', { name: 'Global alerts toggle' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+    fireEvent.click(screen.getByLabelText('Show alert delay settings'));
+    expect(screen.getByText('Alert Delay (s)')).toBeInTheDocument();
+    const group = screen.getByText('runtimes').closest('td');
+    expect(group).toHaveAttribute('colspan', '4');
+    for (const row of screen.getAllByRole('row').slice(1)) {
+      if (row.contains(group)) continue;
+      expect(row.querySelectorAll('td')).toHaveLength(4);
+    }
+    unmount();
+    render(() => (
+      <ResourceTable
+        {...makeProps({
+          resources: [],
+          columns: [],
+          showAlertsColumn: false,
+          showOfflineAlertsColumn: true,
+        })}
+      />
+    ));
+    for (const cell of screen.getAllByRole('cell')) expect(cell).toHaveAttribute('colspan', '3');
+  });
+
   describe('rendering basics', () => {
     it.each([false, true])(
       'keeps filesystem reading explanations visible and reactive (mobile=%s)',
