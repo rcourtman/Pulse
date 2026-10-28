@@ -83,6 +83,66 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+// The registered public fallback remains reachable behind the ordinary
+// authentication and licence gates, without an Enterprise endpoint binder.
+func TestContractRBACIntegrityQueryAdmission(t *testing.T) {
+	SetRBACAdminEndpointsBinder(nil)
+	t.Cleanup(func() { SetRBACAdminEndpointsBinder(nil) })
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+	rawToken := "integrity-query-contract-token.12345678"
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil))
+	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierEnterprise)
+	serve := func(query, token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/rbac/integrity?"+query, nil)
+		req.Header.Set("Accept", "application/json")
+		if token != "" {
+			req.Header.Set("X-API-Token", token)
+		}
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	for _, tt := range []struct {
+		name, query, code string
+		status            int
+	}{
+		{"damaged", "org_id=%zz", "invalid_query", http.StatusBadRequest},
+		{"repeated", "org_id=default&org_id=other", "invalid_query", http.StatusBadRequest},
+		{"blank", "org_id=", "invalid_org_id", http.StatusBadRequest},
+		{"foreign", "org_id=other", "access_denied", http.StatusForbidden},
+		{"omitted", "", "", http.StatusOK},
+		{"encoded", "org_%69d=%64efault", "", http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serve(tt.query, rawToken)
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.status, rec.Body.String())
+			}
+			if tt.code != "" {
+				var result APIError
+				if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil || result.Code != tt.code {
+					t.Fatalf("invalid error contract: %s", rec.Body.String())
+				}
+			} else {
+				var result RBACIntegrityResult
+				if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil || result.OrgID != "default" || !result.Healthy {
+					t.Fatalf("invalid integrity contract: %s", rec.Body.String())
+				}
+			}
+		})
+	}
+	if rec := serve("org_id=%zz", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated damaged query = %d, want 401", rec.Code)
+	}
+	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierFree)
+	if rec := serve("org_id=%zz", rawToken); rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("unlicensed damaged query = %d, want 402", rec.Code)
+	}
+}
+
 // Exercise the proof's real CLI, child execution and on-disk receipts without
 // running a latency workload. Only capacity telemetry and sampling delays are
 // synthetic; a malformed/failed child must never become a neutral budget result.

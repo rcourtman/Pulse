@@ -10591,3 +10591,13 @@ settings, certificate trust or authentication. The adjacent
 correct audit verdicts and unchanged saved secrets/local administrator recovery.
 Existing XML-parser failures keep their original categories; this evidence
 check only runs after that parser succeeds.
+
+### RBAC integrity query admission does not change agent authority
+
+The public integrity-check fallback rejects damaged or repeated `org_id`
+selections (`400 invalid_query`) and explicit blank identifiers
+(`400 invalid_org_id`) before verification. Omitted selection and existing
+org/authentication/licence boundaries remain. This changes no agent token,
+enrolment, credential or runtime operation. The API contract and
+`TestContractRBACIntegrityQueryAdmission` cover the registered fallback;
+`rbac_integrity_query_test.go` covers rejected and supported selections.

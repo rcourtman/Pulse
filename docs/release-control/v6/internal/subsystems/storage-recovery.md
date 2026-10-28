@@ -8219,3 +8219,14 @@ initial assessments, retry, deferred initial assessment, common filters/hash,
 replace-history semantics, explicit views and empty inventory. Browser proof
 must exercise the actual table, inventory parsers and posture client through a
 local safe producer at desktop and narrow widths, with native pixel inspection.
+
+### Damaged RBAC selections are not successful recovery evidence
+
+The existing RBAC integrity-check fallback rejects malformed query encoding,
+repeated decoded organisation selections and explicit blanks before manager
+initialization or an integrity verdict. The API contract and
+`TestContractRBACIntegrityQueryAdmission` bind the wire errors and unchanged
+authentication/licence gates; `rbac_integrity_query_test.go` checks rejected
+requests create no manager/files while omitted and valid scoped checks work.
+This changes no reset token, backup, guest operation, storage format or native
+recovery guarantee. Existing default-context compatibility stays intact.
