@@ -10674,8 +10674,8 @@ updates. This is safer evidence inspection, not a restore or installed recovery.
 
 The SSO provider card in `SSOProvidersPanel.tsx` separates each endpoint's
 label from its value with a definition-list entry. OIDC callbacks and enabled
-SAML metadata/ACS values wrap anywhere rather than truncating or imposing an
-18rem minimum on the card. The shared `CopyValueButton` remains a native,
+SAML metadata/ACS values wrap anywhere rather than truncating or forcing an
+unshrinkable inline URL row on the card. The shared `CopyValueButton` remains a native,
 keyboard-operable control with a preserved copy icon, a full-width 44px-tall
 narrow target, and the exact server-supplied value. Copying does not navigate,
 normalise or infer a URL. Existing missing-endpoint guidance, disabled-provider
