@@ -190,22 +190,11 @@ describe('Proxmox backups responsive table presentation', () => {
   });
 
   it('keeps the recovery-point answer visible before verbose metadata', () => {
-    expect(ids(getRecoverableColumns('compact'))).toEqual([
-      'workload',
-      'source',
-      'created',
-      'state',
-    ]);
-    expect(getRecoverableColumnWidthStyle('workload', 'compact')).toEqual({ width: '40%' });
-    expect(getRecoverableColumnWidthStyle('created', 'compact')).toEqual({ width: '21%' });
-    expect(getRecoverableColumnWidthStyle('state', 'compact')).toEqual({ width: '23%' });
-    expect(ids(getRecoverableColumns('basic'))).toEqual([
-      'workload',
-      'source',
-      'location',
-      'created',
-      'state',
-    ]);
+    expect(ids(getRecoverableColumns('compact'))).toEqual(['workload', 'created', 'state']);
+    expect(getRecoverableColumnWidthStyle('workload', 'compact')).toEqual({ width: '53%' });
+    expect(getRecoverableColumnWidthStyle('created', 'compact')).toEqual({ width: '22%' });
+    expect(getRecoverableColumnWidthStyle('state', 'compact')).toEqual({ width: '25%' });
+    expect(ids(getRecoverableColumns('basic'))).toEqual(['workload', 'created', 'state']);
     expect(ids(getRecoverableColumns('expanded'))).not.toContain('details');
     expect(ids(getRecoverableColumns('full'))).toHaveLength(9);
   });

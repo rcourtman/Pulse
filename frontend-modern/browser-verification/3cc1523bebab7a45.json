@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "6217a1e503291da9162217ea1d315eef3ac81452",
+  "verified_at": "2026-10-28T22:05:28.139242Z",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "10f154ee77fcc595949c1c4aec653ed4a818e5f9676865f5f51fb38c55812a36",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "479cdb2eb6284a01fbc058e829018e50c24b016175ba3ccb41e669bdd2427ab1"
+  },
+  "routes": [
+    "/proxmox/backups/date (offline canonical inventory client/parser and actual ProxmoxBackupsTable consumer, production CSS)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    },
+    {
+      "width": 600,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Namesake guests and reader connections; all three source kinds; explicit missing PVE scope and unmatched/host backup identities; future/unknown dates; terminal Failed; Unverified changing to Verified without inventing an age.",
+    "Below 720px full workload/type/ID, PVE scope, source kind, reader and repository wrap in the identity cell beside independent age/state. Wide metadata columns remain progressive. Current reader/location update the same open point without replacing focus or borrowing an owner."
+  ],
+  "interactions": [
+    "96 checks across desktop Chromium, 320px WebKit touch and 600px Chromium. Native Tab/Enter, row tap, one-point disclosure, dismissal/focus return, canonical refresh, local reader search and live open-record resize/colspan.",
+    "A 240-entry phone control remains bounded to 35 initially/36 at the tail; the final point is reachable and opens the correct identity. There are only 21 deliberate fixture GETs, no page/console errors or unexpected/off-origin/modifying requests. Three contexts, three browsers and the server close.",
+    "All six final captures were opened with native view_image at original detail; actual pixels confirm wrapped identity, fit of Unknown/state, and full live details. Finite animations finish naturally; no CSS or action force is used.",
+    "Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37 and WebKit 26.0. source-_b_p_gcj builds the production and consuming bundles; all 296 compiled modules and both manifests match this parent. Full types/lint and 1140 Proxmox passes plus the repaired static check remain separately source-bound in lane receipts. Earlier formatter/test/harness failures remain retained, not called product recovery or a whole-frontend/performance pass."
+  ],
+  "evidence": "Lane RECEIPTS.md, BROWSER-RESULT.json, PIXEL-REVIEW.json, source receipts and EXECUTION.tar.xz. Committed candidate only; no release or original backup/guest recovery claimed."
+}

@@ -263,14 +263,12 @@ export const RECOVERABLE_COLUMNS: readonly BackupTableColumn<RecoverableColumnId
 ];
 
 const RECOVERABLE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly RecoverableColumnId[]> = {
-  // A recovery-point feed starts with identity, source, location, age, and
-  // verification. Size and verbose details progressively return with usable
-  // room; the full values remain available through their title affordance.
-  // The phone projection keeps the source and state badges and the age whole;
-  // the repository location returns with the first wider layout and stays in
-  // the row's hover title meanwhile.
-  compact: ['workload', 'source', 'created', 'state'],
-  basic: ['workload', 'source', 'location', 'created', 'state'],
+  // Narrow restore-point rows group full workload/source/location identity in
+  // the first cell. Separate tiny columns hid namesake connections behind hover
+  // titles on touch devices. Age and state remain independent scan columns;
+  // size and provider identifiers stay progressive detail in the drawer.
+  compact: ['workload', 'created', 'state'],
+  basic: ['workload', 'created', 'state'],
   operational: ['workload', 'type', 'source', 'location', 'created', 'size', 'state'],
   expanded: ['workload', 'type', 'targetId', 'source', 'location', 'created', 'size', 'state'],
   full: RECOVERABLE_COLUMNS.map((column) => column.id),
@@ -280,11 +278,10 @@ const RECOVERABLE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<RecoverableColumnId, number>>
 > = {
-  // Unknown is a safety answer, not an abbreviated age: reserve room for
-  // the whole word alongside complete state badges (including Failed and
-  // Running). Identity remains on the canonical 40% anchor.
-  compact: { workload: 40, source: 16, created: 21, state: 23 },
-  basic: { workload: 28, source: 14, location: 23, created: 18, state: 17 },
+  // Grouping identity needs more room than a single name. Keep Unknown ages
+  // and full state words readable rather than trading one hidden fact for another.
+  compact: { workload: 53, created: 22, state: 25 },
+  basic: { workload: 58, created: 20, state: 22 },
   operational: {
     workload: 24,
     type: 8,
@@ -332,15 +329,6 @@ export const getRecoverableColumnWidthStyle = (
     columnId,
     RECOVERABLE_WEIGHTS[layout],
     RECOVERABLE_VISIBLE[layout],
-    layout === 'compact' || layout === 'basic'
-      ? {
-          columnId: 'workload',
-          widthPercent:
-            layout === 'compact'
-              ? PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT
-              : PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
-        }
-      : undefined,
   );
 
 export const isCompactBackupIdentityLayout = (layout: ProxmoxBackupsTableLayoutMode): boolean =>

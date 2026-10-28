@@ -8264,3 +8264,27 @@ invalid instants. Browser proof must inspect the actual consuming record at
 desktop and narrow widths, including UTC text, keyboard/touch disclosure and
 refresh/recovery with the open record preserved. This is evidence inspection,
 not original incident recovery.
+
+### Restore-point identity is readable before narrow-screen disclosure
+
+The existing Proxmox By date list groups workload name/type/target ID, PVE
+workload connection, source kind, reader connection and repository location in
+one wrapping identity cell below 720px table width. These are different scopes:
+a PBS reader/namespace never supplies an unknown guest's PVE connection. Age and
+state retain independent columns and their existing meanings. Wider tables keep
+separate source/location columns and expose PVE scope beneath the workload name;
+a hidden Target ID column never hides the ID itself. Full provider identifiers,
+size and existing owner links remain in the same single-point drawer. This
+changes no matching, posture, verification, pruning, filter, poll or API contract.
+
+The three-column narrow projection reserves enough width for the grouped
+identity, Unknown age and full state words instead of the old single-name 40%
+anchor. Normal-suite `recoverableIdentityAccess.test.tsx` exercises the real
+parsed inventory consumer across 320/479/480/719/720/1200px, namesakes, every source
+kind, unmatched/host scope and open-record live refresh/focus. The registered
+`ProxmoxBackupsTable.test.tsx` checks workload/reader separation before disclosure;
+`ProxmoxRecoverableTable.test.tsx` and `proxmoxBackupsTablePresentation.test.ts`
+protect grouped metadata, responsive columns and bounded rendering. Browser
+proof must exercise the consuming list at desktop/narrow widths, inspect actual
+pixels, identity, state/age fit, touch/keyboard disclosure, filters and live
+updates. This is safer evidence inspection, not a restore or installed recovery.

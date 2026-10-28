@@ -33,6 +33,7 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
 import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
+  ArtifactSourceBadge,
   ArtifactSourceIdentity,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
@@ -108,8 +109,8 @@ const artifactVerificationText = (artifact: RecoverableArtifact): string => {
   return artifact.sourceKind === 'snapshot' ? '' : 'Not reported';
 };
 
-// Phones drop the location, size and details columns, so the drawer is where
-// a restore point is always readable in full.
+// Size and provider identifiers remain progressive detail. Workload and
+// repository identity must also be readable before choosing a point on a phone.
 const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSection[] => {
   const source = getProxmoxBackupSourcePresentation(artifact.sourceKind);
   return compactDetailSections([
@@ -204,6 +205,7 @@ export function ProxmoxRecoverableTable(props: {
       : 'full';
   });
   const visibleColumns = createMemo(() => getRecoverableColumns(layoutMode()));
+  const stackedIdentity = () => isCompactBackupIdentityLayout(layoutMode());
   const columnVisible = (column: RecoverableColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
   const showDayGroups = () => props.groupByDay && props.sortKey() === 'created';
@@ -238,34 +240,54 @@ export function ProxmoxRecoverableTable(props: {
         data-proxmox-backup-row="recoverable"
       >
         <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
-          <div class="flex min-w-0 items-center gap-1">
+          <div class={`flex min-w-0 gap-2 ${stackedIdentity() ? 'items-start' : 'items-center'}`}>
             <PlatformResourceDetailToggleButton
               expanded={drawer.isExpanded(artifact)}
               resourceLabel={getBackupWorkloadDisclosureLabel(artifact.workload)}
               controlsId={drawer.detailRowId(artifact)}
               onToggle={() => drawer.toggle(artifact)}
             />
-            <div
-              class="min-w-0 truncate font-semibold"
-              title={[
-                artifact.workload.name || artifact.workload.label,
-                artifact.workload.typeLabel,
-                artifact.workload.vmid,
-                // The phone projection has no location column, so the row's
-                // hover title carries the repository instead.
-                columnVisible('location') ? undefined : artifact.location,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            >
-              {artifact.workload.name || artifact.workload.label}
-            </div>
-            <Show when={isCompactBackupIdentityLayout(layoutMode())}>
-              <span class="shrink-0 text-[10px] text-muted">
-                {artifact.workload.typeLabel}
-                <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
+            <div class="min-w-0 flex-1">
+              <span
+                class={`block font-semibold ${stackedIdentity() ? 'whitespace-normal wrap-anywhere' : 'truncate'}`}
+                title={artifact.workload.label}
+              >
+                {artifact.workload.name || artifact.workload.label}
               </span>
-            </Show>
+              <Show when={!columnVisible('targetId') && artifact.workload.vmid}>
+                <span class="block text-[10px] text-muted">
+                  {artifact.workload.typeLabel} {artifact.workload.vmid}
+                </span>
+              </Show>
+              <Show when={getBackupWorkloadPVEConnection(artifact.workload)}>
+                {(connection) => (
+                  <span
+                    class={`block text-[10px] text-muted ${stackedIdentity() ? 'whitespace-normal wrap-anywhere' : 'truncate'}`}
+                    title={`PVE connection: ${connection()}`}
+                    data-backup-workload-connection
+                  >
+                    PVE: {connection()}
+                  </span>
+                )}
+              </Show>
+              <Show when={stackedIdentity()}>
+                <div class="mt-1 space-y-0.5 text-[10px] leading-snug">
+                  <ArtifactSourceBadge artifact={artifact} wrap />
+                  <span
+                    class="block whitespace-normal text-muted wrap-anywhere"
+                    data-backup-source-connection
+                  >
+                    Connection: {artifact.locationConnection || 'Unknown connection'}
+                  </span>
+                  <span
+                    class="block whitespace-normal text-muted wrap-anywhere"
+                    data-backup-location
+                  >
+                    Location: {artifact.location}
+                  </span>
+                </div>
+              </Show>
+            </div>
           </div>
         </TableCell>
         <Show when={columnVisible('type')}>
@@ -283,9 +305,11 @@ export function ProxmoxRecoverableTable(props: {
             {artifact.workload.vmid || '—'}
           </TableCell>
         </Show>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <ArtifactSourceIdentity artifact={artifact} />
-        </TableCell>
+        <Show when={columnVisible('source')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <ArtifactSourceIdentity artifact={artifact} />
+          </TableCell>
+        </Show>
         <Show when={columnVisible('location')}>
           <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
             <span class="block truncate" title={artifact.location}>
@@ -380,13 +404,13 @@ export function ProxmoxRecoverableTable(props: {
           header={
             <>
               <SortableHead
-                label="Workload"
+                label={stackedIdentity() ? 'Restore point' : 'Workload'}
                 sortKey="workload"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
                 onSort={props.onSort}
                 align="left"
-                headClass={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30`}
+                headClass={getPlatformTableHeadClassForKind('name')}
               />
               <Show when={columnVisible('type')}>
                 <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
@@ -396,15 +420,17 @@ export function ProxmoxRecoverableTable(props: {
                   {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
                 </TableHead>
               </Show>
-              <SortableHead
-                label={layoutMode() === 'compact' ? 'Via' : 'Source'}
-                sortKey="source"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
+              <Show when={columnVisible('source')}>
+                <SortableHead
+                  label="Source"
+                  sortKey="source"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
               <Show when={columnVisible('location')}>
                 <SortableHead
                   label={layoutMode() === 'compact' ? 'Loc' : 'Location'}
@@ -458,7 +484,7 @@ export function ProxmoxRecoverableTable(props: {
                 items={tableItems}
                 keyExtractor={(item) => `${item.kind}:${item.key}`}
                 colSpan={visibleColumns().length}
-                estimatedRowHeight={32}
+                estimatedRowHeight={stackedIdentity() ? 128 : 44}
                 reserveScrollExtent
               >
                 {(item) => (
