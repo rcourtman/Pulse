@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5951c99b7360b6e0c2b1bbb23097991b86a3c265",
+  "verified_at": "2026-10-28T12:05:51.669542Z",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "7b86b09c89a86ff9da01fe431d21cd96402cf5c5a3c86f21920212a9a782ec2f"
+  },
+  "routes": [
+    "/proxmox/backups",
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/?q=backup&node=pve-a&type=ct&operator=saved#evidence"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Bare bookmarks wait for the first assessment, then replace history with the existing health-selected canonical view without dropping common query filters or the fragment. Subsequent 30-second reads update actual health rather than switching the workspace.",
+    "Coverage attention-to-protected refresh retains the same focused disclosure and open evidence. By date protected-to-attention refresh retains the same focused calendar day, current tooltip and restore feed. Counts change truthfully in both cases.",
+    "Deferred initial posture, failed ordinary poll, explicit retry, existing health-count navigation to filtered Coverage and By date facet clearing run through production clients and parsers against a safe local HTTP producer.",
+    "Eight captures natively inspected: four exact-base and four final candidate, desktop and 320px. Focus outlines, open evidence, source/location identity and chart tooltip remain visible without page overflow. The fixture renders the light class-based theme even when narrow browser colour preference is dark; no dark-theme claim is made."
+  ],
+  "interactions": [
+    "29 final candidate checks; 17 completed exact-base checks reproduce workspace replacement and lost focus in both directions. Playwright 1.56.1 matches the integration lockfile; Chromium 141.0.7390.37 and WebKit use the assigned offline browser.",
+    "Actual 30-second query intervals run via Playwright clock, not replacement fetch/timer logic. Requests stay local and GET-only; unknown routes, page errors and off-origin requests fail the proof. Keyboard Enter expands evidence and follows existing tab/count actions.",
+    "Initial authored browser selector failures are retained: the first requested Expand after the label correctly changed to Collapse; the next used 7D rather than the actual 7d. Their completed baseline checks remain evidence without replay. The final browser run passes with owned browser/server cleanup."
+  ],
+  "evidence": "RECEIPTS.md / BROWSER-CANDIDATE.json / BROWSER-BASELINE-PARTIAL.json / BROWSER-BASELINE-REST.json / BROWSER-BINDING.json / PIXEL-REVIEW.json / BROWSER-ASSETS.tar.xz. This is synthetic consuming proof, not native guest recovery, installed monitoring, publication or a claim to fix original backup incidents."
+}
