@@ -102,7 +102,7 @@ UPGRADE_PREFLIGHT_RAN=false
 ARCHIVE_OVERRIDE="${PULSE_ARCHIVE_PATH:-}"
 SOURCE_BRANCH="main"
 CURRENT_INSTALL_CTID=""
-CONTAINER_CREATED_FOR_CLEANUP=false
+INSTALL_CONTAINER_CREATED=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
 UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))
@@ -585,16 +585,32 @@ auto_detect_container_environment() {
     fi
 }
 
+handle_container_install_exit() {
+    local install_status="$1"
+    # Preserve the original failure, even if removing owned input scratch fails.
+    if ! cleanup_container_install_inputs "${container_script_temp_dir:-}" "${container_archive_source:-}" "${container_archive_temp:-false}"; then
+        if [[ "$install_status" -eq 0 ]]; then
+            install_status=1
+        fi
+    fi
+    if [[ "$install_status" -ne 0 && "$INSTALL_CONTAINER_CREATED" == "true" && -n "$CURRENT_INSTALL_CTID" ]]; then
+        print_warn "Container $CURRENT_INSTALL_CTID has been retained for inspection and recovery."
+        print_info "No automatic stop or deletion was requested; an interrupted command may still be running."
+        print_info "Check its state and logs before continuing:"
+        print_info "  pct status $CURRENT_INSTALL_CTID"
+        print_info "  pct enter $CURRENT_INSTALL_CTID"
+        print_info "Do not rerun the host installer to recover this container: that creates another instance."
+        print_info "If this new container is no longer needed, remove it explicitly in Proxmox."
+    fi
+    exit "$install_status"
+}
+
 handle_install_interrupt() {
     echo ""
-    print_error "Installation cancelled"
-    if [[ -n "$CURRENT_INSTALL_CTID" ]] && [[ "$CONTAINER_CREATED_FOR_CLEANUP" == "true" ]]; then
-        print_info "Cleaning up container $CURRENT_INSTALL_CTID..."
-        pct stop "$CURRENT_INSTALL_CTID" 2>/dev/null || true
-        sleep 2
-        pct destroy "$CURRENT_INSTALL_CTID" 2>/dev/null || true
-    fi
-    exit 1
+    print_error "Installation interrupted"
+    # The EXIT handler removes only owned temporary inputs, never the container
+    # or state a partially successful installation may already have created.
+    exit "${1:-1}"
 }
 
 # Wrapper for systemctl commands that might hang in unprivileged containers
@@ -1249,10 +1265,11 @@ create_lxc_container() {
     local container_archive_dest=""
     local container_archive_temp=false
     local archive_requested=false
-    trap 'cleanup_container_install_inputs "${container_script_temp_dir:-}" "${container_archive_source:-}" "${container_archive_temp:-false}"' EXIT
+    trap 'handle_container_install_exit "$?"' EXIT
     CURRENT_INSTALL_CTID=""
-    CONTAINER_CREATED_FOR_CLEANUP=false
-    trap handle_install_interrupt INT TERM
+    INSTALL_CONTAINER_CREATED=false
+    trap 'handle_install_interrupt 130' INT
+    trap 'handle_install_interrupt 143' TERM
 
     print_header
     echo "Proxmox VE detected. Installing Pulse in a container."
@@ -1944,29 +1961,18 @@ create_lxc_container() {
     fi
 
 
-    # Execute container creation (suppress verbose output)
-    if ! "${CREATE_ARGS[@]}" >/dev/null 2>&1; then
+    # Keep command errors and signal-handler recovery guidance visible.
+    if ! "${CREATE_ARGS[@]}"; then
         print_error "Failed to create container"
         exit 1
     fi
-    CONTAINER_CREATED_FOR_CLEANUP=true
-
-    # From this point on, cleanup container if we fail
-    cleanup_on_error() {
-        print_error "Installation failed, cleaning up container $CTID..."
-        CURRENT_INSTALL_CTID="$CTID"
-        CONTAINER_CREATED_FOR_CLEANUP=true
-        pct stop $CTID 2>/dev/null || true
-        sleep 2
-        pct destroy $CTID 2>/dev/null || true
-        exit 1
-    }
+    INSTALL_CONTAINER_CREATED=true
 
     # Start container
     print_info "Starting container..."
-    if ! pct start $CTID >/dev/null 2>&1; then
+    if ! pct start "$CTID"; then
         print_error "Failed to start container"
-        cleanup_on_error
+        exit 1
     fi
     sleep 3
     
@@ -1985,19 +1991,21 @@ create_lxc_container() {
 
     if [[ "$network_ready" != "true" ]]; then
         print_error "Container network failed to obtain an IP address after 60 seconds"
-        cleanup_on_error
+        exit 1
     fi
     
     # Install dependencies and optimize container
     print_info "Installing dependencies..."
-    if ! pct exec $CTID -- bash -c "
-        apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq curl wget ca-certificates >/dev/null 2>&1
+    local dependency_status=0
+    pct exec "$CTID" -- bash -e -c "
+        apt-get update -qq
+        apt-get install -y -qq curl wget ca-certificates
         # Set timezone to UTC for consistent logging
-        ln -sf /usr/share/zoneinfo/UTC /etc/localtime 2>/dev/null
+        ln -sf /usr/share/zoneinfo/UTC /etc/localtime 2>/dev/null || true
         # Optimize sysctl for monitoring workload
         echo 'net.core.somaxconn=1024' >> /etc/sysctl.conf
         echo 'net.ipv4.tcp_keepalive_time=60' >> /etc/sysctl.conf
-        sysctl -p >/dev/null 2>&1
+        sysctl -p >/dev/null 2>&1 || true
         
         # Note: We don't create /usr/local/bin/update to avoid conflicts with Community Scripts
         # Native installations should update using: curl -fsSL ... | bash
@@ -2011,9 +2019,10 @@ create_lxc_container() {
         if [[ -f /etc/bash.bashrc ]] && ! grep -q '/usr/local/bin' /etc/bash.bashrc 2>/dev/null; then
             echo 'export PATH="/usr/local/bin:$PATH"' >> /etc/bash.bashrc
         fi
-    "; then
-        print_error "Failed to install dependencies in container"
-        cleanup_on_error
+    " || dependency_status=$?
+    if [[ "$dependency_status" -ne 0 ]]; then
+        print_error "Failed to install dependencies in container (exit $dependency_status)"
+        exit "$dependency_status"
     fi
 
     if [[ -n "$ARCHIVE_OVERRIDE" ]]; then
@@ -2036,14 +2045,14 @@ create_lxc_container() {
     local script_source="$0"
     if [[ "$0" == "bash" ]] || [[ ! -f "$0" ]]; then
         if ! download_container_installer script_source container_script_temp_dir; then
-            cleanup_on_error
+            exit 1
         fi
     fi
     
     # Copy this script to container and run it
-    if ! pct push $CTID "$script_source" /tmp/install.sh >/dev/null 2>&1; then
+    if ! pct push "$CTID" "$script_source" /tmp/install.sh; then
         print_error "Failed to copy install script to container"
-        cleanup_on_error
+        exit 1
     fi
     
     cleanup_container_install_inputs "$container_script_temp_dir" "" false
@@ -2051,14 +2060,14 @@ create_lxc_container() {
 
     if [[ -n "$container_archive_source" ]]; then
         print_info "Copying Pulse release archive to container..."
-        if ! pct push $CTID "$container_archive_source" "$container_archive_dest" >/dev/null 2>&1; then
+        if ! pct push "$CTID" "$container_archive_source" "$container_archive_dest"; then
             if [[ "$container_archive_temp" == "true" ]]; then
                 cleanup_temp_archive_path "$container_archive_source"
                 container_archive_temp=false
             fi
             if [[ "$archive_requested" == "true" ]]; then
                 print_error "Failed to copy Pulse release archive to container"
-                cleanup_on_error
+                exit 1
             fi
             print_warn "Could not copy prefetched archive into container; falling back to in-container download."
             container_archive_source=""
@@ -2068,13 +2077,13 @@ create_lxc_container() {
             # Signature sidecar must travel with the archive so that
             # install_pulse_archive inside the container can verify it.
             if [[ -f "${container_archive_source}.sshsig" ]]; then
-                if ! pct push $CTID "${container_archive_source}.sshsig" "${container_archive_dest}.sshsig" >/dev/null 2>&1; then
+                if ! pct push "$CTID" "${container_archive_source}.sshsig" "${container_archive_dest}.sshsig"; then
                     if [[ "$container_archive_temp" == "true" ]]; then
                         cleanup_temp_archive_path "$container_archive_source"
                         container_archive_temp=false
                     fi
                     print_error "Failed to copy Pulse release archive signature to container"
-                    cleanup_on_error
+                    exit 1
                 fi
             else
                 if [[ "$container_archive_temp" == "true" ]]; then
@@ -2082,7 +2091,7 @@ create_lxc_container() {
                     container_archive_temp=false
                 fi
                 print_error "Pulse release archive signature missing alongside ${container_archive_source}"
-                cleanup_on_error
+                exit 1
             fi
         fi
     fi
@@ -2098,7 +2107,7 @@ create_lxc_container() {
     
     # Run installation showing output in real-time so users can see progress/errors
     # Use timeout wrapper if available
-    local install_status
+    local install_status=0
     local timeout_duration=300
 
     if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
@@ -2115,25 +2124,23 @@ create_lxc_container() {
 
     if command -v timeout >/dev/null 2>&1 && [[ "$timeout_duration" -ne 0 ]]; then
         # Show output in real-time with timeout
-        timeout "$timeout_duration" pct exec $CTID -- bash -c "$install_cmd"
-        install_status=$?
+        timeout "$timeout_duration" pct exec "$CTID" -- bash -c "$install_cmd" || install_status=$?
         if [[ $install_status -eq 124 ]]; then
             print_error "Installation timed out after ${timeout_duration}s"
             if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
                 print_info "Building from source can take more than 15 minutes in containers, especially on first run."
             else
-                print_info "This usually happens due to network issues or GitHub rate limiting."
+                print_info "The timeout does not establish whether installation completed. Check the container's state and logs."
             fi
             print_info "You can increase or disable the timeout by setting PULSE_CONTAINER_TIMEOUT (set to 0 to disable)."
-            print_info "Then enter the container and run the same installer command manually:"
+            print_info "Only after confirming no installer is still running, recover inside the retained container:"
             print_info "  pct enter $CTID"
             print_container_recovery_command
-            cleanup_on_error
+            exit "$install_status"
         fi
     else
         # Show output in real-time without timeout
-        pct exec $CTID -- bash -c "$install_cmd"
-        install_status=$?
+        pct exec "$CTID" -- bash -c "$install_cmd" || install_status=$?
     fi
     
     if [[ $install_status -ne 0 ]]; then
@@ -2141,7 +2148,7 @@ create_lxc_container() {
         print_info "You can enter the container to investigate:"
         print_info "  pct enter $CTID"
         print_container_recovery_command
-        cleanup_on_error
+        exit "$install_status"
     fi
     
     # Get container IP
@@ -2178,7 +2185,7 @@ create_lxc_container() {
     echo "    pct exec $CTID -- $UPDATE_HELPER_PATH     # Update Pulse"
     echo
     
-    CONTAINER_CREATED_FOR_CLEANUP=false
+    INSTALL_CONTAINER_CREATED=false
     CURRENT_INSTALL_CTID=""
     trap - INT TERM
     

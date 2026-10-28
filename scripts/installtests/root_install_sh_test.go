@@ -85,7 +85,8 @@ safe_read_with_default() {
     printf 'fixture stopped at %s\n' "$1"
     exit 47
 }
-` + extractRootInstallShellFunction(t, "create_lxc_container") + `
+` + extractRootInstallShellFunction(t, "handle_container_install_exit") + "\n" +
+				extractRootInstallShellFunction(t, "create_lxc_container") + `
 create_lxc_container
 exit 85
 `
@@ -129,6 +130,20 @@ sys.exit(os.waitstatus_to_exitcode(pty.spawn(command)))
 				t.Fatalf("new installation claimed legacy recovery:\n%s", out)
 			}
 		})
+	}
+}
+
+func TestRootInstallProxmoxFailurePreservesRecovery(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix installer failure fixture")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_lxc_recovery.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Proxmox installer failure/recovery controls: %v\n%s", err, out)
 	}
 }
 
