@@ -145,9 +145,9 @@ is worth reporting, even when memory no longer grows.
 
 ## Runtime and container alert scopes
 
-In **Alerts → Thresholds → Docker**, a container runtime (Docker or Podman),
-its containers and the machine running it are different alert resources.
-Turning off one check is not a blanket mute for everything on that machine.
+In **Alerts → Thresholds → Docker**, runtime connectivity, per-container alert
+rules and machine maintenance have different scopes. Turning off one check
+is not a blanket mute for everything on that machine.
 
 - **Runtime Offline Alerts** controls that runtime's connectivity alert. It
   does **not** turn off alerts for its containers. The runtime row's general
@@ -159,9 +159,11 @@ Turning off one check is not a blanket mute for everything on that machine.
   check the saved row. Other containers and the machine keep their own rules.
   Turning off only the container's **Offline Alerts** leaves its other checks
   enabled. Neither setting stops collection or hides readings.
-- **Machine maintenance** has a different scope. A window covering the machine
-  and its descendants also suppresses wanted machine alerts, not just Docker
-  alerts. It is not equivalent to muting one runtime and its containers while
+- **Machine maintenance** has a different scope. On a unified-agent host, the
+  runtime's **Manage** controls apply to the machine too. A window covering
+  the machine and its descendants also suppresses wanted machine alerts, not
+  just Docker alerts. It is not equivalent to muting one runtime and its
+  containers while
   keeping the machine monitored. Global or platform-wide Off controls also
   affect more than one runtime; do not use them for that narrower job.
 
