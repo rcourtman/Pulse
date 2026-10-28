@@ -32,6 +32,31 @@ import {
 import { ALERT_EMAIL_REPLY_TO_PLACEHOLDER } from '@/utils/alertEmailPresentation';
 import { useSSOProvidersState } from '@/components/Settings/useSSOProvidersState';
 
+// Endpoint labels and values have separate lines so neither a long URL nor
+// the copy icon can push the other outside a narrow provider card.
+const SSOEndpoint: Component<{
+  caption: string;
+  value: string | undefined;
+  copyLabel: string;
+  onCopyValue: (value: string) => Promise<void>;
+}> = (props) => (
+  <div class="min-w-0 space-y-1">
+    <dt class="text-muted">{props.caption}</dt>
+    <dd class="min-w-0">
+      <CopyValueButton
+        value={props.value}
+        onCopyValue={props.onCopyValue}
+        label={props.copyLabel}
+        variant="accent"
+        size="sm"
+        class="min-h-11 w-full max-w-full justify-between gap-2 py-2 text-left text-xs sm:min-h-0 sm:w-auto [&>svg]:shrink-0"
+      >
+        <span class="min-w-0 [overflow-wrap:anywhere]">{props.value}</span>
+      </CopyValueButton>
+    </dd>
+  </div>
+);
+
 interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
   canManage?: boolean;
@@ -202,21 +227,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           </p>
                         }
                       >
-                        <div class="flex flex-wrap gap-4 text-xs">
-                          <div class="flex items-center gap-1">
-                            <span class="text-slate-500">Callback / Redirect URL:</span>
-                            <CopyValueButton
-                              value={provider.oidcCallbackUrl}
-                              onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
-                              label="Copy callback / redirect URL"
-                              variant="accent"
-                              size="chip"
-                              class="max-w-[18rem] text-xs"
-                            >
-                              <span class="min-w-0 truncate">{provider.oidcCallbackUrl}</span>
-                            </CopyValueButton>
-                          </div>
-                        </div>
+                        <dl class="grid min-w-0 gap-3 text-xs">
+                          <SSOEndpoint
+                            caption="Callback / Redirect URL:"
+                            value={provider.oidcCallbackUrl}
+                            onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
+                            copyLabel="Copy callback / redirect URL"
+                          />
+                        </dl>
                       </Show>
                     </div>
                   </Show>
@@ -232,34 +250,20 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           </p>
                         }
                       >
-                        <div class="flex flex-wrap gap-4 text-xs">
-                          <div class="flex items-center gap-1">
-                            <span class="text-slate-500">SP Metadata:</span>
-                            <CopyValueButton
-                              value={provider.samlMetadataUrl}
-                              onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
-                              label="Copy SP metadata URL"
-                              variant="accent"
-                              size="chip"
-                              class="max-w-[18rem] text-xs"
-                            >
-                              <span class="min-w-0 truncate">{provider.samlMetadataUrl}</span>
-                            </CopyValueButton>
-                          </div>
-                          <div class="flex items-center gap-1">
-                            <span class="text-slate-500">ACS URL:</span>
-                            <CopyValueButton
-                              value={provider.samlAcsUrl}
-                              onCopyValue={(value) => copyToClipboard(value, 'ACS URL')}
-                              label="Copy ACS URL"
-                              variant="accent"
-                              size="chip"
-                              class="max-w-[18rem] text-xs"
-                            >
-                              <span class="min-w-0 truncate">{provider.samlAcsUrl}</span>
-                            </CopyValueButton>
-                          </div>
-                        </div>
+                        <dl class="grid min-w-0 gap-3 text-xs">
+                          <SSOEndpoint
+                            caption="SP Metadata:"
+                            value={provider.samlMetadataUrl}
+                            onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
+                            copyLabel="Copy SP metadata URL"
+                          />
+                          <SSOEndpoint
+                            caption="ACS URL:"
+                            value={provider.samlAcsUrl}
+                            onCopyValue={(value) => copyToClipboard(value, 'ACS URL')}
+                            copyLabel="Copy ACS URL"
+                          />
+                        </dl>
                       </Show>
                     </div>
                   </Show>

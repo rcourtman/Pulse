@@ -1238,6 +1238,25 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersPanelSource).toContain('Group names may contain spaces.');
   });
 
+  it('keeps card endpoint labels outside the wrapping shared copy control', () => {
+    const endpoint = ssoProvidersPanelSource.slice(
+      ssoProvidersPanelSource.indexOf('const SSOEndpoint:'),
+      ssoProvidersPanelSource.indexOf('interface SSOProvidersPanelProps'),
+    );
+    // The old inline flex row let a non-shrinking URL squeeze its label and
+    // disappear beyond the card. Keep this shared card projection explicit;
+    // rendered/browser checks cover copying and actual responsive geometry.
+    expect(endpoint).toContain('<dt class="text-muted">{props.caption}</dt>');
+    expect(endpoint).toContain('value={props.value}');
+    expect(endpoint).toContain('onCopyValue={props.onCopyValue}');
+    expect(endpoint).toContain('w-full max-w-full');
+    expect(endpoint).toContain('[overflow-wrap:anywhere]');
+    expect(endpoint).toContain('[&>svg]:shrink-0');
+    expect(endpoint).not.toContain('truncate');
+    expect(ssoProvidersPanelSource.match(/<SSOEndpoint\s/g)).toHaveLength(3);
+    expect(ssoProvidersPanelSource).not.toContain('max-w-[18rem]');
+  });
+
   it('never offers a localhost SSO endpoint URL as if it were registerable with an IdP', () => {
     // The panel tells admins to register these URLs with their IdP, so a
     // hardcoded localhost guess would be copied out and fail at the IdP. The
