@@ -753,6 +753,75 @@ quiesce_pulse_for_removal() {
     done
 }
 
+# These helpers are explicitly checked by both removal entries. Bash suppresses
+# errexit inside a function called from an if/OR-list; set -e is not a deletion
+# result. Stop at the first failure, without restarting or claiming rollback.
+remove_pulse_path_for_removal() {
+    local path="$1" kind="${2:-file}"
+    if [[ "$kind" == directory ]]; then
+        if rm -rf -- "$path"; then return 0; fi
+    else
+        if rm -f -- "$path"; then return 0; fi
+    fi
+    print_error "Cannot remove $path; Pulse removal is incomplete. Some files may already have been removed. Inspect retained files before recovery; no automatic restart will be attempted."
+    return 1
+}
+
+remove_pulse_runtime_files() {
+    local service_name="$1" path resolved config_path
+    local paths=("/etc/systemd/system/${service_name%.service}.service"
+        "$UPDATE_SERVICE_PATH" "$UPDATE_TIMER_PATH"
+        "$BINARY_LINK_PATH" "$AUTO_UPDATE_DEST")
+    if [[ "$SERVICE_NAME_EXPLICIT" != true ]]; then
+        paths+=(/etc/systemd/system/pulse.service /etc/systemd/system/pulse-backend.service)
+    fi
+    if [[ "$UPDATE_HELPER_PATH" != /bin/update ]]; then
+        paths+=("$UPDATE_HELPER_PATH")
+    fi
+    paths+=("$INSTALL_DIR")
+
+    # Configuration is a separate, last deletion phase. Custom paths (including
+    # symlinked parents) must not let runtime removal consume it before consent
+    # or a later failure. Validate the whole layout before the first deletion.
+    if ! config_path=$(readlink -m -- "$CONFIG_DIR") || [[ "$config_path" == / ]]; then
+        print_error "Cannot safely separate configuration from runtime files; refusing removal"
+        return 1
+    fi
+    for path in "${paths[@]}"; do
+        if ! resolved=$(readlink -m -- "$path") ||
+           [[ "$resolved" == / || "$resolved" == "$config_path" ||
+              "$resolved" == "$config_path/"* || "$config_path" == "$resolved/"* ]]; then
+            print_error "Runtime path overlaps configuration or is unsafe ($path); refusing removal. No files have been removed."
+            return 1
+        fi
+    done
+    for path in "${paths[@]}"; do
+        if [[ "$path" == "$INSTALL_DIR" ]]; then
+            remove_pulse_path_for_removal "$path" directory || return 1
+        else
+            remove_pulse_path_for_removal "$path" || return 1
+        fi
+    done
+}
+
+reload_pulse_units_after_removal() {
+    # Unlike update-time best-effort reloads, removal cannot declare completion
+    # while systemd's view of deleted units is unknown.
+    if ! timeout -k 1 5 systemctl daemon-reload; then
+        print_error "Cannot reload service definitions; Pulse removal is incomplete. Configuration is retained; reconcile service state before recovery."
+        return 1
+    fi
+}
+
+remove_pulse_user_for_removal() {
+    if id pulse &>/dev/null; then
+        if ! userdel pulse; then
+            print_error "Cannot remove the pulse account; Pulse removal is incomplete. Configuration is retained; inspect remaining account use before recovery."
+            return 1
+        fi
+    fi
+}
+
 # Called only after a confirmed stop and a failed atomic rename. The previous
 # executable is still in place. An uncertain stop never reaches this recovery,
 # and an intentionally inactive/failed service must not be started for the user.
@@ -5536,43 +5605,18 @@ main() {
                     return 1
                 fi
                 
-                # Remove service files
-                rm -f "/etc/systemd/system/$SERVICE_NAME.service"
-                if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
-                    rm -f /etc/systemd/system/pulse.service
-                    rm -f /etc/systemd/system/pulse-backend.service
-                fi
-                rm -f "$UPDATE_SERVICE_PATH"
-                rm -f "$UPDATE_TIMER_PATH"
-                # Reload systemd daemon
-                safe_systemctl daemon-reload
-                
-                # Remove installation directory
-                rm -rf "$INSTALL_DIR"
-                
-                # Remove symlink
-                rm -f "$BINARY_LINK_PATH"
-                rm -f "$AUTO_UPDATE_DEST"
-                if [[ "$UPDATE_HELPER_PATH" != "/bin/update" ]]; then
-                    rm -f "$UPDATE_HELPER_PATH"
-                fi
+                remove_pulse_runtime_files "$SERVICE_NAME" || return 1
+                reload_pulse_units_after_removal || return 1
                 
                 # Ask about config/data removal
                 echo
                 print_info "Config and data files exist in $CONFIG_DIR"
                 safe_read_with_default "Remove all configuration and data? (y/N): " remove_config "n"
-                if [[ "$remove_config" =~ ^[Yy]$ ]]; then
-                    rm -rf "$CONFIG_DIR"
-                    print_success "Configuration and data removed"
-                else
-                    print_info "Configuration preserved in $CONFIG_DIR"
-                fi
-                
                 # Ask about user removal
                 if id "pulse" &>/dev/null; then
                     safe_read_with_default "Remove pulse user account? (y/N): " remove_user "n"
                     if [[ "$remove_user" =~ ^[Yy]$ ]]; then
-                        userdel pulse 2>/dev/null || true
+                        remove_pulse_user_for_removal || return 1
                         print_success "User account removed"
                     else
                         print_info "User account preserved"
@@ -5580,9 +5624,21 @@ main() {
                 fi
                 
                 # Remove any log files
-                rm -f /var/log/pulse*.log 2>/dev/null || true
+                local log_path
+                for log_path in /var/log/pulse*.log; do
+                    remove_pulse_path_for_removal "$log_path" || return 1
+                done
                 if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
-                    rm -f /opt/pulse.log 2>/dev/null || true
+                    remove_pulse_path_for_removal /opt/pulse.log || return 1
+                fi
+
+                # Data deletion is last: any earlier incomplete removal leaves
+                # recovery state intact. A deletion error can itself be partial.
+                if [[ "$remove_config" =~ ^[Yy]$ ]]; then
+                    remove_pulse_path_for_removal "$CONFIG_DIR" directory || return 1
+                    print_success "Configuration and data removed"
+                else
+                    print_info "Configuration preserved in $CONFIG_DIR"
                 fi
                 
                 print_success "Pulse removed successfully"
@@ -5782,33 +5838,20 @@ uninstall_pulse() {
 
     # Remove files
     echo "Removing Pulse files..."
-    rm -rf "$INSTALL_DIR"
-    rm -rf "$CONFIG_DIR"
-    rm -f "/etc/systemd/system/$service_name.service"
-    if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
-        rm -f /etc/systemd/system/pulse.service
-        rm -f /etc/systemd/system/pulse-backend.service
-    fi
-    rm -f "$UPDATE_SERVICE_PATH"
-    rm -f "$UPDATE_TIMER_PATH"
-    rm -f "$BINARY_LINK_PATH"
-    rm -f "$AUTO_UPDATE_DEST"
-    if [[ "$UPDATE_HELPER_PATH" != "/bin/update" ]]; then
-        rm -f "$UPDATE_HELPER_PATH"
-    fi
-    
-    # Remove user (if it exists and isn't being used by other services)
-    if id "pulse" &>/dev/null; then
-        echo "Removing pulse user..."
-        userdel pulse 2>/dev/null || true
-    fi
+    remove_pulse_runtime_files "$service_name" || return 1
 
     # Remove any leftover legacy pulse-sensor-proxy footprint on this host so a
     # full uninstall on a v5-upgraded Proxmox host leaves nothing behind.
     cleanup_local_sensor_proxy || return 1
 
     # Reload systemd
-    systemctl daemon-reload
+    reload_pulse_units_after_removal || return 1
+
+    # Keep configuration/credentials until runtime, legacy cleanup, systemd and
+    # account removal have all completed. Never turn a partial deletion into a
+    # successful uninstall when this entry is called conditionally.
+    remove_pulse_user_for_removal || return 1
+    remove_pulse_path_for_removal "$CONFIG_DIR" directory || return 1
     
     echo
     echo -e "\033[0;32m✓ Pulse has been completely uninstalled\033[0m"

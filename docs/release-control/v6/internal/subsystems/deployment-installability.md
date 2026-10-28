@@ -832,6 +832,28 @@ the original key file rather than reporting completion after an ignored error.
 `TestRootInstallSensorProxyCleanupRejectsFailedKeyReplacement` executes that
 boundary. Native systemd/removal acceptance remains separate from source fixtures.
 
+Quiescence alone is not completed removal. Both entries explicitly check every
+runtime-file deletion and the bounded systemd reload, without the update-time
+best-effort reload exception. Runtime paths are checked as a complete set before
+deletion: unresolved, root, equal or overlapping configuration paths (including
+symlinked parents) stop rather than consume recovery state in the runtime phase.
+The menu retains its separate data/account choices; `--uninstall` retains its
+existing full-removal intent. Account-removal failure is incomplete, not an
+ignored success. Configuration/credentials are deleted last, after applicable
+runtime, local legacy, reload, account and log work succeeds. Any earlier failure
+retains that configuration and stops; previously removed runtime files are not
+claimed restored. Failure during data deletion may itself be partial and must
+not claim intact data, successful removal or automatic restart/retry.
+
+`TestRootInstallRemovalFilesystemFailures` runs the repository-discovered
+`scripts/tests/test_server_removal_failures.py` against both actual sourced
+entries, directly and in conditional callers. It exercises each runtime-file
+failure, real ordinary-user permission denial, reload/account/legacy/log errors,
+partial data deletion, separate successful default/custom-instance removal,
+declined data/account deletion and unsafe layouts. It compares retained data
+bytes/modes and other-instance files. These confined controls do not establish
+native installed removal, signed forward/reverse recovery or incident recovery.
+
 ### Legacy installer identity recovery is a whole-file decision
 
 An installer recovering a pre-descriptor-helper agent-ID file accepts exactly
