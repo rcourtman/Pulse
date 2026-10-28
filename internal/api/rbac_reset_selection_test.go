@@ -78,7 +78,7 @@ func TestRBACResetSelectionRejectsBeforeSpendingToken(t *testing.T) {
 					org = "default"
 				}
 				valid := fmt.Sprintf(`{"org_id":%q,"username":"recovery-user","recovery_token":%q}`, org, token)
-				require.Equal(t, http.StatusForbidden, serve(valid, "127.0.0.2").Code, "token lost IP binding")
+				require.Equal(t, http.StatusForbidden, serve(valid, "192.0.2.2").Code, "token lost IP binding")
 				require.Equal(t, http.StatusOK, serve(valid, "127.0.0.1").Code, "rejected selection consumed the original token")
 				manager, err := provider.GetManager(org)
 				require.NoError(t, err)
