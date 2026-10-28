@@ -269,8 +269,10 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 			key := guestLookupKey(instanceName, nodeName, vmid)
 			info := guestInfoByKey[key]
 			resourceType := resourceTypeFromGuestType(b.Type)
-			if resourceType == "" {
-				// Untyped legacy rows keep the existing best-effort lookup.
+			if resourceType == "" && strings.TrimSpace(b.Type) == "" {
+				// Only an absent legacy discriminator uses best-effort lookup.
+				// An explicitly unknown/unsupported archive kind cannot borrow
+				// the current occupant's type and claim its protection.
 				resourceType = info.ResourceType
 			} else if info.ResourceType != "" && info.ResourceType != resourceType {
 				// VMIDs can be reused across guest kinds. Keep the historical
