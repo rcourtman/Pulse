@@ -81,6 +81,8 @@ mapfile -t calls < "${WORK_DIR}/go.log"
 
 metadata="${WORK_DIR}/candidate/bench-metadata.txt"
 grep -qFx 'samples=2' "${metadata}"
+grep -qFx 'shard=all' "${metadata}"
+grep -qFx 'shard_count=3' "${metadata}"
 grep -qFx 'selection=all (trees are not both clean Git checkouts)' "${metadata}"
 grep -qFx 'packages=./pkg/metrics/ ./pkg/auth/ ./internal/api/ ./internal/monitoring/ ./internal/unifiedresources/ ./internal/dockeragent/ ./cmd/pulse-agent/ ./internal/hostagent/ ./internal/hostmetrics/' "${metadata}"
 grep -qFx 'benchtime=100ms' "${metadata}"
@@ -148,6 +150,20 @@ for call in "${calls[@]}"; do
   [[ "${call}" == *' ./internal/api/' && "${call}" != *pkg/metrics* ]]
 done
 
+# Package selection is intersected with the fixed shard, not expanded. A shard
+# with no affected package must not invoke go test with an empty argument list
+# (which would unexpectedly run the repository root).
+PULSE_BENCH_SHARD=0 run_paired
+grep -qFx 'selection=affected' "${metadata}"
+grep -qFx 'shard=0' "${metadata}"
+grep -qFx 'packages=' "${metadata}"
+[[ ! -s "${WORK_DIR}/go.log" ]]
+[[ ! -s "${WORK_DIR}/candidate/bench-baseline.txt" ]]
+[[ ! -s "${WORK_DIR}/candidate/bench-results.txt" ]]
+PULSE_BENCH_SHARD=1 run_paired
+grep -qFx 'packages=./internal/api/' "${metadata}"
+[[ "$(grep -c '^sample=' "${metadata}")" == 2 ]]
+
 # A shared non-test file selects every package that imports its directory.
 change internal/shared/shared.go shared
 commit candidate
@@ -172,6 +188,86 @@ commit candidate
 run_paired
 grep -qFx 'selection=all (module files changed)' "${metadata}"
 grep -qF 'packages=./pkg/metrics/ ./pkg/auth/' "${metadata}"
+
+# Every package belongs to exactly one shard. Each shard retains both warmups,
+# all ten base/candidate samples, alternating order and executable provenance.
+: > "${WORK_DIR}/partition"
+for shard in 0 1 2; do
+  case "${shard}" in
+    0) expected='./pkg/auth/ ./internal/monitoring/ ./internal/dockeragent/' ;;
+    1) expected='./internal/api/ ./internal/unifiedresources/ ./internal/hostagent/' ;;
+    2) expected='./pkg/metrics/ ./cmd/pulse-agent/ ./internal/hostmetrics/' ;;
+  esac
+  : > "${WORK_DIR}/go.log"
+  PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+    PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" \
+    PULSE_BENCH_BASELINE_DIR="${WORK_DIR}/baseline" PULSE_BENCH_SAMPLE_COUNT=10 \
+    PULSE_BENCH_SHARD="${shard}" \
+    bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
+  grep -qFx "shard=${shard}" "${metadata}"
+  grep -qFx "packages=${expected}" "${metadata}"
+  printf '%s\n' "${expected}" | tr ' ' '\n' >> "${WORK_DIR}/partition"
+  [[ "$(grep -c '^sample=' "${metadata}")" == 20 ]]
+  [[ "$(grep -c '^binary=' "${metadata}")" == 20 ]]
+  [[ "$(grep -c '^BenchmarkExample' "${WORK_DIR}/candidate/bench-baseline.txt")" == 10 ]]
+  [[ "$(grep -c '^BenchmarkExample' "${WORK_DIR}/candidate/bench-results.txt")" == 10 ]]
+  mapfile -t calls < "${WORK_DIR}/go.log"
+  [[ "${#calls[@]}" == 22 ]]
+  for call in "${calls[@]}"; do [[ "${call}" == *" ${expected}" ]]; done
+  for ((round=1; round<=10; round++)); do
+    first=baseline; second=candidate
+    if ((round % 2 == 0)); then first=candidate; second=baseline; fi
+    [[ "${calls[2*round]}" == "${WORK_DIR}/${first}"$'\t'* ]]
+    [[ "${calls[2*round+1]}" == "${WORK_DIR}/${second}"$'\t'* ]]
+    for label in baseline candidate; do
+      grep -qFx "binary=${label},${round},fixture.test,${digest}" "${metadata}"
+    done
+  done
+  # Branch collection partitions the same inventory but still uses Go's ten
+  # counts in a single invocation; it must not fall back to the full package set.
+  : > "${WORK_DIR}/go.log"
+  PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+    PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" PULSE_BENCH_BASELINE_DIR='' \
+    PULSE_BENCH_SAMPLE_COUNT=10 PULSE_BENCH_SHARD="${shard}" \
+    bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" >/dev/null
+  grep -qFx 'selection=all (no baseline)' "${metadata}"
+  grep -qFx "packages=${expected}" "${metadata}"
+  [[ "$(wc -l < "${WORK_DIR}/go.log")" == 1 ]]
+  grep -qF -- "-count=10 -run=^$ -benchtime=100ms -timeout=5m ${expected}" "${WORK_DIR}/go.log"
+done
+[[ "$(wc -l < "${WORK_DIR}/partition")" == 9 ]]
+[[ -z "$(sort "${WORK_DIR}/partition" | uniq -d)" ]]
+
+# A malformed shard is a collection error, never a silent no-op or an all-tree
+# fallback. This must stop before any Go invocation.
+for invalid in 3 -1 01 x all,0; do
+  : > "${WORK_DIR}/go.log"
+  set +e
+  output="$(PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+    PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" PULSE_BENCH_SHARD="${invalid}" \
+    bash "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" 2>&1)"
+  status=$?
+  set -e
+  [[ "${status}" == 2 ]]
+  grep -qF 'PULSE_BENCH_SHARD must be all, 0, 1 or 2.' <<<"${output}"
+  [[ ! -s "${WORK_DIR}/go.log" ]]
+done
+
+# A newly added inventory member without a fixed assignment fails rather than
+# disappearing from all three jobs. Exercise the actual collector, not a model
+# of the partition function.
+sed '/^PACKAGES=(/a\  ./internal/new-benchmark/' \
+  "${ROOT_DIR}/scripts/run-ci-benchmarks.sh" > "${WORK_DIR}/unassigned.sh"
+: > "${WORK_DIR}/go.log"
+set +e
+output="$(PATH="${WORK_DIR}/bin:${PATH}" FAKE_GO_LOG="${WORK_DIR}/go.log" \
+  PULSE_BENCH_CURRENT_DIR="${WORK_DIR}/candidate" PULSE_BENCH_BASELINE_DIR='' \
+  PULSE_BENCH_SHARD=0 bash "${WORK_DIR}/unassigned.sh" 2>&1)"
+status=$?
+set -e
+[[ "${status}" == 2 ]]
+grep -qFx 'Benchmark package has no shard: ./internal/new-benchmark/' <<<"${output}"
+[[ ! -s "${WORK_DIR}/go.log" ]]
 
 # A nested archive has no identity of its own; never attribute its parent's SHA.
 mkdir -p "${WORK_DIR}/candidate/archive"
