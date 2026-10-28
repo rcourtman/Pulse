@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d0968bf99902ab78ab701ac0ca28876f833c194f",
+  "verified_at": "2026-10-28T18:25:30.618333Z",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "f093d976e583e9be8ba5378163b31be3501b7bd85565939ac2f9a5f1eee7fe65"
+  },
+  "routes": [
+    "/proxmox/backups/coverage (offline source-bound production Backups consumer)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Separately labelled, fully wrapping UTC instants from the strict admitted server assessment remain distinct from a fresher raw archive, its age and location filters. Optional missing dates stay Not reported; no policy, posture or completion is recomputed.",
+    "Ordinary polling advances only the server evaluation clock and keeps the open record/focus. A failed posture read withdraws the entire clock section; an isolated successful retry restores it without inventing missing point/verification dates."
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard Enter disclosure, native location-filter selection and clearing;320px WebKit uses the supported whole-row touch disclosure, filter controls, retry and close. No forced click or hidden-control tap. Complete labels/time values, zero document overflow, preserved node identity and focus, no unexpected API/off-origin/modifying request or page error.",
+    "All6 final captures were opened with native view_image and inspected. Playwright1.56.1 matches the integration lock; Chromium141.0.7390.37 and WebKit26.0. The two expected console errors are the deliberate HTTP503 posture fixtures.",
+    "source-jnzwe4jo on this exact parent passes50 affected tests, full types, changed-file lint/format, copy audit, production build/budgets and the consumer build. All296 compiled modules and both manifests hash-match. Prior source-2sz8721p passes1289 broader tests before the one-line label wrapping change; it is not a whole-frontend pass on final source.",
+    "The initial source test assertions and first browser matrix failed and remain retained. Initial desktop pixels exposed the clipped label and prompted this fix. Its phone attempt targeted the intentionally sr-only disclosure, not the supported row touch; no product refusal or full matrix pass is inferred."
+  ],
+  "evidence": "Lane RECEIPTS.md, FINAL-RESULT.json, FINAL-RECEIPT.json, BROWSER-RESULT.json, PIXEL-REVIEW.json, EXECUTION.tar.xz and FINAL-CONSUMER-BUNDLE.tar.xz; not original guest/backup recovery or release inclusion."
+}

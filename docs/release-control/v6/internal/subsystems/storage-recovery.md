@@ -8230,3 +8230,26 @@ authentication/licence gates; `rbac_integrity_query_test.go` checks rejected
 requests create no manager/files while omitted and valid scoped checks work.
 This changes no reset token, backup, guest operation, storage format or native
 recovery guarantee. Existing default-context compatibility stays intact.
+
+### Coverage distinguishes assessment clocks from visible restore evidence
+
+An expanded Proxmox Coverage record exposes the server assessment's `evaluatedAt`,
+`lastSuccessfulPointAt` and `lastVerifiedAt` as separately labelled UTC instants.
+Time labels and values use wrapping stacked rows, not truncated hover-only labels.
+Evaluation is not backup completion. These workload-wide recorded times do not
+come from the current artifact list or its location filters and do not establish
+a fresh inventory read, successful restore or guest responsiveness. Missing
+optional clocks say Not reported; malformed instants say Unknown rather than
+being repaired by the browser or borrowed from another field. A failed posture
+read withdraws the section with the assessment; ordinary recovery restores it.
+No provider, policy, association, age, permission, guest operation or polling
+contract changes.
+
+Normal-suite `coverageAssessmentEvidence.test.tsx` exercises the parsed Backups
+consumer at desktop/narrow widths, differing artifact/evaluation/point clocks,
+missing fields, location filtering, ordinary refresh, failed-read withdrawal and
+isolated retry. `ProxmoxCoverageTable.test.tsx` protects strict presentation of
+invalid instants. Browser proof must inspect the actual consuming record at
+desktop and narrow widths, including UTC text, keyboard/touch disclosure and
+refresh/recovery with the open record preserved. This is evidence inspection,
+not original incident recovery.
