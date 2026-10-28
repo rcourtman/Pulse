@@ -16,6 +16,23 @@
 
 ## Purpose
 
+### OIDC JOSE security graph (28 October 2026)
+
+The root graph advances only go-jose/v4 from 4.1.4 to 4.1.6 for the reachable
+OIDC JWK/token parsing fixes, including GHSA-mgcc-cww5-fp2q. It becomes a direct
+requirement because the new repository-owned JWK regression imports it. The
+three unrelated direct/indirect reclassifications in the managed proposal are
+not imported. Exact module and go.mod checksum pairs are added without pruning
+old records. The compiler, go-oidc, SQLite/libc, all other versions and all
+install/update/deployment interfaces remain unchanged.
+
+`scripts/tests/test-hot-dev-runtime.sh` rejects a downgrade below 4.1.6; the
+normal API suite owns the real consumer and bounded-key controls documented in
+security-privacy. Exact committed-graph acquisition, a fresh matching worker,
+read-only resolution/module verification and a genuine embedded server build
+are still required. A manifest edit, static floor or acquisition receipt is not
+runtime compatibility, installed login recovery or a shipped security fix.
+
 ### Mechanical stable patch source admission
 
 Stable-regression patches are the sole main-only release exception. The release
