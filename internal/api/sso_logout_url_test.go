@@ -129,7 +129,7 @@ func TestSSOLogoutURLPreservesSupportedWrites(t *testing.T) {
 }
 
 func TestSSOLogoutURLRejectsInheritedUnsafeTargetButAllowsCorrection(t *testing.T) {
-	for _, nested := range []string{"", `,"oidc":null`, `,"oidc":{}`} {
+	for _, nested := range []string{"", `,"oidc":null`, `,"OIDC":null`} {
 		t.Run(nested, func(t *testing.T) {
 			router, _ := setupTestRouter(t)
 			p := logoutProviderFixture()
