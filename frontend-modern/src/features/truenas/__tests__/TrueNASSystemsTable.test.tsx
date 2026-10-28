@@ -2,7 +2,9 @@ import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-lib
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
-  StackedMemoryBar: () => <div data-testid="stacked-memory-bar" />,
+  StackedMemoryBar: (props: { detailsLabel?: string }) => (
+    <div data-testid="stacked-memory-bar" data-details-label={props.detailsLabel} />
+  ),
 }));
 
 vi.mock('@/components/shared/responsive', () => ({
@@ -51,6 +53,33 @@ afterEach(() => {
 });
 
 describe('TrueNASSystemsTable', () => {
+  it('names each inspectable memory record after its own system rather than its connection', () => {
+    const systems = [
+      makeSystem({ id: 'nas-1', name: 'core-east' }),
+      makeSystem({ id: 'nas-2', name: 'core-west' }),
+    ];
+    const { container } = render(() => (
+      <TrueNASSystemsTable
+        systems={systems}
+        scope={systems}
+        emptyIcon={<span />}
+        emptyTitle="No systems"
+        emptyDescription="No systems"
+        showToolbar={false}
+      />
+    ));
+    for (const [id, name] of [
+      ['nas-1', 'core-east'],
+      ['nas-2', 'core-west'],
+    ]) {
+      expect(
+        container.querySelector(
+          `[data-truenas-system-row="${id}"] [data-testid="stacked-memory-bar"]`,
+        ),
+      ).toHaveAttribute('data-details-label', `Memory composition for ${name}`);
+    }
+  });
+
   it('updates both the reading and compact temperature heading with the display preference', async () => {
     temperatureStore.setUnit('celsius');
     const system = makeSystem({ id: 'nas-temperature', temperature: 40 });

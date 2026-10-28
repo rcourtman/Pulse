@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@solidjs/testing-library';
+import { render, screen, cleanup, fireEvent, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { MemoryObservationPresentation } from '@/utils/memoryObservation';
 import { StackedMemoryBar } from './StackedMemoryBar';
@@ -53,6 +53,29 @@ describe('StackedMemoryBar', () => {
     expect(screen.getByText('N/A')).toBeInTheDocument();
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
     expect(getSegments(container)).toHaveLength(0);
+  });
+
+  it('keeps unavailable usage and its explanation in the opted-in accessible breakdown', () => {
+    render(() => (
+      <StackedMemoryBar
+        used={0}
+        total={32 * 1024 ** 3}
+        cache={20 * 1024 ** 3}
+        reading={{ state: 'unavailable', message: 'No current memory reading.' }}
+        detailsLabel="Memory composition for unavailable host"
+      />
+    ));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Memory composition for unavailable host' }),
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Unavailable', { exact: true })).toBeInTheDocument();
+    expect(within(dialog).getByText('No current memory reading.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Total', { exact: true }).nextElementSibling).toHaveTextContent(
+      '32.0 GB',
+    );
+    expect(within(dialog).queryByText('Free', { exact: true })).toBeNull();
+    expect(within(dialog).queryByText('Reclaimable cache')).toBeNull();
   });
 
   it.each(['last-known', 'unknown'] as const)(

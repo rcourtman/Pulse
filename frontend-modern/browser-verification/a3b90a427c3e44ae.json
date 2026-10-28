@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "27473be1e197c3207800af21225425374388bf56",
+  "verified_at": "2026-10-28T19:34:59.559952Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx",
+    "frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx": "6797a3968a2def2ce0a2288a393a23127d8d54a1e6bf945f7187af854435e2a4",
+    "frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts": "e0ab88a66f87f1ca9e9b7fb41514cd9f9654eb5f9a47df81e158859704304a8e",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx": "42844a9f7ef3b9fc2147125f5e4b9552bdda3408f948ecda55654c07fdb66a8c"
+  },
+  "routes": [
+    "/truenas/overview (offline source-bound full TrueNASPageSurface, canonical REST parser and production table)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Known ARC retains Used10/cache20/free2GB; absent and measured-zero cache add no cache row; measured-zero usage stays0B; percentage-only shows73% only; unreported metrics have no composition control. No native ARC presence is assumed.",
+    "Background canonical refresh updates the open record without remounting; disappearing ARC removes its row and metric withdrawal closes the breakdown/unlocks the background. Existing status semantics and all memory math stay unchanged."
+  ],
+  "interactions": [
+    "35 first-pass checks: ordinary desktop Tab/Enter, hover parity, actual320px WebKit taps, shared modal focus trapping, Close/Escape/backdrop return focus without opening the system row, live refresh/withdrawal, no page/console/unexpected API/off-origin/modifying requests. Only6 explicit canonical fixture GETs.",
+    "Native view_image inspection rejected the initial pre-animation dialog captures as readability proof. A separate capture-only continuation waits for the existing animations to finish naturally and records opacity1; all6 settled captures and the retained hover capture were natively opened and inspected. No completed interaction matrix was replayed.",
+    "The phone target is44px high and28.078125px wide (not claimed44px square). All dialog labels/values wrap or fit inside the viewport. Playwright1.56.1 matches integration lock; Chromium141.0.7390.37 and WebKit26.0. Context/browser/server cleanup completed.",
+    "source-grj_hpx3 on this parent passes8 consuming tests, full types, changed lint/format, copy audit, production build/budgets and full consuming build; all316 compiled modules and both manifests match. Earlier357 passes/two wrong new assertions, typed-fixture failure and unchanged mocked filter timeout remain attributed in lane evidence; no whole-frontend or performance-suite pass is claimed."
+  ],
+  "evidence": "Lane RECEIPTS.md, VALIDATED-SOURCE-RESULT.json/receipt, BROWSER-RESULT.json, PIXELS-RESULT.json, PIXEL-REVIEW.json and EXECUTION.tar.xz; candidate source only, not native ARC/I/O/History or released recovery."
+}

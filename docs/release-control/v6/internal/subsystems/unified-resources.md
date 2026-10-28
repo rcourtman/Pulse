@@ -8961,3 +8961,50 @@ Desktop/narrow browser proof must exercise the parsed inventory consumer,
 filter interactions, scoped open records and literal long labels and inspect
 actual pixels. This corrects evidence scope, not original incident causality or
 native backup/guest recovery.
+
+
+### Coverage distinguishes assessment clocks from visible restore evidence
+
+An expanded Proxmox Coverage record exposes the server assessment's `evaluatedAt`,
+`lastSuccessfulPointAt` and `lastVerifiedAt` as separately labelled UTC instants.
+Time labels and values use wrapping stacked rows, not truncated hover-only labels.
+Evaluation is not backup completion. These workload-wide recorded times do not
+come from the current artifact list or its location filters and do not establish
+a fresh inventory read, successful restore or guest responsiveness. Missing
+optional clocks say Not reported; malformed instants say Unknown rather than
+being repaired by the browser or borrowed from another field. A failed posture
+read withdraws the section with the assessment; ordinary recovery restores it.
+No provider, policy, association, age, permission, guest operation or polling
+contract changes.
+
+Normal-suite `coverageAssessmentEvidence.test.tsx` exercises the parsed Backups
+consumer at desktop/narrow widths, differing artifact/evaluation/point clocks,
+missing fields, location filtering, ordinary refresh, failed-read withdrawal and
+isolated retry. `ProxmoxCoverageTable.test.tsx` protects strict presentation of
+invalid instants. Browser proof must inspect the actual consuming record at
+desktop and narrow widths, including UTC text, keyboard/touch disclosure and
+refresh/recovery with the open record preserved. This is evidence inspection,
+not original incident recovery.
+
+### TrueNAS memory composition is inspectable without hover
+
+The existing TrueNAS system memory bar opts in to a resource-named native button
+and the shared accessible Dialog. Keyboard and touch expose the same live
+`stackedMemoryBarModel` rows as pointer hover, not a second calculation or a
+snapshot captured when opening. A measured zero stays zero, percentage-only
+readings do not acquire byte/free/cache rows, and absent ARC never gains a
+fabricated cache row. Metric withdrawal removes its open breakdown. The native
+button stops the enclosing system-row action; closing/Escape/backdrop returns
+focus through the existing dialog owner. Its 44px phone target and wrapping
+labels must fit narrow viewports. Shared hover suppression remains unchanged;
+other consumers do not opt in automatically. No collector, freshness, alert,
+permission, API call, polling cadence or native recovery guarantee changes.
+
+Normal-suite `TrueNASSystemMemory.test.tsx` uses the actual table, bar, model and
+dialog for known/missing/zero cache, measured zero, percent-only/unreported
+readings, live resource changes, row isolation and unavailable withdrawal.
+`StackedMemoryBar.test.tsx` retains unavailable explanations without fabricated
+usage and `Dialog.test.tsx` owns modal isolation/focus. Browser proof exercises
+the consuming TrueNAS table with ordinary keyboard/phone taps, hover parity,
+updates and dismissal, and natively inspected desktop/narrow pixels. This repairs
+composition access, not the reporter's missing native ARC or I/O/History source.

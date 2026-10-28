@@ -70,6 +70,45 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
+  it('keeps malformed assessment dates unknown instead of normalising them or borrowing a clock', () => {
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[
+          {
+            ...row,
+            protectionPosture: {
+              ...row.protectionPosture!,
+              evaluatedAt: '2026-09-31T10:00:00Z',
+              lastSuccessfulPointAt: '2026-10-28T10:00:00',
+              lastVerifiedAt: null,
+            },
+          },
+        ]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={row.key}
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+      />
+    ));
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    for (const label of ['Evaluated', 'Latest successful point']) {
+      expect(within(panel).getByText(label, { exact: true })).toHaveClass('whitespace-normal');
+      const value = within(panel).getByText(label, { exact: true }).closest('tr')!;
+      expect(value).toHaveTextContent('Unknown');
+      expect(value.querySelector('time')).toBeNull();
+    }
+    expect(within(panel).getByText('Last verified').closest('tr')).toHaveTextContent(
+      'Not reported',
+    );
+    expect(within(panel).getByRole('img', { name: 'Protected' })).toBeInTheDocument();
+  });
+
   it('keeps uncertain archive evidence inspectable without changing server posture or its owner', async () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [identityGuest('east-100', 'east', 'pve-1')],
