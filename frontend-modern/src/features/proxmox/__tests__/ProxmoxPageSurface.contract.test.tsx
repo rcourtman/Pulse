@@ -500,14 +500,20 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxBackupsTableSource).not.toContain('SavedViews');
   });
 
-  it('keeps backup summary identity on one canonical compact row', () => {
+  it('keeps backup identity constrained and narrow restore scope readable', () => {
     expect(proxmoxBackupServersTableSource).not.toContain(
       'font-mono text-[10px] font-normal text-muted',
     );
     expect(proxmoxBackupServersTableSource).toContain(
       "title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}",
     );
-    expect(proxmoxRecoverableTableSource).toContain('class="flex min-w-0 items-center gap-1"');
+    // The date feed groups complete scope on phones instead of requiring a
+    // single clipped line. Real inventory/width/focus cases live in
+    // recoverableIdentityAccess.test.tsx, not this source-wiring check.
+    expect(proxmoxRecoverableTableSource).toContain('class="min-w-0 flex-1"');
+    expect(proxmoxRecoverableTableSource).toContain('data-backup-workload-connection');
+    expect(proxmoxRecoverableTableSource).toContain('data-backup-source-connection');
+    expect(proxmoxRecoverableTableSource).toContain('data-backup-location');
     expect(proxmoxRecoverableTableSource).not.toContain('class="truncate text-[10px] text-muted"');
   });
 
