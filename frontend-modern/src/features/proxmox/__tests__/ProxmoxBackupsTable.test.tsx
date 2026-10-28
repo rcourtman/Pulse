@@ -2546,11 +2546,13 @@ describe('backup activity day controls survive ordinary inventory polling', () =
     fireEvent.click(target);
     await waitFor(() => expect(target).toHaveAttribute('aria-pressed', 'true'));
     expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
-    expect(new URLSearchParams(window.location.search).get('day')).toBe('2026-10-04');
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('day')).toBe('2026-10-04'),
+    );
     fireEvent.click(target);
     await waitFor(() => expect(target).toHaveAttribute('aria-pressed', 'false'));
     expect(target).toHaveFocus();
-    expect(new URLSearchParams(window.location.search).has('day')).toBe(false);
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has('day')).toBe(false));
     expect(apiFetchMock).toHaveBeenCalledTimes(4);
   });
 });
