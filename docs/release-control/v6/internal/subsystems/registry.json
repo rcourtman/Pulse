@@ -4770,6 +4770,7 @@
         "scripts/release_control/render_release_body.py",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_control/run_go_package_slice.py",
+        "scripts/release_control/run_go_rest_shard.py",
         "scripts/release_control/secure_runtime_attestation_v6.py",
         "scripts/release_control/secure_runtime_attestation_v7.py",
         "scripts/release_control/secure_runtime_rootful_attestation_v1.py",

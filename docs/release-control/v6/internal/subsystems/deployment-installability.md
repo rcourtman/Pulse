@@ -1324,12 +1324,19 @@ each worker the ordinary source-listed packages exclude exactly `internal/api`,
 `internal/monitoring` and `scripts/installtests`. API coverage remains in its
 unchanged five shards. Each worker runs the other two slow packages as contiguous
 source-listed halves through `scripts/release_control/run_go_package_slice.py`.
-The ordinary Go command and both sliced commands run concurrently; every child
-must finish successfully before that same protected check can pass. A failed
-listing, incomplete JSON execution or failed child cannot be hidden by another
-passing command. `GOMAXPROCS=2` bounds the ordinary command to two package
-workers, alongside the two sliced binaries: four package workers, not extra
-hosted jobs. Documentation-only changes retain the original explicit
+`run_go_rest_shard.py` schedules both slices first and ordinary packages in the
+same measured order on one four-slot queue. A completed slice releases its slot
+to the ordinary package tail, rather than reserving two idle slots. Each ordinary
+command covers exactly one selected package with `-race`, unchanged vet and
+50-minute timeout, and `-p=1`; `GOMAXPROCS=2` still bounds each binary. Every
+admitted child must finish successfully before that same protected check can
+pass, even after another child fails. Failed or partial discovery admits no
+tasks. Source inventory and package selection must be complete, unique and local
+to this module. Incomplete JSON execution or failed children cannot be hidden
+by another passing command. The existing artifacts retain every task's exit and
+duration alongside the unchanged slice coverage. These are four package workers,
+not extra hosted jobs; they do not establish a hosted latency improvement.
+Documentation-only changes retain the original explicit
 runtime-inapplicable results and required check names.
 
 The slice runner preserves declaration order, `-race`, uncached execution, the

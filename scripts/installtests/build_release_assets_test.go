@@ -4174,6 +4174,8 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		`.github/scripts/go-package-test-seconds.txt 2 "$index")`,
 		"set -euo pipefail",
 		"go test -race -timeout 50m $pkgs",
+		"python3 scripts/release_control/run_go_rest_shard.py",
+		`--index "$index" --output "$RUNNER_TEMP/backend-slices"`,
 	} {
 		if !strings.Contains(backend, required) {
 			t.Fatalf("backend rest shards missing %q", required)
@@ -4181,16 +4183,27 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	}
 
 	for _, required := range []string{
-		"grep -vE '/(internal/monitoring|scripts/installtests)$'",
 		"python3 scripts/release_control/run_go_package_slice_test.py",
-		"python3 scripts/release_control/run_go_package_slice.py",
-		"for package in internal/monitoring scripts/installtests; do",
-		"for pid in \"${pids[@]}\"; do",
-		"if wait \"$pid\"; then :; else status=1; fi",
 		"GOMAXPROCS: '2'", "name: backend-slices-${{ matrix.shard }}",
 	} {
 		if !strings.Contains(backend, required) {
 			t.Fatalf("required backend worker lost exhaustive sliced coverage: %q", required)
+		}
+	}
+	worker, err := os.ReadFile(repoFile("scripts", "release_control", "run_go_rest_shard.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		`["go", "list", "./..."]`, `"internal/api"`,
+		`SLICED = ("internal/monitoring", "scripts/installtests")`,
+		`ORDINARY_COMMAND = "go test -race -timeout 50m $pkgs"`,
+		`env["GOFLAGS"] = env.get("GOFLAGS", "") + " -p=1"`,
+		`SLOTS = 4`, `ThreadPoolExecutor(max_workers=SLOTS)`,
+		`all(result["exit"] == 0 for result in results)`,
+	} {
+		if !strings.Contains(string(worker), required) {
+			t.Fatalf("backend worker lost bounded exhaustive execution: %q", required)
 		}
 	}
 

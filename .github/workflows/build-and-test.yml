@@ -511,8 +511,8 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
-          # Two ordinary package binaries plus the two sliced binaries: keep
-          # the four-package concurrency envelope, rather than adding runners.
+          # Share four package slots; a finished slice releases its slot to
+          # ordinary packages. Keep the same per-binary CPU bound and runners.
           GOMAXPROCS: '2'
         # Source, not the timing file, defines coverage. Longest measured
         # packages go to the lightest shard and start first within that shard;
@@ -534,28 +534,13 @@ jobs:
             | grep -vE '/(internal/monitoring|scripts/installtests)$' \
             | python3 .github/scripts/select-go-package-shard.py \
                 .github/scripts/go-package-test-seconds.txt 2 "$index")
-          if [ -z "$pkgs" ]; then
-            echo "shard resolved to an empty package list" >&2
-            exit 1
-          fi
-          printf 'Packages in this shard:\n%s\n' "$pkgs"
-          # GOMAXPROCS=2 bounds ordinary go test to two package workers. The
-          # other two binaries each run this worker's contiguous source-listed
-          # half. Preserve both protected rest names and compilation gates.
-          pids=()
-          go test -race -timeout 50m $pkgs &
-          pids+=("$!")
-          for package in internal/monitoring scripts/installtests; do
-            python3 scripts/release_control/run_go_package_slice.py \
-              --package "$package" --index "$index" \
-              --output "$RUNNER_TEMP/backend-slices/${package##*/}" &
-            pids+=("$!")
-          done
-          status=0
-          for pid in "${pids[@]}"; do
-            if wait "$pid"; then :; else status=1; fi
-          done
-          exit "$status"
+          # Keep the stable-shipped command contract as the actual template,
+          # not a comment-only compatibility marker. The queue validates the
+          # complete selection and binds one package to pkgs for each lease.
+          ordinary_command='go test -race -timeout 50m $pkgs'
+          printf '%s\n' "$pkgs" | python3 scripts/release_control/run_go_rest_shard.py \
+            --ordinary-command "$ordinary_command" \
+            --index "$index" --output "$RUNNER_TEMP/backend-slices"
 
       - name: Retain source-listed backend coverage
         if: always() && needs.changes.outputs.code == 'true'
