@@ -589,6 +589,7 @@ handle_container_install_exit() {
     local install_status="$1"
     # Preserve the original failure, even if removing owned input scratch fails.
     if ! cleanup_container_install_inputs "${container_script_temp_dir:-}" "${container_archive_source:-}" "${container_archive_temp:-false}"; then
+        print_warn "Could not remove all temporary installation inputs."
         if [[ "$install_status" -eq 0 ]]; then
             install_status=1
         fi
@@ -3302,21 +3303,25 @@ chown_install_dir_for_pulse() {
 
 cleanup_temp_archive_path() {
     local archive_path="$1"
+    local cleanup_status=0
     [[ -n "$archive_path" ]] || return 0
-    rm -f -- "$archive_path" "${archive_path}.sshsig"
+    rm -f -- "$archive_path" "${archive_path}.sshsig" || cleanup_status=1
     # Delete only the two owned leaves and an empty parent, never a tree.
     rmdir -- "$(dirname "$archive_path")" 2>/dev/null || true
+    return "$cleanup_status"
 }
 
 cleanup_container_install_inputs() {
     local script_dir="${1:-}" archive_path="${2:-}" archive_owned="${3:-false}"
+    local cleanup_status=0
     if [[ -n "$script_dir" ]]; then
-        rm -f -- "$script_dir/install.sh" "$script_dir/install.sh.sshsig" "$script_dir/curl-error"
+        rm -f -- "$script_dir/install.sh" "$script_dir/install.sh.sshsig" "$script_dir/curl-error" || cleanup_status=1
         rmdir -- "$script_dir" 2>/dev/null || true
     fi
     if [[ "$archive_owned" == true ]]; then
-        cleanup_temp_archive_path "$archive_path"
+        cleanup_temp_archive_path "$archive_path" || cleanup_status=1
     fi
+    return "$cleanup_status"
 }
 
 download_container_installer() {

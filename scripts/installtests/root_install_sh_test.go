@@ -145,6 +145,21 @@ func TestRootInstallProxmoxFailurePreservesRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Proxmox installer failure/recovery controls: %v\n%s", err, out)
 	}
+	for _, control := range []string{
+		"test_inner_installer_exit_is_reported_with_and_without_timeout",
+		"test_interruptions_never_destroy_the_partially_installed_container",
+		"test_late_unexpected_failures_keep_state_and_original_exit",
+		"test_no_owned_container_is_claimed_before_create_succeeds",
+		"test_real_owned_cleanup_failure_does_not_replace_the_primary_failure",
+		"test_required_dependency_failures_stop_before_install",
+		"test_start_network_and_copy_failures_keep_recovery_state",
+		"test_success_and_optional_settings_failures_still_complete",
+		"test_timeout_retains_copied_inputs_and_requires_state_reconciliation",
+	} {
+		if !strings.Contains(string(out), control+" (__main__.LXCRecovery."+control+") ... ok") {
+			t.Fatalf("required LXC recovery control %s did not pass:\n%s", control, out)
+		}
+	}
 }
 
 func TestRootInstallScriptVersionFlagRequiresValue(t *testing.T) {

@@ -864,6 +864,10 @@ The EXIT handler removes only this invocation's owned temporary installer/archiv
 inputs, preserving an earlier failure if input cleanup also fails. Caller-owned
 archives/signatures and files already copied into the container remain available.
 Before successful creation, the installer does not claim it owns a container.
+Owned-leaf removal errors propagate explicitly through both cleanup helpers,
+including conditional callers; a later successful directory check cannot hide
+them. Cleanup-only failure warns and returns nonzero without replacing an earlier
+installation exit. Nonempty unexpected directories are still never erased.
 
 The dependency shell fails at the first failed required package-index or package
 installation command, retains its diagnostic and returns its nonzero status;

@@ -277,20 +277,48 @@ class LXCRecovery(unittest.TestCase):
                               actions)
                 self.assertIn("ready\n", actions)
 
-    def test_exit_handler_does_not_replace_the_primary_failure(self):
-        for primary, expected in ((44, 44), (0, 1)):
-            with self.subTest(primary=primary):
-                env = dict(os.environ, INSTALLER=str(INSTALLER))
-                script = r'''
+    def test_real_owned_cleanup_failure_does_not_replace_the_primary_failure(self):
+        for kind in ("script", "archive", "both"):
+            for primary, expected in ((44, 44), (0, 1)):
+                with self.subTest(kind=kind, primary=primary):
+                    self.assert_cleanup_failure(kind, primary, expected)
+
+    def assert_cleanup_failure(self, kind, primary, expected):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "script").mkdir()
+            (root / "archive").mkdir()
+            (root / "script/install.sh").write_bytes(b"owned installer input\n")
+            (root / "archive/pulse.tar.gz").write_bytes(b"owned archive input\n")
+            (root / "archive/pulse.tar.gz.sshsig").write_bytes(b"owned signature input\n")
+            env = dict(os.environ, INSTALLER=str(INSTALLER), FIXTURE=temp, KIND=kind)
+            script = r'''
 source "$INSTALLER"
-cleanup_container_install_inputs() { return 57; }
+container_script_temp_dir=""
+container_archive_source=""
+container_archive_temp=false
+if [[ "$KIND" != archive ]]; then
+    container_script_temp_dir="$FIXTURE/script"
+fi
+if [[ "$KIND" != script ]]; then
+    container_archive_source="$FIXTURE/archive/pulse.tar.gz"
+    container_archive_temp=true
+fi
+# Fail only removal; run both real production cleanup functions unchanged.
+rm() { printf 'fixture owned-input removal failure\n' >&2; return 57; }
 INSTALL_CONTAINER_CREATED=false
 handle_container_install_exit "$1"
 '''
-                result = subprocess.run(["bash", "-c", script, "bash", str(primary)],
-                                        env=env, capture_output=True, text=True,
-                                        timeout=5, start_new_session=True)
-                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            result = subprocess.run(["bash", "-c", script, "bash", str(primary)],
+                                    env=env, capture_output=True, text=True,
+                                    timeout=5, start_new_session=True)
+            self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            self.assertIn("Could not remove all temporary installation inputs.",
+                          result.stdout + result.stderr)
+            self.assertEqual((root / "script/install.sh").read_bytes(), b"owned installer input\n")
+            self.assertEqual((root / "archive/pulse.tar.gz").read_bytes(), b"owned archive input\n")
+            self.assertEqual((root / "archive/pulse.tar.gz.sshsig").read_bytes(),
+                             b"owned signature input\n")
 
 
 if __name__ == "__main__":
