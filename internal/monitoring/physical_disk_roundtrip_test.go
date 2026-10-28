@@ -1984,7 +1984,9 @@ func TestCOREPhysicalDiskReportingPipeline(t *testing.T) {
 	for _, boot := range []string{"boot-pool", "freenas-boot"} {
 		t.Run(boot, func(t *testing.T) {
 			var cycle atomic.Int64
-			sampleEnd := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Second).Unix()
+			// Stay inside the production two-step live window. Advance synthetic
+			// polls by one second, without making later buckets future samples.
+			sampleEnd := time.Now().UTC().Add(-5 * time.Second).Truncate(time.Second).Unix()
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				switch r.URL.Path {
@@ -2010,7 +2012,7 @@ func TestCOREPhysicalDiskReportingPipeline(t *testing.T) {
 						w.WriteHeader(400)
 						return
 					}
-					end := sampleEnd + cycle.Load()*10
+					end := sampleEnd + cycle.Load()
 					var replies []map[string]any
 					for _, g := range request.Graphs {
 						name, _ := g["name"].(string)
