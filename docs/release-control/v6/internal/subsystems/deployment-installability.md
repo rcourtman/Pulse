@@ -859,8 +859,8 @@ Legacy sensor-proxy removal stays in the separate explicitly invoked
 `scripts/uninstall-sensor-proxy.sh` maintenance procedure, with its existing
 state/trust preservation, failure reporting and documented workload-interruption
 warning. The new-install change neither runs that helper nor claims existing
-legacy mounts are repaired. Existing new-container ownership/cleanup, signed
-payload admission and scoped install/update behaviour are unchanged.
+legacy mounts are repaired. Signed payload admission and scoped install/update
+behaviour are unchanged; failed new-container recovery is specified below.
 
 `TestRootInstallProxmoxLeavesLegacyCleanupExplicit` checks the root source has
 no implicit legacy-cleanup implementation. The real `create_lxc_container`
@@ -871,6 +871,44 @@ cleanup or guest lifecycle action may precede the first configuration prompt;
 Cancel must complete without Proxmox actions. Normal read-only ID collision
 checks are unchanged. The separate legacy cleanup safety suite continues to own
 its explicit maintenance path.
+
+### Failed new LXC installations retain recovery state
+
+After acknowledged container creation, any failed stage, unexpected shell exit
+or interruption must leave that container and its partial installation available
+for inspection. Neither the failure nor signal handler stops or destroys it.
+The EXIT handler removes only this invocation's owned temporary installer/archive
+inputs, preserving an earlier failure if input cleanup also fails. Caller-owned
+archives/signatures and files already copied into the container remain available.
+Before successful creation, the installer does not claim it owns a container.
+Owned-leaf removal errors propagate explicitly through both cleanup helpers,
+including conditional callers; a later successful directory check cannot hide
+them. Cleanup-only failure warns and returns nonzero without replacing an earlier
+installation exit. Nonempty unexpected directories are still never erased.
+
+The dependency shell fails at the first failed required package-index or package
+installation command, retains its diagnostic and returns its nonzero status;
+optional timezone/sysctl adjustments remain best-effort. A failed inner installer
+returns its actual exit with or without the timeout wrapper. INT/TERM return
+130/143, and timeout 124 is uncertainty about completion, not a network diagnosis.
+Recovery guidance must remain visible even when a signal arrives during a create,
+start or copy command. It directs operators to inspect state/logs and reconcile
+any still-running command before recovering inside the retained container, not
+rerun the host installer and silently create a second instance. Removal is an
+explicit Proxmox operation, not an automatic consequence of a failed installation.
+
+`TestRootInstallProxmoxFailurePreservesRecovery` runs the complete production
+entry, EXIT and signal handlers with inert Proxmox boundaries and an actual
+dependency shell whose `/etc` writes are confined to fixture paths. Required
+package, start/network/copy, inner-install/timeout, late registration/readiness
+and real INT/TERM controls require nonzero exits, no completion claim, preserved
+fixture state/key bytes and mode, and no stop/destroy operation. Success, optional
+settings failure, caller-owned inputs and owned-scratch cleanup are positive
+controls. These are ordinary-user source proofs, not native guest experiments,
+signed installed forward/reverse recovery or a diagnosis of existing incidents.
+The existing authenticated-input controls require exact exit143 for interrupted
+bootstrap transport and exit1 for failed signature/transport admission, retaining
+their no-copy/no-execution and owned-scratch cleanup requirements in both cases.
 
 ### Legacy credential cleanup needs complete inventory and preserved keys
 
