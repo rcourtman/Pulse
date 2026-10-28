@@ -13022,3 +13022,24 @@ files, saved secrets and local administrator recovery. Existing fetch/parse
 categories, metadata-source precedence, limits, rate checks and outbound/TLS
 policy remain unchanged. Browser proof consumes those actual synthetic wire
 results through the existing Settings editor at desktop and narrow viewports.
+
+### RBAC integrity checks require an unambiguous organisation selection
+
+The public `GET /api/admin/rbac/integrity` fallback parses the complete query.
+Malformed encoding anywhere or repeated decoded `org_id` keys return
+`400 invalid_query`; an explicitly blank/whitespace-only or invalid identifier
+returns `400 invalid_org_id`. No integrity verdict or manager initialization
+may follow rejected admission. Omission retains the request organisation
+(including the existing default-context compatibility); a valid singleton
+retains percent decoding and whitespace normalization. A valid different
+organisation still returns `403 access_denied`. Well-formed unrelated query
+parameters remain ignored, not additional selectors.
+
+Authentication, instance administration, RBAC licensing, method/provider checks
+and endpoint-binder precedence remain unchanged. The default adapter is used
+when no binder is registered or a binder returns nil; a real override still
+owns its endpoint. `rbac_integrity_query_test.go` covers selection, no created
+manager/files on rejection, supported results, existing denials and both
+fallbacks. `TestContractRBACIntegrityQueryAdmission` exercises the registered
+router and unchanged authentication/licence gates. No frontend consumes this
+admin-only check; this changes no rendered state, recovery token or sign-in.

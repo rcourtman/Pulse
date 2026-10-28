@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -19,15 +20,26 @@ func (h *RBACHandlers) HandleRBACIntegrityCheck(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Query() discards malformed pairs and Get() selects the first repeated
+	// value. Neither may turn a damaged selection into a successful check.
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_query", "Invalid query encoding", nil)
+		return
+	}
+	if len(query["org_id"]) > 1 {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_query", "org_id must be supplied at most once", nil)
+		return
+	}
+
 	contextOrgID := strings.TrimSpace(GetOrgID(r.Context()))
 	if contextOrgID == "" {
 		contextOrgID = "default"
 	}
 
-	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
-	if orgID == "" {
-		orgID = contextOrgID
-	} else {
+	orgID := contextOrgID
+	if query.Has("org_id") {
+		orgID = strings.TrimSpace(query.Get("org_id"))
 		if !isValidOrganizationID(orgID) {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_org_id", "Invalid organization ID", nil)
 			return
