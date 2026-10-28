@@ -19,6 +19,7 @@ const GB = 1024 ** 3;
 const system = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'nas-core',
   name: 'nas-core',
+  displayName: 'nas-core',
   type: 'agent',
   platformId: 'nas-core',
   platformType: 'truenas',
