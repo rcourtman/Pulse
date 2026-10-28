@@ -804,8 +804,10 @@ export const ProxmoxBackupsTable: Component<{
                 <>
                   <span class="font-medium">
                     Health counts cover all targets and backup locations, regardless of filters.
-                  </span>{' '}
-                  {getBackupPostureRuleText(protectionPostures.policy())}
+                  </span>
+                  <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
+                    {(rule) => <span data-coverage-posture-rule> {rule()}</span>}
+                  </Show>
                 </>
               }
               tail={

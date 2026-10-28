@@ -1673,7 +1673,7 @@ describe('Coverage withdraws failed protection assessments', () => {
         expect(detail).not.toHaveTextContent('A current verified backup is available.');
         expect(detail).toHaveTextContent('Restore evidence');
         expect(within(detail).getByText('PVE file', { exact: true })).toBeInTheDocument();
-        expect(document.querySelector('[data-coverage-strip-footnote]')).toBeNull();
+        expect(document.querySelector('[data-coverage-posture-rule]')).toBeNull();
         expect(document.body).not.toHaveTextContent('SYNTHETIC_PRIVATE_VALUE');
 
         const beforePVE = sourceCalls('pve').length;
@@ -1720,7 +1720,7 @@ describe('Coverage withdraws failed protection assessments', () => {
       expect(detail).not.toHaveTextContent('History Complete');
       expect(detail).toHaveTextContent('Restore evidence');
       expect(within(detail).getByText('PVE file', { exact: true })).toBeInTheDocument();
-      expect(document.querySelector('[data-coverage-strip-footnote]')).toBeNull();
+      expect(document.querySelector('[data-coverage-posture-rule]')).toBeNull();
 
       const pending = deferred<typeof accepted>();
       apiFetchJSONMock.mockReturnValue(pending.promise);
@@ -1743,7 +1743,7 @@ describe('Coverage withdraws failed protection assessments', () => {
       expect(detail).toHaveTextContent('The current backup verification needs attention.');
       expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: '1 attention' })).toBeInTheDocument();
-      expect(document.querySelector('[data-coverage-strip-footnote]')).not.toBeNull();
+      expect(document.querySelector('[data-coverage-posture-rule]')).not.toBeNull();
       expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(2);
       expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(2);
     } finally {
