@@ -4,6 +4,10 @@ Start here for installation, platform setup, security, operations, and Pulse
 Intelligence. Commands, configuration keys, image names, API fields, and
 product identifiers remain untranslated in localized guides.
 
+The local guides below are shipped with this installation. Links labelled
+**GitHub** or **online** open online resources in a new tab and need network access; their
+current content can differ from your installed version.
+
 **Need help with a failure?** Read the
 [safe reporting guidance](TROUBLESHOOTING.md#-getting-help) before sharing
 evidence. A second reproduction or diagnostics export is not required; keep
@@ -57,7 +61,8 @@ integration against their own vCenter before production use.
 - [Automatic updates](AUTO_UPDATE.md)
 - [Centralized agent management](CENTRALIZED_MANAGEMENT.md) (Pro)
 - [Operational trust model](OPERATIONAL_TRUST.md)
-- [Current product screenshots](SCREENSHOTS.md)
+- [Live demo (online)](https://demo.pulserelay.pro) — generated sample data,
+  not a real deployment.
 
 ## Pulse Intelligence
 
@@ -100,7 +105,7 @@ paths rather than defaults in self-hosted setup.
 - [REST API](API.md)
 - [Architecture](../ARCHITECTURE.md)
 - [Contributing](../CONTRIBUTING.md)
-- [Release notes index](RELEASE_NOTES.md)
+- [Published release notes (GitHub)](https://github.com/rcourtman/Pulse/releases)
 - [Development transparency disclosure](AI_TRANSPARENCY.md)
 
 Detailed design notes and dated migration specifications may remain in this
