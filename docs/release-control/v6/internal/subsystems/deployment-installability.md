@@ -15,6 +15,7 @@
 ```
 
 ## Purpose
+
 ### Mechanical stable patch source admission
 
 Stable-regression patches are the sole main-only release exception. The release
@@ -828,6 +829,31 @@ maximum-length compatibility alongside rejected valid-prefix corruptions. The
 Unix real-agent controls keep their independent two-second watchdog, with
 process-group cancellation and separate build/probe timings. These source
 fixtures do not establish signed native installation, persistence or recovery.
+
+### New Proxmox installations leave existing workloads alone
+
+Creating a Pulse LXC is not estate-wide legacy maintenance. The root installer
+must not invoke sensor-proxy cleanup, stop/start existing guests or remove their
+mount configuration before asking for installation mode, on cancellation or as
+an implicit prerequisite for creating the new container. The old v4 automatic
+mount rewrite is removed, not moved to a later installation phase.
+
+Legacy sensor-proxy removal stays in the separate explicitly invoked
+`scripts/uninstall-sensor-proxy.sh` maintenance procedure, with its existing
+state/trust preservation, failure reporting and documented workload-interruption
+warning. The new-install change neither runs that helper nor claims existing
+legacy mounts are repaired. Existing new-container ownership/cleanup, signed
+payload admission and scoped install/update behaviour are unchanged.
+
+`TestRootInstallProxmoxLeavesLegacyCleanupExplicit` checks the root source has
+no implicit legacy-cleanup implementation. The real `create_lxc_container`
+entry is exercised through a controlling-terminal Cancel, Quick and Advanced
+selection and a detached noninteractive Quick entry, with every Proxmox action
+an inert fixture. The selected-ID lookup remains read-only. No implicit legacy
+cleanup or guest lifecycle action may precede the first configuration prompt;
+Cancel must complete without Proxmox actions. Normal read-only ID collision
+checks are unchanged. The separate legacy cleanup safety suite continues to own
+its explicit maintenance path.
 
 ### Legacy credential cleanup needs complete inventory and preserved keys
 
