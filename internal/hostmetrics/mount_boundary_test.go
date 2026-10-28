@@ -20,6 +20,10 @@ func TestCollectDisksKeepsSystemNamedSiblingVolumes(t *testing.T) {
 			{Device: "runtime", Mountpoint: "/run/worker", Fstype: "ext4"},
 			{Device: "remote", Mountpoint: "/snapshots-remote", Fstype: "nfs4"},
 			{Device: "/dev/vdd1", Mountpoint: "/snapshots-private", Fstype: "ext4"},
+			{Device: "/dev/vde1", Mountpoint: "/var/lib/containers", Fstype: "btrfs"},
+			{Device: "/dev/vdf1", Mountpoint: "/var/lib/docker", Fstype: "xfs"},
+			{Device: "layer", Mountpoint: "/var/lib/docker/overlay2/layer/merged", Fstype: "ext4"},
+			{Device: "podman-layer", Mountpoint: "/var/lib/containers/storage/overlay/layer/merged", Fstype: "xfs"},
 		}, nil
 	}
 	var calls []string
@@ -28,7 +32,7 @@ func TestCollectDisksKeepsSystemNamedSiblingVolumes(t *testing.T) {
 		return &godisk.UsageStat{Total: 1000, Used: 950, Free: 50, UsedPercent: 95}, nil
 	}
 	disks := collectDisks(context.Background(), []string{"/snapshots-private"})
-	want := []string{"/snapshots", "/runtime", "/var/lib/docker-data"}
+	want := []string{"/snapshots", "/runtime", "/var/lib/docker-data", "/var/lib/containers", "/var/lib/docker"}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("usage probes = %v, want only eligible local volumes %v", calls, want)
 	}

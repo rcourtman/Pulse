@@ -96,8 +96,6 @@ var specialMountPrefixes = []string{
 	"/sys",
 	"/run",
 	"/var/run/", // FreeBSD: /var/run is not a symlink to /run
-	"/var/lib/docker",
-	"/var/lib/containers",
 	"/snap",
 	"/System/Volumes/", // macOS APFS system/data/preboot/update companion volumes
 	"/Library/Developer/CoreSimulator/Volumes/", // Xcode simulator runtime disk images
@@ -128,6 +126,25 @@ var containerOverlayPatterns = []string{
 // from disk usage, even if they don't contain "/containers/".
 var containerPathPrefixes = []string{
 	"/mnt/.ix-apps/docker/", // TrueNAS SCALE Docker overlay mounts
+}
+
+// A runtime's data directory can be a separately mounted real disk (#3444).
+// Exclude its layer trees, not the backing mount or persistent data volumes.
+// Keep path checks as well as type checks: bind-mounted layers can report the
+// underlying ext4/xfs/btrfs type instead of "overlay".
+var containerLayerMountPrefixes = []string{
+	"/var/lib/docker/overlay2",
+	"/var/lib/docker/overlay",
+	"/var/lib/docker/aufs",
+	"/var/lib/docker/devicemapper/mnt",
+	"/var/lib/docker/btrfs/subvolumes",
+	"/var/lib/docker/zfs/graph",
+	"/var/lib/docker/vfs/dir",
+	"/var/lib/containers/storage/overlay",
+	"/var/lib/containers/storage/overlay2",
+	"/var/lib/containers/storage/btrfs/subvolumes",
+	"/var/lib/containers/storage/zfs/graph",
+	"/var/lib/containers/storage/vfs/dir",
 }
 
 // transientMountPatterns identify OS-managed mounts whose lifetime follows an
@@ -180,6 +197,14 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	// Check specific special mountpoints
 	if specialMountpoints[mountpoint] {
 		reasons = append(reasons, "special-mountpoint")
+	}
+
+	for _, directory := range containerLayerMountPrefixes {
+		if strings.HasPrefix(mountpoint, directory) &&
+			(len(mountpoint) == len(directory) || mountpoint[len(directory)] == '/') {
+			reasons = append(reasons, "container-overlay")
+			break
+		}
 	}
 
 	for _, pattern := range transientMountPatterns {

@@ -9,8 +9,7 @@ func TestSystemMountFiltersRespectDirectoryBoundaries(t *testing.T) {
 	// Include the roots as well as descendants. Paths that merely share a
 	// directory's spelling must remain eligible, even when they are full.
 	for _, directory := range []string{
-		"/dev", "/proc", "/sys", "/run", "/var/run", "/var/lib/docker",
-		"/var/lib/containers", "/snap", "/System/Volumes",
+		"/dev", "/proc", "/sys", "/run", "/var/run", "/snap", "/System/Volumes",
 		"/Library/Developer/CoreSimulator/Volumes", "/Volumes/.timemachine",
 	} {
 		t.Run(directory, func(t *testing.T) {

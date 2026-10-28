@@ -6,7 +6,7 @@ import (
 )
 
 func TestEligibleFilesystemFilteringDoesNotAllocate(t *testing.T) {
-	paths := []string{"", "/", "/data", "C:\\", " /runtime "}
+	paths := []string{"", "/", "/data", "C:\\", " /runtime ", "/var/lib/containers", "/var/lib/docker"}
 	for _, prefix := range specialMountPrefixes {
 		directory := strings.TrimSuffix(prefix, "/")
 		// Exercise short and long mismatches, including the macOS prefixes
