@@ -131,7 +131,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
   it('keeps assessment clocks workload-wide when a location filter is selected and cleared', async () => {
     mount();
     const panel = await open();
-    fireEvent.click(screen.getByRole('button', { name: 'Backup location: All locations' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Backup location: All backup locations' }));
     fireEvent.click(
       within(screen.getByRole('listbox', { name: 'Backup location' })).getByRole('option', {
         name: 'PVE file · east / local',
