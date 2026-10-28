@@ -27,10 +27,15 @@ describe('shipped documentation index', () => {
   it('uses labelled online references rather than unshipped routes or draft release packets', () => {
     const article = guide('README');
     for (const [label, url] of [
-      ['Demo screenshots (GitHub)', 'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md'],
+      [
+        'Demo screenshots (GitHub)',
+        'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md',
+      ],
       ['Published release notes (GitHub)', 'https://github.com/rcourtman/Pulse/releases'],
     ]) {
-      const link = [...article.querySelectorAll('a')].find((anchor) => anchor.textContent === label);
+      const link = [...article.querySelectorAll('a')].find(
+        (anchor) => anchor.textContent === label,
+      );
       expect(link?.getAttribute('href')).toBe(url);
       expect(link?.getAttribute('target')).toBe('_blank');
       expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
@@ -45,6 +50,8 @@ describe('shipped documentation index', () => {
   });
 
   it('keeps the repository and shipped index identical', () => {
-    expect(read('README')).toBe(readFileSync(path.resolve(process.cwd(), '../docs/README.md'), 'utf8'));
+    expect(read('README')).toBe(
+      readFileSync(path.resolve(process.cwd(), '../docs/README.md'), 'utf8'),
+    );
   });
 });
