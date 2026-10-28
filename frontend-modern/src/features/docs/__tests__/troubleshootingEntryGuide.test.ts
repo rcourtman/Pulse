@@ -8,6 +8,15 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const shippedDocs = path.join(repoRoot, 'frontend-modern/public/docs');
 const source = readFileSync(path.join(shippedDocs, 'TROUBLESHOOTING.md'), 'utf8');
 const renderedGuides = new Map<string, HTMLElement>();
+const entryGuideNames = [
+  'TROUBLESHOOTING',
+  'VM_DISK_MONITORING',
+  'AUTO_UPDATE',
+  'DOCKER',
+  'UNIFIED_AGENT',
+  'TRUENAS',
+  'PBS',
+];
 
 function renderGuide(name: string): HTMLElement {
   // Several destinations share a long guide. Render each immutable document
@@ -111,7 +120,14 @@ describe('troubleshooting workflow entry', () => {
           '/docs/TROUBLESHOOTING#replication-jobs-are-pending-stale-or-missing',
         ],
       ],
-      ['TrueNAS readings are stale or absent:', ['/docs/TRUENAS#stale-truenas-data']],
+      [
+        'TrueNAS readings are stale or absent:',
+        [
+          '/docs/TRUENAS#stale-truenas-data',
+          '/docs/TRUENAS#host-totals-and-individual-disk-activity',
+          '/docs/TRUENAS#memory-usage-and-arc-cache',
+        ],
+      ],
       [
         'Pulse itself uses more memory, CPU or disk writes:',
         [
@@ -183,18 +199,33 @@ describe('troubleshooting workflow entry', () => {
     expect(prose(memory)).toContain('Guest usage and database size are different measurements');
   });
 
-  it('routes every entry to an existing shipped heading in the production viewer', () => {
+  it('assigns every entry link to a verified shipped guide', () => {
     const links = [...entry().querySelectorAll('a[href]')];
     expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       const href = link.getAttribute('href')!;
-      // The production viewer preserves local fragments and rewrites Markdown
-      // links to other guides. Both must still lead to a real shipped heading.
       const match = /^(?:\/docs\/([^#]+))?#(.+)$/.exec(href);
       expect(match, href).not.toBeNull();
-      const target = renderGuide(match![1] ?? 'TROUBLESHOOTING').querySelector(
-        `[id="${match![2]}"]`,
-      );
+      expect(entryGuideNames, href).toContain(match![1] ?? 'TROUBLESHOOTING');
+    }
+  });
+
+  // Each independent destination keeps Vitest's normal deadline. One case
+  // must not accumulate every guide's rendering cost as the index grows.
+  // The coverage check above rejects a link to an unverified destination.
+  it.each(entryGuideNames)('routes every %s entry to its rendered heading', (name) => {
+    const article = renderGuide(name);
+    const links = [...entry().querySelectorAll('a[href]')].filter((link) => {
+      const match = /^(?:\/docs\/([^#]+))?#(.+)$/.exec(link.getAttribute('href')!);
+      return match && (match[1] ?? 'TROUBLESHOOTING') === name;
+    });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      const href = link.getAttribute('href')!;
+      const fragment = href.slice(href.indexOf('#') + 1);
+      // The production viewer preserves local fragments and rewrites Markdown
+      // links to other guides. Both must still lead to a real shipped heading.
+      const target = article.querySelector(`[id="${fragment}"]`);
       expect(target, href).not.toBeNull();
       expect(target?.tagName, href).toMatch(/^H[1-6]$/);
       expect(link.hasAttribute('data-doc-link'), href).toBe(!href.startsWith('#'));
