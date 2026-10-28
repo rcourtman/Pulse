@@ -21,6 +21,17 @@
 
 ## Purpose
 
+### CORE disk throughput is not protection or counter evidence
+
+Native per-disk read/write rates reach existing disk chart History under the
+canonical disk target and original sample instant. They never populate cumulative
+`PhysicalDisk.IO`, operation totals, busy percentage or backup/protection evidence.
+A partial catalogue preserves individual samples without implying complete host
+I/O. The physical-disk roundtrip pipeline checks both boot names and persisted
+readback. Device/pool identity and recovery operations remain unchanged; browser
+proof concerns the consuming drawer, not original appliance recovery.
+
+
 ### Snapshot subjects retain their observed guest kind
 
 A Proxmox snapshot's explicit VM/LXC kind takes precedence over best-effort

@@ -23,6 +23,16 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Native rate instants survive canonical cloning
+
+`MetricValue.ObservedAt` is an optional internal-only sample instant copied with
+the selected scalar, never part of public JSON. TrueNAS CORE per-disk rate writers
+use it instead of registry rebuild time. Rehydrated scalars without it are not
+new observations. `TestCloneNativeRateObservation` checks independent cloning,
+zero preservation and unchanged wire shape; the physical-disk pipeline verifies
+resolved targets. Identity, source precedence and cumulative counters do not change.
+
+
 ### Coverage evidence expansion preserves workload ownership
 
 An uncertain backup date remains inspectable beside the newest dated evidence
