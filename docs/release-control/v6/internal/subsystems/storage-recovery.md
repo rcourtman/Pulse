@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Snapshot subjects retain their observed guest kind
+
+A Proxmox snapshot's explicit VM/LXC kind takes precedence over best-effort
+current guest metadata. A conflicting lookup cannot lend the snapshot the
+replacement guest's canonical ID, source ID or display name: keep the original
+typed canonical subject and literal provider scope. Explicit unknown kinds
+retain the artifact but supply no canonical subject or subject-linked evidence.
+Only an absent legacy discriminator keeps best-effort lookup. Same-kind metadata,
+point IDs, snapshot facts, completion, collection quality and policy are unchanged.
+No store/schema migration, guest-agent, snapshot, backup or restore operation is
+introduced. Existing stored attribution changes only on ordinary re-observation.
+
+The normal-suite mapper regressions cover both replacement directions, all
+recognised kind aliases, same-kind and absent metadata, explicit unknown and
+legacy kinds, connection/node isolation, retained facts/evidence and the actual
+protection-posture aggregation. Production Coverage consuming proof must keep
+original snapshots inspectable without crediting the replacement guest with
+their provider evidence, at desktop and narrow widths. This is attribution
+safety, not incident causality, native recovery or verified restore availability.
+
 ### Backup read recovery retains keyboard position
 
 PVE, PBS and protection-posture retries remain focusable while pending, report
