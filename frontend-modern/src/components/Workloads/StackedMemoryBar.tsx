@@ -21,6 +21,10 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
       class={`metric-text relative w-full flex items-center justify-center ${props.detailsLabel ? 'h-11 sm:h-6' : 'h-4'}`}
       onMouseEnter={state.handleMouseEnter}
       onMouseLeave={state.handleMouseLeave}
+      onClick={(event) => {
+        // Portal dismissal must not reach a table row's separate action.
+        if (props.detailsLabel) event.stopPropagation();
+      }}
     >
       <div class="relative w-full h-4 overflow-hidden bg-surface-hover rounded-sm">
         <svg
