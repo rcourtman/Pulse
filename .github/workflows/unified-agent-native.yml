@@ -148,6 +148,22 @@ jobs:
         if: matrix.unix
         run: go test -count=1 -timeout 3m -run '^TestIntegrationContainer' ./scripts/installtests
 
+      # The complete Go installer inventory also executes Python workflow
+      # contracts. Hosted macOS has Python but does not supply PyYAML; isolate
+      # that fixture prerequisite instead of skipping the registered proof or
+      # modifying Homebrew's externally managed interpreter.
+      - name: Supply YAML parser for native Unix contract checks
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract_python="$(mktemp -d "$RUNNER_TEMP/pulse-contract-python.XXXXXX")"
+          python3 -m venv "$contract_python"
+          "$contract_python/bin/python3" -m pip install \
+            --disable-pip-version-check --no-input --only-binary=:all: 'PyYAML==6.0.3'
+          "$contract_python/bin/python3" -c 'import yaml; assert yaml.__version__ == "6.0.3"'
+          printf '%s\n' "$contract_python/bin" >> "$GITHUB_PATH"
+
       - name: Supply GNU timeout for macOS guidance checks
         if: runner.os == 'macOS'
         shell: bash

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Packaging's normal smoke-suite controls; no Docker daemon is used here."""
+import base64
+import contextlib
 import hashlib
 import importlib.util
 import io
@@ -8,6 +10,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -81,6 +84,56 @@ class InventoryTests(unittest.TestCase):
     def test_process_failure_cannot_become_a_successful_inventory(self):
         with self.assertRaises(subprocess.CalledProcessError):
             packaging.stream_command(['sh', '-c', 'printf partial; exit 19'], lambda f: f.read())
+
+
+class DownloadConsumerTests(unittest.TestCase):
+    def test_actual_consumer_checks_every_body_and_both_sidecars(self):
+        # Execute the exact in-container consumer, substituting only its file
+        # root and HTTP transport. This is not a real-image/startup result.
+        for fault in ['', 'body', 'checksum', 'ed25519', 'sshsig', 'sidecar-mode']:
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                linux = ['linux-'+a for a in ['amd64','arm64','armv7','armv6','386']]
+                files = {}
+                for family, arches in [('pulse-agent', linux+['darwin-amd64','darwin-arm64',
+                        'freebsd-amd64','freebsd-arm64','windows-amd64','windows-arm64','windows-386']),
+                        ('pulse-agent-helper', linux), ('pulse-agent-runner', linux)]:
+                    for arch in arches:
+                        name = family+'-'+arch+('.exe' if arch.startswith('windows-') else '')
+                        files['/download/'+family+'?arch='+arch] = root/'bin'/name
+                for name in ['install.sh','install.ps1']:
+                    files['/'+name] = root/'scripts'/name
+                for path in files.values():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(path.name.encode())
+                    path.chmod(0o755)
+                    for suffix in ['.sig','.sshsig']:
+                        sidecar = Path(str(path)+suffix)
+                        sidecar.write_bytes(('signature-'+path.name+suffix).encode())
+                        sidecar.chmod(0o755 if fault == 'sidecar-mode' else 0o644)
+                called = []
+                def fetch(url, timeout):
+                    route = url.removeprefix('http://127.0.0.1:7655')
+                    path = files[route]
+                    called.append(route)
+                    response = io.BytesIO(path.read_bytes() if fault != 'body' else b'wrong')
+                    response.headers = {
+                        'X-Checksum-Sha256': hashlib.sha256(path.read_bytes()).hexdigest() if fault != 'checksum' else 'wrong',
+                        'X-Signature-Ed25519': Path(str(path)+'.sig').read_text() if fault != 'ed25519' else 'wrong',
+                        'X-Signature-SSHSIG': base64.b64encode(Path(str(path)+'.sshsig').read_bytes()).decode() if fault != 'sshsig' else 'd3Jvbmc=',
+                    }
+                    return response
+                code = packaging.DOWNLOAD_CHECK.replace("'/opt/pulse'", repr(str(root)))
+                capture = io.StringIO()
+                with patch('urllib.request.urlopen', side_effect=fetch), contextlib.redirect_stdout(capture):
+                    if fault:
+                        with self.assertRaises(AssertionError):
+                            exec(compile(code, '<packaging-download-consumer>', 'exec'), {})
+                    else:
+                        exec(compile(code, '<packaging-download-consumer>', 'exec'), {})
+                        self.assertEqual(set(called), set(files))
+                        self.assertEqual(len(called), 24)
+                        self.assertEqual(len(json.loads(capture.getvalue())), 24)
 
 
 class DockerfileTests(unittest.TestCase):

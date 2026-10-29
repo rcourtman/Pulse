@@ -5857,3 +5857,87 @@ func TestContainerPackagingProofIsReadOnlyAndSamePayload(t *testing.T) {
 		`records["result"] = "failed"`, `"merged_rootfs_regular_file_bytes"`,
 	)
 }
+
+func TestNativeMacOSContractPythonPrerequisite(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct{ Name, If, Run string }
+		}
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	recipe := ""
+	for _, step := range workflow.Jobs["native-agent"].Steps {
+		if step.Name == "Supply YAML parser for native Unix contract checks" {
+			if step.If != "runner.os == 'macOS'" {
+				t.Fatal("Python acquisition is the missing macOS prerequisite, not a platform-wide tool replacement")
+			}
+			recipe = step.Run
+		}
+		if step.Name == "Test NAS removal contracts before frontend preparation" && recipe == "" {
+			t.Fatal("parser must be installed before the native contract inventory")
+		}
+	}
+	if recipe == "" || !strings.Contains(recipe, "--only-binary=:all: 'PyYAML==6.0.3'") ||
+		!strings.Contains(recipe, `assert yaml.__version__ == "6.0.3"`) {
+		t.Fatal("missing isolated fixed-version prerequisite and import check")
+	}
+	for _, fault := range []string{"", "venv", "pip", "import"} {
+		t.Run("failure="+fault, func(t *testing.T) {
+			root := t.TempDir()
+			tools := filepath.Join(root, "tools")
+			if err := os.Mkdir(tools, 0700); err != nil {
+				t.Fatal(err)
+			}
+			python := `#!/bin/sh
+set -eu
+if [ "$1 $2" = '-m venv' ]; then
+  [ "$FAULT" != venv ] || exit 21
+  mkdir -p "$3/bin"
+  cp "$0" "$3/bin/python3"
+  exit 0
+fi
+if [ "$1 $2" = '-m pip' ]; then
+  [ "$FAULT" != pip ] || exit 22
+  printf '%s\n' "$*" > "$INSTALL_ARGS"
+  exit 0
+fi
+[ "$1" = -c ] || exit 90
+[ "$FAULT" != import ] || exit 23
+printf '%s\n' "$2" > "$IMPORT_CODE"
+`
+			if err := os.WriteFile(filepath.Join(tools, "python3"), []byte(python), 0700); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(root, "github-path")
+			cmd := exec.Command("bash", "--noprofile", "--norc", "-c", recipe)
+			cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"RUNNER_TEMP="+root, "GITHUB_PATH="+path, "FAULT="+fault,
+				"INSTALL_ARGS="+filepath.Join(root, "install-args"), "IMPORT_CODE="+filepath.Join(root, "import-code"))
+			output, err := cmd.CombinedOutput()
+			if (err == nil) != (fault == "") {
+				t.Fatalf("prerequisite exit: %v\n%s", err, output)
+			}
+			published, readErr := os.ReadFile(path)
+			if fault != "" {
+				if readErr == nil && len(published) != 0 {
+					t.Fatalf("failed prerequisite published a usable path: %q", published)
+				}
+				return
+			}
+			if readErr != nil || !strings.HasPrefix(string(published), root+"/pulse-contract-python.") ||
+				!strings.HasSuffix(string(published), "/bin\n") {
+				t.Fatalf("missing exact venv path: %q, %v", published, readErr)
+			}
+			installed, err := os.ReadFile(filepath.Join(root, "install-args"))
+			if err != nil || !strings.Contains(string(installed), "--only-binary=:all: PyYAML==6.0.3") {
+				t.Fatalf("wrong prerequisite install: %q, %v", installed, err)
+			}
+		})
+	}
+}

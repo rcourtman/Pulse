@@ -16,6 +16,20 @@
 
 ## Purpose
 
+### macOS native contract Python prerequisite
+
+The native Unix installer inventory invokes the registered frontend workflow
+contract through `python3`. Both hosted macOS architectures must supply PyYAML
+before that inventory: their standard Python does not include it. The workflow
+installs the fixed `PyYAML==6.0.3` binary distribution in an owned temporary
+virtual environment, checks its import/version and publishes only its bin path
+to subsequent steps. It does not alter Homebrew's interpreter or skip a test.
+Venv, acquisition or import failures stop before path publication. Linux and
+Windows keep their existing tools and all native checks/deadlines remain.
+`TestNativeMacOSContractPythonPrerequisite` executes the actual shell with
+bounded command doubles for success and each prerequisite failure; native
+macOS CI remains the real installation/execution proof.
+
 ### Duplicate-free Docker payload layers (29 October 2026)
 
 The server runtime keeps its existing final binary bytes, cross-platform
