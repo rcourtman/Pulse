@@ -342,6 +342,9 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real agent lifecycle integration")
 	}
+	// Both the agent and its control plane use this test's private state and
+	// loopback listener. Keep real lifecycle coverage within Go's worker budget.
+	t.Parallel()
 	binaryPath := buildLifecycleAgent(t)
 
 	for _, tc := range []struct {
