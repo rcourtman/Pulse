@@ -146,8 +146,8 @@ func newPresentationFixture(t *testing.T, kind config.SSOProviderType) *presenta
 	} else {
 		p.OIDC = &config.OIDCProviderConfig{IssuerURL: server.URL, ClientID: "pulse", ClientSecret: "synthetic-presentation-secret", ClientSecretSet: true, Scopes: []string{"openid", "email"}}
 		require.NoError(t, r.oidcManager.InitializeProvider(t.Context(), p.ID, &p, ""))
-		t.Cleanup(func() { r.oidcManager.RemoveService(p.ID) })
 	}
+	t.Cleanup(func() { r.oidcManager.RemoveService(p.ID) })
 	require.NoError(t, r.ssoConfig.AddProvider(p))
 	r.ssoConfig.DefaultProviderID = p.ID
 	require.NoError(t, r.saveSSOConfig())
@@ -205,11 +205,9 @@ func TestSSOPresentationSavePreservesBindings(t *testing.T) {
 					payload.Name = "Renamed " + strings.ToUpper(string(kind))
 					f.offline.Store(offline)
 					if failSave {
-						// A regular-file obstruction forces a real persistence error
-						// without discarding the original encrypted file.
-						blocker := filepath.Join(t.TempDir(), "not-a-directory")
-						require.NoError(t, os.WriteFile(blocker, []byte("fixture"), 0600))
-						r.persistence = config.NewConfigPersistence(blocker)
+						// Fail only the write through the existing filesystem seam;
+						// constructing an invalid persistence root is fatal by design.
+						r.persistence.SetFileSystem(failingWriteFileSystem{})
 					}
 					rec := presentationPut(t, r, payload)
 					wantStatus := http.StatusOK
@@ -252,7 +250,11 @@ func TestSSOPresentationSavePreservesBindings(t *testing.T) {
 						expected.Providers[0].DisplayName = payload.DisplayName
 					}
 					require.Equal(t, expected, saved)
-					require.Equal(t, expected, r.ensureSSOConfig())
+					wantJSON, err := json.Marshal(expected)
+					require.NoError(t, err)
+					liveJSON, err := json.Marshal(r.ensureSSOConfig())
+					require.NoError(t, err)
+					require.JSONEq(t, string(wantJSON), string(liveJSON), "persisted nil and live empty collections have identical JSON semantics")
 					diskAfter, err := os.ReadFile(file)
 					require.NoError(t, err)
 					require.False(t, json.Valid(diskAfter), "SSO config was not encrypted")
