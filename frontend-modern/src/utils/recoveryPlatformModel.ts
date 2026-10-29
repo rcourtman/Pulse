@@ -3,7 +3,6 @@ import type {
   RecoveryPointDisplayTransport,
   RecoveryPoint,
   RecoveryPointsResponse,
-  RecoveryPointsTransportResponse,
   RecoveryPointTransport,
 } from '@/types/recovery';
 
@@ -81,8 +80,94 @@ export const normalizeRecoveryPoint = (
   };
 };
 
-export const normalizeRecoveryPointsResponse = (
-  response: RecoveryPointsTransportResponse,
-): RecoveryPointsResponse => ({
-  data: Array.isArray(response?.data) ? response.data.map(normalizeRecoveryPoint) : [],
-});
+export class RecoveryPointsFormatError extends Error {
+  constructor() {
+    // Provider/proxy contents may be private. Do not put them in the error.
+    super('The recovery point response format is invalid.');
+    this.name = 'RecoveryPointsFormatError';
+  }
+}
+
+type FieldCheck = (value: unknown) => boolean;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const isString: FieldCheck = (value) => typeof value === 'string';
+const optional =
+  (check: FieldCheck): FieldCheck =>
+  (value) =>
+    value == null || check(value);
+const hasShape = (value: unknown, shape: Readonly<Record<string, FieldCheck>>): boolean =>
+  isRecord(value) && Object.entries(shape).every(([field, check]) => check(value[field]));
+
+const displayShape = Object.fromEntries(
+  [
+    'itemLabel',
+    'itemType',
+    'subjectLabel',
+    'subjectType',
+    'clusterLabel',
+    'nodeHostLabel',
+    'nodeAgentLabel',
+    'namespaceLabel',
+    'entityIdLabel',
+    'repositoryLabel',
+    'detailsSummary',
+  ].map((field) => [field, optional(isString)]),
+);
+const refShape = Object.fromEntries(
+  ['type', 'namespace', 'name', 'uid', 'id', 'class'].map((field) => [field, optional(isString)]),
+);
+const pointShape = {
+  id: (value: unknown) => typeof value === 'string' && value.trim().length > 0,
+  kind: isString,
+  mode: isString,
+  outcome: isString,
+  ...Object.fromEntries(
+    [
+      'platform',
+      'provider',
+      'entityId',
+      'cluster',
+      'node',
+      'namespace',
+      'startedAt',
+      'completedAt',
+      'itemResourceId',
+      'subjectResourceId',
+      'repositoryResourceId',
+      'providerScope',
+    ].map((field) => [field, optional(isString)]),
+  ),
+  ...Object.fromEntries(
+    ['verified', 'encrypted', 'immutable'].map((field) => [
+      field,
+      optional((value: unknown) => typeof value === 'boolean'),
+    ]),
+  ),
+  sizeBytes: optional((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0),
+  display: optional((value) =>
+    hasShape(value, {
+      ...displayShape,
+      isWorkload: optional((value) => typeof value === 'boolean'),
+    }),
+  ),
+  itemRef: optional((value) => hasShape(value, refShape)),
+  subjectRef: optional((value) => hasShape(value, refShape)),
+  repositoryRef: optional((value) => hasShape(value, refShape)),
+  details: optional(isRecord),
+};
+
+export const normalizeRecoveryPointsResponse = (response: unknown): RecoveryPointsResponse => {
+  // The endpoint explicitly allocates an empty array. Missing/null/wrong-shaped
+  // data is an unread inventory, not evidence that there are no restore points.
+  // Admit the whole page before normalizing it; never silently drop a bad row.
+  if (!isRecord(response) || !Array.isArray(response.data)) throw new RecoveryPointsFormatError();
+  const ids = new Set<string>();
+  for (const point of response.data) {
+    if (!hasShape(point, pointShape) || ids.has(point.id)) throw new RecoveryPointsFormatError();
+    ids.add(point.id);
+  }
+  // Dates remain strings so the consuming table can expose unknown instants;
+  // new kind/mode/outcome strings keep their existing fallback presentation.
+  return { data: response.data.map(normalizeRecoveryPoint) };
+};
