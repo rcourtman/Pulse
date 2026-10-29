@@ -644,6 +644,7 @@ export function ProxmoxCoverageTable(props: {
                               expanded={isExpanded()}
                               resourceLabel={getBackupWorkloadDisclosureLabel(row.workload)}
                               controlsId={detailRowId()}
+                              hideWhenRowTappableOnMobile={false}
                               onToggle={() => props.onToggleExpand(row.key)}
                             />
                             <div class="min-w-0 flex-1">
