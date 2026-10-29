@@ -107,6 +107,16 @@ describe('docsLinks', () => {
     );
   });
 
+  it('publishes the API and metrics history references exactly as written', () => {
+    // The in-app docs serve these copies; the history route's accepted
+    // resourceType list must not differ between the two.
+    for (const guide of ['API.md', 'METRICS_HISTORY.md']) {
+      expect(readFileSync(path.join(frontendRoot, 'public/docs', guide), 'utf8')).toBe(
+        readFileSync(path.join(repoRoot, 'docs', guide), 'utf8'),
+      );
+    }
+  });
+
   it('keeps report collection precautions usable without unpublished documentation links', () => {
     for (const form of ['bug_report.yml', 'v6_rc_feedback.yml']) {
       const source = readFileSync(path.join(repoRoot, '.github', 'ISSUE_TEMPLATE', form), 'utf8');

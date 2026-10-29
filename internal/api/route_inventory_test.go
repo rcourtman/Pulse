@@ -302,6 +302,7 @@ var dynamicRouteAllowlist = []string{
 	"agentcapabilities.OperationsLoopStatusCompatibilityPath",
 	"agentcapabilities.PatrolControlStatusCapabilityPath",
 	"agentcapabilities.RecentChangesCapabilityPath",
+	"agentcapabilities.MetricHistoryCapabilityPath",
 }
 
 var publicRouteAllowlist = []string{

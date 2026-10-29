@@ -2086,6 +2086,22 @@ changes: it does not reconstruct events Pulse did not see, and command, output
 and runbook message content is redacted for tokens without `ai:execute`. Integer
 filters reach the route because the shared projection forwards integral JSON
 numbers as query parameters.
+`get_metric_history` is the manifest-owned metric-history read for external
+agents (`GET /api/agent/metric-history`, `monitoring:read`). It takes the
+canonical resource id the other agent reads return, resolves the resource's
+`MetricsTarget` through the registry, and delegates to the chart history read
+(`handleMetricsHistory`), so an agent and the history charts share tiers,
+fallbacks, downsampling and the licensed history limit; a window beyond that
+limit returns the same `license_required` error. It counts as resource-context
+external-agent activity rather than a new telemetry activity. A range outside
+`MetricHistoryRanges` or a non-positive `maxPoints` is a 400. `maxPoints` (capped
+at 200) is the downsampling target, not an output bound: short windows and
+fallback reads can return native samples, as the chart route does.
+The `cmd/pulse-mcp/README.md` introduction leads with the read-only questions
+external agents can ask (`list_recent_changes`, `get_metric_history`,
+`get_fleet_context`, `get_resource_context`) and says a `monitoring:read` token
+covers them; `TestContract_PulseMCPReadmeIntroNamesPublishedReadTools` fails if
+a tool it names stops being an MCP-published monitoring-read GET.
 than in `cmd/pulse-mcp` or an MCP-only inventory registry. They must enter
 through `ManifestSurfaceResourceCapabilities`,
 `ListMCPManifestSurfaceResourcesHTTP`, and

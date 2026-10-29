@@ -4731,6 +4731,11 @@ readable without a name, so the timeline's recovery posture is exactly the
 `resource_changes` table's: whatever survives a restart or restore is what
 agents read, with no timeline-specific rehydration or recovery artifact.
 
+Metric history at `/api/agent/metric-history` (`get_metric_history`) adds no
+persistence either. It resolves a resource's existing `MetricsTarget` and reads
+through the same history path the charts use (the metrics store, then the
+in-memory and live fallbacks), so its recovery posture is the metrics store's.
+
 The live `alert.fired`, `alert.resolved` and `resource.status_changed` agent
 events add no persistence. They are published in memory after the monitor
 adapter has recorded the matching `resource_changes` row, and per-resource

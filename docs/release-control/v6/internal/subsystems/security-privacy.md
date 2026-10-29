@@ -3770,3 +3770,18 @@ command metadata, so a monitoring-read token learns nothing from an event that
 it could not already read through `list_recent_changes`. Proof:
 `TestContract_AgentChangeEventsStayInsideTheirOrganization` in
 `internal/api/contract_test.go`.
+
+### Agent metric history reuses the chart route's authority (29 October 2026)
+
+`/api/agent/metric-history` (`get_metric_history`) requires `monitoring:read`,
+the same scope as `/api/metrics-store/history`. It resolves the canonical
+resource id through the request organization's registry and hands a cloned
+request, with the organization context intact, to `handleMetricsHistory`, so
+tenant resolution, the licensed history limit and the response are the chart
+route's own. The rewritten query carries only resourceType, resourceId, range,
+maxPoints and metric; any other parameter the caller sent is dropped. A
+monitoring-read token therefore reads nothing through it that it could not
+already read from the chart route. `normalizeMetricsHistoryResourceType` now
+also accepts the registry's Kubernetes target kinds (`pod`, `k8s-cluster`,
+`k8s-node`, `k8s-deployment`) as the `k8s` store type; that widens which
+spellings reach the same store type, not who may read it.

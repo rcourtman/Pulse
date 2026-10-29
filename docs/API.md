@@ -1779,7 +1779,7 @@ Returns stats for the persistent metrics store (SQLite-backed).
 Returns historical metric series for a resource and time range.
 
 Query params:
-- `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s`, `vm`, `system-container`, `oci-container`, `app-container`, `docker-host`
+- `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s` (or the Kubernetes kinds `pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`, which read the same history), `vm`, `system-container`, `oci-container`, `app-container`, `docker-host`
 - `resourceId` (required)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit for all metrics
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)

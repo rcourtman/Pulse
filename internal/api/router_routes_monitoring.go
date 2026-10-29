@@ -127,6 +127,12 @@ func (r *Router) registerMonitoringResourceRoutes(
 		agentcapabilities.ListRecentChangesCapabilityName,
 		r.agentContextHandler.HandleRecentChanges,
 	))))
+	// Agent-consumable metric history — "how did it move?" for one resource,
+	// served by the same history read the charts use.
+	r.mux.HandleFunc(agentcapabilities.MetricHistoryCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.GetMetricHistoryCapabilityName,
+		r.handleAgentMetricHistory,
+	))))
 	// Content-safe Patrol control status: the shared Patrol, Assistant,
 	// governed action, verification, Patrol control proof, and optional MCP
 	// readiness projection for native UI and external agents.

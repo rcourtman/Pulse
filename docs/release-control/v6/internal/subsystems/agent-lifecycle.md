@@ -2749,6 +2749,9 @@ agents may read what changed across the fleet, but `command_executed` and
 `commandRedacted:true`, the command text, output, and caller details dropped,
 and a command's reason cut to its status. A change record is history, never command
 disclosure, install-token scope, or execution authority.
+Metric history at `/api/agent/metric-history` (`get_metric_history`) is the
+same read-only boundary: a resource's recorded metric series for a window,
+never install, enrollment or command authority.
 
 The `alert.fired`, `alert.resolved` and `resource.status_changed` events on
 `/api/agent/events` are the push form of the same records and the same

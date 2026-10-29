@@ -7492,7 +7492,10 @@ func normalizeMetricsHistoryResourceType(input string) (responseType string, run
 		return "agent", "agent", []string{"agent", "node"}, nil
 	case "disk":
 		return "disk", "disk", []string{"disk"}, nil
-	case "k8s":
+	case "k8s", "pod", "k8s-cluster", "k8s-node", "k8s-deployment":
+		// Kubernetes history lives under one store type. The registry's
+		// MetricsTarget names the specific kind, so accept those too and let
+		// every caller pass a target through unchanged.
 		return "k8s", "k8s", []string{"k8s"}, nil
 	case "vm":
 		return "vm", "vm", []string{"vm"}, nil

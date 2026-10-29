@@ -44,7 +44,8 @@ func externalAgentCapabilityActivity(capabilityName string) (string, string, boo
 	var activity string
 	switch strings.TrimSpace(capabilityName) {
 	case agentcapabilities.ResourceContextCapabilityName,
-		agentcapabilities.ListResourceCapabilitiesCapabilityName:
+		agentcapabilities.ListResourceCapabilitiesCapabilityName,
+		agentcapabilities.GetMetricHistoryCapabilityName:
 		activity = config.ExternalAgentActivityResourceContext
 	case agentcapabilities.FleetContextCapabilityName,
 		agentcapabilities.ListRecentChangesCapabilityName:

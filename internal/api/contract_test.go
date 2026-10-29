@@ -28662,20 +28662,62 @@ func TestContract_AgentRecentChangesJSONSnapshot(t *testing.T) {
 }
 
 // TestContract_PulseMCPPublishesRecentChangesAsReadOnlyTool pins that MCP
-// clients see list_recent_changes as a monitoring-read GET on the manifest
-// route, not only the REST surface.
+// clients see the event-record reads (list_recent_changes and
+// get_metric_history) as monitoring-read GETs on their manifest routes, not
+// only on the REST surface.
 func TestContract_PulseMCPPublishesRecentChangesAsReadOnlyTool(t *testing.T) {
-	manifest := agentcapabilities.CanonicalManifest()
-	for _, capability := range agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP) {
-		if capability.Name != agentcapabilities.ListRecentChangesCapabilityName {
+	published := map[string]agentcapabilities.Capability{}
+	for _, capability := range agentcapabilities.ManifestSurfaceToolCapabilities(agentcapabilities.CanonicalManifest(), agentcapabilities.SurfaceIDPulseMCP) {
+		published[capability.Name] = capability
+	}
+	for name, path := range map[string]string{
+		agentcapabilities.ListRecentChangesCapabilityName: agentcapabilities.RecentChangesCapabilityPath,
+		agentcapabilities.GetMetricHistoryCapabilityName:  agentcapabilities.MetricHistoryCapabilityPath,
+	} {
+		capability, ok := published[name]
+		if !ok {
+			t.Errorf("Pulse MCP surface does not publish %s", name)
 			continue
 		}
-		if capability.Method != http.MethodGet || capability.Path != agentcapabilities.RecentChangesCapabilityPath || capability.Scope != config.ScopeMonitoringRead {
-			t.Fatalf("list_recent_changes = %s %s (%s); want GET %s (%s)", capability.Method, capability.Path, capability.Scope, agentcapabilities.RecentChangesCapabilityPath, config.ScopeMonitoringRead)
+		if capability.Method != http.MethodGet || capability.Path != path || capability.Scope != config.ScopeMonitoringRead {
+			t.Errorf("%s = %s %s (%s); want GET %s (%s)", name, capability.Method, capability.Path, capability.Scope, path, config.ScopeMonitoringRead)
 		}
-		return
 	}
-	t.Fatalf("Pulse MCP surface does not publish %s", agentcapabilities.ListRecentChangesCapabilityName)
+}
+
+// TestContract_PulseMCPReadmeIntroNamesPublishedReadTools pins the pulse-mcp
+// README introduction to the manifest. It promises that a monitoring:read
+// token covers the tools it names, so each must be an MCP-published GET with
+// that scope; a renamed tool or a widened scope fails here instead of leaving
+// the first thing a new user reads out of date.
+func TestContract_PulseMCPReadmeIntroNamesPublishedReadTools(t *testing.T) {
+	readme, err := os.ReadFile(filepath.Join("..", "..", "cmd", "pulse-mcp", "README.md"))
+	if err != nil {
+		t.Fatalf("read cmd/pulse-mcp/README.md: %v", err)
+	}
+	intro, _, found := strings.Cut(string(readme), "\n## ")
+	if !found || !strings.Contains(intro, "`monitoring:read` token") {
+		t.Fatalf("pulse-mcp README introduction no longer states which token covers its reads:\n%s", intro)
+	}
+	before, _, _ := strings.Cut(intro, "`monitoring:read` token")
+	named := regexp.MustCompile("`([a-z]+(?:_[a-z]+)+)`").FindAllStringSubmatch(before, -1)
+	if len(named) == 0 {
+		t.Fatal("pulse-mcp README introduction names no tools")
+	}
+	published := map[string]agentcapabilities.Capability{}
+	for _, capability := range agentcapabilities.ManifestSurfaceToolCapabilities(agentcapabilities.CanonicalManifest(), agentcapabilities.SurfaceIDPulseMCP) {
+		published[capability.Name] = capability
+	}
+	for _, match := range named {
+		capability, ok := published[match[1]]
+		if !ok {
+			t.Errorf("README introduction names %s, which Pulse MCP does not publish", match[1])
+			continue
+		}
+		if capability.Method != http.MethodGet || capability.Scope != config.ScopeMonitoringRead {
+			t.Errorf("README introduction says a monitoring:read token covers %s, but it is %s with scope %s", match[1], capability.Method, capability.Scope)
+		}
+	}
 }
 
 // Change events reach only subscribers in the organization whose monitor

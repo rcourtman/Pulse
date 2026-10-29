@@ -77,6 +77,10 @@ func TestNormalizeMetricsHistoryResourceType_ContainerCanonicalTypes(t *testing.
 			wantRuntime:  "app-container",
 			wantStore:    []string{"dockerContainer", "docker"},
 		},
+		{name: "pod target", input: "pod", wantResponse: "k8s", wantRuntime: "k8s", wantStore: []string{"k8s"}},
+		{name: "k8s cluster target", input: "k8s-cluster", wantResponse: "k8s", wantRuntime: "k8s", wantStore: []string{"k8s"}},
+		{name: "k8s node target", input: "k8s-node", wantResponse: "k8s", wantRuntime: "k8s", wantStore: []string{"k8s"}},
+		{name: "k8s deployment target", input: "k8s-deployment", wantResponse: "k8s", wantRuntime: "k8s", wantStore: []string{"k8s"}},
 	}
 
 	for _, tt := range tests {
