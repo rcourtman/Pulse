@@ -44,13 +44,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import shutil
 import sys
+import tempfile
 from collections import defaultdict
 
 
 MAX_FAILURE_IDENTIFIERS = 256
 MAX_IDENTIFIER_LENGTH = 256
 SOURCE_TEST_NAME = re.compile(r"(?:Test|Fuzz|Example)[A-Za-z0-9_]*")
+# Retain diagnostics, not an output-sized Python heap. Short roots stay in
+# memory; noisy roots spill to an anonymous, private temporary file. This is
+# a storage threshold, never an output limit or a different coverage verdict.
+HELD_OUTPUT_MEMORY_BYTES = 64 * 1024
 
 
 def bounded_identifiers(names: set[str]) -> dict[str, object]:
@@ -88,7 +94,17 @@ def main() -> int:
         expected = set(names)
         expected_package = sys.argv[3]
 
-    held: dict[str, list[str]] = defaultdict(list)
+    held = defaultdict(lambda: tempfile.SpooledTemporaryFile(
+        max_size=HELD_OUTPUT_MEMORY_BYTES, mode="w+", encoding="utf-8", newline=""))
+
+    def finish_output(top: str, *, show: bool = False) -> None:
+        buffer = held.pop(top, None)
+        if buffer is not None:
+            with buffer:
+                if show:
+                    buffer.seek(0)
+                    shutil.copyfileobj(buffer, sys.stdout, length=HELD_OUTPUT_MEMORY_BYTES)
+
     running: set[str] = set()
     seconds: dict[str, float] = {}
     package_seconds = None
@@ -187,7 +203,7 @@ def main() -> int:
             started.add(top)
             running.add(top)
         if text:
-            held[top].append(text)
+            held[top].write(text)
         if test != top or action not in ("pass", "fail", "skip"):
             continue
 
@@ -195,11 +211,10 @@ def main() -> int:
             invalid_events += 1
         running.discard(top)
         completed.add(top)
-        lines = held.pop(top, [])
+        finish_output(top, show=action == "fail")
         if action == "fail":
             failed = True
             failed_tests.add(top)
-            out.write("".join(lines))
             out.flush()
         elapsed = event.get("Elapsed")
         if isinstance(elapsed, (int, float)):
@@ -208,7 +223,11 @@ def main() -> int:
     for top in sorted(running):
         failed = True
         out.write(f"--- {top} did not finish; its output follows\n")
-        out.write("".join(held.get(top, [])))
+        finish_output(top, show=True)
+    # Malformed streams can contain output without a root start. They still
+    # fail below; do not leave their temporary buffers open until GC.
+    for top in list(held):
+        finish_output(top)
     out.flush()
 
     missing = expected - completed if expected is not None else set()
