@@ -10,6 +10,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/stretchr/testify/require"
 )
@@ -54,6 +56,23 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 					}
 					return result
 				}
+				// History intentionally ignores collections at or before its
+				// millisecond watermark. These are distinct modeled poll cycles,
+				// not duplicate observations within one persisted clock tick.
+				poll := func() {
+					t.Helper()
+					coverage, err := store.BackupHistoryCoverage(ctx, job.StartTime, time.Now().UTC())
+					require.NoError(t, err)
+					for _, source := range coverage.Sources {
+						if source.Provider == recovery.ProviderProxmoxPVE && source.Instance == "site" {
+							if wait := time.Until(source.LastObservedAt.Add(time.Millisecond)); wait > 0 {
+								time.Sleep(wait)
+							}
+							require.Greater(t, time.Now().UnixMilli(), source.LastObservedAt.UnixMilli())
+						}
+					}
+					m.pollBackupTasks(ctx, "site", client)
+				}
 				checkStored := func(last recovery.Outcome, complete bool) {
 					points, total, err := store.ListPoints(ctx, recovery.ListPointsOptions{Kind: recovery.KindOther})
 					require.NoError(t, err)
@@ -73,7 +92,7 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 						}
 					}
 				}
-				m.pollBackupTasks(ctx, "site", client)
+				poll()
 				assertVzdumpGuestResults(t, guests(), "running")
 				checkStored(recovery.OutcomeRunning, false)
 				_, active := m.resolveBackupIntentContext("", "site", job.Node, 103, time.Now())
@@ -89,7 +108,7 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 				}
 				m.vzdumpJobTaskCache[key] = entry
 				client.logErr = fmt.Errorf("task log %s", failure)
-				m.pollBackupTasks(ctx, "site", client)
+				poll()
 				assertVzdumpGuestResults(t, guests(), "running")
 				for _, task := range guests() {
 					require.Equal(t, observed, task.ObservedAt, "failed reads cannot freshen the last log observation")
@@ -99,7 +118,7 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 
 				client.task.EndTime = job.EndTime.Unix()
 				client.task.Status = parentStatus
-				m.pollBackupTasks(ctx, "site", client)
+				poll()
 				assertVzdumpGuestResults(t, guests(), "unknown")
 				for _, task := range guests() {
 					require.Equal(t, observed, task.ObservedAt)
@@ -118,14 +137,14 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 				// Only an ordinary accepted log supplies the missing guest verdict.
 				client.logErr = nil
 				client.logLines = append(lines, proxmox.TaskLogLine{LineNumber: 6, Text: "INFO: Finished Backup of VM 103 (00:02:00)"}, proxmox.TaskLogLine{LineNumber: 7, Text: "TASK ERROR: job errors"})
-				m.pollBackupTasks(ctx, "site", client)
+				poll()
 				assertVzdumpGuestResults(t, guests(), "OK")
 				checkStored(recovery.OutcomeSuccess, true)
 				require.True(t, m.vzdumpJobTaskCache[key].final)
 				for _, task := range guests() {
 					require.True(t, task.ObservedAt.After(observed))
 				}
-				m.pollBackupTasks(ctx, "site", client)
+				poll()
 				require.Equal(t, 4, client.logRequests, "complete immutable logs still use the final cache")
 				checkStored(recovery.OutcomeSuccess, true)
 			})
@@ -172,4 +191,69 @@ func TestVzdumpCachedGuestUnreadLogUsesCurrentParent(t *testing.T) {
 			require.Equal(t, wantRequests, client.logRequests, "repair must not bypass request or cancellation bounds")
 		})
 	}
+}
+
+// Pin the distinction behind the cached-guest watchdog failure without relying
+// on machine speed, sleeps, repeated test executions or a changed store clock.
+// Live state can accept a parent/log transition before the collection timestamp
+// advances far enough to be a distinct durable observation.
+func TestVzdumpCachedGuestHistoryCollectionPrecision(t *testing.T) {
+	ctx := context.Background()
+	job, lines := vzdumpGuestResultFixture()
+	ended := job
+	job.Status, job.EndTime = "running", time.Time{}
+	client := &cachedVzdumpClient{jobBackupTaskClient: jobBackupTaskClient{logLines: lines}}
+	manager := recoverymanager.New(config.NewMultiTenantPersistence(t.TempDir()))
+	m := &Monitor{recoveryManager: manager}
+	store, err := manager.StoreForOrg("default")
+	require.NoError(t, err)
+	defer store.Close()
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	collection := model.BackupHistoryCollection{
+		Provider: recovery.ProviderProxmoxPVE, Instance: "site",
+		ObservedAt: at, Complete: true, MaxGap: time.Minute,
+	}
+	upids := map[string]string{job.ID: testJobUPID}
+	capture := func(phase, liveStatus string, storedOutcome recovery.Outcome, complete bool) {
+		t.Helper()
+		guests := m.synthesizeVzdumpJobGuestTasks(ctx, "site", client, []models.BackupTask{job}, upids)
+		assertVzdumpGuestResults(t, guests, liveStatus)
+		points, err := proxmoxmapper.FromPVEBackupTasksWithEvidence(append([]models.BackupTask{job}, guests...), nil, collection.ObservedAt)
+		require.NoError(t, err)
+		m.qualifyBackupGuestTaskDetails("site", []models.BackupTask{job}, upids, points)
+		m.persistBackupTaskHistory(ctx, points, collection)
+		stored, total, err := store.ListPoints(ctx, recovery.ListPointsOptions{Kind: recovery.KindOther})
+		require.NoError(t, err)
+		require.Equal(t, 4, total)
+		for _, point := range stored {
+			switch point.ID {
+			case "pve-task:" + job.ID:
+				require.Equal(t, complete, point.Details["guestTaskDetailsComplete"], phase)
+			case "pve-task:" + job.ID + "-vm101":
+				require.Equal(t, recovery.OutcomeSuccess, point.Outcome, phase)
+			case "pve-task:" + job.ID + "-vm102":
+				require.Equal(t, recovery.OutcomeFailed, point.Outcome, phase)
+			case "pve-task:" + job.ID + "-vm103":
+				require.Equal(t, storedOutcome, point.Outcome, phase)
+			default:
+				t.Fatalf("%s: unexpected point %q", phase, point.ID)
+			}
+		}
+		t.Logf("%s collection=%s live=%s durable=%s complete=%t", phase, collection.ObservedAt.Format(time.RFC3339Nano), liveStatus, storedOutcome, complete)
+	}
+	capture("running", "running", recovery.OutcomeRunning, false)
+	job = ended
+	client.logErr = fmt.Errorf("task log 503 unavailable")
+	collection.ObservedAt = at.Add(time.Millisecond - time.Nanosecond)
+	capture("ended-same-tick", "unknown", recovery.OutcomeRunning, false)
+	collection.ObservedAt = at.Add(time.Millisecond)
+	capture("ended-next-tick", "unknown", recovery.OutcomeUnknown, false)
+	client.logErr = nil
+	client.logLines = append(lines, proxmox.TaskLogLine{LineNumber: 6, Text: "INFO: Finished Backup of VM 103 (00:02:00)"}, proxmox.TaskLogLine{LineNumber: 7, Text: "TASK ERROR: job errors"})
+	collection.ObservedAt = at.Add(2*time.Millisecond - time.Nanosecond)
+	capture("complete-same-tick", "OK", recovery.OutcomeUnknown, false)
+	collection.ObservedAt = at.Add(2 * time.Millisecond)
+	capture("complete-next-tick", "OK", recovery.OutcomeSuccess, true)
+	require.True(t, m.vzdumpJobTaskCache["site|"+testJobUPID].final)
+	require.Equal(t, 4, client.logRequests, "the complete log remains immutable after recovery")
 }
