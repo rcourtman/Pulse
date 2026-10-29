@@ -4,7 +4,7 @@
 # cannot invalidate its test API. An unavailable diff is handled as true by CI.
 set -euo pipefail
 
-if grep -E '^go\.(mod|sum)$|^(internal|cmd|pkg)/|^scripts/(compile-go-tests|go-test-compile-required|ensure_test_assets)\.sh$|^\.github/workflows/build-and-test\.yml$|\.(go|c|cc|cpp|h|s|S|syso)$' >/dev/null; then
+if grep -E '^go\.(mod|sum)$|^(internal|cmd|pkg)/|^scripts/(compile-go-tests|go-test-compile-required|ensure_test_assets)\.sh$|^scripts/select-go-test-compile-packages\.py$|^\.github/workflows/build-and-test\.yml$|\.(go|c|cc|cpp|h|s|S|syso)$' >/dev/null; then
     printf 'true\n'
 else
     printf 'false\n'

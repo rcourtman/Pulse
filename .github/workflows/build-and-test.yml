@@ -426,7 +426,8 @@ jobs:
 
   # Reject cross-package test/API incompatibilities before spending seven
   # runners on race tests. This links test binaries but never executes them;
-  # the existing required checks below still own runtime and vet verdicts.
+  # an exclusively test-file diff compiles its packages and imports, otherwise
+  # all packages compile. Required checks below still own runtime/vet verdicts.
   test-compile:
     name: Compile backend race tests (no execution)
     needs: changes
@@ -438,6 +439,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Include a PR merge's base or a single-push parent. An older or
+          # unavailable base safely retains full compilation; never fetch it
+          # through another command inside the source selector.
+          fetch-depth: 2
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -448,7 +453,10 @@ jobs:
       - name: Provide frontend test embed stub
         run: bash scripts/ensure_test_assets.sh
 
-      - name: Compile every Go race-test binary without executing it
+      - name: Compile affected Go race-test binaries without executing them
+        env:
+          PULSE_GO_COMPILE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          PULSE_GO_COMPILE_HEAD: ${{ github.sha }}
         run: bash scripts/compile-go-tests.sh
 
   backend:
