@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Login } from '@/components/Login';
+// Compile the real lazy destination before timed assertions; do not mock setup
+// or make module transformation part of the read-recovery deadline.
+import '@/components/SetupWizard';
 import loginSource from '@/components/Login.tsx?raw';
 import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from '@/utils/localStorage';
 
