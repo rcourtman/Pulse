@@ -77,6 +77,14 @@ func TestPBSMissingInventoryArrayRetainsUnreadScope(t *testing.T) {
 								}
 							}
 							for _, p := range f.postures(t) {
+								// With no accepted point, this guest has no established
+								// provider association. Do not invent one from its VMID.
+								if !warm && p.SubjectResourceID == f.ids[1] {
+									if p.State != recovery.ProtectionStateUnknown || len(p.ProviderStates) != 0 {
+										t.Errorf("cold unread guest gained evidence or protection: %+v", p)
+									}
+									continue
+								}
 								if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 ||
 									p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial ||
 									p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown {
@@ -170,7 +178,13 @@ func TestPBSMissingInventoryArrayConsumerLifecycle(t *testing.T) {
 		if phase == "confirmed-empty" {
 			want = 0
 		}
-		if len(f.live()) != want || len(f.points(t, "pbs-main")) != want {
+		wantPoints := want
+		if phase == "missing-namespaces" || phase == "null-groups" || phase == "null-snapshots" {
+			// The accepted root advances, but an incomplete scan cannot delete
+			// its older historical point while preserving the unread tenant.
+			wantPoints = 3
+		}
+		if len(f.live()) != want || len(f.points(t, "pbs-main")) != wantPoints {
 			t.Fatalf("phase %s lost or invented backup facts", phase)
 		}
 		frames[phase] = map[string]any{"pbs": map[string]any{"data": map[string]any{"backups": f.m.state.GetSnapshot().PBSBackups}}, "postures": map[string]any{"data": postures, "policy": recovery.DefaultProtectionPosturePolicy.Payload()}, "points": f.points(t, "pbs-main")}
