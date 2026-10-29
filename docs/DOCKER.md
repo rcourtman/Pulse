@@ -473,6 +473,19 @@ not on the Pulse server. It uses the login visible to that agent process;
 a successful pull in another user's shell does not prove the agent can
 authenticate. Detection does not require enabling command execution.
 
+**HTTPS is required for registry checks.** The agent contacts the registry
+directly over HTTPS; Docker's `insecure-registries` setting does not apply, and
+Pulse has no plain-HTTP registry option. A successful Docker pull from an
+HTTP-only registry does not establish support for Pulse's update check.
+
+If the existing error says `http: server gave HTTP response to HTTPS client`,
+the selected endpoint is serving HTTP where the checker expects TLS. This is
+not evidence of a missing login; changing registry credentials or adding them
+to the Pulse server will not repair that protocol mismatch. The supported
+route is an HTTPS registry endpoint, directly or through a TLS reverse proxy,
+with a certificate trusted by the agent. Do not disable TLS verification or
+send registry passwords over HTTP to test this.
+
 **Native agent:** use its actual service account, home and service environment.
 Root and least-privilege installations can use different accounts. Log in
 interactively in the intended account and environment:
