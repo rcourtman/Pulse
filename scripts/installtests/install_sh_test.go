@@ -3321,11 +3321,9 @@ func extractCollectorLifecycleShellFunctions(t *testing.T, includeVerify bool) s
 
 func buildPulseAgentLifecycleBinary(t *testing.T) string {
 	t.Helper()
-	binary := filepath.Join(t.TempDir(), "pulse-agent")
-	build := exec.Command("go", "build", "-o", binary, "./cmd/pulse-agent")
-	build.Dir = filepath.Dir(repoFile("go.mod"))
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build pulse-agent lifecycle binary: %v\n%s", err, output)
+	binary, err := lifecycleAgentFixture(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
 	}
 	return binary
 }
