@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "99738e5e08b1d4188c44b31e642b133440dd189d",
+  "verified_at": "2026-10-29T08:57:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/patrol/InvestigationMessages.tsx": "32bd835d50e4faa08de1db37a95323cfbdd5ffe77dc9c449eca46ca33a3dadb0",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "11e42c98383067d0652f93f5232920fb1dfa8fe8272194c821dc9e5edba65f60"
+  },
+  "routes": [
+    "/patrol?attention=primary"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "browser": "WebKit",
+      "touch": true
+    }
+  ],
+  "states": [
+    "Static proof-only preview imports actual InvestigationSection/InvestigationMessages, API client, scoped non-suspending query and production CSS. Synthetic HTTP responses, not native persistence, full application sign-in or original installed recovery.",
+    "Cold503 and failed remount show an error, not no-history/Re-investigate. Same-finding/session503 retains evidence with visible staleness/incompleteness warnings; successful reads clear warnings.",
+    "Genuine404 keeps normal absence/empty-thread semantics. Finding changes cannot borrow retained evidence; final403 withdraws retained detail and shows access guidance, never the raw error body.",
+    "Six desktop/narrow captures were opened with the native image viewer: warnings, read-only Retry controls, summaries and messages are legible without clipping/overlap/page overflow. Re-investigate wraps to its own line on the320px recovered header, not into the outcome badge."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow touch operate read-only history/message Retry and thread toggles. Pending Retry disables; all observed API requests areGET and no reinvestigation POST is made.",
+    "Existing30s polling exercised with Playwright clock acceleration, without changing product refresh policy. Failed same-session remount and same-row recovery retain truthful scope and unchanged message DOM identity.",
+    "Navigate between fixture findings, recover each read, accept genuine empty responses, deny access, and close both browsers/server.40 assertions pass with no uncaught page errors."
+  ],
+  "playwright_version": "1.56.1",
+  "tested_source": "99738e5e08b1d4188c44b31e642b133440dd189d",
+  "source_proof_receipts": [
+    "source-bx3viv_m",
+    "source-yamk9awl"
+  ],
+  "capture_sha256": {
+    "desktop-chromium-cold.png": "83e9b399f6998369b61d196da8ef1bf4c64b9edf3b998df24e4f5559ab4016d5",
+    "desktop-chromium-retained.png": "d92a25afe233ed8dc09128e771e0aeb084621f2af6a3a6c3ba9ce21937843ad7",
+    "desktop-chromium-recovered.png": "011f20368d23456ad28a0c0cce28217df1246d630c626ed048d5911023692901",
+    "phone-webkit-cold.png": "4b27ce01ca01c7486c72f64a153e65d6c86b9d9f4f10413a861662edf2b814bd",
+    "phone-webkit-retained.png": "bff0fe2ac8fb5eaee8775469689daf1f221d90423cabbe35ffa7d39f83928b20",
+    "phone-webkit-recovered.png": "b667347f99e5e319c8e628afe1d94c6792f5a033efcdabede249e353ebce5a9d"
+  }
+}

@@ -26,7 +26,10 @@ import {
 import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
 import { buildPatrolInvestigationRecordPresentation } from '@/features/patrol/patrolInvestigationContextModel';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { Button } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { InvestigationMessages } from './InvestigationMessages';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { notificationStore } from '@/stores/notifications';
@@ -117,7 +120,10 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
   const canReinvestigate = () => {
     // Until the first read answers, a running investigation or a queued fix
     // looks like no investigation at all, which would offer another run.
-    if (!investigationQuery.resolvedOnce()) return false;
+    // A failed read says nothing about whether a run already exists. Even a
+    // retained answer may miss a newer run or queued fix. Retry the read, not
+    // the investigation, until its current state is known.
+    if (!investigationQuery.resolvedOnce() || investigationQuery.error()) return false;
     if (Date.now() < cooldownUntil()) return false;
     const inv = investigation();
     if (!inv) return true; // No investigation yet
@@ -202,8 +208,41 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
         </Show>
       </div>
 
-      {/* Loading */}
-      <Show when={!investigationSectionState().empty && investigationSectionState().text}>
+      <Show when={investigationQuery.error()}>
+        <InlineNotice
+          role="alert"
+          tone="warning"
+          aria-label="Investigation read failed"
+          class="mb-2"
+        >
+          <p class="font-medium">Could not load investigation history.</p>
+          <p>
+            {getAPIReadAccessErrorMessage(investigationQuery.error()) ??
+              (hasInvestigationContext()
+                ? 'Showing previously loaded investigation evidence. It may be out of date.'
+                : 'The saved investigation could not be read. This does not mean no investigation exists.')}
+          </p>
+          <Button
+            size="sm"
+            disabled={investigationQuery.loading()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void investigationQuery.refetch();
+            }}
+          >
+            {investigationQuery.loading() ? 'Retrying history...' : 'Retry history'}
+          </Button>
+        </InlineNotice>
+      </Show>
+
+      {/* A failed read is neither loading nor an empty investigation. */}
+      <Show
+        when={
+          !investigationQuery.error() &&
+          !investigationSectionState().empty &&
+          investigationSectionState().text
+        }
+      >
         <div class="flex items-center gap-2 text-xs text-muted py-2">
           <LoadingSpinner size="sm" />
           {investigationSectionState().text}
@@ -211,7 +250,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       </Show>
 
       {/* No investigation data */}
-      <Show when={investigationSectionState().empty}>
+      <Show when={!investigationQuery.error() && investigationSectionState().empty}>
         <p class="text-xs text-muted py-1">{investigationSectionState().text}</p>
       </Show>
 

@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Unread investigation history is not absent history
+
+Investigation detail and thread reads distinguish a genuine 404/empty response
+from an unavailable or denied read. Failed reads show an accessible warning and
+a read-only Retry, never a false empty state. Re-investigate is withheld while
+the detail read has failed, including when its last answer is retained: that
+answer may miss a newer run or queued fix. Retry only reads existing history;
+it does not start a run or change Patrol's existing refresh intervals.
+
+Previously loaded same-finding/session evidence remains readable after a
+transient failure, labelled as potentially out of date or incomplete. Source
+changes do not borrow another finding/session's evidence; HTTP 401/403 still
+withdraw the query cache and show the existing access guidance without raw
+error payloads. A successful read clears the warning and restores normal
+empty/data/action presentation. The registered InvestigationSection and
+InvestigationMessages suites cover these transitions and retained row identity.
+This consumer contract requires truthful producer statuses; it does not prove
+private persistence admission, original installed recovery or release delivery.
+
 ### Attention selection retains visible evidence in its name (24 October 2026)
 
 Attention list buttons use their visible contents as the accessible name instead

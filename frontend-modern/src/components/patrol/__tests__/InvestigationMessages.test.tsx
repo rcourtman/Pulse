@@ -90,13 +90,131 @@ describe('InvestigationMessages', () => {
         messages: [{ id: 'r-1', role: 'assistant', content: 'Read on retry.', timestamp: '1' }],
       });
       render(() => <InvestigationMessages findingId="finding-7" sessionId="session-retry" />);
-      expect(await screen.findByText('No investigation messages available.')).toBeInTheDocument();
+      expect(
+        await screen.findByRole('alert', { name: 'Investigation thread read failed' }),
+      ).toHaveTextContent('This does not mean it is empty.');
+      expect(screen.queryByText('No investigation messages available.')).not.toBeInTheDocument();
 
       vi.advanceTimersByTime(30_000);
       expect(await screen.findByText('Read on retry.')).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('lets a read-only retry recover an unavailable thread without exposing its error payload', async () => {
+    getMessages.mockRejectedValueOnce(Object.assign(new Error('private path'), { status: 503 }));
+    let finishRead: (value: unknown) => void = () => {};
+    getMessages.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+    render(() => <InvestigationMessages findingId="unavailable" sessionId="unavailable" />);
+    await screen.findByRole('alert', { name: 'Investigation thread read failed' });
+    expect(screen.queryByText('private path')).not.toBeInTheDocument();
+    expect(screen.queryByText('No investigation messages available.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry messages' }));
+    expect(screen.getByRole('button', { name: 'Retrying messages...' })).toBeDisabled();
+    finishRead({
+      messages: [
+        {
+          id: 'recovered',
+          role: 'assistant',
+          content: 'Recovered thread evidence.',
+          timestamp: '1',
+        },
+      ],
+    });
+    expect(await screen.findByText('Recovered thread evidence.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it.each([404, 200])(
+    'shows genuine empty messages for HTTP %s, not a read failure',
+    async (status) => {
+      if (status === 404)
+        getMessages.mockRejectedValueOnce(Object.assign(new Error('not found'), { status }));
+      else getMessages.mockResolvedValueOnce({ messages: [] });
+      render(() => <InvestigationMessages findingId="absent" sessionId="absent" />);
+      expect(await screen.findByText('No investigation messages available.')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    },
+  );
+
+  it('labels retained messages after failure and keeps the same rows through successful recovery', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const message = {
+        id: 'retained',
+        role: 'assistant',
+        content: 'Retained message evidence.',
+        timestamp: '1',
+      };
+      getMessages.mockResolvedValueOnce({ messages: [message] });
+      getMessages.mockRejectedValueOnce(Object.assign(new Error('unavailable'), { status: 503 }));
+      getMessages.mockResolvedValueOnce({
+        messages: [
+          message,
+          { id: 'new', role: 'assistant', content: 'New evidence after recovery.', timestamp: '2' },
+        ],
+      });
+      render(() => <InvestigationMessages findingId="retained" sessionId="retained" live />);
+      const row = await screen.findByText('Retained message evidence.');
+      vi.advanceTimersByTime(5_000);
+      expect(
+        await screen.findByRole('alert', { name: 'Investigation thread read failed' }),
+      ).toHaveTextContent('Newer messages may be missing.');
+      expect(screen.getByText('Retained message evidence.')).toBe(row);
+      fireEvent.click(screen.getByRole('button', { name: 'Retry messages' }));
+      expect(await screen.findByText('New evidence after recovery.')).toBeInTheDocument();
+      expect(screen.getByText('Retained message evidence.')).toBe(row);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([401, 403])('withdraws retained thread messages after HTTP %s', async (status) => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      getMessages.mockResolvedValueOnce({
+        messages: [
+          {
+            id: 'private',
+            role: 'assistant',
+            content: 'Previously authorised message.',
+            timestamp: '1',
+          },
+        ],
+      });
+      getMessages.mockRejectedValueOnce(Object.assign(new Error('secret payload'), { status }));
+      render(() => <InvestigationMessages findingId="private" sessionId="private" live />);
+      await screen.findByText('Previously authorised message.');
+      vi.advanceTimersByTime(5_000);
+      const alert = await screen.findByRole('alert', { name: 'Investigation thread read failed' });
+      expect(alert).toHaveTextContent(status === 401 ? 'Sign in again' : 'Access denied');
+      expect(alert).not.toHaveTextContent('secret payload');
+      expect(screen.queryByText('Previously authorised message.')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not borrow the previous session messages when the new session is unavailable', async () => {
+    getMessages.mockResolvedValueOnce({
+      messages: [
+        { id: 'old', role: 'assistant', content: 'Old session evidence.', timestamp: '1' },
+      ],
+    });
+    getMessages.mockRejectedValueOnce(Object.assign(new Error('unavailable'), { status: 503 }));
+    const [sessionId, setSessionId] = createSignal('old');
+    render(() => <InvestigationMessages findingId="same-finding" sessionId={sessionId()} />);
+    await screen.findByText('Old session evidence.');
+    setSessionId('new');
+    await screen.findByRole('alert', { name: 'Investigation thread read failed' });
+    expect(screen.queryByText('Old session evidence.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No investigation messages available.')).not.toBeInTheDocument();
   });
 
   it('does not read a finished thread again while it stays open', async () => {

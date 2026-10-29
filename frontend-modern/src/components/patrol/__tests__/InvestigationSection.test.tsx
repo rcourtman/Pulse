@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { Suspense } from 'solid-js';
+import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvestigationRecord } from '@/api/ai';
 import type { Investigation } from '@/api/patrol';
@@ -109,8 +109,112 @@ describe('InvestigationSection', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(screen.getByText('The service restarted twice.')).toBeInTheDocument();
+    expect(screen.getByRole('alert', { name: 'Investigation read failed' })).toHaveTextContent(
+      'Showing previously loaded investigation evidence. It may be out of date.',
+    );
+    expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
     expect(screen.queryByText(/No investigation yet/)).not.toBeInTheDocument();
   });
+
+  it('retries an unavailable cold read without offering or starting another investigation', async () => {
+    getInvestigationMock.mockRejectedValueOnce(
+      Object.assign(new Error('private path'), { status: 503 }),
+    );
+    let finishRead: (value: Investigation) => void = () => {};
+    getInvestigationMock.mockReturnValueOnce(
+      new Promise<Investigation>((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+    render(() => <InvestigationSection findingId="unavailable" />);
+
+    const alert = await screen.findByRole('alert', { name: 'Investigation read failed' });
+    expect(alert).toHaveTextContent('This does not mean no investigation exists.');
+    expect(alert).not.toHaveTextContent('private path');
+    expect(screen.queryByText(/No investigation yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
+    expect(screen.getByRole('button', { name: 'Retrying history...' })).toBeDisabled();
+    expect(alert).toBeInTheDocument();
+    finishRead({
+      id: 'recovered',
+      finding_id: 'unavailable',
+      session_id: 'session-recovered',
+      status: 'failed',
+      outcome: 'fix_queued',
+      started_at: '2026-10-29T08:00:00Z',
+      turn_count: 1,
+      summary: 'A fix is already waiting.',
+    });
+    expect(await screen.findByText('A fix is already waiting.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
+    expect(reinvestigateFindingMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a genuine 404 distinct from an unread investigation', async () => {
+    getInvestigationMock.mockRejectedValueOnce(
+      Object.assign(new Error('not found'), { status: 404 }),
+    );
+    render(() => <InvestigationSection findingId="absent" />);
+    expect(await screen.findByText(/No investigation yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Re-investigate' })).toBeEnabled();
+  });
+
+  it('never shows one finding as the history of a different unavailable finding', async () => {
+    getInvestigationMock.mockResolvedValueOnce({
+      id: 'first',
+      finding_id: 'first',
+      session_id: 'first',
+      status: 'completed',
+      started_at: '2026-10-29T08:00:00Z',
+      turn_count: 1,
+      summary: 'Evidence for the first finding.',
+    });
+    getInvestigationMock.mockRejectedValueOnce(
+      Object.assign(new Error('unavailable'), { status: 503 }),
+    );
+    const [findingId, setFindingId] = createSignal('first');
+    render(() => <InvestigationSection findingId={findingId()} />);
+    expect(await screen.findByText('Evidence for the first finding.')).toBeInTheDocument();
+    setFindingId('second');
+    await screen.findByRole('alert', { name: 'Investigation read failed' });
+    expect(screen.queryByText('Evidence for the first finding.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
+  });
+
+  it.each([401, 403])(
+    'withdraws retained history after HTTP %s without exposing the error payload',
+    async (status) => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        getInvestigationMock.mockResolvedValueOnce({
+          id: 'private',
+          finding_id: 'private',
+          session_id: 'private',
+          status: 'completed',
+          outcome: 'unclassified',
+          started_at: '2026-10-29T08:00:00Z',
+          turn_count: 1,
+          summary: 'Previously authorised evidence.',
+        });
+        getInvestigationMock.mockRejectedValue(
+          Object.assign(new Error('secret error payload'), { status }),
+        );
+        render(() => <InvestigationSection findingId="private" />);
+        expect(await screen.findByText('Previously authorised evidence.')).toBeInTheDocument();
+        vi.advanceTimersByTime(30_000);
+        const alert = await screen.findByRole('alert', { name: 'Investigation read failed' });
+        expect(alert).toHaveTextContent(status === 401 ? 'Sign in again' : 'Access denied');
+        expect(alert).not.toHaveTextContent('secret error payload');
+        expect(screen.queryByText('Previously authorised evidence.')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it('reads again on its own after a failed first read', async () => {
     // Findings refreshes no longer remount the review, so it retries itself.
