@@ -73,6 +73,13 @@ export const SummaryRowActionButton: Component<SummaryRowActionButtonProps> = (p
         onAction: props.onAction,
         onPreviewClear: props.onPreviewClear,
       })}
+      onKeyUp={(event) => {
+        // Keydown already owns Space activation. Mobile Chromium can still
+        // issue its native click on keyup, which would undo that action.
+        if (event.key === ' ' || event.key === 'Space' || event.code === 'Space') {
+          event.preventDefault();
+        }
+      }}
     >
       <Show
         when={props.kind === 'scope'}
