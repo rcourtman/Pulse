@@ -4058,7 +4058,7 @@ for (const [name, marker, sibling] of [
   ["unordered", "-", "-"],
   ["alternate unordered", "*", "*"],
   ["ordered", "1.", "2."],
-  ["task", "- [x]", "- [ ]"],
+  ["plus unordered", "+", "+"],
 ]) {
   test(`loose ${name} lists retain their first-line legacy version declaration`, () => {
     for (const newline of ["\n", "\r\n"]) {
