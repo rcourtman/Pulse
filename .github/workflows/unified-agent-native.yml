@@ -153,13 +153,18 @@ jobs:
       # contract (ARM64 could not obtain the pinned parser). Select supported
       # CPython before creating the isolated venv; never build a parser from
       # source, skip the registered proof or modify the managed interpreter.
+      # Intel images already supply a versioned framework Python. Reuse that
+      # verified runtime without asking Homebrew to replace its global links;
+      # only acquire a formula when the versioned command is absent.
       - name: Supply YAML parser for native Unix contract checks
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-          brew install python@3.13
-          contract_runtime="$(brew --prefix python@3.13)/bin/python3.13"
+          if ! contract_runtime="$(command -v python3.13)"; then
+            brew install python@3.13
+            contract_runtime="$(brew --prefix python@3.13)/bin/python3.13"
+          fi
           test -x "$contract_runtime"
           "$contract_runtime" -c 'import sys; assert sys.version_info[:2] == (3, 13); print(sys.version)'
           contract_python="$(mktemp -d "$RUNNER_TEMP/pulse-contract-python.XXXXXX")"

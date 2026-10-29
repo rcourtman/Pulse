@@ -5889,25 +5889,46 @@ func TestNativeMacOSContractPythonPrerequisite(t *testing.T) {
 	if recipe == "" || !strings.Contains(recipe, "--only-binary=:all: 'PyYAML==6.0.3'") ||
 		!strings.Contains(recipe, `assert yaml.__version__ == "6.0.3"`) ||
 		!strings.Contains(recipe, `brew install python@3.13`) ||
+		!strings.Contains(recipe, `contract_runtime="$(command -v python3.13)"`) ||
 		!strings.Contains(recipe, `contract_runtime="$(brew --prefix python@3.13)/bin/python3.13"`) ||
 		!strings.Contains(recipe, `assert sys.version_info[:2] == (3, 13)`) {
 		t.Fatal("missing isolated fixed-version prerequisite and import check")
 	}
-	for _, fault := range []string{"", "brew", "prefix", "missing-runtime", "version", "venv", "pip", "import"} {
-		t.Run("failure="+fault, func(t *testing.T) {
+	for _, scenario := range []struct {
+		name, fault  string
+		preinstalled bool
+	}{
+		{name: "acquired"},
+		{name: "acquisition failure", fault: "brew"},
+		{name: "prefix failure", fault: "prefix"},
+		{name: "missing acquired runtime", fault: "missing-runtime"},
+		{name: "wrong acquired version", fault: "version"},
+		{name: "acquired venv failure", fault: "venv"},
+		{name: "acquired wheel failure", fault: "pip"},
+		{name: "acquired import failure", fault: "import"},
+		{name: "preinstalled with conflicting brew links", preinstalled: true},
+		{name: "wrong preinstalled version", preinstalled: true, fault: "version"},
+		{name: "preinstalled venv failure", preinstalled: true, fault: "venv"},
+		{name: "preinstalled wheel failure", preinstalled: true, fault: "pip"},
+		{name: "preinstalled import failure", preinstalled: true, fault: "import"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fault := scenario.fault
 			root := t.TempDir()
-			tools := filepath.Join(root, "tools")
+			tools := filepath.Join(root, "tools with spaces")
 			if err := os.Mkdir(tools, 0700); err != nil {
 				t.Fatal(err)
 			}
-			// An ambient python3 must never create the venv. The selected
-			// Homebrew prefix can contain spaces and is unrelated to PATH.
+			// Never use the unversioned Python. An existing python3.13 must
+			// not trigger an install/link operation; otherwise acquire the
+			// exact formula. Both runtime paths may contain spaces.
 			runtime := filepath.Join(root, "selected Python")
 			if err := os.MkdirAll(filepath.Join(runtime, "bin"), 0700); err != nil {
 				t.Fatal(err)
 			}
 			brew := `#!/bin/sh
 set -eu
+[ "$PREINSTALLED" != true ] || exit 96
 if [ "$*" = 'install python@3.13' ]; then
   [ "$FAULT" != brew ] || exit 24
   printf 'installed\n' > "$BREW_CALLED"
@@ -5954,10 +5975,23 @@ printf '%s\n' "$2" > "$IMPORT_CODE"
 					t.Fatal(err)
 				}
 			}
+			if scenario.preinstalled {
+				if err := os.Symlink(filepath.Join(runtime, "bin", "python3.13"), filepath.Join(tools, "python3.13")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Empty versioned lookups must be reproducible even on a future
+			// host that itself has Python 3.13 on PATH. Other commands still
+			// resolve normally; the successful branch uses the actual shell
+			// command lookup and an executable in a path containing spaces.
+			lookup := ""
+			if !scenario.preinstalled {
+				lookup = `command() { if [[ "$*" == '-v python3.13' ]]; then return 1; fi; builtin command "$@"; }` + "\n"
+			}
 			path := filepath.Join(root, "github-path")
-			cmd := exec.Command("bash", "--noprofile", "--norc", "-c", recipe)
+			cmd := exec.Command("bash", "--noprofile", "--norc", "-c", lookup+recipe)
 			cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"),
-				"RUNNER_TEMP="+root, "GITHUB_PATH="+path, "FAULT="+fault,
+				"RUNNER_TEMP="+root, "GITHUB_PATH="+path, "FAULT="+fault, "PREINSTALLED="+strconv.FormatBool(scenario.preinstalled),
 				"SELECTED_PYTHON="+runtime, "BREW_CALLED="+filepath.Join(root, "brew-called"),
 				"VERSION_CODE="+filepath.Join(root, "version-code"), "VENV_CREATED="+filepath.Join(root, "venv-created"),
 				"INSTALL_ARGS="+filepath.Join(root, "install-args"), "IMPORT_CODE="+filepath.Join(root, "import-code"))
@@ -5975,6 +6009,13 @@ printf '%s\n' "$2" > "$IMPORT_CODE"
 			if readErr != nil || !strings.HasPrefix(string(published), root+"/pulse-contract-python.") ||
 				!strings.HasSuffix(string(published), "/bin\n") {
 				t.Fatalf("missing exact venv path: %q, %v", published, readErr)
+			}
+			_, brewErr := os.Stat(filepath.Join(root, "brew-called"))
+			if scenario.preinstalled && !os.IsNotExist(brewErr) {
+				t.Fatal("preinstalled runtime must not install or overwrite global Python links")
+			}
+			if !scenario.preinstalled && brewErr != nil {
+				t.Fatal("missing versioned interpreter must acquire the exact formula")
 			}
 			installed, err := os.ReadFile(filepath.Join(root, "install-args"))
 			if err != nil || !strings.Contains(string(installed), "--only-binary=:all: PyYAML==6.0.3") {
