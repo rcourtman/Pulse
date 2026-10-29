@@ -121,7 +121,7 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 	for _, task := range tasks {
 		seen[task.ID] = true
 	}
-	for _, task := range m.state.GetSnapshot().PVEBackups.BackupTasks {
+	for _, task := range m.state.GetBackupTasks() {
 		if task.Instance == instance && unread[task.Node] && !seen[task.ID] {
 			tasks = append(tasks, task)
 			seen[task.ID] = true

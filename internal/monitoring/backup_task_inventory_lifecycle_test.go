@@ -81,7 +81,7 @@ func TestBackupHistoryUnreadNodeRetainsAcceptedTasksWithoutRenewal(t *testing.T)
 		case 0, 4, 7:
 			require.True(t, present)
 			require.Equal(t, "running", a.Status)
-			require.Equal(t, start, a.StartTime)
+			require.True(t, start.Equal(a.StartTime), "preserve the instant regardless of Go's local-zone representation")
 			require.True(t, a.EndTime.IsZero())
 			require.False(t, a.ObservedAt.IsZero())
 			accepted = a
@@ -159,17 +159,26 @@ func TestBackupHistoryUnreadTaskCannotCompleteRunningArchive(t *testing.T) {
 			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pam!readonly", TokenValue: "fixture"})
 			require.NoError(t, err)
 			var before models.BackupTask
+			var beforePoint recovery.RecoveryPoint
 			for i := range 3 {
 				phase.Store(int32(i))
 				f.m.pollBackupTasks(context.Background(), "cluster", client)
 				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", storageClient, f.nodes, f.online)
 				f.wait(t)
 				snapshot, points := f.m.state.GetSnapshot(), f.points(t)
+				taskPoint, exists := points["pve-task:cluster-writer"]
+				require.True(t, exists, "the actual task must reach retained execution history")
 				require.Len(t, snapshot.PVEBackups.BackupTasks, 1)
 				if i == 0 {
 					before = snapshot.PVEBackups.BackupTasks[0]
+					beforePoint = taskPoint
 				} else if i == 1 {
 					require.Equal(t, before, snapshot.PVEBackups.BackupTasks[0], "unread task cannot refresh backup intent")
+					require.Equal(t, beforePoint, taskPoint, "carried task cannot renew durable point evidence")
+					coverage, err := f.store.BackupHistoryCoverage(context.Background(), now.Add(-time.Hour), time.Now().UTC())
+					require.NoError(t, err)
+					require.Len(t, coverage.Sources, 1)
+					require.False(t, coverage.Sources[0].Complete, "malformed task reads cannot qualify report history")
 				}
 				require.Len(t, snapshot.PVEBackups.StorageBackups, 2)
 				for _, archive := range snapshot.PVEBackups.StorageBackups {
