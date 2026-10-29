@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Shard artifacts expose bounded source identities, never assertion payloads."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -40,6 +41,99 @@ class APIFailureIndexTest(unittest.TestCase):
                                     timeout=10)
             raw = Path(str(seconds) + '.failures.json').read_text()
             return result, seconds.read_text(), json.loads(raw), raw
+
+    def test_spilled_output_keeps_interleaved_unicode_and_unfinished_order(self):
+        names = ['TestBroken', 'TestQuiet', 'TestSkipped', 'TestZPending', 'TestAPending']
+        output = {name: ''.join(f'{i}: λ雪 {name}/private-case\n' for i in range(4096))
+                  for name in names}
+        stream = ''.join(event('run', name) for name in names)
+        for i in range(0, max(map(len, output.values())), 1024):
+            for name in names:
+                stream += event('output', name + '/private-case', output[name][i:i + 1024])
+        stream += (event('fail', 'TestBroken', elapsed=.1) +
+                   event('pass', 'TestQuiet', elapsed=.2) +
+                   event('skip', 'TestSkipped', elapsed=.3) + event('fail', elapsed=.4))
+        result, seconds, index, raw = self.record(stream, names)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        expected = output['TestBroken']
+        for name in ['TestAPending', 'TestZPending']:
+            expected += f'--- {name} did not finish; its output follows\n' + output[name]
+        self.assertEqual(result.stdout, expected)
+        self.assertEqual(seconds, '# package-seconds 0.40\nTestBroken 0.10\n'
+                         'TestQuiet 0.20\nTestSkipped 0.30\n')
+        self.assertEqual(index['failed_top_level_tests']['names'], ['TestBroken'])
+        self.assertEqual(index['unfinished_top_level_tests']['names'],
+                         ['TestAPending', 'TestZPending'])
+        self.assertEqual(index['skipped_top_level_tests']['names'], ['TestSkipped'])
+        self.assertNotIn('private-case', raw)
+
+    def noisy_record(self, *, interrupted):
+        # Stream 96 MiB from disk in small events: the recorder, not the test
+        # driver, must retain all four active roots. No application/Go test or
+        # excluded crash scenario is involved. A fixed address-space budget
+        # catches output-sized retention without a timing/RSS threshold.
+        import resource
+        names = ['TestBroken', 'TestQuiet', 'TestSkipped', 'TestPending']
+        chunks = {name: (name + '/private-case λ\r\n').ljust(8192, '.') for name in names}
+        repeats = 3072
+        expected = hashlib.sha256()
+        if interrupted:
+            for _ in range(repeats):
+                expected.update(chunks['TestBroken'].encode())
+            expected.update(b'--- TestPending did not finish; its output follows\n')
+            for _ in range(repeats):
+                expected.update(chunks['TestPending'].encode())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, seconds, log = (root / name for name in ['events.jsonl', 'seconds.txt', 'log'])
+            spool = root / 'spool'
+            spool.mkdir()
+            selection = root / 'selected'
+            selection.write_text('\n'.join(names) + '\n')
+            with source.open('w', encoding='utf-8', newline='') as stream:
+                stream.write(''.join(event('run', name) for name in names))
+                rows = ''.join(event('output', name + '/private-case', chunks[name]) for name in names)
+                for _ in range(repeats):
+                    stream.write(rows)
+                stream.write(event('fail' if interrupted else 'pass', names[0], elapsed=.1))
+                stream.write(event('pass', names[1], elapsed=.2))
+                stream.write(event('skip', names[2], elapsed=.3))
+                if not interrupted:
+                    stream.write(event('pass', names[3], elapsed=.4))
+                stream.write(event('fail' if interrupted else 'pass', elapsed=.5))
+
+            def memory_budget():
+                resource.setrlimit(resource.RLIMIT_AS, (64 * 1024**2, 64 * 1024**2))
+
+            with source.open('rb') as stream, log.open('wb') as output:
+                result = subprocess.run(
+                    [sys.executable, str(RECORDER), str(seconds), str(selection), 'example/internal/api'],
+                    stdin=stream, stdout=output, stderr=subprocess.PIPE, timeout=60,
+                    env={**os.environ, 'TMPDIR': str(spool)}, preexec_fn=memory_budget)
+            self.assertEqual(result.returncode, int(interrupted), result.stderr.decode())
+            self.assertNotIn(b'Traceback', result.stderr)
+            actual = hashlib.sha256()
+            with log.open('rb') as output:
+                for block in iter(lambda: output.read(64 * 1024), b''):
+                    actual.update(block)
+            self.assertEqual(actual.hexdigest(), expected.hexdigest())
+            raw = Path(str(seconds) + '.failures.json').read_text()
+            index = json.loads(raw)
+            self.assertEqual(index['recorder_exit_code'], int(interrupted))
+            self.assertEqual(index['completed_top_level_test_count'], 3 if interrupted else 4)
+            self.assertEqual(index['unfinished_top_level_tests']['names'],
+                             ['TestPending'] if interrupted else [])
+            self.assertEqual(index['skipped_top_level_tests']['names'], ['TestSkipped'])
+            self.assertNotIn('private-case', raw)
+            self.assertEqual(list(spool.iterdir()), [])
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux CI address-space control')
+    def test_noisy_passing_and_skipped_roots_fit_fixed_memory(self):
+        self.noisy_record(interrupted=False)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux CI address-space control')
+    def test_noisy_failed_and_unfinished_roots_fit_fixed_memory_without_log_loss(self):
+        self.noisy_record(interrupted=True)
 
     def test_pass_preserves_timing_and_quiet_output(self):
         result, seconds, index, _ = self.record(

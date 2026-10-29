@@ -1390,6 +1390,17 @@ change test selection, race/vet coverage or required check names.
 `test_api_failure_index.py` exercises failure/unfinished/package-only/unknown,
 privacy and bounds controls; the existing Go shard contract verifies the index
 beside unchanged timing output.
+Held test output uses a 64 KiB in-memory spool per active root, then secure
+temporary storage, rather than an output-sized Python heap. Passing/skipped
+roots discard their buffers; failed roots print all their output in arrival
+order, and unfinished roots print all their output in sorted root order at EOF.
+The threshold changes storage, not log length, timing/index schemas, source
+selection or the verdict. Overflow files use anonymous/private temporary files,
+not test or subtest labels as filenames, and are closed when each root ends or
+the stream is drained. Registered recorder controls stream 96 MiB through four
+interleaved roots under a fixed 64 MiB Linux address-space budget, requiring
+exact failure/unfinished bytes, quiet pass/skip output and unchanged index
+privacy. Smaller Unicode/interleaving controls also check the spill path.
 The recorder itself must now fail incomplete or inconsistent execution evidence,
 even when the producer exits zero: it requires exactly one passing package
 completion, no malformed events, and non-repeated complete top-level executions.
