@@ -1196,6 +1196,109 @@ describe('independent Proxmox backup inventory reads', () => {
     apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
   });
 
+  const duplicateCases = [
+    ['pve', 'backupTasks'],
+    ['pve', 'storageBackups'],
+    ['pve', 'guestSnapshots'],
+    ['pbs', 'backups'],
+  ] as const;
+  const duplicated = (source: 'pve' | 'pbs', key: string, conflicting = false) => {
+    const data: Record<string, unknown> = {
+      ...(source === 'pbs' ? pbsPayload.data : pvePayload.data),
+    };
+    const [row] = data[key] as Record<string, unknown>[];
+    data[key] = [
+      row,
+      conflicting
+        ? { ...row, instance: 'UNACCEPTED_CONNECTION', status: 'failed', size: 2 ** 40 }
+        : row,
+    ];
+    return { data };
+  };
+
+  it.each(duplicateCases)(
+    'rejects an initial duplicate %s %s collection without hiding the independent source',
+    async (source, key) => {
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(
+          jsonResponse(
+            url.endsWith(`/${source}`)
+              ? duplicated(source, key)
+              : source === 'pve'
+                ? pbsPayload
+                : readPvePayload,
+          ),
+        ),
+      );
+      mountBackupReadState();
+      await screen.findByText(/The response format is invalid/);
+      await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+      expect(screen.getByText('Backup inventory is incomplete')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` }),
+      ).toBeEnabled();
+      expect(document.querySelectorAll('[data-testid="proxmox-recoverable-detail"]')).toHaveLength(
+        0,
+      );
+    },
+  );
+
+  it.each(duplicateCases)(
+    'retains accepted details/counts after a duplicate %s %s refresh, retries only that source and rejects recurrence',
+    async (source, key) => {
+      let bad = false;
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(
+          jsonResponse(
+            bad && url.endsWith(`/${source}`)
+              ? duplicated(source, key, true)
+              : url.endsWith('/pbs')
+                ? pbsPayload
+                : pvePayload,
+          ),
+        ),
+      );
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        mountBackupReadState();
+        await waitFor(() => expect(recoverableRows()).toHaveLength(3));
+        const firstRow = recoverableRows()[0] as HTMLElement;
+        fireEvent.click(within(firstRow).getByRole('button', { name: /expand details/i }));
+        const detail = await screen.findByTestId('proxmox-recoverable-detail');
+        const accepted = detail.textContent;
+        bad = true;
+        await vi.advanceTimersByTimeAsync(30_000);
+        await screen.findByText(/The response format is invalid/);
+        expect(recoverableRows()).toHaveLength(3);
+        expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(detail);
+        expect(detail.textContent).toBe(accepted);
+        expect(document.body).not.toHaveTextContent('UNACCEPTED_CONNECTION');
+        expect(screen.getByText(/The response format is invalid/)).toHaveTextContent(
+          'Counts are incomplete.',
+        );
+        const other = source === 'pve' ? 'pbs' : 'pve';
+        const before = sourceCalls(other).length;
+        const retry = screen.getByRole('button', {
+          name: `Retry ${source.toUpperCase()} inventory`,
+        });
+        bad = false;
+        fireEvent.click(retry);
+        await waitFor(() => expect(retry).not.toBeInTheDocument());
+        expect(sourceCalls(other)).toHaveLength(before);
+        expect(recoverableRows()).toHaveLength(3);
+        expect(screen.getByTestId('proxmox-recoverable-detail')).toHaveTextContent(accepted!);
+        bad = true;
+        await vi.advanceTimersByTimeAsync(30_000);
+        await screen.findByText(/The response format is invalid/);
+        expect(recoverableRows()).toHaveLength(3);
+        expect(document.body).not.toHaveTextContent('UNACCEPTED_CONNECTION');
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it.each(['pve', 'pbs'] as const)(
     'keeps malformed HTTP200 %s responses source-local and recovers with an isolated retry',
     async (source) => {
