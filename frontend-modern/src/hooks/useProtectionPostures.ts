@@ -10,6 +10,9 @@ import { parseProtectionPostureBatches } from '@/utils/protectionPostureResponse
 
 const PROTECTION_POSTURES_URL = '/api/recovery/postures';
 export const MAX_PROTECTION_POSTURE_BATCH_SIZE = 200;
+// Bound work per consuming surface as well as per request. A fleet-sized read
+// must not enqueue every batch at once against the same server.
+export const MAX_CONCURRENT_PROTECTION_POSTURE_REQUESTS = 4;
 const REFRESH_MS = 30_000;
 
 const EMPTY_POLICY: ProtectionPosturePolicy = {
@@ -72,14 +75,38 @@ async function fetchAllProtectionPostures(
   const controller = new AbortController();
   const cancel = () => controller.abort(signal.reason);
   signal.addEventListener('abort', cancel, { once: true });
+  const responses: unknown[] = new Array(batches.length);
+  let nextBatch = 0;
+  let failure: { error: unknown } | undefined;
+  const readBatches = async () => {
+    try {
+      while (nextBatch < batches.length) {
+        // A cancelled transport may still resolve. Never let that completion
+        // dispatch a queued request for the retired scope/read.
+        controller.signal.throwIfAborted();
+        const index = nextBatch++;
+        responses[index] = await fetchProtectionPostures(batches[index], controller.signal);
+      }
+    } catch (error) {
+      // Stop queued work before siblings settle their aborts, and retain the
+      // initiating failure rather than whichever abort rejection arrives first.
+      failure ??= { error };
+      controller.abort();
+      throw failure.error;
+    }
+  };
   try {
-    const responses = await Promise.all(
-      batches.map((batch) => fetchProtectionPostures(batch, controller.signal)),
+    await Promise.all(
+      Array.from(
+        { length: Math.min(MAX_CONCURRENT_PROTECTION_POSTURE_REQUESTS, batches.length) },
+        readBatches,
+      ),
     );
+    // Completion order never changes request order or publishes partial health.
     return parseProtectionPostureBatches(responses);
   } catch (error) {
     controller.abort();
-    throw error;
+    throw failure ? failure.error : error;
   } finally {
     signal.removeEventListener('abort', cancel);
   }

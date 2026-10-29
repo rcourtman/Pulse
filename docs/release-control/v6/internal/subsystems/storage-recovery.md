@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Fleet protection reads bound their request fan-out
+
+Coverage reads keep the existing 200-subject batch size and issue at most four
+posture requests at once per consuming surface. Queued batches start only as a
+slot completes, in request order; responses retain that order regardless of
+completion order. The entire validated fleet result and policy publish together,
+never progressively green partial health. A failed batch aborts active siblings,
+discards queued work and retains the initiating failure. A retired read cannot
+start queued batches even when a transport resolves after cancellation. Scope,
+organisation, replacement-read and disposal ownership remain unchanged, as do
+existing polling, auth, policy and independent restore-evidence inspection.
+
+Normal-suite `useProtectionPostures.concurrency.test.ts` checks peak request
+counts for a 10,001-subject fleet, out-of-order completion, atomic publication,
+failure/retry and cancellation with queued work. Existing hook/cancellation and
+Backups consumer suites remain required. Desktop/narrow browser proof must
+exercise the actual HTTP producer through Coverage for multi-wave pending,
+failure, retry and scope retirement, retaining independent evidence and focus.
+This bounds client request pressure, not measured installed CPU relief or
+original backup, guest or restore recovery.
+
 ### Backup inventory identities must be unambiguous
 
 Each PVE task, archive and guest-snapshot collection, and the PBS snapshot
