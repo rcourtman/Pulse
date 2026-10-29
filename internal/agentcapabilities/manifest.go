@@ -108,6 +108,44 @@ func recentChangesOutputSchema() json.RawMessage {
 	})
 }
 
+// MetricHistoryRanges are the windows get_metric_history accepts. They match
+// the history chart ranges, so an agent and the drawer read the same tiers.
+var MetricHistoryRanges = []string{"30m", "1h", "6h", "12h", "24h", "7d", "30d", "90d"}
+
+const (
+	MetricHistoryDefaultRange     = "24h"
+	MetricHistoryDefaultMaxPoints = 60
+	MetricHistoryMaxPoints        = 200
+)
+
+func metricHistoryInputSchema() json.RawMessage {
+	return agentObjectInputSchema([]string{ResourceIDArgumentName}, map[string]any{
+		ResourceIDArgumentName: stringOption("Canonical resource id from get_fleet_context, list_recent_changes or get_resource_context."),
+		"metric":               stringOption("One recorded metric, such as cpu, memory, disk, netin, netout, diskread or diskwrite (storage records usage, used, avail and total). Omit to get every metric the resource records."),
+		"range":                stringEnumOption(MetricHistoryRanges, "Window ending now. Defaults to "+MetricHistoryDefaultRange+". Windows beyond the install's licensed history return license_required."),
+		"maxPoints": map[string]any{
+			"type":        "integer",
+			"minimum":     1,
+			"maximum":     MetricHistoryMaxPoints,
+			"description": fmt.Sprintf("Target number of points per metric; window edges can add one. Defaults to %d; values above %d are capped. Short windows may return native samples instead.", MetricHistoryDefaultMaxPoints, MetricHistoryMaxPoints),
+		},
+	})
+}
+
+func metricHistoryOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"resourceType", "resourceId", "range", "start", "end", "source"}, map[string]any{
+		"resourceType": stringOption("Metrics-store type of the resource."),
+		"resourceId":   stringOption("Metrics-store id of the resource, which can differ from the canonical id that was requested."),
+		"metric":       stringOption("The requested metric, when one was given."),
+		"range":        stringOption("Effective window."),
+		"start":        integerOption("Window start, Unix milliseconds."),
+		"end":          integerOption("Window end, Unix milliseconds."),
+		"points":       objectArrayOption("Series for the requested metric, oldest first: timestamp (Unix milliseconds), value (bucket average), min and max."),
+		"metrics":      map[string]any{"type": "object", "description": "Every recorded metric when none was requested, keyed by metric name, each an array of points shaped like points."},
+		"source":       stringOption("Where the points came from: store (persistent history), memory (recent in-memory history while the store fills), live or mock_synthetic."),
+	})
+}
+
 func operationsLoopStatusOutputSchema() json.RawMessage {
 	return agentObjectOutputSchema([]string{"nextAction", "progressLabel", "steps", "patrolEvidenceCount", "patrolIssueEvidenceCount", "activeFindingCount", "pendingApprovalCount", "governedActionCount", "approvedDecisionCount", "rejectedDecisionCount", "verifiedOutcomeCount", "operationsLoopStarterCount", "assistantOperationsLoopStarterCount", "patrolOperationsLoopStarterCount", "patrolControlOperationsLoopStarterCount", "patrolControlCompletedOperationsLoopCount", "patrolControlResolvedOperationsLoopCount", "patrolControlValueState", "patrolAutonomyOperationsLoopStarterCount", "patrolAutonomyCompletedOperationsLoopCount", "patrolAutonomyResolvedOperationsLoopCount", "patrolAutonomyValueState", "proActivationOperationsLoopStarterCount", "proActivationCompletedOperationsLoopCount", "proActivationResolvedOperationsLoopCount", "proActivationValueProofState", "mcpOperationsLoopStarterCount", "externalAgentReady", "windowStart", "generatedAt"}, map[string]any{
 		"nextAction":                                 stringEnumOption([]string{"run_patrol", "review_findings", "open_assistant", "review_approvals", "open_mcp", "complete"}, "Next recommended Patrol work action an agent or UI should take."),
@@ -893,6 +931,20 @@ var canonicalManifest = Manifest{
 			OutputSchema:   recentChangesOutputSchema(),
 		},
 		{
+			Name:           GetMetricHistoryCapabilityName,
+			Title:          "Get metric history",
+			Description:    "Return how one resource's metrics moved over a window, from the history Pulse records while it monitors: 'did this disk fill gradually or suddenly?', 'was memory climbing before the restart?'. Pass the canonical resourceId from get_fleet_context, list_recent_changes or get_resource_context. Omit metric to get every metric the resource records, which also tells you their names. Points are averaged into about maxPoints buckets (window edges can add one), each with min and max. Windows longer than the install's licensed history (7 days on Community) return a license_required error.",
+			Category:       "context",
+			Method:         http.MethodGet,
+			Path:           MetricHistoryCapabilityPath,
+			Scope:          agentCapabilityScopeMonitoringRead,
+			ActionMode:     agentCapabilityActionModeRead,
+			ApprovalPolicy: agentCapabilityApprovalPolicyScopeOnly,
+			ResponseShape:  "MetricsHistory",
+			InputSchema:    metricHistoryInputSchema(),
+			OutputSchema:   metricHistoryOutputSchema(),
+		},
+		{
 			Name:           OperationsLoopStatusCapabilityName,
 			Title:          "Get Patrol work status",
 			Description:    "Return the current content-safe Patrol work status: Patrol issue evidence, pending approvals, governed decisions/actions, verified outcomes, Patrol control outcome evidence, compatibility aliases, and optional MCP readiness. The payload is count-only and deliberately omits finding ids, action ids, prompts, commands, resource names, and output.",
@@ -1231,6 +1283,7 @@ func canonicalPulseMCPSurfaceToolNames() []string {
 		ListResourceCapabilitiesCapabilityName,
 		FleetContextCapabilityName,
 		ListRecentChangesCapabilityName,
+		GetMetricHistoryCapabilityName,
 		OperationsLoopStatusCapabilityName,
 		ListNodesCapabilityName,
 		AddNodeCapabilityName,

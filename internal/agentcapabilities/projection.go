@@ -39,6 +39,11 @@ const (
 	// resource changes across the fleet: the "what changed?" companion to the
 	// fleet triage and per-resource context reads.
 	ListRecentChangesCapabilityName = "list_recent_changes"
+	// GetMetricHistoryCapabilityName is the manifest-owned read of one
+	// resource's recorded metric series: how it moved, not only where it is.
+	GetMetricHistoryCapabilityName = "get_metric_history"
+	// MetricHistoryCapabilityPath is the manifest-owned metric history route.
+	MetricHistoryCapabilityPath = "/api/agent/metric-history"
 	// FleetContextCapabilityPath is the manifest-owned fleet triage route.
 	FleetContextCapabilityPath = "/api/agent/fleet-context"
 	// RecentChangesCapabilityPath is the manifest-owned fleet change route.

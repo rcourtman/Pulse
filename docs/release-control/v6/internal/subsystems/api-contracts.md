@@ -6802,6 +6802,27 @@ projection layer forwards integral JSON numbers as integer query
 parameters so manifest integer filters such as `limit` reach the
 route; fractional or out-of-range numbers are dropped like objects.
 
+`/api/agent/metric-history` (`get_metric_history`, scope
+`monitoring:read`) is the agent-consumable "how did it move?" read for
+one resource. It takes the canonical `resourceId` (required), an
+optional `metric` (omitted returns every recorded metric keyed by
+name), `range` from `MetricHistoryRanges` (default 24h) and
+`maxPoints` (default 60, capped at 200; a downsampling target, not an
+output bound, so short windows and fallback reads can return native
+samples). It resolves the resource's `MetricsTarget` through the
+registry (`ResourceRegistry.MetricsTarget`, as the resources API does)
+and delegates to
+`handleMetricsHistory`, so its payload, tiers, fallbacks and licensed
+history limit are exactly the chart history route's: a window beyond
+the install's licensed history returns 402 `license_required`. An
+unknown resource, or one without a `MetricsTarget`, is a 404 with a
+reason; a missing `resourceId`, unknown range or non-positive
+`maxPoints` is a 400. The response's `resourceId` is the metrics-store
+id, which can differ from the canonical id requested.
+`normalizeMetricsHistoryResourceType` accepts the registry's Kubernetes
+target kinds (`pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`) as the
+`k8s` store type, so a target passes through unchanged for every caller.
+
 `/api/agent/resource-capabilities/{id}` is the agent-consumable
 structured capability surface for a single resource: the governed
 capabilities it advertises (name, type, approval level, platform, and

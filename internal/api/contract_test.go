@@ -28662,20 +28662,27 @@ func TestContract_AgentRecentChangesJSONSnapshot(t *testing.T) {
 }
 
 // TestContract_PulseMCPPublishesRecentChangesAsReadOnlyTool pins that MCP
-// clients see list_recent_changes as a monitoring-read GET on the manifest
-// route, not only the REST surface.
+// clients see the event-record reads (list_recent_changes and
+// get_metric_history) as monitoring-read GETs on their manifest routes, not
+// only on the REST surface.
 func TestContract_PulseMCPPublishesRecentChangesAsReadOnlyTool(t *testing.T) {
-	manifest := agentcapabilities.CanonicalManifest()
-	for _, capability := range agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP) {
-		if capability.Name != agentcapabilities.ListRecentChangesCapabilityName {
+	published := map[string]agentcapabilities.Capability{}
+	for _, capability := range agentcapabilities.ManifestSurfaceToolCapabilities(agentcapabilities.CanonicalManifest(), agentcapabilities.SurfaceIDPulseMCP) {
+		published[capability.Name] = capability
+	}
+	for name, path := range map[string]string{
+		agentcapabilities.ListRecentChangesCapabilityName: agentcapabilities.RecentChangesCapabilityPath,
+		agentcapabilities.GetMetricHistoryCapabilityName:  agentcapabilities.MetricHistoryCapabilityPath,
+	} {
+		capability, ok := published[name]
+		if !ok {
+			t.Errorf("Pulse MCP surface does not publish %s", name)
 			continue
 		}
-		if capability.Method != http.MethodGet || capability.Path != agentcapabilities.RecentChangesCapabilityPath || capability.Scope != config.ScopeMonitoringRead {
-			t.Fatalf("list_recent_changes = %s %s (%s); want GET %s (%s)", capability.Method, capability.Path, capability.Scope, agentcapabilities.RecentChangesCapabilityPath, config.ScopeMonitoringRead)
+		if capability.Method != http.MethodGet || capability.Path != path || capability.Scope != config.ScopeMonitoringRead {
+			t.Errorf("%s = %s %s (%s); want GET %s (%s)", name, capability.Method, capability.Path, capability.Scope, path, config.ScopeMonitoringRead)
 		}
-		return
 	}
-	t.Fatalf("Pulse MCP surface does not publish %s", agentcapabilities.ListRecentChangesCapabilityName)
 }
 
 // Change events reach only subscribers in the organization whose monitor
