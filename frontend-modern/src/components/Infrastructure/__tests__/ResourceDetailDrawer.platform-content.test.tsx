@@ -137,6 +137,67 @@ describe('ResourceDetailDrawer platform content', () => {
     expect(facts(unused.getByTestId)).toContain('Unused');
   });
 
+  it.each(['image', 'consumer'])('shows the %s check failure as ordinary wrapping text', (source) => {
+    const error = 'authentication required\n<em>registry.example.invalid</em>';
+    const updateStatus = { updateAvailable: false, error };
+    const image = baseResource({
+      id: 'image-failed',
+      type: 'docker-image',
+      name: 'registry.example.invalid/team/web:latest',
+      docker: {
+        hostname: 'edge-01',
+        image: 'registry.example.invalid/team/web:latest',
+        ...(source === 'image' ? { updateStatus } : {}),
+      },
+    });
+    if (source === 'consumer') {
+      estate.push(
+        baseResource({
+          id: 'consumer-failed',
+          type: 'app-container',
+          name: 'web',
+          docker: { image: image.docker!.image, updateStatus },
+        }),
+      );
+    }
+    const { getByTestId } = render(() => <ResourceDetailDrawer resource={image} />);
+    const lifted = getByTestId('resource-drawer-exceptions');
+    const reason = within(lifted).getByText(error, { exact: true, normalizer: (value) => value });
+    expect(within(lifted).getByText('Check failed')).toBeInTheDocument();
+    expect(reason).toHaveClass('select-text', 'whitespace-pre-wrap');
+    expect(reason.parentElement).toHaveClass('wrap-anywhere');
+    expect(reason.closest('details')).toBeNull();
+    expect(reason.querySelector('em')).toBeNull();
+    expect(reason.textContent).toBe(error);
+  });
+
+  it.each([
+    ['Current', { updateAvailable: false }, 'No newer digest was reported by the last image check.'],
+    ['Not checked', undefined, 'No update comparison has been reported for this image.'],
+    [
+      'Pinned',
+      { updateAvailable: false, error: 'digest-pinned image' },
+      'The image is pinned to a specific digest, so there is no tag to check against.',
+    ],
+    [
+      'Local',
+      { updateAvailable: false, error: 'local image' },
+      'The image was built or loaded on this host, so no registry has a newer version to check.',
+    ],
+  ] as const)('keeps %s distinct and gives its explanation in Details', (label, updateStatus, reason) => {
+    const image = baseResource({
+      id: 'image-state',
+      type: 'docker-image',
+      name: 'service:latest',
+      docker: { image: 'service:latest', updateStatus },
+    });
+    const { getByTestId, queryByTestId } = render(() => <ResourceDetailDrawer resource={image} />);
+    const section = within(getByTestId('resource-docker-image-section'));
+    expect(section.getByText(label)).toBeInTheDocument();
+    expect(section.getByText(reason)).toBeInTheDocument();
+    expect(queryByTestId('resource-drawer-exceptions')).toBeNull();
+  });
+
   it('describes a Docker volume with its mountpoint in full', () => {
     const volume = baseResource({
       id: 'volume-data',

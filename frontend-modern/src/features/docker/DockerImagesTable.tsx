@@ -247,12 +247,32 @@ export const DockerImagesTable: Component<
                             {dockerByteValue(resource.docker?.sizeBytes)}
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                            <span
-                              class={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${updateToneClass[operational().updateTone]}`}
-                              title={operational().updateDetail}
+                            <Show
+                              when={operational().updateTone === 'danger'}
+                              fallback={
+                                <span
+                                  class={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${updateToneClass[operational().updateTone]}`}
+                                  title={operational().updateDetail}
+                                >
+                                  {operational().updateLabel}
+                                </span>
+                              }
                             >
-                              {operational().updateLabel}
-                            </span>
+                              <button
+                                type="button"
+                                class={`inline-flex min-h-9 max-w-full items-center rounded-full px-2 py-0.5 text-[10px] font-medium underline decoration-dotted underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-400/70 sm:min-h-0 ${updateToneClass[operational().updateTone]}`}
+                                aria-label={`Check failed for ${dockerResourceName(resource)}; details`}
+                                aria-expanded={isExpanded()}
+                                aria-controls={detailRowId()}
+                                title={operational().updateDetail}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  drawer.toggle(resource);
+                                }}
+                              >
+                                {operational().updateLabel}
+                              </button>
+                            </Show>
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

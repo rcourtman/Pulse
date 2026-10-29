@@ -1499,6 +1499,88 @@ describe('Docker native tables', () => {
     expect(screen.getByText('edge-01')).toBeInTheDocument();
   });
 
+  it('opens a failed image check from a named native button without toggling its row twice', () => {
+    const error = 'authentication required (synthetic registry)';
+    const { container } = render(() => (
+      <DockerImagesTable
+        resources={[
+          makeResource({
+            id: 'image-failed',
+            type: 'docker-image',
+            name: 'registry.example.invalid/team/web:latest',
+            docker: {
+              hostname: 'edge-01',
+              image: 'registry.example.invalid/team/web:latest',
+              updateStatus: { updateAvailable: false, error },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No images"
+        emptyDescription="No images"
+        showToolbar={false}
+      />
+    ));
+
+    const button = screen.getByRole('button', {
+      name: 'Check failed for registry.example.invalid/team/web:latest; details',
+    });
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button.tabIndex).toBe(0);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(error)).not.toBeInTheDocument();
+    button.focus();
+    fireEvent.click(button);
+    expect(button).toHaveFocus();
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    const detail = document.getElementById(button.getAttribute('aria-controls')!);
+    expect(detail).toBeInTheDocument();
+    expect(within(detail!).getByText(error)).toBeInTheDocument();
+    expect(detail).toHaveTextContent('Host edge-01');
+    expect(container.querySelectorAll('[data-inline-platform-resource-detail-for]')).toHaveLength(
+      1,
+    );
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(error)).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+    expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
+    expect(ResourceActionsAPI.executeAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps two failed image explanations attached to their own expanded row', () => {
+    render(() => (
+      <DockerImagesTable
+        resources={['one', 'two'].map((name) =>
+          makeResource({
+            id: `image-${name}`,
+            type: 'docker-image',
+            name: `service-${name}:latest`,
+            docker: {
+              hostname: `edge-${name}`,
+              updateStatus: { updateAvailable: false, error: `registry failure ${name}` },
+            },
+          }),
+        )}
+        emptyIcon={<span />}
+        emptyTitle="No images"
+        emptyDescription="No images"
+        showToolbar={false}
+      />
+    ));
+
+    const one = screen.getByRole('button', { name: /Check failed for service-one/ });
+    const two = screen.getByRole('button', { name: /Check failed for service-two/ });
+    fireEvent.click(one);
+    expect(screen.getByText('registry failure one')).toBeInTheDocument();
+    expect(screen.queryByText('registry failure two')).not.toBeInTheDocument();
+    fireEvent.click(two);
+    expect(one).toHaveAttribute('aria-expanded', 'false');
+    expect(two).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByText('registry failure one')).not.toBeInTheDocument();
+    expect(screen.getByText('registry failure two')).toBeInTheDocument();
+  });
+
   it('renders Docker volume API fields', () => {
     render(() => (
       <DockerVolumesTable
