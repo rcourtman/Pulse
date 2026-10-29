@@ -5911,8 +5911,9 @@ metadata and a lockfile do not by themselves clear an audit failure.
 Ordinary frontend CI must check Solid's actual locked Seroval and plugin
 dependency edges before installing the graph. An npm override cannot silently
 reuse an older compatibility proof after the consumer changes its requirements.
-`scripts/check-frontend-serialization.mjs` preserves only the exact qualified
-Solid `1.9.15` / Seroval `1.6.3` root override of `~1.5.4`; otherwise each
+`scripts/check-frontend-serialization.mjs` preserves the exact qualified
+Solid `1.9.15` / Seroval `1.6.3` root override of `~1.5.4` and the separately
+controlled current tuple below; otherwise each
 resolved serializer must satisfy Solid's full stable tilde range, including
 nested consumers and dependencies. New range forms require review. The
 standalone regression suite rejects the Solid `1.9.16` / `~1.6.8` update with
@@ -5920,6 +5921,30 @@ stale Seroval `1.6.3` or plugins `1.5.5`, accepts matched updates, and checks
 the non-optional pre-install CI wiring. This is a graph-admission check, not
 official-byte authenticity, a security-audit verdict or installed UI proof;
 the existing security floors and actual consumer tests remain required.
+
+The current serializer override is deliberately narrower than a maintained-major
+range: Solid `1.9.17` continues to declare Seroval and seroval-plugins `~1.6.8`,
+while the root Seroval override is pinned to `1.7.3`. The unchanged root
+seroval-plugins `1.6.8` still declares its Seroval peer as `^1.0`. Seroval's
+Node `>=20` requirement fits the declared Node 24 build. No new Solid, plugin,
+declared edge or nested resolution can borrow this exact compatibility
+exception. The pre-install guard tests enforce those limits; the old `1.9.15`
+exception is not evidence for this tuple. The complete lock retains the
+canonical representation of the unchanged optional Tailwind WASI bundle and
+all unrelated dependency floors.
+
+`solidSerialization.test.ts`, run by the ordinary frontend test command, uses
+the installed Solid Node server export, not a mock Serializer or only the
+standalone Seroval API. Its actual resource/Suspense and late streaming paths
+must preserve cyclic/shared values, typed view offsets and shared buffers,
+default URL/Headers plugins, script-text escaping, nonces, render scopes and
+`noScripts`. Installed versions/resolution must match the committed lock. The
+existing standalone plugin consumers and security floors remain required.
+These executable controls and a structural guard do not themselves qualify an
+unexecuted graph: exact acquired-graph source/type/build and consuming desktop/
+narrow-browser proof, with inspected pixels, and the complete hosted dependency
+audit remain required. Older-graph passes and official resource observations
+cannot substitute for them or establish advisory clearance.
 
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and

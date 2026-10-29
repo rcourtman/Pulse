@@ -9,7 +9,7 @@ function graph(solid = '1.9.16', range = '~1.6.8', seroval = '1.6.8', plugins = 
     packages: {
       'node_modules/solid-js': { version: solid, dependencies: { seroval: range, 'seroval-plugins': range } },
       'node_modules/seroval': { version: seroval },
-      'node_modules/seroval-plugins': { version: plugins },
+      'node_modules/seroval-plugins': { version: plugins, peerDependencies: { seroval: '^1.0' } },
     },
   };
 }
@@ -60,6 +60,56 @@ test('a new Solid cannot borrow the old consumer compatibility exception', () =>
 
 test('a different serializer cannot borrow the exact old override', () => {
   assert.equal(serializationGraphErrors(graph('1.9.15', '~1.5.4', '1.6.4', '1.5.5')).length, 1);
+});
+
+test('the deliberate current override preserves the exact Solid and plugin consumers', () => {
+  assert.deepEqual(serializationGraphErrors(graph('1.9.17', '~1.6.8', '1.7.3', '1.6.8')), []);
+});
+
+test('other Solid versions cannot borrow the current override', () => {
+  for (const solid of ['1.9.16', '1.9.18', '2.0.0']) {
+    assert.equal(serializationGraphErrors(graph(solid, '~1.6.8', '1.7.3', '1.6.8')).length, 1);
+  }
+});
+
+test('another serializer version or declared edge cannot borrow the current override', () => {
+  for (const version of ['1.7.2', '1.7.4', '1.8.0', '2.0.0']) {
+    assert.equal(serializationGraphErrors(graph('1.9.17', '~1.6.8', version, '1.6.8')).length, 1);
+  }
+  assert.equal(serializationGraphErrors(graph('1.9.17', '~1.6.7', '1.7.3', '1.6.8')).length, 1);
+});
+
+test('the unchanged plugin tuple is part of current override admission', () => {
+  for (const version of ['1.6.7', '1.6.9', '1.7.3']) {
+    assert.ok(serializationGraphErrors(graph('1.9.17', '~1.6.8', '1.7.3', version)).length > 0);
+  }
+  const lock = graph('1.9.17', '~1.6.8', '1.7.3', '1.6.8');
+  lock.packages['node_modules/solid-js'].dependencies['seroval-plugins'] = '~1.6.7';
+  assert.equal(serializationGraphErrors(lock).length, 1);
+});
+
+test('absent or changed plugin peer metadata cannot borrow the current override', () => {
+  for (const peer of [undefined, '^2.0', '~1.6.8']) {
+    const lock = graph('1.9.17', '~1.6.8', '1.7.3', '1.6.8');
+    lock.packages['node_modules/seroval-plugins'].peerDependencies.seroval = peer;
+    assert.equal(serializationGraphErrors(lock).length, 1);
+  }
+});
+
+test('nested serializer and plugin resolutions cannot borrow the current override', () => {
+  for (const name of ['seroval', 'seroval-plugins']) {
+    const lock = graph('1.9.17', '~1.6.8', '1.7.3', '1.6.8');
+    lock.packages[`node_modules/solid-js/node_modules/${name}`] =
+      structuredClone(lock.packages[`node_modules/${name}`]);
+    assert.equal(serializationGraphErrors(lock).length, 1);
+  }
+});
+
+test('a nested Solid cannot borrow the root-only current override', () => {
+  const lock = graph('1.9.17', '~1.6.8', '1.7.3', '1.6.8');
+  lock.packages['node_modules/fixture/node_modules/solid-js'] =
+    structuredClone(lock.packages['node_modules/solid-js']);
+  assert.equal(serializationGraphErrors(lock).length, 1);
 });
 
 test('nested resolution wins over a correct root serializer', () => {
