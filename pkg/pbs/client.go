@@ -1950,7 +1950,7 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		// If namespace endpoint doesn't exist (older PBS versions), return empty list
-		if strings.Contains(err.Error(), "404") {
+		if isPBSNotFoundError(err) {
 			return []Namespace{}, nil
 		}
 		return nil, err
