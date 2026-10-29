@@ -43,25 +43,24 @@ manifest tools and resource URIs, not a separate MCP playbook layer.
 
 ## Install
 
-Three ways to get the binary, in order of friction.
+Install the adapter on the machine running your MCP client, not on every
+monitored host. Installation needs no Pulse token.
 
-### 1. One-line installer (recommended)
+### 1. Verified, saved installer (recommended)
 
-```sh
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh | bash
-```
+Follow the [saved-installer verification steps](../../docs/AGENT_SUBSTRATE.md#install-the-mcp-adapter-safely)
+for Unix or Windows. They download one published release's installer to a new
+directory and verify the release and exact saved asset before you review or
+execute it. Do not pipe a remote script into Bash or PowerShell.
 
-Detects your platform, downloads the matching binary from the latest
-Pulse release, verifies SHA256, and places it at `~/.local/bin/pulse-mcp`
+The installer detects your platform, verifies Pulse's signed checksum manifest
+and the matching binary's SHA256, and places it at `~/.local/bin/pulse-mcp`
 (or `/usr/local/bin/pulse-mcp` if `~/.local/bin` is not writable).
 Override the install location with `PULSE_MCP_BIN_DIR=/some/path` or
-the version with `PULSE_MCP_VERSION=v6.0.0-rc.5`.
-
-Windows (PowerShell):
-
-```powershell
-irm https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.ps1 | iex
-```
+pin the exact published tag with `PULSE_MCP_VERSION=vX.Y.Z` (PowerShell:
+`-Version vX.Y.Z`). Without that pin it downloads the latest release, which
+need not be the release whose installer you just verified. Windows installs
+to `%LOCALAPPDATA%\pulse-mcp` by default. Keep OS security controls enabled.
 
 ### 2. Download from a GitHub Release
 
@@ -72,15 +71,16 @@ Pick the binary that matches your platform from the Pulse release assets:
 - `pulse-mcp-windows-amd64.exe` for Windows
 - (full matrix on the release page)
 
-`chmod +x` it on Unix, drop it on your `PATH`. SHA256 sums for every
-binary are in `checksums.txt` on the same release.
+Save it without running it. Use the same release and asset verification steps
+above, substituting the exact binary filename for the installer. A SHA256
+match against an unauthenticated `checksums.txt` alone is not verification.
+Only after verification, `chmod +x` it on Unix and put it on your `PATH`.
 
-On macOS the first launch may show a Gatekeeper warning ("cannot be
-opened because the developer cannot be verified"). Either right-click
-the binary and pick Open the first time, or run
-`xattr -d com.apple.quarantine pulse-mcp` to clear the quarantine flag.
-Notarization is intentionally skipped for v1; the install-script path
-above downloads the same unsigned binary.
+If macOS Gatekeeper, Windows policy or another security control blocks launch,
+keep the warning and use your administrator's normal software approval path.
+Pulse's detached release signature is not macOS notarization or Windows
+Authenticode; do not remove quarantine or weaken execution policy as a
+troubleshooting shortcut.
 
 ### 3. Build from source
 
