@@ -175,9 +175,14 @@ function projectDeclarationLines(tokens) {
   return lines;
 }
 
-function firstFieldValue(lines) {
-  const value = lines.find((line) => !line.delimiter && line.text.trim());
-  return value ? value.text.trim() : "";
+function firstFieldValue(lines, start = 0) {
+  // Repeated declarations share the report snapshot; do not allocate a copy
+  // of its entire remaining suffix for each field.
+  for (let index = start; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.delimiter && line.text.trim()) return line.text.trim();
+  }
+  return "";
 }
 
 function extractSectionValues(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
@@ -347,18 +352,30 @@ function extractTitlePulseVersion(title) {
   return leading && !declaredVersionIsTransition(neutral) ? normalizeVersion(leading[1]) : null;
 }
 
+// A repeated version field is evidence only when every declaration
+// agrees. First-wins would turn a copy, appended correction or uncertain
+// runtime into one exact release solely because of its position. Unknown or
+// incomplete declarations do not gain a value from a neighbouring copy.
+function agreedDeclaredVersion(versions) {
+  const first = versions[0];
+  return first && versions.every(version => version &&
+    version.toLowerCase() === first.toLowerCase()) ? first : null;
+}
+
 function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
   if (body) {
     const lines = report.lines;
-    const versionHeading = lines.findIndex((line) =>
-      line.heading !== null && /^Pulse[ \t]+version$/i.test(line.heading)
+    const versionHeadings = lines.flatMap((line, index) =>
+      line.heading !== null && /^Pulse[ \t]+version$/i.test(line.heading) ? [index] : []
     );
-    if (versionHeading !== -1) {
+    if (versionHeadings.length) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)), report);
+      return agreedDeclaredVersion(versionHeadings.map(index =>
+        normalizeLegacyVersionValue(firstFieldValue(lines, index + 1), report)));
     }
+    const legacyVersions = [];
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
       const line = (lines[i].heading ?? lines[i].metadata).replace(/\*\*|__/g, "")
@@ -377,11 +394,13 @@ function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
       );
       const inlineValue = visibleField ? visibleField[1].trim() : "";
-      if (inlineValue) return normalizeLegacyVersionValue(inlineValue, report);
       // A declared value may itself be fenced; that does not turn headings
-      // elsewhere in a fenced log into declarations.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)), report);
+      // elsewhere in a fenced log into declarations. Reconcile every real
+      // legacy declaration, just as with repeated form headings above.
+      legacyVersions.push(normalizeLegacyVersionValue(inlineValue ||
+        firstFieldValue(lines, i + 1), report));
     }
+    if (legacyVersions.length) return agreedDeclaredVersion(legacyVersions);
   }
 
   return extractTitlePulseVersion(title);
