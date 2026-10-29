@@ -2025,7 +2025,7 @@ func legacyRESTReportingMemoryBody() string {
 
 func newLegacyRESTReportingClient(t *testing.T, routes alertArgsTransport) *Client {
 	t.Helper()
-	client, err := NewClient(ClientConfig{Host: "http://truenas.invalid", APIKey: "synthetic"})
+	client, err := NewClient(ClientConfig{Host: "http://truenas.invalid", Port: 80, APIKey: "synthetic"})
 	if err != nil {
 		t.Fatal(err)
 	}

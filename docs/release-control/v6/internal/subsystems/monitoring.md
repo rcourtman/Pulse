@@ -2418,6 +2418,57 @@ timestamps/units, appliance acceptance or the reporter's exact failure. Native
 response evidence remains required before claiming that this repair resolves the
 reported telemetry journey.
 
+### CORE 13 native same-frame memory — issue #2077
+
+The legacy REST transport remains the inventory and reporting/History owner.
+CORE 13.0 alone may supplement a successful reporting read with one fresh,
+short-lived authenticated DDP `reporting.realtime` observation at the same
+appliance's `/websocket`. The historical native CORE 13.0-U6.1 event in
+issue comment 5784440810 establishes a distinct protocol/envelope and memory
+shape: `memory.classes.free`, `zfs.arc_size`/`memory.classes.arc`, and
+`virtual_memory.total`. It is not a current REST ARC reply or native recovery
+proof. The old REST-only choice is superseded for this bounded live-memory
+path; other metrics and graph History retain their existing semantics.
+
+`internal/truenas/core_realtime_memory.go` owns this internal supplement, not a
+new selectable transport, endpoint setting or cache. It requires an already
+negotiated legacy connection, an exact recognized `TrueNAS-13.0` version and
+TLS with the configured CA/fingerprint policy. Modern JSON-RPC, SCALE, other
+CORE versions, plaintext sockets and redirects do not enter it. REST failure
+never triggers a second authentication route. DDP uses the configured API key,
+or the configured username/password only when no key exists; refusal never
+tries another identity/mechanism. Authentication results and subscription
+collections are matched exactly, pre-authentication events are discarded, DDP
+pings receive pongs, and subscription termination ends the read. The complete
+session shares the shorter caller/configured deadline, is capped at five
+seconds, 64 messages and the existing response-size bound, observes cancellation
+and closes after one frame or failure. No reconnection or replay is added.
+
+A valid native memory tuple replaces Free, ARC and total together. All three
+must be nonnegative integer bytes (total positive), fit the reported total,
+and have consistent ARC values when both native fields exist. Missing, null,
+fractional, string, conflicting or out-of-range data never supplies a tuple.
+Measured zero Free or ARC remains zero. Neither Wired nor inactive/available
+memory substitutes for ARC or Free. Values come from one post-authentication
+live frame, timestamped on receipt; an old event, previous poll, RRD bucket or
+other frame cannot fill missing members. Native failure/absence preserves
+independently successful reporting data, and an empty reporting result remains
+unknown unless the native observation supplies usable memory. No new public
+schema or historical backfill is implied.
+
+Verification: `core_realtime_memory_test.go` exercises pinned TLS, DDP connect,
+API-key/password authentication, exact subscription/event matching, native
+field decoding, snapshot and serialized canonical host memory, genuine zeros,
+missing/malformed/conflicting/overflow fields, auth/subscription refusal,
+silent/flood peers, cancellation/closure, trust/version/modern-mode gates and
+independent reporting preservation. `testdata/core13_realtime_memory.json`
+retains only the native event's unchanged memory fields; transport replies are
+explicit protocol fixtures, not appliance captures. Existing modern transport,
+REST reporting and scoped monitoring pipeline suites remain regression proof.
+Desktop and narrow consuming-surface interactions/pixels are retained as lane
+evidence. This source proof does not establish installed CORE recovery,
+original host totals/Activity or original History.
+
 ### CORE native reporting rows and device graphs — issue #2077
 
 `internal/truenas/core_reporting.go` owns the native reporting envelope alongside
@@ -4526,6 +4577,12 @@ service-history reads plus denial/recovery without fabricated samples.
 3. Snapshot-backed helper paths used where `ReadState` should be authoritative
 
 ## Completion Obligations
+
+CORE 13 live-memory supplements must prove the native DDP/TLS/authentication
+boundary and same-frame Free/ARC/total together in
+`internal/truenas/core_realtime_memory_test.go`. Partial native data must retain
+independent reporting rather than mix frames; modern transport, trust and
+original History semantics remain unchanged.
 
 Discovery belongs to the monitor that constructs it. Both initial startup and
 runtime enablement pass that monitor's org into the service constructor; every
