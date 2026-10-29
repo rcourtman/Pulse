@@ -90,8 +90,7 @@ function getBackupAgeBadgeLabel(
   info: BackupInfo,
   now: number,
 ): string {
-  if (info.status === 'never') return 'None';
-  if (info.status === 'unknown') return 'Unknown';
+  if (info.status === 'never' || info.status === 'unknown') return 'Unknown';
   const compact = formatRelativeTime(lastBackup ?? undefined, {
     compact: true,
     emptyText: 'Unknown',
@@ -105,9 +104,9 @@ function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): stri
   const layout =
     'inline-flex h-5 min-w-13 items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
   // A healthy backup only needs its shield. Existing backups that cross an age
-  // threshold remain amber because age is a policy-relative caution, while red
-  // is reserved for the materially different state where no backup exists.
-  // The exact age stays visible for every non-fresh state.
+  // threshold remain amber because age is a policy-relative caution. Missing
+  // completion evidence is also cautionary: this row cannot establish that
+  // no backups exist. The exact age stays visible when it is available.
   const pill = `${layout} rounded-full border`;
 
   switch (status) {
@@ -117,9 +116,8 @@ function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): stri
       return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'overdue':
     case 'unknown':
-      return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'never':
-      return `${pill} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
+      return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     // A running backup is work underway, not success (green would claim a
     // completed backup) and not absence (hiding it would look like nothing
     // is happening). Blue matches the Backups page's running-task tone.
@@ -381,9 +379,9 @@ function BackupStatusCell(props: {
     if (props.backupRunning) {
       return hasCompletedBackup()
         ? `Backup status: backup running now, last completed backup ${currentInfo.ageFormatted}`
-        : 'Backup status: backup running now, no completed backup yet';
+        : 'Backup status: backup running now, no completed backup reported';
     }
-    if (currentInfo.status === 'never') return 'Backup status: no backup found';
+    if (currentInfo.status === 'never') return 'Backup status: no completed backup reported';
     return `Backup status: ${currentInfo.status}, last backup ${currentInfo.ageFormatted}`;
   });
 
@@ -439,10 +437,9 @@ function BackupStatusCell(props: {
         <p class="text-amber-700 dark:text-amber-300">{info().ageFormatted}</p>
       </Show>
       <Show when={info().status === 'never'}>
-        <p class="text-red-600 dark:text-red-400">
-          {props.backupRunning
-            ? 'No completed backup yet - the first backup is running now.'
-            : 'No backup has ever been recorded for this guest.'}
+        <p class="text-amber-700 dark:text-amber-300">
+          No completed backup is reported in the current inventory. Missing data does not mean no
+          backups exist.
         </p>
       </Show>
       <Show when={guestReadPresentation()}>

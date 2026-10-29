@@ -705,7 +705,7 @@ export const getGuestDrawerBackupPresentation = (
   if (info.ageMs === null) {
     return {
       ageClass: statusPresentation.color,
-      ageLabel: info.status === 'never' ? 'No completed backup found' : info.ageFormatted,
+      ageLabel: info.ageFormatted,
       dateLabel: 'Unknown',
     };
   }

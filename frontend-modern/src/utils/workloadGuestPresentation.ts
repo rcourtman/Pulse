@@ -36,9 +36,11 @@ const BACKUP_STATUS_PRESENTATION: Record<
     icon: 'warning',
   },
   never: {
-    color: 'text-red-600 dark:text-red-400',
-    bgColor: 'bg-red-100 dark:bg-red-900/25',
-    icon: 'x',
+    // The legacy key means no completion time in current inventory, not
+    // independently established absence of every backup or restore point.
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bgColor: 'bg-yellow-100 dark:bg-yellow-900/25',
+    icon: 'warning',
   },
   unknown: {
     color: 'text-yellow-600 dark:text-yellow-400',
@@ -95,15 +97,12 @@ export function getWorkloadsGuestBackupTooltip(
 ): string {
   const base =
     status === 'never'
-      ? 'No completed backup found'
+      ? 'No completed backup reported'
       : status === 'unknown'
         ? ageFormatted || 'Backup age unavailable'
         : `Last backup: ${ageFormatted || 'Unknown'}`;
   if (backupRunning) {
     return `Backup running now · ${base.toLowerCase()}`;
-  }
-  if (status === 'never') {
-    return 'No backup found';
   }
   return base;
 }
@@ -113,7 +112,7 @@ export function getWorkloadsGuestProtectionPresentation(options: {
   ageClass?: string | null;
 }): WorkloadsGuestProtectionPresentation {
   if (!options.ageLabel) {
-    return { label: 'No completed backup found', tone: 'danger' };
+    return { label: 'No completed backup reported', tone: 'warning' };
   }
   return {
     label: options.ageLabel,

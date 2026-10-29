@@ -200,7 +200,7 @@ describe('mounted completed-backup evidence', () => {
         .closest('td'),
     ).toHaveClass('text-amber-700');
     expect(completion()).toBeNull();
-    expect(details().queryByText('No completed backup found')).not.toBeInTheDocument();
+    expect(details().queryByText('No completed backup reported')).not.toBeInTheDocument();
     expectOnlyTrendReads();
   });
 

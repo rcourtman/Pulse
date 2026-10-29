@@ -103,9 +103,9 @@ describe('workloadGuestPresentation', () => {
       icon: 'check',
     });
     expect(getWorkloadsGuestBackupStatusPresentation('never')).toEqual({
-      color: 'text-red-600 dark:text-red-400',
-      bgColor: 'bg-red-100 dark:bg-red-900/25',
-      icon: 'x',
+      color: 'text-yellow-600 dark:text-yellow-400',
+      bgColor: 'bg-yellow-100 dark:bg-yellow-900/25',
+      icon: 'warning',
     });
     expect(getWorkloadsGuestBackupStatusPresentation('overdue')).toEqual({
       color: 'text-yellow-600 dark:text-yellow-400',
@@ -115,7 +115,7 @@ describe('workloadGuestPresentation', () => {
   });
 
   it('returns canonical guest backup tooltip copy', () => {
-    expect(getWorkloadsGuestBackupTooltip('never')).toBe('No backup found');
+    expect(getWorkloadsGuestBackupTooltip('never')).toBe('No completed backup reported');
     expect(getWorkloadsGuestBackupTooltip('stale', '3d')).toBe('Last backup: 3d');
   });
 
@@ -134,8 +134,8 @@ describe('workloadGuestPresentation', () => {
 
   it('returns canonical compact protection context for object drawers', () => {
     expect(getWorkloadsGuestProtectionPresentation({})).toEqual({
-      label: 'No completed backup found',
-      tone: 'danger',
+      label: 'No completed backup reported',
+      tone: 'warning',
     });
     expect(
       getWorkloadsGuestProtectionPresentation({
@@ -163,7 +163,7 @@ describe('workloadGuestPresentation', () => {
       'Backup running now · last backup: 3d',
     );
     expect(getWorkloadsGuestBackupTooltip('never', undefined, true)).toBe(
-      'Backup running now · no completed backup found',
+      'Backup running now · no completed backup reported',
     );
   });
 

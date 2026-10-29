@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "2963e03a29fa84aa4e657f7e463a386338a31f08",
+  "verified_at": "2026-10-29T01:59:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "10509ecda22d2ddd28b1cc7b1da1bdddaafe592617f09d90bc7fcf96f0677677",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "3637356e422b8e6ee3671de646820efbf4c8fbc7e9a73607e4cff31e4304c234",
+    "frontend-modern/src/utils/format.ts": "ab982e50d5c14a61b9dacef4d99a3df710c4875b1cc5afcedc439cbbd8034eb6",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "a98a3ebe2cd3950ad2d5ba9b8d14be3e41a9fe7812c07af9940242a9f7cf6524"
+  },
+  "routes": [
+    "/workloads?transport=api&type=vm",
+    "/workloads?transport=api&type=system-container",
+    "/workloads?transport=snapshot&type=vm",
+    "/workloads?transport=snapshot&type=system-container"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 780
+    }
+  ],
+  "states": [
+    "Missing, empty and Go-zero completion times stay cautionary Unknown, not red absence, never-backed-up or first-backup claims.",
+    "Running activity remains blue and is not completion. Valid completion restores exact UTC time and green freshness; malformed/future and missing recurrence withdraw the time without closing details.",
+    "Real REST/owning-snapshot useWorkloads mapper, production GuestRow, full GuestDrawer, dialogs and CSS; 1974 checks over 16 Chromium/WebKit desktop/narrow scenarios, Playwright 1.56.1.",
+    "Eight final captures opened with native view_image. New inventory-scoped explanation, cautionary drawer state, phone shield and independent guest-read/thaw warnings fit and remain readable.",
+    "Bounded synthetic consumer proof, not original backup/guest causality, native thaw, archive restorability, installed recovery, publication or release acceptance."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch open the real backup disclosure without toggling its row. Native drawer Details activation exposes valid evidence.",
+    "Live source replacement retains the same dialog/drawer and focus. Escape or Close returns focus to the exact originating shield/badge.",
+    "Existing guest-safety link stays separate; no threshold link appears without an age. All API traffic is loopback reads; no guest/backup/restore operation or external request."
+  ]
+}

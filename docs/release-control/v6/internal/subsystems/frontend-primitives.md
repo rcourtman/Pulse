@@ -20,6 +20,27 @@
 
 ## Purpose
 
+### Missing Workloads completion times do not establish absence
+
+The workload badge, compact shield, hover/dialog and full drawer treat absent
+completion-time sentinels as missing current-inventory evidence, not proof that
+no backup exists or that a running backup is the first. The legacy `never` key
+stays internal; visible absence is cautionary Unknown and “No completed backup
+reported”, with no invented date or age-rule link. The disclosure states that
+missing data does not mean no backups exist. Known valid ages, invalid/future
+time reasons, blue running activity, platform/template gating and independent
+guest-read/thaw precautions are unchanged. No read, timer, policy, identity,
+guest, backup or restore operation is added.
+
+`backupTimestampFlow.test.tsx` drives missing/empty/Go-zero observations through
+the real REST and owning-snapshot mapper into badge, shield and full drawer for
+VM/LXC, including activity, recovery/recurrence and retained dialog/focus.
+Existing cell, drawer, shared-clock and guest-row tests pin the accessible
+wording, warning tone and separate safety evidence. Desktop/narrow browser
+proof must inspect real production rows and their consuming disclosures, not
+just helpers. This is truthful inspection, not original protection causality,
+native thaw, restore readiness, installed recovery or release availability.
+
 ### Backup read recovery retains keyboard position
 
 PVE, PBS and protection-posture retries remain focusable while pending, report
@@ -3186,10 +3207,11 @@ not a replacement status card, CTA band, or page-local nested card.
    `frontend-modern/src/utils/workloadGuestPresentation.ts` owns the canonical
    tone and icon mapping consumed by workload rows and drawers. A recorded
    backup may be green or amber according to the configured freshness
-   thresholds, but age alone must not produce a red failure treatment. Red is
-   reserved for the materially different `never` state where no backup has
-   been recorded; unsupported workloads and templates remain neutral rather
-   than being classified as unprotected.
+   thresholds, but age alone must not produce a red failure treatment. The legacy
+   `never` key means no completion time reported in current inventory: show
+   cautionary Unknown, not a red no-backup verdict or an all-time absence
+   claim. Unsupported workloads and templates remain neutral rather than
+   being classified as unprotected.
    Inline detail content belongs to the shared detail-section primitive family.
    Feature surfaces may own the platform-specific rows, section labels, and
    source model, but section row shaping, empty-row compaction, value tone

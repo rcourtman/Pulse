@@ -3290,15 +3290,18 @@ describe('backup column', () => {
     expect(badge?.className).not.toContain('text-red');
   });
 
-  it('reserves red for supported guests without a backup', () => {
+  it('keeps missing supported-guest backup evidence cautionary rather than declaring absence', () => {
     const { container } = renderGuestRow({
       guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: 0 }),
       visibleColumnIds: ['name', 'backup'],
     });
-    expect(screen.getByText('None')).toBeTruthy();
-    const badge = container.querySelector('[aria-label="Backup status: no backup found"]');
+    expect(screen.getByText('Unknown')).toBeTruthy();
+    const badge = container.querySelector(
+      '[aria-label="Backup status: no completed backup reported"]',
+    );
     expect(badge).toBeTruthy();
-    expect(badge?.classList.contains('text-red-700')).toBe(true);
+    expect(badge?.classList.contains('text-yellow-700')).toBe(true);
+    expect(badge?.className).not.toContain('red');
   });
 
   it('keeps positive backup coverage visible when the backup column is hidden', () => {
@@ -3331,7 +3334,7 @@ describe('backup column', () => {
     });
 
     const indicator = container.querySelector(
-      '[aria-label="Backup running now · no completed backup found"]',
+      '[aria-label="Backup running now · no completed backup reported"]',
     );
     expect(indicator).toBeTruthy();
     expect(indicator?.classList.contains('text-blue-600')).toBe(true);
@@ -3349,7 +3352,7 @@ describe('backup column', () => {
       visibleColumnIds: ['name'],
     });
 
-    expect(container.querySelector('[title="No backup found"]')).toBeNull();
+    expect(container.querySelector('[title="No completed backup reported"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Backup status:"]')).toBeNull();
   });
 
@@ -3669,10 +3672,38 @@ describe('backup disclosures keep completion separate from guest safety', () => 
 
   function openBackup(backupColumn: boolean) {
     fireEvent.click(
-      screen.getByRole('button', { name: backupColumn ? /^Backup status:/ : /^Last backup:/ }),
+      screen.getByRole('button', {
+        name: backupColumn ? /^Backup status:/ : /^(Last backup:|No completed backup reported$)/,
+      }),
     );
     return screen.getByRole('dialog');
   }
+
+  it.each([true, false])(
+    'keeps missing backup evidence separate from uncertain guest reads, column=%s',
+    (backupColumn) => {
+      render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={makeGuest({ lastBackup: 0, diskStatusReason: 'prev-agent-timeout' })}
+              visibleColumnIds={backupColumn ? ['name', 'backup'] : ['name']}
+            />
+          </tbody>
+        </table>
+      ));
+      const dialog = openBackup(backupColumn);
+      expect(dialog).toHaveTextContent('Missing data does not mean no backups exist');
+      expect(dialog).not.toHaveTextContent(/No backup has ever|the first backup/i);
+      expect(dialog.querySelector('time')).toBeNull();
+      expect(dialog).toHaveTextContent('Guest-agent reads: Deferred');
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(within(dialog).getByRole('link', { name: 'Backup safety guidance' })).toHaveAttribute(
+        'href',
+        '/docs/VM_DISK_MONITORING',
+      );
+    },
+  );
 
   it.each([true, false])(
     'keeps the same open evidence truthful through lock, uncertain completion and recovery, column=%s',
