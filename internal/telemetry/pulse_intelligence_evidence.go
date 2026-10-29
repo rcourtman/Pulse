@@ -83,6 +83,11 @@ type PulseIntelligenceExternalAgentEvidence struct {
 	OperatorStateRequests int
 	FindingRequests       int
 	ActionRequests        int
+	// HistoryReadDays counts distinct UTC days in the window with at least
+	// one successful requested history read (list_recent_changes,
+	// get_metric_history). It backs the event-record review and is not a
+	// request count.
+	HistoryReadDays int
 }
 
 // CollaborationActive reports whether an external agent or MCP adapter used a
@@ -122,6 +127,14 @@ func PulseIntelligenceExternalAgentEvidenceFromHistory(history *config.ExternalA
 	if history == nil {
 		return evidence
 	}
+	// History-read days are whole UTC dates: the partial date the window
+	// starts in is left out, so the count is at most 30 and a day is never
+	// lost because its first read fell before the cutoff.
+	firstHistoryReadDay := since.UTC().Truncate(24 * time.Hour)
+	if firstHistoryReadDay.Before(since) {
+		firstHistoryReadDay = firstHistoryReadDay.Add(24 * time.Hour)
+	}
+	historyReadDays := make(map[string]struct{})
 	for _, event := range history.Events {
 		if event.Timestamp.IsZero() || event.Timestamp.Before(since) {
 			continue
@@ -133,8 +146,12 @@ func PulseIntelligenceExternalAgentEvidenceFromHistory(history *config.ExternalA
 		if strings.TrimSpace(event.Surface) == config.ExternalAgentActivitySurfacePulseMCP {
 			evidence.MCPAdapterUsed = true
 		}
+		if strings.TrimSpace(event.Activity) == config.ExternalAgentActivityHistoryRead && !event.Timestamp.Before(firstHistoryReadDay) {
+			historyReadDays[event.Timestamp.UTC().Format(time.DateOnly)] = struct{}{}
+		}
 		evidence.ApplyActivity(event.Activity)
 	}
+	evidence.HistoryReadDays = len(historyReadDays)
 	return evidence
 }
 

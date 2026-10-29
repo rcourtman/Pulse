@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `20` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `21` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -252,6 +252,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence MCP adapter used 30d | `true`/`false` | See whether the `pulse-mcp` adapter reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, prompts, or request details |
 | Pulse Intelligence external agent context requests 30d | `8` | Count external-agent/MCP resource-context and fleet-context requests in the current 30-day telemetry window without sending resource IDs, route parameters, or request details |
 | Pulse Intelligence external agent event stream requests 30d | `3` | Count external-agent/MCP event-stream requests in the current 30-day telemetry window without sending event content, route parameters, or request details |
+| Pulse Intelligence external agent history read days 30d | `4` | Count the distinct days, 0 to 30, in the current 30-day telemetry window on which an external agent or MCP client successfully read change or metric history, so adoption of those reads can be judged without sending queries, resource IDs, time windows, results, or request counts |
 | Pulse Intelligence external agent provisioning requests 30d | `2` | Count external-agent/MCP provisioning requests in the current 30-day telemetry window without sending discovered resources, credentials, route parameters, or request details |
 | Pulse Intelligence external agent operator state requests 30d | `5` | Count external-agent/MCP operator-state requests in the current 30-day telemetry window without sending state payloads, route parameters, or request details |
 | Pulse Intelligence external agent finding requests 30d | `4` | Count external-agent/MCP finding-list and finding-decision requests in the current 30-day telemetry window without sending finding IDs, finding text, route parameters, or request details |
@@ -456,6 +457,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 21 | 2026-10-29 | Content-free count of distinct days on which an external agent or MCP client successfully read change or metric history |
 | 20 | 2026-10-17 | Content-free aggregate report generation, delivery outcomes, source-data states and distinct-period repeat use, with measurement availability and elapsed observation days |
 | 19 | 2026-10-16 | Content-free rolling count of successful metric-history responses that return data older than seven days |
 | 18 | 2026-09-27 | Effective update channel, closed outcome of the last update check on that channel, and whether it offered a newer release |

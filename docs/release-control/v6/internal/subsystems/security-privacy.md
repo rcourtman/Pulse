@@ -3202,7 +3202,7 @@ carry the schema notice for the first release that includes this field.
 
 ### Telemetry ingestion matches the released sender while storage stays compatible
 
-The active outbound contract is schema v19. Schema v8 added content-free
+The active outbound contract is schema v21. Schema v8 added content-free
 approved-action refusal counters for target change, prerequisite failure, and
 invalid typed contract so agent-side pre-mutation failures no longer collapse
 into `other`. Schema v9 completes that split with a content-free `uncoded`
@@ -3250,6 +3250,21 @@ it. The sender and receiver both force `update_available` false unless the
 outcome is `available`. No version, release tag, URL, response, or error text
 leaves the install, and the receiver canonicalizes both strings to the released
 vocabulary or `unknown`.
+Schema v19 adds the rolling count of served metric history responses with data
+older than seven days, and schema v20 adds aggregate reporting outcomes and
+distinct-period reuse. Schema v21 adds only
+`pulse_intelligence_external_agent_history_read_days_30d`: the number of
+distinct UTC days, 0 to 30, on which an external agent or MCP client got a
+successful response from `list_recent_changes` or `get_metric_history`. It
+backs the agent event-record review. Locally it is one content-free
+`history_read` marker per UTC day in the external-agent activity history,
+written to the root persistence after a 2xx response, never for a request
+Pulse's own pages made (`Sec-Fetch-Site: same-origin`) or in mock mode, and kept
+outside the 500-record cap so busy agents cannot erase earlier days. Days are
+whole UTC dates inside the window, so the partial start date is left out and
+the count never exceeds 30. No query, resource ID, time window, result
+or request count leaves the install, and the receiver clamps the value to
+0 to 30.
 Patrol run and new-finding volumes use bounded local UTC-day tallies in
 `internal/config/persistence.go`, preserving aggregate activity after the
 operator-facing run history is trimmed. Finding volume has its own persistence

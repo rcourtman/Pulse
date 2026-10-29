@@ -4736,6 +4736,12 @@ persistence either. It resolves a resource's existing `MetricsTarget` and reads
 through the same history path the charts use (the metrics store, then the
 in-memory and live fallbacks), so its recovery posture is the metrics store's.
 
+The history-read usage marker adds no new store. It is a content-free
+`history_read` record in the existing external-agent activity history, at most
+one per UTC day, kept outside that history's 500-record cap and bounded by its
+90-day retention. Losing the file loses only past markers; telemetry then
+reports fewer history-read days until agents read again.
+
 The live `alert.fired`, `alert.resolved` and `resource.status_changed` agent
 events add no persistence. They are published in memory after the monitor
 adapter has recorded the matching `resource_changes` row, and per-resource
