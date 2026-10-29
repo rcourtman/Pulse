@@ -149,16 +149,21 @@ jobs:
         run: go test -count=1 -timeout 3m -run '^TestIntegrationContainer' ./scripts/installtests
 
       # The complete Go installer inventory also executes Python workflow
-      # contracts. Hosted macOS has Python but does not supply PyYAML; isolate
-      # that fixture prerequisite instead of skipping the registered proof or
-      # modifying Homebrew's externally managed interpreter.
+      # contracts. The runner's unversioned Python is not a wheel compatibility
+      # contract (ARM64 could not obtain the pinned parser). Select supported
+      # CPython before creating the isolated venv; never build a parser from
+      # source, skip the registered proof or modify the managed interpreter.
       - name: Supply YAML parser for native Unix contract checks
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
+          brew install python@3.13
+          contract_runtime="$(brew --prefix python@3.13)/bin/python3.13"
+          test -x "$contract_runtime"
+          "$contract_runtime" -c 'import sys; assert sys.version_info[:2] == (3, 13); print(sys.version)'
           contract_python="$(mktemp -d "$RUNNER_TEMP/pulse-contract-python.XXXXXX")"
-          python3 -m venv "$contract_python"
+          "$contract_runtime" -m venv "$contract_python"
           "$contract_python/bin/python3" -m pip install \
             --disable-pip-version-check --no-input --only-binary=:all: 'PyYAML==6.0.3'
           "$contract_python/bin/python3" -c 'import yaml; assert yaml.__version__ == "6.0.3"'

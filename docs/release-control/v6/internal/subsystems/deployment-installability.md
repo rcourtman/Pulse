@@ -20,14 +20,19 @@
 
 The native Unix installer inventory invokes the registered frontend workflow
 contract through `python3`. Both hosted macOS architectures must supply PyYAML
-before that inventory: their standard Python does not include it. The workflow
-installs the fixed `PyYAML==6.0.3` binary distribution in an owned temporary
+before that inventory: their standard Python does not include it, and the
+unversioned ARM64 runtime could not obtain the pinned wheel. The workflow
+selects Homebrew `python@3.13` by its explicit prefix, requires Python 3.13,
+then installs the fixed `PyYAML==6.0.3` binary distribution in an owned temporary
 virtual environment, checks its import/version and publishes only its bin path
 to subsequent steps. It does not alter Homebrew's interpreter or skip a test.
-Venv, acquisition or import failures stop before path publication. Linux and
+Runtime installation, prefix lookup, executable/version, venv, wheel acquisition
+or import failures stop before path publication, with no ambient-Python or
+source-build fallback. Linux and
 Windows keep their existing tools and all native checks/deadlines remain.
 `TestNativeMacOSContractPythonPrerequisite` executes the actual shell with
-bounded command doubles for success and each prerequisite failure; native
+bounded command doubles for success, an unusable ambient Python, a selected
+prefix containing spaces and each prerequisite failure; native
 macOS CI remains the real installation/execution proof.
 
 ### Duplicate-free Docker payload layers (29 October 2026)
