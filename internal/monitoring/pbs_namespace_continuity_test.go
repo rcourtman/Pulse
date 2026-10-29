@@ -21,10 +21,12 @@ import (
 
 type pbsNamespaceContinuityFixture struct {
 	*pbsPosturePollFixture
-	rootStatus, tenantStatus atomic.Int32
-	rootEmpty, tenantEmpty   atomic.Bool
-	rootAt, tenantAt         atomic.Int64
-	rootReads, tenantReads   atomic.Int32
+	rootStatus, tenantStatus              atomic.Int32
+	rootEmpty, tenantEmpty                atomic.Bool
+	rootAt, tenantAt                      atomic.Int64
+	rootReads, tenantReads                atomic.Int32
+	tenantSnapshotStatus, namespaceStatus atomic.Int32
+	failedReads                           atomic.Int32
 }
 
 func newPBSNamespaceContinuityFixture(t *testing.T, kind string) *pbsNamespaceContinuityFixture {
@@ -40,21 +42,36 @@ func newPBSNamespaceContinuityFixture(t *testing.T, kind string) *pbsNamespaceCo
 		} else {
 			f.rootReads.Add(1)
 		}
+		fail := func(status int32) {
+			f.failedReads.Add(1)
+			w.Header().Set("Retry-After", "3600")
+			http.Error(w, "upstream API error 404: fixture unavailable", int(status))
+		}
 		var data any = []any{}
 		switch r.URL.Path {
+		case "/api2/json/admin/datastore/archive/namespace":
+			if status := f.namespaceStatus.Load(); status != 0 {
+				fail(status)
+				return
+			}
+			data = []map[string]any{{"ns": "tenant"}}
 		case "/api2/json/admin/datastore/archive/groups":
 			if status == http.StatusOK {
 				_, _ = w.Write([]byte(`{"data":`))
 				return
 			}
 			if status != 0 {
-				http.Error(w, "fixture unavailable", int(status))
+				fail(status)
 				return
 			}
 			if !empty {
 				data = []map[string]any{{"backup-type": kind, "backup-id": id, "last-backup": at, "backup-count": 1}}
 			}
 		case "/api2/json/admin/datastore/archive/snapshots":
+			if id == "101" && f.tenantSnapshotStatus.Load() != 0 {
+				fail(f.tenantSnapshotStatus.Load())
+				return
+			}
 			data = []map[string]any{{"backup-type": kind, "backup-id": id, "backup-time": at, "size": 1024, "files": []string{"index.json.blob"}, "verification": map[string]any{"state": "ok"}, "comment": "guest-" + id}}
 		default:
 			http.NotFound(w, r)
@@ -98,7 +115,7 @@ func (f *pbsNamespaceContinuityFixture) live() map[string]models.PBSBackup {
 func TestPBSNamespaceTransientGroupReadKeepsLiveInventory(t *testing.T) {
 	for _, kind := range []string{"vm", "ct"} {
 		for _, ns := range []string{"", "tenant"} {
-			for _, status := range []int{http.StatusServiceUnavailable, http.StatusOK} {
+			for _, status := range []int{http.StatusServiceUnavailable, http.StatusOK, http.StatusRequestTimeout, http.StatusTooManyRequests} {
 				t.Run(fmt.Sprintf("%s/ns=%s/status=%d", kind, ns, status), func(t *testing.T) {
 					f := newPBSNamespaceContinuityFixture(t, kind)
 					f.collect(t, true, nil)
@@ -309,11 +326,13 @@ func TestPBSNamespaceContinuityLifecycle(t *testing.T) {
 	f := newPBSNamespaceContinuityFixture(t, "vm")
 	frames := map[string]any{}
 	original := map[string]models.PBSBackup{}
-	for _, phase := range []string{"observed", "partial", "recovered", "denied", "restored", "confirmed-empty"} {
+	for _, phase := range []string{"observed", "throttled", "timed-out", "recovered", "denied", "restored", "confirmed-empty"} {
 		switch phase {
-		case "partial":
-			f.tenantStatus.Store(http.StatusServiceUnavailable)
+		case "throttled":
+			f.tenantStatus.Store(http.StatusTooManyRequests)
 			f.rootAt.Add(15 * 60)
+		case "timed-out":
+			f.tenantStatus.Store(http.StatusRequestTimeout)
 		case "recovered", "restored":
 			f.tenantStatus.Store(0)
 		case "denied":
@@ -337,7 +356,7 @@ func TestPBSNamespaceContinuityLifecycle(t *testing.T) {
 		if phase == "observed" {
 			original = rows
 		}
-		if phase == "partial" && !reflect.DeepEqual(rows["101"], original["101"]) {
+		if (phase == "throttled" || phase == "timed-out") && !reflect.DeepEqual(rows["101"], original["101"]) {
 			t.Fatal("unread row changed")
 		}
 		postures := f.postures(t)
@@ -356,7 +375,15 @@ func TestPBSNamespaceContinuityLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.Marshal(map[string]any{"runtime_sha256": fmt.Sprintf("%x", sha256.Sum256(source)), "observed_at": time.Now().UTC(), "resource_ids": f.ids, "frames": frames})
+	runtimeHashes := map[string]string{"internal/monitoring/monitor_backups.go": fmt.Sprintf("%x", sha256.Sum256(source))}
+	for _, file := range []string{"backup_guard.go", "../../pkg/pbs/client.go"} {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtimeHashes[file] = fmt.Sprintf("%x", sha256.Sum256(content))
+	}
+	data, err := json.Marshal(map[string]any{"runtime_sha256": runtimeHashes, "observed_at": time.Now().UTC(), "resource_ids": f.ids, "frames": frames})
 	if err != nil {
 		t.Fatal(err)
 	}

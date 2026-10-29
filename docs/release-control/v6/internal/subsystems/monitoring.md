@@ -2816,17 +2816,35 @@ Direct PBS backup polling classifies typed API and authentication failures by
 the response status exposed by `pbs.HTTPStatus`, including wrapped errors.
 A 5xx gateway or server response remains transient even when its body quotes
 an upstream “API error 403” or “API error 404”; that text must not erase the
-last known backup inventory. Genuine 4xx responses remain terminal under the
-existing cache policy. The legacy untyped-error fallback is unchanged.
+last known backup inventory. Typed HTTP 408 (request timeout) and 429 (rate
+limit) likewise retain already accepted files in their own unread scope. They
+cannot renew point evidence, cache age or complete/permission-granted provider
+claims, and introduce no immediate retry or cadence change. Cold unread scopes
+invent no files; readable siblings still advance and accepted empty reads still
+confirm absence. Other 4xx responses, including 401/403/404, retain the existing
+terminal cache policy. The legacy untyped-error fallback is unchanged.
+
+Namespace compatibility treats only an actual HTTP 404 as an unavailable legacy
+endpoint; a quoted 404 in another response cannot turn failed discovery into
+an accepted empty namespace list. Wrapped typed errors retain their status.
 Retaining cached inventory does not establish a successful poll or fresh
 backup evidence.
 
-Verification: `TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
-`TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError` in
-`internal/monitoring/monitor_backups_readstate_test.go` exercise actual HTTP
-fixtures for 500, 502 quoting 403, 503 quoting 404, and genuine 401/403/404.
-These tests prove cache retention/removal, not installed PBS wake, service
-restart, or notification receipt.
+Verification: `TestPBSRetryableReadLifecycle` and
+`TestPBSRetryableReadWithoutCacheDoesNotInventFiles` exercise real synthetic
+namespace discovery, group and snapshot HTTP 408/429 replies for VM/LXC
+history, including bodies quoting 404, repeated ordinary polls, unchanged
+historical points/cache age, partial/unknown provider evidence, sibling
+progress, complete recovery and accepted removal. The existing namespace
+transient/mixed-denial controls remain. `TestNamespaceCompatibilityUsesActualHTTPStatus`
+pins actual 400/401/403/404/408/429/500/503 replies in `pkg/pbs`.
+`TestPBSNamespaceContinuityLifecycle` exports actual producer frames for
+production Backups/Coverage desktop and narrow interaction/pixel proof.
+`TestPollPBSBackups_PreservesCacheOnTransientDatastoreError` and
+`TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError` retain 500,
+502 quoting 403, 503 quoting 404, and genuine 401/403/404 controls. These are
+source safety proofs, not installed PBS wake, guest/backup recovery,
+notification receipt, archive restorability or release availability.
 
 Docker alert lifecycle events pass through the shared resource history identity
 writer. A full Docker source reference must reach the same canonical container

@@ -1059,6 +1059,8 @@ func TestPollPBSBackups_PreservesCacheOnTransientDatastoreError(t *testing.T) {
 		status int
 		body   string
 	}{
+		{"response timeout quoting missing datastore", http.StatusRequestTimeout, "upstream API error 404: request timed out"},
+		{"rate limit quoting forbidden", http.StatusTooManyRequests, "upstream API error 403: retry later"},
 		{"server error", http.StatusInternalServerError, "temporary server issue"},
 		{"gateway quoting forbidden", http.StatusBadGateway, "upstream API error 403: permission denied"},
 		{"unavailable quoting missing datastore", http.StatusServiceUnavailable, "upstream API error 404: datastore does not exist"},
