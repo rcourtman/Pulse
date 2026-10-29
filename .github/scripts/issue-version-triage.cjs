@@ -522,6 +522,7 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
   };
   const changed = () => core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
   const current = await readCurrent();
+  let checked = current;
   if (!decisionInputsMatch(current)) {
     changed();
     return;
@@ -545,18 +546,36 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
       changed();
       return;
     }
+    checked = final;
   }
 
+  const expectedLabels = new Set(beforeKeys);
   if (additions.length) {
     await github.rest.issues.addLabels({ ...target, labels: additions });
+    for (const name of additions) expectedLabels.add(name.toLowerCase());
   }
   for (const name of removals) {
+    // The preceding label write is another asynchronous boundary. A reporter
+    // or Community can change the report before the next removal, even after
+    // the preparation fence passed. Account only for our completed writes;
+    // never adopt unrelated activity as permission to finish a stale delta.
+    // Our own writes can advance updated_at, so compare content, comments and
+    // the provider's case-insensitive label identities instead of that clock.
+    const latest = await readCurrent();
+    const labels = new Set((latest.labels || []).map((label) => label.name.toLowerCase()));
+    if (latest.state !== "open" || latest.pull_request ||
+        ["title", "body", "comments"].some((field) => latest[field] !== checked[field]) ||
+        labels.size !== expectedLabels.size || [...expectedLabels].some((label) => !labels.has(label))) {
+      changed();
+      return;
+    }
     try {
       await github.rest.issues.removeLabel({ ...target, name });
     } catch (error) {
       // Another synchronizer may already have removed this label.
       if (error.status !== 404) throw error;
     }
+    expectedLabels.delete(name.toLowerCase());
   }
 }
 
