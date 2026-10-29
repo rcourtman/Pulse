@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 )
 
 func TestRecordExternalAgentCapabilityActivityUsesCapabilityScope(t *testing.T) {
@@ -269,6 +270,34 @@ func TestHistoryReadDayRecordedOnlyAfterSuccessfulRead(t *testing.T) {
 	call(&Router{persistence: uiPersistence}, agentcapabilities.ListRecentChangesCapabilityName, http.StatusOK, true)
 	if got := historyReads(t, uiPersistence); got != 0 {
 		t.Fatalf("Pulse's own page recorded %d history-read markers", got)
+	}
+}
+
+// Mock and demo installs serve generated fleets, so their history reads say
+// nothing about whether a real fleet's history was useful.
+func TestHistoryReadDayNotRecordedInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	handler := (&Router{persistence: persistence}).withExternalAgentCapabilityActivity(agentcapabilities.ListRecentChangesCapabilityName, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/changes", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
+	handler(httptest.NewRecorder(), req)
+
+	history, err := persistence.LoadExternalAgentActivityHistory()
+	if err != nil {
+		t.Fatalf("LoadExternalAgentActivityHistory: %v", err)
+	}
+	for _, event := range history.Events {
+		if event.Activity == config.ExternalAgentActivityHistoryRead {
+			t.Fatalf("mock mode recorded a history-read marker: %+v", event)
+		}
 	}
 }
 
