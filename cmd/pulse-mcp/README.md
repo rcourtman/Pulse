@@ -1,11 +1,16 @@
 # pulse-mcp
 
 `pulse-mcp` is the Model Context Protocol (MCP) adapter for Pulse
-Intelligence. It exposes the same governed operations substrate that
-Pulse Assistant uses inside the app, but as tools for Claude Desktop,
-Claude Code, OpenCode, and any other MCP-speaking client: list findings,
-read the fleet, drill into a resource, set operator intent, and run
-governed actions.
+Intelligence. It lets Claude Desktop, Claude Code, Codex, OpenCode and any
+other MCP-speaking client ask Pulse what it has seen while it monitors:
+what changed across the fleet and when (`list_recent_changes`), how a
+resource's metrics moved (`get_metric_history`), and where to look first
+(`get_fleet_context`, `get_resource_context`). A `monitoring:read` token
+covers those reads.
+
+With more scopes it exposes the same governed operations substrate that
+Pulse Assistant uses inside the app: list findings, set operator intent,
+and plan, approve and run governed actions.
 
 ## Pulse Intelligence surface contract
 

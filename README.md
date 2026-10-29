@@ -39,8 +39,11 @@ sample data and signs you in automatically.
   Community, ninety in Pro.
 - **Optional AI checks.** Connect your own AI provider or a local model and
   Pulse Patrol runs scheduled checks for problems a dashboard only shows if
-  someone is looking. An MCP adapter lets clients such as Claude Code and
-  OpenCode query Pulse.
+  someone is looking.
+- **Answers your own AI agent.** Point Claude Code, Codex or OpenCode at Pulse
+  with [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) and ask what changed
+  overnight, whether a host rebooted, or how a disk filled up. A read-only
+  token is enough.
 - **Stays hands-off by default.** Proxmox is read through a read-only API
   token, credentials are encrypted at rest, and agent commands stay off unless
   you turn them on.

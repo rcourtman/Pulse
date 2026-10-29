@@ -2097,6 +2097,11 @@ external-agent activity rather than a new telemetry activity. A range outside
 `MetricHistoryRanges` or a non-positive `maxPoints` is a 400. `maxPoints` (capped
 at 200) is the downsampling target, not an output bound: short windows and
 fallback reads can return native samples, as the chart route does.
+The `cmd/pulse-mcp/README.md` introduction leads with the read-only questions
+external agents can ask (`list_recent_changes`, `get_metric_history`,
+`get_fleet_context`, `get_resource_context`) and says a `monitoring:read` token
+covers them; `TestContract_PulseMCPReadmeIntroNamesPublishedReadTools` fails if
+a tool it names stops being an MCP-published monitoring-read GET.
 than in `cmd/pulse-mcp` or an MCP-only inventory registry. They must enter
 through `ManifestSurfaceResourceCapabilities`,
 `ListMCPManifestSurfaceResourcesHTTP`, and

@@ -6826,6 +6826,10 @@ target kinds (`pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`) as the
 `frontend-modern/public/docs/`, list those kinds beside `k8s`;
 `scripts/tests/test_setup_access_docs.py` pins the documented set to the switch
 and `docsLinks.test.ts` pins the published copies to their sources.
+The `cmd/pulse-mcp/README.md` introduction names these monitoring-read agent
+reads as the place a new MCP user starts; its named tools are pinned to the
+manifest's MCP surface and scope by
+`TestContract_PulseMCPReadmeIntroNamesPublishedReadTools`.
 
 `/api/agent/resource-capabilities/{id}` is the agent-consumable
 structured capability surface for a single resource: the governed
