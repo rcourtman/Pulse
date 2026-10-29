@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "2fb1c2afe3d3ed51bd45077def13f105f9e7b4b3",
+  "verified_at": "2026-10-29T14:44:26.205492Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useRecoveryPoints.ts",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useRecoveryPoints.ts": "51113208023ac3240b6b7b179a7d4c135febd1a98b6a418e19cbc3db5e8f3433",
+    "frontend-modern/src/utils/recoveryPlatformModel.ts": "9303a9841fc60099926b65fa9d6eccd3fc47b416a5fd204a27c2ceae6226392e"
+  },
+  "routes": [
+    "/truenas/protection (actual production App, recovery client and table; secret-free local HTTP/WebSocket fixtures)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Containing source 2fb1c2afe3d3ed51bd45077def13f105f9e7b4b3. All 12 source/graph inputs and 186 produced files match the retained build manifest. Build-only source-b8z27h_4 completes with exit 0 and reproduces every original production hash; no suites were repeated. Original source-suw2zefw reports successful check steps but returns client exit 2 for an oversized asset export, not an overall proof pass.",
+    "Playwright 1.56.1 matches the integration lock. Desktop Chromium 141.0.7390.37 at 1280x900 and dark touch WebKit 26.0 at 320x800 exercise the real consuming route. Across retained partial and completion results, each viewport completes 26 consuming, geometry and scoped-read checks. The final completion additionally validates source/assets and has no page/console errors, external request or API write.",
+    "Missing data is an initial read error, never no activity. Null data, a partly valid page with an object-typed outcome and duplicate event IDs leave the previously accepted events and open details intact with the stale-data warning. Private fixture body markers are not rendered. Search and status filters do not conceal the warning.",
+    "Validated retry replaces the retained events and clears the warning. Legacy provider/subject labels remain visible; a future outcome and impossible calendar date remain Unknown. An explicit validated data array with zero rows may show No TrueNAS protection activity.",
+    "All nine retained capture files were opened with native view_image. Eight readable state captures establish desktop and 320px error, retained-warning, recovery and empty pixels. The first initial desktop capture caught a finite entrance animation and is retained as adverse, not readable-pixel proof; a render-only completion captures the settled state with finite animations disabled.",
+    "The initial desktop attempt stops at an incorrect Show-details selector after successful initial/retry checks, and its incomplete version fixture produces a caught console error. The next attempt completes retained/malformed-page checks, then a search selector reveals the synthetic monitoring-read token has entered the existing kiosk default. Remaining filters/recovery/empty checks resume with an explicit non-kiosk preference; token scope is unchanged. Narrow cases then complete and initial desktop pixels are completed separately. No application source, build content or browser deadline is changed.",
+    "Synthetic history inspection is not actual appliance, backup, guest-liveness, installed recovery, reporter confirmation or release availability. No provider or guest operation is performed; all fixture servers, browsers and contexts close."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow touch tap activate existing read Refresh controls. Ordinary query polling receives malformed pages through the actual API client. Retained details remain available; partially accepted or duplicate rows never replace the accepted page.",
+    "Search to no matches leaves the failure warning visible. Existing status filters still select the retained failed event. Validated refresh restores current warning/unknown rows; ordinary polling accepts a genuine empty page. Recovery reads preserve monitoring:read access, organisation scope and the fixed page/limit/platform query.",
+    "Eight settled captures are visually inspected for readable warning/error copy, visible Refresh, retained event/detail context, truthful Unknown states and distinct genuine emptiness without horizontal page overflow."
+  ]
+}
