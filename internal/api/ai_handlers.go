@@ -1842,6 +1842,12 @@ func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
 
 // setupInvestigationOrchestrator creates and wires the investigation orchestrator for an AI service
 func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai.Service) {
+	h.configureInvestigationOrchestrator(orgID, svc, false)
+}
+
+// configureInvestigationOrchestrator publishes a store only after its retained
+// history has loaded. readRetry must not replace an already recovered runtime.
+func (h *AISettingsHandler) configureInvestigationOrchestrator(orgID string, svc *ai.Service, readRetry bool) {
 	// Check factory exists first — if nil, this is OSS (no orchestrator available).
 	// Clear any stale orchestrator from a prior setup so the patrol service
 	// doesn't keep using a removed enterprise component.
@@ -1868,35 +1874,8 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		return
 	}
 
-	// Get or create investigation store for this org
-	h.investigationMu.Lock()
-	store, exists := h.investigationStores[orgID]
-	if !exists {
-		// Get data directory from persistence
-		var dataDir string
-		mtPersistence, _, _, defaultPersistence, _, _ := h.stateRefs()
-		if defaultPersistence != nil && orgID == "default" {
-			dataDir = defaultPersistence.DataDir()
-		} else if mtPersistence != nil {
-			if p, err := mtPersistence.GetPersistence(orgID); err == nil {
-				dataDir = p.DataDir()
-			}
-		}
-		if storeFactory := getCreateInvestigationStore(); storeFactory != nil {
-			store = storeFactory(dataDir)
-		}
-		if store == nil {
-			log.Warn().Str("orgID", orgID).Msg("Investigation store not available (requires Pulse Pro)")
-			h.investigationMu.Unlock()
-			return
-		}
-		if err := store.LoadFromDisk(); err != nil {
-			log.Warn().Err(err).Str("orgID", orgID).Msg("Failed to load investigation store")
-		}
-		h.investigationStores[orgID] = store
-	}
-	h.investigationMu.Unlock()
-
+	// GetService may invoke dependency initializers, which take the AI service
+	// and investigation-map locks. Resolve it before locking load/publication.
 	// Get chat service for this org using org-scoped context
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
 	chatSvc := chatHandler.GetService(ctx)
@@ -1910,6 +1889,50 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	if !ok {
 		log.Warn().Str("orgID", orgID).Msg("Chat service is not *chat.Service, cannot create adapter")
 		return
+	}
+
+	h.investigationMu.Lock()
+	defer h.investigationMu.Unlock()
+	if readRetry && patrol.GetInvestigationOrchestrator() != nil {
+		return
+	}
+
+	// A missing tenant directory must not silently become an empty memory-only
+	// store. It would lose the original run and permit new writes over unread
+	// history. Never fall back to another organization's persistence.
+	store, exists := h.investigationStores[orgID]
+	if !exists || store == nil {
+		var persistence *config.ConfigPersistence
+		mtPersistence, _, _, defaultPersistence, _, _ := h.stateRefs()
+		if orgID == "default" && defaultPersistence != nil {
+			persistence = defaultPersistence
+		} else if mtPersistence != nil {
+			var err error
+			persistence, err = mtPersistence.GetPersistence(orgID)
+			if err != nil {
+				log.Warn().Err(err).Str("orgID", orgID).Msg("Investigation persistence unavailable")
+				return
+			}
+		}
+		if persistence == nil || strings.TrimSpace(persistence.DataDir()) == "" {
+			log.Warn().Str("orgID", orgID).Msg("Investigation persistence unavailable")
+			return
+		}
+		if storeFactory := getCreateInvestigationStore(); storeFactory != nil {
+			store = storeFactory(persistence.DataDir())
+		}
+		if store == nil {
+			log.Warn().Str("orgID", orgID).Msg("Investigation store not available (requires Pulse Pro)")
+			return
+		}
+		if err := store.LoadFromDisk(); err != nil {
+			log.Warn().Err(err).Str("orgID", orgID).Msg("Failed to load investigation store")
+			return
+		}
+		if h.investigationStores == nil {
+			h.investigationStores = make(map[string]aicontracts.InvestigationStore)
+		}
+		h.investigationStores[orgID] = store
 	}
 
 	// Mirror default-org router wiring for per-org services so patrol/investigation
@@ -8318,6 +8341,41 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 // forward compatibility with any future ID scheme.
 const maxFindingIDLength = 256
 
+// investigationOrchestratorForRead retries an incomplete startup without
+// starting a new investigation. Failed stores were never published, so a retry
+// can reload the same org's original files after their read failure clears.
+func (h *AISettingsHandler) investigationOrchestratorForRead(ctx context.Context, svc *ai.Service) aicontracts.InvestigationOrchestrator {
+	patrol := svc.GetPatrolService()
+	if orchestrator := patrol.GetInvestigationOrchestrator(); orchestrator != nil {
+		return orchestrator
+	}
+	if !isAIInvestigationEnabled() {
+		return nil
+	}
+	// The publication lock rechecks readiness after dependency lookup, so
+	// concurrent retries do not replace a newly recovered live orchestrator.
+	h.configureInvestigationOrchestrator(GetOrgID(ctx), svc, true)
+	return patrol.GetInvestigationOrchestrator()
+}
+
+// writeFindingInvestigationReadError distinguishes proven absence in the current
+// occurrence from a missing run the finding still references. Do not substitute
+// a historical occurrence or turn unread retained history into a 404.
+func writeFindingInvestigationReadError(w http.ResponseWriter, finding *ai.Finding) {
+	knownRun := finding != nil && finding.InvestigationSessionID != ""
+	if finding != nil && finding.InvestigationRecord != nil {
+		record := finding.InvestigationRecord
+		knownRun = knownRun || finding.IsCurrentInvestigation(&aicontracts.InvestigationSession{
+			FindingID: record.FindingID, SessionID: record.SessionID, StartedAt: record.StartedAt,
+		})
+	}
+	if knownRun {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "history_unavailable", "Saved investigation history could not be read", nil)
+		return
+	}
+	writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
+}
+
 // HandleGetInvestigation returns investigation details for a finding (GET /api/ai/findings/{id}/investigation)
 func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -8349,7 +8407,7 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 	}
 
 	// Get investigation from orchestrator
-	orchestrator := patrol.GetInvestigationOrchestrator()
+	orchestrator := h.investigationOrchestratorForRead(r.Context(), aiService)
 	if orchestrator == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Investigation orchestrator not initialized", nil)
 		return
@@ -8358,7 +8416,7 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 	investigation := orchestrator.GetInvestigationByFinding(findingID)
 	finding := patrol.GetFindings().Get(findingID)
 	if investigation == nil || (finding != nil && !finding.IsCurrentInvestigation(investigation)) {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
+		writeFindingInvestigationReadError(w, finding)
 		return
 	}
 	orgID := GetOrgID(r.Context())
@@ -8403,7 +8461,7 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 	}
 
 	// Get investigation from orchestrator
-	orchestrator := patrol.GetInvestigationOrchestrator()
+	orchestrator := h.investigationOrchestratorForRead(r.Context(), aiService)
 	if orchestrator == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Investigation orchestrator not initialized", nil)
 		return
@@ -8412,7 +8470,7 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 	investigation := orchestrator.GetInvestigationByFinding(findingID)
 	finding := patrol.GetFindings().Get(findingID)
 	if investigation == nil || (finding != nil && !finding.IsCurrentInvestigation(investigation)) {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
+		writeFindingInvestigationReadError(w, finding)
 		return
 	}
 
