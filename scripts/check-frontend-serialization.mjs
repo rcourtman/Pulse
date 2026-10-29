@@ -63,10 +63,25 @@ export function serializationGraphErrors(lock) {
       // 795e534517 qualified this one security override with actual cyclic,
       // typed-array and plugin consumers. Preserve it, but do not apply that
       // old proof to a new consumer, dependency, declared range or nested copy.
-      const qualifiedOverride = path === 'node_modules/solid-js' &&
+      const legacyOverride = path === 'node_modules/solid-js' &&
         consumer.version === '1.9.15' && dependency === 'seroval' &&
         range === '~1.5.4' && resolved.path === 'node_modules/seroval' &&
         resolved.entry.version === '1.6.3';
+      // This deliberately pinned override has its own actual Solid resource,
+      // async/streaming and default-plugin consumers in solidSerialization.test.ts.
+      // It is not an extension of the old exception or blanket 1.x approval.
+      // Changing either consumer, declared edge, nearest resolution or plugin
+      // requires fresh compatibility review, not another permissive npm range.
+      const plugin = resolvedDependency(packages, path, 'seroval-plugins');
+      const currentOverride = path === 'node_modules/solid-js' &&
+        consumer.version === '1.9.17' && dependency === 'seroval' &&
+        range === '~1.6.8' && resolved.path === 'node_modules/seroval' &&
+        resolved.entry.version === '1.7.3' &&
+        consumer.dependencies?.['seroval-plugins'] === '~1.6.8' &&
+        plugin?.path === 'node_modules/seroval-plugins' &&
+        plugin.entry?.version === '1.6.8' &&
+        plugin.entry.peerDependencies?.seroval === '^1.0';
+      const qualifiedOverride = legacyOverride || currentOverride;
       if (!compatible && !qualifiedOverride) {
         errors.push(`Solid ${consumer.version} requires ${dependency} ${range}, but resolves ${resolved.entry.version}. Update the coupled graph and retain consumer compatibility proof; an npm override is not that proof.`);
       }
