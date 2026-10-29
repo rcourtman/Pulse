@@ -89,7 +89,7 @@ function inventoryData(payload: unknown): Record<string, unknown> {
   return payload.data;
 }
 
-function collection<T>(
+function collection<T extends { id: string }>(
   data: Record<string, unknown>,
   key: string,
   shape: RowShape,
@@ -106,7 +106,14 @@ function collection<T>(
   ) {
     throw new BackupInventoryFormatError();
   }
-  return value as T[];
+  const rows = value as T[];
+  // IDs own disclosure state and restore-point counts. Even identical repeats
+  // are not independent evidence; conflicting repeats cannot choose a winner.
+  // Each source collection has its own namespace, matching the model's keys.
+  if (new Set(rows.map((row) => row.id)).size !== rows.length) {
+    throw new BackupInventoryFormatError();
+  }
+  return rows;
 }
 
 export function parsePVEBackupInventory(payload: unknown): PVEBackupsPayload {

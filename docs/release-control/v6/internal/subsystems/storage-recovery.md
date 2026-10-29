@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Backup inventory identities must be unambiguous
+
+Each PVE task, archive and guest-snapshot collection, and the PBS snapshot
+collection, requires unique exact record IDs. Identical repeats inflate counts;
+conflicting repeats share disclosure state and cannot select a trustworthy
+record. Reject the entire source read through the existing format-error path,
+without deduplication, partial acceptance or invented IDs. Preserve the existing
+withdrawal of a failed source's old restore points and open details, while
+independent source evidence remains usable. Only a valid read restores the
+failed source; scope/access withdrawal remains unchanged. IDs stay opaque,
+with independent collection namespaces. Valid empty/nil collections, policy, provider and guest
+operations are unchanged.
+
+Normal-suite `proxmoxBackupInventory.test.ts` checks identical/conflicting IDs
+in all four collections and distinct-ID controls. `ProxmoxBackupsTable.test.tsx`
+checks initial/refresh rejection, withdrawal of affected points/details,
+independent inspection, isolated retry and recurrence through the consuming page. Browser
+proof must exercise the real HTTP reader and desktop/narrow interactions and
+pixels. This establishes inspection safety, not native guest or backup recovery.
+
 ### CORE disk throughput is not protection or counter evidence
 
 Native per-disk read/write rates reach existing disk chart History under the

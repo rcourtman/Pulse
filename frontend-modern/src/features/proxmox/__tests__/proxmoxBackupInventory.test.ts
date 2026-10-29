@@ -14,6 +14,47 @@ const pveData = { backupTasks: [task], storageBackups: [archive], guestSnapshots
 const pbsData = { backups: [pbs] };
 
 describe('backup inventory response boundary', () => {
+  it.each(['backupTasks', 'storageBackups', 'guestSnapshots'] as const)(
+    'rejects identical and conflicting duplicate %s IDs without choosing or dropping rows',
+    (key) => {
+      const row = pveData[key][0];
+      for (const duplicate of [row, { ...row, vmid: 113, instance: 'other-connection' }]) {
+        expect(() =>
+          parsePVEBackupInventory({ data: { ...pveData, [key]: [row, duplicate] } }),
+        ).toThrow(BackupInventoryFormatError);
+      }
+    },
+  );
+
+  it('rejects identical and conflicting duplicate PBS IDs, even with different repository hints', () => {
+    for (const duplicate of [pbs, { ...pbs, vmid: '113', instance: 'other', datastore: 'other' }]) {
+      expect(() => parsePBSBackupInventory({ data: { backups: [pbs, duplicate] } })).toThrow(
+        BackupInventoryFormatError,
+      );
+    }
+  });
+
+  it('preserves distinct opaque IDs and the independent collection namespaces', () => {
+    const data = {
+      backupTasks: [
+        { ...task, id: 'shared' },
+        { ...task, id: ' shared ' },
+      ],
+      storageBackups: [
+        { ...archive, id: 'shared' },
+        { ...archive, id: 'Shared' },
+      ],
+      guestSnapshots: [
+        { ...snapshot, id: 'shared' },
+        { ...snapshot, id: 'other' },
+      ],
+    };
+    expect(parsePVEBackupInventory({ data })).toEqual(data);
+    expect(
+      parsePBSBackupInventory({ data: { backups: [pbs, { ...pbs, id: 'other' }] } }).backups,
+    ).toEqual([pbs, { ...pbs, id: 'other' }]);
+  });
+
   it('keeps observed rows, missing optional facts and future fields without coercion', () => {
     const data = {
       ...pveData,

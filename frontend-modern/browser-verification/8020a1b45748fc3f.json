@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "486557267f9f22e59e65e5ca9f000546992f553e",
+  "verified_at": "2026-10-29T16:06:18.809856Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts": "4d584c1a56d0f4aa5a33c408801ffeddeb7d029b2f46eb30970ccea050eec887"
+  },
+  "routes": [
+    "/proxmox/backups/date (actual production App, HTTP clients, backup model and table; local secret-free HTTP/WebSocket fixtures)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Containing source 486557267f9f22e59e65e5ca9f000546992f553e; complete offline source-gx4fv9cf proof passes 201 focused and 23,441 full-suite tests, three skips, types/lint/format/build/bundles. Browser verifies all twelve source inputs and 186 production files against that build.",
+    "Identical duplicate IDs in each PVE task/archive/guest-snapshot collection and the PBS list reject the entire affected source read. Independent points remain inspectable and counts are incomplete, never inflated or mistaken for no backups.",
+    "Conflicting duplicates on ordinary polling withdraw the failed source old points and its open details, preserving independent evidence and its detail through valid isolated retries and recurrence. The existing source-withdrawal and server-authored assessment rules are unchanged.",
+    "Explicit empty PBS arrays and nil PVE collections remain valid empty observations, distinct from failure. No-match filtering does not hide a read error. All consuming reads preserve monitoring-read auth and organisation; no page/console error, off-origin request, API write or unhandled fixture API.",
+    "Desktop Chromium 141.0.7390.37 completes 67 state/geometry/interaction checks. Dark touch WebKit 26.0 at 320px completes 61 across the initial and completion runs. Playwright 1.56.1 matches the integration lock. All twelve retained capture files were natively opened and inspected for readable warnings, retry controls, source/count/detail context, recovery and distinct empty state, within their actual viewport folds.",
+    "The initial overall browser run exits 1 when high-level Playwright tap waits on aria-disabled during the deliberate duplicate-input test. Only unfinished narrow cases resume with real touchscreen coordinates. Completed cases are not replayed; app source/assets and the 180-second deadline are unchanged. Original adverse result and closure-bookkeeping limits remain retained. Completion exits 0 and awaits owned server/context/browser closure."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow touch activate real inventory retry controls. Pending duplicate input causes no second read; only the failed source is retried and desktop focus transfers from the retired notice to the active By date link.",
+    "Open affected details, poll conflicting IDs, verify withdrawal, inspect independent source details, retry valid data and check recurrence across all four collections. Use existing no-match search and recover again without wider access or provider operations.",
+    "Inspect actual desktop and 320px warning/error, independent detail, recovery and empty pixels through native view_image. No original guest/backup/installed recovery, reporter confirmation or release availability is claimed."
+  ]
+}
