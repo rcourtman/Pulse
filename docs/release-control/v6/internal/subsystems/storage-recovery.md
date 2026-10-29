@@ -8448,3 +8448,30 @@ External-agent activity telemetry now skips first-party browser requests
 (`Sec-Fetch-Site: same-origin`) before writing `external_agent_activity.json`.
 It writes fewer records to the same file and opens no new storage, backup or
 recovery path.
+
+### Uncertain task histories use bounded, complete inspection
+
+When missing, future or tied start times leave multiple possible latest tasks,
+Coverage initially renders eight task detail cards, not the whole provider
+history. The preview includes a witness of each observed outcome (including
+error text) and known/unknown-start group, preserving the model's deterministic,
+explicitly non-chronological order. Full-candidate status, error-text and unknown-
+start counts remain visible, and every candidate stays available through an
+explicit eight-at-a-time control without more API reads. Search continues to
+match the complete workload evidence, not just its preview.
+
+Deliberate preview expansion survives ordinary polling of the open workload.
+The same control retains focus when the list shrinks, becomes ordered or empties;
+its exhausted state is guarded. Opening another workload or reopening the panel
+starts bounded again. No candidate is discarded, no latest task is chosen from
+ambiguous times, and neither task success nor disclosure establishes protection,
+a restore or guest responsiveness. Identity, posture, provider collection and
+polling semantics are unchanged.
+
+Normal-suite `backupTaskEvidence.test.tsx` exercises the parsed inventory consumer
+with a 200-task history, adverse status/error witnesses, complete inspection,
+search and polling/focus. The registered `ProxmoxCoverageTable.test.tsx` verifies
+per-workload reset. Desktop and narrow browser proof must exercise the actual
+inventory consumer, the bounded disclosure, keyboard/touch expansion and live
+shrink/ordering with actual pixel inspection. This is an inspection/rendering
+bound, not a measured installed CPU improvement or original guest recovery.

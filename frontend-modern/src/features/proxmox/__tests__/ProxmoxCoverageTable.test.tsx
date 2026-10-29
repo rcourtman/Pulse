@@ -70,6 +70,55 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
+  it('resets a deliberate task preview when another workload is opened, not on a refresh', () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      identityTask({ id: `candidate-${index}`, startTime: 'invalid' }),
+    );
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [identityGuest('east-100', 'east', 'pve-1')],
+      tasks,
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      nowMs: BACKUP_IDENTITY_NOW,
+    });
+    const first = model.coverageRows[0];
+    const second = {
+      ...first,
+      key: 'second',
+      workload: { ...first.workload, key: 'second', name: 'second' },
+    };
+    const [expanded, setExpanded] = createSignal<string | null>(first.key);
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[first, second]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={expanded()}
+        onToggleExpand={(key) => setExpanded(expanded() === key ? null : key)}
+        showTaskColumn
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 8 more possible latest tasks' }));
+    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
+      'Showing 16 of 24 possible latest tasks.',
+    );
+    setExpanded(second.key);
+    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
+      'Showing 8 of 24 possible latest tasks.',
+    );
+    setExpanded(null);
+    setExpanded(first.key);
+    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
+      'Showing 8 of 24 possible latest tasks.',
+    );
+  });
+
   it('keeps malformed assessment dates unknown instead of normalising them or borrowing a clock', () => {
     renderInRouter(() => (
       <ProxmoxCoverageTable

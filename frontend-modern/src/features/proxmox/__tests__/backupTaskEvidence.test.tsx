@@ -326,3 +326,120 @@ describe('uncertain task chronology through the inventory consumer', () => {
     expect(api.fetch).toHaveBeenCalledTimes(2);
   });
 });
+
+// A provider history can contribute 200 tasks per node. If its clock is wrong,
+// none of those starts can rule out a task as latest. Keep the complete evidence
+// searchable without creating hundreds of detail cards on a single disclosure.
+describe('bounded uncertain-task inspection', () => {
+  const history = () =>
+    Array.from({ length: 200 }, (_, index) =>
+      identityTask({
+        id: `history-${String(index).padStart(3, '0')}`,
+        startTime: index === 199 ? '2026-10-04T11:00:00Z' : 'invalid',
+        status:
+          index === 198 ? 'failed' : index === 199 ? 'running' : index === 197 ? 'warning' : 'OK',
+        error: index === 198 ? failure : undefined,
+      }),
+    );
+  const cards = (panel: HTMLElement) =>
+    within(panel).queryAllByText(/^Possible latest task \d+$/, { selector: 'th' });
+
+  it.each([320, 1200])(
+    'bounds a 200-task disclosure and preserves outcome witnesses at %ipx',
+    async (width) => {
+      api.width = width;
+      tasks = history();
+      mount();
+      const panel = await open();
+      expect(cards(panel)).toHaveLength(8);
+      expect(panel).toHaveTextContent('Showing 8 of 200 possible latest tasks.');
+      expect(panel).toHaveTextContent(
+        'Failed: 1 · Running: 1 · OK: 197 · Other status: 1 · With error text: 1 · Unknown start: 199',
+      );
+      for (const id of ['history-197', 'history-198', 'history-199'])
+        expect(panel).toHaveTextContent(id);
+      expect(panel.textContent).toContain(failure);
+      expect(panel.querySelector('svg[onload]')).toBeNull();
+      expect(panel).toHaveTextContent('It is not a time order.');
+      expect(panel).not.toHaveTextContent('history-150');
+      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(api.fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('allows deliberate complete inspection without more reads, and keeps the same focused control', async () => {
+    tasks = history();
+    mount();
+    const panel = await open();
+    const more = within(panel).getByRole('button', { name: 'Show 8 more possible latest tasks' });
+    more.focus();
+    for (let expected = 16; expected <= 200; expected += 8) {
+      fireEvent.click(more);
+      expect(cards(panel)).toHaveLength(expected);
+      expect(document.activeElement).toBe(more);
+    }
+    expect(more).toHaveTextContent('All 200 possible latest tasks shown');
+    expect(more).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(more);
+    expect(cards(panel)).toHaveLength(200);
+    for (const task of tasks) expect(panel).toHaveTextContent(task.id);
+    expect(api.fetch).toHaveBeenCalledTimes(2);
+    expect(api.json).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains expansion and focus through replacement, shrink, ordered and empty polling', async () => {
+    tasks = history();
+    mount();
+    const panel = await open();
+    const more = within(panel).getByRole('button', { name: 'Show 8 more possible latest tasks' });
+    more.focus();
+    fireEvent.click(more);
+    expect(cards(panel)).toHaveLength(16);
+
+    tasks = history().map((task) => ({
+      ...task,
+      error: task.error ? 'updated literal <b>failure</b>' : undefined,
+    }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(panel).toHaveTextContent('updated literal <b>failure</b>'));
+    expect(cards(panel)).toHaveLength(16);
+    expect(document.activeElement).toBe(more);
+    tasks = tasks.slice(0, 3);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(more).toHaveTextContent('All 3 possible latest tasks shown'));
+    expect(cards(panel)).toHaveLength(3);
+    expect(panel.textContent).not.toContain(failure);
+    expect(document.activeElement).toBe(more);
+    tasks = [identityTask({ id: 'now-ordered' })];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(panel).toHaveTextContent('now-ordered'));
+    expect(cards(panel)).toHaveLength(0);
+    expect(more).toHaveTextContent('All 0 possible latest tasks shown');
+    expect(panel).toHaveTextContent('No uncertain tasks remain in this read.');
+    expect(panel).not.toHaveTextContent('Task order');
+    expect(document.activeElement).toBe(more);
+    tasks = [];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(panel).not.toHaveTextContent('now-ordered'));
+    expect(document.activeElement).toBe(more);
+    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(api.fetch).toHaveBeenCalledTimes(10);
+  });
+
+  it('continues to find an undisplayed candidate through saved-view workload search', async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date'] });
+    tasks = history();
+    mount();
+    const panel = await open();
+    const search = screen.getByPlaceholderText(
+      'Search backups by workload, node, source, or status',
+    );
+    fireEvent.input(search, { target: { value: 'history-150' } });
+    await waitFor(() => expect(window.location.search).toContain('q=history-150'));
+    expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+    expect(cards(panel)).toHaveLength(8);
+    expect(panel).toHaveTextContent('Showing 8 of 200 possible latest tasks.');
+    expect(api.fetch).toHaveBeenCalledTimes(2);
+  });
+});
