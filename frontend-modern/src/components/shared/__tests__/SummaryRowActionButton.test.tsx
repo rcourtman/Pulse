@@ -3,6 +3,53 @@ import { describe, expect, it, vi } from 'vitest';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 
 describe('SummaryRowActionButton', () => {
+  it.each(['disclosure', 'scope'] as const)(
+    'prevents a second native Space activation for %s [single-space-activation]',
+    (kind) => {
+      const onAction = vi.fn();
+      render(() =>
+        kind === 'disclosure' ? (
+          <SummaryRowActionButton
+            kind="disclosure"
+            subjectLabel="alpha"
+            expanded={false}
+            hideWhenRowTappableOnMobile={false}
+            onAction={onAction}
+          />
+        ) : (
+          <SummaryRowActionButton
+            kind="scope"
+            subjectLabel="alpha"
+            pressed={false}
+            onAction={onAction}
+          />
+        ),
+      );
+      const button = screen.getByRole('button');
+      fireEvent.keyDown(button, { key: ' ', code: 'Space' });
+      expect(onAction).toHaveBeenCalledTimes(1);
+      const keyup = new KeyboardEvent('keyup', {
+        key: ' ',
+        code: 'Space',
+        bubbles: true,
+        cancelable: true,
+      });
+      expect(button.dispatchEvent(keyup)).toBe(false);
+      expect(keyup.defaultPrevented).toBe(true);
+      expect(onAction).toHaveBeenCalledTimes(1);
+
+      fireEvent.keyDown(button, { key: 'Enter', code: 'Enter' });
+      expect(onAction).toHaveBeenCalledTimes(2);
+      const enterUp = new KeyboardEvent('keyup', {
+        key: 'Enter',
+        code: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      expect(button.dispatchEvent(enterUp)).toBe(true);
+    },
+  );
+
   it('owns disclosure semantics with aria-expanded and aria-controls', () => {
     const onAction = vi.fn();
     render(() => (

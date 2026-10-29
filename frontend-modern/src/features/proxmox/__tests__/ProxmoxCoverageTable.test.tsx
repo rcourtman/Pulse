@@ -70,6 +70,54 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
+  it('keeps a visible native phone disclosure through row activation and refresh [visible-coverage-disclosure]', () => {
+    const [rows, setRows] = createSignal([row]);
+    const [expanded, setExpanded] = createSignal<string | null>(null);
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={rows()}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={expanded()}
+        onToggleExpand={(key) => setExpanded(expanded() === key ? null : key)}
+        layoutWidth={() => 320}
+        showTaskColumn
+      />
+    ));
+
+    const toggle = screen.getByRole('button', { name: /Expand details for web/ });
+    const summary = toggle.closest('tr')!;
+    // CSS hit testing is covered by the actual-App browser proof. Keep the
+    // Coverage opt-out explicit: row tapping must not hide its native control.
+    expect(toggle).not.toHaveClass('sr-only');
+    expect(toggle).toHaveClass('h-9', 'w-9');
+    fireEvent.click(toggle);
+    expect(expanded()).toBe(row.key);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toBeInTheDocument();
+
+    toggle.focus();
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    setRows([{ ...row, pbsCount: 2 }]);
+    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(toggle).toHaveFocus();
+    fireEvent.keyDown(toggle, { key: ' ' });
+    expect(expanded()).toBeNull();
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    expect(expanded()).toBe(row.key);
+
+    fireEvent.click(within(summary).getByText('web', { exact: true }));
+    expect(expanded()).toBeNull();
+    fireEvent.click(within(summary).getByText('web', { exact: true }));
+    expect(expanded()).toBe(row.key);
+    expect(screen.getAllByTestId('proxmox-coverage-detail')).toHaveLength(1);
+  });
+
   it('resets a deliberate task preview when another workload is opened, not on a refresh', () => {
     const tasks = Array.from({ length: 24 }, (_, index) =>
       identityTask({ id: `candidate-${index}`, startTime: 'invalid' }),

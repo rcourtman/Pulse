@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Summary buttons activate once per Space press
+
+Native summary disclosure and scope buttons retain their existing keydown-owned
+Space action. They cancel the corresponding keyup default as well: mobile
+Chromium can otherwise synthesize a second click and undo the activation.
+Enter, Escape, pointer actions, expanded/pressed semantics and focus ownership
+stay unchanged. Normal-suite `SummaryRowActionButton.test.tsx` checks both button
+kinds and that Enter keyup is not suppressed. Browser proof must exercise actual
+App disclosure Space/Enter, touch and focus at desktop and narrow widths.
+
 ### TrueNAS protection consumers do not repair malformed instants
 
 The Protection row, completion sorts and inline Started/Completed fields use the

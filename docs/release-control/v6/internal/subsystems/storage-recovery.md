@@ -21,6 +21,21 @@
 
 ## Purpose
 
+### Coverage keeps its evidence disclosure visible on phones
+
+The existing Coverage chevron remains visible at phone widths, with the shared
+36px native target reserved beside the wrapped workload identity. Whole-row
+tapping remains a convenience, not the only visible route to evidence. The
+button retains its scoped accessible name, expanded state and controlled panel;
+its action must not also toggle the row. Keyboard activation, same-key polling,
+owner links and full workload/connection identity remain unchanged.
+
+Normal-suite `ProxmoxCoverageTable.test.tsx` checks the visible-control opt-out,
+single activation, keyboard/row paths and refresh continuity. Actual-App browser
+proof must inspect desktop and 320px pixels, ordinary disclosure clicks/taps,
+namesake isolation, task refresh/withdrawal and close-focus return. No shared
+primitive, read cadence, protection policy, backup or guest operation changes.
+
 ### Backup-server memory does not invent empty or current readings
 
 The Backup servers table keeps a valid selected memory percentage when a partial
