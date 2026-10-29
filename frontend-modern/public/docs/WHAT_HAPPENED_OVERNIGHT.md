@@ -15,14 +15,15 @@ Everything here is free with Pulse Community.
 
 1. **Pulse v6.7.0 or later.** Earlier releases don't have
    `list_recent_changes` or `get_metric_history`. Install it with Docker or
-   the Proxmox LXC installer from the [README](../README.md#install).
+   the Proxmox LXC installer from the [installation guide](INSTALL.md).
 2. **Your systems added to Pulse.** Proxmox connects with a read-only API
    token under **Settings → Infrastructure**. Docker hosts need the Pulse
    agent: **Settings → Infrastructure → Install on a host**.
-3. **`pulse-mcp`** on the machine where your agent runs, and a
-   `monitoring:read` token from **Settings → API Access**. Follow the
-   [pulse-mcp quick start](../cmd/pulse-mcp/README.md#quick-start), which also
-   has the client configuration for Claude Code, Codex and OpenCode.
+3. **`pulse-mcp`** on the machine where your agent runs. Install it with the
+   [verified installer steps](AGENT_SUBSTRATE.md#install-the-mcp-adapter-safely),
+   then open **Settings → API Access → Agent integrations**. That tab mints a
+   `monitoring:read` token and generates the configuration for Claude Code and
+   OpenCode. Other MCP clients, such as Codex, use the same command and token.
 
 A `monitoring:read` token can read history and status. It can't change
 anything, and it never receives command text or output.
@@ -124,7 +125,7 @@ empty or short answer.
 and status changes as they happen. Each event carries the `changeId` that
 `list_recent_changes` returns, so the agent can read the history around it.
 Not every MCP client shows these notifications; see
-[About `--emit-notifications`](../cmd/pulse-mcp/README.md#about---emit-notifications).
+[What ships to help you connect](AGENT_SUBSTRATE.md#what-ships-to-help-you-connect).
 
 ## Tell us how it went
 
