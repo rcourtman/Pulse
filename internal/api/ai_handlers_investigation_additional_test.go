@@ -971,9 +971,14 @@ func orchestratorPatrolFor(t *testing.T, audits unifiedresources.ResourceStore) 
 	t.Cleanup(func() { SetCreateInvestigationOrchestrator(prevOrchestratorFactory) })
 
 	tenantSvc := ai.NewService(nil, nil)
+	tenantSvc.SetOrgID("tenant-1")
 	tenantSvc.SetStateProvider(&MockStateProvider{})
+	// Audit reconciliation resolves the run's service through GetAIService.
+	// Register the service owning these findings, rather than letting the
+	// persistence manager create a second, unrelated service for the tenant.
 	handler := &AISettingsHandler{
 		mtPersistence:       config.NewMultiTenantPersistence(t.TempDir()),
+		aiServices:          map[string]*ai.Service{"tenant-1": tenantSvc},
 		investigationStores: make(map[string]aicontracts.InvestigationStore),
 	}
 	if audits != nil {
