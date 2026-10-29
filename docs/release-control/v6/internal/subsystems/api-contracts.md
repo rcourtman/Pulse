@@ -7145,6 +7145,14 @@ scope set. Read-only external agents using `monitoring:read` must therefore
 count for context/event-stream activity without being treated as action,
 settings, or approval-capable callers. Generic API token last-use timestamps
 are not canonical proof that the external-agent surface was used.
+Requests from a page Pulse itself served (browser `Sec-Fetch-Site:
+same-origin`) never record the marker, whatever token authenticated them: the
+setup wizard leaves the Pulse UI on the wildcard admin token and kiosk links
+authenticate with `?token=`, so the UI's own node-list and finding-list
+fetches otherwise counted as external-agent use and made the counter track
+new-install volume. Scripts, MCP adapters and dashboards on another origin
+still count. `TestExternalAgentActivityIgnoresFirstPartyBrowserRequests`
+covers both sides.
 The `pulse-mcp` adapter may stamp the content-free
 `X-Pulse-Agent-Surface: pulse_mcp` header on those same capability requests so
 the telemetry snapshot can expose adapter-specific recent use while keeping the

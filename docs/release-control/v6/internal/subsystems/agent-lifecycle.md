@@ -10626,3 +10626,9 @@ org/authentication/licence boundaries remain. This changes no agent token,
 enrolment, credential or runtime operation. The API contract and
 `TestContractRBACIntegrityQueryAdmission` cover the registered fallback;
 `rbac_integrity_query_test.go` covers rejected and supported selections.
+
+External-agent activity telemetry no longer records requests from a page Pulse
+itself served (`Sec-Fetch-Site: same-origin`), so the Pulse UI running on the
+setup admin token stops reading as external-agent use. This changes no agent
+token, enrolment, credential scope, authentication or runtime operation; only
+which requests write the content-free activity marker.

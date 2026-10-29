@@ -8343,3 +8343,8 @@ protect grouped metadata, responsive columns and bounded rendering. Browser
 proof must exercise the consuming list at desktop/narrow widths, inspect actual
 pixels, identity, state/age fit, touch/keyboard disclosure, filters and live
 updates. This is safer evidence inspection, not a restore or installed recovery.
+
+External-agent activity telemetry now skips first-party browser requests
+(`Sec-Fetch-Site: same-origin`) before writing `external_agent_activity.json`.
+It writes fewer records to the same file and opens no new storage, backup or
+recovery path.
