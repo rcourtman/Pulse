@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "576634c00a9c5a848e9fc51295e1bf64bc19e8b2",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "7d9626a33a3264770dbef13dfff466ead4c744267095c3df5845c7789b41d38a",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "fa563d673bf41df0580ab80a7813c4d61b292fee1fb229c05708c3f57678121b"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "200 possible latest tasks disclose eight initial cards with full status/error/unknown-start counts and sampled adverse outcomes",
+    "Deliberate eight-at-a-time reveal reaches all 200 without more reads, recreating no prior card or focused control",
+    "Ordinary refresh updates literal error evidence; shrink, ordered and empty reads withdraw old task evidence without inventing protection",
+    "Returning history retains the deliberate limit; reopen resets to eight and a namesake VMID on another connection inherits no task evidence"
+  ],
+  "interactions": [
+    "Desktop native keyboard disclosure and Enter for all 24 reveal activations; focus retained through refresh/withdrawal",
+    "320px WebKit whole-row touch disclosure and actual reveal taps through all 200 candidates",
+    "Actual production App, inventory parsers and HTTP client; all 36 consuming reads retain monitoring-read auth and same org",
+    "Thirteen captures natively inspected, including separate below-fold initial phone summary completion"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "verified_at": "2026-10-29T19:26:24.727905Z",
+  "evidence": {
+    "source_proof": "source-a_xn6ai3: final focused/types/lint/format/build/bundles pass",
+    "full_suite": "852805232c: 23,454 passed / three skipped; all 186 final production files are byte-identical after an erased TypeScript-only annotation",
+    "browser": "241 checks including 22 desktop / 18 narrow journeys; separate narrow pixel completion passes",
+    "pixels": "NATIVE-PIXEL-REVIEW.json in lane dossier, all 13 actual native inspections",
+    "receipts": "RECEIPTS.md in lane dossier",
+    "adverse": "Initial innerText driver wrapper remains failed; source-identical unfinished work resumed with explicit task-cell observation. Earlier source failures retained in the dossier."
+  }
+}
