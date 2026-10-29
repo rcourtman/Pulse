@@ -653,7 +653,7 @@ export function ProxmoxBackupServersTable(props: {
                                   title={
                                     row.memoryReading?.message ??
                                     (row.memoryTotal !== undefined && row.memoryUsed !== undefined
-                                      ? `${formatPlatformTableBytesValue(row.memoryUsed)} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
+                                      ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
                                       : undefined)
                                   }
                                 >
@@ -667,7 +667,7 @@ export function ProxmoxBackupServersTable(props: {
                                   }
                                 >
                                   <span class="ml-1 text-[10px] text-muted tabular-nums">
-                                    {`(${formatPlatformTableBytesValue(row.memoryUsed)}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
+                                    {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
                                   </span>
                                 </Show>
                                 <Show
