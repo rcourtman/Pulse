@@ -17,6 +17,28 @@
 
 ## Purpose
 
+### PBS snapshot reads retain their exact requested group
+
+A snapshot array is accepted only when every row's native backup kind and
+opaque ID exactly match the requested group, with no repeated native snapshot
+time. Reject the whole response before sorting, bounding, conversion or cache
+renewal; neither discard only bad rows nor rewrite them to the request's subject.
+Case, whitespace, numeric spelling and host IDs remain significant. Errors name
+the row and condition, never snapshot payloads. Valid distinct rows retain their
+order and facts; explicit empty arrays remain authoritative.
+
+`backup_snapshot_identity_test.go` covers VM, CT and host controls, missing and
+foreign subjects, identical/conflicting repeats, mixed arrays and a bad row
+beyond the collector's retention cap. `pbs_snapshot_identity_test.go` crosses
+the real HTTP reader, ordinary poll, raw inventory, cache, asynchronous recovery
+ingest and protection read in cold/warm VM/CT lifecycles. Rejected reads retain
+only prior accepted history without renewing it or claiming complete protection;
+independent namespaces progress, and an ordinary valid or explicit empty read
+recovers/reconciles without a reset. No backup, guest, restore, auth or provider
+operation changes; this is malformed-response safety, not incident causality or
+original installed recovery.
+
+
 ### CORE per-disk throughput keeps its native meaning
 
 The existing reporting batch retains each selected disk's read/write rate even
