@@ -23,6 +23,13 @@ type canonicalResourceChangeRecorder interface {
 	RecordChange(change unifiedresources.ResourceChange) error
 }
 
+// liveResourceChangeRecorder records a change that is happening now and
+// announces it to live subscribers (the agent event stream). Replayed and
+// imported alert history uses RecordChange instead, so it is never announced.
+type liveResourceChangeRecorder interface {
+	RecordLiveChange(change unifiedresources.ResourceChange) error
+}
+
 // GetAlertManager returns the alert manager
 func (m *Monitor) GetAlertManager() *alerts.Manager {
 	return m.alertManager
@@ -328,7 +335,16 @@ func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, 
 	m.broadcastEscalatedAlert(hub, alert)
 }
 
+// handleAlertLifecycleEvent projects a live lifecycle event from the alert
+// manager's callback bus.
 func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
+	m.projectAlertLifecycleEvent(event, true)
+}
+
+// projectAlertLifecycleEvent writes the incident timeline and canonical
+// resource change for one lifecycle event. live is false for replay and
+// reconciliation, which project events that already happened.
+func (m *Monitor) projectAlertLifecycleEvent(event alerts.LifecycleEvent, live bool) {
 	alert := event.Alert
 	if m == nil || alert == nil {
 		return
@@ -356,7 +372,7 @@ func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
 		if event.Type == eventlog.TypeFired && !alert.StartTime.IsZero() {
 			occurredAt = alert.StartTime
 		}
-		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertFired, occurredAt, "")
+		m.recordAlertTimelineChangeWithLiveness(timelineAlert, unifiedresources.ChangeAlertFired, occurredAt, "", live)
 	case eventlog.TypeAcknowledged:
 		if m.incidentStore != nil {
 			m.incidentStore.RecordAlertAcknowledged(timelineAlert, actor)
@@ -365,12 +381,12 @@ func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
 		if alert.AckTime != nil && !alert.AckTime.IsZero() {
 			occurredAt = *alert.AckTime
 		}
-		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertAcknowledged, occurredAt, actor)
+		m.recordAlertTimelineChangeWithLiveness(timelineAlert, unifiedresources.ChangeAlertAcknowledged, occurredAt, actor, live)
 	case eventlog.TypeUnacknowledged:
 		if m.incidentStore != nil {
 			m.incidentStore.RecordAlertUnacknowledged(timelineAlert, actor)
 		}
-		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertUnacknowledged, event.OccurredAt, actor)
+		m.recordAlertTimelineChangeWithLiveness(timelineAlert, unifiedresources.ChangeAlertUnacknowledged, event.OccurredAt, actor, live)
 	case eventlog.TypeSnoozed:
 		timelineAlert = timelineAlert.Clone()
 		if timelineAlert.Metadata == nil {
@@ -379,14 +395,14 @@ func (m *Monitor) handleAlertLifecycleEvent(event alerts.LifecycleEvent) {
 		if until := strings.TrimSpace(event.Details["until"]); until != "" {
 			timelineAlert.Metadata["snoozedUntil"] = until
 		}
-		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertSnoozed, event.OccurredAt, actor)
+		m.recordAlertTimelineChangeWithLiveness(timelineAlert, unifiedresources.ChangeAlertSnoozed, event.OccurredAt, actor, live)
 	case eventlog.TypeUnsnoozed:
-		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertUnsnoozed, event.OccurredAt, actor)
+		m.recordAlertTimelineChangeWithLiveness(timelineAlert, unifiedresources.ChangeAlertUnsnoozed, event.OccurredAt, actor, live)
 	case eventlog.TypeResolved:
 		if m.incidentStore != nil {
 			m.incidentStore.RecordAlertResolved(timelineAlert, event.OccurredAt)
 		}
-		m.recordAlertTimelineChange(timelineAlert, unifiedresources.ChangeAlertResolved, event.OccurredAt, "")
+		m.recordAlertTimelineChangeWithLiveness(timelineAlert, unifiedresources.ChangeAlertResolved, event.OccurredAt, "", live)
 	case eventlog.TypeHistoryImported:
 		m.materializeImportedAlertTimeline(timelineAlert, event.OccurredAt)
 	}
@@ -539,7 +555,7 @@ func (m *Monitor) replayAlertLifecycleProjections(ctx context.Context) {
 		// Apply the whole occurrence (including imported acknowledgement and
 		// resolution) before advancing its watermark, even if shutdown arrives
 		// during a canonical write. Cancellation only stops the next event.
-		m.handleAlertLifecycleEvent(event)
+		m.projectAlertLifecycleEvent(event, false)
 		if eventID > maxApplied {
 			maxApplied = eventID
 		}
@@ -603,25 +619,34 @@ func (m *Monitor) reconcileActiveAlertTimelines(ctx context.Context) {
 				continue
 			}
 		}
-		m.handleAlertLifecycleEvent(alerts.LifecycleEvent{
+		m.projectAlertLifecycleEvent(alerts.LifecycleEvent{
 			Type:       eventlog.TypeFired,
 			OccurredAt: alert.StartTime,
 			Alert:      alert,
-		})
+		}, false)
 	}
 }
 
 func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedresources.ChangeKind, occurredAt time.Time, actor string) {
+	m.recordAlertTimelineChangeWithLiveness(alert, kind, occurredAt, actor, false)
+}
+
+func (m *Monitor) recordAlertTimelineChangeWithLiveness(alert *alerts.Alert, kind unifiedresources.ChangeKind, occurredAt time.Time, actor string, live bool) {
 	if alert == nil || m == nil {
 		return
 	}
 	// Background catch-up replay runs concurrently with SetResourceStore, so
 	// the store handle must be read under the monitor lock.
 	m.mu.RLock()
-	recorder, ok := m.resourceStore.(canonicalResourceChangeRecorder)
+	store := m.resourceStore
 	m.mu.RUnlock()
+	recorder, ok := store.(canonicalResourceChangeRecorder)
 	if !ok || recorder == nil {
 		return
+	}
+	record := recorder.RecordChange
+	if liveRecorder, ok := store.(liveResourceChangeRecorder); ok && live {
+		record = liveRecorder.RecordLiveChange
 	}
 
 	timelineChange := unifiedresources.AlertTimelineChange{
@@ -649,7 +674,7 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		string(kind),
 		occurredAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00"))).String()
-	if err := recorder.RecordChange(*change); err != nil {
+	if err := record(*change); err != nil {
 		log.Warn().
 			Err(err).
 			Str("resource_id", alert.ResourceID).

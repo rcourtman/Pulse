@@ -1,16 +1,21 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary is
@@ -776,5 +781,144 @@ func assertAgentStableEnvelope(t *testing.T, label, body, wantCode string) {
 		if _, has := envelope[legacy]; has {
 			t.Errorf("%s: envelope must not carry legacy APIError field %q after agent-stable refactor; envelope=%s", label, legacy, body)
 		}
+	}
+}
+
+// TestAgentSubstrate_LiveChangeEventsReachSubscribeEventsStream proves the
+// push half of the change substrate through the HTTP boundary: a status
+// change and a live alert that the monitor's adapter records reach a
+// monitoring-read subscriber of /api/agent/events as resource.status_changed
+// and alert.fired, with the canonical resource ID, current name and the same
+// change IDs list_recent_changes returns for them.
+func TestAgentSubstrate_LiveChangeEventsReachSubscribeEventsStream(t *testing.T) {
+	rawToken := "agent-live-events-e2e.12345678"
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil))
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "1.0.0")
+	cleanupTestRouter(t, router)
+	adapter := router.monitorAdapterForMonitor(monitor)
+	if adapter == nil {
+		t.Fatal("router must wire a resource adapter for the monitor")
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	snapshot := models.StateSnapshot{
+		Nodes: []models.Node{{ID: "lab-pve1", Name: "pve1", Instance: "lab", Host: "https://pve1.lab:8006", Status: "online", LastSeen: now}},
+		VMs:   []models.VM{{ID: "lab:pve1:101", VMID: 101, Name: "web", Node: "pve1", Instance: "lab", Status: "running", Type: "qemu", LastSeen: now}},
+	}
+	adapter.PopulateFromSnapshot(snapshot)
+
+	server := httptest.NewServer(router.Handler())
+	defer server.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+agentcapabilities.AgentEventsPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-API-Token", rawToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("subscribe status = %d", resp.StatusCode)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && router.agentEventBroadcaster.SubscriberCount() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	snapshot.VMs[0].Status = "stopped"
+	snapshot.VMs[0].LastSeen = now.Add(time.Minute)
+	adapter.PopulateFromSnapshot(snapshot)
+	if err := adapter.RecordLiveChange(unifiedresources.ResourceChange{
+		ID:         "e2e-alert-fired",
+		ResourceID: "lab:pve1:101",
+		Kind:       unifiedresources.ChangeAlertFired,
+		SourceType: unifiedresources.SourceHeuristic,
+		ObservedAt: now.Add(time.Minute),
+		Metadata: map[string]any{
+			unifiedresources.MetadataAlertIdentifier: "lab:pve1:101-powered-off",
+			unifiedresources.MetadataAlertType:       "powered-off",
+			unifiedresources.MetadataAlertLevel:      "critical",
+			unifiedresources.MetadataAlertMessage:    "VM web is stopped",
+		},
+	}); err != nil {
+		t.Fatalf("record live alert: %v", err)
+	}
+
+	type frame struct {
+		Kind    string                          `json:"kind"`
+		Payload AgentEventResourceChangePayload `json:"payload"`
+	}
+	frames := make(chan []frame, 1)
+	go func() {
+		scanner := bufio.NewScanner(resp.Body)
+		var seen []frame
+		for scanner.Scan() {
+			line := scanner.Text()
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+			var f frame
+			if json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &f) != nil {
+				continue
+			}
+			if f.Kind == string(agentcapabilities.EventKindResourceStatusChanged) || f.Kind == string(agentcapabilities.EventKindAlertFired) {
+				seen = append(seen, f)
+			}
+			if len(seen) == 2 {
+				frames <- seen
+				return
+			}
+		}
+	}()
+	var got []frame
+	select {
+	case got = <-frames:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for change events on /api/agent/events")
+	}
+	cancel()
+
+	status, alert := got[0], got[1]
+	if status.Kind != string(agentcapabilities.EventKindResourceStatusChanged) || alert.Kind != string(agentcapabilities.EventKindAlertFired) {
+		t.Fatalf("event order = %s, %s", status.Kind, alert.Kind)
+	}
+	vmID := status.Payload.ResourceID
+	if vmID == "" || vmID == "lab:pve1:101" || status.Payload.ResourceName != "web" || status.Payload.ResourceType != string(unifiedresources.ResourceTypeVM) {
+		t.Fatalf("status payload must carry the canonical VM identity: %+v", status.Payload)
+	}
+	if status.Payload.From != "online" || status.Payload.To != "offline" {
+		t.Fatalf("status payload from/to = %+v", status.Payload)
+	}
+	if alert.Payload.ResourceID != vmID || alert.Payload.ResourceName != "web" || alert.Payload.ChangeID != "e2e-alert-fired" ||
+		alert.Payload.AlertLevel != "critical" || alert.Payload.AlertType != "powered-off" {
+		t.Fatalf("alert payload = %+v", alert.Payload)
+	}
+
+	// The events point at rows the timeline read returns.
+	listReq := httptest.NewRequest(http.MethodGet, agentcapabilities.RecentChangesCapabilityPath+"?resourceId="+vmID, nil)
+	listReq.Header.Set("X-API-Token", rawToken)
+	listRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list_recent_changes status = %d, body = %s", listRec.Code, listRec.Body.String())
+	}
+	var listed AgentRecentChanges
+	if err := json.NewDecoder(listRec.Body).Decode(&listed); err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, change := range listed.Changes {
+		ids[change.ID] = true
+	}
+	if !ids[status.Payload.ChangeID] || !ids[alert.Payload.ChangeID] {
+		t.Fatalf("event change IDs %q and %q must be readable through list_recent_changes: %+v", status.Payload.ChangeID, alert.Payload.ChangeID, listed.Changes)
 	}
 }

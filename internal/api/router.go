@@ -104,6 +104,7 @@ type Router struct {
 	maintenanceSentinel             *maintenancesentinel.Sentinel
 	agentContextHandler             *AgentContextHandler
 	agentEventBroadcaster           *AgentEventBroadcaster
+	agentChangeEvents               *agentChangeEventProducer
 	resourceRegistry                *unifiedresources.ResourceRegistry
 	trueNASPoller                   *monitoring.TrueNASPoller
 	vmwarePoller                    *monitoring.VMwarePoller
@@ -569,6 +570,7 @@ func (r *Router) setupRoutes() {
 	// read for the wrong org.
 	r.agentContextHandler.SetApprovalsProvider(agentApprovalStoreProvider{})
 	r.agentEventBroadcaster = NewAgentEventBroadcaster()
+	r.agentChangeEvents = newAgentChangeEventProducer(r.agentEventBroadcaster, defaultResourceStatusEventWindow)
 	if r.resourceHandlers != nil && r.agentEventBroadcaster != nil {
 		r.resourceHandlers.SetActionCompletedPublisher(r.agentEventBroadcaster.PublishActionCompletedRecord)
 	}
@@ -1831,6 +1833,11 @@ func (r *Router) configureMonitorDependenciesLocked(m *monitoring.Monitor) {
 	// Apply saved notification policy before the first publication, which can
 	// evaluate alerts. The combined boundary avoids one refresh per source.
 	if adapter := r.monitorAdapterForMonitor(m); adapter != nil {
+		// Live alert and status changes this adapter records reach the
+		// agent event stream for the monitor's organization only.
+		if r.agentChangeEvents != nil {
+			adapter.SetChangeObserver(r.agentChangeEvents.observer(m.GetOrgID(), adapter.GetByReference))
+		}
 		m.SetResourceStoreAndProviders(adapter, r.monitorSupplementalRecords)
 	} else {
 		m.SetSupplementalRecordsProviders(r.monitorSupplementalRecords)

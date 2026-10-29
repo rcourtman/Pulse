@@ -47,6 +47,14 @@ const (
 	// the audit endpoint.
 	AgentEventActionCompleted AgentEventKind = AgentEventKind(agentcapabilities.EventKindActionCompleted)
 
+	// AgentEventAlertFired, AgentEventAlertResolved and
+	// AgentEventResourceStatusChanged fire when a monitor adapter records
+	// the matching live resource change. Payload is
+	// AgentEventResourceChangePayload; see agent_change_events.go.
+	AgentEventAlertFired            AgentEventKind = AgentEventKind(agentcapabilities.EventKindAlertFired)
+	AgentEventAlertResolved         AgentEventKind = AgentEventKind(agentcapabilities.EventKindAlertResolved)
+	AgentEventResourceStatusChanged AgentEventKind = AgentEventKind(agentcapabilities.EventKindResourceStatusChanged)
+
 	// AgentEventStreamConnected is emitted once when an SSE subscriber connects
 	// so clients can distinguish a healthy stream from an idle one.
 	AgentEventStreamConnected AgentEventKind = AgentEventKind(agentcapabilities.EventKindStreamConnected)
@@ -66,6 +74,15 @@ type AgentEvent struct {
 	ID      uint64         `json:"id"`
 	At      time.Time      `json:"at"`
 	Payload any            `json:"payload,omitempty"`
+
+	// orgID scopes the event to one organization's subscribers. Empty means
+	// the event is not tenant-scoped and reaches every subscriber.
+	orgID string
+}
+
+// visibleToOrg reports whether a subscriber in orgID may receive the event.
+func (e AgentEvent) visibleToOrg(orgID string) bool {
+	return e.orgID == "" || e.orgID == normalizeAgentEventOrgID(orgID)
 }
 
 // AgentEventFindingCreatedPayload is the payload shape for
@@ -267,6 +284,7 @@ func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http
 
 	events, unsubscribe := b.Subscribe()
 	defer unsubscribe()
+	orgID := GetOrgID(r.Context())
 
 	// Initial sync event so agents that just connected can confirm
 	// the stream is open before the first real event lands. This is
@@ -288,6 +306,9 @@ func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http
 		case event, open := <-events:
 			if !open {
 				return
+			}
+			if !event.visibleToOrg(orgID) {
+				continue
 			}
 			writeAgentSSEEvent(w, redactAgentEventCommandsForRequest(event, r))
 			flusher.Flush()

@@ -8783,3 +8783,17 @@ recovery and confirmed scoped absence. Their opt-in producer feeds the existing
 production Backups consumer for browser proof. Retained evidence is not a fresh
 read, available archive, installed recovery or a diagnosis of #3248; no guest or
 backup operation, thaw or filesystem-liveness assertion follows.
+
+### Only live alert lifecycle changes are announced to agents (29 October 2026)
+
+The alert manager's live lifecycle callback reaches
+`Monitor.handleAlertLifecycleEvent`, which projects the event with
+`live=true`; lifecycle replay and active-alert reconciliation call
+`projectAlertLifecycleEvent(event, false)`, and imported history always
+projects as not live. A live projection records its canonical resource change
+through the resource store's `RecordLiveChange` when the store offers it, so
+the agent event stream hears `alert.fired` and `alert.resolved` once, when the
+alert engine emits them; every other projection uses `RecordChange` and stays
+silent. Both paths write the same deterministic change row. Proof:
+`TestAlertTimelineAnnouncesOnlyLiveLifecycleChanges` in
+`internal/monitoring/monitor_alert_handling_test.go`.

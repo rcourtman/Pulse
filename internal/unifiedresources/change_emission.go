@@ -11,9 +11,12 @@ import (
 	"github.com/google/uuid"
 )
 
-func recordRegistryChanges(store ResourceStore, before, after []Resource, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) {
+// recordRegistryChanges persists the changes between two resource lists and
+// returns the ones the store accepted, so the caller can announce exactly what
+// was recorded.
+func recordRegistryChanges(store ResourceStore, before, after []Resource, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) []ResourceChange {
 	if store == nil {
-		return
+		return nil
 	}
 
 	beforeByID := make(map[string]Resource, len(before))
@@ -40,6 +43,7 @@ func recordRegistryChanges(store ResourceStore, before, after []Resource, observ
 		seen[id] = struct{}{}
 	}
 
+	var recorded []ResourceChange
 	for id := range seen {
 		beforeResource, beforeOK := beforeByID[id]
 		afterResource, afterOK := afterByID[id]
@@ -49,8 +53,11 @@ func recordRegistryChanges(store ResourceStore, before, after []Resource, observ
 		}
 		if err := store.RecordChange(*change); err != nil {
 			log.Printf("unifiedresources: failed to record change for %s: %v", change.ResourceID, err)
+			continue
 		}
+		recorded = append(recorded, *change)
 	}
+	return recorded
 }
 
 // recordRegistryChangesBetweenGenerations compares two complete registry
@@ -58,10 +65,11 @@ func recordRegistryChanges(store ResourceStore, before, after []Resource, observ
 // readers. The resources are read only while both registry locks are held;
 // persistence happens after releasing them so a slow store cannot block
 // registry readers. The caller must keep the old generation stable until this
-// returns (MonitorAdapter's mutationMu does so during a replacement).
-func recordRegistryChangesBetweenGenerations(before, after *ResourceRegistry, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) {
+// returns (MonitorAdapter's mutationMu does so during a replacement). It
+// returns the changes the store accepted.
+func recordRegistryChangesBetweenGenerations(before, after *ResourceRegistry, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) []ResourceChange {
 	if before == nil || after == nil || before.store == nil {
-		return
+		return nil
 	}
 
 	var pending []ResourceChange
@@ -100,11 +108,15 @@ func recordRegistryChangesBetweenGenerations(before, after *ResourceRegistry, ob
 	after.mu.RUnlock()
 	before.mu.RUnlock()
 
+	recorded := pending[:0]
 	for _, change := range pending {
 		if err := before.store.RecordChange(change); err != nil {
 			log.Printf("unifiedresources: failed to record change for %s: %v", change.ResourceID, err)
+			continue
 		}
+		recorded = append(recorded, change)
 	}
+	return recorded
 }
 
 func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK bool, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) *ResourceChange {

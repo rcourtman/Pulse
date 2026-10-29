@@ -6262,6 +6262,46 @@ by `internal/agentcapabilities/events.go`; API constants may expose typed
 aliases, but API handlers, manifest descriptions, MCP adapters, and probes must
 not re-declare the vocabulary independently.
 
+The stream also carries `alert.fired`, `alert.resolved` and
+`resource.status_changed`, the push half of `list_recent_changes`. They are
+published from `internal/api/agent_change_events.go` at the moment a monitor's
+`unifiedresources.MonitorAdapter` records the matching canonical resource
+change: the adapter's `SetChangeObserver` hears registry-diff changes after the
+new generation is swapped in, and alert lifecycle changes recorded through
+`RecordLiveChange`, with the resource ID already resolved to the canonical
+identity the row was stored under. Nothing is read back from the change store
+and nothing new is persisted, so the events add no disk writes. Only the live
+alert lifecycle callback records through `RecordLiveChange`; lifecycle replay,
+active-alert reconciliation and imported history use `RecordChange`, so a
+restart never re-announces old alerts. The payload
+(`AgentEventResourceChangePayload`) mirrors the change record the timeline read
+returns: `changeId` is its `id`, `kind` its `kind`, plus `resourceId`, current
+`resourceName` and `resourceType`, `from`/`to` for status changes, and
+`alertIdentifier`, `alertType`, `alertLevel` and `alertResolution` for alerts.
+It never carries the alert message, change reason or command metadata. A
+`state_transition` counts as `resource.status_changed` only when its
+`changedFields` include `status` and the status differs; discovery, removal,
+Docker command and Proxmox lifecycle transitions stay timeline-only. Status
+events are coalesced per organization and resource over
+`agentcapabilities.ResourceStatusEventCoalesceWindow` (30s): the first change
+in a quiet period publishes at once, later changes fold into one event at the
+window's end carrying `coalescedTransitions` (from the last announced status to
+the latest), and a flap that returns to the announced status publishes nothing.
+Volume is otherwise bounded by the broadcaster's existing per-subscriber drop.
+These events are tenant-scoped: `AgentEvent` carries an unexported
+organization tag set from the recording monitor, and `HandleAgentEvents`
+delivers a tagged event only to subscribers whose request organization matches.
+Untagged kinds keep reaching every subscriber. Proofs:
+`TestAgentChangeEvents*` in `internal/api/agent_change_events_test.go`,
+`TestContract_AgentChangeEventsStayInsideTheirOrganization` in
+`internal/api/contract_test.go`,
+`TestAgentSubstrate_LiveChangeEventsReachSubscribeEventsStream` in
+`internal/api/agent_substrate_e2e_test.go`,
+`TestMonitorAdapterChangeObserverHearsOnlyRecordedLiveChanges` in
+`internal/unifiedresources/history_identity_test.go`, and
+`TestAlertTimelineAnnouncesOnlyLiveLifecycleChanges` in
+`internal/monitoring/monitor_alert_handling_test.go`.
+
 The approval store exposes `SetOnApprovalCreated(cb)` so the API
 layer can install a fire-and-forget callback that runs after every
 successful `CreateApproval`. The callback fires on its own

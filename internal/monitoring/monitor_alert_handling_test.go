@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1949,4 +1950,90 @@ func TestActiveAlertsSnapshotCarriesSubjectFreeSummary(t *testing.T) {
 		require.Equal(t, "Health is unhealthy", alert.Summary)
 	}
 	require.True(t, found, "expected the container health alert in the state snapshot")
+}
+
+type observedAlertChanges struct {
+	mu      sync.Mutex
+	changes []unifiedresources.ResourceChange
+}
+
+func (o *observedAlertChanges) observe(change unifiedresources.ResourceChange) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if change.Kind == unifiedresources.ChangeAlertFired || change.Kind == unifiedresources.ChangeAlertResolved {
+		o.changes = append(o.changes, change)
+	}
+}
+
+func (o *observedAlertChanges) take() []unifiedresources.ResourceChange {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	out := o.changes
+	o.changes = nil
+	return out
+}
+
+// Live alert lifecycle events reach the adapter's change observer (and so the
+// agent event stream) with the canonical resource ID they were stored under.
+// Replay, reconciliation and imported history record the same rows without
+// announcing them again.
+func TestAlertTimelineAnnouncesOnlyLiveLifecycleChanges(t *testing.T) {
+	store, err := unifiedresources.NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+
+	containerID := strings.Repeat("e", 64)
+	host := models.DockerHost{ID: "live-host", Hostname: "live-host", LastSeen: time.Now(), Containers: []models.DockerContainer{
+		{ID: containerID, Name: "api", State: "running", Health: "unhealthy"},
+	}}
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{host}})
+	adapter := unifiedresources.NewMonitorAdapter(registry)
+	observed := &observedAlertChanges{}
+	adapter.SetChangeObserver(observed.observe)
+	monitor := &Monitor{alertManager: manager, resourceStore: adapter}
+	manager.SubscribeLifecycleCallback(monitor.handleAlertLifecycleEvent)
+	canonicalID := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAppContainer, unifiedresources.SourceDocker, host.ID+"/container/"+containerID)
+
+	manager.CheckDockerHost(host)
+	fired := observed.take()
+	require.Len(t, fired, 1)
+	require.Equal(t, unifiedresources.ChangeAlertFired, fired[0].Kind)
+	require.Equal(t, canonicalID, fired[0].ResourceID)
+	require.Equal(t, "docker-container-health", fired[0].Metadata[unifiedresources.MetadataAlertType])
+
+	host.Containers[0].Health = "healthy"
+	manager.CheckDockerHost(host)
+	resolved := observed.take()
+	require.Len(t, resolved, 1)
+	require.Equal(t, unifiedresources.ChangeAlertResolved, resolved[0].Kind)
+	require.Equal(t, canonicalID, resolved[0].ResourceID)
+
+	// The announced changes are the stored rows, so agents can look them up.
+	stored, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, unifiedresources.ResourceChangeFilters{
+		Kinds: []unifiedresources.ChangeKind{unifiedresources.ChangeAlertFired, unifiedresources.ChangeAlertResolved},
+	})
+	require.NoError(t, err)
+	require.Len(t, stored, 2)
+	require.ElementsMatch(t, []string{fired[0].ID, resolved[0].ID}, []string{stored[0].ID, stored[1].ID})
+
+	// Replaying the whole lifecycle log projects the same events again; none
+	// of them may be announced as new.
+	monitor.replayAlertLifecycleProjections(context.Background())
+	require.Empty(t, observed.take(), "replayed alert history must not reach the live change observer")
+
+	alert := &alerts.Alert{ID: "imported-alert", Type: "cpu", Level: alerts.AlertLevelWarning, ResourceID: canonicalID, StartTime: time.Now().Add(-time.Hour)}
+	monitor.recordAlertTimelineChange(alert, unifiedresources.ChangeAlertFired, alert.StartTime, "")
+	require.Empty(t, observed.take(), "history projected outside the live callback must not be announced")
+	recorded, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, unifiedresources.ResourceChangeFilters{AlertIdentifiers: []string{alert.ID}})
+	require.NoError(t, err)
+	require.Len(t, recorded, 1, "the non-live projection still records the row")
 }

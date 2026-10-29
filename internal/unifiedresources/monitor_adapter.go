@@ -33,6 +33,43 @@ type MonitorAdapter struct {
 	legacyHistory           legacyHistoryBackfill
 
 	overlays overlayReadStateCache
+
+	// changeObserver hears each live change after the store accepted it.
+	// Guarded by mu.
+	changeObserver ResourceChangeObserver
+}
+
+// ResourceChangeObserver is told about a change the adapter just recorded,
+// with its resource ID already resolved to the canonical identity it was
+// stored under. It runs on the recording goroutine, so it must not block.
+// Replayed or imported history never reaches it: only registry diffs and
+// changes recorded through RecordLiveChange do.
+type ResourceChangeObserver func(change ResourceChange)
+
+// SetChangeObserver installs the observer for live changes; nil removes it.
+func (a *MonitorAdapter) SetChangeObserver(observer ResourceChangeObserver) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	a.changeObserver = observer
+	a.mu.Unlock()
+}
+
+func (a *MonitorAdapter) notifyChanges(changes []ResourceChange) {
+	if a == nil || len(changes) == 0 {
+		return
+	}
+	a.mu.RLock()
+	observer := a.changeObserver
+	a.mu.RUnlock()
+	if observer == nil {
+		return
+	}
+	for _, change := range changes {
+		change.ResourceID = CanonicalResourceID(change.ResourceID)
+		observer(change)
+	}
 }
 
 // overlayReadStateMaxAge bounds how long an overlay built from one registry
@@ -245,9 +282,28 @@ func (a *MonitorAdapter) GetByReference(reference string) (*Resource, string, bo
 // resolve here so history reads by canonical ID include them. PVE disk alert
 // rows are owned row by row instead (proxmoxDiskAlertOwner).
 func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
+	_, _, err := a.recordChange(change)
+	return err
+}
+
+// RecordLiveChange records a change that is happening now, as RecordChange
+// does, then tells the change observer. Callers replaying or importing history
+// use RecordChange so old events are not announced as new.
+func (a *MonitorAdapter) RecordLiveChange(change ResourceChange) error {
+	recorded, ok, err := a.recordChange(change)
+	if err != nil || !ok {
+		return err
+	}
+	a.notifyChanges([]ResourceChange{recorded})
+	return nil
+}
+
+// recordChange persists the change and returns it as stored, with the
+// resource ID it resolved to. ok is false when no durable store is attached.
+func (a *MonitorAdapter) recordChange(change ResourceChange) (ResourceChange, bool, error) {
 	registry := a.currentRegistry()
 	if registry == nil || registry.store == nil {
-		return nil
+		return change, false, nil
 	}
 	sourceRef := change.ResourceID
 	if ref, ok := proxmoxDiskAlertRowReference(change); ok {
@@ -258,7 +314,8 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 			change.Metadata[MetadataAlertResourceID] = ref
 			change.ResourceID = owner
 		}
-		return registry.store.RecordChange(change)
+		err := registry.store.RecordChange(change)
+		return change, err == nil, err
 	}
 	history, hasHistory := registry.store.(resourceHistoryIdentityWriter)
 	unbound := false
@@ -275,7 +332,7 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 			if hasHistory {
 				id, found, err := history.ResolveHistorySourceIdentity(sourceRef)
 				if err != nil {
-					return err
+					return change, false, err
 				}
 				if found {
 					change.ResourceID = id
@@ -291,7 +348,7 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 			// No resource answers to it: keep the binding an earlier event recorded.
 			id, found, err := history.ResolveHistorySourceIdentity(CanonicalResourceID(sourceRef))
 			if err != nil {
-				return err
+				return change, false, err
 			}
 			if found {
 				change.ResourceID = id
@@ -300,16 +357,17 @@ func (a *MonitorAdapter) RecordChange(change ResourceChange) error {
 		}
 	}
 	if hasHistory && CanonicalResourceID(sourceRef) != CanonicalResourceID(change.ResourceID) {
-		return history.RecordChangeWithSourceIdentity(change, sourceRef)
+		err := history.RecordChangeWithSourceIdentity(change, sourceRef)
+		return change, err == nil, err
 	}
 	if err := registry.store.RecordChange(change); err != nil {
-		return err
+		return change, false, err
 	}
 	// Inventory may name the resource in a later generation; bind the row then.
 	if _, ok := registry.store.(legacyHistoryBinder); unbound && ok {
 		a.legacyHistory.add(CanonicalResourceID(sourceRef), time.Now())
 	}
-	return nil
+	return change, true, nil
 }
 
 // GetRecentChanges forwards canonical resource-history reads into the
@@ -545,7 +603,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		occ := snapshot.LastUpdate
 		occurredAt = &occ
 	}
-	recordRegistryChangesBetweenGenerations(registry, rebuilt, rebuiltAt, occurredAt, SourcePulseDiff, "")
+	recorded := recordRegistryChangesBetweenGenerations(registry, rebuilt, rebuiltAt, occurredAt, SourcePulseDiff, "")
 	rebuilt.PersistIdentityPins()
 
 	a.mu.Lock()
@@ -555,6 +613,9 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()
 	a.bindLegacyHistory(rebuilt, time.Now())
+	// After the swap, so an observer reading the adapter sees the generation
+	// that produced the change.
+	a.notifyChanges(recorded)
 }
 
 // ShouldSkipAPIPolling returns true when agent coverage indicates API
@@ -761,11 +822,12 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 	before := registry.List()
 	registry.IngestRecordsWithStaleThresholds(source, records, thresholds)
 	rebuiltAt := time.Now().UTC()
-	recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
+	recorded := recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
 	registry.PersistIdentityPins()
 	a.mu.Lock()
 	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()
+	a.notifyChanges(recorded)
 }
 
 // MetricsTargetForResource resolves the history/metrics target for a canonical
