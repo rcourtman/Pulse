@@ -56,6 +56,36 @@ class DockerResourceSizingDocsTest(unittest.TestCase):
             self.assertIn(f"TROUBLESHOOTING.md#{anchor}", section())
             self.assertIn(heading, source)
 
+    def test_image_storage_is_not_sold_as_lightweight_or_persistent_data(self):
+        guide = (ROOT / "docs/DOCKER.md").read_text()
+        self.assertNotIn("lightweight", guide.split("\n## ", 1)[0])
+        text = guide.split("## Image size and disk use\n", 1)[1].split("\n## ", 1)[0]
+        for fact in ("compressed layers", "cached layers", "Docker version and image store",
+                     "shared between images and tags", "Container writable-layer size",
+                     "Mounted volume or bind-mount contents", "Persistent configuration, credentials",
+                     "replacing an image does not shrink or back up this data",
+                     "GB** (decimal)", "GiB** (binary)", "changes\nits ownership"):
+            with self.subTest(fact=fact):
+                self.assertIn(fact, text)
+
+    def test_image_comparison_preserves_state_and_uses_existing_evidence(self):
+        guide = (ROOT / "docs/DOCKER.md").read_text()
+        text = guide.split("## Image size and disk use\n", 1)[1].split("\n## ", 1)[0]
+        for fact in ("exact image reference or digest", "linux/amd64", "linux/arm64",
+                     "measurement label", "multi-platform image index",
+                     "configured image and image ID", "Unknown is\nvalid",
+                     "do not pull or build another image", "export full\ninspect/Compose output",
+                     "Do not prune images, delete volumes or clear `/data`",
+                     "Keep the previous image and consistent data backup",
+                     "does not reclaim old images", "without changing retention or restarting"):
+            with self.subTest(fact=fact):
+                self.assertIn(fact, text)
+        # No fresh diagnostic command, broad inspect or cleanup recipe is added.
+        self.assertNotIn("```", text)
+        self.assertIn("docker inspect pulse --format '{{.Config.Image}} {{.Image}}'", guide)
+        self.assertIn("## 🔄 Updates", guide)
+        self.assertIn("TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth", text)
+
 
 if __name__ == "__main__":
     unittest.main()
