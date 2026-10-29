@@ -26,6 +26,10 @@ import {
 import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import { getPlatformAgentRecord } from '@/utils/agentResources';
+import {
+  getMemoryObservationPresentation,
+  type MemoryObservationPresentation,
+} from '@/utils/memoryObservation';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
@@ -59,6 +63,7 @@ interface BackupServerRow {
   memoryPercent?: number;
   memoryUsed?: number;
   memoryTotal?: number;
+  memoryReading?: MemoryObservationPresentation | null;
   uptimeSeconds?: number;
   datastore?: ResourcePBSDatastore;
   backupCount: number;
@@ -370,21 +375,45 @@ export function buildBackupServerRows(
     const datastores = (server.pbs?.datastores ?? [])
       .slice()
       .sort((left, right) => left.name.localeCompare(right.name));
-    const memoryTotal = server.memory?.total ?? 0;
+    const memory = server.memory;
+    const memoryTotal =
+      typeof memory?.total === 'number' && Number.isFinite(memory.total) && memory.total > 0
+        ? memory.total
+        : undefined;
+    const memoryUsed =
+      typeof memory?.used === 'number' &&
+      Number.isFinite(memory.used) &&
+      memory.used >= 0 &&
+      (memoryTotal === undefined || memory.used <= memoryTotal)
+        ? memory.used
+        : undefined;
+    // A partial metric may report a percentage and capacity without used
+    // bytes. Capacity cannot turn the missing amount into a measured zero.
+    // Keep an independently valid percentage, but show a byte pair only when
+    // both amounts were actually reported. Explicit zero remains a reading.
+    const percent =
+      memoryTotal !== undefined && memoryUsed !== undefined
+        ? (memoryUsed / memoryTotal) * 100
+        : memory?.current;
+    const memoryPercent =
+      typeof percent === 'number' && Number.isFinite(percent) && percent >= 0 && percent <= 100
+        ? percent
+        : undefined;
     const host = {
       serverName: server.name,
       online: serverIsOnline(server),
       connectionLabel: connectionLabel(server),
       version: server.pbs?.version,
       cpuPercent: typeof server.cpu?.current === 'number' ? server.cpu.current : undefined,
-      memoryPercent:
-        memoryTotal > 0
-          ? ((server.memory?.used ?? 0) / memoryTotal) * 100
-          : typeof server.memory?.current === 'number'
-            ? server.memory.current
-            : undefined,
-      memoryUsed: server.memory?.used,
-      memoryTotal: memoryTotal > 0 ? memoryTotal : undefined,
+      memoryPercent,
+      memoryUsed,
+      memoryTotal,
+      // A healthy PBS connection does not renew a linked host's retained
+      // memory. Use the same source-owned observation as the resource drawer.
+      memoryReading: getMemoryObservationPresentation(memoryPercent, memory?.observation, false, {
+        includeCurrent: false,
+        agentStale: (server.agent ?? getPlatformAgentRecord(server))?.stale === true,
+      }),
       uptimeSeconds: server.uptime ?? server.pbs?.uptimeSeconds,
     };
     // Each keyed row has a reconciled Solid store. Give it its own JSON DTO
@@ -606,22 +635,54 @@ export function ProxmoxBackupServersTable(props: {
                           <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
                             <Show when={!row.continuesServer}>
                               <Show
-                                when={row.online && row.memoryPercent !== undefined}
-                                fallback={<span class="text-muted">—</span>}
+                                when={
+                                  row.online &&
+                                  row.memoryPercent !== undefined &&
+                                  row.memoryReading?.state !== 'unavailable'
+                                }
+                                fallback={
+                                  <span class="text-muted text-[11px]">
+                                    {row.online && row.memoryReading?.state === 'unavailable'
+                                      ? 'Unavailable'
+                                      : '—'}
+                                  </span>
+                                }
                               >
                                 <span
                                   class="text-base-content"
                                   title={
-                                    row.memoryTotal
-                                      ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
-                                      : undefined
+                                    row.memoryReading?.message ??
+                                    (row.memoryTotal !== undefined && row.memoryUsed !== undefined
+                                      ? `${formatPlatformTableBytesValue(row.memoryUsed)} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
+                                      : undefined)
                                   }
                                 >
                                   <PlatformTablePercentValue value={row.memoryPercent} />
                                 </span>
-                                <Show when={row.memoryTotal && layoutMode() === 'full'}>
+                                <Show
+                                  when={
+                                    row.memoryTotal !== undefined &&
+                                    row.memoryUsed !== undefined &&
+                                    layoutMode() === 'full'
+                                  }
+                                >
                                   <span class="ml-1 text-[10px] text-muted tabular-nums">
-                                    {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
+                                    {`(${formatPlatformTableBytesValue(row.memoryUsed)}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
+                                  </span>
+                                </Show>
+                                <Show
+                                  when={
+                                    row.memoryReading?.state === 'last-known' ||
+                                    row.memoryReading?.state === 'unknown'
+                                  }
+                                >
+                                  <span
+                                    class="block whitespace-normal text-[10px] leading-snug text-amber-600 dark:text-amber-300"
+                                    title={row.memoryReading?.message}
+                                  >
+                                    {row.memoryReading?.state === 'last-known'
+                                      ? 'Last known'
+                                      : 'Freshness unknown'}
                                   </span>
                                 </Show>
                               </Show>
