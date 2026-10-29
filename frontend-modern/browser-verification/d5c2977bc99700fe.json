@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "c8d2a7681deee6293c2d7aef321568123e33b3de",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "34653650dcc71a69d2ec6608e7434baa1d1c64e8e1750a03e810990beb49a541"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Percentage-only 75% with capacity but no invented used-byte pair",
+    "Reported byte pairs and genuine zero retained",
+    "Last-known and unknown/future memory observations explicitly qualified with original clocks, never renewed by healthy connection",
+    "Explicitly unavailable memory withdraws percent and byte pair",
+    "Stopped linked agent qualifies only its own source; independent current memory remains current",
+    "Live same-ID changes keep the row, drawer and keyboard focus; offline suppression and independent datastore risk remain intact"
+  ],
+  "interactions": [
+    "Desktop native keyboard disclosure and collapse, with focus retained through realtime updates",
+    "320px WebKit whole-row touch disclosure and collapse, readable memory explanations above bottom navigation",
+    "Real REST APIResource.metrics parser, canonical realtime Resource updates and real History client through the production App; safe read-only local producer",
+    "All 15 retained captures inspected with native view_image; the completed desktop table capture from the failed second wrapper remains valid; only omitted unknown-state pixels were supplemented"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "verified_at": "2026-10-29T21:06:56Z",
+  "evidence": {
+    "source_sha": "c8d2a7681deee6293c2d7aef321568123e33b3de",
+    "source_proof": "source-35t87yfo",
+    "dossier_receipts": "RECEIPTS.md in the web-product lane dossier",
+    "browser": "BROWSER-RECONCILIATION.json in the lane dossier",
+    "pixels": "NATIVE-PIXEL-REVIEW.json, 15 actual image inspections",
+    "adverse": "Two failed browser drivers and one parse-only pixel-driver failure remain retained, with their completed segments and precise evidence-only corrections. Product source is unchanged throughout browser verification."
+  }
+}
