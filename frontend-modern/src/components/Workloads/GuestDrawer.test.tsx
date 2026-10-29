@@ -370,7 +370,7 @@ describe('GuestDrawer', () => {
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     const details = technicalDetails();
     expect(details.getByText('Backup time unavailable: invalid timestamp.')).toBeVisible();
-    expect(details.queryByText('No completed backup found')).not.toBeInTheDocument();
+    expect(details.queryByText('No completed backup reported')).not.toBeInTheDocument();
     expect(details.queryByText('1 hour ago')).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: Date.now() + 86_400_000, backupInProgress: true });
     expect(details.getByText(/timestamp is in the future/)).toBeVisible();
@@ -379,7 +379,7 @@ describe('GuestDrawer', () => {
     expect(details.getByText('1 hour ago')).toBeVisible();
     expect(details.queryByText(/unavailable/)).not.toBeInTheDocument();
     setGuest({ ...guest(), lastBackup: 0 });
-    expect(details.getByText('No completed backup found')).toBeVisible();
+    expect(details.getByText('No completed backup reported')).toBeVisible();
   });
 
   it('keeps deferred filesystem fallback last-known through History and fresh resumption', async () => {
@@ -1176,9 +1176,9 @@ describe('GuestDrawer', () => {
           />
         ));
         expect(technicalDetails().getByText('Last completed backup')).toBeInTheDocument();
-        expect(technicalDetails().getByText('No completed backup found').closest('td')).toHaveClass(
-          'text-rose-700',
-        );
+        expect(
+          technicalDetails().getByText('No completed backup reported').closest('td'),
+        ).toHaveClass('text-amber-700');
         expect(technicalDetails().getByText('Backup activity')).toBeInTheDocument();
         expect(
           technicalDetails().getByText('Running · not completed yet').closest('td'),
@@ -1210,12 +1210,14 @@ describe('GuestDrawer', () => {
       expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
       setGuest({ ...guest(), backupInProgress: true });
       expect(technicalDetails().getByText('Running · not completed yet')).toBeInTheDocument();
-      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      expect(technicalDetails().getByText('No completed backup reported')).toBeInTheDocument();
       setGuest({ ...guest(), backupInProgress: false });
       expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
-      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      expect(technicalDetails().getByText('No completed backup reported')).toBeInTheDocument();
       setGuest({ ...guest(), lastBackup: new Date('2026-03-02T10:00:00Z').getTime() });
-      expect(technicalDetails().queryByText('No completed backup found')).not.toBeInTheDocument();
+      expect(
+        technicalDetails().queryByText('No completed backup reported'),
+      ).not.toBeInTheDocument();
       expect(technicalDetails().getByText('2 hours ago').closest('td')).toHaveClass(
         'text-emerald-700',
       );
@@ -1224,7 +1226,7 @@ describe('GuestDrawer', () => {
 
     it('reports missing completed protection rather than hiding it when lastBackup is 0', () => {
       solidRender(() => <GuestDrawer guest={makeGuest({ lastBackup: 0 })} onClose={vi.fn()} />);
-      expect(technicalDetails().getByText('No completed backup found')).toBeInTheDocument();
+      expect(technicalDetails().getByText('No completed backup reported')).toBeInTheDocument();
       expect(technicalDetails().queryByText('Backup activity')).not.toBeInTheDocument();
     });
   });

@@ -72,9 +72,9 @@ describe('backup evidence access', () => {
     expect(dialog).toHaveTextContent('timestamp is in the future');
     expect(dialog).not.toHaveTextContent('Invalid Date');
     setValue(0);
-    expect(dialog).toHaveTextContent('No completed backup yet');
+    expect(dialog).toHaveTextContent('No completed backup is reported in the current inventory');
     setRunning(false);
-    expect(dialog).toHaveTextContent('No backup has ever been recorded');
+    expect(dialog).toHaveTextContent('Missing data does not mean no backups exist');
     expect(dialog).not.toHaveTextContent('Backup running now');
     setValue(completed);
     expect(dialog).toHaveTextContent('2 hours ago');
@@ -97,7 +97,9 @@ describe('backup evidence access', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close backup details' }));
     fireEvent.click(triggers[1]);
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    expect(screen.getByRole('dialog')).toHaveTextContent('No backup has ever been recorded');
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Missing data does not mean no backups exist',
+    );
     expect(screen.getByRole('dialog')).not.toHaveTextContent('2 hours ago');
     expect(screen.queryByRole('button', { name: /^Last backup:/ })).toBeNull();
   });

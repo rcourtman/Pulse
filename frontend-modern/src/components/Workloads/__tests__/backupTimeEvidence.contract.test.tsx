@@ -57,7 +57,7 @@ describe('backup time evidence', () => {
     expect(getBackupInfo(value, undefined, now)).toEqual({
       status: 'never',
       ageMs: null,
-      ageFormatted: 'Never',
+      ageFormatted: 'No completed backup reported',
     });
   });
 

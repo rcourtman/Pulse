@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Missing backup completion remains a presentation-only uncertainty
+
+Workloads keeps its existing scalar and legacy absence classification, but
+shows the badge/shield and drawer in cautionary Unknown rather than a red
+no-backup state. All-time absence and “first backup” cannot be inferred from
+the current inventory. Missing observations supply no exact time, age rule or
+completion when activity ends. Valid ages, malformed/future reasons and guest
+safety precautions retain their existing meaning. This adds no request, join,
+clock, parse loop or collection work to the hot path.
+
+The normal-suite REST/snapshot `backupTimestampFlow.test.tsx` regressions cover
+VM/LXC missing and Go-zero input, running/stopped activity, valid recovery and
+missing recurrence while preserving mounted details/focus. Shared presentation,
+cell, full-drawer and clock tests cover the remaining consumers. Desktop/narrow
+production-row browser proof is separate from source results and establishes
+no native guest, backup, restore or installed recovery.
+
 ### Workloads maps backup instants once per resource update
 
 The REST and owning-snapshot adapters use the shared strict backup timestamp
@@ -1451,12 +1468,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     provider-specific backup fetches belong in the shared workload hot path.
     Freshness classification must reuse the configured backup thresholds and
     the shared `getBackupInfo` / `workloadGuestPresentation` vocabulary:
-    existing stale or overdue backups stay amber, while red is reserved for a
-    supported guest with no recorded backup. The compact row must not infer a
+    existing stale or overdue backups stay amber. Missing completion evidence
+    is also amber Unknown, not a red no-backup verdict: the current scalar
+    does not establish all-time absence. The compact row must not infer a
     red failure state from a fixed backup age. When the dedicated Backup column
     is hidden, supported non-template guests retain one fixed-size shield in
     the identity cell for every state: green for fresh completed coverage,
-    amber for stale or overdue coverage, red for no recorded backup, and blue
+    amber for stale, overdue or unreported completion evidence, and blue
     for a backup currently running. Positive coverage must not disappear merely
     because it is healthy. Backup support must be derived from the row's
     canonical platform scopes before classifying an absent scalar: `proxmox-pve`
@@ -4419,7 +4437,8 @@ table and the wide width.
 
 The evidence content is reactive to the same guest identity: running is not
 completion, malformed/future times are unknown, and only the existing absence
-sentinels mean no backup recorded. A removed row unmounts its disclosure and
+sentinels mean no completion time reported in current inventory, not that no
+backup exists. A removed row unmounts its disclosure and
 restores dialog isolation. Opening details adds no API/history read, collector,
 permission, backup/guest operation or polling timer. Dialog machinery and
 content are mounted only when opened; existing freshness thresholds and source

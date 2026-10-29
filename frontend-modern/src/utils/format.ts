@@ -340,10 +340,11 @@ export function getBackupInfo(
   thresholds?: BackupThresholds,
   now: number | Date = Date.now(),
 ): BackupInfo {
-  // Only the explicit absence sentinels mean no completed backup was found.
-  // A present but unusable timestamp is uncertainty, not absence or freshness.
+  // These sentinels mean the current inventory reports no completion time,
+  // not that no backup exists or that this guest has never been backed up.
+  // Keep the legacy 'never' key distinct from a present, unusable timestamp.
   if (lastBackup === null || lastBackup === undefined || lastBackup === '' || lastBackup === 0) {
-    return { status: 'never', ageMs: null, ageFormatted: 'Never' };
+    return { status: 'never', ageMs: null, ageFormatted: 'No completed backup reported' };
   }
 
   const timestamp =

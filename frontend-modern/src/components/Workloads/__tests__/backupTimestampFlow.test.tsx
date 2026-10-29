@@ -42,7 +42,11 @@ const valid = '2026-10-04T13:00:00.123456789+02:00';
 const iso = '2026-10-04T11:00:00.123Z';
 const malformed = ['2026-09-31T11:00:00Z', '2026-10-04T11:00:00', '2026-10-04'];
 
-const rawResource = (lastBackup: string, type: 'vm' | 'system-container', running: boolean) => ({
+const rawResource = (
+  lastBackup: string | undefined,
+  type: 'vm' | 'system-container',
+  running: boolean,
+) => ({
   id: 'east-100',
   name: 'backup-time-guest',
   type,
@@ -59,8 +63,12 @@ const rawResource = (lastBackup: string, type: 'vm' | 'system-container', runnin
   },
 });
 
-function mount(transport: 'api' | 'snapshot', type: 'vm' | 'system-container') {
-  let raw = rawResource(malformed[0], type, false);
+function mount(
+  transport: 'api' | 'snapshot',
+  type: 'vm' | 'system-container',
+  initialBackup: string | undefined = malformed[0],
+) {
+  let raw = rawResource(initialBackup, type, false);
   api.json.mockImplementation(() => Promise.resolve({ data: [raw], meta: { totalPages: 1 } }));
   const [snapshot, setSnapshot] = createSignal<Resource[]>([raw as unknown as Resource]);
   let source!: ReturnType<typeof useWorkloads>;
@@ -87,7 +95,7 @@ function mount(transport: 'api' | 'snapshot', type: 'vm' | 'system-container') {
   });
   return {
     source: () => source,
-    update: async (value: string, running = false) => {
+    update: async (value: string | undefined, running = false) => {
       raw = rawResource(value, type, running);
       if (transport === 'snapshot') setSnapshot([raw as unknown as Resource]);
       else await source.refetch();
@@ -116,6 +124,61 @@ afterEach(() => {
 describe.each(['api', 'snapshot'] as const)(
   'backup time through %s resource producer',
   (transport) => {
+    it.each(['vm', 'system-container'] as const)(
+      '[regression] missing %s completion evidence never claims all-time absence or a first backup',
+      async (type) => {
+        const view = mount(transport, type, '');
+        const badge = await screen.findByRole('button', {
+          name: 'Backup status: no completed backup reported',
+        });
+        const details = screen.getByTestId('guest-technical-details') as HTMLDetailsElement;
+        details.open = true;
+        badge.focus();
+        fireEvent.click(badge);
+        const dialog = screen.getByRole('dialog', { name: /^Backup status details/ });
+        const close = within(dialog).getByRole('button', { name: 'Close backup details' });
+        close.focus();
+        for (const value of [undefined, '', '0001-01-01T00:00:00Z']) {
+          for (const running of [true, false]) {
+            await view.update(value, running);
+            await waitFor(() => expect(badge).toHaveTextContent(running ? 'Running' : 'Unknown'));
+            expect(badge).toHaveAccessibleName(/no completed backup reported/);
+            expect(badge.className).toContain(running ? 'blue' : 'yellow');
+            expect(badge.className).not.toMatch(/red|green/);
+            expect(dialog).toHaveTextContent(
+              'No completed backup is reported in the current inventory',
+            );
+            expect(dialog).toHaveTextContent('Missing data does not mean no backups exist');
+            expect(dialog).not.toHaveTextContent(/ever|first backup|no completed backup yet/i);
+            expect(dialog.querySelector('time')).toBeNull();
+            expect(backupRow()).toHaveTextContent('No completed backup reported');
+            expect(backupRow().querySelector('td')).toHaveClass('text-amber-700');
+            expect(screen.getByTestId('guest-drawer-overview').textContent).not.toContain('never');
+            expect(
+              within(dialog).queryByRole('link', { name: 'Change when backups count as old' }),
+            ).toBeNull();
+            expect(close).toHaveFocus();
+          }
+        }
+        await view.update(valid);
+        await waitFor(() => expect(badge).toHaveAccessibleName(/fresh/));
+        expect(badge.className).toContain('green');
+        expect(dialog.querySelector('time')).toHaveAttribute('datetime', iso);
+        expect(backupRow().querySelector('time')).toHaveAttribute('datetime', iso);
+        await view.update('');
+        await waitFor(() => expect(badge).toHaveAccessibleName(/no completed backup reported/));
+        expect(dialog.querySelector('time')).toBeNull();
+        expect(backupRow().querySelector('time')).toBeNull();
+        expect(screen.getByRole('dialog', { name: /^Backup status details/ })).toBe(dialog);
+        expect(screen.getByTestId('guest-technical-details')).toBe(details);
+        expect(close).toHaveFocus();
+        fireEvent.click(close);
+        expect(badge).toHaveFocus();
+        if (transport === 'snapshot') expect(api.json).not.toHaveBeenCalled();
+        else expect(api.json).toHaveBeenCalledTimes(9);
+      },
+    );
+
     it.each(['vm', 'system-container'] as const)(
       '[regression] keeps malformed %s evidence unknown through live recovery and recurrence',
       async (type) => {
@@ -178,7 +241,7 @@ describe.each(['api', 'snapshot'] as const)(
       const badge = await screen.findByRole('button', { name: /^Backup status:/ });
       for (const value of ['', '0001-01-01T00:00:00Z', '0001-01-01T00:00:00.000000000Z']) {
         await view.update(value);
-        await waitFor(() => expect(badge).toHaveTextContent('None'));
+        await waitFor(() => expect(badge).toHaveTextContent('Unknown'));
         expect(view.source().workloads()[0].lastBackup).toBe(0);
       }
       await view.update('2026-10-04T04:00:00-07:00');

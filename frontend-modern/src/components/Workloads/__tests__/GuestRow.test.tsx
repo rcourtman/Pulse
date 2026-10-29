@@ -3669,10 +3669,38 @@ describe('backup disclosures keep completion separate from guest safety', () => 
 
   function openBackup(backupColumn: boolean) {
     fireEvent.click(
-      screen.getByRole('button', { name: backupColumn ? /^Backup status:/ : /^Last backup:/ }),
+      screen.getByRole('button', {
+        name: backupColumn ? /^Backup status:/ : /^(Last backup:|No completed backup reported$)/,
+      }),
     );
     return screen.getByRole('dialog');
   }
+
+  it.each([true, false])(
+    'keeps missing backup evidence separate from uncertain guest reads, column=%s',
+    (backupColumn) => {
+      render(() => (
+        <table>
+          <tbody>
+            <GuestRow
+              guest={makeGuest({ lastBackup: 0, diskStatusReason: 'prev-agent-timeout' })}
+              visibleColumnIds={backupColumn ? ['name', 'backup'] : ['name']}
+            />
+          </tbody>
+        </table>
+      ));
+      const dialog = openBackup(backupColumn);
+      expect(dialog).toHaveTextContent('Missing data does not mean no backups exist');
+      expect(dialog).not.toHaveTextContent(/No backup has ever|the first backup/i);
+      expect(dialog.querySelector('time')).toBeNull();
+      expect(dialog).toHaveTextContent('Guest-agent reads: Deferred');
+      expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
+      expect(within(dialog).getByRole('link', { name: 'Backup safety guidance' })).toHaveAttribute(
+        'href',
+        '/docs/VM_DISK_MONITORING',
+      );
+    },
+  );
 
   it.each([true, false])(
     'keeps the same open evidence truthful through lock, uncertain completion and recovery, column=%s',

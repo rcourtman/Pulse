@@ -339,12 +339,12 @@ describe('getBackupInfo', () => {
     expect(getBackupInfo(null)).toEqual({
       status: 'never',
       ageMs: null,
-      ageFormatted: 'Never',
+      ageFormatted: 'No completed backup reported',
     });
     expect(getBackupInfo(undefined)).toEqual({
       status: 'never',
       ageMs: null,
-      ageFormatted: 'Never',
+      ageFormatted: 'No completed backup reported',
     });
   });
 
@@ -357,7 +357,7 @@ describe('getBackupInfo', () => {
     expect(getBackupInfo(0)).toEqual({
       status: 'never',
       ageMs: null,
-      ageFormatted: 'Never',
+      ageFormatted: 'No completed backup reported',
     });
   });
 

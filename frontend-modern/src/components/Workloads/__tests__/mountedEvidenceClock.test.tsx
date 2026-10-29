@@ -75,8 +75,8 @@ describe('mounted workload evidence clock', () => {
     expect(running).toHaveAccessibleName(/last completed backup 2 hours ago/);
     expect(screen.getByRole('button', { name: /invalid timestamp/ })).toHaveTextContent('Unknown');
     expect(
-      screen.getByRole('button', { name: 'Backup status: no backup found' }),
-    ).toHaveTextContent('None');
+      screen.getByRole('button', { name: 'Backup status: no completed backup reported' }),
+    ).toHaveTextContent('Unknown');
     expect(screen.getAllByRole('button')).toHaveLength(3);
     cleanup();
     expect(vi.getTimerCount()).toBe(0);
