@@ -1,6 +1,7 @@
 # 🐳 Docker Guide
 
-Pulse is distributed as a lightweight, Alpine-based Docker image.
+Pulse is distributed as an Alpine-based Docker image. Image storage and Pulse's
+persistent data are separate; see [image size and disk use](#image-size-and-disk-use).
 
 > **Paid Pulse Pro / Relay / legacy customers:** The public `rcourtman/pulse`
 > Docker image is the community build. It can accept an activation key, but it
@@ -70,6 +71,46 @@ community image or, for eligible paid customers, the private Pulse Pro image
 shown on <https://pulserelay.pro/download.html>.
 
 ---
+
+## Image size and disk use
+
+A registry download, a local image and a container's data do not measure the
+same storage. Before comparing sizes, keep the exact image reference or digest,
+platform (for example, `linux/amd64` or `linux/arm64`), displayed units and the
+tool's measurement label together. A mutable tag such as `latest` is not an
+immutable comparison, and a multi-platform image index is not one platform's
+image.
+
+| Reading | What it measures | What it does not establish |
+| --- | --- | --- |
+| Registry or pull download size | Usually the compressed layers for the selected platform; cached layers may not need downloading again | The unpacked local image size or space used by Pulse's data |
+| Local image size | The image's stored layers, with accounting depending on the Docker version and image store | Exclusive disk use: layers can be shared between images and tags, and some stores retain both compressed and unpacked content |
+| Container writable-layer size | Changes made in that container above the image | Mounted volume or bind-mount contents; it is not the image's download size |
+| Pulse's mounted `/data` | Persistent configuration, credentials and retained history in the deployment's volume or bind mount | Image size; replacing an image does not shrink or back up this data |
+
+Image layers are retained even when a later layer replaces a file or changes
+its ownership. The final visible filesystem can therefore be smaller than the
+stored image. Conversely, adding the sizes of several local tags can count
+shared layers more than once. Keep **GB** (decimal) and **GiB** (binary), or a
+tool's rounded **MB** label, distinct; do not infer a leak or a reduction from
+unmatched readings.
+
+Use details already available in your deployment manager. The
+[update checks](#-updates) show a narrow, read-only way to identify a container's
+configured image and image ID; a Compose file or a pulled tag alone does not
+establish which image the container is running. Existing observations are enough
+for a report: include the size and its label, image/platform if known, and
+whether it concerns the image, writable layer or persistent data. Unknown is
+valid; do not pull or build another image, recreate a container or export full
+inspect/Compose output just to complete the comparison.
+
+**Do not prune images, delete volumes or clear `/data` to diagnose image size.**
+Keep the previous image and consistent data backup needed for
+[update recovery](#-updates). An image-layer repair does not reclaim old images,
+shrink retained history or establish how much space an installed update will
+free. For unexpected ongoing writes or growth, use the separate
+[CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth),
+without changing retention or restarting to obtain a smaller reading.
 
 ## ⚙️ Configuration
 
