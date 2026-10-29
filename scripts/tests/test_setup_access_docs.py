@@ -324,11 +324,13 @@ class MetricsAccessDocsHTTPTest(unittest.TestCase):
             self.assertEqual(len(list((home / ".config/pulse").glob("api-response.*"))), 3)
 
     def test_query_types_match_current_handler_and_both_references(self):
-        expected = {"node", "storage", "agent", "disk", "k8s", "vm", "system-container",
-                    "oci-container", "app-container", "docker-host"}
+        expected = {"node", "storage", "agent", "disk", "k8s", "pod", "k8s-cluster", "k8s-node",
+                    "k8s-deployment", "vm", "system-container", "oci-container", "app-container",
+                    "docker-host"}
         handler = (ROOT / "internal/api/router.go").read_text().split(
             "func normalizeMetricsHistoryResourceType(", 1)[1].split("\n}\n", 1)[0]
-        self.assertEqual(set(re.findall(r'case "([^"]+)":', handler)), expected)
+        cases = " ".join(re.findall(r'case ([^:\n]+):', handler))
+        self.assertEqual(set(re.findall(r'"([^"]+)"', cases)), expected)
         for name in ("API", "METRICS_HISTORY"):
             with self.subTest(guide=name):
                 parameters = guide(name).split("### History" if name == "API" else

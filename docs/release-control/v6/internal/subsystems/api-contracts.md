@@ -6822,6 +6822,10 @@ id, which can differ from the canonical id requested.
 `normalizeMetricsHistoryResourceType` accepts the registry's Kubernetes
 target kinds (`pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`) as the
 `k8s` store type, so a target passes through unchanged for every caller.
+`docs/API.md` and `docs/METRICS_HISTORY.md`, and their published copies under
+`frontend-modern/public/docs/`, list those kinds beside `k8s`;
+`scripts/tests/test_setup_access_docs.py` pins the documented set to the switch
+and `docsLinks.test.ts` pins the published copies to their sources.
 
 `/api/agent/resource-capabilities/{id}` is the agent-consumable
 structured capability surface for a single resource: the governed

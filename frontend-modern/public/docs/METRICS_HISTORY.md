@@ -238,8 +238,10 @@ These endpoints require authentication with the `monitoring:read` scope.
 
 `GET /api/metrics-store/history` supports:
 
-- `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s`, `vm`,
-  `system-container`, `oci-container`, `app-container`, or `docker-host`
+- `resourceType` (required): `node`, `storage`, `agent`, `disk`, `k8s` (or the
+  Kubernetes kinds `pod`, `k8s-cluster`, `k8s-node`, `k8s-deployment`, which read
+  the same history), `vm`, `system-container`, `oci-container`, `app-container`,
+  or `docker-host`
 - `resourceId` (required): the source identifier used by that chart, not its
   display name (for Proxmox guests this is normally `instance:node:vmid`)
 - `metric` (optional): `cpu`, `memory`, `disk`, etc. Omit to return all metrics for the resource.
