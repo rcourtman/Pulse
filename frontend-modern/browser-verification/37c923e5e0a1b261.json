@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "afc29c6eff39ee43b00d4d2d738b99c7f18f0e21",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useProtectionPostures.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "3cc989fb9cedbe36ed80bb5ae70880a8d8193a9038803eb25ac78c078e278dbb"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "1001-workload initial Checking across six batches, with at most four concurrent reads",
+    "Out-of-order completion never publishes partial health or policy",
+    "Complete first assessment Protected; failed later wave withdraws all verdicts and policy to Unknown while independent evidence stays usable",
+    "Pending isolated Retry guards duplicate activation and preserves Unknown until all six batches complete",
+    "Full retry restores new server-authored Attention; closing consuming tab cancels active reads and never dispatches queued work"
+  ],
+  "interactions": [
+    "Desktop native keyboard disclosure, Retry via Enter, repeated pending Enter, recovery focus hand-off to Coverage",
+    "320px WebKit supported whole-row touch disclosure, Retry tap and deliberate repeated pending touchscreen input",
+    "Actual app-shell scrolling to inspect independent restore origins above bottom navigation",
+    "Real HTTP monitoring-read token/org transport; production App and all built assets hash bound; explicit failure and late-wave cancellation"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "verified_at": "2026-10-29T17:42:54Z",
+  "evidence": {
+    "source_proof": "source-ppaq_xs4",
+    "source_sha": "afc29c6eff39ee43b00d4d2d738b99c7f18f0e21",
+    "receipts": "RECEIPTS.md in lane dossier",
+    "browser_reconciliation": "BROWSER-RECONCILIATION.json in lane dossier",
+    "pixel_review": "NATIVE-PIXEL-REVIEW.json, 14 actual native inspections",
+    "adverse": "Four failed browser wrappers remain failed, with completed desktop segments reconciled and only unfinished segments resumed. sr-only target and assertion semantics reconciled; no source repair or forced interaction."
+  }
+}
