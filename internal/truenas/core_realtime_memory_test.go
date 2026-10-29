@@ -242,10 +242,12 @@ func TestCORE13RealtimeMemoryJourney(t *testing.T) {
 				t.Fatal("native memory lost freshness/independent REST inventory/readings")
 			}
 			records := truenasRecordsFromSnapshot(snapshot, "synthetic-core-connection", nil)
+			registry := unifiedresources.NewRegistry(nil)
+			registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
 			var host *unifiedresources.Resource
-			for _, rec := range records {
-				if rec.Resource.Type == unifiedresources.ResourceTypeAgent {
-					copy := rec.Resource
+			for _, resource := range registry.List() {
+				if resource.Type == unifiedresources.ResourceTypeAgent {
+					copy := resource
 					host = &copy
 				}
 			}
@@ -253,6 +255,9 @@ func TestCORE13RealtimeMemoryJourney(t *testing.T) {
 				t.Fatal("native memory did not reach canonical host")
 			}
 			wantUsed := int64(34277445632 - 1079291904 - 25668261968)
+			if host.ID == "" || len(host.Sources) != 1 || host.Sources[0] != unifiedresources.SourceTrueNAS {
+				t.Fatal("native memory did not acquire canonical source/identity")
+			}
 			if host.Agent.Memory.Cache != 25668261968 || host.Agent.Memory.Free != 1079291904 || host.Agent.Memory.Used != wantUsed || *host.Metrics.Memory.Used != wantUsed {
 				t.Fatalf("canonical memory lost native meaning: %+v %+v", host.Agent.Memory, host.Metrics.Memory)
 			}
