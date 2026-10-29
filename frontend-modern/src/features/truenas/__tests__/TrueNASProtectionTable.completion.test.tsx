@@ -139,9 +139,10 @@ describe('TrueNAS protection completion evidence', () => {
     mountProtection();
     await vi.waitFor(() => expect(row('completed')).not.toBeNull());
 
-    for (const id of ['running', 'started-only', 'failed-started-only', 'unknown', 'invalid']) {
+    for (const id of ['running', 'started-only', 'failed-started-only', 'unknown']) {
       expect(completion(id)).toHaveTextContent(/^\s*-\s*$/);
     }
+    expect(completion('invalid')).toHaveTextContent('Unknown');
     for (const id of ['completed', 'failed-completed']) {
       expect(completion(id)).not.toHaveTextContent(/^\s*-\s*$/);
     }

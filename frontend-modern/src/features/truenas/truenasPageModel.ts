@@ -1,5 +1,6 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { getTrueNASDatasetStateSummary } from '@/utils/truenasDatasetState';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
@@ -633,12 +634,10 @@ const normalizeProtectionOutcome = (value: unknown): TrueNASProtectionStatusBuck
   return 'unknown';
 };
 
-const getRecoveryPointTimestampMs = (point: RecoveryPoint): number => {
-  const parsed = Date.parse(
+const getRecoveryPointTimestampMs = (point: RecoveryPoint): number | undefined =>
+  parseBackupTimestampMs(
     asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt) || '',
   );
-  return Number.isFinite(parsed) ? parsed : 0;
-};
 
 const titleize = (value: string): string =>
   value
@@ -984,7 +983,13 @@ export function sortTrueNASProtectionPoints(points: readonly RecoveryPoint[]): R
     const attentionDelta =
       trueNASProtectionAttentionRank(left) - trueNASProtectionAttentionRank(right);
     if (attentionDelta !== 0) return attentionDelta;
-    const timeDelta = getRecoveryPointTimestampMs(right) - getRecoveryPointTimestampMs(left);
+    const leftTime = getRecoveryPointTimestampMs(left);
+    const rightTime = getRecoveryPointTimestampMs(right);
+    // Unknown dates have no chronological rank, including next to pre-epoch
+    // instants. A malformed completion cannot borrow a valid start instead.
+    if (leftTime === undefined && rightTime !== undefined) return 1;
+    if (rightTime === undefined && leftTime !== undefined) return -1;
+    const timeDelta = (rightTime ?? 0) - (leftTime ?? 0);
     if (timeDelta !== 0) return timeDelta;
     const leftLabel =
       asTrimmedString(left.display?.itemLabel) || asTrimmedString(left.itemRef?.name) || left.id;

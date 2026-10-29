@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### TrueNAS protection consumers do not repair malformed instants
+
+The Protection row, completion sorts and inline Started/Completed fields use the
+shared explicit-zone, calendar-valid backup instant rule. Invalid reported values
+remain Unknown, with the literal evidence retained in details rather than a
+browser-repaired date. Unknowns have no chronological rank; outcome priority,
+absent/active completion handling, identity and policy remain unchanged.
+`TrueNASProtectionTable.test.tsx` drives the query/transport normalizer into these
+consumers with malformed and valid-offset controls; desktop/narrow browser pixels
+and interactions remain required. This is not native protection or guest recovery.
+
+
 ### Native rate instants survive canonical cloning
 
 `MetricValue.ObservedAt` is an optional internal-only sample instant copied with

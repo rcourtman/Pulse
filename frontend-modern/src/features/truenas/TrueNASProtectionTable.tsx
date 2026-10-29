@@ -10,6 +10,7 @@ import {
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   PlatformWindowedRows,
@@ -24,7 +25,6 @@ import {
   createPlatformTableSortState,
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableDateTimeSortValue,
   withPlatformStatusCounts,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
@@ -210,7 +210,7 @@ const getTrueNASProtectionSortValue = (
       return target === '-' ? null : target;
     }
     case 'completed':
-      return getPlatformTableDateTimeSortValue(completionTimestamp(point));
+      return parseBackupTimestampMs(completionTimestamp(point)) ?? null;
     case 'size':
       return typeof point.sizeBytes === 'number' && Number.isFinite(point.sizeBytes)
         ? point.sizeBytes
@@ -234,9 +234,11 @@ const detailBool = (value?: boolean | null): string | null => {
 const detailDateTime = (value?: string | null): string | null => {
   const raw = asTrimmedString(value);
   if (!raw) return null;
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return raw;
-  return parsed.toLocaleString(undefined, {
+  const timestamp = parseBackupTimestampMs(raw);
+  // Keep malformed evidence inspectable without letting Date repair its
+  // calendar or invent a browser-local zone. It is not an observed instant.
+  if (timestamp === undefined) return `Unknown date (${raw})`;
+  return new Date(timestamp).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -596,8 +598,8 @@ export const TrueNASProtectionTable: Component<{
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
                                 <PlatformTableDateTimeValue
-                                  value={completionTimestamp(point)}
-                                  emptyText="-"
+                                  value={parseBackupTimestampMs(completionTimestamp(point))}
+                                  emptyText={completionTimestamp(point) ? 'Unknown' : '-'}
                                 />
                               </TableCell>
                               <TableCell

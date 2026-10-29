@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "5040616ecbcc61f2ccc6e3b20b76ebc6fcb3bfb4",
+  "verified_at": "2026-10-29T06:38:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "e1208a6caeeb279649ee3fcb24b29e32518650ef3d687acfbb376af495511b0f",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "57587fef59483d1110bcb4da9241da19fd4f3e28f31e1312c7e21669916ba744"
+  },
+  "routes": ["/truenas/protection"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "timezone": "UTC"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "browser": "WebKit",
+      "timezone": "America/Los_Angeles"
+    }
+  ],
+  "states": [
+    "Proof-only static preview imports the actual TrueNASProtectionTable, useRecoveryPoints and production transport normalizer with synthetic HTTP recovery-points JSON; no native appliance or original incident recovery is claimed.",
+    "Impossible calendar and timezone-free completions are Unknown in rows; both raw reported detail fields remain inspectable without Date repair. Missing and running finishes remain absent. Valid explicit offsets, leap dates, fractions and pre-epoch instants remain dated.",
+    "Initial attention priority, both completion sort directions with unknowns last, valid/invalid same-record refresh and recurrence retain the open row and detail DOM.",
+    "All four retained desktop/narrow captures were opened with the native image viewer. Unknown labels fit; raw dates wrap within phone details without page overflow. Existing compact valid-date cells may ellipsise; the full localised dates remain visible in details."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter sorts twice with retained focus and announced sort direction, toggles Attention/All, opens and closes native row detail buttons.",
+    "Narrow WebKit keyboard sort checks plus touch interaction with the real Filters disclosure, Attention/All controls and rows; local-time and calendar-invalid details inspected.",
+    "Fixture-triggered refetch uses the actual HTTP query/normalizer to update the same expanded record from invalid to valid and back; outcome and native identity stay unchanged."
+  ],
+  "playwright_version": "1.56.1",
+  "capture_sha256": {
+    "desktop-chromium-unknown.png": "dc055375ccf48df548dae6a03fd0f627b414961b523221ad3b27d9f217bea0f6",
+    "desktop-chromium-valid.png": "3e97a1ff83ffa0f434f7819dde4ac4137ac30ad5d9ef7171615db385b18571ae",
+    "phone-webkit-unknown.png": "27a2e01ce4d1a4866b386e3c81803b613fee62c7a6ad4bc1b4878300284bba8b",
+    "phone-webkit-valid.png": "5e37ade9b5249d86efc25087fe9eed9f2a2ee4a36fd851846b461296bab39463"
+  }
+}
