@@ -1161,6 +1161,91 @@ test("a form-named topic subheading remains actionable inside the declaration", 
   }
 });
 
+test("secondary-topic subheadings cannot override primary version or feedback fields", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const level of [1, 2, 3, 4, 5]) {
+      for (const label of [name => name, name => `**[${name}][field]**`]) {
+        const heading = (depth, name) => `${"#".repeat(depth)} ${label(name)}`;
+        const body = [
+          heading(level, "Additional actionable topics"), "Retain the earlier export context too.",
+          heading(level + 1, "Pulse version"), "6.4.5",
+          heading(level + 1, "Feedback type"), "Bug / regression",
+          heading(level, "Feedback type"), "Documentation issue",
+          heading(level, "Pulse version"), "6.6.0", "",
+          "[field]: https://example.invalid/other-version",
+        ].join(newline);
+        assert.equal(extractPulseVersion("Current report", body), "6.6.0", body);
+        assert.equal(classifyV6FeedbackType(body), "documentation", body);
+        assert.equal(classifyAdditionalActionableTopics(body), true, body);
+      }
+    }
+  }
+});
+
+test("legacy declarations inside secondary topics stay evidence, not primary metadata", () => {
+  const { extractPulseVersion, classifyV6FeedbackType, classifyAdditionalActionableTopics } = triage.internals;
+  for (const copied of ["Pulse version: 6.4.5", "**Pulse Version:** `6.4.5`",
+    "- **Pulse version**: 6.4.5", "#### Pulse version\n6.4.5"]) {
+    const body = ["### Additional actionable topics", copied,
+      "Retain this earlier version in the export too.", "#### Feedback type", "Bug / regression"].join("\n");
+    assert.equal(extractPulseVersion("Current report", body), null, copied);
+    assert.equal(extractPulseVersion("Pulse 6.6.0", body), "6.6.0", copied);
+    assert.equal(classifyV6FeedbackType(body), null, copied);
+    assert.equal(classifyAdditionalActionableTopics(body), true, copied);
+    assert.equal(extractPulseVersion("Pulse 6.6.0",
+      `${body}\n### Pulse version\nunknown`), null, copied);
+  }
+});
+
+test("secondary-topic scope lasts through custom headings and ends at a real form boundary", () => {
+  const { extractPulseVersion, classifyAdditionalActionableTopics } = triage.internals;
+  const body = ["### Additional actionable topics", "None", "### Separate export problem",
+    "Pulse version: 6.4.5", "### Additional context", "Pulse version: 6.6.0"].join("\n");
+  assert.equal(extractPulseVersion("Current report", body), "6.6.0");
+  assert.equal(classifyAdditionalActionableTopics(body), true);
+  // A later genuine topic still belongs to the review; a nested copy must not
+  // consume the peer boundary or prevent a subsequent version correction.
+  const repeated = ["### Additional actionable topics", "None",
+    "#### Additional actionable topics", "Pulse version: 6.4.5",
+    "### Additional actionable topics", "Another recovery problem.",
+    "### Pulse version", "6.6.0"].join("\n");
+  assert.equal(extractPulseVersion("Current report", repeated), "6.6.0");
+  assert.equal(classifyAdditionalActionableTopics(repeated), true);
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  for (const [name, primaryLabels, primaryFields, topicFields, additions, removals] of [
+    ["real primary version", ["bug"], "### Pulse version\n6.6.0",
+      "#### Pulse version\n6.4.5", ["affects-6.6.0"], ["affects-6.4.5"]],
+    ["missing primary version", ["bug"], "### Additional context\nExisting context.",
+      "Pulse version: 6.4.5", ["needs-version-info"], ["affects-6.4.5"]],
+    ["real primary feedback", ["enhancement"], "### Feedback type\nDocumentation issue\n### Pulse version\nunknown",
+      "#### Feedback type\nBug / regression", ["documentation"], []],
+  ]) {
+    test(`${action} triage keeps secondary metadata scoped: ${name}`, async () => {
+      const preserved = [...primaryLabels, "needs-human", "release-blocker",
+        "needs-retest-on-latest", "operator-reviewed"];
+      const body = topic => `### Additional actionable topics\n${topic}\n\n${primaryFields}\n`;
+      const issue = { number: 2936, title: "Current report", comments: 0,
+        body: body(topicFields), labels: [...preserved, "affects-6.4.5"].map(name => ({ name })) };
+      const { github, calls } = createGithub();
+      await syncLabels({ github, core: createCore(), context: createContext({ action, issue,
+        previousBody: action === "edited" ? body("None") : undefined }) });
+      const expected = [...additions, ...(action === "reopened" ? [] : ["needs-decomposition"])].sort();
+      assert.deepEqual(calls.addLabels.map(call => call.labels), [expected]);
+      assert.deepEqual(calls.removeLabel.map(call => call.name), removals);
+      const final = github.currentIssue.labels.map(label => label.name).sort();
+      assert.deepEqual(final, [...preserved, ...expected,
+        ...(removals.length ? [] : ["affects-6.4.5"])].sort());
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+      assert.deepEqual(calls.paginate, []);
+      assert.deepEqual(calls.getEvents, []);
+    });
+  }
+}
+
 test("copied form-named headings cannot hide a later topic", () => {
   const { classifyAdditionalActionableTopics } = triage.internals;
   for (const copied of [

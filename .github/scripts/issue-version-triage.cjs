@@ -6,6 +6,39 @@ const BUG_LABEL = "bug";
 const DOCS_LABEL = "documentation";
 const ENHANCEMENT_LABEL = "enhancement";
 
+// These headings end a secondary-topic field at its own level or above.
+// Deeper headings and legacy field-looking prose remain that topic's evidence,
+// not a second source of primary version or feedback metadata.
+const FORM_FIELD_NAMES = [
+  "Additional actionable topics",
+  "Describe the bug",
+  "Steps or original sequence",
+  "Expected behavior",
+  "Feedback type",
+  "Pulse version",
+  "Last known working Pulse version",
+  "Agent version",
+  "Image tag or digest",
+  "Running Pulse container image tag or digest",
+  "Install path",
+  "Installation type",
+  "OS / environment",
+  "Installer or helper source",
+  "Upgrade attempt and recovery",
+  "License tier",
+  "What happened?",
+  "Steps or original sequence / usage context",
+  "What did you expect instead?",
+  "Additional context",
+  "Logs, screenshots, or diagnostics",
+  "Confirmations",
+  "Problem",
+  "Current workflow",
+  "Desired outcome",
+  "Alternatives considered",
+];
+const FORM_FIELD_KEYS = new Set(FORM_FIELD_NAMES.map((name) => name.toLowerCase()));
+
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -114,6 +147,21 @@ function projectDeclarationLines(tokens) {
       append(token.raw || "");
     }
   }
+  let topicDepth = null;
+  for (const line of lines) {
+    if (topicDepth !== null && line.heading !== null &&
+        line.headingDepth <= topicDepth && FORM_FIELD_KEYS.has(line.heading.toLowerCase())) {
+      topicDepth = null;
+    }
+    if (topicDepth !== null) {
+      // All classifiers consume this same scope decision. Keep visible text
+      // intact for decomposition; mask only its ability to declare metadata.
+      line.declaration = false;
+      line.heading = null;
+    } else if (line.heading?.toLowerCase() === "additional actionable topics") {
+      topicDepth = line.headingDepth;
+    }
+  }
   return lines;
 }
 
@@ -155,33 +203,7 @@ function additionalActionableTopicDeclarations(body, report = parseReportMarkdow
   // Edited reports can move this field beside any other form field. Context
   // from those fields must not invent a topic or reopen a completed review.
   // Deeper subheadings still belong to the topic, even with a familiar name.
-  const values = extractSectionValues(body, "Additional actionable topics", [
-    "Describe the bug",
-    "Steps or original sequence",
-    "Expected behavior",
-    "Feedback type",
-    "Pulse version",
-    "Last known working Pulse version",
-    "Agent version",
-    "Image tag or digest",
-    "Running Pulse container image tag or digest",
-    "Install path",
-    "Installation type",
-    "OS / environment",
-    "Installer or helper source",
-    "Upgrade attempt and recovery",
-    "License tier",
-    "What happened?",
-    "Steps or original sequence / usage context",
-    "What did you expect instead?",
-    "Additional context",
-    "Logs, screenshots, or diagnostics",
-    "Confirmations",
-    "Problem",
-    "Current workflow",
-    "Desired outcome",
-    "Alternatives considered",
-  ], report);
+  const values = extractSectionValues(body, "Additional actionable topics", FORM_FIELD_NAMES, report);
   if (!values.length) return null;
   // A reporter may append a second field rather than replace the first.
   // Assess each independently: neither an earlier None nor a later empty
