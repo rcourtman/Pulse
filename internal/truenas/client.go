@@ -289,7 +289,7 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 	}
 	history := parseSystemMetricHistory(liveReportingResponses(response, end))
 	system := systemInfoFromMetricHistory(history)
-	memory, memoryErr := c.getCORE13RealtimeMemory(ctx)
+	memory, _ := c.getCORE13RealtimeMemory(ctx)
 	if memory != nil {
 		if system == nil {
 			system = &SystemInfo{Telemetry: &SystemTelemetryAvailability{}}
@@ -303,9 +303,6 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 		}
 	}
 	if system == nil {
-		if memoryErr != nil {
-			return nil, memoryErr
-		}
 		return nil, errNoSystemTelemetry
 	}
 	return system, nil

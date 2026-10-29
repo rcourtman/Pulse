@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -203,6 +205,14 @@ func coreMemoryClient(t *testing.T, scenario *coreMemoryScenario, config ClientC
 	}
 	t.Cleanup(server.Close)
 	config.Host = server.URL
+	parsed, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Port, err = strconv.Atoi(parsed.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !scenario.plaintext {
 		sum := sha256.Sum256(server.TLS.Certificates[0].Certificate[0])
 		config.Fingerprint = hex.EncodeToString(sum[:])
