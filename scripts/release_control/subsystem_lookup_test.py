@@ -4394,6 +4394,7 @@ class SubsystemLookupTest(unittest.TestCase):
                     "pkg/pbs/client_http_test.go",
                     "pkg/pbs/client_test.go",
                     "pkg/pbs/host_diagnostics_regression_test.go",
+                    "pkg/pbs/namespace_status_test.go",
                 ],
             )
 
