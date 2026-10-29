@@ -197,6 +197,37 @@ func TestRegistryGenerationComparisonTreatsIdentityListsAsSets(t *testing.T) {
 	}
 }
 
+// A guest that rebooted between two polls stays "running", so its Proxmox
+// uptime reset is the only trace. Ingest stamps the poll time per source, and
+// an older poll published late must not read as a reboot.
+func TestRegistryGenerationComparisonRecordsProxmoxUptimeResetOnce(t *testing.T) {
+	store := NewMemoryStore()
+	polled := time.Date(2026, 10, 29, 3, 0, 0, 0, time.UTC)
+	vm := models.VM{ID: "pve:node:105", Instance: "pve", Node: "node", VMID: 105, Type: "qemu", Status: "running", Name: "guest", Uptime: 86400, LastSeen: polled}
+	generation := func(uptime int64, seen time.Time) *ResourceRegistry {
+		rr := NewRegistry(store)
+		vm.Uptime, vm.LastSeen = uptime, seen
+		rr.IngestSnapshot(models.StateSnapshot{VMs: []models.VM{vm}})
+		return rr
+	}
+
+	before := generation(86400, polled)
+	rebooted := generation(40, polled.Add(time.Minute))
+	recordRegistryChangesBetweenGenerations(before, rebooted, polled.Add(time.Minute), nil, SourcePulseDiff, "")
+	if len(store.changes) != 1 || store.changes[0].Kind != ChangeRestart {
+		t.Fatalf("reboot between polls: %+v", store.changes)
+	}
+
+	newer := generation(100, polled.Add(2*time.Minute))
+	stale := generation(70, polled.Add(90*time.Second))
+	recordRegistryChangesBetweenGenerations(newer, stale, polled.Add(2*time.Minute), nil, SourcePulseDiff, "")
+	for _, change := range store.changes[1:] {
+		if change.Kind == ChangeRestart {
+			t.Fatalf("older poll published late recorded a restart: %+v", store.changes)
+		}
+	}
+}
+
 // TestMemoryStore_RecordActionAuditAppliesRedaction is an integration check
 // at the registry-store boundary. The MemoryStore is the backing store the
 // registry uses in tests and contract examples, and operator-authored audit

@@ -6935,6 +6935,26 @@ serial/machine ID, guest key or actual set member still is. This prevents
 no-op `identity` configuration rows without weakening canonical matching or
 changing the public resource shape. `TestResourceChangeIdentityIgnoresSetOrderAndEmptySlices`
 pins both the quiet and real-change cases.
+Restart detection covers Proxmox nodes, VMs and LXCs and host agents as well
+as Docker and Kubernetes: an uptime that goes backwards between two positive
+readings is a `restart` change (`resourceRestartChanged` in
+`change_emission.go`), because a reboot shorter than the offline threshold
+never flips status and would otherwise leave no history. Proxmox uptime counts
+only on the same node, since a move to another node starts a new process and
+is recorded as a relationship change. Host-agent uptime counts only for the
+same agent ID. QEMU's uptime follows its process, so an in-guest reboot or a
+hard reset of a VM is seen only through a host agent inside the guest (checked
+on 2026-10-29: pulse-ci reported 4.5 days of QEMU uptime 19.6 hours after a
+`qmreset`). A zero reading is a stopped or unreported resource, never a reset.
+The lower reading must also be the newer one by that source's
+`SourceStatus.LastSeen`: snapshots are captured before publication is
+serialized, so an older reading can publish after a newer one. An uptime reset
+that arrives with a status change stays a `state_transition` (its
+`changedFields` name the uptime too), so a host that rebooted while offline
+still records the recovery that availability reporting and
+`resource.status_changed` events read.
+`TestBuildResourceChange_UptimeDropsThatAreNotRestarts` pins the quiet cases and
+`TestBuildResourceChange_RebootWhileOfflineRecordsTheRecovery` the precedence.
 Change emission over registry rebuilds must diff relationships by edge
 identity only: canonical source, canonical target, type, and active state,
 order-insensitive (`relationshipsEquivalent` in `change_emission.go`).
