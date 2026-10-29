@@ -16,6 +16,37 @@
 
 ## Purpose
 
+### Duplicate-free Docker payload layers (29 October 2026)
+
+The server runtime keeps its existing final binary bytes, cross-platform
+agent/helper/runner downloads, detached sidecars, Windows aliases, native-agent
+entrypoint, UID handling and health configuration. Large regular payload files
+must occur in only one retained filesystem layer per path. Source-built copies
+set ownership at COPY; the server sets executable mode there too. Prebuilt
+agent/script modes are normalised in a discarded staging image, then copied
+with final ownership. Signature sidecars remain non-executable. Final alias
+ownership changes touch links only, never recursively copy up regular payload.
+No download set is removed and no published tag is rewritten.
+
+The ordinary `Container packaging` PR/main workflow uses fresh hosted runners,
+read-only repository permission and identical digest-pinned immutable v6.6.0
+fixture archives for base and candidate Dockerfiles on amd64 and arm64. It
+compares final payload hashes, modes, owners and links, preserves runtime
+configuration, rejects repeated payload paths across layers, and exercises the
+real isolated server's health, default/custom UID, every bundled download's
+body/signature headers and native agent entrypoint. It publishes nothing.
+
+Receipts distinguish Docker's uncompressed size, uncompressed layer tar bytes,
+reencoded per-layer gzip bytes and fresh merged-rootfs regular-file bytes.
+Reencoding is not the registry's original transfer size; mutable container data
+and volumes are not image bytes. Source/mode/inventory unit controls and a green
+workflow definition do not establish real image savings or reporter recovery.
+Inspect both actual CI receipts, runtime results and owned cleanup before using
+a measurement. The fixed older application payload tests packaging equivalence,
+not the proposed application's runtime or next release's exact image size.
+`TestContainerPackagingProofIsReadOnlyAndSamePayload` and the normally discovered
+`test_container_packaging.py` preserve this boundary and its failure controls.
+
 ### OIDC JOSE security graph (28 October 2026)
 
 The root graph advances only go-jose/v4 from 4.1.4 to 4.1.6 for the reachable

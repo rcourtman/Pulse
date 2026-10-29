@@ -316,9 +316,10 @@ FROM pulse-runtime-foundation AS pulse-runtime-base
 
 ARG TARGETARCH
 
-COPY --from=backend-builder /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
-COPY --from=backend-builder /app/VERSION .
-RUN chmod +x ./pulse && chown pulse:pulse ./pulse ./VERSION
+# Assign metadata while copying: a later chown/chmod layer carries the large
+# binary again even though its contents have not changed.
+COPY --from=backend-builder --chown=pulse:pulse --chmod=0755 /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
+COPY --from=backend-builder --chown=pulse:pulse /app/VERSION .
 
 # Exact-candidate runtime base. release_payload is a named BuildKit context
 # produced from the verified linux-amd64 and linux-arm64 release archives.
@@ -326,9 +327,8 @@ FROM pulse-runtime-foundation AS prebuilt-runtime-base
 
 ARG TARGETARCH
 
-COPY --from=release_payload /${TARGETARCH:-amd64}/bin/pulse ./pulse
-COPY --from=release_payload /${TARGETARCH:-amd64}/VERSION .
-RUN chmod +x ./pulse && chown pulse:pulse ./pulse ./VERSION
+COPY --from=release_payload --chown=pulse:pulse --chmod=0755 /${TARGETARCH:-amd64}/bin/pulse ./pulse
+COPY --from=release_payload --chown=pulse:pulse /${TARGETARCH:-amd64}/VERSION .
 
 # Hosted tenant runtime excludes embedded release installer and agent artifacts.
 # Those endpoints can still proxy canonical release assets instead of requiring
@@ -345,23 +345,22 @@ FROM pulse-runtime-base AS e2e_runtime
 FROM pulse-runtime-base AS runtime
 
 # Provide installer scripts for HTTP download endpoints
-RUN mkdir -p /opt/pulse/scripts
-COPY scripts/install-container-agent.sh /opt/pulse/scripts/install-container-agent.sh
-COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
-COPY --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh
-COPY --from=release-assets-builder /app/rendered-installers/install.sh.sig /opt/pulse/scripts/install.sh.sig
-COPY --from=release-assets-builder /app/rendered-installers/install.sh.sshsig /opt/pulse/scripts/install.sh.sshsig
-COPY --from=release-assets-builder /app/rendered-installers/install.ps1 /opt/pulse/scripts/install.ps1
-COPY --from=release-assets-builder /app/rendered-installers/install.ps1.sig /opt/pulse/scripts/install.ps1.sig
-COPY --from=release-assets-builder /app/rendered-installers/install.ps1.sshsig /opt/pulse/scripts/install.ps1.sshsig
-RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1
+RUN mkdir -p /opt/pulse/scripts /opt/pulse/bin && \
+    chown pulse:pulse /opt/pulse /opt/pulse/scripts /opt/pulse/bin
+COPY --chown=pulse:pulse --chmod=0755 scripts/install-container-agent.sh /opt/pulse/scripts/install-container-agent.sh
+COPY --chown=pulse:pulse --chmod=0755 scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
+COPY --chown=pulse:pulse --chmod=0755 --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh
+COPY --chown=pulse:pulse --from=release-assets-builder /app/rendered-installers/install.sh.sig /opt/pulse/scripts/install.sh.sig
+COPY --chown=pulse:pulse --from=release-assets-builder /app/rendered-installers/install.sh.sshsig /opt/pulse/scripts/install.sh.sshsig
+COPY --chown=pulse:pulse --chmod=0755 --from=release-assets-builder /app/rendered-installers/install.ps1 /opt/pulse/scripts/install.ps1
+COPY --chown=pulse:pulse --from=release-assets-builder /app/rendered-installers/install.ps1.sig /opt/pulse/scripts/install.ps1.sig
+COPY --chown=pulse:pulse --from=release-assets-builder /app/rendered-installers/install.ps1.sshsig /opt/pulse/scripts/install.ps1.sshsig
 
 # Copy all binaries for download endpoint
-RUN mkdir -p /opt/pulse/bin
 
 # Main pulse server binary (for validation) - copy both architectures
-COPY --from=backend-builder /app/pulse-linux-amd64 /opt/pulse/bin/pulse-linux-amd64
-COPY --from=backend-builder /app/pulse-linux-arm64 /opt/pulse/bin/pulse-linux-arm64
+COPY --chown=pulse:pulse --from=backend-builder /app/pulse-linux-amd64 /opt/pulse/bin/pulse-linux-amd64
+COPY --chown=pulse:pulse --from=backend-builder /app/pulse-linux-arm64 /opt/pulse/bin/pulse-linux-arm64
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         ln -s pulse-linux-arm64 /opt/pulse/bin/pulse; \
     else \
@@ -369,7 +368,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi
 
 # Unified agent binaries (all platforms and architectures) plus detached signatures
-COPY --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/
+COPY --chown=pulse:pulse --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/
 # Create complete binary/signature aliases for Windows without .exe extension.
 # The download handler resolves this name and reads detached sidecars beside it.
 RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
@@ -381,7 +380,7 @@ RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64
     ln -s pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386 && \
     ln -s pulse-agent-windows-386.exe.sig /opt/pulse/bin/pulse-agent-windows-386.sig && \
     ln -s pulse-agent-windows-386.exe.sshsig /opt/pulse/bin/pulse-agent-windows-386.sshsig && \
-    chown -R pulse:pulse /opt/pulse
+    find /opt/pulse/bin -maxdepth 1 -type l -exec chown -h pulse:pulse {} +
 
 # Arch-resolved /usr/local/bin/pulse-agent so the helm chart's agent workload
 # and `docker run rcourtman/pulse --entrypoint /usr/local/bin/pulse-agent`
@@ -397,21 +396,28 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
         ln -s /opt/pulse/bin/pulse-agent-linux-amd64 /usr/local/bin/pulse-agent; \
     fi
 
+# Normalise executable metadata outside the runtime's retained layers. The
+# agent glob includes detached sidecars: COPY --chmod on that glob would make
+# signatures executable too. Keep every candidate byte and sidecar unchanged.
+FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS prebuilt-downloads
+
+COPY --from=release_payload /amd64/scripts/ /payload/scripts/
+COPY --from=release_payload /amd64/bin/pulse-agent-* /payload/bin/
+COPY --from=release_payload /amd64/bin/pulse /payload/bin/pulse-linux-amd64
+COPY --from=release_payload /arm64/bin/pulse /payload/bin/pulse-linux-arm64
+RUN chmod 755 /payload/scripts/*.sh /payload/scripts/*.ps1 && \
+    find /payload/bin -maxdepth 1 -type f -name 'pulse-agent-*' \
+        ! -name '*.sig' ! -name '*.sshsig' -exec chmod 755 {} +
+
 # Release qualification and publication target assembled from the immutable
-# candidate rather than recompiling source inside Docker.
+# candidate rather than recompiling source inside Docker. A single final copy
+# sets ownership without another layer containing the complete download set.
 FROM prebuilt-runtime-base AS runtime_prebuilt
 
 ARG TARGETARCH
 
-RUN mkdir -p /opt/pulse/scripts /opt/pulse/bin
-COPY --from=release_payload /amd64/scripts/ /opt/pulse/scripts/
-COPY --from=release_payload /amd64/bin/pulse-agent-* /opt/pulse/bin/
-COPY --from=release_payload /amd64/bin/pulse /opt/pulse/bin/pulse-linux-amd64
-COPY --from=release_payload /arm64/bin/pulse /opt/pulse/bin/pulse-linux-arm64
-RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1 && \
-    find /opt/pulse/bin -maxdepth 1 -type f -name 'pulse-agent-*' \
-        ! -name '*.sig' ! -name '*.sshsig' -exec chmod 755 {} + && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
+COPY --from=prebuilt-downloads --chown=pulse:pulse /payload/ /opt/pulse/
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
         ln -sf pulse-linux-arm64 /opt/pulse/bin/pulse; \
         ln -sf /opt/pulse/bin/pulse-agent-linux-arm64 /usr/local/bin/pulse-agent; \
     else \
@@ -427,7 +433,7 @@ RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1 && \
     ln -sf pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386 && \
     ln -sf pulse-agent-windows-386.exe.sig /opt/pulse/bin/pulse-agent-windows-386.sig && \
     ln -sf pulse-agent-windows-386.exe.sshsig /opt/pulse/bin/pulse-agent-windows-386.sshsig && \
-    chown -R pulse:pulse /opt/pulse
+    find /opt/pulse/bin -maxdepth 1 -type l -exec chown -h pulse:pulse {} +
 
 # Unified Agent image assembled from the same immutable candidate payload.
 FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS agent_runtime_prebuilt

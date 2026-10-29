@@ -639,10 +639,11 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 
 	for _, needle := range []string{
 		"FROM pulse-runtime-foundation AS prebuilt-runtime-base",
-		"COPY --from=release_payload /${TARGETARCH:-amd64}/bin/pulse ./pulse",
+		"COPY --from=release_payload --chown=pulse:pulse --chmod=0755 /${TARGETARCH:-amd64}/bin/pulse ./pulse",
 		"FROM prebuilt-runtime-base AS runtime_prebuilt",
-		"COPY --from=release_payload /amd64/bin/pulse /opt/pulse/bin/pulse-linux-amd64",
-		"COPY --from=release_payload /arm64/bin/pulse /opt/pulse/bin/pulse-linux-arm64",
+		"COPY --from=prebuilt-downloads --chown=pulse:pulse /payload/ /opt/pulse/",
+		"COPY --from=release_payload /amd64/bin/pulse /payload/bin/pulse-linux-amd64",
+		"COPY --from=release_payload /arm64/bin/pulse /payload/bin/pulse-linux-arm64",
 		"! -name '*.sig' ! -name '*.sshsig' -exec chmod 755 {} +",
 		"FROM alpine:3.24@sha256:",
 		"AS agent_runtime_prebuilt",
@@ -5805,4 +5806,54 @@ func TestProviderMSPStartupWorkflowRequiresMountedDaemonAcceptance(t *testing.T)
 	if !accepted || strings.Contains(string(content), "secrets.") || strings.Contains(string(content), "pull_request_target") {
 		t.Fatal("missing mounted-daemon acceptance or unsafe credential/event scope")
 	}
+}
+
+// Real Docker execution belongs to the fresh hosted PR job, not the worker's
+// daemon. Keep its fixture, exact source, read-only scope and negative controls
+// registered alongside the immutable-candidate packaging contract.
+func TestContainerPackagingProofIsReadOnlyAndSamePayload(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "container-packaging.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Permissions map[string]string
+		Jobs        map[string]struct {
+			RunsOn  string `yaml:"runs-on"`
+			Timeout int    `yaml:"timeout-minutes"`
+			Steps   []struct {
+				Run, Uses string
+				With      map[string]string
+			}
+		}
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" || len(workflow.Jobs) != 1 {
+		t.Fatal("packaging proof must retain read-only permissions and one isolated matrix job")
+	}
+	job := workflow.Jobs["packaging"]
+	if job.RunsOn != "ubuntu-24.04" || job.Timeout != 30 {
+		t.Fatal("packaging proof must use a fresh, bounded hosted runner")
+	}
+	for _, step := range job.Steps {
+		if strings.Contains(step.Run, "secrets.") || strings.Contains(step.Uses, "login-action") ||
+			strings.Contains(step.Run, "--push") || strings.Contains(step.Run, "workflow run") {
+			t.Fatal("packaging proof must not publish or acquire a mutation credential")
+		}
+	}
+	assertFileContainsAll(t, repoFile(".github", "workflows", "container-packaging.yml"),
+		"arch: [amd64, arm64]", "persist-credentials: false", "fetch-depth: 0",
+		"python3 scripts/tests/test_container_packaging.py", "sha256sum --check",
+		"593d9422caa52286ab22ad332e5990ccd515f84f7496853c577cfccab162a0b8",
+		"a39e0ff47c825b58bc9e93ee9ded20544cd812202a923a1ca257b00b91db6900",
+		`--base "$BASE_SHA" --arch "$ARCH"`, "if-no-files-found: error",
+	)
+	assertFileContainsAll(t, repoFile("scripts", "test-container-packaging.py"),
+		`"--target", "runtime_prebuilt"`, `"--network", "none"`,
+		`compare(before["payload_rootfs"], after["payload_rootfs"])`,
+		`no_payload_copyups(after["layers"])`, `records["runtime"] = runtime_checks`,
+		`records["result"] = "failed"`, `"merged_rootfs_regular_file_bytes"`,
+	)
 }
