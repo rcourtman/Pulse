@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### PBS snapshot group contradictions cannot renew recovery evidence
+
+Every returned PBS snapshot must belong to its exact requested kind/opaque ID,
+and each native snapshot time may occur only once within that group response.
+The PBS client rejects an ambiguous response as a whole, including invalid rows
+beyond the live retention cap. Existing malformed-read handling retains accepted
+raw/history evidence without cache or point renewal, marks collection partial
+rather than complete or access-denied, and never reconciles absence from that
+read. Independent readable namespaces remain usable. Only ordinary valid reads
+restore complete evidence; explicit empty arrays still reconcile confirmed
+absence. No guest, backup, restore, retention policy, access or schema changes.
+
+The normal-suite client `backup_snapshot_identity_test.go` and collector
+`pbs_snapshot_identity_test.go` cover exact subjects, opaque host IDs, duplicates,
+cold/warm VM/CT reads, historical preservation, cache/retry, independent scope,
+valid recovery and authoritative emptiness. Desktop/narrow browser proof must
+consume actual collector outputs through Backups inventory/posture clients,
+inspect retained evidence, uncertainty, recurrence and recovery with keyboard
+and touch. This proves truthful inspection, not original guest/native recovery.
+
+
 ### Fleet protection reads bound their request fan-out
 
 Coverage reads keep the existing 200-subject batch size and issue at most four

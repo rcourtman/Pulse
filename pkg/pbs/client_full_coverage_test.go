@@ -620,7 +620,7 @@ func TestClient_ListBackupSnapshots(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{
 			"data": []BackupSnapshot{
-				{BackupTime: 12345},
+				{BackupType: "vm", BackupID: "100", BackupTime: 12345},
 			},
 		})
 	})
@@ -630,7 +630,7 @@ func TestClient_ListBackupSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListBackupSnapshots failed: %v", err)
 	}
-	if len(snaps) != 1 || snaps[0].BackupTime != 12345 {
+	if len(snaps) != 1 || snaps[0].BackupType != "vm" || snaps[0].BackupID != "100" || snaps[0].BackupTime != 12345 {
 		t.Errorf("Unexpected snapshots: %v", snaps)
 	}
 }
@@ -650,7 +650,7 @@ func TestClient_ListAllBackups(t *testing.T) {
 		if strings.HasSuffix(r.URL.Path, "/snapshots") {
 			json.NewEncoder(w).Encode(map[string]any{
 				"data": []BackupSnapshot{
-					{BackupTime: 12345},
+					{BackupType: "vm", BackupID: "100", BackupTime: 12345},
 				},
 			})
 			return
@@ -667,8 +667,11 @@ func TestClient_ListAllBackups(t *testing.T) {
 	if len(results) != 2 {
 		t.Errorf("Expected 2 namespaces, got %d", len(results))
 	}
-	if len(results["ns1"]) != 1 {
-		t.Errorf("Expected 1 snapshot in ns1, got %d", len(results["ns1"]))
+	for _, namespace := range []string{"ns1", "ns2"} {
+		snapshots := results[namespace]
+		if len(snapshots) != 1 || snapshots[0].BackupType != "vm" || snapshots[0].BackupID != "100" || snapshots[0].BackupTime != 12345 {
+			t.Errorf("Unexpected snapshots in %s: %+v", namespace, snapshots)
+		}
 	}
 }
 
