@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +38,14 @@ type MonitorAdapter struct {
 	// changeObserver hears each live change after the store accepted it.
 	// Guarded by mu.
 	changeObserver ResourceChangeObserver
+
+	// restartBaseline maps each resource the change history recorded before
+	// this process's first diff to its last recorded state. A resource's first
+	// appearance in this run is compared with that state rather than with
+	// nothing, so restarting or updating Pulse does not record the whole fleet
+	// as new. Guarded by mutationMu.
+	restartBaseline       map[string]string
+	restartBaselineLoaded bool
 }
 
 // ResourceChangeObserver is told about a change the adapter just recorded,
@@ -603,7 +612,7 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 		occ := snapshot.LastUpdate
 		occurredAt = &occ
 	}
-	recorded := recordRegistryChangesBetweenGenerations(registry, rebuilt, rebuiltAt, occurredAt, SourcePulseDiff, "")
+	recorded := recordRegistryChangesBetweenGenerationsSkipping(registry, rebuilt, rebuiltAt, occurredAt, SourcePulseDiff, "", a.restartRediscoveryFilterLocked(registry.store))
 	rebuilt.PersistIdentityPins()
 
 	a.mu.Lock()
@@ -616,6 +625,55 @@ func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, re
 	// After the swap, so an observer reading the adapter sees the generation
 	// that produced the change.
 	a.notifyChanges(recorded)
+}
+
+// restartRediscoveryFilterLocked returns the skip filter for a registry diff.
+// A resource's first appearance in this run is a "resource discovered" change
+// built against an empty generation; for a resource the history already knew
+// it becomes:
+//   - nothing, when its last recorded state matches (or none was recorded);
+//   - a transition from its last recorded state, when that state changed while
+//     Pulse was stopped;
+//   - the discovery unchanged, when it was last recorded as removed.
+//
+// The resource then leaves the baseline, so later changes record normally.
+// The baseline is read from store on the first diff. Callers must hold
+// mutationMu.
+func (a *MonitorAdapter) restartRediscoveryFilterLocked(store ResourceStore) func(*ResourceChange) bool {
+	if !a.restartBaselineLoaded {
+		a.restartBaselineLoaded = true
+		if reader, ok := store.(lastResourceStateReader); ok {
+			states, err := reader.LastResourceStates()
+			if err != nil {
+				log.Printf("unifiedresources: cannot read change history before the first diff; this run may record known resources as discovered: %v", err)
+			}
+			if len(states) > 0 {
+				a.restartBaseline = states
+			}
+		}
+	}
+	if len(a.restartBaseline) == 0 {
+		return nil
+	}
+	return func(change *ResourceChange) bool {
+		id := CanonicalResourceID(change.ResourceID)
+		last, known := a.restartBaseline[id]
+		if !known {
+			return false
+		}
+		delete(a.restartBaseline, id)
+		if change.Kind != ChangeStateTransition || change.From != "absent" || last == "absent" {
+			return false
+		}
+		if last == "" || last == change.To {
+			return true
+		}
+		change.From = last
+		change.OccurredAt = nil
+		change.Reason = "resource state changed while Pulse was stopped"
+		change.Metadata = map[string]any{"changeType": "state_changed_while_stopped", "changedFields": []string{"status"}}
+		return false
+	}
 }
 
 // ShouldSkipAPIPolling returns true when agent coverage indicates API
@@ -822,7 +880,7 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 	before := registry.List()
 	registry.IngestRecordsWithStaleThresholds(source, records, thresholds)
 	rebuiltAt := time.Now().UTC()
-	recorded := recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
+	recorded := recordRegistryChangesSkipping(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source), a.restartRediscoveryFilterLocked(registry.store))
 	registry.PersistIdentityPins()
 	a.mu.Lock()
 	a.lastRebuiltAt = rebuiltAt

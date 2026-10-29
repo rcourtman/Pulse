@@ -2162,6 +2162,84 @@ func parseResourceChangeTimeString(value string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unsupported time value %q", value)
 }
 
+// lastResourceStateReader is the optional store read behind restart
+// continuity. It maps every canonical resource ID the change history holds a
+// record for to the to-state of its newest state transition ("" when it has
+// none). Stores without it make every resource look new after a restart.
+type lastResourceStateReader interface {
+	LastResourceStates() (map[string]string, error)
+}
+
+// LastResourceStates maps each canonical resource ID with at least one
+// recorded change to the to-state of its newest state transition, or "" when
+// it has no state transition. Newest is judged on parsed observation times,
+// because stored timestamps mix text formats; equal times prefer the greater
+// change ID.
+func (s *SQLiteResourceStore) LastResourceStates() (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	states := make(map[string]string)
+	idRows, err := s.db.Query(`SELECT DISTINCT canonical_id FROM resource_changes`)
+	if err != nil {
+		return nil, fmt.Errorf("read changed resources: %w", err)
+	}
+	for idRows.Next() {
+		var id string
+		if err := idRows.Scan(&id); err != nil {
+			idRows.Close()
+			return nil, fmt.Errorf("scan changed resource: %w", err)
+		}
+		states[id] = ""
+	}
+	if err := idRows.Err(); err != nil {
+		idRows.Close()
+		return nil, fmt.Errorf("read changed resources: %w", err)
+	}
+	idRows.Close()
+
+	rows, err := s.db.Query(`SELECT canonical_id, COALESCE(to_state, ''), `+s.resourceChangesObservedAtExpr()+`, id FROM resource_changes WHERE kind = ?`, string(ChangeStateTransition))
+	if err != nil {
+		return nil, fmt.Errorf("read last resource states: %w", err)
+	}
+	defer rows.Close()
+	newest := make(map[string]resourceStateMark, len(states))
+	for rows.Next() {
+		var canonicalID, state, changeID string
+		var observedRaw any
+		if err := rows.Scan(&canonicalID, &state, &observedRaw, &changeID); err != nil {
+			return nil, fmt.Errorf("scan last resource state: %w", err)
+		}
+		observedAt, err := parseResourceChangeTime(observedRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse resource change time: %w", err)
+		}
+		mark := resourceStateMark{observedAt: observedAt, changeID: changeID}
+		if current, ok := newest[canonicalID]; ok && !mark.newerThan(current) {
+			continue
+		}
+		newest[canonicalID] = mark
+		states[canonicalID] = state
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read last resource states: %w", err)
+	}
+	return states, nil
+}
+
+// resourceStateMark orders state transitions for LastResourceStates.
+type resourceStateMark struct {
+	observedAt time.Time
+	changeID   string
+}
+
+func (m resourceStateMark) newerThan(other resourceStateMark) bool {
+	if !m.observedAt.Equal(other.observedAt) {
+		return m.observedAt.After(other.observedAt)
+	}
+	return m.changeID > other.changeID
+}
+
 func (s *SQLiteResourceStore) CountRecentChanges(canonicalID string, since time.Time) (int, error) {
 	return s.CountRecentChangesFiltered(canonicalID, since, ResourceChangeFilters{})
 }
@@ -3898,6 +3976,36 @@ func (m *MemoryStore) recordChangeLocked(change ResourceChange) error {
 	}
 	m.changes = append(m.changes, change)
 	return nil
+}
+
+// LastResourceStates maps each canonical resource ID with at least one
+// recorded change to the to-state of its newest state transition, or "" when
+// it has no state transition. Equal times prefer the greater change ID, as the
+// SQLite store does.
+func (m *MemoryStore) LastResourceStates() (map[string]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	states := make(map[string]string, len(m.changes))
+	newest := make(map[string]resourceStateMark, len(m.changes))
+	for _, change := range m.changes {
+		id := CanonicalResourceID(change.ResourceID)
+		if id == "" {
+			continue
+		}
+		if _, known := states[id]; !known {
+			states[id] = ""
+		}
+		if change.Kind != ChangeStateTransition {
+			continue
+		}
+		mark := resourceStateMark{observedAt: change.ObservedAt, changeID: change.ID}
+		if current, ok := newest[id]; ok && !mark.newerThan(current) {
+			continue
+		}
+		newest[id] = mark
+		states[id] = change.To
+	}
+	return states, nil
 }
 
 func (m *MemoryStore) GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error) {

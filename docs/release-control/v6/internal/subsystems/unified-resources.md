@@ -775,6 +775,29 @@ compares the old and new paths, while
 boundary. The 1,000-resource benchmark is component evidence, not installed
 fleet CPU attribution or a release acceptance claim.
 
+A restart is not a discovery. The first diff after Pulse starts compares
+against an empty generation, so before it the monitor adapter reads each
+resource's last recorded state (`LastResourceStates`, an optional store read:
+the to-state of its newest state transition). A known resource's first
+appearance in the run then records nothing when that state still holds, a
+transition from it marked "resource state changed while Pulse was stopped"
+(no `occurredAt`) when it differs, and an ordinary discovery when it was last
+recorded as removed. After that appearance its changes record normally, and a
+resource first seen while Pulse was down records its discovery. The
+while-stopped transition keeps availability reports' boundary for a resource
+that recovered or failed during the gap, and carries `changedFields: status`
+so the agent event stream announces it like any status change. The newest
+state is chosen on parsed observation times (stored text mixes formats), with
+the greater change ID winning a tie in both stores. Before this, each restart or update
+re-recorded the whole fleet as new (1,776 rows on the mock fleet; now only real
+differences), burying the night's changes in `list_recent_changes`. Removals
+during the gap are still not recorded, and a resource whose rows have all aged
+out of retention, or whose canonical ID changed across the restart (for example
+an identity succession on upgrade), is discovered once more.
+`TestMonitorAdapterRestartDoesNotRediscoverKnownResources` covers memory and
+SQLite stores; `TestLastResourceStatesReadsNewestTransitionAcrossStores` pins
+the read.
+
 ### Node-indexed guest parent resolution during ingest — issue #2199
 
 Guest ingest resolves each Proxmox guest's parent node, and that lookup can

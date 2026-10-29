@@ -4554,3 +4554,57 @@ func assertSharedPageCacheBound(t *testing.T, name string, conn interface {
 		t.Fatalf("%s: cache_size = %d, want %d from pdb.PageCachePragma", name, size, -pdb.MaxPageCacheKiB)
 	}
 }
+
+func TestLastResourceStatesReadsNewestTransitionAcrossStores(t *testing.T) {
+	sqlite, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlite.Close() })
+	at := time.Date(2026, 10, 29, 3, 0, 0, 0, time.UTC)
+	changes := []ResourceChange{
+		{ResourceID: "vm-a", ObservedAt: at, Kind: ChangeStateTransition, From: "absent", To: "online"},
+		{ResourceID: "vm-a", ObservedAt: at.Add(2 * time.Minute), Kind: ChangeStateTransition, From: "online", To: "offline"},
+		{ResourceID: "vm-a", ObservedAt: at.Add(3 * time.Minute), Kind: ChangeAlertFired},
+		{ResourceID: "vm-b", ObservedAt: at, Kind: ChangeAlertFired},
+		{ResourceID: "vm-c", ObservedAt: at, Kind: ChangeStateTransition, From: "online", To: "absent"},
+		// Equal times: the greater change ID wins in both stores.
+		{ID: "z", ResourceID: "vm-d", ObservedAt: at, Kind: ChangeStateTransition, From: "absent", To: "online"},
+		{ID: "a", ResourceID: "vm-d", ObservedAt: at, Kind: ChangeStateTransition, From: "online", To: "absent"},
+	}
+	for name, store := range map[string]ResourceStore{"sqlite": sqlite, "memory": NewMemoryStore()} {
+		for i, change := range changes {
+			if change.ID == "" {
+				change.ID = fmt.Sprintf("%s-%d", name, i)
+			} else {
+				change.ID = name + "-" + change.ID
+			}
+			if err := store.RecordChange(change); err != nil {
+				t.Fatalf("%s RecordChange: %v", name, err)
+			}
+		}
+		states, err := store.(lastResourceStateReader).LastResourceStates()
+		if err != nil {
+			t.Fatalf("%s LastResourceStates: %v", name, err)
+		}
+		want := map[string]string{"vm-a": "offline", "vm-b": "", "vm-c": "absent", "vm-d": "online"}
+		if !reflect.DeepEqual(states, want) {
+			t.Fatalf("%s last resource states = %v, want %v", name, states, want)
+		}
+	}
+
+	// Stored timestamps mix text formats; newest is the later instant, not
+	// the greater string.
+	if _, err := sqlite.db.Exec(`INSERT INTO resource_changes (id, canonical_id, observed_at, kind, from_state, to_state, source_type, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"legacy-old", "vm-e", "2026-10-29T03:00:00Z", string(ChangeStateTransition), "online", "offline", string(SourcePulseDiff), string(ConfidenceHigh),
+		"current-new", "vm-e", "2026-10-29 04:00:00 +0000 UTC", string(ChangeStateTransition), "offline", "online", string(SourcePulseDiff), string(ConfidenceHigh)); err != nil {
+		t.Fatalf("insert mixed-format rows: %v", err)
+	}
+	states, err := sqlite.LastResourceStates()
+	if err != nil {
+		t.Fatalf("LastResourceStates: %v", err)
+	}
+	if states["vm-e"] != "online" {
+		t.Fatalf("vm-e last state = %q, want online from the later instant", states["vm-e"])
+	}
+}
