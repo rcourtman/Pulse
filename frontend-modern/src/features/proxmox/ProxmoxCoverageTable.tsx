@@ -308,7 +308,7 @@ function CoverageTaskCandidates(props: { tasks: readonly CoverageTask[] }) {
   });
   return (
     <Show when={props.tasks.length > 0 || retainControl()}>
-      <div class="space-y-2" data-coverage-task-candidates>
+      <div class="@container/task-evidence min-w-0 space-y-2" data-coverage-task-candidates>
         <p class="text-[11px] text-muted whitespace-normal wrap-anywhere" role="status">
           Showing {preview().length} of {props.tasks.length} possible latest tasks.
           <Show when={props.tasks.length === 0}> No uncertain tasks remain in this read.</Show>
@@ -317,8 +317,8 @@ function CoverageTaskCandidates(props: { tasks: readonly CoverageTask[] }) {
           <p class="text-[11px] text-muted whitespace-normal wrap-anywhere">{counts()}</p>
           <Show when={props.tasks.length > preview().length}>
             <p class="text-[11px] text-muted whitespace-normal wrap-anywhere">
-              The preview includes each observed outcome and known or unknown start group. It is not
-              a time order.
+              The preview samples outcomes and known or unknown starts. Full counts include tasks
+              outside the preview. It is not a time order.
             </p>
           </Show>
         </Show>
@@ -327,7 +327,7 @@ function CoverageTaskCandidates(props: { tasks: readonly CoverageTask[] }) {
         <Show when={retainControl()}>
           <button
             type="button"
-            class="rounded-sm px-2 py-1 text-xs font-medium text-accent hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            class="min-h-10 rounded-sm px-2 py-1 text-xs font-medium text-accent hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             aria-disabled={preview().length >= props.tasks.length}
             onClick={() => {
               if (preview().length < props.tasks.length)
@@ -357,14 +357,27 @@ function CoverageTaskCandidates(props: { tasks: readonly CoverageTask[] }) {
                   </p>
                 ),
               },
-              ...preview().map((task) =>
-                buildCoverageTaskSection(
-                  task,
-                  `Possible latest task ${props.tasks.indexOf(task) + 1}`,
-                ),
-              ),
             ]}
           />
+          {/* Keep existing cards when another page is revealed. Rebuilding one
+              large sections array would recreate every previous task as well. */}
+          <div class="grid min-w-0 grid-cols-1 gap-2 @min-[48rem]/task-evidence:grid-cols-2 @min-[64rem]/task-evidence:grid-cols-3">
+            <For each={preview()}>
+              {(task) => (
+                <div class="min-w-0" data-coverage-task-card={task.id}>
+                  <DetailSectionTable
+                    wrapValues
+                    sections={[
+                      buildCoverageTaskSection(
+                        task,
+                        `Possible latest task ${props.tasks.indexOf(task) + 1}`,
+                      ),
+                    ]}
+                  />
+                </div>
+              )}
+            </For>
+          </div>
         </Show>
       </div>
     </Show>

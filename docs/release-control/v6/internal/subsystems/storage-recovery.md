@@ -8453,14 +8453,16 @@ recovery path.
 
 When missing, future or tied start times leave multiple possible latest tasks,
 Coverage initially renders eight task detail cards, not the whole provider
-history. The preview includes a witness of each observed outcome (including
-error text) and known/unknown-start group, preserving the model's deterministic,
+history. The preview samples each failed-or-error-bearing, running, OK and
+other-status group with known/unknown starts, preserving the model's deterministic,
 explicitly non-chronological order. Full-candidate status, error-text and unknown-
 start counts remain visible, and every candidate stays available through an
 explicit eight-at-a-time control without more API reads. Search continues to
 match the complete workload evidence, not just its preview.
 
 Deliberate preview expansion survives ordinary polling of the open workload.
+Existing task cards stay mounted when another page is revealed, rather than
+rebuilding all previously visible cards. Their grid follows the local container.
 The same control retains focus when the list shrinks, becomes ordered or empties;
 its exhausted state is guarded. Opening another workload or reopening the panel
 starts bounded again. No candidate is discarded, no latest task is chosen from

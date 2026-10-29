@@ -372,17 +372,21 @@ describe('bounded uncertain-task inspection', () => {
     mount();
     const panel = await open();
     const more = within(panel).getByRole('button', { name: 'Show 8 more possible latest tasks' });
+    const firstCard = panel.querySelector('[data-coverage-task-card="history-000"]');
+    expect(firstCard).not.toBeNull();
     more.focus();
     for (let expected = 16; expected <= 200; expected += 8) {
       fireEvent.click(more);
       expect(cards(panel)).toHaveLength(expected);
       expect(document.activeElement).toBe(more);
+      expect(panel.querySelector('[data-coverage-task-card="history-000"]')).toBe(firstCard);
     }
     expect(more).toHaveTextContent('All 200 possible latest tasks shown');
     expect(more).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(more);
     expect(cards(panel)).toHaveLength(200);
-    for (const task of tasks) expect(panel).toHaveTextContent(task.id);
+    const content = panel.textContent;
+    for (const task of tasks) expect(content).toContain(task.id);
     expect(api.fetch).toHaveBeenCalledTimes(2);
     expect(api.json).toHaveBeenCalledTimes(1);
   });
