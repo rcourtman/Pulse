@@ -75,6 +75,62 @@ afterEach(() => {
 });
 
 describe('TrueNAS protection refresh evidence', () => {
+  it.each([{}, { data: null }, { data: {} }, { data: [point('unexpected'), { id: 'broken' }] }])(
+    'shows an initial read failure for malformed HTTP-success data (%j), not no activity',
+    async (payload) => {
+      apiFetchJSON.mockResolvedValueOnce(payload);
+      mountProtection();
+      await vi.waitFor(() =>
+        expect(screen.getByText('Could not load TrueNAS protection')).toBeInTheDocument(),
+      );
+      expect(screen.queryByText('No TrueNAS protection activity')).not.toBeInTheDocument();
+      expect(document.querySelector('[data-truenas-protection-row]')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    },
+  );
+
+  it('retains labelled evidence through malformed refreshes and replaces it only with a validated page', async () => {
+    apiFetchJSON.mockResolvedValueOnce({ data: [point('apps')] });
+    const recovery = mountProtection();
+    await expectLoaded();
+    await fireEvent.click(row('apps')!);
+    expect(screen.getByTestId('truenas-protection-detail')).toHaveTextContent('tank/apps');
+
+    for (const payload of [
+      { private: 'private-provider-detail' },
+      { data: null },
+      {
+        data: [
+          point('unexpected'),
+          { ...point('broken'), outcome: { secret: 'private-provider-detail' } },
+        ],
+      },
+      { data: [point('duplicate'), point('duplicate', 'failed')] },
+    ]) {
+      apiFetchJSON.mockResolvedValueOnce(payload);
+      await recovery().refetch({ background: true });
+      expect(notice()).toHaveTextContent('Showing previously loaded events.');
+      expect(row('apps')).not.toBeNull();
+      expect(row('unexpected')).toBeNull();
+      expect(row('duplicate')).toBeNull();
+      expect(screen.getByTestId('truenas-protection-detail')).toHaveTextContent('tank/apps');
+      expect(document.body).not.toHaveTextContent('private-provider-detail');
+      expect(screen.queryByText('No TrueNAS protection activity')).not.toBeInTheDocument();
+    }
+
+    apiFetchJSON.mockResolvedValueOnce({ data: [point('current', 'warning')] });
+    await fireEvent.click(
+      within(notice()).getByRole('button', { name: 'Refresh TrueNAS protection' }),
+    );
+    await vi.waitFor(() => expect(row('current')).not.toBeNull());
+    expect(row('apps')).toBeNull();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    apiFetchJSON.mockResolvedValueOnce({ data: [] });
+    await recovery().refetch({ background: true });
+    expect(screen.getByText('No TrueNAS protection activity')).toBeInTheDocument();
+    expect(document.querySelector('[data-truenas-protection-row]')).toBeNull();
+  });
+
   it('labels retained events after a background failure and keeps their filters and details usable', async () => {
     apiFetchJSON.mockResolvedValueOnce({ data: [point('apps'), point('archive', 'failed')] });
     const recovery = mountProtection();

@@ -39,6 +39,28 @@ const productionSources = (dir: string): string[] =>
   });
 
 describe('recovery transport', () => {
+  it('keeps an unread points page failed until an explicit valid page is received', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ private: 'private-provider-response' });
+    let dispose = () => {};
+    const recovery = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return useRecoveryPoints(() => ({ platform: 'truenas', page: 1, limit: 200 }));
+    });
+    try {
+      await vi.waitFor(() => expect(recovery.response.error).toBeInstanceOf(Error));
+      expect(recovery.points()).toEqual([]);
+      expect((recovery.response.error as Error).message).toBe(
+        'The recovery point response format is invalid.',
+      );
+      apiFetchJSONMock.mockResolvedValueOnce({ data: [] });
+      await recovery.refetch();
+      expect(recovery.points()).toEqual([]);
+      expect(recovery.response.error).toBeNull();
+    } finally {
+      dispose();
+    }
+  });
+
   it('normalizes legacy subject recovery fields onto canonical item fields', () => {
     expect(
       normalizeRecoveryPointsResponse({

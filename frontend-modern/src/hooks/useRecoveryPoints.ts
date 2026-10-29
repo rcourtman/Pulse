@@ -1,10 +1,6 @@
 import { Accessor, createMemo } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
-import type {
-  RecoveryPoint,
-  RecoveryPointsResponse,
-  RecoveryPointsTransportResponse,
-} from '@/types/recovery';
+import type { RecoveryPoint, RecoveryPointsResponse } from '@/types/recovery';
 import { normalizeRecoveryPointsResponse } from '@/utils/recoveryPlatformModel';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 
@@ -69,7 +65,7 @@ async function fetchRecoveryPointsResponse(
   query: RecoveryPointsQuery | undefined,
 ): Promise<RecoveryPointsResponse> {
   const url = buildURL(query);
-  const response = await apiFetchJSON<RecoveryPointsTransportResponse>(url);
+  const response = await apiFetchJSON<unknown>(url);
   return normalizeRecoveryPointsResponse(response);
 }
 

@@ -5996,6 +5996,30 @@ with its reader.
 keys, the result members and the response keys at the type level, and at
 runtime the three parameters that reach the wire and that a backend response's
 meta does not survive the decode.
+
+The points decoder accepts an explicit `data` array only, matching the handler's
+allocated empty slice. Missing, null or non-array collections are failed reads,
+never evidence of absent snapshots or replication. Each page is validated before
+normalization: required row identity/kind/mode/outcome, consumed optional field
+types and unique event IDs must be usable. One malformed row rejects the page;
+no partial list or duplicate-key replacement can masquerade as a complete read.
+Unknown kind/mode/outcome strings, extra fields, legacy subject/provider aliases,
+optional nulls and malformed timestamp strings retain existing presentation
+fallbacks. Date validity remains the consuming surface's responsibility.
+
+`useRecoveryPoints` reads unknown wire data through that boundary. Initial format
+failure reaches the existing TrueNAS Protection error/Refresh state; a failed
+refresh keeps the last accepted events with their existing stale-data warning,
+filters and details. Only a validated page clears the warning or replaces those
+events, including a genuine empty array. Permission failures still withdraw
+private rows. Parser errors never include response bodies or source identifiers.
+`recoveryPointsResponse.test.ts`, `recoveryTransport.test.ts` and
+`TrueNASProtectionTable.refresh.test.tsx` cover admission and the consuming
+failure/recovery path. Desktop/narrow browser proof must exercise malformed
+HTTP-success responses through the real client and table and inspect pixels.
+No backend, pagination, retention, permission, provider or guest-operation
+contract changes; this is truthful history inspection, not native recovery.
+
 `useProtectionPostures.ts` holds the same line for `GET /api/recovery/postures`:
 `ProtectionPosturesResponse` carries the posture rows and the policy that the
 Proxmox Backups tab reads, and nothing else. That endpoint also returns its

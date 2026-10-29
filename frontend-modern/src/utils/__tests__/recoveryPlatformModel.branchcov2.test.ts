@@ -198,13 +198,13 @@ describe('recoveryPlatformModel.branchcov2', () => {
   });
 
   describe('normalizeRecoveryPointsResponse', () => {
-    it('coerces non-array data to [] and carries no response-level meta', () => {
-      expect(
+    it('rejects non-array data rather than inventing an empty response', () => {
+      expect(() =>
         normalizeRecoveryPointsResponse({
           data: 'not-an-array',
           meta: { page: NaN, limit: Infinity, total: 'twenty', totalPages: undefined },
         } as unknown as Parameters<typeof normalizeRecoveryPointsResponse>[0]),
-      ).toStrictEqual({ data: [] });
+      ).toThrow('The recovery point response format is invalid.');
     });
   });
 });
