@@ -21,7 +21,7 @@ VERIFY = "Verify backend with real frontend embed"
 
 
 def recipe(source):
-    job = re.search(r"(?ms)^  frontend:\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)", source)
+    job = re.search(r"(?ms)^  frontend-checks:\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)", source)
     if not job:
         raise AssertionError("frontend job missing")
     job = job[1]
@@ -33,10 +33,10 @@ def recipe(source):
         raise AssertionError("duplicate named frontend step")
     order = list(steps)
     required = ["Checkout repository", "Build frontend bundle (with embed copy)",
-                "Check frontend bundle size budget", "Frontend unit tests", GO_SETUP, VERIFY,
+                "Check frontend bundle size budget", GO_SETUP, VERIFY,
                 "Require frontend dependency audit"]
     if any(name not in order for name in required) or [order.index(name) for name in required] != sorted(order.index(name) for name in required):
-        raise AssertionError("same-checkout real build, tests, compiler or audit ordering missing")
+        raise AssertionError("same-checkout real build, compiler or audit ordering missing")
     if sum("uses: actions/checkout@" in step for step in steps.values()) != 1 or "run: make frontend" not in steps[required[1]]:
         raise AssertionError("must use this checkout's production frontend build")
     if re.search(r"^          (ref|repository):", steps[required[0]], re.M):

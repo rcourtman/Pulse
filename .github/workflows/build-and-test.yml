@@ -246,16 +246,16 @@ jobs:
           grep -q '^--- PASS: TestIntegrationProviderPairNetworkIsolation ' \
             "$RUNNER_TEMP/provider-pair-network-test.log"
 
-  frontend:
-    name: Frontend
+  frontend-checks:
+    name: Frontend build and runtime
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    # Everything except the audit runs in ~11m. The audit is now bounded to a
-    # 4 minute wall-clock budget, so 30 leaves real headroom while staying a
-    # meaningful ceiling: an unbounded 40 would have absorbed the 2026-09-04
-    # stall instead of reporting it.
+    # Keep the original bounded audit and build/runtime deadline. Unit proof
+    # follows in isolated file shards instead of one 650-second serial step.
     timeout-minutes: 30
+    outputs:
+      unit_admitted: ${{ steps.unit-admission.outputs.admitted }}
     env:
       FRONTEND_DIR: frontend-modern
 
@@ -338,10 +338,6 @@ jobs:
         working-directory: frontend-modern
         run: npm run check:bundlesize
 
-      - name: Frontend unit tests
-        working-directory: frontend-modern
-        run: npm run test
-
       # Use this checkout's production assets, not another job's embed stub.
       # Keep the existing job deadline, audit and full frontend tests gating.
       - name: Set up Go for real-embed verification
@@ -412,6 +408,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # A failed audit must still permit unit proof, as in the serial job.
+      # Only the unchanged build/size/real-embed/native/runtime gates admit
+      # these shards. A missing output never grants admission.
+      - name: Admit frontend unit shards
+        id: unit-admission
+        run: echo 'admitted=true' >> "$GITHUB_OUTPUT"
+
       # An audit service failure or real advisory stays gating, but it must not
       # suppress formatting, tests, type-checking, or production-build proof.
       - name: Require frontend dependency audit
@@ -423,6 +426,67 @@ jobs:
             echo "::error::The frontend dependency audit failed."
             exit 1
           fi
+
+  frontend-unit:
+    name: Frontend unit tests (${{ matrix.shard }}/4)
+    needs: [changes, frontend-checks]
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-checks.outputs.unit_admitted == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-modern/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend-modern
+        # The unchanged complete audit in frontend-checks owns its verdict.
+        run: npm ci --no-audit
+
+      # Vitest partitions its complete file inventory, preserving the existing
+      # config, isolation and assertions. No test allowlist or changed-file
+      # filter can silently leave part of the suite behind.
+      - name: Frontend unit tests
+        working-directory: frontend-modern
+        run: npm run test -- --shard=${{ matrix.shard }}/4
+
+  # Preserve the required check name; a failed/cancelled/skipped shard or a
+  # failed audit/build/runtime check must never produce a green Frontend.
+  frontend:
+    name: Frontend
+    needs: [changes, frontend-checks, frontend-unit]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require complete frontend proof
+        env:
+          CHANGE_RESULT: ${{ needs.changes.result }}
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
+          CHECKS_RESULT: ${{ needs.frontend-checks.result }}
+          UNIT_RESULT: ${{ needs.frontend-unit.result }}
+        run: |
+          case "$CHANGE_RESULT:$CODE_CHANGED:$CHECKS_RESULT:$UNIT_RESULT" in
+            success:true:success:success)
+              echo "Frontend build, complete audit, runtime and every unit shard passed." ;;
+            success:false:skipped:skipped)
+              echo "Application runtime checks are not applicable to this classified change; no frontend tests ran." ;;
+            *)
+              echo "::error::Frontend proof is incomplete or failed. Inspect changed-area classification, build/audit/runtime and all four unit shards."
+              exit 1 ;;
+          esac
 
   # Reject cross-package test/API incompatibilities before spending seven
   # runners on race tests. This links test binaries but never executes them;
