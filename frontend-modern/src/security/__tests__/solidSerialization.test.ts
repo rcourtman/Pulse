@@ -21,6 +21,13 @@ describe('actual Solid resource serialization consumer', () => {
     'async-suspense',
     'late-stream',
     'script-boundary',
+    'script-boundary-uppercase',
+    'script-boundary-mixed-case',
+    'script-oracle-uppercase',
+    'script-oracle-mixed-case',
+    'script-oracle-quoted-attribute',
+    'script-oracle-comment',
+    'script-oracle-rejects-additional-tags',
     'render-scopes',
     'no-scripts',
   ])('preserves %s on the exact committed graph', (name) => {

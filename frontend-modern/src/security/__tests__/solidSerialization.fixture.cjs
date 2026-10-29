@@ -6,6 +6,7 @@ const { readFileSync } = require('node:fs');
 const { createRequire } = require('node:module');
 const { resolve } = require('node:path');
 const { createContext, runInContext } = require('node:vm');
+const { JSDOM } = require('jsdom');
 const solid = require('solid-js');
 const server = require('solid-js/web');
 const fromServer = createRequire(require.resolve('solid-js/web'));
@@ -57,15 +58,50 @@ function hydrationContext() {
   return { hydration, context };
 }
 
+function scriptContents(html) {
+  // Parse only synthetic HTML, with JSDOM's script execution and resource
+  // loading left disabled. HTML parsing recognises tag casing and quoted
+  // attributes, and does not mistake commented markup for executable scripts.
+  const dom = new JSDOM(html);
+  try {
+    return [...dom.window.document.querySelectorAll('script')].map((script) => script.textContent);
+  } finally {
+    dom.window.close();
+  }
+}
+
+function assertSingleScript(html) {
+  assert.equal(scriptContents(html).length, 1, 'resource HTML must contain exactly one script');
+}
+
 function consumeScripts(html, target = hydrationContext()) {
-  const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+  const scripts = scriptContents(html);
   assert.ok(scripts.length > 0);
-  for (const [, script] of scripts) {
+  for (const script of scripts) {
     // Only synthetic fixture data enters these actual-consumer scripts. This
     // context exposes no process, require, filesystem or network capability.
     runInContext(script, target.context, { timeout: 1000 });
   }
   return target;
+}
+
+async function renderText(text) {
+  return server.renderToStringAsync(
+    () => {
+      const [resource] = solid.createResource(() => ({ text }));
+      return resource().text;
+    },
+    { renderId: 'text-', nonce: 'text-fixture' },
+  );
+}
+
+async function expectScriptBoundary(text) {
+  const html = await renderText(text);
+  assert.ok(!html.includes(text));
+  assertSingleScript(html);
+  const { hydration, context } = consumeScripts(html);
+  assert.equal(hydration.r['text-0'].text, text);
+  assert.equal(context.unexpected, undefined);
 }
 
 function expectFixture(restored) {
@@ -160,19 +196,53 @@ const cases = {
     expectFixture(await hydration.r['stream-0']);
   },
   async 'script-boundary'() {
-    const text = '</script><script>globalThis.unexpected = true</script> & \u2028\u2029';
-    const html = await server.renderToStringAsync(
-      () => {
-        const [resource] = solid.createResource(() => ({ text }));
-        return resource().text;
-      },
-      { renderId: 'text-', nonce: 'text-fixture' },
+    await expectScriptBoundary(
+      '</script><script>globalThis.unexpected = true</script> & \u2028\u2029',
     );
-    assert.ok(!html.includes(text));
-    assert.equal([...html.matchAll(/<script\b/g)].length, 1);
-    const { hydration, context } = consumeScripts(html);
-    assert.equal(hydration.r['text-0'].text, text);
-    assert.equal(context.unexpected, undefined);
+  },
+  async 'script-boundary-uppercase'() {
+    await expectScriptBoundary(
+      '</SCRIPT><SCRIPT>globalThis.unexpected = true</SCRIPT> & \u2028\u2029',
+    );
+  },
+  async 'script-boundary-mixed-case'() {
+    await expectScriptBoundary(
+      '</ScRiPt><sCrIpT>globalThis.unexpected = true</sCrIpT> & \u2028\u2029',
+    );
+  },
+  async 'script-oracle-uppercase'() {
+    const { context } = consumeScripts(
+      '<SCRIPT nonce="case-fixture">globalThis.casing = "upper"</SCRIPT>',
+    );
+    assert.equal(context.casing, 'upper');
+  },
+  async 'script-oracle-mixed-case'() {
+    const { context } = consumeScripts(
+      '<sCrIpT nonce="case-fixture">globalThis.casing = "mixed"</ScRiPt>',
+    );
+    assert.equal(context.casing, 'mixed');
+  },
+  async 'script-oracle-quoted-attribute'() {
+    const { context } = consumeScripts(
+      '<script data-label="a > b">globalThis.quotedAttribute = true</script>',
+    );
+    assert.equal(context.quotedAttribute, true);
+  },
+  async 'script-oracle-comment'() {
+    const { context } = consumeScripts(
+      '<!-- <script>globalThis.commentRan = true</script> -->' +
+        '<script>globalThis.actualScriptRan = true</script>',
+    );
+    assert.equal(context.actualScriptRan, true);
+    assert.equal(context.commentRan, undefined);
+  },
+  async 'script-oracle-rejects-additional-tags'() {
+    const html = await renderText('Safe resource control');
+    assertSingleScript(html);
+    for (const tag of ['script', 'SCRIPT', 'ScRiPt']) {
+      const injected = `${html}<${tag}>globalThis.unexpected = true</${tag}>`;
+      assert.throws(() => assertSingleScript(injected), { actual: 2, expected: 1 });
+    }
   },
   async 'render-scopes'() {
     const target = hydrationContext();
