@@ -580,14 +580,20 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
+	// Presentation-only saves must not discard the live service's pending
+	// login/logout bindings. Compare the effective config, after preservation.
+	presentationOnly := ssoPresentationOnlyUpdate(*existing, updated)
+
 	// Re-initialize SAML provider if applicable
 	if updated.Type == config.SSOProviderTypeSAML && updated.SAML != nil {
 		if updated.Enabled {
 			if err := r.syncSAMLPublicURL(); err != nil {
 				log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to synchronize SAML public URL before provider re-init")
 			}
-			if err := r.samlManager.InitializeProvider(req.Context(), updated.ID, updated.SAML); err != nil {
-				log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to re-initialize SAML provider")
+			if !presentationOnly || r.samlManager.GetService(updated.ID) == nil {
+				if err := r.samlManager.InitializeProvider(req.Context(), updated.ID, updated.SAML); err != nil {
+					log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to re-initialize SAML provider")
+				}
 			}
 		} else {
 			r.samlManager.RemoveProvider(updated.ID)
@@ -597,8 +603,10 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	// Re-initialize OIDC provider if applicable
 	if updated.Type == config.SSOProviderTypeOIDC {
 		if updated.Enabled && updated.OIDC != nil {
-			if err := r.oidcManager.InitializeProvider(req.Context(), updated.ID, &updated, ""); err != nil {
-				log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to re-initialize OIDC provider")
+			if !presentationOnly || r.oidcManager.GetService(updated.ID) == nil {
+				if err := r.oidcManager.InitializeProvider(req.Context(), updated.ID, &updated, ""); err != nil {
+					log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to re-initialize OIDC provider")
+				}
 			}
 		} else {
 			r.oidcManager.RemoveService(updated.ID)

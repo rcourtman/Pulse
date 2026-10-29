@@ -461,6 +461,7 @@ func TestSetupInvestigationOrchestrator_WiresTenantBudgetChecker(t *testing.T) {
 	t.Cleanup(func() { SetCreateInvestigationOrchestrator(prevOrchestratorFactory) })
 
 	handler := &AISettingsHandler{
+		mtPersistence:       config.NewMultiTenantPersistence(t.TempDir()),
 		investigationStores: make(map[string]aicontracts.InvestigationStore),
 	}
 
@@ -920,6 +921,7 @@ func TestSetupInvestigationOrchestratorUsesSubscriptionAgentLimits(t *testing.T)
 	tenantSvc.SetStateProvider(&MockStateProvider{})
 
 	handler := &AISettingsHandler{
+		mtPersistence:       config.NewMultiTenantPersistence(t.TempDir()),
 		investigationStores: make(map[string]aicontracts.InvestigationStore),
 	}
 	handler.chatHandler = &AIHandler{
@@ -971,6 +973,7 @@ func orchestratorPatrolFor(t *testing.T, audits unifiedresources.ResourceStore) 
 	tenantSvc := ai.NewService(nil, nil)
 	tenantSvc.SetStateProvider(&MockStateProvider{})
 	handler := &AISettingsHandler{
+		mtPersistence:       config.NewMultiTenantPersistence(t.TempDir()),
 		investigationStores: make(map[string]aicontracts.InvestigationStore),
 	}
 	if audits != nil {
