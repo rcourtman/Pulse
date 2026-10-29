@@ -436,7 +436,16 @@ func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
 			return patrol.GetInvestigationOrchestrator()
 		},
 		SetupOrchestrator: func(orgID string) {
-			h.setupInvestigationOrchestrator(orgID, h.GetAIService(context.Background()))
+			// The request has already resolved its AI service. Only the
+			// orchestrator is lazy: do not start a provider-backed service
+			// here or borrow the default service for an unavailable tenant.
+			orgID = approval.NormalizeOrgID(orgID)
+			ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
+			svc := h.ExistingAIService(ctx)
+			if svc == nil || svc.GetOrgID() != orgID {
+				return
+			}
+			h.setupInvestigationOrchestrator(orgID, svc)
 		},
 		IsInvestigationEnabled: isAIInvestigationEnabled,
 		GetOrgID:               GetOrgID,
