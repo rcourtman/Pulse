@@ -2081,6 +2081,13 @@ of an unchanged snapshot must not append duplicate change records.
 cover the publish and blocked-persistence boundaries. Synthetic performance
 improvement alone does not establish field CPU relief.
 
+The adapter also keeps restart continuity: before its first diff it reads
+each resource's last recorded state, and a known resource's first appearance
+after a Pulse restart or update records only a real difference from that
+state, never a fresh discovery (see the unified-resources "Bounded generation
+change comparison" clause).
+`TestMonitorAdapterRestartDoesNotRediscoverKnownResources` covers it.
+
 ### One registry snapshot per store refresh pass — issue #2199
 
 Each store refresh pass (`updateResourceStore`, its read-path twin, and so

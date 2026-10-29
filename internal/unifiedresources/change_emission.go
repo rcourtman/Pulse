@@ -15,6 +15,13 @@ import (
 // returns the ones the store accepted, so the caller can announce exactly what
 // was recorded.
 func recordRegistryChanges(store ResourceStore, before, after []Resource, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) []ResourceChange {
+	return recordRegistryChangesSkipping(store, before, after, observedAt, occurredAt, sourceType, sourceAdapterHint, nil)
+}
+
+// recordRegistryChangesSkipping is recordRegistryChanges with a filter: a
+// change skip reports true for is neither persisted nor returned, and skip may
+// rewrite a change it keeps. A nil skip keeps every change unchanged.
+func recordRegistryChangesSkipping(store ResourceStore, before, after []Resource, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter, skip func(*ResourceChange) bool) []ResourceChange {
 	if store == nil {
 		return nil
 	}
@@ -48,7 +55,7 @@ func recordRegistryChanges(store ResourceStore, before, after []Resource, observ
 		beforeResource, beforeOK := beforeByID[id]
 		afterResource, afterOK := afterByID[id]
 		change := buildResourceChange(beforeResource, beforeOK, afterResource, afterOK, observedAt, occurredAt, sourceType, sourceAdapterHint)
-		if change == nil {
+		if change == nil || (skip != nil && skip(change)) {
 			continue
 		}
 		if err := store.RecordChange(*change); err != nil {
@@ -68,6 +75,14 @@ func recordRegistryChanges(store ResourceStore, before, after []Resource, observ
 // returns (MonitorAdapter's mutationMu does so during a replacement). It
 // returns the changes the store accepted.
 func recordRegistryChangesBetweenGenerations(before, after *ResourceRegistry, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter) []ResourceChange {
+	return recordRegistryChangesBetweenGenerationsSkipping(before, after, observedAt, occurredAt, sourceType, sourceAdapterHint, nil)
+}
+
+// recordRegistryChangesBetweenGenerationsSkipping is
+// recordRegistryChangesBetweenGenerations with the same skip filter as
+// recordRegistryChangesSkipping. skip runs after both registry locks are
+// released.
+func recordRegistryChangesBetweenGenerationsSkipping(before, after *ResourceRegistry, observedAt time.Time, occurredAt *time.Time, sourceType ChangeSourceType, sourceAdapterHint ChangeSourceAdapter, skip func(*ResourceChange) bool) []ResourceChange {
 	if before == nil || after == nil || before.store == nil {
 		return nil
 	}
@@ -110,6 +125,9 @@ func recordRegistryChangesBetweenGenerations(before, after *ResourceRegistry, ob
 
 	recorded := pending[:0]
 	for _, change := range pending {
+		if skip != nil && skip(&change) {
+			continue
+		}
 		if err := before.store.RecordChange(change); err != nil {
 			log.Printf("unifiedresources: failed to record change for %s: %v", change.ResourceID, err)
 			continue

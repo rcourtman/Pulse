@@ -1070,3 +1070,106 @@ func TestMonitorAdapterChangeObserverHearsOnlyRecordedLiveChanges(t *testing.T) 
 	require.NoError(t, adapter.RecordLiveChange(ResourceChange{ID: "unobserved", ResourceID: "lab:pve1:101", Kind: ChangeAlertResolved, SourceType: SourceHeuristic, ObservedAt: now}))
 	require.Len(t, heard, 1)
 }
+
+// A Pulse restart builds its first registry from nothing, so without the
+// history baseline every resource it already knew was recorded as
+// "resource discovered" again, burying a night's real changes under one
+// entry per resource whenever Pulse restarted or updated. The first
+// appearance is compared with the last recorded state instead.
+func TestMonitorAdapterRestartDoesNotRediscoverKnownResources(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		store func(t *testing.T) ResourceStore
+	}{
+		{name: "memory", store: func(*testing.T) ResourceStore { return NewMemoryStore() }},
+		{name: "sqlite", store: func(t *testing.T) ResourceStore {
+			store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore: %v", err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+			return store
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := tc.store(t)
+			at := time.Date(2026, 10, 29, 2, 0, 0, 0, time.UTC)
+			ids := map[string]string{}
+			populate := func(adapter *MonitorAdapter, vms ...models.VM) {
+				t.Helper()
+				at = at.Add(time.Minute)
+				for i := range vms {
+					vms[i].LastSeen = at
+				}
+				adapter.PopulateFromSnapshot(models.StateSnapshot{VMs: vms, LastUpdate: at})
+				for _, resource := range adapter.currentRegistry().List() {
+					ids[resource.Name] = resource.ID
+				}
+			}
+			vm := func(id int, name, status string) models.VM {
+				return models.VM{ID: fmt.Sprintf("lab:node-a:%d", id), VMID: id, Name: name, Node: "node-a", Instance: "lab", Status: status}
+			}
+			history := func(name string) []ResourceChange {
+				t.Helper()
+				changes, err := store.GetRecentChanges(ids[name], time.Time{}, 100)
+				if err != nil {
+					t.Fatalf("GetRecentChanges(%s): %v", name, err)
+				}
+				var transitions []ResourceChange
+				for _, change := range changes {
+					if change.Kind == ChangeStateTransition {
+						transitions = append(transitions, change)
+					}
+				}
+				return transitions
+			}
+
+			first := NewMonitorAdapter(NewRegistry(store))
+			populate(first, vm(101, "database", "running"), vm(102, "archive", "running"), vm(103, "cache", "running"))
+			populate(first, vm(101, "database", "running"), vm(103, "cache", "stopped"))
+			if got := history("archive"); len(got) != 2 {
+				t.Fatalf("archive history before restart = %+v, want discovery and removal", got)
+			}
+			cacheBefore := history("cache")
+			if len(cacheBefore) != 2 || cacheBefore[0].From == "absent" {
+				t.Fatalf("cache history before restart = %+v, want its stop newest", cacheBefore)
+			}
+			stopped, running := cacheBefore[0].To, cacheBefore[0].From
+
+			// Restart: database is unchanged, backup appeared while Pulse was
+			// down, archive was recorded as removed and is back, and cache
+			// started again while Pulse was down.
+			restarted := NewMonitorAdapter(NewRegistry(store))
+			populate(restarted, vm(101, "database", "running"), vm(102, "archive", "running"), vm(103, "cache", "running"), vm(104, "backup", "running"))
+
+			if got := history("database"); len(got) != 1 {
+				t.Fatalf("database history after restart = %+v, want only its first discovery", got)
+			}
+			if got := history("backup"); len(got) != 1 || got[0].From != "absent" {
+				t.Fatalf("backup history = %+v, want one discovery", got)
+			}
+			if got := history("archive"); len(got) != 3 || got[0].From != "absent" {
+				t.Fatalf("archive history = %+v, want its return after removal recorded", got)
+			}
+			cache := history("cache")
+			if len(cache) != 3 {
+				t.Fatalf("cache history = %+v, want the start while Pulse was stopped recorded", cache)
+			}
+			if got := cache[0]; got.From != stopped || got.To != running || got.OccurredAt != nil || got.Reason != "resource state changed while Pulse was stopped" {
+				t.Fatalf("cache change across restart = %+v, want %s -> %s marked as while stopped", got, stopped, running)
+			}
+			// It is a status change, so the live agent event stream hears it.
+			if fields := fmt.Sprint(cache[0].Metadata["changedFields"]); !strings.Contains(fields, "status") {
+				t.Fatalf("cache change across restart changedFields = %s, want status", fields)
+			}
+
+			// Once seen in this run, a resource that leaves and returns is a
+			// real change and records as discovered again.
+			populate(restarted, vm(102, "archive", "running"), vm(103, "cache", "running"), vm(104, "backup", "running"))
+			populate(restarted, vm(101, "database", "running"), vm(102, "archive", "running"), vm(103, "cache", "running"), vm(104, "backup", "running"))
+			if got := history("database"); len(got) != 3 || got[0].From != "absent" {
+				t.Fatalf("database history after leaving and returning = %+v, want discovery, removal and discovery", got)
+			}
+		})
+	}
+}
