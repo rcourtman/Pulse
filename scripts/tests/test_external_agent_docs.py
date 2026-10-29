@@ -25,6 +25,10 @@ def adapter_readme():
     return (ROOT / "cmd/pulse-mcp/README.md").read_text(encoding="utf-8")
 
 
+def walkthrough():
+    return (ROOT / "docs/WHAT_HAPPENED_OVERNIGHT.md").read_text(encoding="utf-8")
+
+
 def compact(value):
     return " ".join(value.split())
 
@@ -37,6 +41,26 @@ def requests():
 class ExternalAgentDocsTest(unittest.TestCase):
     def test_shipped_guide_matches_canonical(self):
         self.assertEqual(guide(), (ROOT / "frontend-modern/public/docs/AGENT_SUBSTRATE.md").read_text())
+
+    def test_shipped_walkthrough_matches_canonical(self):
+        self.assertEqual(walkthrough(), (ROOT / "frontend-modern/public/docs/WHAT_HAPPENED_OVERNIGHT.md").read_text())
+
+    def test_walkthrough_separates_backup_log_collection_from_agent_access(self):
+        text = compact(walkthrough())
+        limitation = text.split("**Logs and task history.**", 1)[1].split("**Retention.**", 1)[0]
+        # The backup collector already fetches and parses multi-guest job logs.
+        # Don't deny that collection or advertise it as a raw MCP log reader.
+        collector = (ROOT / "internal/monitoring/monitor_backups.go").read_text()
+        self.assertIn("client.GetTaskLog(ctx, jobTask.Node, upid)", collector)
+        self.assertIn("parseVzdumpJobLog(jobTask, upid, logLines)", collector)
+        for fact in ("multi-guest `vzdump` backup jobs", "per-guest backup results",
+                     "not a general task-log archive", "`list_recent_changes`",
+                     "don't return raw Proxmox task logs, system journals or container logs",
+                     "separate authorised host access", "a Pulse token doesn't grant it"):
+            with self.subTest(fact=fact):
+                self.assertIn(fact, limitation)
+        self.assertIn("`monitoring:read`", text)
+        self.assertIn("it never receives command text or output", text)
 
     def test_adapter_bootstrap_is_saved_verified_and_separate_from_execution(self):
         install = guide().split("## Install the MCP adapter safely\n", 1)[1].split("\n## ", 1)[0]

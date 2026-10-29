@@ -112,8 +112,12 @@ empty or short answer.
   rather than when it happened. Resources that appeared in the gap are
   recorded as discovered. Removals and reboots during the gap are not
   recorded.
-- **Logs and task history.** Pulse doesn't read system journals, container
-  logs or the Proxmox task log. Your agent can still read those on the host.
+- **Logs and task history.** For multi-guest `vzdump` backup jobs, Pulse reads
+  Proxmox task logs to derive per-guest backup results. This bounded backup
+  collection is not a general task-log archive: `list_recent_changes` and the
+  other MCP reads above don't return raw Proxmox task logs, system journals or
+  container logs. Your agent needs separate authorised host access to read
+  those directly; a Pulse token doesn't grant it.
 - **Retention.** The change history keeps 30 days. Metric history keeps seven
   days on Community.
 - **An empty answer is not proof that nothing happened.** It means Pulse
