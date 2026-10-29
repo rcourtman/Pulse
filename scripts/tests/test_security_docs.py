@@ -17,7 +17,9 @@ import subprocess
 import tempfile
 import unittest
 
-from test_api_auth_docs import ROOT, TEST_TOKEN, exercise_curl, recording_server
+from test_api_auth_docs import (ROOT, TEST_TOKEN, exercise_curl,
+                                private_recording_server, recording_server,
+                                request_helper)
 
 
 DOC = ROOT / "SECURITY.md"
@@ -37,7 +39,7 @@ def blocks() -> list[str]:
 
 def recipes() -> list[str]:
     return [step for block in blocks() for step in re.split(r"\n(?=# )", block)
-            if "curl " in step]
+            if "pulse_api " in step]
 
 
 def private_export_request(home: Path):
@@ -52,26 +54,31 @@ class SecurityDocsTest(unittest.TestCase):
         self.assertEqual(DOC.read_bytes(),
                          (ROOT / "frontend-modern/public/docs/SECURITY.md").read_bytes())
 
-    def test_copied_requests_never_expose_credentials_or_weaken_tls(self):
+    def test_copied_requests_use_the_existing_private_response_helper(self):
         requests = recipes()
         self.assertEqual(len(requests), len(EXPECTED))
-        for request in requests:
+        for request, (method, path, _body) in zip(requests, EXPECTED):
+            self.assertEqual(request.count("pulse_api "), 1,
+                             "each copied block must send only its selected operation")
+            self.assertIn(f"pulse_api {method} {path}", request)
             self.assertNotRegex(request, r"(?:\b\w*TOKEN=|X-API-Token:|Authorization:|Bearer\s|--cookie\b)")
             self.assertNotRegex(request, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
-            self.assertIn('curl --disable --fail-with-body --header "@$HOME/.config/pulse/api-header"', request)
-            if "/api/config/export" in request:
-                self.assertIn('--data-binary "@$HOME/.config/pulse/export-request.json"', request)
+            if path == "/api/config/export":
+                self.assertIn('pulse_api POST /api/config/export < "$request_file"', request)
                 self.assertNotIn('"passphrase":', request)
-            elif "--request POST" in request:
-                self.assertIn("--data-binary @-", request)
+            elif method == "POST":
                 self.assertIn("<<'JSON'", request)
         shell = "\n".join(blocks())
-        self.assertNotRegex(shell, r"(?:--token\s|PULSE_AUTH_PASS=|API_TOKEN[S]?=|curl[^\n]*\|)")
+        self.assertNotRegex(shell, r"(?:--token\s|PULSE_AUTH_PASS=|API_TOKEN[S]?=|curl\s)")
         self.assertNotIn("rm -rf", shell)
         self.assertNotIn("authorized_keys", shell)
+        for block in blocks():
+            subprocess.run(["bash", "-n", "-c", block], check=True, capture_output=True)
+
+    def export_preparation(self):
+        return next(block for block in blocks() if 'vi "$request_file"' in block)
 
     def test_export_preparation_protects_new_and_existing_files_without_erasing_them(self):
-        preparation = next(block for block in blocks() if 'vi "$HOME/.config/pulse/export-request.json"' in block)
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             tools = home / "tools"
@@ -87,21 +94,25 @@ class SecurityDocsTest(unittest.TestCase):
                         private_export_request(home)
                         request.chmod(0o644)
                         request.parent.chmod(0o755)
-                    subprocess.run(["bash", "-eu", "-c", preparation], env=env, check=True, timeout=10)
+                    # No caller-provided -e: the copied block must fail closed.
+                    subprocess.run(["bash", "-c", self.export_preparation()], env=env, check=True, timeout=10)
                     self.assertEqual(stat.S_IMODE(request.stat().st_mode), 0o600)
                     self.assertEqual(stat.S_IMODE(request.parent.stat().st_mode), 0o700)
                     self.assertEqual(request.read_text(), json.dumps({"passphrase": TEST_PASSPHRASE}) if existing else "")
 
     def test_exact_methods_paths_and_bodies_with_both_supported_headers(self):
-        steps = recipes()
-        with recording_server() as (port, requests):
+        with private_recording_server() as (port, requests):
             for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
-                for step, (method, path, body) in zip(steps, EXPECTED):
+                for step, (method, path, body) in zip(recipes(), EXPECTED):
                     with self.subTest(header=key, method=method, path=path), tempfile.TemporaryDirectory() as temporary:
                         home = Path(temporary)
                         private_export_request(home)
-                        result = exercise_curl(self, home, f"{key}: {value}", port, step)
+                        before = len(requests)
+                        result = exercise_curl(self, home, f"{key}: {value}", port,
+                                               request_helper() + "\n" + step,
+                                               private_response=True)
                         self.assertEqual(result.returncode, 0, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1)
                         self.assertEqual(requests[-1][0], path)
                         self.assertEqual(requests[-1][1][key], value)
                         self.assertNotIn("X-Curlrc-Injected", requests[-1][1])
@@ -109,39 +120,116 @@ class SecurityDocsTest(unittest.TestCase):
                         self.assertEqual(json.loads(requests[-1][3]) if body is not None else None, body)
                         self.assertNotIn(TEST_PASSPHRASE.encode(), result.stdout + result.stderr)
                         self.assertNotIn(TEST_PASSPHRASE, (home / "argv.json").read_text())
-                        if path == "/api/config/export":
-                            self.check_export_files(home, result, success=True)
 
-    def check_export_files(self, home: Path, result, *, success: bool):
-        directories = list(home.glob("pulse-export.*"))
-        self.assertEqual(len(directories), 1)
-        directory = directories[0]
-        output = directory / "config-export.json"
-        self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
-        # A recording server does not prove encryption. This only checks the
-        # exact response is saved privately, with truthful HTTP success/failure.
-        self.assertEqual(output.read_text(), '{"fixture":true}\n')
-        self.assertNotIn(TEST_TOKEN, output.read_text())
-        self.assertNotIn(TEST_PASSPHRASE, output.read_text())
-        if success:
-            self.assertIn(b"Export response saved", result.stdout)
-        else:
-            self.assertNotIn(b"Export response saved", result.stdout)
-            self.assertIn(b"Export failed; do not import", result.stderr)
+    def test_loopback_security_requests_bypass_environment_proxy(self):
+        with private_recording_server() as (port, requests), recording_server() as (proxy_port, proxy_requests):
+            for step, (method, path, _body) in zip(recipes(), EXPECTED):
+                with self.subTest(method=method, path=path), tempfile.TemporaryDirectory() as temporary:
+                    home = Path(temporary)
+                    private_export_request(home)
+                    before = len(requests)
+                    result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}", port,
+                                           request_helper() + "\n" + step,
+                                           private_response=True, proxy_port=proxy_port)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode())
+                    self.assertEqual(len(requests), before + 1)
+                    self.assertEqual(requests[-1][0], path)
+                    self.assertEqual(proxy_requests, [], "proxy received a private loopback request")
 
-    def test_unauthorised_and_wrong_scope_responses_never_report_success(self):
-        for status in (401, 403, 500):
-            with self.subTest(status=status), recording_server(status) as (port, requests):
-                for step, (_, path, _) in zip(recipes(), EXPECTED):
-                    with self.subTest(path=path), tempfile.TemporaryDirectory() as temporary:
+    def test_http_errors_redirects_and_partial_bodies_fail_privately_without_retry(self):
+        for status, partial, expected_exit in ((401, False, 22), (403, False, 22),
+                                               (500, False, 22), (302, False, 1),
+                                               (200, True, 18)):
+            with self.subTest(status=status, partial=partial), private_recording_server(status, partial) as (port, requests):
+                for step, (method, path, _body) in zip(recipes(), EXPECTED):
+                    with self.subTest(method=method, path=path), tempfile.TemporaryDirectory() as temporary:
                         home = Path(temporary)
                         private_export_request(home)
-                        result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}", port, step)
-                        self.assertNotEqual(result.returncode, 0)
+                        before = len(requests)
+                        result = exercise_curl(self, home, f"X-API-Token: {TEST_TOKEN}", port,
+                                               request_helper() + "\n" + step,
+                                               private_response=True)
+                        self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                        self.assertEqual(len(requests), before + 1,
+                                         "a failed or uncertain operation must not be retried or redirected")
                         self.assertEqual(requests[-1][0], path)
-                        if path == "/api/config/export":
-                            self.check_export_files(home, result, success=False)
+                        self.assertNotIn(TEST_PASSPHRASE.encode(), result.stdout + result.stderr)
+
+    def test_export_paths_are_checked_before_editor_or_transport(self):
+        export = next(step for step in recipes() if "/api/config/export" in step)
+        for operation, script in (("prepare", self.export_preparation()),
+                                  ("send", export)):
+            for component in (".config", ".config/pulse", ".config/pulse/export-request.json"):
+                for kind in ("symlink", "dangling", "wrong-type"):
+                    with self.subTest(operation=operation, component=component, kind=kind), tempfile.TemporaryDirectory() as temporary:
+                        home = Path(temporary) / "home"
+                        home.mkdir()
+                        node = home / component
+                        node.parent.mkdir(parents=True, exist_ok=True)
+                        target = Path(temporary) / "target"
+                        is_file = component.endswith(".json")
+                        if kind != "dangling":
+                            if is_file:
+                                target.write_text("preserve existing sensitive fixture\n")
+                                target.chmod(0o640)
+                            else:
+                                target.mkdir()
+                                target.chmod(0o750)
+                        if kind == "wrong-type":
+                            if is_file:
+                                os.mkfifo(node)
+                            else:
+                                node.write_text("not a directory\n")
+                        else:
+                            node.symlink_to(target)
+                        tools = home / "tools"
+                        tools.mkdir()
+                        for name in ("vi", "curl"):
+                            tool = tools / name
+                            tool.write_text(f'#!/bin/sh\n: > "$HOME/{name}-called"\nexit 79\n')
+                            tool.chmod(0o700)
+                        before_mode = stat.S_IMODE(target.stat().st_mode) if target.exists() else None
+                        env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}")
+                        result = subprocess.run(["bash", "-c", request_helper() + "\n" + script],
+                                                env=env, capture_output=True, timeout=10)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertFalse((home / "vi-called").exists())
+                        self.assertFalse((home / "curl-called").exists())
+                        self.assertNotIn(TEST_PASSPHRASE.encode(), result.stdout + result.stderr)
+                        if before_mode is not None:
+                            self.assertEqual(stat.S_IMODE(target.stat().st_mode), before_mode)
+                            if is_file:
+                                self.assertEqual(target.read_text(), "preserve existing sensitive fixture\n")
+                            else:
+                                self.assertEqual(list(target.iterdir()), [])
+                        else:
+                            self.assertFalse(target.exists())
+
+    def test_preparation_failures_stop_before_editor_and_send_failures_before_transport(self):
+        export = next(step for step in recipes() if "/api/config/export" in step)
+        for operation, script, commands in (("prepare", self.export_preparation(), ("mkdir", "chmod", "touch")),
+                                             ("send", export, ("chmod",))):
+            for command in commands:
+                with self.subTest(operation=operation, command=command), tempfile.TemporaryDirectory() as temporary:
+                    home = Path(temporary)
+                    private_export_request(home)
+                    tools = home / "tools"
+                    tools.mkdir()
+                    for name in ("vi", "curl"):
+                        tool = tools / name
+                        tool.write_text(f'#!/bin/sh\n: > "$HOME/{name}-called"\n')
+                        tool.chmod(0o700)
+                    failure = tools / command
+                    failure.write_text("#!/bin/sh\nexit 73\n")
+                    failure.chmod(0o700)
+                    env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}")
+                    result = subprocess.run(["bash", "-c", request_helper() + "\n" + script],
+                                            env=env, capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, 73)
+                    self.assertFalse((home / "vi-called").exists())
+                    self.assertFalse((home / "curl-called").exists())
+                    self.assertEqual((home / ".config/pulse/export-request.json").read_text(),
+                                     json.dumps({"passphrase": TEST_PASSPHRASE}))
 
     def test_guidance_retains_authority_and_credential_lifecycle_boundaries(self):
         guide = " ".join(DOC.read_text().split())
@@ -154,6 +242,14 @@ class SecurityDocsTest(unittest.TestCase):
             self.assertTrue(boundary in guide, f"missing safety boundary: {boundary}")
         self.assertIn("docs/UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas", guide)
         self.assertIn("docs/TROUBLESHOOTING.md#i-forgot-my-password", guide)
+        for boundary in ("same Bash session", "not an installed Pulse command",
+                         "prints only its HTTP status", "preserves earlier responses",
+                         "bypasses environment proxies", "does not follow redirects",
+                         "private response-file path", "not a complete result",
+                         "not proof of an import or tested recovery", "concurrent path replacement",
+                         "Choose **one** request", "separate counters",
+                         "do not run both examples as a batch", "repeat an uncertain POST"):
+            self.assertIn(boundary, guide)
         self.assertNotIn("### What's **Not** Encrypted", guide)
 
     def test_encrypted_file_examples_match_the_actual_store_and_data_path(self):
