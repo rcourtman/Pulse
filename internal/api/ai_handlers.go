@@ -1842,14 +1842,12 @@ func (h *AISettingsHandler) WireOrchestratorAfterChatStart() {
 
 // setupInvestigationOrchestrator creates and wires the investigation orchestrator for an AI service
 func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai.Service) {
-	h.investigationMu.Lock()
-	defer h.investigationMu.Unlock()
-	h.setupInvestigationOrchestratorLocked(orgID, svc)
+	h.configureInvestigationOrchestrator(orgID, svc, false)
 }
 
-// setupInvestigationOrchestratorLocked publishes a store only after its retained
-// history has loaded. The same lock serializes startup and read-side recovery.
-func (h *AISettingsHandler) setupInvestigationOrchestratorLocked(orgID string, svc *ai.Service) {
+// configureInvestigationOrchestrator publishes a store only after its retained
+// history has loaded. readRetry must not replace an already recovered runtime.
+func (h *AISettingsHandler) configureInvestigationOrchestrator(orgID string, svc *ai.Service, readRetry bool) {
 	// Check factory exists first — if nil, this is OSS (no orchestrator available).
 	// Clear any stale orchestrator from a prior setup so the patrol service
 	// doesn't keep using a removed enterprise component.
@@ -1873,6 +1871,29 @@ func (h *AISettingsHandler) setupInvestigationOrchestratorLocked(orgID string, s
 	patrol := svc.GetPatrolService()
 	if patrol == nil {
 		log.Debug().Str("orgID", orgID).Msg("Patrol service not available, skipping orchestrator setup")
+		return
+	}
+
+	// GetService may invoke dependency initializers, which take the AI service
+	// and investigation-map locks. Resolve it before locking load/publication.
+	// Get chat service for this org using org-scoped context
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
+	chatSvc := chatHandler.GetService(ctx)
+	if chatSvc == nil {
+		log.Warn().Str("orgID", orgID).Msg("Chat service not available for orchestrator")
+		return
+	}
+
+	// Create chat adapter - need to cast to *chat.Service
+	chatService, ok := chatSvc.(*chat.Service)
+	if !ok {
+		log.Warn().Str("orgID", orgID).Msg("Chat service is not *chat.Service, cannot create adapter")
+		return
+	}
+
+	h.investigationMu.Lock()
+	defer h.investigationMu.Unlock()
+	if readRetry && patrol.GetInvestigationOrchestrator() != nil {
 		return
 	}
 
@@ -1912,21 +1933,6 @@ func (h *AISettingsHandler) setupInvestigationOrchestratorLocked(orgID string, s
 			h.investigationStores = make(map[string]aicontracts.InvestigationStore)
 		}
 		h.investigationStores[orgID] = store
-	}
-
-	// Get chat service for this org using org-scoped context
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
-	chatSvc := chatHandler.GetService(ctx)
-	if chatSvc == nil {
-		log.Warn().Str("orgID", orgID).Msg("Chat service not available for orchestrator")
-		return
-	}
-
-	// Create chat adapter - need to cast to *chat.Service
-	chatService, ok := chatSvc.(*chat.Service)
-	if !ok {
-		log.Warn().Str("orgID", orgID).Msg("Chat service is not *chat.Service, cannot create adapter")
-		return
 	}
 
 	// Mirror default-org router wiring for per-org services so patrol/investigation
@@ -8346,13 +8352,9 @@ func (h *AISettingsHandler) investigationOrchestratorForRead(ctx context.Context
 	if !isAIInvestigationEnabled() {
 		return nil
 	}
-	h.investigationMu.Lock()
-	defer h.investigationMu.Unlock()
-	// Concurrent retries must not replace a newly recovered live orchestrator.
-	if orchestrator := patrol.GetInvestigationOrchestrator(); orchestrator != nil {
-		return orchestrator
-	}
-	h.setupInvestigationOrchestratorLocked(GetOrgID(ctx), svc)
+	// The publication lock rechecks readiness after dependency lookup, so
+	// concurrent retries do not replace a newly recovered live orchestrator.
+	h.configureInvestigationOrchestrator(GetOrgID(ctx), svc, true)
 	return patrol.GetInvestigationOrchestrator()
 }
 

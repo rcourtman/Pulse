@@ -391,3 +391,20 @@ func TestInvestigationReadRequiresScopedPersistenceAndEnabledRuntime(t *testing.
 		t.Fatalf("disabled runtime was created by a read: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestInvestigationReadInitializersRunOutsideStoreLock(t *testing.T) {
+	f := newHistoryReadFixture(t)
+	var calls atomic.Int32
+	f.handler.chatHandler.SetServiceInitializer(func(context.Context, AIService) {
+		calls.Add(1)
+		if !f.handler.investigationMu.TryRLock() {
+			t.Error("dependency initializer called under investigation lock")
+			return
+		}
+		f.handler.investigationMu.RUnlock()
+	})
+	rec := f.read("tenant-a", "")
+	if rec.Code != http.StatusOK || calls.Load() != 1 {
+		t.Fatalf("read retry did not initialize once: %d %s", rec.Code, rec.Body.String())
+	}
+}
