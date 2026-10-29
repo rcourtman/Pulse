@@ -119,7 +119,7 @@ def private_recording_server(status: int = 200, partial: bool = False):
 
 
 def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: int, request: str,
-                  *, private_response: bool = False):
+                  *, private_response: bool = False, proxy_port: int | None = None):
     """Execute the exact copied recipe; capture argv and hostile curl defaults."""
     header = home / ".config/pulse/api-header"
     header.parent.mkdir(parents=True, exist_ok=True)
@@ -159,6 +159,12 @@ def exercise_curl(case: unittest.TestCase, home: Path, header_text: str, port: i
     for key in list(env):
         if key.lower().endswith("_proxy"):
             del env[key]
+    if proxy_port is not None:
+        # A guest-local recording proxy witnesses whether a copied loopback
+        # recipe can disclose its credential through inherited proxy settings.
+        proxy = f"http://127.0.0.1:{proxy_port}"
+        env.update(http_proxy=proxy, HTTPS_PROXY=proxy, ALL_PROXY=proxy,
+                   no_proxy="", NO_PROXY="")
     request = request.replace("http://127.0.0.1:7655", f"http://127.0.0.1:{port}")
     result = subprocess.run(["bash", "-eu", "-c", request], env=env, capture_output=True, timeout=10)
     calls = [json.loads(line) for line in receipt.read_text().splitlines()]
