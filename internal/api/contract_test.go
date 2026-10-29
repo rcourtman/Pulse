@@ -28605,3 +28605,73 @@ func TestContractSSOSAMLDiagnosticConsumer(t *testing.T) {
 	}
 	t.Logf("SAML_CONSUMER_FRAMES %s", encoded)
 }
+
+// TestContract_AgentRecentChangesJSONSnapshot pins the GET /api/agent/changes
+// payload a monitoring-read agent receives, including the command redaction:
+// command text, output and caller details are dropped, the reason is cut to
+// its status, and commandRedacted tells the agent the record was trimmed.
+func TestContract_AgentRecentChangesJSONSnapshot(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	since := now.Add(-24 * time.Hour)
+	command := unifiedresources.BuildCommandExecutionChange("vm:101", "alert-1", "patrol", "systemctl restart nginx", true, "secret output", map[string]any{"script": "cat /etc/shadow"})
+	command.ID = "change-1"
+	command.ObservedAt = now.Add(-time.Hour)
+	command.OccurredAt = &command.ObservedAt
+
+	payload := AgentRecentChanges{
+		Changes: []AgentRecentChange{redactAgentRecentChangeCommand(AgentRecentChange{
+			ResourceChange: *command,
+			ResourceName:   "db-01",
+			ResourceType:   "vm",
+		})},
+		Count:       1,
+		Since:       since,
+		Limit:       agentcapabilities.RecentChangesDefaultLimit,
+		GeneratedAt: now,
+	}
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal recent changes: %v", err)
+	}
+
+	const want = `{
+		"changes":[{
+			"id":"change-1",
+			"observedAt":"2026-10-28T11:00:00Z",
+			"occurredAt":"2026-10-28T11:00:00Z",
+			"resourceId":"vm:101",
+			"kind":"command_executed",
+			"sourceType":"agent_action",
+			"confidence":"high",
+			"actor":"patrol",
+			"reason":"Command succeeded",
+			"metadata":{"alert_identifier":"alert-1","success":true},
+			"resourceName":"db-01",
+			"resourceType":"vm",
+			"commandRedacted":true
+		}],
+		"count":1,
+		"truncated":false,
+		"since":"2026-10-27T12:00:00Z",
+		"limit":50,
+		"generatedAt":"2026-10-28T12:00:00Z"
+	}`
+	assertJSONSnapshot(t, got, want)
+}
+
+// TestContract_PulseMCPPublishesRecentChangesAsReadOnlyTool pins that MCP
+// clients see list_recent_changes as a monitoring-read GET on the manifest
+// route, not only the REST surface.
+func TestContract_PulseMCPPublishesRecentChangesAsReadOnlyTool(t *testing.T) {
+	manifest := agentcapabilities.CanonicalManifest()
+	for _, capability := range agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP) {
+		if capability.Name != agentcapabilities.ListRecentChangesCapabilityName {
+			continue
+		}
+		if capability.Method != http.MethodGet || capability.Path != agentcapabilities.RecentChangesCapabilityPath || capability.Scope != config.ScopeMonitoringRead {
+			t.Fatalf("list_recent_changes = %s %s (%s); want GET %s (%s)", capability.Method, capability.Path, capability.Scope, agentcapabilities.RecentChangesCapabilityPath, config.ScopeMonitoringRead)
+		}
+		return
+	}
+	t.Fatalf("Pulse MCP surface does not publish %s", agentcapabilities.ListRecentChangesCapabilityName)
+}

@@ -182,6 +182,35 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 		t.Fatalf("operations-loop status must keep external-agent readiness out of steps: %+v", loopStatus.Steps)
 	}
 
+	// --- 2b. History: list_recent_changes is reachable at its declared
+	// path behind its declared scope, and an integer filter projected the
+	// way MCP projects tool arguments arrives at the handler intact. ---
+	changesCap := byName[agentcapabilities.ListRecentChangesCapabilityName]
+	if changesCap.Path != agentcapabilities.RecentChangesCapabilityPath || changesCap.Method != http.MethodGet ||
+		changesCap.Scope != config.ScopeMonitoringRead || changesCap.ResponseShape != "AgentRecentChanges" {
+		t.Fatalf("%s manifest entry = %+v", agentcapabilities.ListRecentChangesCapabilityName, changesCap)
+	}
+	req = httptest.NewRequest(http.MethodGet, changesCap.Path, nil)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("changes GET unauth: status = %d, want 401, body = %s", rec.Code, rec.Body.String())
+	}
+	projectedChanges, err := agentcapabilities.ProjectCapabilityCall(changesCap, map[string]any{"limit": float64(5), "kind": "restart,alert_fired"})
+	if err != nil {
+		t.Fatalf("project %s: %v", changesCap.Name, err)
+	}
+	req = httptest.NewRequest(http.MethodGet, projectedChanges.Path+"?"+projectedChanges.Query.Encode(), nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("changes GET auth: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `"changes":[]`) || !strings.Contains(body, `"limit":5`) {
+		t.Fatalf("changes response must carry an empty array and the projected limit; body = %s", body)
+	}
+
 	// --- 3. Depth: call the path the manifest declares for the
 	// per-resource bundle. The manifest also declares the stable
 	// error code "resource_not_found" — exercise the unknown-id path

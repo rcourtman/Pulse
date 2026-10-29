@@ -3,6 +3,7 @@ package agentcapabilities
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -34,8 +35,14 @@ const (
 	// ResourceIDArgumentName is the shared path/body argument for canonical
 	// resource identity in Pulse Intelligence context and action tools.
 	ResourceIDArgumentName = "resourceId"
+	// ListRecentChangesCapabilityName is the manifest-owned read of observed
+	// resource changes across the fleet: the "what changed?" companion to the
+	// fleet triage and per-resource context reads.
+	ListRecentChangesCapabilityName = "list_recent_changes"
 	// FleetContextCapabilityPath is the manifest-owned fleet triage route.
 	FleetContextCapabilityPath = "/api/agent/fleet-context"
+	// RecentChangesCapabilityPath is the manifest-owned fleet change route.
+	RecentChangesCapabilityPath = "/api/agent/changes"
 	// ResourceContextCapabilityPath is the manifest-owned per-resource context route.
 	ResourceContextCapabilityPath = "/api/agent/resource-context/{" + ResourceIDArgumentName + "}"
 	// ListResourceCapabilitiesCapabilityPath is the manifest-owned per-resource
@@ -555,6 +562,15 @@ func ProjectCapabilityCall(cap Capability, args map[string]any) (ProjectedCall, 
 				// JSON-RPC decoding just like string filters. Do not stringify
 				// arbitrary values such as objects, arrays or null.
 				query.Set(k, strconv.FormatBool(value))
+			case float64:
+				// JSON-RPC decodes every number as float64. Integer filters
+				// such as limit forward as plain integers; a fractional value
+				// is not a valid integer filter and is dropped like an object.
+				if value == math.Trunc(value) && math.Abs(value) <= 1<<53 {
+					query.Set(k, strconv.FormatInt(int64(value), 10))
+				}
+			case int:
+				query.Set(k, strconv.Itoa(value))
 			}
 		}
 		if len(query) > 0 {

@@ -824,7 +824,8 @@ func TestProjectCapabilityCallGETDELETEPreservesTypedFilters(t *testing.T) {
 		{"legacy_string", map[string]any{"hasFindings": "true"}, "hasFindings=true"},
 		{"mixed", map[string]any{"hasFindings": true, "technology": "qemu & lxc"}, "hasFindings=true&technology=qemu+%26+lxc"},
 		{"empty_string", map[string]any{"technology": ""}, "technology="},
-		{"unsupported", map[string]any{"null": nil, "number": float64(1), "integer": 1, "array": []any{true}, "object": map[string]any{"x": true}}, ""},
+		{"integers", map[string]any{"limit": float64(25), "count": 3}, "count=3&limit=25"},
+		{"unsupported", map[string]any{"null": nil, "fraction": 1.5, "huge": 1e300, "array": []any{true}, "object": map[string]any{"x": true}}, ""},
 		{"private_boolean", map[string]any{ApprovalArgumentKey: true}, ""},
 		{"omitted", nil, ""},
 	}

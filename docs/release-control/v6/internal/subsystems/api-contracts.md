@@ -6733,6 +6733,35 @@ them so agents discover the filters through the capability surface,
 and non-path GET arguments are forwarded as query parameters by the
 shared projection layer rather than a per-capability adapter.
 
+`/api/agent/changes` (`list_recent_changes`, scope `monitoring:read`)
+is the agent-consumable "what changed?" read across the fleet. It
+reads the existing `unified.ResourceStore` change history through
+`GetRecentChangesFiltered` and `CountRecentChangesFiltered` and
+records nothing, so it adds no stored data. Optional query
+parameters: `since` (inclusive RFC 3339, default 24 hours ago),
+`before` (exclusive RFC 3339), `resourceId` (canonical id; includes
+related resources, as the per-resource timeline does), `kind` and
+`sourceType` (comma-separated, parsed by the shared
+`ParseResourceChangeFilters` contract), and `limit` (default 50,
+capped at 200). Malformed timestamps, kinds, origins, limits or an
+empty window return 400 with a reason, because an agent reading the
+wrong window silently would answer the wrong question. Changes are
+newest first and always an array; `count` is the total matching and
+`truncated` says more matched than were returned. There is no
+timestamp cursor, because one registry rebuild records many changes
+at the same instant; agents narrow the window, resource or kind
+instead. Each change carries the canonical record plus the
+resource's current `resourceName` and `resourceType` when the
+registry still knows it, so history for a removed resource stays
+readable. For tokens without `ai:execute`, `command_executed` and
+`runbook_executed` changes keep only allowlisted metadata (alert
+identifier, success, outcome, automatic, runbook id, title), the
+command is cut from the reason, and `commandRedacted` is set, matching
+the resource-context and event-stream redaction rule. The shared
+projection layer forwards integral JSON numbers as integer query
+parameters so manifest integer filters such as `limit` reach the
+route; fractional or out-of-range numbers are dropped like objects.
+
 `/api/agent/resource-capabilities/{id}` is the agent-consumable
 structured capability surface for a single resource: the governed
 capabilities it advertises (name, type, approval level, platform, and

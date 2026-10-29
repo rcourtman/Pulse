@@ -120,6 +120,13 @@ func (r *Router) registerMonitoringResourceRoutes(
 		agentcapabilities.FleetContextCapabilityName,
 		r.agentContextHandler.HandleFleetContext,
 	))))
+	// Agent-consumable change history — "what happened?" across the fleet,
+	// read from the existing resource change store. Companion to the fleet
+	// triage view above, which answers "where do I look now?".
+	r.mux.HandleFunc(agentcapabilities.RecentChangesCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.ListRecentChangesCapabilityName,
+		r.agentContextHandler.HandleRecentChanges,
+	))))
 	// Content-safe Patrol control status: the shared Patrol, Assistant,
 	// governed action, verification, Patrol control proof, and optional MCP
 	// readiness projection for native UI and external agents.
