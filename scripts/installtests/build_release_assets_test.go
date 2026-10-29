@@ -1777,8 +1777,8 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		`go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers`,
 		`--allow-empty-installer-ssh-public-key`,
 		`ssh-keygen -q -Y sign -f "${OPENSSH_SIGNING_KEY}" -n pulse-install`,
-		`COPY --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh`,
-		`COPY --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/`,
+		`COPY --chown=pulse:pulse --chmod=0755 --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh`,
+		`COPY --chown=pulse:pulse --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/`,
 	}
 	for _, needle := range dockerRequired {
 		if !strings.Contains(dockerfile, needle) {
@@ -1791,7 +1791,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS pulse-runtime-foundation`)
 	// Source-built and prebuilt servers/agents must consume the same selected
 	// runtime image; checking only digest syntax would permit a partial refresh.
-	for _, stage := range []string{"agent_runtime", "apprise-builder", "pulse-runtime-foundation", "agent_runtime_prebuilt"} {
+	for _, stage := range []string{"agent_runtime", "apprise-builder", "pulse-runtime-foundation", "prebuilt-downloads", "agent_runtime_prebuilt"} {
 		assertContainsAll(t, dockerfile, "FROM alpine:3.24@sha256:"+alpine324RuntimeDigest+" AS "+stage+"\n")
 	}
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
