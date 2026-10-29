@@ -179,6 +179,7 @@ export const useAppRuntimeState = () => {
   };
 
   const [isLoading, setIsLoading] = createSignal(true);
+  const [bootstrapFailed, setBootstrapFailed] = createSignal(false);
   const [needsAuth, setNeedsAuth] = createSignal(false);
   const [hasAuth, setHasAuth] = createSignal(false);
   const [organizations, setOrganizations] = createSignal<Organization[]>([
@@ -363,6 +364,10 @@ export const useAppRuntimeState = () => {
     if (summaryResponse.status === 401) {
       setNeedsAuth(true);
       return false;
+    }
+
+    if (!summaryResponse.ok) {
+      throw new Error(`Session check failed with status ${summaryResponse.status}`);
     }
 
     return true;
@@ -599,7 +604,7 @@ export const useAppRuntimeState = () => {
   });
 
   createEffect(() => {
-    if (!hasAuth()) {
+    if (isLoading() || needsAuth() || bootstrapFailed() || !hasAuth()) {
       setBackendHealthy(false);
       return;
     }
@@ -705,19 +710,6 @@ export const useAppRuntimeState = () => {
         return;
       }
 
-      if (justLoggedOut) {
-        localStorage.removeItem('just_logged_out');
-        logger.debug('[App] User logged out, showing login page');
-        if (securityResponse.ok) {
-          const securityData = (await securityResponse.json()) as SecurityStatus;
-          applySecurityStatus(securityData);
-        }
-        setHasAuth(true);
-        setNeedsAuth(true);
-        setIsLoading(false);
-        return;
-      }
-
       if (!securityResponse.ok) {
         throw new Error(`Security status request failed with status ${securityResponse.status}`);
       }
@@ -732,10 +724,21 @@ export const useAppRuntimeState = () => {
         ssoSessionDisplayName?: string;
         ssoLogoutURL?: string;
       };
+      if (!isRecord(securityData) || typeof securityData.hasAuthentication !== 'boolean') {
+        throw new Error('Authentication discovery is incomplete');
+      }
       logger.debug('[App] Security status fetched', securityData);
       applySecurityStatus(securityData);
 
-      const authConfigured = securityData.hasAuthentication || false;
+      if (justLoggedOut) {
+        localStorage.removeItem('just_logged_out');
+        logger.debug('[App] User logged out, showing login page');
+        setHasAuth(true);
+        setNeedsAuth(true);
+        return;
+      }
+
+      const authConfigured = securityData.hasAuthentication;
       setHasAuth(authConfigured);
 
       if (securityData.hasProxyAuth && securityData.proxyAuthUsername) {
@@ -793,12 +796,10 @@ export const useAppRuntimeState = () => {
       await beginAuthenticatedRuntime();
     } catch (error) {
       logger.error('Auth check error', error);
-      try {
-        const { clearAuth } = await import('@/utils/apiClient');
-        clearAuth();
-      } catch (clearError) {
-        logger.warn('[App] Failed to clear stored auth after auth check error', clearError);
-      }
+      // A transport, discovery or permission failure is not an expired session.
+      // Keep the saved credentials and tenant for an explicit connection retry,
+      // but admit neither the authenticated shell nor first-run setup.
+      setBootstrapFailed(true);
       aiAvailabilityStore.setEnabled(false);
       setHasAuth(false);
       setNeedsAuth(true);
@@ -859,6 +860,7 @@ export const useAppRuntimeState = () => {
 
   return {
     isLoading,
+    bootstrapFailed,
     needsAuth,
     hasAuth,
     organizations,
