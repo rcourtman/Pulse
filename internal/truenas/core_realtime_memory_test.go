@@ -345,21 +345,21 @@ func TestCORE13RealtimeMemoryFieldBoundaries(t *testing.T) {
 func TestCORE13RealtimeMemoryFailureKeepsReporting(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
-		scenario  coreMemoryScenario
+		scenario  *coreMemoryScenario
 		auth, sub int32
 	}{
-		{"authentication refusal", coreMemoryScenario{rejectAuth: true}, 1, 0},
-		{"subscription refusal", coreMemoryScenario{rejectSub: true}, 1, 1},
-		{"silent peer", coreMemoryScenario{silent: true}, 0, 0},
-		{"malformed handshake", coreMemoryScenario{malformed: true}, 0, 0},
-		{"message flood", coreMemoryScenario{flood: true}, 0, 0},
-		{"missing endpoint", coreMemoryScenario{noEndpoint: true}, 0, 0},
-		{"incomplete native frame", coreMemoryScenario{frame: []byte(`{"msg":"added","collection":"reporting.realtime","fields":{"zfs":{"arc_size":25668261968}}}`)}, 1, 1},
+		{"authentication refusal", &coreMemoryScenario{rejectAuth: true}, 1, 0},
+		{"subscription refusal", &coreMemoryScenario{rejectSub: true}, 1, 1},
+		{"silent peer", &coreMemoryScenario{silent: true}, 0, 0},
+		{"malformed handshake", &coreMemoryScenario{malformed: true}, 0, 0},
+		{"message flood", &coreMemoryScenario{flood: true}, 0, 0},
+		{"missing endpoint", &coreMemoryScenario{noEndpoint: true}, 0, 0},
+		{"incomplete native frame", &coreMemoryScenario{frame: []byte(`{"msg":"added","collection":"reporting.realtime","fields":{"zfs":{"arc_size":25668261968}}}`)}, 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scenario := tc.scenario
 			scenario.restARC = 8 << 30
-			client := coreMemoryClient(t, &scenario, ClientConfig{APIKey: "synthetic-key", Username: "unused-user", Password: "unused-password", Timeout: 200 * time.Millisecond})
+			client := coreMemoryClient(t, scenario, ClientConfig{APIKey: "synthetic-key", Username: "unused-user", Password: "unused-password", Timeout: 200 * time.Millisecond})
 			start := time.Now()
 			system, err := client.GetSystemTelemetry(context.Background())
 			if err != nil || system == nil {
