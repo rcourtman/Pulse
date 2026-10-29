@@ -307,6 +307,30 @@ A disk named `qemu-archive` may hold LXC backups without hiding them behind the
 VM filter or emitting VM-typed PBS guest confirmations. VMID-zero host handling
 and template/ISO admission stay unchanged.
 
+A recognised archive path must encode a positive numeric guest ID that agrees
+with the returned VMID before supplying that kind. Malformed, overflowing or
+conflicting path subjects stay explicitly unknown even when a PBS format would
+otherwise supply a fallback. Retain the raw volume ID, returned VMID, date,
+size and read origin without choosing either subject. Such a row supplies no
+live guest date, placement, recovery subject or direct-PBS guest confirmation.
+Ordinary corrected re-observation restores attribution under the same archive
+ID; a failed read does not renew or reinterpret prior evidence. Opaque paths
+with exact PBS formats keep their existing fallback, and VMID-zero host and
+non-backup admission remain unchanged.
+
+`TestPVEArchiveSubjectRequiresAgreement` covers both archive kinds and PBS
+paths, optional storage/backup prefixes and malformed numeric tokens.
+`TestPVEArchiveSubjectCannotConfirmAnotherPBSGuest` checks confirmation
+withdrawal and recovery for both kinds. The normal-suite
+`TestPVEArchiveSubjectAgreementLifecycle` follows conflicts, corrected metadata,
+failed reads, recurrence, recovery and accepted absence through live inventory,
+canonical dates, asynchronous recovery points and protection postures. An older
+correctly attributed backup, independent LXC and another connection's namesake
+stay isolated. Its actual frames drive desktop and narrow Backups proof; this
+is attribution safety, not original guest recovery or a diagnosis of stale
+protection reports. No guest, backup, restore, store/schema or access operation
+is added.
+
 An explicit `unknown` or unsupported non-empty kind is not an absent legacy
 discriminator. Keep that archive's ID, read node, repository, date, size and
 completion visible, but do not borrow a live VM/LXC's kind, name, canonical
