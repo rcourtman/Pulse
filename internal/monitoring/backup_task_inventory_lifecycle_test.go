@@ -197,3 +197,27 @@ func TestBackupHistoryUnreadTaskCannotCompleteRunningArchive(t *testing.T) {
 		})
 	}
 }
+
+func TestBackupHistoryCarryForwardCannotAccumulateLiveWindows(t *testing.T) {
+	for _, previousCount := range []int{200, 215} {
+		t.Run(fmt.Sprint(previousCount), func(t *testing.T) {
+			m := &Monitor{state: models.NewState()}
+			old := time.Now().UTC().Add(-time.Hour)
+			previous := make([]models.BackupTask, previousCount)
+			for i := range previous {
+				previous[i] = models.BackupTask{ID: fmt.Sprintf("old-%d", i), Instance: "site", Node: "unread", Type: "vzdump", VMID: 101, StartTime: old, ObservedAt: old}
+			}
+			m.state.UpdateBackupTasksForInstance("site", previous)
+			for poll := range 5 {
+				fresh := make([]models.BackupTask, 200)
+				for i := range fresh {
+					fresh[i] = models.BackupTask{ID: fmt.Sprintf("fresh-%d-%d", poll, i), Instance: "site", Node: "unread", Type: "vzdump", VMID: 101, StartTime: old.Add(time.Duration(poll+1) * time.Minute), ObservedAt: time.Now().UTC()}
+				}
+				retained := m.retainUnreadBackupTasks("site", []proxmox.BackupTaskHistoryNode{{Node: "unread", Reason: "collection_failed"}}, fresh)
+				require.Len(t, retained, previousCount, "partial windows cannot grow the live payload on each failed poll")
+				require.Equal(t, fresh, retained[:len(fresh)], "accepted page order and exact facts take priority")
+				m.state.UpdateBackupTasksForInstance("site", retained)
+			}
+		})
+	}
+}

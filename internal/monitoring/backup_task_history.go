@@ -118,13 +118,30 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 		return tasks
 	}
 	seen := make(map[string]bool, len(tasks))
+	counts := make(map[string]int)
+	limits := make(map[string]int)
 	for _, task := range tasks {
 		seen[task.ID] = true
+		counts[task.Node]++
 	}
-	for _, task := range m.state.GetBackupTasks() {
-		if task.Instance == instance && unread[task.Node] && !seen[task.ID] {
+	previous := m.state.GetBackupTasks()
+	for _, task := range previous {
+		if task.Instance == instance && unread[task.Node] {
+			limits[task.Node]++
+		}
+	}
+	// Share the existing 200-provider-task live window. Synthesized guest
+	// children can make a previously accepted payload larger; preserve that
+	// payload's bound, but never accumulate a fresh window of carried rows on
+	// every partially read poll. Accepted new rows always have priority.
+	for node := range unread {
+		limits[node] = max(200, limits[node], counts[node])
+	}
+	for _, task := range previous {
+		if task.Instance == instance && unread[task.Node] && !seen[task.ID] && counts[task.Node] < limits[task.Node] {
 			tasks = append(tasks, task)
 			seen[task.ID] = true
+			counts[task.Node]++
 		}
 	}
 	return tasks
