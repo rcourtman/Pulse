@@ -10,6 +10,19 @@ const article = (name: string) => {
   return element;
 };
 const text = (element: Element) => element.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+const section = (guide: Element, id: string) => {
+  const heading = guide.querySelector(`#${id}`);
+  expect(heading?.tagName).toBe('H2');
+  const content = document.createElement('section');
+  for (
+    let node = heading!.nextElementSibling;
+    node && node.tagName !== 'H2';
+    node = node.nextElementSibling
+  ) {
+    content.append(node.cloneNode(true));
+  }
+  return content;
+};
 
 describe('external-agent operator guidance', () => {
   it('puts read-only trust and private credentials before advertised controls', () => {
@@ -27,9 +40,31 @@ describe('external-agent operator guidance', () => {
     expect(text(setup!.nextElementSibling!)).toContain('not the minimum for a read-only client');
     expect(text(setup!.nextElementSibling!)).toContain('project-shared .mcp.json');
     expect(text(guide)).toContain('only the protected fleet read checks token access');
-    expect([...guide.querySelectorAll('pre')].map((node) => text(node))).toEqual([
+    const connection = section(guide, 'connect-without-granting-control');
+    expect([...connection.querySelectorAll('pre')].map((node) => text(node))).toEqual([
       'pulse_api GET /api/agent/capabilities pulse_api GET /api/agent/fleet-context',
     ]);
+  });
+
+  it('renders saved-installer verification separately from connection checks', () => {
+    const install = section(article('AGENT_SUBSTRATE'), 'install-the-mcp-adapter-safely');
+    const recipes = [...install.querySelectorAll('pre')].map((node) => text(node));
+    expect(recipes).toHaveLength(2);
+    expect(recipes[0]).toContain('set -eu');
+    expect(recipes[1]).toContain('$LASTEXITCODE -ne 0');
+    for (const recipe of recipes) {
+      expect(recipe).toContain('gh release download');
+      expect(recipe).toContain('gh release verify');
+      expect(recipe).toContain('gh release verify-asset');
+      expect(recipe).not.toContain('pulse_api');
+      expect(recipe).not.toMatch(/\|\s*(bash|sh|iex|Invoke-Expression)\b/i);
+    }
+    expect(text(install)).toContain('after verification and before running it');
+    expect(text(install)).toContain('PULSE_MCP_VERSION=vX.Y.Z');
+    expect(text(install)).toContain('-Version $version');
+    expect(text(install)).toContain('normal software approval path');
+    const link = install.querySelector('a[href="/docs/INSTALL#verify-release-build-provenance"]');
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
   });
 
   it('shows terminal-event, partial-verification and legacy-probe limits', () => {
