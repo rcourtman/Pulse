@@ -5,6 +5,8 @@ The copied HTTP recipes run only against synthetic guest-local fixtures.
 """
 
 from pathlib import Path
+import json
+import os
 import re
 import subprocess
 import tempfile
@@ -35,6 +37,88 @@ def requests():
 class ExternalAgentDocsTest(unittest.TestCase):
     def test_shipped_guide_matches_canonical(self):
         self.assertEqual(guide(), (ROOT / "frontend-modern/public/docs/AGENT_SUBSTRATE.md").read_text())
+
+    def test_adapter_bootstrap_is_saved_verified_and_separate_from_execution(self):
+        install = guide().split("## Install the MCP adapter safely\n", 1)[1].split("\n## ", 1)[0]
+        readme = adapter_readme().split("## Install\n", 1)[1].split("\n## Quick start", 1)[0]
+        for text in (install, readme):
+            self.assertNotRegex(text, r"(?i)\|\s*(?:bash|sh|iex|invoke-expression)\b")
+            self.assertNotIn("xattr -d", text)
+        for fact in ("inside the installer", "cannot authenticate an unverified installer",
+                     "2.97.0", "before running it", "lacks a verification command, stop",
+                     "normal client user", "no Pulse token", "same session",
+                     "PowerShell execution policy", "macOS quarantine"):
+            self.assertIn(fact, compact(install))
+        self.assertIn("../../docs/AGENT_SUBSTRATE.md#install-the-mcp-adapter-safely", readme)
+        # Match the real installer's signature boundary, not a claim that a
+        # checksum alone authenticates a binary or the already-running script.
+        for name in ("install-mcp.sh", "install-mcp.ps1"):
+            source = (ROOT / "scripts" / name).read_text()
+            self.assertIn("checksums.txt", source)
+            self.assertIn("cryptographic signature verification failed", source)
+            self.assertIn("ssh-keygen", source)
+
+    def test_copied_unix_bootstrap_stops_at_each_failed_verification(self):
+        install = guide().split("## Install the MCP adapter safely\n", 1)[1].split("\n## ", 1)[0]
+        blocks = re.findall(r"```sh\n(.*?)```", install, re.S)
+        self.assertEqual(len(blocks), 1)
+        for failure, expected in (("download", ["download"]),
+                                  ("verify", ["download", "verify"]),
+                                  ("verify-asset", ["download", "verify", "verify-asset"]),
+                                  ("none", ["download", "verify", "verify-asset"])):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                binary = home / "bin"
+                binary.mkdir()
+                fixture = binary / "gh"
+                fixture.write_text('''#!/usr/bin/env python3
+import json, os, pathlib, sys
+args = sys.argv[1:]
+with open(os.environ["MCP_CALLS"], "a") as log:
+    log.write(json.dumps(args) + "\\n")
+assert args[0] == "release"
+assert args[2] == "v6.6.0"
+assert args[args.index("--repo") + 1] == "rcourtman/Pulse"
+assert not any(a in args for a in ("--clobber", "--skip-existing"))
+if args[1] == os.environ["MCP_FAILURE"]:
+    sys.exit(47)
+if args[1] == "download":
+    assert args[args.index("--pattern") + 1] == "install-mcp.sh"
+    directory = pathlib.Path(args[args.index("--dir") + 1])
+    with (directory / "install-mcp.sh").open("x") as out:
+        out.write('echo executed > "$MCP_EXECUTED"\\n')
+elif args[1] == "verify-asset":
+    assert pathlib.Path(args[3]).name == "install-mcp.sh"
+    assert pathlib.Path(args[3]).is_file()
+else:
+    assert args[1] == "verify"
+''')
+                fixture.chmod(0o755)
+                calls = home / "calls.jsonl"
+                executed = home / "executed"
+                env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
+                       "TMPDIR": str(home), "MCP_CALLS": str(calls),
+                       "MCP_EXECUTED": str(executed), "MCP_FAILURE": failure}
+                result = subprocess.run(["sh", "-c", blocks[0].replace("vX.Y.Z", "v6.6.0")],
+                                        cwd=home, env=env, text=True, capture_output=True)
+                recorded = [json.loads(line) for line in calls.read_text().splitlines()]
+                self.assertEqual([call[1] for call in recorded], expected)
+                self.assertEqual(result.returncode, 0 if failure == "none" else 47, result.stderr)
+                self.assertEqual("Verified installer saved in" in result.stdout, failure == "none")
+                self.assertFalse(executed.exists(), "Download/verification must never execute the installer")
+
+    def test_powershell_checks_native_exits_without_policy_bypass(self):
+        install = guide().split("## Install the MCP adapter safely\n", 1)[1].split("\n## ", 1)[0]
+        code, = re.findall(r"```powershell\n(.*?)```", install, re.S)
+        commands = [line for line in code.splitlines() if line.startswith("gh ")]
+        self.assertEqual(len(commands), 3)
+        lines = code.splitlines()
+        for command in commands:
+            check = lines[lines.index(command) + 1]
+            self.assertIn("if ($LASTEXITCODE -ne 0) { throw ", check)
+        self.assertNotRegex(code, r"(?i)\biex\b|Invoke-Expression|ExecutionPolicy|Unblock-File|--clobber")
+        self.assertIn("[guid]::NewGuid()", code)
+        self.assertIn("-ErrorAction Stop", code)
 
     def test_read_only_setup_does_not_grant_whole_surface_authority(self):
         text = compact(guide())

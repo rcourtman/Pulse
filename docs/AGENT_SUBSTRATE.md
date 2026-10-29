@@ -15,6 +15,69 @@ monitoring or act on workloads. A tool listing or readiness badge is not an
 execution grant or proof of recovery. Use only a client and model provider
 permitted to receive the data in those responses.
 
+## Install the MCP adapter safely
+
+Install `pulse-mcp` on the machine running your MCP client, not on every
+monitored host. It needs no Pulse token to install. Choose one **published
+Pulse release tag**, not a Helm-chart tag or a development branch, and keep
+that tag for both the installer and the binary it downloads.
+
+Do not pipe a remote download into Bash or PowerShell. The installers verify
+the binary against Pulse's signed checksum manifest, but that check runs
+**inside the installer**: it cannot authenticate an unverified installer that
+you have already executed. With GitHub CLI **2.97.0 or newer**, save and verify
+the installer first. These download-only recipes use a new directory, never
+overwrite an existing file, and stop if a download or verification fails.
+
+On Linux, macOS or FreeBSD, replace `vX.Y.Z` with your chosen published tag:
+
+```sh
+(
+  set -eu
+  version=vX.Y.Z
+  download_dir=$(mktemp -d)
+  gh release download "$version" --repo rcourtman/Pulse \
+    --pattern install-mcp.sh --dir "$download_dir"
+  gh release verify "$version" --repo rcourtman/Pulse
+  gh release verify-asset "$version" "$download_dir/install-mcp.sh" --repo rcourtman/Pulse
+  printf 'Verified installer saved in %s\n' "$download_dir"
+)
+```
+
+On Windows, use PowerShell. Native command failures need explicit checks even
+when `$ErrorActionPreference` is `Stop`:
+
+```powershell
+$version = 'vX.Y.Z'
+$downloadDir = Join-Path ([System.IO.Path]::GetTempPath()) ('pulse-mcp-' + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $downloadDir -ErrorAction Stop | Out-Null
+gh release download $version --repo rcourtman/Pulse --pattern install-mcp.ps1 --dir $downloadDir
+if ($LASTEXITCODE -ne 0) { throw 'Installer download failed; stop here.' }
+gh release verify $version --repo rcourtman/Pulse
+if ($LASTEXITCODE -ne 0) { throw 'Release verification failed; stop here.' }
+gh release verify-asset $version (Join-Path $downloadDir 'install-mcp.ps1') --repo rcourtman/Pulse
+if ($LASTEXITCODE -ne 0) { throw 'Installer verification failed; stop here.' }
+Write-Output "Verified installer saved in $downloadDir"
+```
+
+Review the saved script locally **after verification and before running it**.
+If any check fails or your CLI lacks a verification command, stop; do not use
+a checksum from the same unverified download as a substitute, skip signature
+checks, or fall back to executing a remote script. See
+[release build provenance](INSTALL.md#verify-release-build-provenance) for the
+separate build evidence and offline-verification requirements.
+
+Only after successful verification and review, run that saved script as your
+normal client user. For Unix, use `PULSE_MCP_VERSION=vX.Y.Z bash /path/to/install-mcp.sh`;
+for Windows, use `& (Join-Path $downloadDir 'install-mcp.ps1') -Version $version`
+in the same session. Keep the exact chosen tag; otherwise the installer defaults
+to the latest release. Do not add `sudo`, weaken PowerShell execution policy,
+remove macOS quarantine or bypass an operating-system warning to make it run.
+Use your administrator's normal software approval path if it is blocked.
+The installer also needs OpenSSH's `ssh-keygen` and refuses missing or invalid
+signature evidence. Installation success is not a successful Pulse connection;
+continue with the read-only setup below.
+
 ## Connect without granting control
 
 1. Inspect the manifest on the running server, not just this page. Its
@@ -162,11 +225,12 @@ Pulse; verification can be unavailable without proving that nothing ran.
   `--emit-notifications` to translate Pulse's SSE events into JSON-RPC
   notifications on the stdio channel, which lets an autonomous MCP-bound agent
   react to push events without holding a separate HTTP connection. The
-  one-line installers `install-mcp.sh` and `install-mcp.ps1` fetch the
+  installers `install-mcp.sh` and `install-mcp.ps1` fetch the
   matching binary from the latest Pulse release, verify the checksum manifest
   against Pulse's pinned release key, and then verify the binary's checksum.
   They refuse installation when any integrity evidence is unavailable or
-  invalid. Building from source stays available.
+  invalid. [Verify the saved installer before running it](#install-the-mcp-adapter-safely).
+  Building from source stays available.
 
 - **`cmd/agent-probe`** is a worked source example for discovery, triage,
   depth and push, not a production diagnostic tool. Its current credential input
