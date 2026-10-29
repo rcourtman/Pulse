@@ -347,6 +347,18 @@ const dockerImageSection = (
   const rows = compactDetailRows([
     makeDetailRow('Update check', operational.updateLabel, {
       title: operational.updateDetail,
+      // The table's failure badge opens this ordinary drawer. Keep the reason
+      // in the visible, selectable value too: a title alone is not available
+      // to keyboard or touch users. Render it as text, never registry HTML.
+      valueContent: (
+        <span class="!block min-w-0 whitespace-normal text-left wrap-anywhere">
+          <span class="block">{operational.updateLabel}</span>
+          <span class="mt-1 block select-text whitespace-pre-wrap font-normal">
+            {operational.updateDetail}
+          </span>
+        </span>
+      ),
+      wrap: true,
       tone:
         operational.updateTone === 'danger'
           ? 'danger'

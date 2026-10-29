@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "5aba90a11fa8a518ed39252ec12eac1f3e4aad53",
+  "verified_at": "2026-10-29T11:45:48.333958Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "156679a0ecfb616f5f28df02e7264274419eb7688ac31f019ba9ff581a53aee2",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "808b7d30e21187a0a3ad7e73a832cd3777894bc4de88c705649b945f342803b2"
+  },
+  "routes": [
+    "/docker/images (isolated safe fixtures through actual table, operational presenter, resource drawer, context providers and production CSS)",
+    "/docker/images?dark (same compiled source, 320px touch WebKit)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 760
+    }
+  ],
+  "states": [
+    "Committed containing source 5aba90a11f; offline source-hhhoxc9o passes 23,363 frontend tests with three existing skips, types, full lint, headers, changed-file formatting, production build, bundle checks and actual-config consuming preview build. No dependency graph change.",
+    "Eight distinct captures inspected with native view_image: desktop Chromium 141.0.7390.37 light and 320px touch WebKit 26.0 dark, Playwright 1.56.1 matches the integration declaration. Full authentication and consumer TLS reasons are escaped ordinary text, wrapping and selectable before Technical Details is opened.",
+    "The first combined browser attempt completes all 74 desktop checks then fails its WebKit unprefixed JavaScript userSelect read. The compiled CSS already contains both prefixed and standard rules. Only the evidence getter changes to read standard or prefixed computed CSS; only the narrow journey resumes, passing 72 checks with the same source, compiled preview, fixtures and deadlines. Original failure and cleanup are retained.",
+    "Current, Pinned, Local, Not checked, Managed by Pulse and Update available remain distinct and their explanations are readable through native Details. Some existing long non-failure pills remain clipped in the dense 320px table; the new failure control and full reason fit without page overflow.",
+    "Synthetic local consumer proof, not a real registry, installed agent, screen-reader speech, physical-device long press, reporter recovery or release acceptance. Authentication, consumer matching, monitoring status and governed workload actions are unchanged."
+  ],
+  "interactions": [
+    "Ordinary Tab reaches the named native failed-check button with visible focus. Enter and Space toggle the exact image once, retain button focus and update aria-expanded/aria-controls.",
+    "Mouse click and phone tap open the existing row drawer; image and consumer failure reasons can be read and fully selected without hover, Settings, Debug, rerunning a check or issuing a workload action. Desktop mouse text selection is also exercised.",
+    "Switch images, open native Details for every other verdict, and replace the same image with a new synthetic Current observation. Old feedback disappears while the image remains expanded. All text fragments fit their viewport.",
+    "No API/action or off-origin request, page/console error or non-GET request in any attempt. All browsers and servers close; original adverse measurement remains retained, not presented as an aggregate pass."
+  ]
+}
