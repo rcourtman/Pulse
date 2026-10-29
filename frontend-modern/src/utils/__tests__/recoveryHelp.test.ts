@@ -122,9 +122,14 @@ describe('recovery help', () => {
   it('resolves safe issue reporting to the actual troubleshooting heading', () => {
     const rendered = document.createElement('article');
     rendered.innerHTML = renderDocMarkdown(guide, 'RECOVERY');
-    const link = within(rendered).getByRole<HTMLAnchorElement>('link', {
-      name: 'safe issue reporting',
+    // This detached article tests a link's identity and destination, not the
+    // visibility of every link in the guide. Check the chosen link's accessible
+    // name directly instead of scanning all ancestors' styles for every link.
+    const link = within(rendered).getByText<HTMLAnchorElement>('safe issue reporting', {
+      selector: 'a',
+      exact: true,
     });
+    expect(link).toHaveAccessibleName('safe issue reporting');
     expect(link.textContent).toBe('safe issue reporting');
     expect(link?.hasAttribute('data-doc-link')).toBe(true);
     const destination = new URL(link!.getAttribute('href')!, 'https://pulse.example.invalid');
