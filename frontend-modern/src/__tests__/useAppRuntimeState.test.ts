@@ -356,13 +356,13 @@ describe('useAppRuntimeState', () => {
     const { hookState, dispose } = mountHook();
     await waitFor(() => expect(hookState.isLoading()).toBe(false));
 
+    expect(clearAuthMock).not.toHaveBeenCalled();
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(hookState.securityStatus()).toBeNull();
     expect(hookState.bootstrapFailed()).toBe(true);
     expect(hookState.needsAuth()).toBe(true);
     expect(hookState.backendHealthy()).toBe(false);
-    expect(hookState.enhancedStore()).toBeNull();
-    expect(hookState.securityStatus()).toBeNull();
     expect(hookState.activeOrgID()).toBe('acme');
-    expect(clearAuthMock).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem('auth')).toBe('synthetic-saved-token');
     expect(window.sessionStorage.getItem('pulse_auth_user')).toBe('synthetic-operator');
     expect(window.localStorage.getItem('org_id')).toBe('acme');
@@ -385,10 +385,10 @@ describe('useAppRuntimeState', () => {
       const { hookState, dispose } = mountHook();
       await waitFor(() => expect(hookState.isLoading()).toBe(false));
 
+      expect(hookState.enhancedStore()).toBeNull();
       expect(hookState.bootstrapFailed()).toBe(true);
       expect(hookState.needsAuth()).toBe(true);
       expect(hookState.backendHealthy()).toBe(false);
-      expect(hookState.enhancedStore()).toBeNull();
       expect(clearAuthMock).not.toHaveBeenCalled();
       expect(setOrgIDMock).not.toHaveBeenCalled();
       expect(getRuntimeDisplayMock).not.toHaveBeenCalled();

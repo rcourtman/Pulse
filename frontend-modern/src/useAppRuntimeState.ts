@@ -604,7 +604,7 @@ export const useAppRuntimeState = () => {
   });
 
   createEffect(() => {
-    if (!hasAuth()) {
+    if (isLoading() || needsAuth() || bootstrapFailed() || !hasAuth()) {
       setBackendHealthy(false);
       return;
     }
