@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "484e5e8f071ae3463823dd90a839a00dcbcfb1e2",
+  "verified_at": "2026-10-29T10:26:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "1790c082aae7311c7c79bf358db8ebd73a5862348acbcae1185d5eeead8a5728"
+  },
+  "routes": [
+    "/",
+    "/?show_local=true"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "browser": "WebKit26.0",
+      "touch": true
+    }
+  ],
+  "states": [
+    "Proof-only preview imports actual Login, API client, lazy SetupWizard and production CSS, built from this committed source using actual vite.config.ts in the offline VM. Synthetic HTTP only, not full App bootstrap, installed SSO or original access/private recovery.",
+    "HTTP503 and malformed200 discovery stay unknown, not setup/local sign-in. The actual consuming recovery restores SSO-only policy, local sign-in and the explicit local override. Only server hasAuthentication:false exposes existing bootstrap-token-protected setup; no unlock is submitted.",
+    "Eight final desktop/narrow captures opened natively: new error copy, Retry and help are readable without page-level clipping/overlap; narrow SSO button wraps cleanly. Existing setup command strips remain locally horizontally scrollable, not fully visible command text. Finite CSS animations are fast-forwarded only for settled screenshots."
+  ],
+  "interactions": [
+    "Keyboard Enter and narrow touch retry real GET discovery. Pending state retains the control and ignores duplicates; failed/malformed retries remain operable. Desktop retry-owned focus returns to the access region. Disposal cancels/ignores late results; valid supplied discovery avoids redundant reads.",
+    "33 checks pass,24 API requests, no uncaught page errors. Discovery isGET-only. A single deliberately submitted synthetic locked login per viewport retains the existing apiClient CSRF-recovery repeat:2 POSTs to/api/login per viewport, no setup/SSO mutations.",
+    "Both browsers and preview server closed. The first completed browser attempt and its incorrect one-POST assertion/early animation captures remain in lane evidence; no product source, assertion deadline, auth rule or dependency changed for the corrected fixture."
+  ],
+  "playwright_version": "1.56.1",
+  "project_playwright_versions": {
+    "node_modules/@playwright/test": "1.56.1",
+    "node_modules/playwright": "1.56.1"
+  },
+  "tested_source": "484e5e8f071ae3463823dd90a839a00dcbcfb1e2",
+  "source_proof_receipts": [
+    "source-y5y6pth8",
+    "source-vloiykje"
+  ],
+  "source_proof_scope": "source-y5y6pth8 overall exit1 after successful source suites/build and failed proof-only preview target; source-vloiykje passes the corrected actual-config preview. Complete output hashes and guest stops match; no aggregate exit0 claimed for the earlier command.",
+  "capture_sha256": {
+    "desktop-chromium-unavailable.png": "e2a70f6d0881b445cf315e3572613341757c73dce657f369843e6764ed6bff47",
+    "desktop-chromium-sso.png": "68329ce791aba3914932466c6d9fbdfb16033dc3e0a44db7d998b4f1a047874e",
+    "desktop-chromium-local.png": "7a1bf9b3df0d1179dadc98b76443a55b08e4331471293c1c1f2ba2ddb2b7bc1d",
+    "desktop-chromium-setup.png": "a1177cc1d164535d14eed789e2d17623b43a3fdbd681830e2e3e5cd004bac9b6",
+    "phone-webkit-unavailable.png": "2c0686317c8af3d9d22539e870454f7795113c720d04a52b87ae4e82d1421f0b",
+    "phone-webkit-sso.png": "3ff9ce5bfbeaadd3543bafe6a58065703604033f73b4830391b78868e0988958",
+    "phone-webkit-local.png": "57e3ec65aa263b84f44b1ff105f47d1d9677be368c310718fb83fbc47879bb62",
+    "phone-webkit-setup.png": "40826ef716f18946aca76157f3bcc33027e2c69fb33ca3f87d26737590a9b198"
+  }
+}
