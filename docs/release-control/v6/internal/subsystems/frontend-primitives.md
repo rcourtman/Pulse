@@ -10718,3 +10718,27 @@ settings mutation or a paid SSO gate. `SSOProvidersPanel.test.tsx` verifies
 exact OIDC/SAML clipboard values, read-only/disabled-provider controls and
 clipboard rejection. Actual consuming desktop and narrow-browser geometry,
 keyboard/touch and inspected pixels establish responsive fit beyond JSDOM.
+
+
+### Failed login discovery is not first-run setup
+
+`Login.tsx` uses a complete bootstrap observation or reads `/api/security/status`
+before selecting setup or sign-in options. A boolean `hasAuth` hint alone cannot
+supply SSO/local-login policy. A failed read or missing/non-boolean
+`hasAuthentication` remains unknown; it never becomes `false`. Only an explicit
+server `false` enters the existing bootstrap-token-protected setup wizard.
+
+The failed-read surface offers sign-in help and one explicit, read-only retry.
+While pending, its live status and retry control remain mounted, duplicate
+requests are ignored, and a successful retry hands owned focus to the access
+region without stealing focus the user moved elsewhere. Disposal aborts the
+read and ignores late results. Supplied valid discovery still avoids a redundant
+read; existing SSO hiding, local-login override, lockouts, demo sign-in and
+remembered username behaviour remain unchanged. No authentication, entitlement,
+credential, server setup or session-validation rule changes.
+
+Normal-suite `components/__tests__/Login.test.tsx` covers failed and malformed
+reads, recovery to SSO/local login or confirmed setup, single-flight/cancellation,
+focus ownership and the established sign-in behaviours. Browser proof exercises
+the actual Login/API client/CSS with safe HTTP fixtures at desktop and narrow
+widths; it is not installed SSO or original private/access recovery.

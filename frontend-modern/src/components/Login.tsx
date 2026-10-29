@@ -5,6 +5,7 @@ import {
   Show,
   For,
   onMount,
+  onCleanup,
   lazy,
   Suspense,
 } from 'solid-js';
@@ -21,7 +22,7 @@ const SetupWizard = lazy(() => import('./SetupWizard').then((m) => ({ default: m
 
 interface LoginProps {
   onLogin: () => void;
-  hasAuth?: boolean; // If true, auth is configured (passed from App.tsx to skip redundant check)
+  hasAuth?: boolean; // Compatibility hint; full discovery still decides setup and sign-in options.
   securityStatus?: SecurityStatus; // Full security status from App.tsx to avoid redundant API call
 }
 
@@ -70,14 +71,62 @@ export const Login: Component<LoginProps> = (props) => {
   const [rememberMe, setRememberMe] = createSignal(false);
   const [error, setError] = createSignal('');
   const [loading, setLoading] = createSignal(false);
-  const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(
-    props.securityStatus ?? null,
-  );
-  // If hasAuth is passed from App.tsx, we already know auth status - skip the loading state
-  // Also skip if securityStatus is provided
-  const [loadingAuth, setLoadingAuth] = createSignal(
-    props.hasAuth === undefined && !props.securityStatus,
-  );
+  // Only an explicit server observation can select setup. A boolean hint from
+  // bootstrap cannot supply the SSO/local-login policy or turn a failed read
+  // into an unconfigured server.
+  const hasAuthDiscovery = (value: unknown): value is SecurityStatus =>
+    value !== null &&
+    typeof value === 'object' &&
+    typeof (value as SecurityStatus).hasAuthentication === 'boolean';
+  const initialStatus = hasAuthDiscovery(props.securityStatus) ? props.securityStatus : null;
+  const [authStatus, setAuthStatus] = createSignal<SecurityStatus | null>(initialStatus);
+  const [loadingAuth, setLoadingAuth] = createSignal(!initialStatus);
+  const [authReadFailed, setAuthReadFailed] = createSignal(false);
+  let authController: AbortController | undefined;
+  let active = true;
+  let accessEntry: HTMLDivElement | undefined;
+  let authReadNotice: HTMLDivElement | undefined;
+
+  onCleanup(() => {
+    active = false;
+    authController?.abort();
+  });
+
+  const readAuthStatus = async () => {
+    if (!active || authController) return;
+    const returnFocus = authReadNotice?.contains(document.activeElement);
+    const controller = new AbortController();
+    authController = controller;
+    setLoadingAuth(true);
+    let accepted = false;
+    try {
+      const data = await apiFetchJSON<unknown>('/api/security/status', {
+        signal: controller.signal,
+        retry: false,
+      });
+      if (!active) return;
+      if (!hasAuthDiscovery(data)) throw new Error('Authentication discovery is incomplete');
+      setAuthStatus(data);
+      setAuthReadFailed(false);
+      accepted = true;
+    } catch {
+      if (!active) return;
+      // Never expose proxy content, raw response errors or guessed auth state.
+      setAuthReadFailed(true);
+    } finally {
+      if (active) {
+        authController = undefined;
+        setLoadingAuth(false);
+        if (accepted && returnFocus) {
+          queueMicrotask(() => {
+            // Recovery removes Retry. Hand off its focus, not focus the user
+            // moved elsewhere while waiting, and never after unmount.
+            if (active && document.activeElement === document.body) accessEntry?.focus();
+          });
+        }
+      }
+    }
+  };
   const [oidcLoading] = createSignal(false);
   const [oidcError, setOidcError] = createSignal('');
   const [oidcMessage, setOidcMessage] = createSignal('');
@@ -167,42 +216,9 @@ export const Login: Component<LoginProps> = (props) => {
       window.history.replaceState({}, document.title, newUrl);
     }
 
-    // If securityStatus was passed from App.tsx, use it directly without making another API call
-    // This eliminates the flicker between "Checking authentication..." and the login form
-    // AND ensures hideLocalLogin and SSO settings are properly respected
-    if (props.securityStatus) {
-      logger.debug(
-        '[Login] Using securityStatus from App.tsx, skipping redundant auth check',
-        props.securityStatus,
-      );
-      setAuthStatus(props.securityStatus);
-      setLoadingAuth(false);
-      return;
-    }
-
-    // Compatibility fallback: if only hasAuth was passed (without full securityStatus)
-    if (props.hasAuth !== undefined && !props.securityStatus) {
-      logger.debug('[Login] Using hasAuth from App.tsx fallback, fetching full security status');
-      // Still need to fetch full status to get hideLocalLogin and SSO settings.
-    }
-
-    logger.debug('[Login] Starting auth check...');
-    try {
-      const data = await apiFetchJSON<SecurityStatus>('/api/security/status');
-      logger.debug('[Login] Auth status data', data);
-      setAuthStatus(data);
-    } catch (err: any) {
-      // Check for 429
-      // apiFetchJSON throws error with status attached? No, simple Error map.
-      // But if needed we can parse error message if it contains "Too Many Requests"
-
-      // Just assume no auth on error, matching previous logic mostly.
-      logger.error('[Login] Failed to check auth status:', err);
-      setAuthStatus({ hasAuthentication: false } as SecurityStatus);
-    } finally {
-      logger.debug('[Login] Auth check complete, setting loading to false');
-      setLoadingAuth(false);
-    }
+    // The full bootstrap observation avoids a redundant read. Failed or
+    // incomplete bootstrap discovery takes the same guarded read path here.
+    if (!initialStatus) await readAuthStatus();
   });
 
   // Auto-redirect to OIDC is intentionally disabled to prevent redirect loops
@@ -310,7 +326,7 @@ export const Login: Component<LoginProps> = (props) => {
   // this page anyway, so sign the visitor in instead of making them type
   // demo/demo. Once per browser tab, and never straight after a sign-out.
   createEffect(() => {
-    if (loadingAuth() || !demoModeEnabled() || showFirstRunSetup()) return;
+    if (loadingAuth() || authReadFailed() || !demoModeEnabled() || showFirstRunSetup()) return;
     const params = new URLSearchParams(window.location.search);
     if (params.has('oidc') || params.has('saml')) return;
     const storage = getBrowserStorage('sessionStorage');
@@ -341,61 +357,100 @@ export const Login: Component<LoginProps> = (props) => {
   };
 
   return (
-    <Show
-      when={!loadingAuth()}
-      fallback={
-        <div class="min-h-screen flex items-center justify-center">
-          <div class="text-center">
-            <LoadingSpinner size="lg" tone="info" label="Checking authentication" class="mb-4" />
-            <p class="text-muted">Checking authentication...</p>
-          </div>
-        </div>
-      }
-    >
+    <div ref={accessEntry} role="region" aria-label="Pulse access" tabIndex={-1}>
       <Show
-        when={showFirstRunSetup()}
+        when={!loadingAuth() || authReadFailed()}
         fallback={
-          <LoginForm
-            {...{
-              username,
-              setUsername,
-              password,
-              setPassword,
-              rememberMe,
-              setRememberMe,
-              error,
-              loading,
-              handleSubmit,
-              oidcLoading,
-              oidcError,
-              oidcMessage,
-              demoModeEnabled: demoModeEnabled(),
-              demoAutoLogin,
-              showLocalLogin: shouldShowLocalLogin(),
-              ssoProviders: ssoProviders(),
-            }}
-          />
+          <div class="min-h-screen flex items-center justify-center">
+            <div class="text-center">
+              <LoadingSpinner size="lg" tone="info" label="Checking authentication" class="mb-4" />
+              <p class="text-muted">Checking authentication...</p>
+            </div>
+          </div>
         }
       >
-        <Suspense
+        <Show
+          when={!authReadFailed()}
           fallback={
-            <div class="min-h-screen flex items-center justify-center">
-              <div class="text-center">
-                <LoadingSpinner size="lg" tone="info" label="Loading setup" class="mb-4" />
-                <p class="text-muted">Loading setup...</p>
+            <div class="min-h-screen flex items-center justify-center px-4 py-8 text-base-content">
+              <div
+                ref={authReadNotice}
+                class="w-full max-w-md rounded-md border border-border bg-surface p-6 shadow-xs sm:p-8"
+              >
+                <h1 class="text-lg font-semibold">Could not check sign-in options</h1>
+                <p role="status" aria-live="polite" class="mt-3 text-sm leading-6 text-muted">
+                  {loadingAuth()
+                    ? 'Checking authentication again…'
+                    : 'Pulse could not read its authentication status. This does not mean authentication is unconfigured.'}
+                </p>
+                <p class="mt-3 text-sm leading-6 text-muted">
+                  Retry the check before changing authentication settings. This check does not
+                  change your settings or start setup.
+                </p>
+                <button
+                  type="button"
+                  aria-disabled={loadingAuth()}
+                  onClick={() => void readAuthStatus()}
+                  class="mt-5 min-h-11 w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 aria-disabled:opacity-50"
+                >
+                  Retry sign-in check
+                </button>
+                <a
+                  href={TROUBLESHOOTING_DOC_URL}
+                  class="mt-3 inline-flex min-h-11 items-center rounded-sm px-1 text-sm font-medium text-blue-700 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-300"
+                >
+                  Can’t sign in?
+                </a>
               </div>
             </div>
           }
         >
-          <SetupWizard
-            onComplete={(nextPath) => {
-              const target = nextPath || window.location.pathname;
-              window.location.assign(target);
-            }}
-          />
-        </Suspense>
+          <Show
+            when={showFirstRunSetup()}
+            fallback={
+              <LoginForm
+                {...{
+                  username,
+                  setUsername,
+                  password,
+                  setPassword,
+                  rememberMe,
+                  setRememberMe,
+                  error,
+                  loading,
+                  handleSubmit,
+                  oidcLoading,
+                  oidcError,
+                  oidcMessage,
+                  demoModeEnabled: demoModeEnabled(),
+                  demoAutoLogin,
+                  showLocalLogin: shouldShowLocalLogin(),
+                  ssoProviders: ssoProviders(),
+                }}
+              />
+            }
+          >
+            <Suspense
+              fallback={
+                <div class="min-h-screen flex items-center justify-center">
+                  <div class="text-center">
+                    <LoadingSpinner size="lg" tone="info" label="Loading setup" class="mb-4" />
+                    <p class="text-muted">Loading setup...</p>
+                  </div>
+                </div>
+              }
+            >
+              <SetupWizard
+                onComplete={(nextPath) => {
+                  const target = nextPath || window.location.pathname;
+                  window.location.assign(target);
+                }}
+              />
+            </Suspense>
+          </Show>
+        </Show>
       </Show>
-    </Show>
+    </div>
   );
 };
 

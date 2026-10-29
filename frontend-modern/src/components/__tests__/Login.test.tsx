@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Login } from '@/components/Login';
+// Compile the real lazy destination before timed assertions; do not mock setup
+// or make module transformation part of the read-recovery deadline.
+import '@/components/SetupWizard';
 import loginSource from '@/components/Login.tsx?raw';
 import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from '@/utils/localStorage';
 
@@ -391,6 +394,215 @@ describe('Login', () => {
     expect(mockLocalStorage.removeItem).toHaveBeenCalledWith(
       STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME,
     );
+  });
+
+  describe('authentication discovery recovery', () => {
+    const discoveryResponse = (data: unknown) =>
+      new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const expectNoGuessedAccess = () => {
+      expect(screen.queryByRole('main', { name: 'Pulse Setup Wizard' })).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Username')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /sign in to pulse/i })).not.toBeInTheDocument();
+    };
+
+    it.each([401, 403, 429, 503])(
+      'keeps a failed HTTP %s read unknown and never starts setup or retries automatically',
+      async (status) => {
+        const onLogin = vi.fn();
+        mockFetch.mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'SYNTHETIC_PRIVATE_RESPONSE' }), { status }),
+        );
+        render(() => <Login onLogin={onLogin} hasAuth={false} />);
+
+        expect(
+          await screen.findByRole('heading', { name: 'Could not check sign-in options' }),
+        ).toBeVisible();
+        expect(screen.getByRole('status')).toHaveTextContent(
+          'does not mean authentication is unconfigured',
+        );
+        expectNoGuessedAccess();
+        expect(screen.queryByText(/SYNTHETIC_PRIVATE_RESPONSE/)).not.toBeInTheDocument();
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(mockFetch.mock.calls[0][0]).toBe('/api/security/status');
+        expect(onLogin).not.toHaveBeenCalled();
+        expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toHaveAttribute(
+          'href',
+          '/docs/TROUBLESHOOTING',
+        );
+      },
+    );
+
+    it('keeps a network failure unknown without exposing its raw text', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('SYNTHETIC_PRIVATE_TRANSPORT'));
+      render(() => <Login onLogin={vi.fn()} />);
+      expect(await screen.findByRole('button', { name: 'Retry sign-in check' })).toBeVisible();
+      expectNoGuessedAccess();
+      expect(document.body).not.toHaveTextContent('SYNTHETIC_PRIVATE_TRANSPORT');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      null,
+      [],
+      {},
+      { hasAuthentication: null },
+      { hasAuthentication: 0 },
+      { hasAuthentication: 'false' },
+    ])('keeps incomplete or malformed discovery %j unknown', async (data) => {
+      mockFetch.mockResolvedValueOnce(discoveryResponse(data));
+      render(() => <Login onLogin={vi.fn()} />);
+      expect(await screen.findByRole('button', { name: 'Retry sign-in check' })).toBeVisible();
+      expectNoGuessedAccess();
+    });
+
+    it('keeps invalid JSON unknown instead of entering setup', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('not-json', { status: 200 }));
+      render(() => <Login onLogin={vi.fn()} />);
+      expect(await screen.findByRole('button', { name: 'Retry sign-in check' })).toBeVisible();
+      expectNoGuessedAccess();
+    });
+
+    it.each([true, false])(
+      'waits for full discovery despite a hasAuth=%s bootstrap hint',
+      async (hasAuth) => {
+        mockFetch.mockReturnValueOnce(new Promise(() => {}));
+        const view = render(() => <Login onLogin={vi.fn()} hasAuth={hasAuth} />);
+        expect(screen.getByText('Checking authentication...')).toBeVisible();
+        expectNoGuessedAccess();
+        const signal = mockFetch.mock.calls[0][1].signal as AbortSignal;
+        expect(signal.aborted).toBe(false);
+        view.unmount();
+        expect(signal.aborted).toBe(true);
+      },
+    );
+
+    it('reads again when bootstrap supplied no explicit authentication observation', async () => {
+      mockFetch.mockResolvedValueOnce(discoveryResponse({ hasAuthentication: true }));
+      render(() => <Login onLogin={vi.fn()} securityStatus={{} as any} />);
+      expect(await screen.findByPlaceholderText('Username')).toBeVisible();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries one read, retains pending focus and restores SSO policy without local login', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
+      let finish!: (response: Response) => void;
+      mockFetch.mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+      );
+      const onLogin = vi.fn();
+      render(() => <Login onLogin={onLogin} hasAuth={true} />);
+      const retry = await screen.findByRole('button', { name: 'Retry sign-in check' });
+      retry.focus();
+      fireEvent.click(retry);
+      fireEvent.click(retry);
+      expect(screen.getByRole('button', { name: 'Retry sign-in check' })).toBe(retry);
+      expect(retry).toHaveAttribute('aria-disabled', 'true');
+      expect(retry).toHaveFocus();
+      expect(screen.getByRole('status')).toHaveTextContent('Checking authentication again');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expectNoGuessedAccess();
+      finish(
+        discoveryResponse({
+          hasAuthentication: true,
+          hideLocalLogin: true,
+          ssoProviders: [
+            {
+              id: 'lab',
+              name: 'Lab SSO',
+              displayName: 'Lab SSO',
+              type: 'oidc',
+              loginUrl: '/api/oidc/lab/login',
+            },
+          ],
+        }),
+      );
+      expect(await screen.findByRole('button', { name: 'Continue with Lab SSO' })).toBeVisible();
+      expect(screen.queryByPlaceholderText('Username')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Retry sign-in check' })).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: 'Pulse access' })).toHaveFocus(),
+      );
+      expect(
+        mockFetch.mock.calls.every(
+          ([url, options]) =>
+            url === '/api/security/status' && (!options.method || options.method === 'GET'),
+        ),
+      ).toBe(true);
+      expect(onLogin).not.toHaveBeenCalled();
+    });
+
+    it('retains the same retry control and focus after another failed read', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
+      mockFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
+      render(() => <Login onLogin={vi.fn()} />);
+      const retry = await screen.findByRole('button', { name: 'Retry sign-in check' });
+      retry.focus();
+      fireEvent.click(retry);
+      await waitFor(() => expect(retry).toHaveAttribute('aria-disabled', 'false'));
+      expect(screen.getByRole('button', { name: 'Retry sign-in check' })).toBe(retry);
+      expect(retry).toHaveFocus();
+      expectNoGuessedAccess();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not steal focus moved outside the failed-read notice while a retry is pending', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
+      let finish!: (response: Response) => void;
+      mockFetch.mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+      );
+      render(() => (
+        <>
+          <button type="button">Independent control</button>
+          <Login onLogin={vi.fn()} />
+        </>
+      ));
+      const retry = await screen.findByRole('button', { name: 'Retry sign-in check' });
+      retry.focus();
+      fireEvent.click(retry);
+      const independent = screen.getByRole('button', { name: 'Independent control' });
+      independent.focus();
+      finish(discoveryResponse({ hasAuthentication: true }));
+      expect(await screen.findByPlaceholderText('Username')).toBeVisible();
+      expect(independent).toHaveFocus();
+    });
+
+    it('ignores late discovery after disposal and aborts its transport', async () => {
+      let finish!: (response: Response) => void;
+      mockFetch.mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+      );
+      const onLogin = vi.fn();
+      const view = render(() => <Login onLogin={onLogin} />);
+      const signal = mockFetch.mock.calls[0][1].signal as AbortSignal;
+      view.unmount();
+      expect(signal.aborted).toBe(true);
+      finish(discoveryResponse({ hasAuthentication: false }));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(screen.queryByRole('region', { name: 'Pulse access' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('main', { name: 'Pulse Setup Wizard' })).not.toBeInTheDocument();
+      expect(onLogin).not.toHaveBeenCalled();
+    });
+
+    it('enters the existing protected setup only after retry explicitly observes unconfigured authentication', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
+      mockFetch.mockResolvedValueOnce(discoveryResponse({ hasAuthentication: false }));
+      render(() => <Login onLogin={vi.fn()} hasAuth={false} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Retry sign-in check' }));
+      expect(await screen.findByRole('main', { name: 'Pulse Setup Wizard' })).toBeVisible();
+      expect(screen.queryByPlaceholderText('Username')).not.toBeInTheDocument();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('routes login loading indicators through the shared LoadingSpinner primitive', () => {
