@@ -476,7 +476,7 @@ function App() {
 
     return (
       <Show
-        when={!runtime.isLoading() && !runtime.bootstrapFailed()}
+        when={!runtime.isLoading() && (!runtime.bootstrapFailed() || isPublicRoute())}
         fallback={<AppBootstrapStatus failed={runtime.bootstrapFailed()} />}
       >
         <Show

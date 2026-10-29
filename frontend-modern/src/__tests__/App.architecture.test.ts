@@ -256,7 +256,7 @@ describe('App architecture', () => {
   });
 
   it('keeps first-load connection progress understandable and retryable', () => {
-    expect(appSource).toContain('when={!runtime.isLoading() && !runtime.bootstrapFailed()}');
+    expect(appSource).toContain('(!runtime.bootstrapFailed() || isPublicRoute())');
     expect(appSource).toContain(
       'fallback={<AppBootstrapStatus failed={runtime.bootstrapFailed()} />}',
     );

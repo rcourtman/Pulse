@@ -56,7 +56,7 @@ const makeTrueNASResource = (id = 'truenas-1'): Resource => ({
 
 describe('useAppRuntimeState', () => {
   let useAppRuntimeState: UseAppRuntimeStateModule['useAppRuntimeState'];
-  let apiFetchMock: ReturnType<typeof vi.fn>;
+  let apiFetchMock: ReturnType<typeof vi.fn<(url: string) => Promise<Response>>>;
   let orgsListMock: ReturnType<typeof vi.fn>;
   let loadLicenseStatusMock: ReturnType<typeof vi.fn>;
   let loadCommercialPostureMock: ReturnType<typeof vi.fn>;
@@ -418,9 +418,7 @@ describe('useAppRuntimeState', () => {
   it('keeps a genuine summary 401 on the login path, not the connection-error path', async () => {
     const fallbackFetch = apiFetchMock.getMockImplementation()!;
     apiFetchMock.mockImplementation(async (url: string) =>
-      url === '/api/state/summary'
-        ? new Response('{}', { status: 401 })
-        : fallbackFetch(url),
+      url === '/api/state/summary' ? new Response('{}', { status: 401 }) : fallbackFetch(url),
     );
 
     const { hookState, dispose } = mountHook();
@@ -434,9 +432,7 @@ describe('useAppRuntimeState', () => {
   });
 
   it('requires explicit no-auth discovery before first-run setup', async () => {
-    apiFetchMock.mockResolvedValue(
-      new Response('{"hasAuthentication":false}', { status: 200 }),
-    );
+    apiFetchMock.mockResolvedValue(new Response('{"hasAuthentication":false}', { status: 200 }));
 
     const { hookState, dispose } = mountHook();
     await waitFor(() => expect(hookState.isLoading()).toBe(false));

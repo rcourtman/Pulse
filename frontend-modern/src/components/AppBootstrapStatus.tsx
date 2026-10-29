@@ -51,8 +51,8 @@ export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) =>
             when={props.failed}
             fallback={
               <Show when={isSlow()} fallback="Checking your session and preparing the workspace.">
-                Pulse is taking longer than expected to respond. The server may still be starting
-                or busy.
+                Pulse is taking longer than expected to respond. The server may still be starting or
+                busy.
               </Show>
             }
           >
