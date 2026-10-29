@@ -6501,6 +6501,9 @@ func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing
 // transient "agent has not reported yet" state, so the installer can surface an
 // actionable error instead of leaving a silent 401 loop behind (issue #1515).
 func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T) {
+	// Each lifecycle check owns its real-agent binary, state and loopback
+	// server. Let the existing Go worker budget overlap their independent work.
+	t.Parallel()
 	pulseAgent := buildPulseAgentLifecycleBinary(t)
 	verifyFns := extractCollectorLifecycleShellFunctions(t, true)
 
@@ -6559,6 +6562,7 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 }
 
 func TestInstallSHVerifyAgentServerRegistrationPrefersCanonicalAgentID(t *testing.T) {
+	t.Parallel()
 	pulseAgent := buildPulseAgentLifecycleBinary(t)
 	verifyFns := extractCollectorLifecycleShellFunctions(t, true)
 
@@ -6605,6 +6609,7 @@ func TestInstallSHVerifyAgentServerRegistrationPrefersCanonicalAgentID(t *testin
 // registration (issue #1644). A rejected token still short-circuits because
 // more polling cannot change a definitive 401/403.
 func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) {
+	t.Parallel()
 	pulseAgent := buildPulseAgentLifecycleBinary(t)
 	verifyFns := extractCollectorLifecycleShellFunctions(t, true)
 	retryFn := extractInstallShellFunction(t, "verify_agent_server_registration_with_retry")
@@ -7736,6 +7741,7 @@ resolve_action_runner_agent_id
 }
 
 func TestInstallSHActionRunnerPersistsResolvedIdentityOutsideCollectorState(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	stateDir := filepath.Join(root, "collector-state")
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
@@ -8386,6 +8392,7 @@ teardown_action_runner_service
 }
 
 func TestInstallSHSafeProfileDurablyReducesCollectorAuthority(t *testing.T) {
+	t.Parallel()
 	const token = "collector-secret-that-must-not-appear-in-output"
 	var gotAuthorization string
 	var gotMethod string
@@ -8476,6 +8483,7 @@ printf 'explicit=%s\n' "$HOSTNAME_OVERRIDE"
 }
 
 func TestInstallSHCollectorLifecycleRejectsActiveMITMForgedSuccess(t *testing.T) {
+	t.Parallel()
 	const token = "collector-mitm-secret"
 	var authorizationSeen bool
 	mitm := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
