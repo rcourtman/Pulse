@@ -1,0 +1,40 @@
+{
+  "msg": "added",
+  "collection": "reporting.realtime",
+  "fields": {
+    "zfs": {
+      "arc_max_size": 33203703808,
+      "arc_size": 25668261968,
+      "cache_hit_ratio": 0.9979427724308871
+    },
+    "memory": {
+      "classes": {
+        "laundry": 1339392,
+        "inactive": 1913860096,
+        "active": 178978816,
+        "wire": 4464228272,
+        "free": 1079291904,
+        "os_reserved": 971485184,
+        "arc": 25668261968
+      },
+      "extra": {},
+      "swap": {
+        "used": 0,
+        "total": 2147352576
+      }
+    },
+    "virtual_memory": {
+      "total": 34277445632,
+      "available": 2993152000,
+      "percent": 91.3,
+      "used": 30311469056,
+      "free": 1079291904,
+      "active": 178978816,
+      "inactive": 1913860096,
+      "buffers": 0,
+      "cached": 0,
+      "shared": 277647360,
+      "wired": 30132490240
+    }
+  }
+}
