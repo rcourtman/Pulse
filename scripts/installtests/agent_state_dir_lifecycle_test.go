@@ -158,13 +158,7 @@ func waitForLifecycleState(t *testing.T, timeout time.Duration, describe string,
 
 func buildLifecycleAgent(t *testing.T) string {
 	t.Helper()
-	binaryPath := filepath.Join(t.TempDir(), "pulse-agent")
-	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/pulse-agent")
-	cmd.Dir = repoFile()
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build pulse-agent: %v\n%s", err, output)
-	}
-	return binaryPath
+	return buildPulseAgentLifecycleBinary(t)
 }
 
 func renderLifecycleService(t *testing.T, stateDir, stateSource, unitPath, pulseURL, token string, commandsEnabled, recoverExisting bool) {
