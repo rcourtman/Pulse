@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "21f1dd1e34ce8c316649a68c892cba3950354f0b",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "416bc1e3a9dfaae462ce8016f6c8b0b7896716e5a01d264401d3f02a32d7bdd3",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "cefe5af7410411c1323976b063dce0efcaa9178c968683187d0e48cb1b013e62"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000,
+      "browser": "Chromium141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "Chromium141.0.7390.37",
+      "theme": "dark",
+      "touch": true
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "WebKit26.0",
+      "theme": "light",
+      "touch": true
+    }
+  ],
+  "states": [
+    "Collapsed and expanded scoped backup evidence",
+    "Accepted, unread, accepted-empty, unread-after-empty and valid recovery",
+    "Independent same-VMID connections and long workload identity"
+  ],
+  "interactions": [
+    "Ordinary click/tap on the visible disclosure without force, DOM activation or CSS overrides",
+    "Native Tab, Space close and Enter reopen after touch; no duplicate keyup activation",
+    "Same-key REST/realtime polling preserves panel and focus, withdraws and restores task evidence",
+    "Namesake switching, ordinary row activation, unchanged owner link and panel close-focus return",
+    "Native wheel scrolling for complete task-footer pixels above fixed navigation"
+  ],
+  "verified_at": "2026-10-29T23:22:55Z",
+  "notes": "Production App from exact-source proof source-wcb1eocy; Playwright1.56.1 matches the integration lock.74 main checks plus7 pixel-completion checks include integrity assertions. All19 final captures were natively inspected. Earlier failed drivers and candidate keyboard regression are retained separately; source is unchanged throughout final browser verification."
+}
