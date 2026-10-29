@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "02459c3783b9460630d71a32110955a67b5b644f",
+  "verified_at": "2026-10-29T12:59:59.482378Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/components/AppBootstrapStatus.tsx",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "a06ce1967641efe2547cfc459eef45c8803439642eb243dbad6b74808bcf96d1",
+    "frontend-modern/src/components/AppBootstrapStatus.tsx": "83a1bd1a50cf5d0ffe94a369806b44fb938482786928817239d9eedf836b3026",
+    "frontend-modern/src/useAppRuntimeState.ts": "42f9cdf47b00c4721be376ca94db2f7ccfe47910bc840bb42d77c763645424d7"
+  },
+  "routes": [
+    "/alerts (actual production App and API client, safe synthetic HTTP/WebSocket fixtures)",
+    "/docs/SECURITY (actual shipped public documentation during failed authentication discovery)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 760
+    }
+  ],
+  "states": [
+    "Containing source 02459c3783b9460630d71a32110955a67b5b644f. The unchanged production entry and 125 built asset files match their retained manifest; all 12 current source/graph inputs match the recorded build binding. Completed source-u6moqszb reports 23,382 frontend passes and three existing skips, types, lint, headers, formatting, production build and bundle checks. This receipt records existing proof, not a new run.",
+    "Desktop Chromium 141.0.7390.37 completes 57 consuming checks. Dark 320px touch WebKit 26.0 completes 65 consuming checks, plus source-binding and no-error/no-write/no-off-origin checks. Playwright 1.56.1 matches the repository integration lock.",
+    "Security discovery 503, 403, transport, HTML, null, missing and string-typed authentication flags retain the saved token, user and organisation. Failed summary checks do not start the runtime. Genuine 401 handling and explicit no-auth setup remain distinct from connection failure.",
+    "All 12 capture files, ten distinct images, were opened with native view_image in the preceding source turn. Desktop keyboard focus and the full wrapping error copy are visible. The 320px Retry target is 44px high. Public security documentation remains readable during discovery failure.",
+    "The first combined attempt completes desktop checks, then its narrow recovery wait targets a desktop-only Alerts heading and times out. Only unfinished narrow cases resume using visible No active alerts content, with the synthetic version response completed. The original failure, caught incomplete-version fixture error and cleanup remain retained. No source, production build or deadline changes.",
+    "The initial desktop login capture catches its finite entrance animation. Only the outstanding login pixel control is completed separately with finite capture animations disabled; the readable local/SSO form is then inspected natively. Completed desktop startup cases are not replayed.",
+    "Synthetic local consuming proof is not actual private SSO, installed recovery, physical-device operation, screen-reader speech, reporter confirmation or release availability. The fixture truthfully leaves notification delivery unavailable; it establishes no alert-delivery recovery."
+  ],
+  "interactions": [
+    "Ordinary Tab and Enter on desktop, and tap at 320px, invoke the existing Retry connection reload. Once discovery and the protected summary succeed, the consuming Alerts surface renders with the same saved synthetic token and selected organisation; the protected summary receives that original scoped access.",
+    "Actual security-status 401 clears rejected saved access and displays the existing local/SSO login surface. Summary 401 also withholds runtime. Only explicit hasAuthentication:false reaches the existing setup surface; setup is never executed.",
+    "Public security documentation stays accessible without authenticated runtime after discovery failure. No page error, off-origin request, authentication/setup/action POST or other mutation request occurs. All browsers, contexts and fixture servers close."
+  ]
+}
