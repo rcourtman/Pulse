@@ -6,6 +6,12 @@ const BUG_LABEL = "bug";
 const DOCS_LABEL = "documentation";
 const ENHANCEMENT_LABEL = "enhancement";
 
+// Match a complete version token, not a valid-looking prefix of a malformed
+// value. An extra core component, unfinished suffix or empty prerelease
+// segment must not turn into an assertion about another release. Ordinary
+// sentence punctuation after a complete token remains harmless.
+const VERSION_TOKEN = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?![0-9A-Za-z_-]|\.+[0-9A-Za-z_-])`;
+
 // These headings end a secondary-topic field at its own level or above.
 // Deeper headings and legacy field-looking prose remain that topic's evidence,
 // not a second source of primary version or feedback metadata.
@@ -249,8 +255,12 @@ function isActionableTopicValue(value, report) {
 
 function normalizeVersion(value) {
   if (!value) return null;
-  const match = String(value).match(/\bv?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/i);
-  return match ? match[1] : null;
+  // Capture the first whole candidate before validating it. A failed match
+  // must not resume inside that same malformed token and salvage a later
+  // version, even after a hyphen. Trim sentence stops, not version segments.
+  const match = String(value).match(/(?<![0-9A-Za-z_.])v?(\d+\.\d+\.\d+[0-9A-Za-z._-]*)/i);
+  const candidate = match?.[1].replace(/\.+$/, "");
+  return candidate && new RegExp(`^${VERSION_TOKEN}$`).test(candidate) ? candidate : null;
 }
 
 function declaredVersionIsTransition(value) {
@@ -307,9 +317,9 @@ function normalizeLegacyVersionValue(value, report) {
   // The complete version must follow its server prefix immediately. An
   // unversioned/incomplete image or a companion binary cannot borrow an
   // agent/platform number later in the value (or one in the registry name).
-  const declared = visible.match(
-    /^(?:(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:[ \t]*|pulse(?:-pro)?[-_])?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/i
-  );
+  const declared = visible.match(new RegExp(
+    String.raw`^(?:(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:[ \t]*|pulse(?:-pro)?[-_])?v?(${VERSION_TOKEN})`, "i"
+  ));
   if (!declared) return null;
   const version = declared[1];
   return declaredVersionIsTransition(version + visible.slice(declared[0].length))
@@ -321,7 +331,7 @@ function extractTitlePulseVersion(title) {
   // A starting version in an upgrade title is not a running declaration.
   if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(text)) return null;
 
-  const version = String.raw`v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b`;
+  const version = String.raw`v?${VERSION_TOKEN}`;
   // A title can also name the agent, OS or monitored platform. Prefer a
   // server-qualified value, rather than taking its first arbitrary number.
   const declared = text.match(new RegExp(
