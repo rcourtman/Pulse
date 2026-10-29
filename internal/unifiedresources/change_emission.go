@@ -264,6 +264,12 @@ func resourceChangedFields(before, after Resource) []string {
 	if kubernetesRestartChanged(before, after) {
 		changed = append(changed, "kubernetes.restarts", "kubernetes.uptimeSeconds")
 	}
+	if proxmoxRestartChanged(before, after) {
+		changed = append(changed, "proxmox.uptime")
+	}
+	if agentRestartChanged(before, after) {
+		changed = append(changed, "agent.uptimeSeconds")
+	}
 	if dockerCommandChanged(before, after) {
 		changed = append(changed, "docker.command")
 	}
@@ -396,8 +402,48 @@ func dockerRestartChanged(before, after Resource) bool {
 	return before.Docker.UptimeSeconds > 0 && after.Docker.UptimeSeconds > 0 && after.Docker.UptimeSeconds < before.Docker.UptimeSeconds
 }
 
+// resourceRestartChanged decides the restart kind. An uptime reset that comes
+// with a status change stays a state transition, so a host that rebooted while
+// offline still records its recovery for availability and status events.
 func resourceRestartChanged(before, after Resource) bool {
-	return dockerRestartChanged(before, after) || kubernetesRestartChanged(before, after)
+	if dockerRestartChanged(before, after) || kubernetesRestartChanged(before, after) {
+		return true
+	}
+	return before.Status == after.Status && (proxmoxRestartChanged(before, after) || agentRestartChanged(before, after))
+}
+
+// uptimeReset reports an uptime counter that went backwards between two
+// positive readings from source, the later one observed later. Snapshots are
+// captured before publication is serialized, so an older reading can publish
+// after a newer one; its lower uptime is not a reset. A zero reading is a
+// stopped or unreported resource.
+func uptimeReset(before, after Resource, source DataSource, beforeUptime, afterUptime int64) bool {
+	if beforeUptime <= 0 || afterUptime <= 0 || afterUptime >= beforeUptime {
+		return false
+	}
+	beforeSeen, afterSeen := before.SourceStatus[source].LastSeen, after.SourceStatus[source].LastSeen
+	return beforeSeen.IsZero() || afterSeen.IsZero() || afterSeen.After(beforeSeen)
+}
+
+// proxmoxRestartChanged reports a node, VM or LXC whose Proxmox uptime reset
+// on the same node. QEMU's uptime follows its process, so it catches a stop
+// and start (including qm reboot and a host reboot) but not an in-guest reboot
+// or a reset; a host agent inside the guest reports those. A move to another
+// node starts a new process there and is recorded as a relationship change.
+func proxmoxRestartChanged(before, after Resource) bool {
+	if before.Proxmox == nil || after.Proxmox == nil || before.Proxmox.NodeName != after.Proxmox.NodeName {
+		return false
+	}
+	return uptimeReset(before, after, SourceProxmox, before.Proxmox.Uptime, after.Proxmox.Uptime)
+}
+
+// agentRestartChanged reports an operating system reboot seen by the same host
+// agent. Another agent taking over the resource is not a reboot.
+func agentRestartChanged(before, after Resource) bool {
+	if before.Agent == nil || after.Agent == nil || before.Agent.AgentID != after.Agent.AgentID {
+		return false
+	}
+	return uptimeReset(before, after, SourceAgent, before.Agent.UptimeSeconds, after.Agent.UptimeSeconds)
 }
 
 func kubernetesRestartChanged(before, after Resource) bool {

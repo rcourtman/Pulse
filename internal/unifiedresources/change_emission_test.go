@@ -449,6 +449,118 @@ func TestBuildResourceChange_ClassifiesKubernetesRestartChange(t *testing.T) {
 	}
 }
 
+// A reboot shorter than the offline threshold never flips status, so the
+// uptime reset is the only trace it leaves.
+func TestBuildResourceChange_ClassifiesProxmoxUptimeResetAsRestart(t *testing.T) {
+	before := Resource{
+		ID:      "vm:pve1:101",
+		Type:    ResourceTypeVM,
+		Name:    "db-01",
+		Status:  StatusOnline,
+		Proxmox: &ProxmoxData{NodeName: "pve1", VMID: 101, Uptime: 86400},
+	}
+	after := before
+	after.Proxmox = &ProxmoxData{NodeName: "pve1", VMID: 101, Uptime: 40}
+
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+	if change == nil || change.Kind != ChangeRestart {
+		t.Fatalf("change = %+v, want a restart", change)
+	}
+	if change.From != "online|proxmox.uptime=86400" || change.To != "online|proxmox.uptime=40" {
+		t.Fatalf("From/To = %q/%q, want proxmox uptime summaries", change.From, change.To)
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"proxmox.uptime"}) {
+		t.Fatalf("changedFields = %+v, want proxmox.uptime", mustChangedFields(t, change))
+	}
+}
+
+func TestBuildResourceChange_ClassifiesAgentUptimeResetAsRestart(t *testing.T) {
+	before := Resource{
+		ID:     "agent:host-1",
+		Type:   ResourceTypeAgent,
+		Name:   "nas",
+		Status: StatusOnline,
+		Agent:  &AgentData{AgentID: "agent-1", UptimeSeconds: 604800},
+	}
+	after := before
+	after.Agent = &AgentData{AgentID: "agent-1", UptimeSeconds: 95}
+
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+	if change == nil || change.Kind != ChangeRestart {
+		t.Fatalf("change = %+v, want a restart", change)
+	}
+	if change.To != "online|agent.uptimeSeconds=95" {
+		t.Fatalf("To = %q, want agent uptime summary", change.To)
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"agent.uptimeSeconds"}) {
+		t.Fatalf("changedFields = %+v, want agent.uptimeSeconds", mustChangedFields(t, change))
+	}
+}
+
+func TestBuildResourceChange_UptimeDropsThatAreNotRestarts(t *testing.T) {
+	vm := Resource{ID: "vm:pve1:101", Type: ResourceTypeVM, Status: StatusOnline}
+	host := Resource{ID: "agent:host-1", Type: ResourceTypeAgent, Status: StatusOnline}
+	for _, tc := range []struct {
+		name          string
+		before, after Resource
+	}{
+		{"migrated to another node", withProxmox(vm, "pve1", 86400), withProxmox(vm, "pve2", 30)},
+		{"stopped reading", withProxmox(vm, "pve1", 86400), withProxmox(vm, "pve1", 0)},
+		{"first reading", withProxmox(vm, "pve1", 0), withProxmox(vm, "pve1", 30)},
+		{"uptime grew", withProxmox(vm, "pve1", 30), withProxmox(vm, "pve1", 90)},
+		{"another agent took over", withAgent(host, "agent-1", 604800), withAgent(host, "agent-2", 95)},
+		{"older reading published late", seenAt(withAgent(host, "agent-1", 1030), SourceAgent, 30), seenAt(withAgent(host, "agent-1", 1000), SourceAgent, 0)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if change := buildResourceChange(tc.before, true, tc.after, true, time.Now().UTC(), nil, SourcePulseDiff, ""); change != nil && change.Kind == ChangeRestart {
+				t.Fatalf("recorded a restart: %+v", change)
+			}
+		})
+	}
+}
+
+// A host that rebooted while offline comes back with a new status and a reset
+// uptime in one comparison. The recovery must stay a state transition, which
+// availability reporting and status events read.
+func TestBuildResourceChange_RebootWhileOfflineRecordsTheRecovery(t *testing.T) {
+	before := withAgent(Resource{ID: "agent:host-1", Type: ResourceTypeAgent, Status: StatusOffline}, "agent-1", 604800)
+	after := withAgent(Resource{ID: "agent:host-1", Type: ResourceTypeAgent, Status: StatusOnline}, "agent-1", 95)
+	before, after = seenAt(before, SourceAgent, 0), seenAt(after, SourceAgent, 600)
+
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+	if change == nil || change.Kind != ChangeStateTransition {
+		t.Fatalf("change = %+v, want the recovery as a state transition", change)
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"status", "agent.uptimeSeconds"}) {
+		t.Fatalf("changedFields = %+v, want status and the uptime reset", mustChangedFields(t, change))
+	}
+}
+
+func TestBuildResourceChange_NewerUptimeResetIsARestart(t *testing.T) {
+	host := Resource{ID: "agent:host-1", Type: ResourceTypeAgent, Status: StatusOnline}
+	before := seenAt(withAgent(host, "agent-1", 604800), SourceAgent, 0)
+	after := seenAt(withAgent(host, "agent-1", 95), SourceAgent, 30)
+	if change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, ""); change == nil || change.Kind != ChangeRestart {
+		t.Fatalf("change = %+v, want a restart", change)
+	}
+}
+
+func seenAt(resource Resource, source DataSource, offsetSeconds int) Resource {
+	base := time.Date(2026, 10, 29, 3, 0, 0, 0, time.UTC)
+	resource.SourceStatus = map[DataSource]SourceStatus{source: {LastSeen: base.Add(time.Duration(offsetSeconds) * time.Second)}}
+	return resource
+}
+
+func withProxmox(resource Resource, node string, uptime int64) Resource {
+	resource.Proxmox = &ProxmoxData{NodeName: node, VMID: 101, Uptime: uptime}
+	return resource
+}
+
+func withAgent(resource Resource, agentID string, uptime int64) Resource {
+	resource.Agent = &AgentData{AgentID: agentID, UptimeSeconds: uptime}
+	return resource
+}
+
 func TestBuildResourceChange_ClassifiesIncidentAnomalyChange(t *testing.T) {
 	before := Resource{
 		ID:     "storage:1",

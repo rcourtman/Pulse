@@ -114,6 +114,12 @@ func resourceRestartSummary(resource Resource) string {
 			parts = append(parts, fmt.Sprintf("kubernetes.uptimeSeconds=%d", resource.Kubernetes.UptimeSeconds))
 		}
 	}
+	if resource.Proxmox != nil && resource.Proxmox.Uptime > 0 {
+		parts = append(parts, fmt.Sprintf("proxmox.uptime=%d", resource.Proxmox.Uptime))
+	}
+	if resource.Agent != nil && resource.Agent.UptimeSeconds > 0 {
+		parts = append(parts, fmt.Sprintf("agent.uptimeSeconds=%d", resource.Agent.UptimeSeconds))
+	}
 	return strings.Join(parts, "|")
 }
 
