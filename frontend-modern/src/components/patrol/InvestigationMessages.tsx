@@ -9,9 +9,12 @@ import { Component, createEffect, createMemo, on, Show, For } from 'solid-js';
 import { getInvestigationMessages, formatTimestamp, type ChatMessage } from '@/api/patrol';
 import { withAPIErrorStatusNull } from '@/api/responseUtils';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { Button } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getInvestigationMessagesState } from '@/utils/patrolEmptyStatePresentation';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { ToolExecutionBlock } from './ToolExecutionBlock';
 
@@ -101,14 +104,40 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
 
   return (
     <div class="mt-2">
-      <Show when={!messagesState().empty && messagesState().text}>
+      <Show when={messagesQuery.error()}>
+        <InlineNotice
+          role="alert"
+          tone="warning"
+          aria-label="Investigation thread read failed"
+          class="mb-2"
+        >
+          <p class="font-medium">Could not load investigation messages.</p>
+          <p>
+            {getAPIReadAccessErrorMessage(messagesQuery.error()) ??
+              (messages().length > 0
+                ? 'Showing previously loaded messages. Newer messages may be missing.'
+                : 'The saved thread could not be read. This does not mean it is empty.')}
+          </p>
+          <Button
+            size="sm"
+            disabled={messagesQuery.loading()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void messagesQuery.refetch();
+            }}
+          >
+            {messagesQuery.loading() ? 'Retrying messages...' : 'Retry messages'}
+          </Button>
+        </InlineNotice>
+      </Show>
+      <Show when={!messagesQuery.error() && !messagesState().empty && messagesState().text}>
         <div class="flex items-center gap-2 text-xs text-muted py-2">
           <LoadingSpinner size="sm" />
           {messagesState().text}
         </div>
       </Show>
 
-      <Show when={messagesState().empty}>
+      <Show when={!messagesQuery.error() && messagesState().empty}>
         <p class="text-xs text-muted py-1">{messagesState().text}</p>
       </Show>
 
