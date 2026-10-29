@@ -35,6 +35,22 @@ describe('AppBootstrapStatus', () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
+  it('announces a failed session check immediately without suggesting it is still running', () => {
+    const onRetry = vi.fn();
+    render(() => <AppBootstrapStatus failed onRetry={onRetry} />);
+
+    expect(screen.getByRole('main')).toHaveAccessibleName('Could not check your session');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your saved sign-in details have not been cleared.',
+    );
+    expect(screen.queryByText(/You can keep waiting/)).toBeNull();
+    expect(screen.queryByText(/Checking your session and preparing/)).toBeNull();
+    const retry = screen.getByRole('button', { name: 'Retry connection' });
+    expect(retry).toBeVisible();
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
   it('cancels a completed bootstrap timer and gives a fresh attempt its full waiting period', async () => {
     vi.useFakeTimers();
     const first = render(() => <AppBootstrapStatus />);

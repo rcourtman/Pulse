@@ -5,6 +5,7 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 export const APP_BOOTSTRAP_SLOW_DELAY_MS = 10_000;
 
 interface AppBootstrapStatusProps {
+  failed?: boolean;
   onRetry?: () => void;
   slowDelayMs?: number;
 }
@@ -34,9 +35,11 @@ export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) =>
       aria-labelledby="app-bootstrap-title"
     >
       <div class="w-full max-w-md rounded-md border border-border bg-surface p-6 text-center shadow-xs sm:p-8">
-        <LoadingSpinner size="xl" tone="info" class="mb-4" />
+        <Show when={!props.failed}>
+          <LoadingSpinner size="xl" tone="info" class="mb-4" />
+        </Show>
         <h1 id="app-bootstrap-title" class="text-lg font-semibold tracking-tight">
-          Connecting to Pulse
+          {props.failed ? 'Could not check your session' : 'Connecting to Pulse'}
         </h1>
         <p
           class="mt-2 text-sm leading-6 text-muted"
@@ -44,15 +47,24 @@ export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) =>
           aria-live="polite"
           aria-atomic="true"
         >
-          <Show when={isSlow()} fallback="Checking your session and preparing the workspace.">
-            Pulse is taking longer than expected to respond. The server may still be starting or
-            busy.
+          <Show
+            when={props.failed}
+            fallback={
+              <Show when={isSlow()} fallback="Checking your session and preparing the workspace.">
+                Pulse is taking longer than expected to respond. The server may still be starting
+                or busy.
+              </Show>
+            }
+          >
+            Pulse could not check your session. Your saved sign-in details have not been cleared.
           </Show>
         </p>
-        <Show when={isSlow()}>
+        <Show when={props.failed || isSlow()}>
           <div class="mt-5 border-t border-border pt-5">
             <p class="mb-4 text-sm leading-6 text-muted">
-              You can keep waiting, or retry the connection.
+              {props.failed
+                ? 'Check that Pulse is available, then retry the connection.'
+                : 'You can keep waiting, or retry the connection.'}
             </p>
             <Button variant="primary" size="md" onClick={retry}>
               Retry connection

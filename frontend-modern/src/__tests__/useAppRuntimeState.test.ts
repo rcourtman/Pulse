@@ -65,6 +65,7 @@ describe('useAppRuntimeState', () => {
   let getOrgIDMock: ReturnType<typeof vi.fn>;
   let hasStoredAuthSessionMock: ReturnType<typeof vi.fn>;
   let setOrgIDMock: ReturnType<typeof vi.fn>;
+  let clearAuthMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiAvailabilitySetEnabledMock: ReturnType<typeof vi.fn>;
   let aiAvailabilityRefreshMock: ReturnType<typeof vi.fn>;
@@ -84,6 +85,7 @@ describe('useAppRuntimeState', () => {
     vi.resetModules();
     window.history.replaceState({}, '', '/');
     window.sessionStorage.clear();
+    window.localStorage.removeItem('just_logged_out');
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -139,6 +141,11 @@ describe('useAppRuntimeState', () => {
     getOrgIDMock = vi.fn().mockReturnValue('default');
     hasStoredAuthSessionMock = vi.fn().mockReturnValue(true);
     setOrgIDMock = vi.fn();
+    clearAuthMock = vi.fn(() => {
+      window.sessionStorage.removeItem('auth');
+      window.sessionStorage.removeItem('pulse_auth_user');
+      window.localStorage.removeItem('org_id');
+    });
     showToastMock = vi.fn();
     aiAvailabilitySetEnabledMock = vi.fn();
     aiAvailabilityRefreshMock = vi.fn().mockResolvedValue(undefined);
@@ -209,6 +216,7 @@ describe('useAppRuntimeState', () => {
       getOrgID: getOrgIDMock,
       hasAuth: hasStoredAuthSessionMock,
       setOrgID: setOrgIDMock,
+      clearAuth: clearAuthMock,
     }));
 
     vi.doMock('@/stores/events', () => ({
@@ -298,6 +306,8 @@ describe('useAppRuntimeState', () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
+    window.localStorage.removeItem('org_id');
+    window.localStorage.removeItem('just_logged_out');
     const policyModule = await import('@/stores/sessionPresentationPolicy');
     policyModule.syncSessionPresentationPolicy(null);
     vi.resetModules();
@@ -314,6 +324,168 @@ describe('useAppRuntimeState', () => {
 
     return { dispose, hookState: hookState! };
   };
+
+  it.each([
+    'unavailable',
+    'forbidden',
+    'network',
+    'invalid-json',
+    'null',
+    'missing-flag',
+    'string-flag',
+  ])('retains saved access without admitting a runtime after %s discovery', async (scenario) => {
+    const fallbackFetch = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url !== '/api/security/status') return fallbackFetch(url);
+      if (scenario === 'network') throw new TypeError('Offline');
+      if (scenario === 'unavailable') return new Response('Unavailable', { status: 503 });
+      if (scenario === 'forbidden') return new Response('Forbidden', { status: 403 });
+      const bodies: Record<string, string> = {
+        'invalid-json': '<html>Temporary gateway page</html>',
+        null: 'null',
+        'missing-flag': '{}',
+        'string-flag': '{"hasAuthentication":"false"}',
+      };
+      return new Response(bodies[scenario], { status: 200 });
+    });
+    window.sessionStorage.setItem('auth', 'synthetic-saved-token');
+    window.sessionStorage.setItem('pulse_auth_user', 'synthetic-operator');
+    window.localStorage.setItem('org_id', 'acme');
+    getOrgIDMock.mockReturnValue('acme');
+
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+
+    expect(hookState.bootstrapFailed()).toBe(true);
+    expect(hookState.needsAuth()).toBe(true);
+    expect(hookState.backendHealthy()).toBe(false);
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(hookState.securityStatus()).toBeNull();
+    expect(hookState.activeOrgID()).toBe('acme');
+    expect(clearAuthMock).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem('auth')).toBe('synthetic-saved-token');
+    expect(window.sessionStorage.getItem('pulse_auth_user')).toBe('synthetic-operator');
+    expect(window.localStorage.getItem('org_id')).toBe('acme');
+    expect(setOrgIDMock).not.toHaveBeenCalled();
+    expect(getRuntimeDisplayMock).not.toHaveBeenCalled();
+    expect(apiFetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/security/status']);
+    dispose();
+  });
+
+  it.each([403, 429, 500, 502, 503, 'network'])(
+    'does not treat a %s protected session check as authenticated or expired',
+    async (status) => {
+      const fallbackFetch = apiFetchMock.getMockImplementation()!;
+      apiFetchMock.mockImplementation(async (url: string) => {
+        if (url !== '/api/state/summary') return fallbackFetch(url);
+        if (status === 'network') throw new TypeError('Offline');
+        return new Response('{}', { status: status as number });
+      });
+
+      const { hookState, dispose } = mountHook();
+      await waitFor(() => expect(hookState.isLoading()).toBe(false));
+
+      expect(hookState.bootstrapFailed()).toBe(true);
+      expect(hookState.needsAuth()).toBe(true);
+      expect(hookState.backendHealthy()).toBe(false);
+      expect(hookState.enhancedStore()).toBeNull();
+      expect(clearAuthMock).not.toHaveBeenCalled();
+      expect(setOrgIDMock).not.toHaveBeenCalled();
+      expect(getRuntimeDisplayMock).not.toHaveBeenCalled();
+      expect(apiFetchMock.mock.calls.map(([url]) => url)).toEqual([
+        '/api/security/status',
+        '/api/state/summary',
+      ]);
+      dispose();
+    },
+  );
+
+  it('keeps genuine security-status 401 handling and clears rejected stored access', async () => {
+    apiFetchMock.mockResolvedValue(new Response('{}', { status: 401 }));
+    window.sessionStorage.setItem('auth', 'synthetic-rejected-token');
+
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+
+    expect(hookState.bootstrapFailed()).toBe(false);
+    expect(hookState.needsAuth()).toBe(true);
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(clearAuthMock).toHaveBeenCalledOnce();
+    expect(window.sessionStorage.getItem('auth')).toBeNull();
+    dispose();
+  });
+
+  it('keeps a genuine summary 401 on the login path, not the connection-error path', async () => {
+    const fallbackFetch = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string) =>
+      url === '/api/state/summary'
+        ? new Response('{}', { status: 401 })
+        : fallbackFetch(url),
+    );
+
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+
+    expect(hookState.bootstrapFailed()).toBe(false);
+    expect(hookState.needsAuth()).toBe(true);
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(getRuntimeDisplayMock).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('requires explicit no-auth discovery before first-run setup', async () => {
+    apiFetchMock.mockResolvedValue(
+      new Response('{"hasAuthentication":false}', { status: 200 }),
+    );
+
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+
+    expect(hookState.bootstrapFailed()).toBe(false);
+    expect(hookState.hasAuth()).toBe(false);
+    expect(hookState.needsAuth()).toBe(true);
+    expect(hookState.securityStatus()?.hasAuthentication).toBe(false);
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(clearAuthMock).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('retains explicit logout intent until discovery succeeds', async () => {
+    window.localStorage.setItem('just_logged_out', 'true');
+    apiFetchMock.mockResolvedValue(new Response('Unavailable', { status: 503 }));
+
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+
+    expect(hookState.bootstrapFailed()).toBe(true);
+    expect(window.localStorage.getItem('just_logged_out')).toBe('true');
+    expect(hookState.enhancedStore()).toBeNull();
+    dispose();
+    window.localStorage.removeItem('just_logged_out');
+  });
+
+  it('recovers with the saved tenant after a fresh connection attempt succeeds', async () => {
+    const fallbackFetch = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockRejectedValue(new TypeError('Offline'));
+    getOrgIDMock.mockReturnValue('acme');
+    isMultiTenantEnabledMock.mockReturnValue(true);
+
+    const first = mountHook();
+    await waitFor(() => expect(first.hookState.bootstrapFailed()).toBe(true));
+    expect(clearAuthMock).not.toHaveBeenCalled();
+    first.dispose();
+
+    apiFetchMock.mockImplementation(fallbackFetch);
+    const second = mountHook();
+    await waitFor(() => expect(second.hookState.isLoading()).toBe(false));
+    expect(second.hookState.bootstrapFailed()).toBe(false);
+    expect(second.hookState.needsAuth()).toBe(false);
+    expect(second.hookState.activeOrgID()).toBe('acme');
+    expect(second.hookState.enhancedStore()).not.toBeNull();
+    expect(setOrgIDMock).toHaveBeenCalledWith('acme');
+    expect(clearAuthMock).not.toHaveBeenCalled();
+    second.dispose();
+  });
 
   it('loads bootstrap display settings from the authenticated runtime projection', async () => {
     getRuntimeDisplayMock.mockResolvedValue({
