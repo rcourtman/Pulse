@@ -125,7 +125,11 @@ function projectDeclarationLines(tokens) {
       // item's first line can declare one; lazy/nested copied content cannot.
       for (const item of token.items) {
         const first = item.tokens[0];
-        if (first && first.type === "text" && first.tokens) {
+        // GFM changes the same item's first block from text to paragraph
+        // when blank lines make the list loose. Its explicit first-line
+        // declaration has the same authority in either layout; later blocks
+        // and nested content still cannot declare fields.
+        if (first && ["text", "paragraph"].includes(first.type) && first.tokens) {
           const text = inlineProjection(first.tokens);
           const metadata = inlineDeclarationText(first.tokens, false, true);
           const fieldText = inlineDeclarationText(first.tokens, true);

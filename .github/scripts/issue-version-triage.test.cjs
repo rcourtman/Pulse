@@ -4053,3 +4053,94 @@ for (const after of ["add", "remove"]) {
     assert.equal(fixture.calls.comments, 0);
   });
 }
+
+for (const [name, marker, sibling] of [
+  ["unordered", "-", "-"],
+  ["alternate unordered", "*", "*"],
+  ["ordered", "1.", "2."],
+  ["task", "- [x]", "- [ ]"],
+]) {
+  test(`loose ${name} lists retain their first-line legacy version declaration`, () => {
+    for (const newline of ["\n", "\r\n"]) {
+      for (const [label, value, expected] of [
+        ["**Pulse version**", "6.6.0", "6.6.0"],
+        ["Pulse version", "unknown", null],
+        ["_Pulse version_", "6.6", null],
+        ["**[Pulse version][field]**", "[`v6.7.0-beta.2`][release]", "6.7.0-beta.2"],
+        ["Pulse version", "`6.5.0`", "6.5.0"],
+        ["Pulse version", "6.5.0 → 6.6.0", null],
+      ]) {
+        const field = `${marker} ${label}: ${value}`;
+        const rest = `${sibling} Agent version: 9.9.9\n\n` +
+          "[field]: https://example.invalid/ignored\n" +
+          "[release]: https://example.invalid/6.4.5";
+        for (const gap of ["\n", "\n\n"]) {
+          const body = `${field}${gap}${rest}`.replaceAll("\n", newline);
+          assert.equal(triage.internals.extractPulseVersion("[Bug]: v6.4.5 upgrade failed", body),
+            expected, body);
+        }
+      }
+    }
+  });
+}
+
+test("later paragraphs, lazy lines and nested loose-list fields stay copied evidence", () => {
+  for (const copied of [
+    "- Existing observations\n\n  Pulse version: 6.4.5\n\n- More observations",
+    "- Existing observations\nPulse version: 6.4.5\n\n- More observations",
+    "- Existing observations\n\n  - Pulse version: 6.4.5\n\n- More observations",
+    "- Existing observations\n\n  ### Pulse version\n  6.4.5\n\n- More observations",
+  ]) {
+    for (const newline of ["\n", "\r\n"]) {
+      const body = copied.replaceAll("\n", newline);
+      assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), null, body);
+      assert.equal(triage.internals.extractPulseVersion("Unversioned report",
+        body + newline.repeat(2) + "Pulse version: 6.6.0"), "6.6.0", body);
+    }
+  }
+});
+
+test("loose lists cannot promote literal, withdrawn or nested first blocks into declarations", () => {
+  for (const item of [
+    "- `Pulse version`: 6.4.5",
+    "- ~~Pulse version~~: 6.4.5",
+    "- ![Pulse version](https://example.invalid/ignored): 6.4.5",
+    "- > Pulse version: 6.4.5",
+    "- ### Pulse version\n  6.4.5",
+    "- ```text\n  Pulse version: 6.4.5\n  ```",
+  ]) {
+    const body = `${item}\n\n- Other observations\n\nPulse version: 6.6.0`;
+    assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), "6.6.0", body);
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`${action} consumes an explicit loose-list version without replacing Community decisions`, async () => {
+    for (const [value, version] of [["6.6.0", "6.6.0"], ["unknown", null], ["6.6", null]]) {
+      const preserved = ["bug", "needs-human", "release-blocker", "stable-regression",
+        "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"];
+      const issue = { number: 42, title: "[Bug]: v6.4.5 upgrade failed",
+        body: `- **Pulse version**: ${value}\n\n- Agent version: 9.9.9`,
+        labels: [...preserved, "affects-6.4.5"].map(name => ({ name })) };
+      const { github, calls } = createGithub();
+      await syncLabels({ github, core: createCore(), context: createContext({ issue, action }) });
+      const desired = version ? `affects-${version}` : "needs-version-info";
+      assert.deepEqual(calls.addLabels.map(call => call.labels), [[desired]]);
+      assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+      assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(), [...preserved, desired].sort());
+      assert.equal(calls.getIssue.length, 3, "keep the pre-write and per-removal live reads");
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+      assert.deepEqual(calls.getEvents, []);
+      assert.deepEqual(calls.paginate, []);
+    }
+  });
+}
+
+test("loose-list version declarations inside secondary topics remain topic evidence", () => {
+  const body = "### Additional actionable topics\nAnother installation has:\n\n" +
+    "- **Pulse version**: 6.4.5\n\n- A separate loss of readings\n\n" +
+    "### Pulse version\n6.6.0";
+  assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), "6.6.0");
+  assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
+});
