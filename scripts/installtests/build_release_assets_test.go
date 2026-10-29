@@ -5865,7 +5865,10 @@ func TestNativeMacOSContractPythonPrerequisite(t *testing.T) {
 	}
 	var workflow struct {
 		Jobs map[string]struct {
-			Steps []struct{ Name, If, Run string }
+			Steps []struct {
+				Name, If, Run, Shell string
+				ContinueOnError      bool `yaml:"continue-on-error"`
+			}
 		}
 	}
 	if err := yaml.Unmarshal(content, &workflow); err != nil {
@@ -5874,7 +5877,7 @@ func TestNativeMacOSContractPythonPrerequisite(t *testing.T) {
 	recipe := ""
 	for _, step := range workflow.Jobs["native-agent"].Steps {
 		if step.Name == "Supply YAML parser for native Unix contract checks" {
-			if step.If != "runner.os == 'macOS'" {
+			if step.If != "runner.os == 'macOS'" || step.Shell != "bash" || step.ContinueOnError {
 				t.Fatal("Python acquisition is the missing macOS prerequisite, not a platform-wide tool replacement")
 			}
 			recipe = step.Run
@@ -5884,22 +5887,51 @@ func TestNativeMacOSContractPythonPrerequisite(t *testing.T) {
 		}
 	}
 	if recipe == "" || !strings.Contains(recipe, "--only-binary=:all: 'PyYAML==6.0.3'") ||
-		!strings.Contains(recipe, `assert yaml.__version__ == "6.0.3"`) {
+		!strings.Contains(recipe, `assert yaml.__version__ == "6.0.3"`) ||
+		!strings.Contains(recipe, `brew install python@3.13`) ||
+		!strings.Contains(recipe, `contract_runtime="$(brew --prefix python@3.13)/bin/python3.13"`) ||
+		!strings.Contains(recipe, `assert sys.version_info[:2] == (3, 13)`) {
 		t.Fatal("missing isolated fixed-version prerequisite and import check")
 	}
-	for _, fault := range []string{"", "venv", "pip", "import"} {
+	for _, fault := range []string{"", "brew", "prefix", "missing-runtime", "version", "venv", "pip", "import"} {
 		t.Run("failure="+fault, func(t *testing.T) {
 			root := t.TempDir()
 			tools := filepath.Join(root, "tools")
 			if err := os.Mkdir(tools, 0700); err != nil {
 				t.Fatal(err)
 			}
+			// An ambient python3 must never create the venv. The selected
+			// Homebrew prefix can contain spaces and is unrelated to PATH.
+			runtime := filepath.Join(root, "selected Python")
+			if err := os.MkdirAll(filepath.Join(runtime, "bin"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			brew := `#!/bin/sh
+set -eu
+if [ "$*" = 'install python@3.13' ]; then
+  [ "$FAULT" != brew ] || exit 24
+  printf 'installed\n' > "$BREW_CALLED"
+elif [ "$*" = '--prefix python@3.13' ]; then
+  [ "$FAULT" != prefix ] || exit 25
+  test -f "$BREW_CALLED" || exit 93
+  printf '%s\n' "$SELECTED_PYTHON"
+else
+  exit 94
+fi
+`
 			python := `#!/bin/sh
 set -eu
+if [ "$1" = -c ] && [ ! -f "$VENV_CREATED" ]; then
+  [ "$FAULT" != version ] || exit 26
+  printf '%s\n' "$2" > "$VERSION_CODE"
+  exit 0
+fi
 if [ "$1 $2" = '-m venv' ]; then
+  test -f "$VERSION_CODE" || exit 95
   [ "$FAULT" != venv ] || exit 21
   mkdir -p "$3/bin"
   cp "$0" "$3/bin/python3"
+  printf 'created\n' > "$VENV_CREATED"
   exit 0
 fi
 if [ "$1 $2" = '-m pip' ]; then
@@ -5911,13 +5943,23 @@ fi
 [ "$FAULT" != import ] || exit 23
 printf '%s\n' "$2" > "$IMPORT_CODE"
 `
-			if err := os.WriteFile(filepath.Join(tools, "python3"), []byte(python), 0700); err != nil {
+			if err := os.WriteFile(filepath.Join(tools, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(tools, "python3"), []byte("#!/bin/sh\nexit 92\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if fault != "missing-runtime" {
+				if err := os.WriteFile(filepath.Join(runtime, "bin", "python3.13"), []byte(python), 0700); err != nil {
+					t.Fatal(err)
+				}
 			}
 			path := filepath.Join(root, "github-path")
 			cmd := exec.Command("bash", "--noprofile", "--norc", "-c", recipe)
 			cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"),
 				"RUNNER_TEMP="+root, "GITHUB_PATH="+path, "FAULT="+fault,
+				"SELECTED_PYTHON="+runtime, "BREW_CALLED="+filepath.Join(root, "brew-called"),
+				"VERSION_CODE="+filepath.Join(root, "version-code"), "VENV_CREATED="+filepath.Join(root, "venv-created"),
 				"INSTALL_ARGS="+filepath.Join(root, "install-args"), "IMPORT_CODE="+filepath.Join(root, "import-code"))
 			output, err := cmd.CombinedOutput()
 			if (err == nil) != (fault == "") {
@@ -5937,6 +5979,10 @@ printf '%s\n' "$2" > "$IMPORT_CODE"
 			installed, err := os.ReadFile(filepath.Join(root, "install-args"))
 			if err != nil || !strings.Contains(string(installed), "--only-binary=:all: PyYAML==6.0.3") {
 				t.Fatalf("wrong prerequisite install: %q, %v", installed, err)
+			}
+			version, err := os.ReadFile(filepath.Join(root, "version-code"))
+			if err != nil || !strings.Contains(string(version), "assert sys.version_info[:2] == (3, 13)") {
+				t.Fatalf("selected runtime version was not checked: %q, %v", version, err)
 			}
 		})
 	}
