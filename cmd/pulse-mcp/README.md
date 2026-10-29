@@ -218,12 +218,26 @@ notification on stdout for every non-transport event:
 { "jsonrpc": "2.0", "method": "notifications/finding.created", "params": { ... } }
 { "jsonrpc": "2.0", "method": "notifications/approval.pending",  "params": { ... } }
 { "jsonrpc": "2.0", "method": "notifications/action.completed",  "params": { ... } }
+{ "jsonrpc": "2.0", "method": "notifications/alert.fired",       "params": { ... } }
+{ "jsonrpc": "2.0", "method": "notifications/alert.resolved",    "params": { ... } }
+{ "jsonrpc": "2.0", "method": "notifications/resource.status_changed", "params": { ... } }
 ```
 
 The `params` object is the SSE event's `data` payload verbatim, so an
 agent that already knows the substrate's wire shape sees identical
 content to what an HTTP SSE consumer would. Transport plumbing
 (`stream.connected`, `heartbeat`) is filtered out.
+
+`alert.fired`, `alert.resolved` and `resource.status_changed` carry the
+canonical `resourceId`, resource name and type, and the `changeId` and `kind`
+that `list_recent_changes` returns for the same change, so an agent can read
+the surrounding history. They carry the alert identifier, type and level, or
+the status `from` and `to`, never alert message or command text. A resource's
+status changes within 30 seconds of the last announced one fold into a single
+event with `coalescedTransitions`; a flap that ends where it started is not
+announced. Pulse announces changes as it records them; it does not replay old
+alert history on restart, and an event dropped for a slow client is still
+readable through `list_recent_changes`.
 
 `action.completed` also covers failed or refused terminal actions; its name
 alone is not a successful dispatch or recovery receipt. Inspect the result and

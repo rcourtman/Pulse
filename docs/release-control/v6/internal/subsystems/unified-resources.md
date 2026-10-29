@@ -9042,3 +9042,18 @@ protect grouped metadata, responsive columns and bounded rendering. Browser
 proof must exercise the consuming list at desktop/narrow widths, inspect actual
 pixels, identity, state/age fit, touch/keyboard disclosure, filters and live
 updates. This is safer evidence inspection, not a restore or installed recovery.
+
+### Monitor adapter announces the changes it recorded (29 October 2026)
+
+`MonitorAdapter.SetChangeObserver` installs one non-blocking observer that
+hears each change the adapter just persisted, with its resource ID resolved to
+the canonical identity the row was stored under. Registry diffs from
+`replaceRegistry` and `PopulateSupplementalRecords` are announced after the new
+generation is swapped in, so an observer reading the adapter sees the
+generation that produced the change; `recordRegistryChanges` and
+`recordRegistryChangesBetweenGenerations` return only the changes the store
+accepted. Alert lifecycle rows are announced only through `RecordLiveChange`;
+`RecordChange` stays silent so replayed and imported history is not presented
+as new. The API agent event stream is the only observer today. Proof:
+`TestMonitorAdapterChangeObserverHearsOnlyRecordedLiveChanges` in
+`internal/unifiedresources/history_identity_test.go`.

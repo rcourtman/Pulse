@@ -12,6 +12,9 @@ func TestAgentActionableEventKindsReturnsDetachedKnownKinds(t *testing.T) {
 		string(EventKindFindingCreated),
 		string(EventKindApprovalPending),
 		string(EventKindActionCompleted),
+		string(EventKindAlertFired),
+		string(EventKindAlertResolved),
+		string(EventKindResourceStatusChanged),
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("AgentActionableEventKinds() = %v, want %v", got, want)
@@ -43,5 +46,9 @@ func TestSubscribeEventsDescriptionUsesSharedEventKinds(t *testing.T) {
 		if !strings.Contains(description, kind) {
 			t.Fatalf("subscribe_events description missing %q: %s", kind, description)
 		}
+	}
+	// Change events point agents at the timeline read for surrounding history.
+	if !strings.Contains(description, ListRecentChangesCapabilityName) {
+		t.Fatalf("subscribe_events description must name %s: %s", ListRecentChangesCapabilityName, description)
 	}
 }

@@ -4712,6 +4712,16 @@ readable without a name, so the timeline's recovery posture is exactly the
 `resource_changes` table's: whatever survives a restart or restore is what
 agents read, with no timeline-specific rehydration or recovery artifact.
 
+The live `alert.fired`, `alert.resolved` and `resource.status_changed` agent
+events add no persistence. They are published in memory after the monitor
+adapter has recorded the matching `resource_changes` row, and per-resource
+status coalescing lives only in process memory. An event dropped for a slow
+subscriber, or lost to a restart, is not replayed; the durable row it pointed
+at stays readable through `list_recent_changes`. Alert lifecycle replay,
+active-alert reconciliation and imported history after a restore record their
+rows through the non-announcing `RecordChange` path, so recovery never
+re-announces old alerts.
+
 The Patrol-control status endpoint at
 `/api/agent/patrol-control/status` introduces no new persistence. The legacy
 `/api/agent/operations-loop/status` URL remains a compatibility alias. It reads the

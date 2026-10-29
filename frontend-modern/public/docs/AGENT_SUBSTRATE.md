@@ -110,7 +110,13 @@ actor. Validation failures emit the `operator_state_invalid` and
 the specific conflict instead of retrying blindly.
 
 **Push.** `/api/agent/events` is an SSE stream that fires `finding.created`,
-`approval.pending`, and `action.completed` as state changes. `action.completed`
+`approval.pending`, `action.completed`, `alert.fired`, `alert.resolved` and
+`resource.status_changed` as state changes. The alert and status events are
+doorbells for changes Pulse just recorded: each carries the canonical
+`resourceId` and the `changeId` that `list_recent_changes` returns, so read the
+history there rather than treating the event as the whole record. Status flaps
+on one resource are coalesced into at most one event per 30 seconds.
+`action.completed`
 means a terminal action record, **including failed or refused actions**, not
 necessarily a successful dispatch. Inspect its result and verification evidence;
 the event name alone does not confirm the intended outcome. An idle stream is

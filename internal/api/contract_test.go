@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/ed25519"
@@ -45,6 +46,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/alerting"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/configapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
@@ -28674,4 +28676,63 @@ func TestContract_PulseMCPPublishesRecentChangesAsReadOnlyTool(t *testing.T) {
 		return
 	}
 	t.Fatalf("Pulse MCP surface does not publish %s", agentcapabilities.ListRecentChangesCapabilityName)
+}
+
+// Change events reach only subscribers in the organization whose monitor
+// recorded them; untagged events still reach everyone.
+func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
+	b := NewAgentEventBroadcaster()
+	producer, _ := newTestAgentChangeEventProducer(b)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), apicontext.OrgIDContextKey, "tenant-a")
+		b.HandleAgentEvents(w, r.WithContext(ctx))
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && b.SubscriberCount() == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	producer.observer("tenant-b", nil)(unifiedresources.ResourceChange{ID: "foreign", ResourceID: "vm-b", Kind: unifiedresources.ChangeAlertFired})
+	producer.observer("", nil)(unifiedresources.ResourceChange{ID: "default-org", ResourceID: "vm-d", Kind: unifiedresources.ChangeAlertFired})
+	producer.observer("tenant-a", nil)(unifiedresources.ResourceChange{ID: "own", ResourceID: "vm-a", Kind: unifiedresources.ChangeAlertFired})
+	b.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "untagged-finding"})
+
+	got := make(chan string, 1)
+	go func() {
+		scanner := bufio.NewScanner(resp.Body)
+		var collected strings.Builder
+		for scanner.Scan() {
+			collected.WriteString(scanner.Text())
+			collected.WriteString("\n")
+			if strings.Contains(collected.String(), "untagged-finding") {
+				got <- collected.String()
+				return
+			}
+		}
+	}()
+	select {
+	case stream := <-got:
+		if !strings.Contains(stream, "event: alert.fired") || !strings.Contains(stream, `"changeId":"own"`) {
+			t.Fatalf("own organization's alert missing from stream:\n%s", stream)
+		}
+		for _, foreign := range []string{`"changeId":"foreign"`, `"changeId":"default-org"`} {
+			if strings.Contains(stream, foreign) {
+				t.Fatalf("stream leaked %s:\n%s", foreign, stream)
+			}
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for the stream")
+	}
 }

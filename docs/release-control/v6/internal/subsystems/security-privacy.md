@@ -3757,3 +3757,16 @@ the session router's default branch, which still refuses tokens without
 `ai:chat` before answering `404`
 (`TestRelayMobileAccessScopeDeniesAdjacentAIRoutes`). The undo, redo, and steer
 notes above are history.
+
+### Agent change events stay inside their organization (29 October 2026)
+
+`alert.fired`, `alert.resolved` and `resource.status_changed` events carry an
+unexported organization tag from the monitor that recorded the change, and
+`HandleAgentEvents` delivers a tagged event only to subscribers whose request
+organization matches (the legacy empty organization is `default`). A tenant
+therefore never hears another tenant's alerts or outages on
+`/api/agent/events`. The payload excludes alert messages, change reasons and
+command metadata, so a monitoring-read token learns nothing from an event that
+it could not already read through `list_recent_changes`. Proof:
+`TestContract_AgentChangeEventsStayInsideTheirOrganization` in
+`internal/api/contract_test.go`.

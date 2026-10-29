@@ -1012,3 +1012,61 @@ func TestHistoryIdentityLinkedAgentDiskUsesCanonicalOwner(t *testing.T) {
 		require.Empty(t, ownerID, ref)
 	}
 }
+
+// The change observer hears the changes a registry rebuild recorded, after
+// the new generation is readable, and the alert rows recorded live through
+// RecordLiveChange under their resolved canonical ID. RecordChange, the path
+// replayed and imported history takes, stays silent.
+func TestMonitorAdapterChangeObserverHearsOnlyRecordedLiveChanges(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, store.Close()) })
+	now := time.Now().UTC().Truncate(time.Second)
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	snapshot := proxmoxHistoryIdentitySnapshot(now)
+	adapter.PopulateFromSnapshot(snapshot)
+	vmID := historyIdentityResourceID(t, adapter.currentRegistry(), ResourceTypeVM, "web")
+
+	var heard []ResourceChange
+	var statusAtNotify string
+	adapter.SetChangeObserver(func(change ResourceChange) {
+		heard = append(heard, change)
+		if change.ResourceID == vmID {
+			if resource, _, ok := adapter.GetByReference(change.ResourceID); ok {
+				statusAtNotify = string(resource.Status)
+			}
+		}
+	})
+
+	snapshot.VMs[0].Status = "stopped"
+	snapshot.VMs[0].LastSeen = now.Add(time.Minute)
+	adapter.PopulateFromSnapshot(snapshot)
+	var transition *ResourceChange
+	for i := range heard {
+		if heard[i].ResourceID == vmID && heard[i].Kind == ChangeStateTransition {
+			transition = &heard[i]
+		}
+	}
+	require.NotNil(t, transition, "status change must reach the observer: %+v", heard)
+	require.Equal(t, "online", transition.From)
+	require.Equal(t, "offline", transition.To)
+	require.Contains(t, transition.Metadata["changedFields"], "status")
+	require.Equal(t, string(StatusOffline), statusAtNotify, "observer must read the generation that produced the change")
+	stored, err := store.GetRecentChangesFiltered(vmID, time.Time{}, 10, ResourceChangeFilters{Kinds: []ChangeKind{ChangeStateTransition}})
+	require.NoError(t, err)
+	require.NotEmpty(t, stored)
+	require.Equal(t, transition.ID, stored[0].ID)
+
+	heard = nil
+	require.NoError(t, adapter.RecordChange(ResourceChange{ID: "replayed", ResourceID: "lab:pve1:101", Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now}))
+	require.Empty(t, heard, "RecordChange must not announce")
+
+	require.NoError(t, adapter.RecordLiveChange(ResourceChange{ID: "live", ResourceID: "lab:pve1:101", Kind: ChangeAlertFired, SourceType: SourceHeuristic, ObservedAt: now}))
+	require.Len(t, heard, 1)
+	require.Equal(t, "live", heard[0].ID)
+	require.Equal(t, vmID, heard[0].ResourceID, "live alert changes carry the canonical ID they were stored under")
+
+	adapter.SetChangeObserver(nil)
+	require.NoError(t, adapter.RecordLiveChange(ResourceChange{ID: "unobserved", ResourceID: "lab:pve1:101", Kind: ChangeAlertResolved, SourceType: SourceHeuristic, ObservedAt: now}))
+	require.Len(t, heard, 1)
+}

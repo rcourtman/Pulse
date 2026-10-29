@@ -1984,8 +1984,12 @@ The Pulse Intelligence event vocabulary is part of that same shared
 transport-event filtering, MCP notification method projection, shared SSE
 record parsing, shared SSE-to-MCP notification bridging, and reference probes
 must consume the shared event kind constants/helpers instead of maintaining local copies of
-`finding.created`, `approval.pending`, `action.completed`, `stream.connected`,
-or `heartbeat`.
+`finding.created`, `approval.pending`, `action.completed`, `alert.fired`,
+`alert.resolved`, `resource.status_changed`, `stream.connected`, or
+`heartbeat`. `AgentActionableEventKinds` lists the three change kinds, so MCP
+`--emit-notifications` advertises and forwards them without a local list, and
+`SubscribeEventsDescription` derives their wording, including the
+`ResourceStatusEventCoalesceWindow` duration, from the same constants.
 MCP `tools/list` must use the shared
 `agentcapabilities.ProjectManifestSurfaceTools` projection for the Pulse MCP
 surface. The manifest-owned `surfaceToolContracts` field is the allowlist for

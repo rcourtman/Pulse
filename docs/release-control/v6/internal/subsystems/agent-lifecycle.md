@@ -2749,6 +2749,14 @@ agents may read what changed across the fleet, but `command_executed` and
 `commandRedacted:true`, the command text, output, and caller details dropped,
 and a command's reason cut to its status. A change record is history, never command
 disclosure, install-token scope, or execution authority.
+
+The `alert.fired`, `alert.resolved` and `resource.status_changed` events on
+`/api/agent/events` are the push form of the same records and the same
+boundary. Their payload carries only identifiers, the alert type and level, and
+the status `from`/`to`; it never carries alert messages, change reasons, command
+metadata or anything a monitoring-read token could not already read. An event is
+a doorbell for a recorded change, never an instruction to act, install-token
+scope, or execution authority.
 Agent-facing provisioning capabilities declared by
 `/api/agent/capabilities` are also API-owned projections over the canonical
 node lifecycle and discovery APIs. Lifecycle and infrastructure onboarding
