@@ -21,6 +21,29 @@
 
 ## Purpose
 
+### Backup-server memory does not invent empty or current readings
+
+The Backup servers table keeps a valid selected memory percentage when a partial
+metric reports capacity without used bytes; it never substitutes zero used bytes.
+A displayed byte pair needs finite non-negative used bytes and positive capacity,
+with used not exceeding capacity. Valid reported pairs still determine the
+percentage, including an explicit measured zero. An independent finite percentage
+in the range 0–100 remains usable when the byte pair is absent or invalid.
+
+Server reachability does not renew memory evidence. The table reuses the resource
+drawer's memory-observation qualification: retained and unknown readings say
+`Last known` or `Freshness unknown`; explicitly unavailable readings show no
+number. A stopped linked agent qualifies its own reading without invalidating an
+independent current source. Offline suppression, datastore risk, backup counts,
+identity, History targets and original observation clocks remain unchanged.
+
+Normal-suite `ProxmoxBackupServersTable.memory.test.tsx` covers partial and invalid
+metrics, measured zero, retained/unavailable/future observations, stopped-agent
+source isolation, live recovery and multi-datastore/offline controls. Browser
+proof must consume the resource producer through the actual Backups surface and
+its existing drawer at desktop and narrow widths. This improves truthful
+inspection, not installed memory relief, a successful backup or guest recovery.
+
 ### Fleet protection reads bound their request fan-out
 
 Coverage reads keep the existing 200-subject batch size and issue at most four
