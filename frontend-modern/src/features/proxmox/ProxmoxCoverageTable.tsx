@@ -11,6 +11,7 @@ import {
 
 import {
   InlineDetailPanel,
+  DetailSectionTable,
   compactDetailRows,
   compactDetailSections,
   makeDetailRow,
@@ -66,6 +67,8 @@ import {
   getCoverageLayoutForContainer,
   isCoverageEvidenceColumnVisible,
   selectCoverageRestoreEvidence,
+  selectCoverageTaskEvidence,
+  COVERAGE_TASK_EVIDENCE_PAGE_SIZE,
   COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
@@ -279,6 +282,109 @@ const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSect
   ),
 });
 
+function CoverageTaskCandidates(props: { tasks: readonly CoverageTask[] }) {
+  const [limit, setLimit] = createSignal(COVERAGE_TASK_EVIDENCE_PAGE_SIZE);
+  const [retainControl, setRetainControl] = createSignal(false);
+  createEffect(() => {
+    if (props.tasks.length > COVERAGE_TASK_EVIDENCE_PAGE_SIZE) setRetainControl(true);
+  });
+  const preview = createMemo(() => selectCoverageTaskEvidence(props.tasks, limit()));
+  const counts = createMemo(() => {
+    const tasks = props.tasks;
+    return [
+      ['Failed', tasks.filter((task) => task.label === 'Failed').length],
+      ['Running', tasks.filter((task) => task.label === 'Running').length],
+      ['OK', tasks.filter((task) => task.label === 'OK').length],
+      [
+        'Other status',
+        tasks.filter((task) => !['Failed', 'Running', 'OK'].includes(task.label)).length,
+      ],
+      ['With error text', tasks.filter((task) => task.error?.trim()).length],
+      ['Unknown start', tasks.filter((task) => task.startedMs === undefined).length],
+    ]
+      .filter(([, count]) => count)
+      .map(([label, count]) => `${label}: ${count}`)
+      .join(' · ');
+  });
+  return (
+    <Show when={props.tasks.length > 0 || retainControl()}>
+      <div class="@container/task-evidence min-w-0 space-y-2" data-coverage-task-candidates>
+        <p class="text-[11px] text-muted whitespace-normal wrap-anywhere" role="status">
+          Showing {preview().length} of {props.tasks.length} possible latest tasks.
+          <Show when={props.tasks.length === 0}> No uncertain tasks remain in this read.</Show>
+        </p>
+        <Show when={props.tasks.length > 0}>
+          <p class="text-[11px] text-muted whitespace-normal wrap-anywhere">{counts()}</p>
+          <Show when={props.tasks.length > preview().length}>
+            <p class="text-[11px] text-muted whitespace-normal wrap-anywhere">
+              The preview samples outcomes and known or unknown starts. Full counts include tasks
+              outside the preview. It is not a time order.
+            </p>
+          </Show>
+        </Show>
+        {/* Outside rebuilt detail sections: the same control keeps keyboard focus
+            through expansion, polling, exhaustion and candidate withdrawal. */}
+        <Show when={retainControl()}>
+          <button
+            type="button"
+            class="min-h-10 rounded-sm px-2 py-1 text-xs font-medium text-accent hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            aria-disabled={preview().length >= props.tasks.length}
+            onClick={() => {
+              if (preview().length < props.tasks.length)
+                setLimit(preview().length + COVERAGE_TASK_EVIDENCE_PAGE_SIZE);
+            }}
+          >
+            <Show
+              when={preview().length < props.tasks.length}
+              fallback={<>All {preview().length} possible latest tasks shown</>}
+            >
+              Show{' '}
+              {Math.min(COVERAGE_TASK_EVIDENCE_PAGE_SIZE, props.tasks.length - preview().length)}{' '}
+              more possible latest tasks
+            </Show>
+          </button>
+        </Show>
+        <Show when={props.tasks.length > 0}>
+          <DetailSectionTable
+            wrapValues
+            sections={[
+              {
+                label: 'Task order',
+                // The literal Unknown value is always a renderable detail row.
+                rows: [makeDetailRow('Latest task', 'Unknown', { tone: 'warning' })!],
+                footerContent: (
+                  <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+                    {TASK_ORDER_NOTICE}
+                  </p>
+                ),
+              },
+            ]}
+          />
+          {/* Keep existing cards when another page is revealed. Rebuilding one
+              large sections array would recreate every previous task as well. */}
+          <div class="grid min-w-0 grid-cols-1 gap-2 @min-[48rem]/task-evidence:grid-cols-2 @min-[64rem]/task-evidence:grid-cols-3">
+            <For each={preview()}>
+              {(task) => (
+                <div class="min-w-0" data-coverage-task-card={task.id}>
+                  <DetailSectionTable
+                    wrapValues
+                    sections={[
+                      buildCoverageTaskSection(
+                        task,
+                        `Possible latest task ${props.tasks.indexOf(task) + 1}`,
+                      ),
+                    ]}
+                  />
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+      </div>
+    </Show>
+  );
+}
+
 // Provider evidence quality (did the job run, is history complete, can Pulse
 // read it) explains a posture; it is detail, not the answer.
 const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] =>
@@ -314,20 +420,6 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
           ),
         }
       : null,
-    row.taskCandidates?.length
-      ? {
-          label: 'Task order',
-          rows: compactDetailRows([makeDetailRow('Latest task', 'Unknown', { tone: 'warning' })]),
-          footerContent: (
-            <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-              {TASK_ORDER_NOTICE}
-            </p>
-          ),
-        }
-      : null,
-    ...(row.taskCandidates ?? []).map((task, index) =>
-      buildCoverageTaskSection(task, `Possible latest task ${index + 1}`),
-    ),
     row.latestTask ? buildCoverageTaskSection(row.latestTask, 'Latest task') : null,
     {
       label: 'Provider evidence',
@@ -1016,6 +1108,7 @@ export function ProxmoxCoverageTable(props: {
                                 </div>
                               </Show>
                             </div>
+                            <CoverageTaskCandidates tasks={row.taskCandidates ?? []} />
                           </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>

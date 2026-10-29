@@ -419,3 +419,37 @@ export const selectCoverageRestoreEvidence = <
   }
   return newestFirst.filter((artifact) => picked.has(artifact.id));
 };
+
+export const COVERAGE_TASK_EVIDENCE_PAGE_SIZE = 8;
+
+// Unknown/tied starts can leave an entire provider history as possible latest
+// tasks. Bound the initial disclosure, but keep a witness of each outcome and
+// known/unknown start group so an OK prefix cannot hide failure or uncertainty.
+// Preserve the model's deterministic, explicitly non-chronological order.
+export const selectCoverageTaskEvidence = <
+  T extends { id: string; label: string; startedMs?: number; error?: string },
+>(
+  tasks: readonly T[],
+  limit = COVERAGE_TASK_EVIDENCE_PAGE_SIZE,
+): T[] => {
+  const picked = new Set<string>();
+  const groups = new Set<string>();
+  for (const task of tasks) {
+    const outcome = task.error?.trim()
+      ? 'Failed'
+      : ['Failed', 'Running', 'OK'].includes(task.label)
+        ? task.label
+        : 'other';
+    const group = `${outcome}:${task.startedMs === undefined ? 'unknown' : 'known'}`;
+    if (!groups.has(group)) {
+      groups.add(group);
+      picked.add(task.id);
+    }
+  }
+  const cap = Math.max(limit, picked.size);
+  for (const task of tasks) {
+    if (picked.size >= cap) break;
+    picked.add(task.id);
+  }
+  return tasks.filter((task) => picked.has(task.id));
+};
