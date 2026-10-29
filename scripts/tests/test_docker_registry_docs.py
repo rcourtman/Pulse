@@ -36,6 +36,24 @@ class DockerRegistryDocsTest(unittest.TestCase):
         self.assertNotIn("the installer's systemd service runs the agent as root", text)
         self.assertIn("only for an agent that actually runs as root", text)
 
+    def test_http_only_registry_is_not_a_credential_setup_problem(self):
+        text = prose()
+        for fact in ("HTTPS is required for registry checks",
+                     "Docker's `insecure-registries` setting does not apply",
+                     "no plain-HTTP registry option",
+                     "http: server gave HTTP response to HTTPS client",
+                     "not evidence of a missing login",
+                     "will not repair that protocol mismatch",
+                     "TLS reverse proxy", "certificate trusted by the agent",
+                     "send registry passwords over HTTP to test this"):
+            self.assertIn(fact, text)
+        # Explain transport before asking operators to log in. This is a
+        # source-bound documentation assertion, not installed-registry proof.
+        self.assertLess(text.index("HTTPS is required"), text.index("**Native agent:**"))
+        source = (ROOT / "internal/dockeragent/registry.go").read_text()
+        self.assertIn('fmt.Sprintf("https://%s/v2/%s/manifests/%s"', source)
+        self.assertIn("MinVersion: tls.VersionTLS12", source)
+
     def test_paths_and_cache_match_the_existing_producer(self):
         text = section()
         source = (ROOT / "internal/dockeragent/registry_credentials.go").read_text()
