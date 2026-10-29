@@ -20371,7 +20371,7 @@ func TestContract_AgentSubstrateDocReflectsCurrentMCPOnboarding(t *testing.T) {
 		"`cmd/pulse-mcp`",
 		"projects each manifest capability into one MCP tool",
 		"`--emit-notifications`",
-		"The saved installers `install-mcp.sh` and `install-mcp.ps1`",
+		"installers `install-mcp.sh` and `install-mcp.ps1` fetch",
 		"Do not pipe a remote download into Bash or PowerShell",
 		"gh release verify-asset",
 		"after verification and before running it",
