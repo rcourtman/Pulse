@@ -1801,14 +1801,18 @@ describe('Docker native tables', () => {
     expect(networkCells[2].querySelectorAll('[title]')).toHaveLength(1);
     // The health filter reads the same verdict: degraded, not healthy, and not
     // offline, since the network itself is up.
-    expect(screen.getByRole('button', { name: /^Degraded, 1$/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Healthy, 1$/ })).toBeNull();
+    const networkFilters = within(screen.getByRole('group', { name: 'Status' }));
+    expect(networkFilters.getByRole('button', { name: /^Degraded, 1$/ })).toBeInTheDocument();
+    expect(networkFilters.queryByRole('button', { name: /^Healthy, 1$/ })).toBeNull();
 
     fireEvent.click(document.querySelector('[data-docker-network-row="network-dense"]')!);
 
     const detail = within(
       document.querySelector('[data-docker-network-detail-row="network-dense"]')!,
     );
+    // Resolve filters in their accessible group, not the growing attachment
+    // list. Keep the same real buttons, role/name/visibility checks and clicks.
+    const attachmentFilters = within(detail.getByRole('group', { name: 'Status' }));
     expect(detail.getByPlaceholderText('Search attached containers')).toBeInTheDocument();
     expect(detail.getByText('Show all 30 containers')).toBeInTheDocument();
     expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
@@ -1819,7 +1823,7 @@ describe('Docker native tables', () => {
     expect(detail.getByText('worker-29')).toBeInTheDocument();
     expect(detail.getByText('Show first 24')).toBeInTheDocument();
 
-    fireEvent.click(detail.getByRole('button', { name: /^Attention, \d+$/ }));
+    fireEvent.click(attachmentFilters.getByRole('button', { name: /^Attention, \d+$/ }));
     expect(detail.getAllByText('2 of 30 containers').length).toBeGreaterThan(0);
     expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
     expect(detail.getByText('api-restarting')).toBeInTheDocument();
@@ -1827,7 +1831,7 @@ describe('Docker native tables', () => {
 
     // Running is Docker's run state: the unhealthy container still runs, so it
     // matches Running too, listed under its Attention section.
-    fireEvent.click(detail.getByRole('button', { name: /^Running, 28$/ }));
+    fireEvent.click(attachmentFilters.getByRole('button', { name: /^Running, 28$/ }));
     expect(detail.getAllByText('28 of 30 containers').length).toBeGreaterThan(0);
     expect(detail.getByText('api-unhealthy')).toBeInTheDocument();
     expect(detail.getByText('Needs operator review')).toBeInTheDocument();
@@ -1839,12 +1843,12 @@ describe('Docker native tables', () => {
     expect(detail.queryByText('api-restarting')).toBeNull();
     expect(detail.queryByText('worker-stopped')).toBeNull();
 
-    fireEvent.click(detail.getByRole('button', { name: /^Other, 2$/ }));
+    fireEvent.click(attachmentFilters.getByRole('button', { name: /^Other, 2$/ }));
     expect(detail.getByText('api-restarting')).toBeInTheDocument();
     expect(detail.getByText('worker-stopped')).toBeInTheDocument();
     expect(detail.queryByText('api-unhealthy')).toBeNull();
 
-    fireEvent.click(detail.getByRole('button', { name: /^All, \d+$/ }));
+    fireEvent.click(attachmentFilters.getByRole('button', { name: /^All, \d+$/ }));
     fireEvent.input(detail.getByPlaceholderText('Search attached containers'), {
       target: { value: 'worker-29' },
     });
