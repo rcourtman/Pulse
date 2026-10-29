@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -18,6 +19,9 @@ import (
 // Non-parallel: these tests capture and restore the package logger. Only local
 // synthetic PBS responses are used; no installed target or backup is touched.
 func TestGetDatastoresRoutineLogging(t *testing.T) {
+	// First-dial process startup is not recurring datastore-poll output. Do
+	// this before capture so isolated/race runs have the same basis as a suite.
+	tlsutil.GetDNSResolver()
 	for _, level := range []zerolog.Level{zerolog.InfoLevel, zerolog.DebugLevel} {
 		t.Run(level.String(), func(t *testing.T) {
 			const stores, polls = 12, 5
@@ -121,6 +125,7 @@ func TestGetDatastoresRoutineLogging(t *testing.T) {
 }
 
 func TestGetDatastoresFailureLogging(t *testing.T) {
+	tlsutil.GetDNSResolver()
 	for _, failure := range []string{"list-json", "status-json", "status-http"} {
 		t.Run(failure, func(t *testing.T) {
 			var captured bytes.Buffer
