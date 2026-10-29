@@ -107,7 +107,7 @@ describe('backup time evidence', () => {
       expect(badge).not.toHaveAccessibleName(/unavailable/);
       expect(badge.className).toContain(running ? 'blue' : 'green');
       setTimestamp(0);
-      expect(badge).toHaveTextContent(running ? 'Running' : 'None');
+      expect(badge).toHaveTextContent(running ? 'Running' : 'Unknown');
       expect(badge).toHaveAccessibleName(/no (completed )?backup/);
     },
   );
