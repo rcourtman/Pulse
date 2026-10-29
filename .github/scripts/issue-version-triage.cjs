@@ -255,10 +255,12 @@ function isActionableTopicValue(value, report) {
 
 function normalizeVersion(value) {
   if (!value) return null;
-  // Do not salvage a later dotted fragment after rejecting the original
-  // token (for example, 6.0.1 inside 6.6.0.1).
-  const match = String(value).match(new RegExp(String.raw`(?<![0-9A-Za-z_.])v?(${VERSION_TOKEN})`, "i"));
-  return match ? match[1] : null;
+  // Capture the first whole candidate before validating it. A failed match
+  // must not resume inside that same malformed token and salvage a later
+  // version, even after a hyphen. Trim sentence stops, not version segments.
+  const match = String(value).match(/(?<![0-9A-Za-z_.])v?(\d+\.\d+\.\d+[0-9A-Za-z._-]*)/i);
+  const candidate = match?.[1].replace(/\.+$/, "");
+  return candidate && new RegExp(`^${VERSION_TOKEN}$`).test(candidate) ? candidate : null;
 }
 
 function declaredVersionIsTransition(value) {

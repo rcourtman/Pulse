@@ -4146,14 +4146,14 @@ test("loose-list version declarations inside secondary topics remain topic evide
 });
 
 test("malformed version tokens cannot be shortened or salvaged into another release", () => {
-  for (const value of ["6.6.0.1", "v6.6.0.12", "6.6.0-", "V6.6.0-beta..3", "6.6.0-beta_3"]) {
+  for (const value of ["6.6.0.1", "v6.6.0.12", "6.6.0-", "V6.6.0-beta..3", "6.6.0-beta_3", "6.6.0-beta..-v6.5.0"]) {
     assert.equal(triage.internals.normalizeVersion(value), null, value);
   }
 });
 
 test("explicit malformed versions remain authoritative in all supported Markdown layouts", () => {
   const { extractPulseVersion } = triage.internals;
-  for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3"]) {
+  for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3", "6.6.0-beta..-v6.5.0"]) {
     for (const body of [
       `### Pulse version\n${value}\n\n### Agent version\n6.5.0`,
       `**Pulse version:** ${value}\nAgent version: 6.5.0`,
@@ -4170,7 +4170,7 @@ test("explicit malformed versions remain authoritative in all supported Markdown
 
 test("title fallback does not shorten a malformed server or neutral version token", () => {
   const { extractPulseVersion } = triage.internals;
-  for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3"]) {
+  for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3", "6.6.0-beta..-v6.5.0"]) {
     for (const title of [
       `Pulse ${value} loses readings`,
       `Pulse Pro version: V${value} loses readings`,
@@ -4198,7 +4198,7 @@ test("complete stable and prerelease tokens retain their full value and ordinary
 
 test("malformed attempted archives cannot borrow a valid dotted fragment", () => {
   for (const stem of ["pulse", "pulse-pro"]) {
-    for (const value of ["6.6.0.1", "6.6.0-beta..3"]) {
+    for (const value of ["6.6.0.1", "6.6.0-beta..3", "6.6.0-beta..-v6.5.0"]) {
       const archive = `${stem}-v${value}-linux-amd64.tar.gz`;
       assert.equal(triage.internals.extractPulseVersion("Pulse 6.4.5 install failed",
         `### Pulse version\n\`${archive}\``), null, archive);
@@ -4208,7 +4208,7 @@ test("malformed attempted archives cannot borrow a valid dotted fragment", () =>
 
 for (const action of ["opened", "edited", "reopened"]) {
   test(`${action} malformed-version metadata preserves Community decisions and accepts a later correction`, async () => {
-    for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3"]) {
+    for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3", "6.6.0-beta..-v6.5.0"]) {
       const preserved = ["bug", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed", "affects-storage"];
       const issue = { number: 42, state: "open", title: "Pulse 6.4.5 update failed",
         body: `### Pulse version\n${value}\n\n### Additional actionable topics\nKeep failed attempts visible.`,
