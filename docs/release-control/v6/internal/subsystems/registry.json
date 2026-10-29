@@ -6511,6 +6511,7 @@
             "match_prefixes": [],
             "match_files": [
               "internal/truenas/client.go",
+              "internal/truenas/core_realtime_memory.go",
               "internal/truenas/core_reporting.go",
               "internal/truenas/disk_health.go",
               "internal/truenas/disk_rates.go",
@@ -6519,6 +6520,7 @@
               "internal/truenas/provider.go",
               "internal/truenas/subscription.go",
               "internal/truenas/telemetry.go",
+              "internal/truenas/testdata/core13_realtime_memory.json",
               "internal/truenas/testdata/core13_reporting.json",
               "internal/truenas/transport.go",
               "internal/truenas/types.go"
@@ -6534,6 +6536,7 @@
               "internal/truenas/client_api_shapes_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",
+              "internal/truenas/core_realtime_memory_test.go",
               "internal/truenas/core_reporting_test.go",
               "internal/truenas/disk_history_identity_test.go",
               "internal/truenas/disk_history_netdata_test.go",
