@@ -1234,7 +1234,9 @@ describe('independent Proxmox backup inventory reads', () => {
       await screen.findByText(/The response format is invalid/);
       await waitFor(() => expect(recoverableRows()).toHaveLength(1));
       expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
-      expect(screen.getByText('Backup inventory is incomplete')).toBeInTheDocument();
+      expect(screen.getByText(/The response format is invalid/)).toHaveTextContent(
+        'Counts are incomplete.',
+      );
       expect(
         screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` }),
       ).toBeEnabled();
@@ -1245,7 +1247,7 @@ describe('independent Proxmox backup inventory reads', () => {
   );
 
   it.each(duplicateCases)(
-    'retains accepted details/counts after a duplicate %s %s refresh, retries only that source and rejects recurrence',
+    'withdraws ambiguous %s %s on refresh, preserves independent details and recovers only through valid reads',
     async (source, key) => {
       let bad = false;
       apiFetchMock.mockImplementation((url: string) =>
@@ -1263,20 +1265,24 @@ describe('independent Proxmox backup inventory reads', () => {
       try {
         mountBackupReadState();
         await waitFor(() => expect(recoverableRows()).toHaveLength(3));
-        const firstRow = recoverableRows()[0] as HTMLElement;
-        fireEvent.click(within(firstRow).getByRole('button', { name: /expand details/i }));
-        const detail = await screen.findByTestId('proxmox-recoverable-detail');
-        const accepted = detail.textContent;
+        const affected = [...recoverableRows()].find((row) =>
+          row.textContent?.includes(source === 'pve' ? 'PVE file' : 'PBS'),
+        )! as HTMLElement;
+        fireEvent.click(within(affected).getByRole('button', { name: /expand details/i }));
+        await screen.findByTestId('proxmox-recoverable-detail');
         bad = true;
         await vi.advanceTimersByTimeAsync(30_000);
         await screen.findByText(/The response format is invalid/);
-        expect(recoverableRows()).toHaveLength(3);
-        expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(detail);
-        expect(detail.textContent).toBe(accepted);
+        expect(recoverableRows()).toHaveLength(source === 'pve' ? 1 : 2);
+        expect(screen.queryByTestId('proxmox-recoverable-detail')).not.toBeInTheDocument();
         expect(document.body).not.toHaveTextContent('UNACCEPTED_CONNECTION');
         expect(screen.getByText(/The response format is invalid/)).toHaveTextContent(
           'Counts are incomplete.',
         );
+        const independent = recoverableRows()[0] as HTMLElement;
+        fireEvent.click(within(independent).getByRole('button', { name: /expand details/i }));
+        const detail = await screen.findByTestId('proxmox-recoverable-detail');
+        const accepted = detail.textContent;
         const other = source === 'pve' ? 'pbs' : 'pve';
         const before = sourceCalls(other).length;
         const retry = screen.getByRole('button', {
@@ -1291,7 +1297,9 @@ describe('independent Proxmox backup inventory reads', () => {
         bad = true;
         await vi.advanceTimersByTimeAsync(30_000);
         await screen.findByText(/The response format is invalid/);
-        expect(recoverableRows()).toHaveLength(3);
+        expect(recoverableRows()).toHaveLength(source === 'pve' ? 1 : 2);
+        expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(detail);
+        expect(detail.textContent).toBe(accepted);
         expect(document.body).not.toHaveTextContent('UNACCEPTED_CONNECTION');
       } finally {
         vi.useRealTimers();
