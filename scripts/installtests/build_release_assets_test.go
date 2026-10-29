@@ -639,10 +639,11 @@ func TestReleaseContainerTargetsConsumeImmutableCandidate(t *testing.T) {
 
 	for _, needle := range []string{
 		"FROM pulse-runtime-foundation AS prebuilt-runtime-base",
-		"COPY --from=release_payload /${TARGETARCH:-amd64}/bin/pulse ./pulse",
+		"COPY --from=release_payload --chown=pulse:pulse --chmod=0755 /${TARGETARCH:-amd64}/bin/pulse ./pulse",
 		"FROM prebuilt-runtime-base AS runtime_prebuilt",
-		"COPY --from=release_payload /amd64/bin/pulse /opt/pulse/bin/pulse-linux-amd64",
-		"COPY --from=release_payload /arm64/bin/pulse /opt/pulse/bin/pulse-linux-arm64",
+		"COPY --from=prebuilt-downloads --chown=pulse:pulse /payload/ /opt/pulse/",
+		"COPY --from=release_payload /amd64/bin/pulse /payload/bin/pulse-linux-amd64",
+		"COPY --from=release_payload /arm64/bin/pulse /payload/bin/pulse-linux-arm64",
 		"! -name '*.sig' ! -name '*.sshsig' -exec chmod 755 {} +",
 		"FROM alpine:3.24@sha256:",
 		"AS agent_runtime_prebuilt",
@@ -1776,8 +1777,8 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 		`go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers`,
 		`--allow-empty-installer-ssh-public-key`,
 		`ssh-keygen -q -Y sign -f "${OPENSSH_SIGNING_KEY}" -n pulse-install`,
-		`COPY --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh`,
-		`COPY --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/`,
+		`COPY --chown=pulse:pulse --chmod=0755 --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh`,
+		`COPY --chown=pulse:pulse --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/`,
 	}
 	for _, needle := range dockerRequired {
 		if !strings.Contains(dockerfile, needle) {
@@ -1790,7 +1791,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS pulse-runtime-foundation`)
 	// Source-built and prebuilt servers/agents must consume the same selected
 	// runtime image; checking only digest syntax would permit a partial refresh.
-	for _, stage := range []string{"agent_runtime", "apprise-builder", "pulse-runtime-foundation", "agent_runtime_prebuilt"} {
+	for _, stage := range []string{"agent_runtime", "apprise-builder", "pulse-runtime-foundation", "prebuilt-downloads", "agent_runtime_prebuilt"} {
 		assertContainsAll(t, dockerfile, "FROM alpine:3.24@sha256:"+alpine324RuntimeDigest+" AS "+stage+"\n")
 	}
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
@@ -5804,5 +5805,139 @@ func TestProviderMSPStartupWorkflowRequiresMountedDaemonAcceptance(t *testing.T)
 	}
 	if !accepted || strings.Contains(string(content), "secrets.") || strings.Contains(string(content), "pull_request_target") {
 		t.Fatal("missing mounted-daemon acceptance or unsafe credential/event scope")
+	}
+}
+
+// Real Docker execution belongs to the fresh hosted PR job, not the worker's
+// daemon. Keep its fixture, exact source, read-only scope and negative controls
+// registered alongside the immutable-candidate packaging contract.
+func TestContainerPackagingProofIsReadOnlyAndSamePayload(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "container-packaging.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Permissions map[string]string
+		Jobs        map[string]struct {
+			RunsOn  string `yaml:"runs-on"`
+			Timeout int    `yaml:"timeout-minutes"`
+			Steps   []struct {
+				Run, Uses string
+				With      map[string]string
+			}
+		}
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" || len(workflow.Jobs) != 1 {
+		t.Fatal("packaging proof must retain read-only permissions and one isolated matrix job")
+	}
+	job := workflow.Jobs["packaging"]
+	if job.RunsOn != "ubuntu-24.04" || job.Timeout != 30 {
+		t.Fatal("packaging proof must use a fresh, bounded hosted runner")
+	}
+	for _, step := range job.Steps {
+		if strings.Contains(step.Run, "secrets.") || strings.Contains(step.Uses, "login-action") ||
+			strings.Contains(step.Run, "--push") || strings.Contains(step.Run, "workflow run") {
+			t.Fatal("packaging proof must not publish or acquire a mutation credential")
+		}
+	}
+	assertFileContainsAll(t, repoFile(".github", "workflows", "container-packaging.yml"),
+		"arch: [amd64, arm64]", "persist-credentials: false", "fetch-depth: 0",
+		"python3 scripts/tests/test_container_packaging.py", "sha256sum --check",
+		"593d9422caa52286ab22ad332e5990ccd515f84f7496853c577cfccab162a0b8",
+		"a39e0ff47c825b58bc9e93ee9ded20544cd812202a923a1ca257b00b91db6900",
+		`--base "$BASE_SHA" --arch "$ARCH"`, "if-no-files-found: error",
+	)
+	assertFileContainsAll(t, repoFile("scripts", "test-container-packaging.py"),
+		`"--target", "runtime_prebuilt"`, `"--network", "none"`,
+		`compare(before["payload_rootfs"], after["payload_rootfs"])`,
+		`no_payload_copyups(after["layers"])`, `records["runtime"] = runtime_checks`,
+		`records["result"] = "failed"`, `"merged_rootfs_regular_file_bytes"`,
+	)
+}
+
+func TestNativeMacOSContractPythonPrerequisite(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			Steps []struct{ Name, If, Run string }
+		}
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	recipe := ""
+	for _, step := range workflow.Jobs["native-agent"].Steps {
+		if step.Name == "Supply YAML parser for native Unix contract checks" {
+			if step.If != "runner.os == 'macOS'" {
+				t.Fatal("Python acquisition is the missing macOS prerequisite, not a platform-wide tool replacement")
+			}
+			recipe = step.Run
+		}
+		if step.Name == "Test NAS removal contracts before frontend preparation" && recipe == "" {
+			t.Fatal("parser must be installed before the native contract inventory")
+		}
+	}
+	if recipe == "" || !strings.Contains(recipe, "--only-binary=:all: 'PyYAML==6.0.3'") ||
+		!strings.Contains(recipe, `assert yaml.__version__ == "6.0.3"`) {
+		t.Fatal("missing isolated fixed-version prerequisite and import check")
+	}
+	for _, fault := range []string{"", "venv", "pip", "import"} {
+		t.Run("failure="+fault, func(t *testing.T) {
+			root := t.TempDir()
+			tools := filepath.Join(root, "tools")
+			if err := os.Mkdir(tools, 0700); err != nil {
+				t.Fatal(err)
+			}
+			python := `#!/bin/sh
+set -eu
+if [ "$1 $2" = '-m venv' ]; then
+  [ "$FAULT" != venv ] || exit 21
+  mkdir -p "$3/bin"
+  cp "$0" "$3/bin/python3"
+  exit 0
+fi
+if [ "$1 $2" = '-m pip' ]; then
+  [ "$FAULT" != pip ] || exit 22
+  printf '%s\n' "$*" > "$INSTALL_ARGS"
+  exit 0
+fi
+[ "$1" = -c ] || exit 90
+[ "$FAULT" != import ] || exit 23
+printf '%s\n' "$2" > "$IMPORT_CODE"
+`
+			if err := os.WriteFile(filepath.Join(tools, "python3"), []byte(python), 0700); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(root, "github-path")
+			cmd := exec.Command("bash", "--noprofile", "--norc", "-c", recipe)
+			cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"RUNNER_TEMP="+root, "GITHUB_PATH="+path, "FAULT="+fault,
+				"INSTALL_ARGS="+filepath.Join(root, "install-args"), "IMPORT_CODE="+filepath.Join(root, "import-code"))
+			output, err := cmd.CombinedOutput()
+			if (err == nil) != (fault == "") {
+				t.Fatalf("prerequisite exit: %v\n%s", err, output)
+			}
+			published, readErr := os.ReadFile(path)
+			if fault != "" {
+				if readErr == nil && len(published) != 0 {
+					t.Fatalf("failed prerequisite published a usable path: %q", published)
+				}
+				return
+			}
+			if readErr != nil || !strings.HasPrefix(string(published), root+"/pulse-contract-python.") ||
+				!strings.HasSuffix(string(published), "/bin\n") {
+				t.Fatalf("missing exact venv path: %q, %v", published, readErr)
+			}
+			installed, err := os.ReadFile(filepath.Join(root, "install-args"))
+			if err != nil || !strings.Contains(string(installed), "--only-binary=:all: PyYAML==6.0.3") {
+				t.Fatalf("wrong prerequisite install: %q, %v", installed, err)
+			}
+		})
 	}
 }

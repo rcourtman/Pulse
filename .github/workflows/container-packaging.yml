@@ -1,0 +1,100 @@
+name: Container packaging
+
+# Product packaging regression, not a release build or publication. Both images
+# receive identical immutable public fixture bytes; only the Dockerfile differs.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - docker-entrypoint.sh
+      - docker-healthcheck.sh
+      - scripts/prepare-release-container-context.sh
+      - scripts/test-container-packaging.py
+      - scripts/tests/test_container_packaging.py
+      - .github/workflows/container-packaging.yml
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - docker-entrypoint.sh
+      - docker-healthcheck.sh
+      - scripts/prepare-release-container-context.sh
+      - scripts/test-container-packaging.py
+      - scripts/tests/test_container_packaging.py
+      - .github/workflows/container-packaging.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-packaging-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  packaging:
+    name: Same-payload packaging (${{ matrix.arch }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Check out proposed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Test inventory and failure controls
+        run: python3 scripts/tests/test_container_packaging.py
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Prepare immutable public fixture
+        # Release 423296089 is immutable. These exact archive digests are fixture
+        # identities, not a moving latest/version selector or signing authority.
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/packaging-fixture"
+          for arch in amd64 arm64; do
+            file="pulse-v6.6.0-linux-${arch}.tar.gz"
+            curl --disable --fail --location --proto '=https' --proto-redir '=https' \
+              --connect-timeout 15 --max-time 300 \
+              "https://github.com/rcourtman/Pulse/releases/download/v6.6.0/${file}" \
+              --output "$RUNNER_TEMP/packaging-fixture/${file}"
+          done
+          (cd "$RUNNER_TEMP/packaging-fixture" && sha256sum --check <<'HASHES'
+          593d9422caa52286ab22ad332e5990ccd515f84f7496853c577cfccab162a0b8  pulse-v6.6.0-linux-amd64.tar.gz
+          a39e0ff47c825b58bc9e93ee9ded20544cd812202a923a1ca257b00b91db6900  pulse-v6.6.0-linux-arm64.tar.gz
+          HASHES
+          )
+          bash scripts/prepare-release-container-context.sh \
+            "$RUNNER_TEMP/packaging-fixture" 6.6.0 "$RUNNER_TEMP/packaging-payload"
+
+      - name: Compare exact parent packaging and exercise runtime
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          python3 scripts/test-container-packaging.py \
+            --base "$BASE_SHA" --arch "$ARCH" \
+            --payload "$RUNNER_TEMP/packaging-payload" \
+            --output "packaging-receipts/${ARCH}.json"
+
+      - name: Retain source-bound measurement and partial failures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: container-packaging-${{ matrix.arch }}-${{ github.sha }}
+          path: packaging-receipts/
+          if-no-files-found: error
+          retention-days: 7
