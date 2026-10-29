@@ -98,7 +98,9 @@ describe('frontend dependency security floors', () => {
     // GHSA-68fv-2mgg-jv7q: all PostCSS/source-map consumers need the fix.
     ['source-map-js', [1, 2, 2]],
   ])('keeps every %s copy above the October deserialization and parsing floors', (name, floor) => {
-    expect(manifest.overrides[name]).toBe(`^${floor.join('.')}`);
+    // Seroval now deliberately crosses Solid's declared minor. Pin that one
+    // reviewed tuple rather than allowing the caret to admit future minors.
+    expect(manifest.overrides[name]).toBe(name === 'seroval' ? '1.7.3' : `^${floor.join('.')}`);
     const versions = lockedVersions(name);
     expect(versions, `${name} must be locked`).not.toHaveLength(0);
     for (const version of versions) {
@@ -106,6 +108,13 @@ describe('frontend dependency security floors', () => {
       expect(parseVersion(version)[0], `${name} must stay on the reviewed major`).toBe(floor[0]);
       expect(atLeast(version, floor), `${name} ${version} is vulnerable`).toBe(true);
     }
+  });
+
+  it('pins every Seroval copy to the override exercised by the real Solid consumers', () => {
+    expect(manifest.overrides.seroval).toBe('1.7.3');
+    expect(lockedVersions('seroval')).toEqual(['1.7.3']);
+    expect(lockedVersions('solid-js')).toEqual(['1.9.17']);
+    expect(lockedVersions('seroval-plugins')).toEqual(['1.6.8']);
   });
 
   it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
