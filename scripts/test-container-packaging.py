@@ -5,6 +5,7 @@ No publication, registry credentials or release qualification. The immutable
 published fixture is deliberately independent of the proposed application code.
 """
 import argparse
+import gzip
 import hashlib
 import json
 import subprocess
@@ -61,25 +62,53 @@ def layers(stream):
     or a multi-platform index size. Neither number includes writable volumes.
     """
     result = []
-    with tarfile.open(fileobj=stream, mode="r|*") as outer:
-        for entry in outer:
-            if not entry.name.endswith("/layer.tar"):
-                continue
+    # Classic Docker archives use <id>/layer.tar; containerd-backed Docker
+    # uses blobs/sha256/<digest>. Both name the retained layers in manifest.json.
+    # Spool opaque blobs under generated names, never archive-selected paths.
+    with tempfile.TemporaryDirectory(prefix="pulse-image-blobs-") as directory:
+        blobs = {}
+        with tarfile.open(fileobj=stream, mode="r|*") as outer:
+            for index, entry in enumerate(outer):
+                if not entry.isfile():
+                    continue
+                if entry.name in blobs:
+                    raise ValueError("duplicate Docker-save blob")
+                target = Path(directory)/str(index)
+                with target.open("wb") as destination:
+                    source = outer.extractfile(entry)
+                    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                        destination.write(chunk)
+                blobs[entry.name] = target
+        manifest_file = blobs.get("manifest.json")
+        if manifest_file is None or manifest_file.stat().st_size > 1024 * 1024:
+            raise ValueError("missing or oversized Docker-save manifest")
+        manifest = json.loads(manifest_file.read_bytes())
+        if (not isinstance(manifest, list) or len(manifest) != 1 or
+                not isinstance(manifest[0], dict) or
+                not isinstance(manifest[0].get("Layers"), list) or not manifest[0]["Layers"]):
+            raise ValueError("expected exactly one image with filesystem layers")
+        names = manifest[0]["Layers"]
+        if not all(isinstance(n, str) for n in names) or len(set(names)) != len(names):
+            raise ValueError("invalid or duplicate Docker-save layer identity")
+        for name in names:
+            if name not in blobs:
+                raise ValueError("manifest layer blob is missing")
+            path = blobs[name]
             compressor = zlib.compressobj(level=6, wbits=31)
-            compressed = 0
-            contents = outer.extractfile(entry)
-            # Stream once into an owned temporary file; never expand its paths.
-            with tempfile.TemporaryFile() as raw:
-                for chunk in iter(lambda: contents.read(1024 * 1024), b""):
-                    compressed += len(compressor.compress(chunk))
-                    raw.write(chunk)
-                compressed += len(compressor.flush())
+            compressed = uncompressed = 0
+            with path.open("rb") as raw:
+                magic = raw.read(2)
                 raw.seek(0)
+                decoded = gzip.GzipFile(fileobj=raw) if magic == b"\x1f\x8b" else raw
+                for chunk in iter(lambda: decoded.read(1024 * 1024), b""):
+                    uncompressed += len(chunk)
+                    compressed += len(compressor.compress(chunk))
+                compressed += len(compressor.flush())
+            with path.open("rb") as raw:
                 files = inventory(raw)
-            result.append(dict(uncompressed_tar_bytes=entry.size,
+            result.append(dict(archive_blob_bytes=path.stat().st_size,
+                               uncompressed_tar_bytes=uncompressed,
                                reencoded_gzip_bytes=compressed, files=files))
-    if not result:
-        raise ValueError("Docker save returned no filesystem layers")
     return result
 
 

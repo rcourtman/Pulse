@@ -2,6 +2,7 @@
 """Packaging's normal smoke-suite controls; no Docker daemon is used here."""
 import base64
 import contextlib
+import gzip
 import hashlib
 import importlib.util
 import io
@@ -55,7 +56,8 @@ class InventoryTests(unittest.TestCase):
 
     def test_layer_inventory_counts_repeated_payload_and_explicit_reencoding(self):
         layer = archive([('app/pulse', b'server', 'file'), ('opt/pulse/bin/agent', b'agent', 'file')])
-        image = archive([('one/layer.tar', layer, 'file'), ('two/layer.tar', layer, 'file')])
+        image = archive([('one/layer.tar', layer, 'file'), ('two/layer.tar', layer, 'file'),
+                         ('manifest.json', json.dumps([{'Layers':['one/layer.tar','two/layer.tar']}]).encode(), 'file')])
         measured = packaging.layers(io.BytesIO(image))
         self.assertEqual(len(measured), 2)
         self.assertEqual(sum(l['uncompressed_tar_bytes'] for l in measured), len(layer)*2)
@@ -65,10 +67,28 @@ class InventoryTests(unittest.TestCase):
             packaging.no_payload_copyups(measured)
 
     def test_absent_layer_or_payload_cannot_pass(self):
-        with self.assertRaisesRegex(ValueError, 'no filesystem layers'):
+        with self.assertRaisesRegex(ValueError, 'manifest'):
             packaging.layers(io.BytesIO(archive([])))
         with self.assertRaisesRegex(ValueError, 'payload missing'):
             packaging.no_payload_copyups([])
+
+    def test_containerd_blob_paths_and_gzip_measure_uncompressed_bytes(self):
+        layer = archive([('app/pulse', b'server', 'file'), ('opt/pulse/bin/agent', b'agent', 'file')])
+        blob = gzip.compress(layer)
+        path = 'blobs/sha256/'+hashlib.sha256(blob).hexdigest()
+        image = archive([(path, blob, 'file'), ('unreferenced/layer.tar', layer, 'file'),
+                         ('manifest.json', json.dumps([{'Layers':[path]}]).encode(), 'file')])
+        measured = packaging.layers(io.BytesIO(image))
+        self.assertEqual(len(measured), 1)
+        self.assertEqual(measured[0]['archive_blob_bytes'], len(blob))
+        self.assertEqual(measured[0]['uncompressed_tar_bytes'], len(layer))
+        packaging.no_payload_copyups(measured)
+
+    def test_manifest_identity_missing_duplicate_and_multiimage_fail_closed(self):
+        for manifest in [[{'Layers':['missing']}], [{'Layers':['same','same']}],
+                         [{'Layers':[]}], [{'Layers':['a']},{'Layers':['b']}], {}]:
+            with self.subTest(manifest=manifest), self.assertRaises(ValueError):
+                packaging.layers(io.BytesIO(archive([('manifest.json', json.dumps(manifest).encode(), 'file')])))
 
     def test_every_compatibility_dimension_is_checked(self):
         baseline = packaging.inventory(io.BytesIO(archive([('app/pulse', b'server', 'file')])))
