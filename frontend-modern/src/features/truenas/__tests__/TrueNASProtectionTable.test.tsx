@@ -1,10 +1,13 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TrueNASProtectionTable } from '@/features/truenas/TrueNASProtectionTable';
-import type { RecoveryPoint } from '@/types/recovery';
+import type { RecoveryPoint, RecoveryPointTransport } from '@/types/recovery';
+import { sortTrueNASProtectionPoints } from '@/features/truenas/truenasPageModel';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
+import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
 
 // Record drawers link to the object they are about, which needs a router.
 const renderInRouter = (component: () => JSX.Element) =>
@@ -236,5 +239,149 @@ describe('TrueNASProtectionTable', () => {
       'data-truenas-protection-row',
       'running',
     );
+  });
+});
+
+const apiFetchJSON = vi.hoisted(() => vi.fn());
+vi.mock('@/utils/apiClient', () => ({ apiFetchJSON }));
+
+const point = (
+  id: string,
+  overrides: Partial<RecoveryPointTransport> = {},
+): RecoveryPointTransport => ({
+  id,
+  platform: 'truenas',
+  kind: 'backup',
+  mode: 'remote',
+  outcome: 'success',
+  startedAt: '2026-09-29T01:00:00Z',
+  completedAt: '2026-09-30T01:15:00Z',
+  display: { subjectLabel: `tank/${id}`, subjectType: 'dataset' },
+  ...overrides,
+});
+
+function mount(points: RecoveryPointTransport[]) {
+  apiFetchJSON.mockResolvedValue({ data: points });
+  render(() => (
+    <Router>
+      <Route
+        path="/*"
+        component={() => {
+          const recovery = useRecoveryPoints(() => ({ platform: 'truenas', page: 1, limit: 200 }));
+          return (
+            <TrueNASProtectionTable
+              points={recovery.points()}
+              emptyIcon={<span />}
+              emptyTitle="No protection"
+              emptyDescription="No events in this response."
+            />
+          );
+        }}
+      />
+    </Router>
+  ));
+}
+
+const row = (id: string) =>
+  document.querySelector<HTMLElement>(`[data-truenas-protection-row="${id}"]`)!;
+const completion = (id: string) => row(id).querySelectorAll('td')[3]!;
+const rowIDs = () =>
+  [...document.querySelectorAll('[data-truenas-protection-row]')].map((item) =>
+    item.getAttribute('data-truenas-protection-row'),
+  );
+
+afterEach(() => {
+  cleanup();
+  apiFetchJSON.mockReset();
+  resetCreateNonSuspendingQueryCacheForTest();
+  localStorage.clear();
+});
+
+describe('TrueNAS protection timestamp admission', () => {
+  it.each([
+    '2026-09-31T01:15:00Z',
+    '2026-02-29T01:15:00Z',
+    '2026-09-30T01:15:00',
+    '2026-09-30',
+    '2026-09-30T24:00:00Z',
+    'not-a-date',
+  ])(
+    'keeps a malformed reported date unknown in the row and both detail fields: %s',
+    async (raw) => {
+      mount([point('malformed', { startedAt: raw, completedAt: raw, outcome: 'failed' })]);
+      await vi.waitFor(() => expect(row('malformed')).not.toBeNull());
+      expect(completion('malformed')).toHaveTextContent(/^Unknown$/);
+      expect(row('malformed')).toHaveAttribute('data-truenas-protection-outcome', 'failed');
+      await fireEvent.click(within(row('malformed')).getByRole('button', { name: /details/i }));
+      const detail = within(screen.getByTestId('truenas-protection-detail'));
+      for (const label of ['Started', 'Completed']) {
+        expect(detail.getByText(label, { exact: true }).closest('tr')).toHaveTextContent(
+          `Unknown date (${raw})`,
+        );
+      }
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/recovery/points?page=1&limit=200&platform=truenas',
+      );
+    },
+  );
+
+  it.each([
+    '2024-02-29T01:15:00.123456789+01:30',
+    '2026-09-30T01:15:00Z',
+    '2026-09-29T23:15:00-02:00',
+  ])('preserves valid explicit instants through the real transport normalizer: %s', async (raw) => {
+    mount([point('valid', { startedAt: raw, completedAt: raw })]);
+    await vi.waitFor(() => expect(row('valid')).not.toBeNull());
+    expect(completion('valid')).not.toHaveTextContent(/Unknown|^\s*-\s*$/);
+    await fireEvent.click(within(row('valid')).getByRole('button', { name: /details/i }));
+    const detail = within(screen.getByTestId('truenas-protection-detail'));
+    const expected = new Date(raw).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    for (const label of ['Started', 'Completed']) {
+      expect(detail.getByText(label, { exact: true }).closest('tr')).toHaveTextContent(expected);
+    }
+  });
+
+  it('keeps malformed completions last in either completion sort direction without borrowing starts', async () => {
+    mount([
+      point('malformed', {
+        completedAt: '2026-09-31T01:15:00Z',
+        startedAt: '2026-10-02T00:00:00Z',
+      }),
+      point('missing', { completedAt: undefined }),
+      point('older', { completedAt: '2026-09-29T01:15:00Z' }),
+      point('newer'),
+    ]);
+    await vi.waitFor(() => expect(row('malformed')).not.toBeNull());
+    const sort = within(screen.getByRole('columnheader', { name: /Completed/ })).getByRole(
+      'button',
+    );
+    await fireEvent.click(sort);
+    expect(rowIDs().slice(0, 2)).toEqual(['newer', 'older']);
+    expect(rowIDs().slice(2).sort()).toEqual(['malformed', 'missing']);
+    await fireEvent.click(sort);
+    expect(rowIDs().slice(0, 2)).toEqual(['older', 'newer']);
+    expect(rowIDs().slice(2).sort()).toEqual(['malformed', 'missing']);
+  });
+
+  it('does not give malformed dates a default chronological rank, and preserves attention priority', () => {
+    const valid = point('valid', { completedAt: '1960-01-01T00:00:00Z' });
+    const malformed = point('malformed', { completedAt: '2026-09-31T01:15:00Z' });
+    const absent = point('absent', { completedAt: undefined, startedAt: undefined });
+    expect(sortTrueNASProtectionPoints([absent, malformed, valid]).map(({ id }) => id)).toEqual([
+      'valid',
+      'absent',
+      'malformed',
+    ]);
+    const failed = point('failed', { outcome: 'failed', completedAt: '2026-09-31T01:15:00Z' });
+    expect(sortTrueNASProtectionPoints([valid, failed]).map(({ id }) => id)).toEqual([
+      'failed',
+      'valid',
+    ]);
   });
 });

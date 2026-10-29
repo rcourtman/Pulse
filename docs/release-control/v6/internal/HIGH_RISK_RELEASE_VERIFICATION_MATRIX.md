@@ -8,6 +8,19 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## TrueNAS protection timestamp admission
+
+Automated: `TrueNASProtectionTable.test.tsx`, existing completion and
+refresh tests, `truenasPageModel.test.ts` and the shared backup timestamp suite.
+Send synthetic recovery-points JSON through the real query and normalizer into
+Protection on desktop and 320px touch. Impossible dates and timezone-free values
+say Unknown instead of normalising to a date; open details to inspect the original
+Started/Completed strings. Sort in both directions with unknowns last, preserving
+failure priority in default order, absent/running completions and valid explicit
+zones/fractions. Refresh the same open record from invalid to valid evidence and
+back; inspect actual pixels and focus as well as DOM values. No native/production
+operation or original incident replay is part of this consumer proof.
+
 ## Workloads guest interface source selection — issue #2757
 
 Automated: `useWorkloads.test.ts` (both REST and owning-snapshot VM/LXC

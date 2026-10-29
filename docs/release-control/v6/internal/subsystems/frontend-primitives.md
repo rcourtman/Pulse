@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### TrueNAS protection consumers do not repair malformed instants
+
+The Protection row, completion sorts and inline Started/Completed fields use the
+shared explicit-zone, calendar-valid backup instant rule. Invalid reported values
+remain Unknown, with the literal evidence retained in details rather than a
+browser-repaired date. Unknowns have no chronological rank; outcome priority,
+absent/active completion handling, identity and policy remain unchanged.
+`TrueNASProtectionTable.test.tsx` drives the query/transport normalizer into these
+consumers with malformed and valid-offset controls; desktop/narrow browser pixels
+and interactions remain required. This is not native protection or guest recovery.
+
+
 ### Missing Workloads completion times do not establish absence
 
 The workload badge, compact shield, hover/dialog and full drawer treat absent

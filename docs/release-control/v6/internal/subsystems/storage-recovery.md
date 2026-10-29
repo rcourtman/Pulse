@@ -556,6 +556,25 @@ desktop and narrow browser proof establishes actual fit and interaction; a DOM
 class assertion alone does not establish readability. No date, outcome, query,
 API, identity, policy or recovery operation changes.
 
+### TrueNAS protection dates require observed instants
+
+The Protection table and its inline Started/Completed details use the shared
+backup timestamp admission rule: a calendar-valid RFC3339 instant with an
+explicit zone. Impossible dates, date-only strings, local times and invalid
+clock fields are not repaired by the browser. A malformed reported completion
+says Unknown in the row; details retain the original string beside Unknown date.
+Absent finishes and active runs still show no completion. Valid explicit offsets
+and fractional seconds retain their instant and normal localised presentation.
+
+Malformed values sort after dated values in either explicit completion direction.
+The default attention-first order also gives unknown dates no chronological rank,
+without substituting a start for a non-empty malformed finish. The normal-suite
+`TrueNASProtectionTable.test.tsx` exercises the actual query/transport
+normalizer, table, details and sorting, with valid leap-day/offset controls.
+Stored data, outcomes, policy, verification and native recovery are unchanged.
+Source-bound desktop and narrow browser interactions/pixels remain required;
+these synthetic cases establish consumer admission, not original incident recovery.
+
 ### TrueNAS start and active-run dates are not completion evidence
 
 The Protection table's Completed column, its explicit completion sort and its
