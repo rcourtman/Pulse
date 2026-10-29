@@ -928,7 +928,7 @@ func (c *Client) GetDatastoresFiltered(
 
 	if err := json.Unmarshal(body, &datastoreList); err != nil {
 		log.Error().
-			Str("response", string(body)).
+			Int("responseBytes", len(body)).
 			Err(err).
 			Msg("Failed to parse PBS datastore list response")
 		return nil, fmt.Errorf("failed to parse datastore list: %w", err)
@@ -976,7 +976,7 @@ func (c *Client) GetDatastoresFiltered(
 			if json.Unmarshal(rrdBody, &rrdResult) == nil && len(rrdResult.Data) > 0 {
 				// Get the most recent deduplication factor
 				dedupFactor = rrdResult.Data[len(rrdResult.Data)-1].DedupFactor
-				log.Info().Float64("dedup_from_rrd", dedupFactor).Str("store", ds.Store).Msg("Got dedup factor from RRD")
+				log.Debug().Float64("dedup_from_rrd", dedupFactor).Str("store", ds.Store).Msg("Got dedup factor from RRD")
 			}
 		}
 
@@ -1012,7 +1012,7 @@ func (c *Client) GetDatastoresFiltered(
 		if err := json.Unmarshal(statusBody, &statusResult); err != nil {
 			log.Error().
 				Str("store", ds.Store).
-				Str("response", string(statusBody)).
+				Int("responseBytes", len(statusBody)).
 				Err(err).
 				Msg("Failed to parse datastore status")
 			datastores = append(datastores, Datastore{
@@ -1065,7 +1065,7 @@ func (c *Client) GetDatastoresFiltered(
 					// Calculate deduplication factor from index-data-bytes / disk-bytes
 					if gcResult.Data.DiskBytes > 0 && gcResult.Data.IndexDataBytes > 0 {
 						dedupFactor = gcResult.Data.IndexDataBytes / gcResult.Data.DiskBytes
-						log.Info().
+						log.Debug().
 							Float64("index_bytes", gcResult.Data.IndexDataBytes).
 							Float64("disk_bytes", gcResult.Data.DiskBytes).
 							Float64("dedup_factor", dedupFactor).
@@ -1090,15 +1090,15 @@ func (c *Client) GetDatastoresFiltered(
 			DeduplicationFactor: dedupFactor,
 		}
 
-		// Log all fields to see what's available
-		log.Info().
+		// Routine polls must not write the whole provider payload to the log.
+		// Keep useful named measurements at Debug without copying arbitrary fields.
+		log.Debug().
 			Str("store", datastore.Store).
 			Int64("total", datastore.Total).
 			Int64("used", datastore.Used).
 			Int64("avail", datastore.Avail).
 			Float64("dedup_factor", datastore.DeduplicationFactor).
-			Interface("all_fields", statusResult.Data).
-			Msg("PBS datastore status - ALL FIELDS")
+			Msg("PBS datastore status")
 
 		datastores = append(datastores, datastore)
 	}
