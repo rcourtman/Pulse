@@ -134,3 +134,10 @@ f46ff1792bd53436891c9a7a8b74180f443f0772:docs/API.md:curl-auth-header:48
 f46ff1792bd53436891c9a7a8b74180f443f0772:docs/CONFIGURATION.md:curl-auth-header:394
 f46ff1792bd53436891c9a7a8b74180f443f0772:docs/REVERSE_PROXY.md:generic-api-key:260
 f46ff1792bd53436891c9a7a8b74180f443f0772:docs/TROUBLESHOOTING.md:curl-auth-header:29
+
+# The signed-installer test copied the public Ed25519 verification key from
+# docs/INSTALL.md into a constant. It is not a credential. The current test
+# substitutes its generated fixture key without duplicating the public value;
+# retain only these exact historical introduction/first-parent merge findings.
+ffdfefbc572215114a7aec92b84fa0b656c95356:scripts/tests/test_signed_installer_docs.py:generic-api-key:18
+ed75bc835ad035c9be74b2851cd24acb403849ff:scripts/tests/test_signed_installer_docs.py:generic-api-key:18

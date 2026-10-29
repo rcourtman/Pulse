@@ -15,13 +15,20 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-INSTALLER_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm"
 
 
 def recipes():
     return [block for block in re.findall(
         r"```bash\n(.*?)\n```", (ROOT / "docs/INSTALL.md").read_text(), re.S
     ) if "ssh-keygen -Y verify" in block]
+
+
+def with_fixture_signer(block, public_key):
+    """Replace the recipe's one public verification key, not its trust policy."""
+    command, count = re.subn(r"(?<=ssh-ed25519 )\S+", lambda _match: public_key, block)
+    if count != 1:
+        raise ValueError(f"expected one installer verification key, found {count}")
+    return command
 
 
 @contextmanager
@@ -103,7 +110,8 @@ def run_local_recipe(root, block, secure_port, plain_port, *, trust=True):
     command = block.replace("vX.Y.Z", "v6.4.5-rc.2").replace(
         "https://github.com/rcourtman/Pulse/releases/download",
         f"https://127.0.0.1:{secure_port}"
-    ).replace(INSTALLER_KEY, public_key)
+    )
+    command = with_fixture_signer(command, public_key)
     env = {k: v for k, v in os.environ.items()
            if not k.lower().endswith("_proxy") and k not in ("CURL_CA_BUNDLE", "SSL_CERT_FILE", "SSL_CERT_DIR")}
     env.update(HOME=str(root), CURL_HOME=str(root), XDG_CONFIG_HOME=str(root / ".config"),
@@ -116,6 +124,19 @@ def run_local_recipe(root, block, secure_port, plain_port, *, trust=True):
 
 
 class SignedInstallerDocsTest(unittest.TestCase):
+    def test_fixture_signer_replacement_preserves_policy_and_requires_one_key(self):
+        for block in recipes():
+            with self.subTest(recipe=block.splitlines()[0]):
+                replaced = with_fixture_signer(block, "fixture-public")
+                self.assertEqual(replaced.count("ssh-ed25519 fixture-public "), 1)
+                self.assertEqual(
+                    re.sub(r"(?<=ssh-ed25519 )\S+", "KEY", block),
+                    re.sub(r"(?<=ssh-ed25519 )\S+", "KEY", replaced),
+                )
+                for malformed in ("no verification key", block + "\n" + block):
+                    with self.assertRaisesRegex(ValueError, "expected one installer verification key"):
+                        with_fixture_signer(malformed, "fixture-public")
+
     def test_mirror_and_bounded_https_only_transfers(self):
         self.assertEqual((ROOT / "docs/INSTALL.md").read_bytes(),
                          (ROOT / "frontend-modern/public/docs/INSTALL.md").read_bytes())
