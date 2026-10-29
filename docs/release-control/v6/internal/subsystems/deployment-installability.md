@@ -625,19 +625,35 @@ candidate commit; an unowned or unreachable route is not proof coverage.
 
 ### Ordinary CI compiles the backend with the same checkout's real frontend
 
-The existing Frontend job retains its production bundle, size, whole-tree tests,
-audit and 30-minute ceiling. After those tests it selects Go from `go.mod`,
+The required `Frontend` check aggregates the complete build/audit/runtime job
+and every one of four isolated Vitest file shards. Missing, failed, cancelled
+or skipped proof fails that check; only an explicit, consistent non-runtime
+classification admits inapplicable checks. Each execution job retains the
+30-minute ceiling; the aggregate has a five-minute orchestration deadline.
+
+Before admitting unit shards, `frontend-checks` builds and size-checks the
+production frontend, selects Go from `go.mod`,
 requires a nonempty built index/assets tree and compares the complete generated
 frontend and embed copy before backend compilation and server/API vet. Missing,
 extra or changed embedded files stop the phase; it never creates a placeholder
 or imports assets from another job/source. Build and vet use the read-only Go
 graph and two workers; the binary stays in the runner's temporary directory.
 The log records the checkout and binary digest without publishing an artifact.
+The same job retains native updater and ordinary notification/restart proof.
+Only successful build/size/runtime phases emit the explicit unit-admission
+output. The complete dependency audit still reports its own terminal verdict
+after that output: an audit failure does not suppress unit proof, but always
+fails the required aggregate. Shards use the same lock, configuration and
+assertions with only Vitest's built-in file partition; no maintained file list,
+changed-file filter, shared mutable runner or extra in-runner concurrency is
+introduced. Type/build/size failure still stops the expensive suite early.
 
 `TestFrontendCIRequiresSameCheckoutRealEmbedBackend` executes the exact phase
 with private assets and Git/compiler doubles, covering mismatch refusal,
 declared command/ordering checks and terminal compiler/vet failures. These
-controls are not real compilation. Actual containing CI checkout/phase logs
+controls are not real compilation. `TestFrontendCIRequiresCompleteIsolatedUnitProof`
+executes the workflow-order, complete-shard and actual fail-closed audit/verdict
+controls in `scripts/tests/test_frontend_workflow_order.py`. Actual containing CI checkout/phase logs
 remain necessary before using the result as real-embed source proof; unrelated
 stub builds, workflow success, releases and installed recovery remain distinct.
 

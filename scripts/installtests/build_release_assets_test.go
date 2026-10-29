@@ -4520,6 +4520,17 @@ func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
 	}
 }
 
+// Keep the registered frontend security-proof route bound to the actual
+// workflow's complete inventory, runtime admission and audit/shard verdicts.
+func TestFrontendCIRequiresCompleteIsolatedUnitProof(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_workflow_order.py"), "-v")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("complete isolated frontend proof and required verdict controls: %v\n%s", err, out)
+	}
+}
+
 // The issue-event check runs after publication. Its real parser tests and
 // silent-mutation policy also need credential-free PR/main admission, without
 // relaxing product runtime, dependency audit or receipt-only boundaries.
@@ -4619,7 +4630,7 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read %s: %v", workflowPath, err)
 	}
-	frontendJob := workflowJobBlock(t, string(workflow), "frontend")
+	frontendJob := workflowJobBlock(t, string(workflow), "frontend-checks")
 	if !strings.Contains(frontendJob, "timeout-minutes: 30") {
 		t.Fatal("frontend job must keep a bounded timeout above the audit budget")
 	}

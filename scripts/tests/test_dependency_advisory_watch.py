@@ -202,7 +202,7 @@ class WorkflowContractTest(unittest.TestCase):
 
     def test_audit_matches_the_required_build_and_test_audit(self) -> None:
         build = yaml.safe_load(BUILD_AND_TEST.read_text(encoding="utf-8"))
-        frontend = build["jobs"]["frontend"]["steps"]
+        frontend = build["jobs"]["frontend-checks"]["steps"]
         audit = self.workflow["jobs"]["audit"]["steps"]
 
         def step(steps: list[dict], name: str) -> dict:

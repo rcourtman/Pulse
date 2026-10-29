@@ -36,7 +36,7 @@ def selected_fixture_commands():
 
 
 def recipe(source):
-    job = re.search(r"(?ms)^  frontend:\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)", source)[1]
+    job = re.search(r"(?ms)^  frontend-checks:\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)", source)[1]
     steps = dict(re.findall(r"(?ms)^      - name: ([^\n]+)\n(.*?)(?=^      - name:|\Z)", job))
     order = list(steps)
     assert order.index("Verify backend with real frontend embed") < order.index(STEP) < order.index("Require frontend dependency audit")

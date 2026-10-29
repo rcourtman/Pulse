@@ -172,7 +172,9 @@ test('prereleases and malformed locked versions cannot claim compatibility', () 
 
 test('CI fails the graph check before installation without relaxing the audit', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/build-and-test.yml', import.meta.url), 'utf8');
-  const frontend = workflow.slice(workflow.indexOf('\n  frontend:'));
+  const job = /\n  frontend-checks:\n([\s\S]*?)(?=\n  [\w-]+:\n|$)/.exec(workflow);
+  assert.ok(job, 'the build/audit/runtime job must contain the graph check');
+  const frontend = job[1];
   const check = frontend.indexOf('- name: Check Solid serialization dependency edges');
   const install = frontend.indexOf('- name: Install frontend dependencies');
   assert.ok(check >= 0 && check < install);

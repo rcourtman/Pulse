@@ -637,7 +637,7 @@ class NpmAuditRetryTest(unittest.TestCase):
     def test_all_workflow_audits_use_the_retry_boundary(self) -> None:
         expected = {
             ".github/workflows/build-and-test.yml": {
-                "job": "frontend",
+                "job": "frontend-checks",
                 "runs": [
                     'bash "$GITHUB_WORKSPACE/scripts/npm-audit-retry.sh" all',
                 ],

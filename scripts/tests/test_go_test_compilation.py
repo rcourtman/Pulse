@@ -139,7 +139,9 @@ func TestStaleFixture(t *testing.T) { _ = api.Resource{Alerts: []api.ResourceAle
         self.assertIn("if: needs.changes.outputs.go_compile == 'true'", compile_job)
         self.assertIn("go test -race -vet=off -count=1 -exec /bin/true ./...", COMPILER.read_text())
         # Frontend work does not wait for the Go-only gate.
-        self.assertIn("needs: changes", job(source, "frontend"))
+        self.assertIn("needs: changes", job(source, "frontend-checks"))
+        self.assertIn("needs: [changes, frontend-checks]", job(source, "frontend-unit"))
+        self.assertIn("needs: [changes, frontend-checks, frontend-unit]", job(source, "frontend"))
 
     def test_required_checks_admit_only_explicit_consistent_results(self):
         source = WORKFLOW.read_text()
