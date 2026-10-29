@@ -1465,6 +1465,8 @@ func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]i
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
+	// Match datastore discovery: missing/null data is unread, not an empty
+	// scope that can authorize removal of retained backup history.
 	if result.Data == nil {
 		result.Data = map[string]interface{}{}
 	}
@@ -1964,6 +1966,9 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
+	if result.Data == nil {
+		return nil, fmt.Errorf("namespace list response contains no data array")
+	}
 
 	return result.Data, nil
 }
@@ -2004,6 +2009,9 @@ func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespa
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode backup groups: %w", err)
+	}
+	if result.Data == nil {
+		return nil, fmt.Errorf("backup group list response contains no data array")
 	}
 
 	log.Debug().
@@ -2046,6 +2054,9 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode snapshots: %w", err)
+	}
+	if result.Data == nil {
+		return nil, fmt.Errorf("snapshot list response contains no data array")
 	}
 
 	return result.Data, nil
