@@ -70,6 +70,7 @@ integration against their own vCenter before production use.
 - [Patrol modes and safety](AI_AUTONOMY.md)
 - [Assistant safety model](ASSISTANT_SAFETY.md)
 - [External agent HTTP and MCP substrate](AGENT_SUBSTRATE.md)
+- [Walkthrough: what happened overnight on my Proxmox and Docker fleet?](WHAT_HAPPENED_OVERNIGHT.md)
 
 Patrol watch-only analysis is available on Community with a local model or the
 operator's own provider. Investigation and governed fixes require the relevant
