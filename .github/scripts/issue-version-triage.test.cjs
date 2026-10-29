@@ -491,6 +491,98 @@ test("examples, withdrawn selections and prose do not invent a feedback class", 
   }
 });
 
+test("repeated feedback declarations require one recognised metadata category", () => {
+  const { classifyV6FeedbackType } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const level of [2, 3, 6]) {
+      const body = values => values.map(value =>
+        `${"#".repeat(level)} Feedback type${newline}${value}${newline}`).join(newline);
+      for (const [values, expected] of [
+        [["Bug / regression", "Performance issue", "Upgrade / migration issue"], "bug"],
+        [["Bug", "Regression"], "bug"],
+        [["Documentation issue", "[**DOCUMENTATION ISSUE**](https://example.invalid/bugs)"], "documentation"],
+        [["UX / workflow friction", "Other actionable feedback"], "enhancement"],
+        [["Bug / regression", "Documentation issue"], null],
+        [["Documentation issue", "UX / workflow friction"], null],
+        [["Performance issue", "unknown"], null],
+        [["Documentation issue", "_No response_"], null],
+        [["UX / workflow friction", "~~Other actionable feedback~~"], null],
+        [["Bug / regression", ""], null],
+        [["unknown", ""], null],
+      ]) {
+        assert.equal(classifyV6FeedbackType(body(values)), expected, JSON.stringify(values));
+        assert.equal(classifyV6FeedbackType(body([...values].reverse())), expected,
+          "Field order cannot settle contradictory evidence");
+      }
+    }
+  }
+});
+
+test("copied and secondary feedback fields cannot veto an agreeing primary category", () => {
+  for (const copied of [
+    "```markdown\n### Feedback type\nBug / regression\n```",
+    "> ### Feedback type\n> Bug / regression",
+    "<!--\n### Feedback type\nBug / regression\n-->",
+    "### Additional actionable topics\nAnother job.\n#### Feedback type\nBug / regression",
+  ]) {
+    const body = `### Feedback type\nDocumentation issue\n\n${copied}\n\n` +
+      "### Feedback type\n**Documentation issue**\n";
+    assert.equal(triage.internals.classifyV6FeedbackType(body), "documentation", copied);
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`${action} consumes repeated feedback without invented categories or version demands`, async () => {
+    const preserved = ["needs-human", "needs-retest-on-latest", "release-blocker",
+      "stable-regression", "operator-reviewed"];
+    for (const values of [
+      ["Bug / regression", "Documentation issue"],
+      ["Documentation issue", "UX / workflow friction"],
+      ["Performance issue", "unknown"],
+      ["Bug / regression", ""],
+    ]) {
+      for (const selections of [values, [...values].reverse()]) {
+        for (const version of ["6.6.0", "unknown"]) {
+          const { github, calls } = createGithub();
+          const body = selections.map(value => `### Feedback type\n${value}\n`).join("\n") +
+            `\n### Pulse version\n${version}\n\n### Additional actionable topics\nA separate saved-history problem.\n`;
+          const issue = { number: 42, title: "Synthetic repeated feedback", comments: 0,
+            labels: preserved.map(name => ({ name })), body };
+          await syncLabels({ github, core: createCore(), context: createContext({ action, issue,
+            previousBody: "### Additional actionable topics\nNone\n" }) });
+          const expected = [...preserved, ...(action === "reopened" ? [] : ["needs-decomposition"])].sort();
+          assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(), expected);
+          assert.deepEqual(calls.addLabels.map(call => call.labels),
+            action === "reopened" ? [] : [["needs-decomposition"]]);
+          assert.deepEqual(calls.getLabel, action === "reopened" ? [] : ["needs-decomposition"]);
+          assert.deepEqual(calls.removeLabel, []);
+          assert.deepEqual(calls.createComment, []);
+          assert.deepEqual(calls.getLatestRelease, []);
+          assert.deepEqual(calls.paginate, []);
+        }
+      }
+    }
+  });
+}
+
+test("ambiguous feedback preserves an existing Community bug and its independent version metadata", async () => {
+  for (const version of ["6.6.0", "unknown"]) {
+    const { github, calls } = createGithub();
+    const preserved = ["Bug", "needs-human", "needs-retest-on-latest", "operator-reviewed"];
+    const issue = { number: 42, title: "Synthetic reviewed report", comments: 0,
+      labels: [...preserved, "affects-6.5.0"].map(name => ({ name })),
+      body: "### Feedback type\nDocumentation issue\n\n### Feedback type\nBug / regression\n\n" +
+        `### Pulse version\n${version}\n` };
+    await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+    const expected = version === "unknown" ? "needs-version-info" : "affects-6.6.0";
+    assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(), [...preserved, expected].sort());
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[expected]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+  }
+});
+
 test("syncLabels consumes the selected feedback class without invented version demands or contact", async () => {
   for (const action of ["opened", "edited", "reopened"]) {
     for (const [selection, classification] of [

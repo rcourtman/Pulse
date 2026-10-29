@@ -208,12 +208,6 @@ function extractSectionValues(body, heading, followingHeadings = [], report = pa
   return values;
 }
 
-function extractSectionValue(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
-  const values = extractSectionValues(body, heading, followingHeadings, report);
-  // An empty declared field differs from a legacy report with no field.
-  return values.length ? values[0] : null;
-}
-
 function additionalActionableTopicDeclarations(body, report = parseReportMarkdown(body)) {
   // Edited reports can move this field beside any other form field. Context
   // from those fields must not invent a topic or reopen a completed review.
@@ -406,8 +400,7 @@ function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
   return extractTitlePulseVersion(title);
 }
 
-function classifyV6FeedbackType(body, report = parseReportMarkdown(body)) {
-  const feedbackType = extractSectionValue(body, "Feedback type", [], report);
+function classifyFeedbackSelection(feedbackType, report) {
   if (!feedbackType) return null;
 
   // This is a single-choice field, not free-form evidence. A link's target
@@ -433,6 +426,17 @@ function classifyV6FeedbackType(body, report = parseReportMarkdown(body)) {
     default:
       return null;
   }
+}
+
+function classifyV6FeedbackType(body, report = parseReportMarkdown(body)) {
+  const classes = extractSectionValues(body, "Feedback type", [], report)
+    .map(value => classifyFeedbackSelection(value, report));
+  // Repeated declarations must agree on the metadata category. Choosing the
+  // first can invent a bug and its version requirements from contradictory or
+  // withdrawn feedback. Unknown copies supply no automatic classification;
+  // existing Community labels and independent topic review remain authoritative.
+  const first = classes[0];
+  return first && classes.every(value => value === first) ? first : null;
 }
 
 function parseCore(version) {
