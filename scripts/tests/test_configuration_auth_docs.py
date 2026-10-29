@@ -44,12 +44,14 @@ sys.exit(int(os.environ.get('EDITOR_EXIT', '0')))
 '''
 
 DOCKER = '''#!/usr/bin/env python3
-import json, os, sys
+import json, os, stat, sys
 from pathlib import Path
 args = sys.argv[1:]
 p = Path(args[args.index('--env-file') + 1])
 assert p == Path.home() / '.config/pulse/docker-auth.env'
 assert p.read_text() == os.environ['EXPECTED_FILE']
+assert stat.S_IMODE(p.stat().st_mode) == 0o600
+assert stat.S_IMODE(p.parent.stat().st_mode) == 0o700
 assert os.environ['FIXTURE_HASH'] not in ' '.join(args)
 assert not any(a.startswith('PULSE_AUTH_PASS=') for a in args)
 (Path.home() / 'docker.json').write_text(json.dumps(args))
@@ -164,6 +166,87 @@ class ConfigurationAuthDocsTest(unittest.TestCase):
                                     env=environment(home, EDITOR_EXIT="23"), capture_output=True, timeout=10)
             self.assertEqual(result.returncode, 23)
             self.assertEqual(path.read_text(), CONTENT)
+
+    def test_both_steps_reject_unsafe_paths_before_any_operation(self):
+        for needle in ('vi "$auth_file"', "docker run -d"):
+            for placement in (".config", ".config/pulse", ".config/pulse/docker-auth.env"):
+                for kind in ("symlink", "dangling-symlink", "fifo", "wrong-type"):
+                    with self.subTest(recipe=needle, path=placement, kind=kind), \
+                            tempfile.TemporaryDirectory(prefix="auth paths ") as temp:
+                        home = Path(temp)
+                        path = home / placement
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        outside = home / "untouched"
+                        outside.mkdir(mode=0o755)
+                        witness = outside / "docker-auth.env"
+                        witness.write_text(CONTENT)
+                        witness.chmod(0o644)
+                        before = (witness.stat(), outside.stat())
+                        file_path = placement.endswith(".env")
+                        if kind == "symlink":
+                            path.symlink_to(witness if file_path else outside)
+                        elif kind == "dangling-symlink":
+                            path.symlink_to(home / "must-not-be-created")
+                        elif kind == "fifo":
+                            os.mkfifo(path)
+                        elif file_path:
+                            path.mkdir()
+                        else:
+                            path.write_text("not a directory")
+                        original = path.lstat()
+                        tools = home / "tools"
+                        tools.mkdir()
+                        receipt = home / "operation-called"
+                        for name in ("mkdir", "chmod", "touch", "vi", "docker"):
+                            tool = tools / name
+                            tool.write_text('#!/bin/sh\nprintf called >> "$OPERATION_RECEIPT"\nexit 23\n')
+                            tool.chmod(0o700)
+                        env = {**os.environ, "HOME": str(home),
+                               "PATH": f"{tools}:{os.environ['PATH']}",
+                               "OPERATION_RECEIPT": str(receipt)}
+                        result = subprocess.run(["bash", "-c", recipe(needle)],
+                                                env=env, capture_output=True, timeout=10)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertFalse(receipt.exists(), "must stop before mutation, editor or Docker")
+                        self.assertEqual(path.lstat(), original)
+                        self.assertEqual((witness.stat(), outside.stat()), before)
+                        self.assertEqual(witness.read_text(), CONTENT)
+                        self.assertFalse((home / "must-not-be-created").exists())
+                        self.assertNotIn(HASH.encode(), result.stdout + result.stderr)
+
+    def test_preparation_command_failures_stop_before_editor(self):
+        for failed in ("mkdir", "chmod", "touch"):
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory() as temp:
+                home = Path(temp)
+                env = environment(home)
+                tool = home / "tools" / failed
+                tool.write_text('#!/bin/sh\nexit 23\n')
+                tool.chmod(0o700)
+                result = subprocess.run(["bash", "-c", recipe('vi "$auth_file"')],
+                                        env=env, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 23)
+                self.assertFalse((home / "editor.json").exists())
+
+    def test_launch_protects_existing_file_and_stops_on_permission_failure(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as temp:
+                home = Path(temp)
+                path = private_file(home)
+                path.chmod(0o644)
+                path.parent.chmod(0o755)
+                env = environment(home)
+                if fail:
+                    tool = home / "tools/chmod"
+                    tool.write_text('#!/bin/sh\nexit 23\n')
+                    tool.chmod(0o700)
+                result = subprocess.run(["bash", "-c", recipe("docker run -d")],
+                                        env=env, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 23 if fail else 0, result.stderr.decode())
+                self.assertEqual((home / "docker.json").exists(), not fail)
+                self.assertEqual(path.read_text(), CONTENT)
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644 if fail else 0o600)
+                self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode), 0o755 if fail else 0o700)
+                self.assertNotIn(HASH.encode(), result.stdout + result.stderr)
 
     def test_launch_passes_only_private_path_and_preserves_hash_bytes(self):
         with tempfile.TemporaryDirectory(prefix="auth docs ") as temp:
