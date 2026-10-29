@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -702,4 +704,113 @@ func joinCSV(parts []string) string {
 
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+// Exercise the shared classifier through real persisted writes, tenant-scoped
+// rollup reads and the public wire projection. Future source dates are evidence,
+// not verified protection; ordinary date correction must recover in place.
+func TestHandleListRollupsFutureClockEvidenceAndCorrection(t *testing.T) {
+	setMockModeForTest(t, false)
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	recent, future := now.Add(-time.Hour), now.Add(24*time.Hour)
+	for _, provider := range []recovery.Provider{recovery.ProviderProxmoxPVE, recovery.ProviderProxmoxPBS} {
+		for _, verified := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/verified=%t", provider, verified), func(t *testing.T) {
+				manager := recoverymanager.New(config.NewMultiTenantPersistence(t.TempDir()))
+				store, err := manager.StoreForOrg("default")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = store.Close() })
+				other, err := manager.StoreForOrg("clock-other")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = other.Close() })
+				point := recovery.RecoveryPoint{ID: "clock-point", Provider: provider, ProviderScope: "clock-source", Kind: recovery.KindBackup, Mode: recovery.ModeRemote,
+					Outcome: recovery.OutcomeSuccess, CompletedAt: &future, Verified: &verified, SubjectResourceID: "clock-guest"}
+				otherPoint := point
+				otherPoint.CompletedAt = &recent
+				if err := other.UpsertPoints(context.Background(), []recovery.RecoveryPoint{otherPoint}); err != nil {
+					t.Fatal(err)
+				}
+				handler := NewRecoveryHandlers(manager)
+				read := func(org string) recoveryRollupPayload {
+					t.Helper()
+					request := httptest.NewRequest(http.MethodGet, "/api/recovery/rollups?limit=500", nil)
+					request = request.WithContext(context.WithValue(request.Context(), OrgIDContextKey, org))
+					response := httptest.NewRecorder()
+					handler.HandleListRollups(response, request)
+					if response.Code != http.StatusOK {
+						t.Fatalf("status=%d, body=%s", response.Code, response.Body.String())
+					}
+					var payload struct {
+						Data []recoveryRollupPayload `json:"data"`
+						Meta struct {
+							Total int `json:"total"`
+						} `json:"meta"`
+					}
+					if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+						t.Fatal(err)
+					}
+					if len(payload.Data) != 1 || payload.Meta.Total != 1 {
+						t.Fatalf("response=%s", response.Body.String())
+					}
+					return payload.Data[0]
+				}
+				check := func(got recoveryRollupPayload, intent recovery.VerifyIntent, at time.Time) {
+					t.Helper()
+					if got.VerifyIntent != intent {
+						t.Errorf("intent=%q, want %q", got.VerifyIntent, intent)
+					}
+					if got.RollupID != "res:clock-guest" || got.ItemResourceID != "clock-guest" || got.SubjectResourceID != got.ItemResourceID || len(got.Providers) != 1 || got.Providers[0] != provider || len(got.Platforms) != 1 || got.Platforms[0] != provider {
+						t.Errorf("canonical/compatibility scope changed: %+v", got)
+					}
+					if got.LastSuccessAt == nil || !got.LastSuccessAt.Equal(at) || got.LastAttemptAt == nil || !got.LastAttemptAt.Equal(at) || got.LastOutcome != recovery.OutcomeSuccess {
+						t.Errorf("source evidence changed: %+v", got)
+					}
+					if verified {
+						if got.LastVerifiedAt == nil || !got.LastVerifiedAt.Equal(at) {
+							t.Errorf("verification date changed: %+v", got)
+						}
+					} else if got.LastVerifiedAt != nil {
+						t.Error("unobserved verification gained a timestamp")
+					}
+				}
+				if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+					t.Fatal(err)
+				}
+				before, err := json.Marshal(point)
+				if err != nil {
+					t.Fatal(err)
+				}
+				check(read("default"), recovery.VerifyIntentUnknown, future)
+				check(read("default"), recovery.VerifyIntentUnknown, future)
+				wantCorrected := recovery.VerifyIntentStale
+				if verified {
+					wantCorrected = recovery.VerifyIntentVerified
+				}
+				check(read("clock-other"), wantCorrected, recent)
+				stored, total, err := store.ListPoints(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+				if err != nil || total != 1 || len(stored) != 1 {
+					t.Fatalf("point read: %d/%d/%v", total, len(stored), err)
+				}
+				// Persistence adds a derived display projection, but the measured completion,
+				// verification, source identity and scope must survive these read-only calls.
+				if stored[0].CompletedAt == nil || !stored[0].CompletedAt.Equal(future) || stored[0].Verified == nil || *stored[0].Verified != verified || stored[0].ID != point.ID || stored[0].ProviderScope != point.ProviderScope {
+					t.Fatalf("stored evidence changed: %+v", stored[0])
+				}
+				after, err := json.Marshal(point)
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatal("read changed the source input")
+				}
+				point.CompletedAt = &recent
+				if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+					t.Fatal(err)
+				}
+				check(read("default"), wantCorrected, recent)
+				check(read("clock-other"), wantCorrected, recent)
+			})
+		}
+	}
 }
