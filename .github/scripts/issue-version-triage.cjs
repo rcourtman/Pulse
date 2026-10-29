@@ -257,7 +257,7 @@ function normalizeVersion(value) {
   if (!value) return null;
   // Do not salvage a later dotted fragment after rejecting the original
   // token (for example, 6.0.1 inside 6.6.0.1).
-  const match = String(value).match(new RegExp(String.raw`(?<![0-9A-Za-z_.-])v?(${VERSION_TOKEN})`, "i"));
+  const match = String(value).match(new RegExp(String.raw`(?<![0-9A-Za-z_.])v?(${VERSION_TOKEN})`, "i"));
   return match ? match[1] : null;
 }
 
