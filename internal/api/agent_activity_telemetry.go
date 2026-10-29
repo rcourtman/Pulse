@@ -93,6 +93,9 @@ func (r *Router) recordExternalAgentActivity(req *http.Request, activity string,
 	if r == nil || req == nil || strings.TrimSpace(activity) == "" {
 		return
 	}
+	if isFirstPartyBrowserRequest(req) {
+		return
+	}
 	token := getAPITokenRecordFromRequest(req)
 	if !apiTokenCoversExternalAgentSurface(token, time.Now().UTC(), requiredScopes...) {
 		return
@@ -200,6 +203,17 @@ func externalAgentActivitySurface(req *http.Request) string {
 	default:
 		return config.ExternalAgentActivitySurfaceAgentAPI
 	}
+}
+
+// isFirstPartyBrowserRequest reports whether the request came from a page
+// Pulse itself served. The setup wizard leaves the browser authenticated with
+// the wildcard admin token, and kiosk links authenticate with ?token=, so the
+// Pulse UI's own node and finding fetches would otherwise count as external
+// agent use. Browsers set Sec-Fetch-Site and page scripts cannot override it;
+// scripts, MCP adapters and dashboards on another origin never send
+// same-origin.
+func isFirstPartyBrowserRequest(req *http.Request) bool {
+	return strings.EqualFold(strings.TrimSpace(req.Header.Get("Sec-Fetch-Site")), "same-origin")
 }
 
 func apiTokenCoversExternalAgentSurface(token *config.APITokenRecord, now time.Time, requiredScopes ...string) bool {
