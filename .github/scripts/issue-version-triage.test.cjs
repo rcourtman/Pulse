@@ -4235,3 +4235,111 @@ for (const action of ["opened", "edited", "reopened"]) {
     }
   });
 }
+
+test("repeated form versions require agreement rather than field order", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const second of ["6.7.0-beta.2", "unknown", "", "6.6.0.1"]) {
+    for (const values of [["6.6.0", second], [second, "6.6.0"]]) {
+      for (const heading of ["### Pulse version", "## **Pulse version**", "Pulse version\n-------------"]) {
+        const body = values.map(value => `${heading}\n\n${value}`).join("\n\n");
+        assert.equal(extractPulseVersion("Pulse 6.4.5 update failed", body), null, body);
+      }
+    }
+  }
+});
+
+test("matching repeated form versions retain formatting, references and attempted archives", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const version of ["6.6.0", "6.7.0-beta.2"]) {
+    for (const value of [
+      `**\`v${version}\`**`, `[v${version}][release]`,
+      `pulse-v${version}-linux-amd64.tar.gz`, `rcourtman/pulse:${version}`,
+      `\`\`\`text\n${version}\n\`\`\``,
+    ]) {
+      const body = `### Pulse version\nv${version}\n\n### Pulse version\n${value}\n\n` +
+        `[release]: https://example.invalid/6.4.5`;
+      assert.equal(extractPulseVersion("Pulse 6.4.5 update failed", body), version, body);
+    }
+  }
+  assert.equal(extractPulseVersion("Unversioned report",
+    "### Pulse version\n6.6.0-RC.6\n\n### Pulse version\n6.6.0-rc.6"), "6.6.0-RC.6");
+});
+
+test("legacy repeated versions require agreement in inline, standalone and loose list layouts", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const label of ["Pulse version: ", "**Pulse version**\n", "- **Pulse version**: ", "1. **Pulse version**: "]) {
+    for (const [second, expected] of [["v6.6.0", "6.6.0"], ["6.7.0-beta.2", null], ["unknown", null], ["6.6.0-", null]]) {
+      for (const values of [["6.6.0", second], [second, "6.6.0"]]) {
+        const body = values.map(value => `${label}${value}`).join("\n\n");
+        assert.equal(extractPulseVersion("Pulse 6.4.5 update failed", body), expected, body);
+      }
+    }
+  }
+});
+
+test("non-declarations and neighbouring versions cannot conflict with the primary field", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const copied of [
+    "```text\n### Pulse version\n6.4.5\n```",
+    "> ### Pulse version\n> 6.4.5",
+    "<pre>\nPulse version: 6.4.5\n</pre>",
+    "<!--\n### Pulse version\n6.4.5\n-->",
+    "### Agent version\n6.4.5\n### Last known working Pulse version\n6.4.5",
+    "### Additional actionable topics\nPreserve this second report.\n\nPulse version: 6.4.5\n\n#### Pulse version\n6.4.5",
+  ]) {
+    const body = `### Pulse version\n6.6.0\n\n${copied}`;
+    assert.equal(extractPulseVersion("Pulse 6.4.5 update failed", body), "6.6.0", body);
+  }
+});
+
+test("form version declarations retain precedence over legacy prose in other form fields", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const primary of ["6.6.0", "unknown"]) {
+    const body = `### Describe the bug\nPulse version: 6.4.5\n\n### Pulse version\n${primary}\n\n` +
+      `### Pulse version\n${primary}\n\n### Additional context\nPulse version: 6.5.0`;
+    assert.equal(extractPulseVersion("Pulse 6.3.0 update failed", body), primary === "unknown" ? null : primary);
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`${action} conflicting versions retire stale assertions without disturbing Community decisions`, async () => {
+    for (const field of ["### Pulse version\n", "Pulse version: ", "- **Pulse version**: "]) {
+      const preserved = ["bug", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed", "affects-storage"];
+      const issue = { number: 42, state: "open", title: "Pulse 6.4.5 update failed",
+        body: `${field}6.6.0\n\n${field}6.7.0-beta.2`, comments: 1,
+        updated_at: "2026-10-29T04:34:00Z",
+        labels: [...preserved, "affects-6.5.0"].map(name => ({ name })) };
+      const { github, calls } = createGithub({ currentIssue: issue });
+      await syncLabels({ github, context: createContext({ action, issue }), core: createCore() });
+      assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+        [...preserved, "needs-version-info"].sort(), field);
+      assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0"], field);
+
+      // Resolving the ambiguity is an ordinary body edit, not a refile or a
+      // reporter contact. It can restore the exact version and retire unknown.
+      const previousBody = github.currentIssue.body;
+      github.currentIssue = { ...github.currentIssue, body: `${field}6.7.0-beta.2\n\n${field}v6.7.0-beta.2`,
+        updated_at: "2026-10-29T04:35:00Z" };
+      await syncLabels({ github,
+        context: createContext({ action: "edited", issue: github.currentIssue, previousBody }), core: createCore() });
+      assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+        [...preserved, "affects-6.7.0-beta.2"].sort(), field);
+      assert.equal(calls.createComment.length, 0);
+      assert.equal(calls.getLatestRelease.length, 0);
+      assert.equal(calls.getEvents.length, 0);
+    }
+  });
+}
+
+test("version ambiguity cannot lose an independently declared topic review", async () => {
+  const issue = { number: 42, state: "open", title: "Two report declarations",
+    body: "### Pulse version\n6.6.0\n\n### Pulse version\n6.7.0-beta.2\n\n" +
+      "### Additional actionable topics\nPreserve a separate notification job.",
+    comments: 0, updated_at: "2026-10-29T04:34:00Z", labels: [{ name: "bug" }] };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+    ["bug", "needs-decomposition", "needs-version-info"]);
+  assert.equal(calls.createComment.length, 0);
+  assert.equal(calls.getLatestRelease.length, 0);
+});
