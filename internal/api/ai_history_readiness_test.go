@@ -403,6 +403,9 @@ func TestInvestigationReadInitializersRunOutsideStoreLock(t *testing.T) {
 		}
 		f.handler.investigationMu.RUnlock()
 	})
+	// Installing an initializer also visits the three existing services.
+	// Measure the subsequent read separately from those installation calls.
+	calls.Store(0)
 	rec := f.read("tenant-a", "")
 	if rec.Code != http.StatusOK || calls.Load() != 1 {
 		t.Fatalf("read retry did not initialize once: %d %s", rec.Code, rec.Body.String())
