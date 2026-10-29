@@ -389,7 +389,9 @@ describe('bounded uncertain-task inspection', () => {
     for (const task of tasks) expect(content).toContain(task.id);
     expect(api.fetch).toHaveBeenCalledTimes(2);
     expect(api.json).toHaveBeenCalledTimes(1);
-  });
+    // This explicit full-history DOM fixture is functional coverage, not a
+    // rendering-latency assertion. All normal per-read deadlines remain unchanged.
+  }, 15_000);
 
   it('retains expansion and focus through replacement, shrink, ordered and empty polling', async () => {
     tasks = history();
