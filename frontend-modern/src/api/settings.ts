@@ -199,6 +199,7 @@ export interface TelemetryPingPreview {
   pulse_intelligence_mcp_adapter_used_30d: boolean;
   pulse_intelligence_external_agent_context_requests_30d: number;
   pulse_intelligence_external_agent_event_stream_requests_30d: number;
+  pulse_intelligence_external_agent_history_read_days_30d: number;
   pulse_intelligence_external_agent_provisioning_requests_30d: number;
   pulse_intelligence_external_agent_operator_state_requests_30d: number;
   pulse_intelligence_external_agent_finding_requests_30d: number;

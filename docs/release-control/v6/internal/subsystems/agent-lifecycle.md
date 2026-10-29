@@ -2752,6 +2752,10 @@ disclosure, install-token scope, or execution authority.
 Metric history at `/api/agent/metric-history` (`get_metric_history`) is the
 same read-only boundary: a resource's recorded metric series for a window,
 never install, enrollment or command authority.
+The schema-v21 history-read usage marker that successful `list_recent_changes`
+and `get_metric_history` responses leave is telemetry about agent reads only:
+one content-free `history_read` record per UTC day, never evidence of agent
+enrollment, a connected host or command use.
 
 The `alert.fired`, `alert.resolved` and `resource.status_changed` events on
 `/api/agent/events` are the push form of the same records and the same

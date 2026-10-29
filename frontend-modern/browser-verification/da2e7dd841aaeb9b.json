@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "75e00474f145f107e54026689f977dabc1da70d5",
+  "verified_at": "2026-10-29T11:16:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/settings.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/settings.ts": "a79ea06499e0326e2039b9d97021b7ccee8f23ff80a0fb2fad29706f5a9392b1"
+  },
+  "routes": [
+    "/settings/system-general"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Signed in to a private mock Pulse built from this tree (schema 21) with outbound telemetry disabled",
+    "Telemetry preview before opening: Preview payload button and disabled-telemetry notice",
+    "Preview open after one successful list_recent_changes call by a monitoring:read API token and one rejected call (400): payload shows schema_version 21 and pulse_intelligence_external_agent_history_read_days_30d 1",
+    "1280x800: preview code block readable, no page-level horizontal overflow",
+    "390x844: preview renders under the mobile settings header, page does not overflow horizontally, long payload lines scroll inside the code block"
+  ],
+  "interactions": [
+    "Signed in with the stack's test credentials",
+    "Opened Settings > General and scrolled to Usage data and privacy",
+    "Clicked Preview payload at 1280x800 and at 390x844 and read the rendered payload",
+    "Clicked Copy JSON and saw the 'Telemetry payload copied to clipboard' confirmation"
+  ]
+}

@@ -228,7 +228,9 @@ const (
 	// Schema v19 adds only the rolling count of successfully served metric
 	// history responses containing data older than seven days.
 	// Schema v20 adds aggregate reporting outcomes and distinct-period reuse.
-	TelemetrySchemaVersion = 20
+	// Schema v21 adds only the count of distinct days, 0 to 30, on which an
+	// external agent successfully read change or metric history.
+	TelemetrySchemaVersion = 21
 )
 
 type installIDRecord struct {
@@ -518,6 +520,7 @@ type Ping struct {
 	PulseIntelligenceMCPAdapterUsed30d                                   bool `json:"pulse_intelligence_mcp_adapter_used_30d"`
 	PulseIntelligenceExternalAgentContextRequests30d                     int  `json:"pulse_intelligence_external_agent_context_requests_30d"`
 	PulseIntelligenceExternalAgentEventStreamRequests30d                 int  `json:"pulse_intelligence_external_agent_event_stream_requests_30d"`
+	PulseIntelligenceExternalAgentHistoryReadDays30d                     int  `json:"pulse_intelligence_external_agent_history_read_days_30d"`
 	PulseIntelligenceExternalAgentProvisioningRequests30d                int  `json:"pulse_intelligence_external_agent_provisioning_requests_30d"`
 	PulseIntelligenceExternalAgentOperatorStateRequests30d               int  `json:"pulse_intelligence_external_agent_operator_state_requests_30d"`
 	PulseIntelligenceExternalAgentFindingRequests30d                     int  `json:"pulse_intelligence_external_agent_finding_requests_30d"`
@@ -753,6 +756,7 @@ type Snapshot struct {
 	PulseIntelligenceMCPAdapterUsed30d                                   bool
 	PulseIntelligenceExternalAgentContextRequests30d                     int
 	PulseIntelligenceExternalAgentEventStreamRequests30d                 int
+	PulseIntelligenceExternalAgentHistoryReadDays30d                     int
 	PulseIntelligenceExternalAgentProvisioningRequests30d                int
 	PulseIntelligenceExternalAgentOperatorStateRequests30d               int
 	PulseIntelligenceExternalAgentFindingRequests30d                     int
@@ -1556,6 +1560,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceMCPAdapterUsed30d = s.PulseIntelligenceMCPAdapterUsed30d
 	ping.PulseIntelligenceExternalAgentContextRequests30d = s.PulseIntelligenceExternalAgentContextRequests30d
 	ping.PulseIntelligenceExternalAgentEventStreamRequests30d = s.PulseIntelligenceExternalAgentEventStreamRequests30d
+	ping.PulseIntelligenceExternalAgentHistoryReadDays30d = s.PulseIntelligenceExternalAgentHistoryReadDays30d
 	ping.PulseIntelligenceExternalAgentProvisioningRequests30d = s.PulseIntelligenceExternalAgentProvisioningRequests30d
 	ping.PulseIntelligenceExternalAgentOperatorStateRequests30d = s.PulseIntelligenceExternalAgentOperatorStateRequests30d
 	ping.PulseIntelligenceExternalAgentFindingRequests30d = s.PulseIntelligenceExternalAgentFindingRequests30d

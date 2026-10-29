@@ -5,18 +5,81 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rs/zerolog/log"
 )
 
 func (r *Router) withExternalAgentCapabilityActivity(capabilityName string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		r.recordExternalAgentCapabilityActivity(req, capabilityName)
-		handler(w, req)
+		if !externalAgentHistoryReadCapability(capabilityName) {
+			handler(w, req)
+			return
+		}
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		handler(rw, req)
+		if rw.StatusCode() < http.StatusBadRequest {
+			r.recordExternalAgentHistoryReadDay(req, capabilityName)
+		}
 	}
+}
+
+// externalAgentHistoryReadCapability reports the requested history reads the
+// event-record review counts: what changed, and how a resource's metrics moved.
+func externalAgentHistoryReadCapability(capabilityName string) bool {
+	switch strings.TrimSpace(capabilityName) {
+	case agentcapabilities.ListRecentChangesCapabilityName, agentcapabilities.GetMetricHistoryCapabilityName:
+		return true
+	default:
+		return false
+	}
+}
+
+// externalAgentHistoryReadDays remembers the last UTC day each persistence
+// recorded a history-read marker, so a busy agent costs one write per day
+// rather than one per request. The persistence also dedupes, which covers
+// restarts.
+var externalAgentHistoryReadDays sync.Map
+
+// recordExternalAgentHistoryReadDay writes the install-level history-read
+// marker. It goes to the root persistence, which install telemetry reads,
+// whichever organization the request served: the marker is a content-free
+// day, not tenant data. Mock-mode reads are demo data, not adoption, and
+// would otherwise outlive the switch back to live monitoring.
+func (r *Router) recordExternalAgentHistoryReadDay(req *http.Request, capabilityName string) {
+	if r == nil || req == nil || isFirstPartyBrowserRequest(req) || mock.IsMockEnabled() {
+		return
+	}
+	_, requiredScope, ok := externalAgentCapabilityActivity(capabilityName)
+	if !ok {
+		return
+	}
+	now := time.Now().UTC()
+	if !apiTokenCoversExternalAgentSurface(getAPITokenRecordFromRequest(req), now, requiredScope) {
+		return
+	}
+	persistence := r.persistence
+	if persistence == nil {
+		return
+	}
+	day := now.Format(time.DateOnly)
+	if last, seen := externalAgentHistoryReadDays.Load(persistence); seen && last == day {
+		return
+	}
+	if err := persistence.RecordExternalAgentActivity(config.ExternalAgentActivityRecord{
+		Timestamp: now,
+		Surface:   externalAgentActivitySurface(req),
+		Activity:  config.ExternalAgentActivityHistoryRead,
+	}); err != nil {
+		log.Debug().Err(err).Msg("Failed to record external agent history read")
+		return
+	}
+	externalAgentHistoryReadDays.Store(persistence, day)
 }
 
 func (r *Router) recordExternalAgentCapabilityActivity(req *http.Request, capabilityName string) {

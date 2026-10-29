@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -3173,6 +3174,11 @@ const (
 	ExternalAgentActivityActionPlan      = "action_plan"
 	ExternalAgentActivityActionDecision  = "action_decision"
 	ExternalAgentActivityActionExecute   = "action_execute"
+	// ExternalAgentActivityHistoryRead is a day marker, at most one per UTC
+	// day, written after a successful requested history read
+	// (list_recent_changes, get_metric_history). The request itself is still
+	// recorded under its own activity, so existing counters keep their meaning.
+	ExternalAgentActivityHistoryRead = "history_read"
 
 	maxExternalAgentActivityHistoryRecords = 500
 	externalAgentActivityHistoryRetention  = 90 * 24 * time.Hour
@@ -3301,9 +3307,40 @@ func pruneExternalAgentActivityRecords(records []ExternalAgentActivityRecord, cu
 		normalized = kept
 	}
 	if maxRecords > 0 && len(normalized) > maxRecords {
-		normalized = normalized[len(normalized)-maxRecords:]
+		// History-read day markers sit outside the cap: retention bounds them
+		// to one per day, and a busy agent's per-request records must not push
+		// out the days it read history on.
+		kept := make([]ExternalAgentActivityRecord, 0, maxRecords)
+		others := 0
+		for i := len(normalized) - 1; i >= 0; i-- {
+			if normalized[i].Activity == ExternalAgentActivityHistoryRead {
+				kept = append(kept, normalized[i])
+				continue
+			}
+			if others < maxRecords {
+				kept = append(kept, normalized[i])
+				others++
+			}
+		}
+		slices.Reverse(kept)
+		normalized = kept
 	}
 	return normalized
+}
+
+// externalAgentHistoryReadMarkerRecorded reports whether record is a history
+// read day marker for a UTC day that already has one.
+func externalAgentHistoryReadMarkerRecorded(events []ExternalAgentActivityRecord, record ExternalAgentActivityRecord) bool {
+	if record.Activity != ExternalAgentActivityHistoryRead {
+		return false
+	}
+	day := record.Timestamp.UTC().Format(time.DateOnly)
+	for _, event := range events {
+		if event.Activity == ExternalAgentActivityHistoryRead && event.Timestamp.UTC().Format(time.DateOnly) == day {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeWorkflowPromptActivityRecord(record WorkflowPromptActivityRecord) (WorkflowPromptActivityRecord, bool) {
@@ -3465,7 +3502,9 @@ func (c *ConfigPersistence) RecordExternalAgentActivity(record ExternalAgentActi
 		"external agent activity history", "Resetting unreadable external agent activity history",
 		newEmptyExternalAgentActivityHistoryData,
 		func(history *ExternalAgentActivityHistoryData) {
-			history.Events = append(history.Events, record)
+			if !externalAgentHistoryReadMarkerRecorded(history.Events, record) {
+				history.Events = append(history.Events, record)
+			}
 			history.Events = pruneExternalAgentActivityRecords(
 				history.Events,
 				record.Timestamp.Add(-externalAgentActivityHistoryRetention),

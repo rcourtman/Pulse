@@ -395,3 +395,46 @@ func TestPulseIntelligenceExternalAgentEvidenceFromHistory(t *testing.T) {
 		})
 	}
 }
+
+// HistoryReadDays counts distinct UTC days, not requests, and only inside the
+// window and on external-agent surfaces.
+func TestPulseIntelligenceExternalAgentEvidence_HistoryReadDays(t *testing.T) {
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	since := now.Add(-30 * 24 * time.Hour)
+	read := func(at time.Time, surface string) config.ExternalAgentActivityRecord {
+		return config.ExternalAgentActivityRecord{Timestamp: at, Surface: surface, Activity: config.ExternalAgentActivityHistoryRead}
+	}
+	evidence := PulseIntelligenceExternalAgentEvidenceFromHistory(&config.ExternalAgentActivityHistoryData{Events: []config.ExternalAgentActivityRecord{
+		read(now.Add(-2*time.Hour), config.ExternalAgentActivitySurfaceAgentAPI),
+		read(now.Add(-1*time.Hour), config.ExternalAgentActivitySurfacePulseMCP),
+		read(now.Add(-3*24*time.Hour), config.ExternalAgentActivitySurfacePulseMCP),
+		read(now.Add(-40*24*time.Hour), config.ExternalAgentActivitySurfaceAgentAPI),
+		read(now.Add(-5*24*time.Hour), "pulse_assistant"),
+		{Timestamp: now.Add(-6 * 24 * time.Hour), Surface: config.ExternalAgentActivitySurfaceAgentAPI, Activity: config.ExternalAgentActivityFleetContext},
+	}}, since)
+	if evidence.HistoryReadDays != 2 {
+		t.Fatalf("HistoryReadDays = %d; want 2 (two days in the window on agent surfaces)", evidence.HistoryReadDays)
+	}
+	if evidence.ContextRequests != 1 {
+		t.Fatalf("ContextRequests = %d; history-read markers must not count as requests", evidence.ContextRequests)
+	}
+}
+
+// History-read days are whole UTC dates inside the window: the partial date
+// the window starts in is left out, so 31 dates of reads report 30.
+func TestPulseIntelligenceExternalAgentEvidence_HistoryReadDaysAreWholeDates(t *testing.T) {
+	now := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	since := now.Add(-30 * 24 * time.Hour)
+	events := make([]config.ExternalAgentActivityRecord, 0, 31)
+	for day := 0; day <= 30; day++ {
+		events = append(events, config.ExternalAgentActivityRecord{
+			Timestamp: time.Date(2026, 10, 1+day, 13, 0, 0, 0, time.UTC),
+			Surface:   config.ExternalAgentActivitySurfaceAgentAPI,
+			Activity:  config.ExternalAgentActivityHistoryRead,
+		})
+	}
+	evidence := PulseIntelligenceExternalAgentEvidenceFromHistory(&config.ExternalAgentActivityHistoryData{Events: events}, since)
+	if evidence.HistoryReadDays != 30 {
+		t.Fatalf("HistoryReadDays = %d; want 30 whole dates", evidence.HistoryReadDays)
+	}
+}

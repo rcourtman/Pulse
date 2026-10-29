@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -215,4 +216,83 @@ func TestRecordExternalAgentCapabilityActivityUsesCapabilityClass(t *testing.T) 
 	if history.Events[0].Activity != config.ExternalAgentActivityOperatorState {
 		t.Fatalf("operator-state capability activity = %q, want %q", history.Events[0].Activity, config.ExternalAgentActivityOperatorState)
 	}
+}
+
+// The event-record review counts days on which an agent successfully read
+// history, so the marker is written only after a 2xx response, at most once a
+// day, never for Pulse's own pages, and never for other capabilities.
+func TestHistoryReadDayRecordedOnlyAfterSuccessfulRead(t *testing.T) {
+	historyReads := func(t *testing.T, persistence *config.ConfigPersistence) int {
+		t.Helper()
+		history, err := persistence.LoadExternalAgentActivityHistory()
+		if err != nil {
+			t.Fatalf("LoadExternalAgentActivityHistory: %v", err)
+		}
+		count := 0
+		for _, event := range history.Events {
+			if event.Activity == config.ExternalAgentActivityHistoryRead {
+				count++
+			}
+		}
+		return count
+	}
+	call := func(router *Router, capability string, status int, firstParty bool) {
+		handler := router.withExternalAgentCapabilityActivity(capability, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/api/agent/changes", nil)
+		attachAPITokenRecord(req, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
+		if firstParty {
+			req.Header.Set("Sec-Fetch-Site", "same-origin")
+		}
+		handler(httptest.NewRecorder(), req)
+	}
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{persistence: persistence}
+	call(router, agentcapabilities.ListRecentChangesCapabilityName, http.StatusBadRequest, false)
+	call(router, agentcapabilities.GetMetricHistoryCapabilityName, http.StatusNotFound, false)
+	if got := historyReads(t, persistence); got != 0 {
+		t.Fatalf("failed reads recorded %d history-read markers", got)
+	}
+	call(router, agentcapabilities.FleetContextCapabilityName, http.StatusOK, false)
+	if got := historyReads(t, persistence); got != 0 {
+		t.Fatalf("fleet context recorded %d history-read markers", got)
+	}
+	call(router, agentcapabilities.ListRecentChangesCapabilityName, http.StatusOK, false)
+	call(router, agentcapabilities.GetMetricHistoryCapabilityName, http.StatusOK, false)
+	if got := historyReads(t, persistence); got != 1 {
+		t.Fatalf("two successful reads on one day recorded %d markers; want 1", got)
+	}
+
+	uiPersistence := config.NewConfigPersistence(t.TempDir())
+	call(&Router{persistence: uiPersistence}, agentcapabilities.ListRecentChangesCapabilityName, http.StatusOK, true)
+	if got := historyReads(t, uiPersistence); got != 0 {
+		t.Fatalf("Pulse's own page recorded %d history-read markers", got)
+	}
+}
+
+// Install telemetry reads only the root persistence, so a history read served
+// for another organization must still leave its day marker there.
+func TestHistoryReadDayFromAnotherOrganizationReachesInstallTelemetry(t *testing.T) {
+	root := config.NewConfigPersistence(t.TempDir())
+	router := &Router{persistence: root, multiTenant: config.NewMultiTenantPersistence(t.TempDir())}
+	handler := router.withExternalAgentCapabilityActivity(agentcapabilities.ListRecentChangesCapabilityName, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/changes", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+	attachAPITokenRecord(req, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
+	handler(httptest.NewRecorder(), req)
+
+	history, err := root.LoadExternalAgentActivityHistory()
+	if err != nil {
+		t.Fatalf("LoadExternalAgentActivityHistory: %v", err)
+	}
+	for _, event := range history.Events {
+		if event.Activity == config.ExternalAgentActivityHistoryRead {
+			return
+		}
+	}
+	t.Fatalf("history read for organization acme left no marker in root persistence: %+v", history.Events)
 }

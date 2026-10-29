@@ -6830,6 +6830,17 @@ The `cmd/pulse-mcp/README.md` introduction names these monitoring-read agent
 reads as the place a new MCP user starts; its named tools are pinned to the
 manifest's MCP surface and scope by
 `TestContract_PulseMCPReadmeIntroNamesPublishedReadTools`.
+After a response below 400 from `list_recent_changes` or `get_metric_history`,
+`withExternalAgentCapabilityActivity` also records one content-free
+`history_read` day marker (`recordExternalAgentHistoryReadDay`), under the same
+token-scope and first-party exclusions as other external-agent activity, never
+in mock mode, and at most once per UTC day. It is written to the root
+persistence whichever organization the request served, because install
+telemetry reads only that history. The per-request activity those routes
+already record is unchanged, so existing context counters keep their meaning.
+The marker feeds schema-v21 telemetry
+`pulse_intelligence_external_agent_history_read_days_30d`, which the
+`TelemetryPingPreview` type in `frontend-modern/src/api/settings.ts` declares.
 
 `/api/agent/resource-capabilities/{id}` is the agent-consumable
 structured capability surface for a single resource: the governed

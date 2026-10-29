@@ -378,6 +378,7 @@ func applyPulseIntelligenceExternalAgentSnapshot(
 	snap.PulseIntelligenceMCPAdapterUsed30d = evidence.MCPAdapterUsed
 	snap.PulseIntelligenceExternalAgentContextRequests30d = evidence.ContextRequests
 	snap.PulseIntelligenceExternalAgentEventStreamRequests30d = evidence.EventStreamRequests
+	snap.PulseIntelligenceExternalAgentHistoryReadDays30d = evidence.HistoryReadDays
 	snap.PulseIntelligenceExternalAgentProvisioningRequests30d = evidence.ProvisioningRequests
 	snap.PulseIntelligenceExternalAgentOperatorStateRequests30d = evidence.OperatorStateRequests
 	snap.PulseIntelligenceExternalAgentFindingRequests30d = evidence.FindingRequests

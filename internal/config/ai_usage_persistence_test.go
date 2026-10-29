@@ -175,3 +175,40 @@ func TestRecordWorkflowPromptActivityPrunesAndNormalizes(t *testing.T) {
 		t.Fatalf("recorded event mismatch: %+v", loaded.Events[0])
 	}
 }
+
+// History-read day markers are one per UTC day and sit outside the record
+// cap, so a busy agent's per-request records cannot erase the days it read
+// history on.
+func TestExternalAgentHistoryReadMarkersAreDailyAndSurviveTheCap(t *testing.T) {
+	cp := NewConfigPersistence(t.TempDir())
+	// Midday, so the same-day pair below cannot straddle midnight.
+	now := time.Now().UTC().Truncate(24 * time.Hour).Add(12 * time.Hour)
+	marker := func(at time.Time) ExternalAgentActivityRecord {
+		return ExternalAgentActivityRecord{Timestamp: at, Surface: ExternalAgentActivitySurfaceAgentAPI, Activity: ExternalAgentActivityHistoryRead}
+	}
+	for _, at := range []time.Time{now.Add(-48 * time.Hour), now.Add(-24 * time.Hour), now, now.Add(time.Second)} {
+		if err := cp.RecordExternalAgentActivity(marker(at)); err != nil {
+			t.Fatalf("RecordExternalAgentActivity: %v", err)
+		}
+	}
+	for i := 0; i < maxExternalAgentActivityHistoryRecords+50; i++ {
+		if err := cp.RecordExternalAgentActivity(ExternalAgentActivityRecord{Timestamp: now.Add(time.Duration(i) * time.Millisecond), Surface: ExternalAgentActivitySurfaceAgentAPI, Activity: ExternalAgentActivityFleetContext}); err != nil {
+			t.Fatalf("RecordExternalAgentActivity: %v", err)
+		}
+	}
+	loaded, err := cp.LoadExternalAgentActivityHistory()
+	if err != nil {
+		t.Fatalf("LoadExternalAgentActivityHistory: %v", err)
+	}
+	markers, others := 0, 0
+	for _, event := range loaded.Events {
+		if event.Activity == ExternalAgentActivityHistoryRead {
+			markers++
+		} else {
+			others++
+		}
+	}
+	if markers != 3 || others != maxExternalAgentActivityHistoryRecords {
+		t.Fatalf("markers=%d others=%d; want 3 daily markers kept beside %d capped records", markers, others, maxExternalAgentActivityHistoryRecords)
+	}
+}

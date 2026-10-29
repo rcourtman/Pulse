@@ -203,6 +203,7 @@ const buildTelemetryPreviewPayload = (
   pulse_intelligence_mcp_adapter_used_30d: false,
   pulse_intelligence_external_agent_context_requests_30d: 0,
   pulse_intelligence_external_agent_event_stream_requests_30d: 0,
+  pulse_intelligence_external_agent_history_read_days_30d: 0,
   pulse_intelligence_external_agent_provisioning_requests_30d: 0,
   pulse_intelligence_external_agent_operator_state_requests_30d: 0,
   pulse_intelligence_external_agent_finding_requests_30d: 0,
