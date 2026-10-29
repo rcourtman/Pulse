@@ -27,6 +27,7 @@ type pbsNamespaceContinuityFixture struct {
 	rootReads, tenantReads                atomic.Int32
 	tenantSnapshotStatus, namespaceStatus atomic.Int32
 	failedReads                           atomic.Int32
+	inventoryResponse                     atomic.Pointer[pbsInventoryResponse]
 }
 
 func newPBSNamespaceContinuityFixture(t *testing.T, kind string) *pbsNamespaceContinuityFixture {
@@ -35,6 +36,13 @@ func newPBSNamespaceContinuityFixture(t *testing.T, kind string) *pbsNamespaceCo
 	f.rootAt.Store(f.backupAt)
 	f.tenantAt.Store(f.backupAt)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if response := f.inventoryResponse.Load(); response != nil &&
+			r.URL.Path == "/api2/json/admin/datastore/archive/"+response.stage &&
+			(response.stage == "namespace" || r.URL.Query().Get("ns") == "tenant") {
+			f.failedReads.Add(1)
+			_, _ = w.Write([]byte(response.body))
+			return
+		}
 		id, at, status, empty := "100", f.rootAt.Load(), f.rootStatus.Load(), f.rootEmpty.Load()
 		if r.URL.Query().Get("ns") == "tenant" {
 			id, at, status, empty = "101", f.tenantAt.Load(), f.tenantStatus.Load(), f.tenantEmpty.Load()
