@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -42,6 +43,7 @@ func TestTrueNASPoolCapacityCollectionHistory(t *testing.T) {
 
 	var cycle atomic.Int32
 	var poolReads atomic.Int32
+	var memoryProbes atomic.Int32
 	fields := []string{
 		`,"size":1000,"allocated":400,"free":600`,
 		`,"size":1000`, // Must not refresh the last reading as zero.
@@ -50,6 +52,21 @@ func TestTrueNASPoolCapacityCollectionHistory(t *testing.T) {
 	}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/current" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Path == "/websocket" {
+			// This REST-only fixture has no optional CORE memory stream. DDP
+			// authenticates after upgrading, not with a REST bearer header.
+			// Its absence must not bypass any REST credential assertion or
+			// prevent independent pool collection and History below.
+			memoryProbes.Add(1)
+			if r.Method != http.MethodGet || !websocket.IsWebSocketUpgrade(r) {
+				t.Error("CORE memory probe did not request a WebSocket upgrade")
+			}
+			if r.Header.Get("Authorization") != "" {
+				t.Error("REST credentials sent to an unsupported CORE memory endpoint")
+			}
 			http.NotFound(w, r)
 			return
 		}
@@ -146,6 +163,9 @@ func TestTrueNASPoolCapacityCollectionHistory(t *testing.T) {
 	}
 	if poolReads.Load() != 8 || len(targets) != 2 {
 		t.Fatalf("reads=%d independent pool identities=%d", poolReads.Load(), len(targets))
+	}
+	if memoryProbes.Load() != 8 {
+		t.Fatalf("CORE memory probes=%d, want one per connection and collection", memoryProbes.Load())
 	}
 	persistent.Flush()
 	for _, resource := range adapter.GetAll() {

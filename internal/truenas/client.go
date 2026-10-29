@@ -31,7 +31,8 @@ const defaultRealtimeIntervalSeconds = 2
 
 // legacyRESTTelemetryWindowSeconds bounds the reporting.get_data window used
 // to reconstruct live system telemetry on the legacy REST transport, where the
-// reporting.realtime JSON-RPC subscription does not exist (#2077).
+// reporting.realtime JSON-RPC subscription does not exist (#2077). CORE 13
+// can additionally supply same-frame memory over its native DDP event stream.
 const legacyRESTTelemetryWindowSeconds = 300
 
 const defaultAppStatsIntervalSeconds = defaultRealtimeIntervalSeconds
@@ -273,11 +274,9 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 	return telemetry, nil
 }
 
-// getSystemTelemetryREST reconstructs live system telemetry from the legacy
-// REST reporting API. TrueNAS CORE 13 has no reporting.realtime JSON-RPC
-// subscription, so reporting.get_data is the only live memory and ARC source
-// there; without it the total-available derivation reports every CORE install
-// as 100% used (#2077).
+// getSystemTelemetryREST keeps legacy reporting for CPU, thermals, device rates
+// and History. A bounded CORE 13 DDP observation can replace the whole memory
+// tuple; it never combines realtime Free with an independently timed RRD ARC.
 func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error) {
 	end := time.Now().Unix()
 	start := end - int64(legacyRESTTelemetryWindowSeconds)
@@ -289,10 +288,24 @@ func (c *Client) getSystemTelemetryREST(ctx context.Context) (*SystemInfo, error
 		return nil, err
 	}
 	history := parseSystemMetricHistory(liveReportingResponses(response, end))
-	if history == nil {
+	system := systemInfoFromMetricHistory(history)
+	memory, _ := c.getCORE13RealtimeMemory(ctx)
+	if memory != nil {
+		if system == nil {
+			system = &SystemInfo{Telemetry: &SystemTelemetryAvailability{}}
+		}
+		system.MemoryTotalBytes = memory.MemoryTotalBytes
+		system.MemoryAvailableBytes = memory.MemoryAvailableBytes
+		system.ARCSizeBytes = memory.ARCSizeBytes // observed zero clears RRD cache
+		system.Telemetry.Memory = true
+		if memory.CollectedAt.After(system.CollectedAt) {
+			system.CollectedAt = memory.CollectedAt
+		}
+	}
+	if system == nil {
 		return nil, errNoSystemTelemetry
 	}
-	return systemInfoFromMetricHistory(history), nil
+	return system, nil
 }
 
 // systemInfoFromMetricHistory maps the latest reporting sample onto live system
@@ -2170,7 +2183,7 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	if telemetry.MemoryAvailableBytes > 0 || (telemetry.Telemetry != nil && telemetry.Telemetry.Memory) {
 		system.MemoryAvailableBytes = telemetry.MemoryAvailableBytes
 	}
-	if telemetry.ARCSizeBytes > 0 {
+	if telemetry.ARCSizeBytes > 0 || (telemetry.Telemetry != nil && telemetry.Telemetry.Memory) {
 		system.ARCSizeBytes = telemetry.ARCSizeBytes
 	}
 	system.CPUPercent = telemetry.CPUPercent
