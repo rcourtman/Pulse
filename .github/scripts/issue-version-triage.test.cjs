@@ -4144,3 +4144,94 @@ test("loose-list version declarations inside secondary topics remain topic evide
   assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), "6.6.0");
   assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true);
 });
+
+test("malformed version tokens cannot be shortened or salvaged into another release", () => {
+  for (const value of ["6.6.0.1", "v6.6.0.12", "6.6.0-", "V6.6.0-beta..3", "6.6.0-beta_3"]) {
+    assert.equal(triage.internals.normalizeVersion(value), null, value);
+  }
+});
+
+test("explicit malformed versions remain authoritative in all supported Markdown layouts", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3"]) {
+    for (const body of [
+      `### Pulse version\n${value}\n\n### Agent version\n6.5.0`,
+      `**Pulse version:** ${value}\nAgent version: 6.5.0`,
+      `Pulse version\n${value}\nAgent version: 6.5.0`,
+      `- **Pulse version**: ${value}\n- Agent version: 6.5.0`,
+      `1. **Pulse version**: ${value}\n\n2. Agent version: 6.5.0`,
+      `### Pulse version\n\`\`\`text\n${value}\n\`\`\`\n### Agent version\n6.5.0`,
+      `### Pulse version\n[${value}][release]\n\n[release]: https://example.invalid/6.6.0`,
+    ]) {
+      assert.equal(extractPulseVersion("Pulse 6.4.5 update failed", body), null, body);
+    }
+  }
+});
+
+test("title fallback does not shorten a malformed server or neutral version token", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3"]) {
+    for (const title of [
+      `Pulse ${value} loses readings`,
+      `Pulse Pro version: V${value} loses readings`,
+      `rcourtman/pulse:${value} loses readings`,
+      `[Bug]: v${value} loses readings`,
+      `Bug on v${value}`,
+    ]) {
+      assert.equal(extractPulseVersion(title, "Legacy report."), null, title);
+      assert.equal(extractPulseVersion(title, "### Pulse version\n6.5.0"), "6.5.0", title);
+    }
+  }
+});
+
+test("complete stable and prerelease tokens retain their full value and ordinary punctuation", () => {
+  const { extractPulseVersion, normalizeVersion } = triage.internals;
+  for (const version of ["6.6.0", "6.7.0-beta.3", "6.6.0-RC.6", "6.7.0-alpha-2.3", "6.7.0-alpha-"]) {
+    for (const suffix of ["", ".", "...", ", still failing", " (Docker)", "; agent 6.5.0"]) {
+      const value = `V${version}${suffix}`;
+      assert.equal(normalizeVersion(value), version, value);
+      assert.equal(extractPulseVersion("Upgrade from 6.4.5", `### Pulse version\n${value}`), version, value);
+      assert.equal(extractPulseVersion(`Pulse ${value}`, "Legacy report."), version, value);
+    }
+  }
+});
+
+test("malformed attempted archives cannot borrow a valid dotted fragment", () => {
+  for (const stem of ["pulse", "pulse-pro"]) {
+    for (const value of ["6.6.0.1", "6.6.0-beta..3"]) {
+      const archive = `${stem}-v${value}-linux-amd64.tar.gz`;
+      assert.equal(triage.internals.extractPulseVersion("Pulse 6.4.5 install failed",
+        `### Pulse version\n\`${archive}\``), null, archive);
+    }
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`${action} malformed-version metadata preserves Community decisions and accepts a later correction`, async () => {
+    for (const value of ["6.6.0.1", "6.6.0-", "6.6.0-beta..3", "6.6.0-beta_3"]) {
+      const preserved = ["bug", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed", "affects-storage"];
+      const issue = { number: 42, state: "open", title: "Pulse 6.4.5 update failed",
+        body: `### Pulse version\n${value}\n\n### Additional actionable topics\nKeep failed attempts visible.`,
+        updated_at: "2026-10-29T03:40:00Z", comments: 1,
+        labels: [...preserved, "affects-6.5.0"].map(name => ({ name })) };
+      const { github, calls } = createGithub({ currentIssue: issue });
+      const context = { repo: { owner: "fixture", repo: "fixture" }, payload: { action, issue } };
+      await triage.syncLabels({ github, context, core: { info() {} } });
+      assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]], value);
+      assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0"], value);
+      assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+        [...preserved, "needs-version-info"].sort(), value);
+      assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-version-info"], value);
+
+      github.currentIssue = { ...github.currentIssue, body: issue.body.replace(value, "6.7.0-beta.3"),
+        updated_at: "2026-10-29T03:41:00Z" };
+      await triage.syncLabels({ github, context: { ...context, payload: { action: "edited", issue: github.currentIssue } },
+        core: { info() {} } });
+      assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+        [...preserved, "affects-6.7.0-beta.3"].sort(), value);
+      assert.equal(calls.getLatestRelease.length, 0);
+      assert.equal(calls.createComment.length, 0);
+      assert.equal(calls.getEvents.length, 0);
+    }
+  });
+}
