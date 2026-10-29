@@ -204,11 +204,39 @@ func pveStorageBackupType(content proxmox.StorageContent) string {
 		volume = volume[colon+1:]
 	}
 	volume = strings.TrimPrefix(volume, "backup/")
+	var kind, encodedID string
 	switch {
-	case strings.HasPrefix(volume, "vzdump-qemu-"), strings.HasPrefix(volume, "vm/"):
-		return "qemu"
-	case strings.HasPrefix(volume, "vzdump-lxc-"), strings.HasPrefix(volume, "ct/"):
-		return "lxc"
+	case strings.HasPrefix(volume, "vzdump-qemu-"):
+		kind, encodedID = "qemu", strings.TrimPrefix(volume, "vzdump-qemu-")
+	case strings.HasPrefix(volume, "vzdump-lxc-"):
+		kind, encodedID = "lxc", strings.TrimPrefix(volume, "vzdump-lxc-")
+	case strings.HasPrefix(volume, "vm/"):
+		kind, encodedID = "qemu", strings.TrimPrefix(volume, "vm/")
+	case strings.HasPrefix(volume, "ct/"):
+		kind, encodedID = "lxc", strings.TrimPrefix(volume, "ct/")
+	}
+	if kind != "" {
+		if strings.HasPrefix(volume, "vzdump-") {
+			if end := strings.IndexAny(encodedID, "-."); end >= 0 {
+				encodedID = encodedID[:end]
+			}
+		} else {
+			encodedID, _, _ = strings.Cut(encodedID, "/")
+		}
+		// A kind prefix is not sufficient subject evidence. Inconsistent
+		// metadata must not credit either guest, lend its current placement,
+		// or confirm a direct PBS snapshot. Keep the raw archive as unknown;
+		// a format fallback cannot overrule a malformed/conflicting subject.
+		for _, digit := range encodedID {
+			if digit < '0' || digit > '9' {
+				return "unknown"
+			}
+		}
+		id, err := strconv.Atoi(encodedID)
+		if err != nil || id <= 0 || id != content.VMID {
+			return "unknown"
+		}
+		return kind
 	}
 	// Explicit PBS formats remain a fallback for paths without a recognised
 	// discriminator. A substring of an unrelated format is not type evidence.
