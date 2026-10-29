@@ -116,10 +116,15 @@ func runPBSRecipe(t *testing.T, recipe, home, bin string, extraEnv ...string) (s
 	return result.output, result.exit
 }
 
+// These cases own their files, command environments and synthetic peers. Use
+// Go's existing -parallel budget; retain the real request/TERM/KILL deadlines
+// and begin each fixture watchdog only after its case is admitted.
 func TestPBSAPIGuidancePreparationIsPrivateAndFailClosed(t *testing.T) {
+	t.Parallel()
 	for index, filename := range []string{"pbs-agent-token", "pbs-header"} {
 		for _, mode := range []string{"new", "existing", "config symlink", "directory symlink", "file symlink", "dangling symlink", "non-regular", "mkdir failure", "chmod failure", "touch failure", "editor failure"} {
 			t.Run(filename+"/"+mode, func(t *testing.T) {
+				t.Parallel()
 				home := t.TempDir()
 				bin := filepath.Join(home, "bin")
 				if err := os.Mkdir(bin, 0700); err != nil {
@@ -266,6 +271,7 @@ func TestPBSAPIGuidanceRejectsUnsafeRecipesAndExactParent(t *testing.T) {
 // and identifying data. This proves copied transport/file safety, not native
 // PBS permissions, installed collection, backup recovery or agent installation.
 func TestPBSAPIGuidanceCopiedRequestsKeepSecretsPrivate(t *testing.T) {
+	t.Parallel()
 	blocks := pbsAPIGuidance(t)
 	for index, recipe := range blocks[2:] {
 		for _, scenario := range []string{"success", "401", "403", "redirect", "wrong success status", "untrusted HTTPS", "truncated installer", "existing installer", "symlinked header"} {
@@ -273,6 +279,7 @@ func TestPBSAPIGuidanceCopiedRequestsKeepSecretsPrivate(t *testing.T) {
 				continue
 			}
 			t.Run(fmt.Sprintf("%d/%s", index, scenario), func(t *testing.T) {
+				t.Parallel()
 				recipe := recipe
 				realCurl, err := exec.LookPath("curl")
 				if err != nil {

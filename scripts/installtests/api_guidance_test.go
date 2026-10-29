@@ -172,10 +172,15 @@ func runPulseAPIRecipe(t *testing.T, script, home, bin string, extraEnv ...strin
 	return result.output, result.exit
 }
 
+// These cases own their files, command environments and synthetic peers. Use
+// Go's existing -parallel budget; retain the real request/TERM/KILL deadlines
+// and begin each fixture watchdog only after its case is admitted.
 func TestPulseAPIGuidancePreparationIsPrivateAndFailClosed(t *testing.T) {
+	t.Parallel()
 	prep, _, _ := pulseAPIReference(t)
 	for _, mode := range []string{"new", "existing", "config symlink", "directory symlink", "file symlink", "dangling symlink", "non-regular", "mkdir failure", "chmod failure", "touch failure", "editor failure"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			home, bin := t.TempDir(), t.TempDir()
 			dir := filepath.Join(home, ".config", "pulse")
 			file := filepath.Join(dir, "api-header")
@@ -281,9 +286,11 @@ func TestPulseAPIGuidancePreparationIsPrivateAndFailClosed(t *testing.T) {
 }
 
 func TestPulseAPIGuidanceHelperStopsBeforeCurlOnUnsafeFilesOrPreparation(t *testing.T) {
+	t.Parallel()
 	_, helper, _ := pulseAPIReference(t)
 	for _, mode := range []string{"missing", "file symlink", "config symlink", "directory symlink", "non-regular", "chmod failure", "mktemp failure", "unsupported method", "full URL", "extra argument"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			home, bin := t.TempDir(), t.TempDir()
 			dir := filepath.Join(home, ".config", "pulse")
 			if err := os.MkdirAll(dir, 0700); err != nil {
@@ -352,10 +359,12 @@ func TestPulseAPIGuidanceHelperStopsBeforeCurlOnUnsafeFilesOrPreparation(t *test
 type apiRecipeRequest struct{ method, uri, token, contentType, body string }
 
 func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing.T) {
+	t.Parallel()
 	_, helper, calls := pulseAPIReference(t)
 	for _, call := range calls {
 		for _, scenario := range []string{"success", "401", "403", "redirect", "partial", "untrusted HTTPS", "trusted HTTPS"} {
 			t.Run(call.contract.name+"/"+scenario, func(t *testing.T) {
+				t.Parallel()
 				home, bin := t.TempDir(), t.TempDir()
 				dir := filepath.Join(home, ".config", "pulse")
 				if err := os.MkdirAll(dir, 0755); err != nil {
@@ -511,6 +520,7 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 }
 
 func TestPulseAPIGuidanceMissingNodeInputStopsBeforeCurl(t *testing.T) {
+	t.Parallel()
 	_, helper, calls := pulseAPIReference(t)
 	home, bin := t.TempDir(), t.TempDir()
 	dir := filepath.Join(home, ".config", "pulse")
@@ -543,6 +553,7 @@ func TestPulseAPIGuidanceMissingNodeInputStopsBeforeCurl(t *testing.T) {
 }
 
 func TestPulseAPIGuidanceTimedOutPOSTIsNotRepeated(t *testing.T) {
+	t.Parallel()
 	_, helper, calls := pulseAPIReference(t)
 	var execute string
 	for _, call := range calls {

@@ -168,11 +168,16 @@ func TestTemperatureCleanupRecipeScopeRejectsBroaderOrMissingActions(t *testing.
 	}
 }
 
+// These cases own their files, command environments and synthetic peers. Use
+// Go's existing -parallel budget; retain the real request/TERM/KILL deadlines
+// and begin each fixture watchdog only after its case is admitted.
 func TestTemperatureGuidanceReadingCommandsArePrivateAndBounded(t *testing.T) {
+	t.Parallel()
 	local, ssh, _ := temperatureRecipes(t)
 	for index, recipe := range []string{local, ssh} {
 		for _, scenario := range []string{"success", "partial failure", "hung command", "temporary directory failure", "missing timeout"} {
 			t.Run(fmt.Sprintf("%d/%s", index, scenario), func(t *testing.T) {
+				t.Parallel()
 				home, bin, tmp := t.TempDir(), t.TempDir(), t.TempDir()
 				tool := "sensors"
 				outName, errName := "sensors.json", "sensors.err"
@@ -256,9 +261,11 @@ func TestTemperatureGuidanceReadingCommandsArePrivateAndBounded(t *testing.T) {
 }
 
 func TestTemperatureGuidanceCleanupDownloadPreservesFilesAndTrust(t *testing.T) {
+	t.Parallel()
 	_, _, original := temperatureRecipes(t)
 	for _, scenario := range []string{"success", "401", "403", "redirect", "wrong success status", "untrusted HTTPS", "truncated response", "existing helper", "helper symlink", "dangling helper", "helper directory", "configuration symlink", "pulse directory symlink", "mkdir failure", "chmod failure"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			realCurl, err := exec.LookPath("curl")
 			if err != nil {
 				t.Fatal("curl is required to verify copied download guidance")
