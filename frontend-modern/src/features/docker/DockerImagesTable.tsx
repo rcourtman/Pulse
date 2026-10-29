@@ -261,7 +261,7 @@ export const DockerImagesTable: Component<
                               <button
                                 type="button"
                                 class={`inline-flex min-h-9 max-w-full items-center rounded-full px-2 py-0.5 text-[10px] font-medium underline decoration-dotted underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sky-400/70 sm:min-h-0 ${updateToneClass[operational().updateTone]}`}
-                                aria-label={`Check failed for ${dockerResourceName(resource)}; details`}
+                                aria-label={`Check failed for ${dockerResourceName(resource)}. Details`}
                                 aria-expanded={isExpanded()}
                                 aria-controls={detailRowId()}
                                 title={operational().updateDetail}

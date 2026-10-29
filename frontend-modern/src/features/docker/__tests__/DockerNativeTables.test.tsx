@@ -1523,7 +1523,7 @@ describe('Docker native tables', () => {
     ));
 
     const button = screen.getByRole('button', {
-      name: 'Check failed for registry.example.invalid/team/web:latest; details',
+      name: 'Check failed for registry.example.invalid/team/web:latest. Details',
     });
     expect(button).toHaveAttribute('type', 'button');
     expect(button.tabIndex).toBe(0);
