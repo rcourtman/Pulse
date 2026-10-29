@@ -701,25 +701,29 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    const attention = await screen.findByRole('button', { name: '1 attention' });
+    // Keep accessible-role queries in the health legend so unrelated table
+    // rows do not add lookup work to the unchanged five-second test budget.
+    const legend = within((await screen.findByText('unprotected')).closest('ul')!);
+    const attention = await legend.findByRole('button', { name: '1 attention' });
     expect(attention).toHaveAttribute('aria-pressed', 'false');
     // A zero count would open an empty list, so it stays text.
-    expect(screen.queryByRole('button', { name: '0 unprotected' })).toBeNull();
-    expect(screen.getByText('unprotected')).toBeInTheDocument();
+    expect(legend.queryByRole('button', { name: '0 unprotected' })).toBeNull();
+    expect(legend.getByText('unprotected')).toBeInTheDocument();
 
     await fireEvent.click(attention);
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/backups/coverage');
       expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
     });
-    expect(screen.getByRole('button', { name: '1 attention' })).toHaveAttribute(
+    expect(legend.getByRole('button', { name: '1 attention' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
 
     // Toggling off keeps the same focused control rather than rebuilding it.
-    const pressed = screen.getByRole('button', { name: '1 attention' });
+    const pressed = legend.getByRole('button', { name: '1 attention' });
+    expect(pressed).toBe(attention);
     pressed.focus();
     await fireEvent.click(pressed);
     await waitFor(() =>
