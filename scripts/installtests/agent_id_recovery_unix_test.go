@@ -33,6 +33,9 @@ func agentIDRecoveryCommand(ctx context.Context, name string, args ...string) *e
 }
 
 func TestInstallSHAgentIDRecoveryRejectsSymlinkFIFOAndOversizedState(t *testing.T) {
+	// The real-agent build and all unsafe-file probes own their paths and
+	// process groups; let Go overlap them with independent transport waits.
+	t.Parallel()
 	buildStarted := time.Now()
 	binaryPath := buildLifecycleAgent(t)
 	t.Logf("built actual lifecycle agent in %s; recovery probes have an independent two-second deadline", time.Since(buildStarted))

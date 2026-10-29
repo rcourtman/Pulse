@@ -17,6 +17,9 @@ import (
 // Actual curl/TLS/deadline behavior, without contacting a provider or running an
 // installer. The complete transaction/failure controls below remain separate.
 func TestAutoUpdateAssetTransport(t *testing.T) {
+	// Private peers, files and child environments do not need to serialise
+	// the real sixty-second curl deadline with independent agent controls.
+	t.Parallel()
 	if _, err := exec.LookPath("curl"); err != nil {
 		t.Fatal("curl is required for the updater transport controls")
 	}
