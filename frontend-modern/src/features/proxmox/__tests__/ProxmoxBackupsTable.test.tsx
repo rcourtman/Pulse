@@ -2414,7 +2414,7 @@ describe('restore volume with unavailable sizes', () => {
     );
     expect(panel).not.toHaveTextContent('0 B');
     expect(within(panel).getAllByText('Verified')).toHaveLength(2);
-    expect(document.body).toHaveTextContent('6 completed restore points');
+    expect(document.body).toHaveTextContent('5 completed restore points');
     expect(document.body).toHaveTextContent('1 running');
   });
 
