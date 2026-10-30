@@ -98,9 +98,9 @@ describe('shipped monitored-container update guide', () => {
       (anchor) => anchor.textContent === 'read-only workload state checks',
     );
     expect(link?.getAttribute('href')).toBe(
-      '/docs/DOCKER#action-was-sent-or-its-outcome-is-unknown',
+      '#action-was-sent-or-its-outcome-is-unknown',
     );
-    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    expect(link?.hasAttribute('data-doc-link')).toBe(false);
     expect(article.querySelector(link!.hash)?.textContent).toBe(
       'Action was sent or its outcome is unknown',
     );
