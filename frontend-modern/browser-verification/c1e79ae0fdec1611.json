@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "3f04de6e2518b6ac752f805f0aa39617f1d5cf1f",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "55a25b7c6c67eaf4abcd935ac6985e61e3f0cdaf92d928bf5527fe1034dbd0ce"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000,
+      "browser": "chromium 141.0.7390.37",
+      "theme": "light",
+      "touch": false
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "chromium 141.0.7390.37",
+      "theme": "dark",
+      "touch": true
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "webkit 26.0",
+      "theme": "light",
+      "touch": true
+    }
+  ],
+  "states": [
+    "Six restore points for one workload have distinct source/date/reader/location/native-ID disclosure names",
+    "Tied guest snapshot dates, separate PBS dates and another backup connection remain independently inspectable",
+    "Visible native phone disclosure beside a wrapped long workload identity",
+    "Open detail shows full calendar year, seconds and zone; Identifier is the native record and Metadata retains file information",
+    "Ordinary same-ID verification refresh keeps the selected point, its name and native focus"
+  ],
+  "interactions": [
+    "Native Tab/Enter selects the older PBS point by accessible identity, once; Space collapses it once",
+    "Phone taps use the visible36px target and select the offsite backup reader without toggling the row twice",
+    "Native close restores focus to the same record disclosure",
+    "Ordinary30s inventory polling changes verification without replacing the open point or its focus",
+    "Bounded follow-up scrolls the existing phone detail to inspect the complete wrapped Identifier and separate Metadata, rather than replaying the full interaction matrix"
+  ],
+  "verified_at": "2026-10-30T05:26:59.015454Z",
+  "notes": "Final runtime/source-1n90v515 production App and exact assets against safe local authenticated raw inventory.50 main checks plus11 bounded pixel-follow-up checks; all8 final captures opened with native view_image. Matching Playwright1.56.1, all2760 module-file and124 asset hashes match; no writes, external calls, unknown APIs, console or App errors. Final source passes1209 tests/47 Proxmox suites, frontend types/lint/format/build/bundles. Intermediate pixel review caught the omitted year and metadata-as-Identifier before this final pass. This is existing inspection usability, not a tested restore, original guest recovery or containing release."
+}
