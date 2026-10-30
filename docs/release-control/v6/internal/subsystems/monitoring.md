@@ -27,8 +27,9 @@ ended jobs even when live work fills the allowance. Unused turns serve either
 queue. Failures, empty, capped and
 incomplete logs spend their turn without becoming final; an unread older job
 must not be hidden forever by the same failing prefix. Only an actual request
-advances scheduling, not selection or cancellation. Selection leaves input and
-guest output ordering unchanged, completed attributed logs remain cached, and
+advances scheduling, not selection or cancellation. Execution follows that
+priority too, so one slow read exhausting the context cannot monopolise even a
+small queue. Selection leaves input and guest output ordering unchanged, completed attributed logs remain cached, and
 removed jobs discard their scheduling state with the existing cache pruning.
 
 Scheduling metadata is not an accepted observation. Skipped/failed reads retain
@@ -37,7 +38,8 @@ supplies a missing guest verdict. No allowance, provider permission, task/result
 schema, identity, protection rule or guest operation changes.
 `vzdump_job_log_scheduling_test.go` checks bounded progress, poll-to-guest results,
 immutable completion, live/history progress under saturation, cancellation,
-pruning and concurrent connection isolation.
+context-budget fairness, stable output order, pruning and concurrent connection
+isolation.
 The existing cached-guest tests retain their observation/intent assertions.
 Desktop/narrow proof consumes actual poll frames through Backups Coverage,
 including scoped task results without inventing a restore artifact or protection.

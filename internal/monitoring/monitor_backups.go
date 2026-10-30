@@ -2725,10 +2725,22 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 	now := time.Now().UTC()
 	seen := make(map[string]struct{}, len(jobTasks))
 	fetchJobs := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
-	var synthesized []models.BackupTask
+	order := make([]int, len(jobTasks))
+	for i := range order {
+		order[i] = i
+	}
+	// Execute selected reads in scheduling order as well: an early slow read
+	// can exhaust the shared context before the request-count cap is reached.
+	sort.SliceStable(order, func(i, j int) bool {
+		left := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[i]].ID]]
+		right := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[j]].ID]]
+		return left > 0 && (right == 0 || left < right)
+	})
+	byJob := make([][]models.BackupTask, len(jobTasks))
 	fetches := 0
 
-	for _, jobTask := range jobTasks {
+	for _, index := range order {
+		jobTask := jobTasks[index]
 		upid := jobUPIDs[jobTask.ID]
 		key := instanceName + "|" + upid
 		seen[key] = struct{}{}
@@ -2738,16 +2750,16 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		m.mu.RUnlock()
 
 		if cached && entry.final {
-			synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+			byJob[index] = refreshObservedAt(entry.tasks, now)
 			continue
 		}
 
-		if !fetchJobs[key] || fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
+		if fetchJobs[key] == 0 || fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
 			// Serve a stale non-final entry if we have one; the next cycle
 			// will catch up. The current parent can end a cached running
 			// guest, but cannot supply its missing verdict or a fresh log read.
 			if cached {
-				synthesized = append(synthesized, cachedVzdumpGuestTasks(entry.tasks, jobTask)...)
+				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
 			continue
 		}
@@ -2771,7 +2783,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 				Str("upid", upid).
 				Msg("failed to fetch vzdump job task log; per-guest status unavailable this cycle")
 			if cached {
-				synthesized = append(synthesized, cachedVzdumpGuestTasks(entry.tasks, jobTask)...)
+				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
 			continue
 		}
@@ -2789,10 +2801,14 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			lastAttempt:     now,
 		}
 		m.mu.Unlock()
-		synthesized = append(synthesized, guestTasks...)
+		byJob[index] = guestTasks
 	}
 
 	m.pruneVzdumpJobTaskCache(instanceName, seen)
+	var synthesized []models.BackupTask
+	for _, tasks := range byJob {
+		synthesized = append(synthesized, tasks...)
+	}
 	return synthesized
 }
 
@@ -2801,7 +2817,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 // for pending ended jobs even when live work fills the allowance. Within each
 // group, never-read then least recently attempted reads win; ties retain provider
 // order. Only actual calls advance scheduling, not selection or cancellation.
-func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]bool {
+func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]int {
 	type pendingRead struct {
 		key     string
 		attempt time.Time
@@ -2822,22 +2838,25 @@ func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupT
 	sort.SliceStable(pending, func(i, j int) bool {
 		return pending[i].attempt.Before(pending[j].attempt)
 	})
-	selected := make(map[string]bool, min(len(pending), maxVzdumpJobLogFetchesPerPoll))
+	// Positive ranks bind both admission and execution order; zero is unselected.
+	selected := make(map[string]int, min(len(pending), maxVzdumpJobLogFetchesPerPoll))
 	for _, read := range pending {
 		if read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll-1 {
-			selected[read.key] = true
+			selected[read.key] = len(selected) + 1
 		}
 	}
 	for _, read := range pending {
 		if !read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll {
-			selected[read.key] = true
+			selected[read.key] = len(selected) + 1
 		}
 	}
 	for _, read := range pending {
 		if len(selected) >= maxVzdumpJobLogFetchesPerPoll {
 			break
 		}
-		selected[read.key] = true
+		if selected[read.key] == 0 {
+			selected[read.key] = len(selected) + 1
+		}
 	}
 	return selected
 }

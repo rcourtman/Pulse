@@ -218,3 +218,41 @@ func TestVzdumpJobLogSchedulingKeepsLiveReadsAndHistoryMoving(t *testing.T) {
 		})
 	}
 }
+
+func TestVzdumpJobLogSchedulingContextBudgetRotatesInsideAllowance(t *testing.T) {
+	jobs, upids := scheduledVzdumpJobs(2, "site")
+	client := &scheduledVzdumpClient{}
+	m := &Monitor{}
+	for cycle := 0; cycle < 2; cycle++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		client.read = func(string) ([]proxmox.TaskLogLine, error) {
+			cancel() // one slow request consumed this cycle's context budget
+			return nil, context.DeadlineExceeded
+		}
+		m.synthesizeVzdumpJobGuestTasks(ctx, "site", client, jobs, upids)
+		cancel()
+	}
+	require.Equal(t, []string{upids[jobs[0].ID], upids[jobs[1].ID]}, client.requests,
+		"a small queue must rotate actual execution, not only admission")
+}
+
+func TestVzdumpJobLogSchedulingOutputRetainsProviderOrder(t *testing.T) {
+	jobs, upids := scheduledVzdumpJobs(2, "site")
+	index := map[string]int{upids[jobs[0].ID]: 0, upids[jobs[1].ID]: 1}
+	client := &scheduledVzdumpClient{read: func(upid string) ([]proxmox.TaskLogLine, error) {
+		return testLogLines(fmt.Sprintf("INFO: Starting Backup of VM %d (qemu)", 501+index[upid])), nil
+	}}
+	m := &Monitor{}
+	for cycle := 0; cycle < 2; cycle++ {
+		tasks := m.synthesizeVzdumpJobGuestTasks(context.Background(), "site", client, jobs, upids)
+		require.Len(t, tasks, 2)
+		require.Equal(t, []int{501, 502}, []int{tasks[0].VMID, tasks[1].VMID})
+		// Force a different scheduling order without changing accepted tasks.
+		m.mu.Lock()
+		entry := m.vzdumpJobTaskCache["site|"+upids[jobs[1].ID]]
+		entry.lastAttempt = time.Time{}
+		m.vzdumpJobTaskCache["site|"+upids[jobs[1].ID]] = entry
+		m.mu.Unlock()
+	}
+	require.Equal(t, []string{upids[jobs[0].ID], upids[jobs[1].ID], upids[jobs[1].ID], upids[jobs[0].ID]}, client.requests)
+}
