@@ -83,7 +83,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 />
                 <p id="backup-export-passphrase-help" class={`${formHelpText} mt-1`}>
                   Use at least 12 characters, different from your Pulse or SSO login password. This
-                  encrypts the backup; it does not verify your login. Store it separately from the
+                  encrypts the backup. It does not verify your login. Store it separately from the
                   file. Pulse cannot recover a forgotten passphrase.
                 </p>
               </div>
