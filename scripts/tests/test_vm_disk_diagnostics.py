@@ -7,6 +7,7 @@ command selection, failure handling and private output, not native thaw.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -17,8 +18,10 @@ import signal
 import subprocess
 import tempfile
 import textwrap
+import threading
 import time
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +34,13 @@ PRIVATE = "synthetic-private-infrastructure-marker"
 READS = [["status", "100"], ["config", "100", "--current"]]
 STATUS_LIMIT = 256
 CONFIG_LIMIT = 64 * 1024
+DEADLINE_CASES = (("status", "producer"),
+                  ("status", "inherited-pipe"),
+                  ("status", "reader"),
+                  ("status", "closed-pipe-reader"),
+                  ("config", "inherited-pipe"),
+                  ("config", "reader"),
+                  ("config", "closed-pipe-reader"))
 
 
 def guide_section(guide, heading):
@@ -492,31 +502,36 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 self.assertIn(f"unavailable: {missing}", result.stderr)
                 self.assertEqual(calls, [])
 
-    def test_real_deadline_stops_a_blocked_synthetic_local_read(self):
+    def test_real_deadlines_stop_every_owned_local_reader(self):
         self.assertIsNotNone(REAL_TIMEOUT)
-        start = time.monotonic()
-        result, calls = self.exercise(settings={"real_timeout": True, "sleep_operation": "status"})
-        elapsed = time.monotonic() - start
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("status read timed out", result.stderr)
-        self.assertLess(elapsed, 14)
-        self.assert_passive(calls, operations=READS[:1])
 
-    def test_complete_read_deadline_covers_inherited_stdout_and_the_reader(self):
-        self.assertIsNotNone(REAL_TIMEOUT)
-        for operation in ("status", "config"):
+        def exercise_case(case):
+            operation, mode = case
             limit = str(STATUS_LIMIT if operation == "status" else CONFIG_LIMIT)
-            for mode in ("inherited-pipe", "reader", "closed-pipe-reader"):
+            settings = {"real_timeout": True}
+            if mode == "producer":
+                settings["sleep_operation"] = operation
+            elif mode == "inherited-pipe":
+                settings["pipe_holder_operation"] = operation
+            else:
+                settings.update(blocked_response_reader=True, blocked_limit=limit,
+                                close_reader_pipes=mode == "closed-pipe-reader")
+            start = time.monotonic()
+            result, calls = self.exercise(settings=settings)
+            return result, calls, time.monotonic() - start
+
+        # Only these seven fixed, wait-bound synthetic controls overlap.
+        # exercise() owns a distinct directory/environment and
+        # run_owned_preflight() owns a session and exact reader pidfd per case.
+        # No process-global mocks or arbitrary suites run concurrently. Keep
+        # each real 10s collection deadline, 14s assertion and cleanup unchanged.
+        # Collect every verdict on the test thread, even after a case raises;
+        # exiting the executor drains all submitted work.
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            pending = [(case, pool.submit(exercise_case, case)) for case in DEADLINE_CASES]
+            for (operation, mode), future in pending:
                 with self.subTest(operation=operation, mode=mode):
-                    settings = {"real_timeout": True}
-                    if mode == "inherited-pipe":
-                        settings["pipe_holder_operation"] = operation
-                    else:
-                        settings.update(blocked_response_reader=True, blocked_limit=limit,
-                                        close_reader_pipes=mode == "closed-pipe-reader")
-                    start = time.monotonic()
-                    result, calls = self.exercise(settings=settings)
-                    elapsed = time.monotonic() - start
+                    result, calls, elapsed = future.result()
                     self.assertEqual(result.returncode, 1, result.stdout)
                     label = "status" if operation == "status" else "configuration"
                     self.assertIn(f"{label} read timed out", result.stderr)
@@ -528,6 +543,75 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                         self.assertNotIn("VM status:", result.stdout)
                     self.assertLess(len(result.stdout + result.stderr), 600)
                     self.assert_passive(calls, operations=READS[:1] if operation == "status" else READS)
+
+    def deadline_adapter(self, barrier, calls, *, fail, error=None):
+        """Independent command/result witness for scheduling controls only."""
+        def exercise(*, settings):
+            self.assertTrue(settings["real_timeout"])
+            if "sleep_operation" in settings:
+                case = settings["sleep_operation"], "producer"
+            elif "pipe_holder_operation" in settings:
+                case = settings["pipe_holder_operation"], "inherited-pipe"
+            else:
+                self.assertTrue(settings["blocked_response_reader"])
+                self.assertIn(settings["blocked_limit"], ("256", "65536"))
+                operation = "status" if settings["blocked_limit"] == "256" else "config"
+                case = operation, "closed-pipe-reader" if settings["close_reader_pipes"] else "reader"
+            calls.append(case)
+            # The first wave must coexist. Later queued cases need no sleep.
+            if case in DEADLINE_CASES[:3]:
+                barrier.wait(timeout=2)
+            if case == error:
+                raise RuntimeError("synthetic owned preflight observation failure")
+            operation = case[0]
+            operations = READS[:1] if operation == "status" else READS
+            observed = []
+            for command in operations:
+                limit = "256" if command[0] == "status" else "65536"
+                observed.extend(({"name": "qm", "args": command},
+                                 {"name": "python3", "args": ["-I", "-c", "fixture", limit]}))
+            label = "status" if operation == "status" else "configuration"
+            result = subprocess.CompletedProcess([], 0 if fail(case) else 1, "",
+                                                 f"{label} read timed out")
+            return result, observed
+        return exercise
+
+    def test_deadline_controls_overlap_boundedly_and_keep_every_failure_gating(self):
+        expected = (("status", "producer"), ("status", "inherited-pipe"),
+                    ("status", "reader"), ("status", "closed-pipe-reader"),
+                    ("config", "inherited-pipe"), ("config", "reader"),
+                    ("config", "closed-pipe-reader"))
+        self.assertEqual(DEADLINE_CASES, expected)
+        for failed in (None, *expected):
+            with self.subTest(failed=failed):
+                calls = []
+                adapter = self.deadline_adapter(threading.Barrier(3), calls,
+                                                fail=lambda case: case == failed)
+                control = type(self)("test_real_deadlines_stop_every_owned_local_reader")
+                result = unittest.TestResult()
+                with mock.patch.object(control, "exercise", side_effect=adapter), \
+                        mock.patch(__name__ + ".ThreadPoolExecutor", wraps=ThreadPoolExecutor) as executor:
+                    control.run(result)
+                executor.assert_called_once_with(max_workers=3)
+                self.assertEqual(sorted(calls), sorted(expected))
+                self.assertEqual(result.errors, [])
+                self.assertEqual(len(result.failures), int(failed is not None))
+                if failed is not None:
+                    self.assertIn(f"operation={failed[0]!r}", result.failures[0][0].id())
+                    self.assertIn(f"mode={failed[1]!r}", result.failures[0][0].id())
+
+    def test_deadline_exception_does_not_lose_later_queued_verdicts(self):
+        calls = []
+        adapter = self.deadline_adapter(threading.Barrier(3), calls,
+                                       fail=lambda case: True, error=DEADLINE_CASES[0])
+        control = type(self)("test_real_deadlines_stop_every_owned_local_reader")
+        result = unittest.TestResult()
+        with mock.patch.object(control, "exercise", side_effect=adapter):
+            control.run(result)
+        self.assertEqual(sorted(calls), sorted(DEADLINE_CASES))
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("synthetic owned preflight observation failure", result.errors[0][1])
+        self.assertEqual(len(result.failures), 6)
 
     def test_exact_documented_command_uses_the_passive_helper(self):
         recipes = bash_examples(guide_section(DOC.read_text(), "Passive host preflight"))
