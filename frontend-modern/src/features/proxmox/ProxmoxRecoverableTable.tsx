@@ -117,10 +117,10 @@ const artifactEvidenceLimit = (artifact: RecoverableArtifact): string => {
     return "This guest snapshot shares the guest's storage. It is not a separate backup and does not count towards backup protection.";
   }
   if (artifact.running) {
-    return 'This backup is still being written. It is not a completed restore point.';
+    return 'This backup is incomplete and may still be in progress. It is not a completed restore point.';
   }
   if (artifact.failed) {
-    return 'This backup is incomplete after a failed task. It is not a completed restore point.';
+    return 'No current writer is reported for this incomplete backup. It is not a completed restore point.';
   }
   if (artifact.verified === true) {
     return "Verified is the provider's reported backup check, not a tested restore.";

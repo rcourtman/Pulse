@@ -3133,19 +3133,25 @@ describe('By date recovery evidence limits', () => {
       name: 'running PBS snapshot',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: true })],
-      explanation: /still being written.*not a completed restore point/,
+      explanation: /incomplete and may still be in progress.*not a completed restore point/,
+    },
+    {
+      name: 'incomplete PBS snapshot with unread write activity',
+      pve: emptyPVE.data,
+      pbs: [identityPBS({ inProgress: true })],
+      explanation: /incomplete and may still be in progress.*not a completed restore point/,
     },
     {
       name: 'failed PBS snapshot',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: false })],
-      explanation: /incomplete after a failed task.*not a completed restore point/,
+      explanation: /No current writer is reported.*not a completed restore point/,
     },
     {
       name: 'running PVE file',
       pve: { ...emptyPVE.data, storageBackups: [identityArchive({ inProgress: true })] },
       pbs: [],
-      explanation: /still being written.*not a completed restore point/,
+      explanation: /incomplete and may still be in progress.*not a completed restore point/,
     },
   ])('explains $name without claiming a tested recovery', async ({ pve, pbs, explanation }) => {
     apiFetchMock.mockImplementation((url: string) =>
@@ -3211,11 +3217,11 @@ describe('By date recovery evidence limits', () => {
     for (const [next, message] of [
       [
         identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: true }),
-        'still being written',
+        'incomplete and may still be in progress',
       ],
       [
         identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: false }),
-        'incomplete after a failed task',
+        'No current writer is reported',
       ],
       [identityPBS({ verified: false }), 'not reported as verified'],
       [identityPBS({ verified: true }), "provider's reported backup check"],
