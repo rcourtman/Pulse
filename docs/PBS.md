@@ -199,6 +199,10 @@ If you have multiple PBS servers, add each one separately in Settings. Pulse wil
 - Show backups from all servers under **Proxmox → Backups** (`/proxmox/backups`)
 - Deduplicate if the same backup appears via both PVE passthrough and direct PBS
 
+For the **Backups** number beside each datastore, see
+[backup server counts](#what-the-backup-server-count-means). It is not a
+verified-recovery total.
+
 ---
 
 ## Troubleshooting
@@ -517,6 +521,40 @@ filesystem info** refers to its QEMU guest-agent filesystem probe, not the
 Pulse Agent's stored History request. Restarting that guest is not a diagnosis
 of an empty PBS chart. See [VM Disk Monitoring](VM_DISK_MONITORING.md) if the
 separate symptom is missing filesystem information in a PVE VM row.
+
+### What the backup server count means
+
+In **Proxmox → Backups**, each **Backup server** datastore row has a
+**Backups** count. It counts the loaded direct PBS inventory entries for that
+exact configured connection and datastore, across its namespaces. It is not a
+count of guests, completed or verified restore points, or physical files.
+An in-progress or unverified entry can count too.
+
+| Backups cell | What it establishes |
+| --- | --- |
+| A number, including **0** | The number of matching entries in the loaded inventory. **0** does not prove that the datastore is empty or that every expected backup was collected. |
+| **Loading** | The PBS inventory has not loaded yet; this is not a zero count. |
+| **Unavailable** | The PBS inventory read failed; this is not a zero count. Server reachability and datastore capacity can still be shown independently. |
+| **—** | This server row has no reported datastore to count, not an empty backup repository. |
+
+The table can hide **Backups** on a narrow screen. A hidden column is not
+missing inventory. These counts are separate from the filtered **By date**
+list and its completed-point charts; see
+[why backup counts differ](RECOVERY.md#why-proxmox-backup-counts-differ).
+
+Compare existing records for the same connection, datastore and namespace.
+Shared hostnames, display labels or guest IDs do not establish the same reader;
+an entry without reader or datastore identity cannot fill a named row's count.
+Keep private names consistent when redacting a discrepancy. Do not share full
+inventories or credentials, rename connections, widen permissions, clear History
+or run another backup to make counts agree. Use the
+[loading guidance](#slow-backup-loading) for an existing read error, not repeated
+retries. Older versions may attribute counts differently; preserve the existing
+native records rather than changing the setup to match Pulse.
+
+A count is not protection, verification, restore readiness or guest thaw. If a
+guest is unresponsive or freeze/thaw is uncertain, stop the display comparison
+and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 
 ### Slow Backup Loading
 
