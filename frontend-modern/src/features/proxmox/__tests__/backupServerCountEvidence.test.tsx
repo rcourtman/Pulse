@@ -126,6 +126,7 @@ describe('PBS server count identity', () => {
   });
 
   it('replaces exact server counts on polling, withdrawing failed reads without losing capacity', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     vi.stubGlobal('scrollTo', vi.fn());
     window.history.replaceState({}, '', '/proxmox/backups/date');
     let payload = inventory(entry('pbs-main'), entry('pbs-main', 'tank', '2'));
@@ -164,17 +165,13 @@ describe('PBS server count identity', () => {
 
     // Only the query's actual 30-second polling is advanced; no direct call to
     // the count producer and no fabricated rendered rows in this consumer test.
-    vi.useFakeTimers();
     payload = inventory(entry('main'), entry('main', 'tank', '2'), entry('main', 'tank', '3'));
     await vi.advanceTimersByTimeAsync(30_000);
-    vi.useRealTimers();
     await waitFor(() => expect(displayedCounts(table)).toEqual(['3', '0']));
     expect(screen.getByTestId('pbs-count-owner-detail')).toBe(detail);
 
-    vi.useFakeTimers();
     failed = true;
     await vi.advanceTimersByTimeAsync(30_000);
-    vi.useRealTimers();
     await screen.findByRole('button', { name: 'Retry PBS inventory' });
     await waitFor(() => expect(displayedCounts(table)).toEqual(['Unavailable', 'Unavailable']));
     expect(within(table).getAllByText('40.0%')).toHaveLength(2);
