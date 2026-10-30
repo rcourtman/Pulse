@@ -55,7 +55,7 @@ describe('Agent observer trust and API-access choice', () => {
     expect(text).toContain('register its credentials with that Pulse server');
     expect(text).toContain('not revocation of a previously issued Proxmox token');
     expect(text).toContain('not a reduced or anonymised copy');
-    expect(text).toContain('primary server\'s HTTP consent does not authorise an observer');
+    expect(text).toContain("primary server's HTTP consent does not authorise an observer");
   });
 
   it('retains real setup, safe-reporting and backup links through the consuming renderer', () => {
