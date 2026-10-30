@@ -100,7 +100,9 @@ describe('malformed timestamp evidence through the parsed HTTP consumer', () => 
     const panel = await open();
     expect(value(section(panel, 'Task order'), 'Latest task')).toHaveTextContent('Unknown');
     expect(value(section(panel, 'Possible latest task 1'), 'Started')).toHaveTextContent('Unknown');
-    expect(value(section(panel, 'Possible latest task 1'), 'Duration')).toHaveTextContent('Unknown');
+    expect(value(section(panel, 'Possible latest task 1'), 'Duration')).toHaveTextContent(
+      'Unknown',
+    );
     expect(section(panel, 'Possible latest task 1')).toHaveTextContent(
       'The reported timestamps or running status do not establish a completed duration.',
     );
