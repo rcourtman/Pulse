@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "bc19d9e69c5ce0139ba57f8d37aaf5c9561008e7",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "b4232a31a4a5dc20e4a4675c89bd60ae58955ddbeee1b8a86cb09f58aaea2f63",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "bd7691506bd0d9f5fe97a9c6e7107e73fe9004f20be7c6ec7fbf803b4d7a44a1",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "388b75c0176bea7aee6b582381d6d8d97fa1c7550c24c15656c64964fc375d27",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "c1d3c387172594a92f45e04992acf5f1d84222a81ffdbe0bb4d1810a5b346e23"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Production App consumes safe authenticated raw PVE/PBS HTTP fixtures with six restore records and same-name guests on independent connections. Both source failures withdraw their own points; the unaffected source remains readable.",
+    "Retired By date detail/disclosure, filtered Coverage owner, whole inventory and activity day hand focus to an existing retry; accepted-empty observations use the active view. Existing query, selection and server-owned unknown posture remain truthful.",
+    "Normal same-point close, current selected evidence after recovery, native shared detail span, unrelated surviving-detail focus, single-source keyboard retry and partial whole-inventory recovery remain intact."
+  ],
+  "interactions": [
+    "Native Tab/Enter point selection, detail focus, automatic polling withdrawal and one Enter on the focused source retry at desktop and320px; phone contexts also activate disclosures and view links by native touch.",
+    "A successful retry restores current evidence and active-view focus; a peer failure does not steal focus. Both failed reads retire the focused search; the first recovered source does not fetch the other source.",
+    "All nine final captures opened with native view_image. Desktop and narrow light/dark pixels show native focus rings, aligned shared details and no document overflow. Captures deliberately reveal the target; they do not claim automatic scrolling."
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "verified_at": "2026-10-30T08:07:36Z",
+  "source_proof": {
+    "source_sha": "bc19d9e69c5ce0139ba57f8d37aaf5c9561008e7",
+    "receipt_id": "source-l6q82h1k",
+    "tests": 1353,
+    "suites": 50,
+    "production_assets": 124
+  },
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "checks": 60,
+    "baseline_checks": 12,
+    "basis": "Three final production-App cases. Two earlier baseline cases reproduce BODY focus loss using retained source27c75854a1assets whose1136runtime files match assigned main; no earlier build/tests replayed."
+  },
+  "captures": [
+    {
+      "name": "desktop-chromium-open-detail.png",
+      "sha256": "b707eaffa064c4bc82d79887732dc8e4eff3ba5021e7d573c28942bd46a22771"
+    },
+    {
+      "name": "desktop-chromium-pbs-retry.png",
+      "sha256": "9de1b408d2861c0f51aaa44ade4a6a267656b3b6d90c449fcd68cc0f91a8aba2"
+    },
+    {
+      "name": "desktop-chromium-coverage-retry.png",
+      "sha256": "101ba145d1928a5411353f66e36c7a0a7fcf56c160daa4ada1dededa9c66fb7c"
+    },
+    {
+      "name": "phone-chromium-open-detail.png",
+      "sha256": "9d0a4fe76246bfb17aa9ccb0e1510e6a1b1ec38c024123d6d7bfebe2f998ec74"
+    },
+    {
+      "name": "phone-chromium-pbs-retry.png",
+      "sha256": "4048aec6d9ff7c2ddc8e0eebf0efcb3a152460640ecfdb69cab6292187b492ae"
+    },
+    {
+      "name": "phone-chromium-coverage-retry.png",
+      "sha256": "b71f62f2d75e401ab24b1725078a13661205f48d5b4cb1fb14c207ec2690d5e2"
+    },
+    {
+      "name": "phone-webkit-open-detail.png",
+      "sha256": "13c54f61b8676f397beaa1e72e66266d8be38916f2c27f64bdf637606e56285e"
+    },
+    {
+      "name": "phone-webkit-pbs-retry.png",
+      "sha256": "3736022b84579c8d225aa88358b6ec68d5dea2c20f096f4cbf804db0fed5bde0"
+    },
+    {
+      "name": "phone-webkit-coverage-retry.png",
+      "sha256": "55374d274e9419fca9dfca5a4bff0101c376638819367ea3537bf292eaee079a"
+    }
+  ],
+  "limits": "Safe local read-only HTTP fixtures, not provider/installed guest recovery, a tested restore or release availability."
+}
