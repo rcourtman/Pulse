@@ -134,7 +134,12 @@ describe('latest backup task evidence through the inventory consumer', () => {
     { status: 'OK', endTime: '2026-10-04T10:59:00Z', duration: 'Unknown' },
     { status: 'OK', endTime: '2026-10-04T12:00:01Z', duration: 'Unknown' },
     { status: 'running', endTime: '2026-10-04T11:05:00Z', duration: 'Unknown' },
-    { status: 'OK', startTime: '2027-01-01T00:00:00Z', endTime: '2027-01-01T00:05:00Z', duration: 'Unknown' },
+    {
+      status: 'OK',
+      startTime: '2027-01-01T00:00:00Z',
+      endTime: '2027-01-01T00:05:00Z',
+      duration: 'Unknown',
+    },
     { status: 'OK', endTime: undefined, duration: 'Not reported' },
     { status: 'OK', endTime: '2026-10-04T11:00:00.100Z', duration: '0s' },
   ])('does not invent completion or protection for $status / $duration', async (extra) => {

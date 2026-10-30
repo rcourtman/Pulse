@@ -70,7 +70,11 @@ describe('Coverage task duration needs observed, consistent endpoints', () => {
       task: { startTime: '2026-10-04T13:00:00+02:00', endTime: '2026-10-04T08:05:00-03:00' },
       seconds: 300,
     },
-    { name: 'observed subsecond rounds to zero', task: { endTime: '2026-10-04T11:00:00.1Z' }, seconds: 0 },
+    {
+      name: 'observed subsecond rounds to zero',
+      task: { endTime: '2026-10-04T11:00:00.1Z' },
+      seconds: 0,
+    },
   ])('retains $name', ({ task: input, seconds }) => {
     const task = observe(input).coverageRows[0].latestTask!;
     expect(task.durationSeconds).toBe(seconds);
@@ -78,6 +82,8 @@ describe('Coverage task duration needs observed, consistent endpoints', () => {
   });
 
   it('does not fabricate elapsed time without a finite observation clock', () => {
-    expect(observe({}, Number.NaN).coverageRows[0].latestTask).toMatchObject({ durationUnknown: true });
+    expect(observe({}, Number.NaN).coverageRows[0].latestTask).toMatchObject({
+      durationUnknown: true,
+    });
   });
 });
