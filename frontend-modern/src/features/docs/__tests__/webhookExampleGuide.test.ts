@@ -28,6 +28,32 @@ describe('copyable webhook example', () => {
     );
   });
 
+  it('keeps organisation selection, access refusals and private authentication beside the API example', () => {
+    const article = render();
+    const section = article.querySelector('#select-the-organisation-without-widening-access');
+    expect(section).not.toBeNull();
+    const text = article.textContent?.replace(/\s+/g, ' ');
+    expect(text).toContain('Selection is not authorisation.');
+    expect(text).toContain("the user's administrator access does not widen it");
+    expect(text).toContain('Adding scopes does not grant access to another organisation');
+    const rows = [...article.querySelectorAll('tr')].map((row) => row.textContent);
+    for (const code of ['400 invalid_org', '403 access_denied', '403 org_suspended']) {
+      expect(rows.some((row) => row?.includes(code))).toBe(true);
+    }
+    expect(article.querySelector('a[href="/docs/API#api-token-recommended"]')?.textContent).toBe(
+      'private header file',
+    );
+    const example = [...article.querySelectorAll('pre code')].find((block) =>
+      block.textContent?.startsWith('POST /api/notifications/webhooks\n'),
+    )?.textContent;
+    expect(example).toContain('X-Pulse-Org-ID: acme-corp');
+    expect(example).toContain('Authorization: Bearer <token with settings:write>');
+    const config = JSON.parse(example!.split('\n\n')[1]);
+    expect(config.url).toBe('https://psa.example.com/inbound/pulse');
+    expect(config.headers.Authorization).toBe('Bearer <psa-token>');
+    expect(example).not.toMatch(/Cookie:|pulse_session|--insecure/);
+  });
+
   it('explains the simple-test blind spot and links the existing structured group example', () => {
     const article = render();
     const text = article.textContent?.replace(/\s+/g, ' ');
