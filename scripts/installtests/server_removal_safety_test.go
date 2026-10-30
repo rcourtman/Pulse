@@ -13,7 +13,10 @@ import (
 // Exercise the actual sourced installer entrypoints. systemctl is an on-disk
 // stateful double, so the real timeout wrapper runs it; destructive commands
 // can affect only per-test files, never an installed service or host directory.
+// Cases share no files or process environment; their unchanged fixture
+// deadlines begin after admission through Go's existing parallel budget.
 func TestRootInstallRemovalPreservesFilesOnUnconfirmedUnits(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ name, mode, target string }{
 		{"initial_query_failure", "query-fails", "pulse.service"},
 		{"empty_load", "empty-load", "pulse.service"},
@@ -38,6 +41,7 @@ func TestRootInstallRemovalPreservesFilesOnUnconfirmedUnits(t *testing.T) {
 	for _, flow := range []string{"menu", "uninstall"} {
 		for _, tc := range cases {
 			t.Run(flow+"/"+tc.name, func(t *testing.T) {
+				t.Parallel()
 				out, calls, err := runServerRemovalFixture(t, flow, tc.mode, tc.target, "active", false, true)
 				if err == nil {
 					t.Fatalf("expected rejected removal, got success:\n%s\n%s", out, calls)
@@ -51,9 +55,11 @@ func TestRootInstallRemovalPreservesFilesOnUnconfirmedUnits(t *testing.T) {
 }
 
 func TestRootInstallRemovalQuiescesUpdaterAndAliases(t *testing.T) {
+	t.Parallel()
 	for _, flow := range []string{"menu", "uninstall"} {
 		for _, state := range []string{"active", "inactive", "failed", "not-found", "masked"} {
 			t.Run(flow+"/"+state, func(t *testing.T) {
+				t.Parallel()
 				out, calls, err := runServerRemovalFixture(t, flow, "normal", "", state, false, true)
 				if err != nil {
 					t.Fatalf("safe removal failed: %v\n%s\n%s", err, out, calls)
@@ -87,8 +93,10 @@ func TestRootInstallRemovalQuiescesUpdaterAndAliases(t *testing.T) {
 }
 
 func TestRootInstallRemovalKeepsOtherInstanceUntouched(t *testing.T) {
+	t.Parallel()
 	for _, flow := range []string{"menu", "uninstall"} {
 		t.Run(flow, func(t *testing.T) {
+			t.Parallel()
 			out, calls, err := runServerRemovalFixture(t, flow, "normal", "", "active", true, false)
 			if err != nil {
 				t.Fatalf("custom instance removal: %v\n%s", err, out)
