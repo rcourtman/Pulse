@@ -9,6 +9,9 @@ import (
 )
 
 func TestInstallPS1UninstallRegistrationRuntime(t *testing.T) {
+	// Every scenario owns a PowerShell process and modelled state/services.
+	// Overlap only within Go's existing budget, before starting its deadline.
+	t.Parallel()
 	powerShell := nativeInstallerPowerShell(t)
 	for _, test := range []struct {
 		name           string

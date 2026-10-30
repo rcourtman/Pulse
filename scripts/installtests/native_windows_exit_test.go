@@ -121,6 +121,9 @@ func nativeWindowsHarnessExitGuards(script string) ([]string, error) {
 }
 
 func TestWindowsAgentLifecycleNativeExitChecksStopFollowingCommands(t *testing.T) {
+	// Each guard runs in its own PowerShell process, without touching SCM.
+	// Share Go's existing budget; native Windows acceptance stays separate.
+	t.Parallel()
 	powerShell := nativeInstallerPowerShell(t)
 	guards, err := nativeWindowsExitGuards(nativeWindowsExitSteps(t))
 	if err != nil {
