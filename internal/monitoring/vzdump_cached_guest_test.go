@@ -170,7 +170,10 @@ func TestVzdumpCachedGuestUnreadLogUsesCurrentParent(t *testing.T) {
 			upids := map[string]string{job.ID: testJobUPID}
 			if blocked == "budget" {
 				for i := 0; i < maxVzdumpJobLogFetchesPerPoll; i++ {
-					filler := models.BackupTask{ID: fmt.Sprintf("filler-%d", i)}
+					// Compete within the ended-job queue. Running jobs now have
+					// their own reserved turns, so they cannot fill this fixture's
+					// entire allowance ahead of the ended cached parent.
+					filler := models.BackupTask{ID: fmt.Sprintf("filler-%d", i), EndTime: job.EndTime}
 					jobs = append(jobs, filler)
 					upids[filler.ID] = filler.ID
 				}
