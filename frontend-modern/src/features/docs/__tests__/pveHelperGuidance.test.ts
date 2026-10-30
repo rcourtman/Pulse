@@ -51,10 +51,9 @@ describe('least-privilege PVE guest reading choices', () => {
   it('does not prescribe optional Linux file access for filesystem auditing', () => {
     const row = choice('VM filesystem usage and guest information through QEMU Guest Agent');
     const permissions = row.querySelectorAll('td')[1];
-    expect([...permissions.querySelectorAll('code')].map((element) => element.textContent)).toEqual([
-      'VM.GuestAgent.Audit',
-      'VM.Monitor',
-    ]);
+    expect([...permissions.querySelectorAll('code')].map((element) => element.textContent)).toEqual(
+      ['VM.GuestAgent.Audit', 'VM.Monitor'],
+    );
     expect(permissions.textContent).toContain('PVE 9+');
     expect(permissions.textContent).toContain('PVE 8 uses the legacy');
     expect(permissions.textContent).toContain('intended guests');
@@ -66,10 +65,9 @@ describe('least-privilege PVE guest reading choices', () => {
       'Linux guest-memory detail by reading /proc/meminfo through QEMU Guest Agent',
     );
     const permissions = row.querySelectorAll('td')[1];
-    expect([...permissions.querySelectorAll('code')].map((element) => element.textContent)).toEqual([
-      'VM.GuestAgent.FileRead',
-      'VM.Monitor',
-    ]);
+    expect([...permissions.querySelectorAll('code')].map((element) => element.textContent)).toEqual(
+      ['VM.GuestAgent.FileRead', 'VM.Monitor'],
+    );
     expect(permissions.textContent).toContain('On PVE 9+, this separate read also needs');
     expect(permissions.textContent).toContain('PVE 8 uses');
     expect(permissions.textContent).toContain('Leave file reads denied if they are not intended');
@@ -77,12 +75,17 @@ describe('least-privilege PVE guest reading choices', () => {
 
   it('routes denials to existing scoped guidance, not another setup or probe', () => {
     const guide = article('AGENT_SECURITY');
-    const section = guide.textContent?.split('Filesystem auditing does not require')[1]?.split(
-      'Inside-guest runtime visibility',
-    )[0]?.replace(/\s+/g, ' ');
+    const section = guide.textContent
+      ?.split('Filesystem auditing does not require')[1]
+      ?.split('Inside-guest runtime visibility')[0]
+      ?.replace(/\s+/g, ' ');
     expect(section).toContain('Windows has no /proc/meminfo');
-    expect(section).toContain('not evidence that Windows disk collection needs VM.GuestAgent.FileRead');
-    expect(section).toContain('does not by itself prove fresh readings, workload health or backup safety');
+    expect(section).toContain(
+      'not evidence that Windows disk collection needs VM.GuestAgent.FileRead',
+    );
+    expect(section).toContain(
+      'does not by itself prove fresh readings, workload health or backup safety',
+    );
     expect(section).toContain('keeping privilege separation enabled');
     expect(section).toContain('not a reason to widen access, install another agent or rerun setup');
     expect(section).toContain('existing observations instead of manual guest-agent probes');
