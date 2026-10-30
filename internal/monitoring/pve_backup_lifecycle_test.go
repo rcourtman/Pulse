@@ -61,8 +61,8 @@ func newBackupLifecycleMonitor(c PVEClientInterface, kind string) *Monitor {
 	} else {
 		m.state.UpdateContainersForInstance("site-a", []models.Container{{ID: "site-a-node-a-101", VMID: 101, Node: "node-a", Instance: "site-a", Name: "workload", Status: "running"}})
 	}
-	m.state.UpdateStorageBackupsForInstance("site-b", []models.StorageBackup{{ID: "peer-file", Instance: "site-b", VMID: 101, Storage: "archive", Time: time.Now().Add(-time.Hour)}})
-	m.state.UpdateGuestSnapshotsForInstance("site-b", []models.GuestSnapshot{{ID: "peer-snap", Instance: "site-b", VMID: 101, Name: "independent", Time: time.Now().Add(-time.Hour)}})
+	m.state.UpdateStorageBackupsForInstance("site-b", []models.StorageBackup{{ID: "peer-file", Instance: "site-b", Node: "node-a", Type: "qemu", VMID: 101, Storage: "archive", Time: time.Now().Add(-time.Hour)}})
+	m.state.UpdateGuestSnapshotsForInstance("site-b", []models.GuestSnapshot{{ID: "peer-snap", Instance: "site-b", Node: "node-a", Type: "qemu", VMID: 101, Name: "independent", Time: time.Now().Add(-time.Hour)}})
 	return m
 }
 func scheduleBackupLifecycle(m *Monitor, c PVEClientInterface) {
