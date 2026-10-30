@@ -121,7 +121,6 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
     initialLoadComplete: infrastructureSettings.initialLoadComplete,
     systemSettings,
     backupTransferFlow,
-    securityStatus,
   });
   const infrastructurePanelProps = useSettingsInfrastructurePanelProps({
     selectedAgent,
@@ -216,11 +215,10 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
         updateInfo={systemSettings.updateInfo}
         updatePlan={systemSettings.updatePlan}
         isInstallingUpdate={systemSettings.isInstallingUpdate}
-        securityStatus={securityStatus}
         exportPassphrase={backupTransferFlow.exportPassphrase}
         setExportPassphrase={backupTransferFlow.setExportPassphrase}
-        useCustomPassphrase={backupTransferFlow.useCustomPassphrase}
-        setUseCustomPassphrase={backupTransferFlow.setUseCustomPassphrase}
+        exportPassphraseConfirmation={backupTransferFlow.exportPassphraseConfirmation}
+        setExportPassphraseConfirmation={backupTransferFlow.setExportPassphraseConfirmation}
         importPassphrase={backupTransferFlow.importPassphrase}
         setImportPassphrase={backupTransferFlow.setImportPassphrase}
         importFile={backupTransferFlow.importFile}

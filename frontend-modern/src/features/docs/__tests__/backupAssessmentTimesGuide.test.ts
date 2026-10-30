@@ -33,13 +33,14 @@ describe('backup assessment time guidance', () => {
   });
 
   it('explains all three assessment clocks without substituting task, collection or filter times', () => {
-    const rows = [...section().querySelectorAll('ul > li')];
+    const currentSection = section();
+    const rows = [...currentSection.querySelectorAll('ul > li')];
     expect(rows.map((row) => row.querySelector('strong')?.textContent)).toEqual([
       'Evaluated',
       'Latest successful point',
       'Last verified',
     ]);
-    const text = prose();
+    const text = currentSection.textContent!.replace(/\s+/g, ' ');
     for (const distinction of [
       "UTC, not your browser's local timezone",
       'not when the backup completed or the provider last collected data',
@@ -68,18 +69,21 @@ describe('backup assessment time guidance', () => {
   });
 
   it('uses passive comparison and preserves the independent guest-safety path', () => {
-    const text = prose();
-    expect(section().querySelector('pre')).toBeNull();
+    const currentSection = section();
+    const text = currentSection.textContent!.replace(/\s+/g, ' ');
+    expect(currentSection.querySelector('pre')).toBeNull();
     expect(text).toContain('repeated names or VMIDs do not establish identity');
     expect(text).toContain('use existing provider records without rerunning collection');
     expect(text).toContain('do not run Diagnostics, another backup or a guest-agent probe');
     expect(text).toContain('restart monitoring or clear History');
     expect(text).toContain('not proof of a tested restore, application health or guest thaw');
     expect(text).toContain('does not establish safe workload recovery');
-    const safety = section().querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
+    const safety = currentSection.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
     expect(safety).not.toBeNull();
     expect(guide('VM_DISK_MONITORING').querySelector('#backup-safety')).not.toBeNull();
-    const archive = section().querySelector('a[href="#local-pve-backups-are-newer-than-coverage"]');
+    const archive = currentSection.querySelector(
+      'a[href="#local-pve-backups-are-newer-than-coverage"]',
+    );
     expect(archive).not.toBeNull();
     expect(guide('RECOVERY').querySelector(archive!.getAttribute('href')!)).not.toBeNull();
   });

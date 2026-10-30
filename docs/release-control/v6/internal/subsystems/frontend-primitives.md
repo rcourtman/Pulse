@@ -10459,9 +10459,32 @@ login credentials and agent enrolment state, and links the shipped migration
 guide for complete scope and full-state recovery. Restore warns to back up the
 destination and describes replacement of included settings and API-token records,
 never a merge option. `RecoverySettingsPanel.test.tsx` covers the visible scope,
-existing dialog actions and passphrase defaults; desktop/narrow browser proof
+and existing dialog actions; desktop/narrow browser proof
 must inspect the overview and follow both actions into the production dialogs.
 Archive formats, server application and access authority do not change.
+
+All login configurations use the same backup-passphrase form. Export asks for a
+strong, unique passphrase of at least 12 characters, explicitly different from
+Pulse or SSO login credentials, and a second masked confirmation. This encrypts
+an archive; it is not a sign-in check. Neither the recovery overview nor Settings
+wiring selects a login-password mode. Both fields use `new-password` autofill
+semantics and explain separate storage and the lack of forgotten-passphrase
+recovery. The transfer flow rejects missing, short or nonmatching values before
+credential prompting or dispatch, preserves them for deliberate correction, and
+sends only the original, unchanged passphrase, never the confirmation. Pending
+controls remain locked; successful export, close and switching dialogs clear
+both fields. Import still accepts the original password/passphrase for old
+archives, not a newly changed login credential, with no confirmation or new
+minimum-length requirement.
+
+The transfer flow/dialog tests cover these validation, exact-byte, auth-mode,
+pending, explicit-correction and cleanup behaviours. Settings architecture and
+overview tests cover the removed auth-dependent wiring. The shipped migration
+guide matches the form and preserves older-archive guidance; its rendered access
+tests check both. Desktop/narrow browser proof must exercise typo rejection,
+explicit correction, an actual synthetic export download, original-passphrase
+import and the migration guide through their production consumers. This changes
+neither backend encryption/authorization nor existing archive formats.
 
 The overview has its own `settings-recovery-overview` verification policy,
 requiring `RecoverySettingsPanel.test.tsx`. That copy/action test is not transfer

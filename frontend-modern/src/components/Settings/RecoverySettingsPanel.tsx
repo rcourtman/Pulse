@@ -28,8 +28,6 @@ export interface RecoverySettingsPanelProps {
   setShowExportDialog: (open: boolean) => void;
   showImportDialog: Accessor<boolean>;
   setShowImportDialog: (open: boolean) => void;
-  setUseCustomPassphrase: Setter<boolean>;
-  securityStatus: Accessor<{ hasAuthentication: boolean } | null>;
 }
 
 export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (props) => {
@@ -297,11 +295,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
                 <button
                   type="button"
-                  onClick={() => {
-                    // Default to custom passphrase if no auth is configured
-                    props.setUseCustomPassphrase(!props.securityStatus()?.hasAuthentication);
-                    props.setShowExportDialog(true);
-                  }}
+                  onClick={() => props.setShowExportDialog(true)}
                   class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-xs hover:shadow-xs"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

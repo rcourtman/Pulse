@@ -1,6 +1,5 @@
 import { Accessor, Component } from 'solid-js';
 import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
-import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { UpdateConfirmationModal } from '@/components/UpdateConfirmationModal';
 import { BackupTransferDialogs } from './BackupTransferDialogs';
 import { ChangePasswordModal } from './ChangePasswordModal';
@@ -13,11 +12,10 @@ interface SettingsDialogsProps {
   updateInfo: Accessor<UpdateInfo | null>;
   updatePlan: Accessor<UpdatePlan | null>;
   isInstallingUpdate: Accessor<boolean>;
-  securityStatus: Accessor<SecurityStatusInfo | null>;
   exportPassphrase: Accessor<string>;
   setExportPassphrase: (value: string) => void;
-  useCustomPassphrase: Accessor<boolean>;
-  setUseCustomPassphrase: (value: boolean) => void;
+  exportPassphraseConfirmation: Accessor<string>;
+  setExportPassphraseConfirmation: (value: string) => void;
   importPassphrase: Accessor<string>;
   setImportPassphrase: (value: string) => void;
   importFile: Accessor<File | null>;
@@ -65,11 +63,10 @@ export const SettingsDialogs: Component<SettingsDialogsProps> = (props) => {
       />
 
       <BackupTransferDialogs
-        securityStatus={props.securityStatus}
         exportPassphrase={props.exportPassphrase}
         setExportPassphrase={props.setExportPassphrase}
-        useCustomPassphrase={props.useCustomPassphrase}
-        setUseCustomPassphrase={props.setUseCustomPassphrase}
+        exportPassphraseConfirmation={props.exportPassphraseConfirmation}
+        setExportPassphraseConfirmation={props.setExportPassphraseConfirmation}
         importPassphrase={props.importPassphrase}
         setImportPassphrase={props.setImportPassphrase}
         importFile={props.importFile}

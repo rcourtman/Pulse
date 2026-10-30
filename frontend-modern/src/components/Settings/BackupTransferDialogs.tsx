@@ -3,17 +3,15 @@ import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { controlClass, formField, formHelpText, labelClass } from '@/components/shared/Form';
-import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { getAPITokenManagementLocationMessage } from '@/utils/apiTokenPresentation';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 
 interface BackupTransferDialogsProps {
-  securityStatus: Accessor<SecurityStatusInfo | null>;
   exportPassphrase: Accessor<string>;
   setExportPassphrase: (value: string) => void;
-  useCustomPassphrase: Accessor<boolean>;
-  setUseCustomPassphrase: (value: boolean) => void;
+  exportPassphraseConfirmation: Accessor<string>;
+  setExportPassphraseConfirmation: (value: string) => void;
   importPassphrase: Accessor<string>;
   setImportPassphrase: (value: string) => void;
   importFile: Accessor<File | null>;
@@ -68,88 +66,48 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
             </Show>
 
             <div class="space-y-4">
-              <Show when={props.securityStatus()?.hasAuthentication}>
-                <div class="bg-page rounded-md p-4 border border-border">
-                  <div class="space-y-3">
-                    <label class="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        disabled={props.isTransferring()}
-                        checked={!props.useCustomPassphrase()}
-                        onChange={() => {
-                          props.setUseCustomPassphrase(false);
-                          props.setExportPassphrase('');
-                        }}
-                        class="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div class="flex-1">
-                        <div class="text-sm font-medium text-base-content">
-                          Use your login password
-                        </div>
-                        <div class="text-xs text-muted mt-0.5">
-                          Use the same password you use to log into Pulse (recommended)
-                        </div>
-                      </div>
-                    </label>
-
-                    <label class="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="radio"
-                        disabled={props.isTransferring()}
-                        checked={props.useCustomPassphrase()}
-                        onChange={() => props.setUseCustomPassphrase(true)}
-                        class="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div class="flex-1">
-                        <div class="text-sm font-medium text-base-content">
-                          Use a custom passphrase
-                        </div>
-                        <div class="text-xs text-muted mt-0.5">
-                          Create a different passphrase for this backup
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </Show>
-
               <div class={formField}>
                 <label for="backup-export-passphrase" class={labelClass()}>
-                  {props.securityStatus()?.hasAuthentication
-                    ? props.useCustomPassphrase()
-                      ? 'Custom Passphrase'
-                      : 'Enter Your Login Password'
-                    : 'Encryption Passphrase'}
+                  Backup passphrase
                 </label>
                 <input
                   id="backup-export-passphrase"
                   disabled={props.isTransferring()}
                   type="password"
+                  autocomplete="new-password"
+                  aria-describedby="backup-export-passphrase-help"
                   value={props.exportPassphrase()}
                   onInput={(event) => props.setExportPassphrase(event.currentTarget.value)}
-                  placeholder={
-                    props.securityStatus()?.hasAuthentication
-                      ? props.useCustomPassphrase()
-                        ? 'Enter a strong passphrase'
-                        : 'Enter your Pulse login password'
-                      : 'Enter a strong passphrase for encryption'
-                  }
+                  placeholder="Choose a strong, unique passphrase"
                   class={controlClass()}
                 />
-                <Show
-                  when={!props.securityStatus()?.hasAuthentication || props.useCustomPassphrase()}
-                >
-                  <p class={`${formHelpText} mt-1`}>
-                    You'll need this passphrase to restore the backup.
-                  </p>
-                </Show>
-                <Show
-                  when={props.securityStatus()?.hasAuthentication && !props.useCustomPassphrase()}
-                >
-                  <p class={`${formHelpText} mt-1`}>
-                    You'll use this same password when restoring the backup
-                  </p>
-                </Show>
+                <p id="backup-export-passphrase-help" class={`${formHelpText} mt-1`}>
+                  Use at least 12 characters, different from your Pulse or SSO login password. This
+                  encrypts the backup. It does not verify your login. Store it separately from the
+                  file. Pulse cannot recover a forgotten passphrase.
+                </p>
+              </div>
+
+              <div class={formField}>
+                <label for="backup-export-passphrase-confirmation" class={labelClass()}>
+                  Confirm backup passphrase
+                </label>
+                <input
+                  id="backup-export-passphrase-confirmation"
+                  disabled={props.isTransferring()}
+                  type="password"
+                  autocomplete="new-password"
+                  aria-describedby="backup-export-confirmation-help"
+                  value={props.exportPassphraseConfirmation()}
+                  onInput={(event) =>
+                    props.setExportPassphraseConfirmation(event.currentTarget.value)
+                  }
+                  placeholder="Re-enter the backup passphrase"
+                  class={controlClass()}
+                />
+                <p id="backup-export-confirmation-help" class={`${formHelpText} mt-1`}>
+                  Enter it again to catch typing mistakes before creating the file.
+                </p>
               </div>
 
               <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
@@ -178,11 +136,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     >
                       migration guide
                     </ExternalTextLink>{' '}
-                    before relying on this for recovery. Remember your{' '}
-                    {props.useCustomPassphrase() || !props.securityStatus()?.hasAuthentication
-                      ? 'passphrase'
-                      : 'password'}{' '}
-                    for restoring.
+                    before relying on this for recovery. Keep your backup passphrase for restoring.
                   </div>
                 </div>
               </div>
@@ -201,8 +155,8 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                   onClick={props.handleExport}
                   disabled={
                     props.isTransferring() ||
-                    !props.exportPassphrase() ||
-                    (props.useCustomPassphrase() && props.exportPassphrase().length < 12)
+                    props.exportPassphrase().length < 12 ||
+                    !props.exportPassphraseConfirmation()
                   }
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -332,19 +286,22 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
 
               <div class={formField}>
                 <label for="backup-import-passphrase" class={labelClass()}>
-                  Backup Password
+                  Backup passphrase
                 </label>
                 <input
                   id="backup-import-passphrase"
                   disabled={props.isTransferring()}
                   type="password"
+                  autocomplete="off"
+                  aria-describedby="backup-import-passphrase-help"
                   value={props.importPassphrase()}
                   onInput={(event) => props.setImportPassphrase(event.currentTarget.value)}
-                  placeholder="Enter the password used when creating this backup"
+                  placeholder="Enter the passphrase used when creating this backup"
                   class={controlClass()}
                 />
-                <p class={`${formHelpText} mt-1`}>
-                  This is usually your Pulse login password, unless you used a custom passphrase
+                <p id="backup-import-passphrase-help" class={`${formHelpText} mt-1`}>
+                  Use the original passphrase for this file. For older backups, this may be the
+                  login password you chose when exporting, not your current login password.
                 </p>
               </div>
 

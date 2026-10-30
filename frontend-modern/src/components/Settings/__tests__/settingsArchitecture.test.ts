@@ -116,6 +116,16 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('forwards both export passphrase inputs without a login-password mode', () => {
+    for (const source of [settingsSource, settingsDialogsSource]) {
+      expect(source).toMatch(/exportPassphraseConfirmation=\{/);
+      expect(source).toMatch(/setExportPassphraseConfirmation=\{/);
+      expect(source).not.toContain('useCustomPassphrase');
+    }
+    expect(recoverySettingsPanelSource).not.toContain('securityStatus');
+    expect(recoverySettingsPanelSource).not.toContain('setUseCustomPassphrase');
+  });
+
   it('carries transfer target, pending and dialog-owned feedback through the Settings shell', () => {
     for (const name of [
       'transferOrgID',

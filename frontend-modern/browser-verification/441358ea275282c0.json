@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "base_sha": "b8d3b5a31848227a8862123860d7957e632bef54",
+  "verified_at": "2026-10-30T12:52:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts",
+    "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "5ecfdaef7b89215884a4e2d19dc87e51ffef8f6510a5e145ffa95c5978189e1e",
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx": "69b2d7cdbd3c534ba5dd254b57b381f669a4db5233283df0424313f97c7633eb",
+    "frontend-modern/src/components/Settings/Settings.tsx": "7decf85960759f1ae196d6a4b5aa9c8a9702aa896891455d1ddc1700dec5277b",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx": "2b762a240c1c3a650882c37dac7b4eb66f2bf4e4f24b5305471d906439b3dfb1",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "a7d04e61e83613673b7a983e7dc810bbf4c092e4f5c47e7cc17586e9716a3718",
+    "frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx": "2c075e793440c2a1786f15b66078ba3d3d68c212eebe290f9ed8b2b3056ee203"
+  },
+  "routes": [
+    "/settings/system-recovery (offline fixture mounting production recovery props, overview, flow/apiClient and SettingsDialogs/BackupTransferDialogs; synthetic security/system state, not full app authentication)",
+    "/docs/MIGRATION (production routed Docs loader/renderer with exact shipped markdown, followed from the recovery guide link)"
+  ],
+  "states": [
+    "Assigned-base control visibly recommends a login password and exports without confirmation.",
+    "Current export uses the same independent two-field passphrase form for SSO/local/proxy/no-auth fixture states. Empty/short/unconfirmed values cannot submit; a typo is rejected locally before token prompting or network work.",
+    "Exact corrected passphrase dispatches once without its confirmation, preserving workspace/CSRF; pending controls and Escape are locked, a safe synthetic archive downloads, and success/cancel clear both secrets.",
+    "Saving a token does not replay the export. Import still sends the original older-file passphrase unchanged without a new minimum or confirmation, and actual-response uncertainty remains.",
+    "The migration guide matches the existing form and preserves separate authority, provider/guest safety and older-archive guidance."
+  ],
+  "interactions": [
+    "97 checks and eight safe local requests across desktop Chromium keyboard activation and 320px WebKit touch. No external/unknown API traffic; all contexts/browsers/server close.",
+    "All 12 final captures opened with native view_image. Capture readiness waits for settled dialog opacity and paint frames; early animated captures remain retained as incomplete preliminary pixels, not substituted."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "touch": false,
+      "colour_scheme": "light"
+    },
+    {
+      "width": 320,
+      "height": 940,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "touch": true,
+      "colour_scheme": "dark"
+    }
+  ],
+  "additional_content_sha256": {
+    "docs/MIGRATION.md": "568651e82f437e7f5fa38a13eff4e3a6504c47a2640c1de09dec656e9144c3fa",
+    "frontend-modern/public/docs/MIGRATION.md": "568651e82f437e7f5fa38a13eff4e3a6504c47a2640c1de09dec656e9144c3fa"
+  },
+  "evidence": "Lane OUTCOME and RECEIPTS.md; SOURCE-RECEIPT.json, SOURCE-PROOF.tar.xz, BROWSER-BINDING.json, BROWSER-RESULT.json, BROWSER.tar.xz and PIXEL-REVIEW.json. Fixtures compiled with the exact prepared graph by source-cga5ll0y; Playwright 1.56.1 matches the integration lock.",
+  "limitations": [
+    "Fixture security metadata is not native sign-in, and a synthetic archive download/rejected import is not cryptographic or installed recovery.",
+    "Narrow focused-field/alert captures can scroll heading/workspace above the captured position.",
+    "No backend, archive format, authorisation/scope, private or guest operation changed. Publication remains separate."
+  ]
+}

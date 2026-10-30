@@ -1,5 +1,4 @@
 import { Accessor, Component, Show } from 'solid-js';
-import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { GeneralSettingsPanel, type GeneralSettingsPanelProps } from './GeneralSettingsPanel';
 import type { NetworkSettingsPanelProps } from './networkSettingsModel';
 import type { RecoverySettingsPanelProps } from './RecoverySettingsPanel';
@@ -15,7 +14,6 @@ interface UseSettingsSystemPanelsParams {
   initialLoadComplete: Accessor<boolean>;
   systemSettings: ReturnType<typeof useSystemSettingsState>;
   backupTransferFlow: ReturnType<typeof useBackupTransferFlow>;
-  securityStatus: Accessor<SecurityStatusInfo | null>;
 }
 
 export interface SettingsSystemPanels {
@@ -129,8 +127,6 @@ export function useSettingsSystemPanels(
       setShowExportDialog: params.backupTransferFlow.setShowExportDialog,
       showImportDialog: params.backupTransferFlow.showImportDialog,
       setShowImportDialog: params.backupTransferFlow.setShowImportDialog,
-      setUseCustomPassphrase: params.backupTransferFlow.setUseCustomPassphrase,
-      securityStatus: params.securityStatus,
     }),
   };
 }

@@ -14,11 +14,10 @@ function renderTransfer(
 ) {
   return render(() => (
     <BackupTransferDialogs
-      securityStatus={() => null}
       exportPassphrase={() => ''}
       setExportPassphrase={vi.fn()}
-      useCustomPassphrase={() => false}
-      setUseCustomPassphrase={vi.fn()}
+      exportPassphraseConfirmation={() => ''}
+      setExportPassphraseConfirmation={vi.fn()}
       importPassphrase={() => 'secure-passphrase'}
       setImportPassphrase={vi.fn()}
       importFile={() => null}
@@ -117,9 +116,17 @@ describe('BackupTransferDialogs', () => {
     expect(text).toContain('Review the workspace and submit again yourself.');
   });
 
-  function renderFlow(kind: 'export' | 'import' = 'import', tokenOnly = false) {
+  function renderFlow(
+    kind: 'export' | 'import' = 'import',
+    tokenOnly = false,
+    security: Partial<SecurityStatus> = {},
+  ) {
     const securityStatus = () =>
-      ({ hasAuthentication: !tokenOnly, apiTokenConfigured: tokenOnly }) as SecurityStatus;
+      ({
+        hasAuthentication: !tokenOnly,
+        apiTokenConfigured: tokenOnly,
+        ...security,
+      }) as SecurityStatus;
     let flow!: ReturnType<typeof useBackupTransferFlow>;
     setOrgID('tenant-fixture');
     document.cookie = 'pulse_csrf=synthetic-csrf; Path=/';
@@ -134,7 +141,7 @@ describe('BackupTransferDialogs', () => {
           >
             Open transfer
           </button>
-          <BackupTransferDialogs {...flow} securityStatus={securityStatus} />
+          <BackupTransferDialogs {...flow} />
           <ToastContainer />
         </>
       );
@@ -143,9 +150,78 @@ describe('BackupTransferDialogs', () => {
     if (kind === 'import') {
       flow.setImportPassphrase('synthetic-passphrase');
       flow.setImportFile({ text: async () => '{"data":"synthetic-archive"}' } as File);
-    } else flow.setExportPassphrase('synthetic-passphrase');
+    } else {
+      flow.setExportPassphrase('synthetic-passphrase');
+      flow.setExportPassphraseConfirmation('synthetic-passphrase');
+    }
     return flow;
   }
+
+  it.each([
+    { hasAuthentication: true, ssoEnabled: true },
+    { hasAuthentication: true, ssoEnabled: false },
+    { hasAuthentication: false },
+  ])('offers the same separate, masked backup passphrase for %j', (security) => {
+    renderFlow('export', false, security);
+    const dialog = screen.getByRole('dialog', { name: 'Export configuration' });
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Backup passphrase')).toHaveAttribute('type', 'password');
+    expect(within(dialog).getByLabelText('Backup passphrase')).toHaveAttribute(
+      'autocomplete',
+      'new-password',
+    );
+    expect(within(dialog).getByLabelText('Backup passphrase')).toHaveAccessibleDescription(
+      /different from your Pulse or SSO login password.*does not verify your login/s,
+    );
+    expect(within(dialog).getByLabelText('Confirm backup passphrase')).toHaveAttribute(
+      'type',
+      'password',
+    );
+    expect(within(dialog).getByLabelText('Confirm backup passphrase')).toHaveAccessibleDescription(
+      'Enter it again to catch typing mistakes before creating the file.',
+    );
+    expect(dialog).not.toHaveTextContent('Use your login password');
+  });
+
+  it('keeps an export typo unsent and lets the operator correct it explicitly', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => new Response('synthetic refusal', { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const flow = renderFlow('export');
+    const dialog = screen.getByRole('dialog');
+    const confirm = within(dialog).getByLabelText('Confirm backup passphrase');
+    fireEvent.input(confirm, { target: { value: '' } });
+    expect(within(dialog).getByRole('button', { name: 'Export' })).toBeDisabled();
+    fireEvent.input(confirm, { target: { value: 'synthetic-passphrase-typo' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Export' }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Passphrases do not match. No export was sent.',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.input(confirm, { target: { value: 'synthetic-passphrase' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Export' }));
+    await waitFor(() => expect(flow.isTransferring()).toBe(false));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      passphrase: 'synthetic-passphrase',
+    });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('synthetic refusal');
+    expect(flow.exportPassphraseConfirmation()).toBe('synthetic-passphrase');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(flow.exportPassphraseConfirmation()).toBe('');
+    expect(flow.exportPassphrase()).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Open transfer' }));
+    expect(screen.getByLabelText('Confirm backup passphrase')).toHaveValue('');
+  });
+
+  it('asks for the original archive passphrase, including older password-based exports', () => {
+    renderTransfer('import');
+    expect(screen.getByLabelText('Backup passphrase')).toHaveAccessibleDescription(
+      'Use the original passphrase for this file. For older backups, this may be the login password you chose when exporting, not your current login password.',
+    );
+    expect(screen.queryByLabelText('Confirm backup passphrase')).not.toBeInTheDocument();
+  });
 
   it.each(['export', 'import'] as const)(
     'keeps repeated %s failures in one persistent dialog alert without toast stacking',
