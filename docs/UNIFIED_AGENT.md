@@ -630,9 +630,21 @@ and persisted host-report buffers are isolated per destination, so an observer
 outage does not replay or block the primary stream. Observer responses cannot
 change configuration, execute commands, enroll the agent, or select updates.
 
-Create a separate API token on each observer and store every token in its own
-absolute-path file. On Unix, both the JSON file and token files must be regular,
-non-symlink files with no group or other permissions (for example mode `0600`).
+**Report-only is a control boundary, not a redaction boundary.** Each observer
+receives the enabled modules' reports, including their infrastructure identities
+and metadata; this is not a reduced or anonymised copy. Choose only destinations
+allowed to hold that data. Adding an observer does not replace the primary
+server, and its delivery health does not establish primary delivery or recovery.
+
+### Choose telemetry only or Proxmox registration
+
+For an additional telemetry destination, explicitly set **`provisionProxmox` to
+`false`**, as in this example. Create a separate API token on that observer and
+store it in its own absolute-path file; do not reuse the primary server's token.
+On Unix, both the JSON file and token files must be regular, non-symlink files
+with no group or other permissions (for example mode `0600`). They must be
+readable by the actual agent service account. Use a private editor, not a token
+in a command, URL, JSON field or issue report.
 
 ```json
 {
@@ -643,30 +655,57 @@ non-symlink files with no group or other permissions (for example mode `0600`).
       "url": "https://pulse-dev.example.test",
       "tokenFile": "/etc/pulse-agent/dev-observer.token",
       "serverFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "provisionProxmox": true
+      "provisionProxmox": false
     }
   ]
 }
 ```
 
-Start or install the service with
-`--observers-file /etc/pulse-agent/observers.json`. Plaintext remote HTTP is
-rejected unless that observer explicitly sets `"allowPlaintextHTTP": true`.
-`insecureSkipVerify` is available per observer but should be replaced with a
-CA file or certificate fingerprint wherever possible.
+The fingerprint above is a placeholder, not a trusted certificate. Obtain the
+observer's actual fingerprint through a separately trusted path, or use
+`caCertPath` for a verified CA file. Keep HTTPS verification enabled. A
+certificate error is not a reason to enable `insecureSkipVerify` or change to
+HTTP. Every non-loopback HTTP observer, including a private-LAN address,
+requires its own `allowPlaintextHTTP` opt-in; that sends its API token and
+reports in cleartext. The primary server's HTTP consent does not authorise an
+observer.
 
-When Proxmox integration is enabled, each observer gets a distinct
-destination-scoped PVE/PBS API token and registration-state directory. Pulse
-must answer the registration check before the agent creates or rotates any
-Proxmox token; an unavailable destination therefore leaves existing
-credentials unchanged. Set `"provisionProxmox": false` when an observer should
-receive only Unified Agent telemetry and no separately registered PVE/PBS
-source.
+| Proxmox choice | Effect when Proxmox integration is enabled |
+| --- | --- |
+| `"provisionProxmox": false` | Sends agent telemetry without creating or repairing this observer's separately registered PVE/PBS source. It does not disable ordinary host, Docker/Podman or Kubernetes reports. |
+| `true`, or the field omitted | Includes this observer in Proxmox setup and periodic registration health checks. The agent can create or rotate a destination-scoped PVE/PBS API token and register its credentials with that Pulse server. |
+
+**Omitting the field defaults to `true`, not telemetry only.** Choose that
+additional API access deliberately; do not enable Proxmox integration or widen
+permissions merely to make observer telemetry appear. Pulse must answer the
+registration check before token creation or rotation; an unavailable
+destination leaves existing credentials unchanged. Each observer has a distinct
+Proxmox token and registration-state directory, not the primary's credentials.
+
+Changing the field to `false` is not revocation of a previously issued Proxmox
+token, removal of an existing Pulse connection, or deletion of reports already
+stored by the observer. Plan any intended credential or connection retirement
+separately, preserving the primary's access and monitoring; do not delete agent
+state or re-enrol it to change this choice.
+
+### Apply and check the intended destination
+
+For a planned installation, pass
+`--observers-file /etc/pulse-agent/observers.json` through the
+[private-file installation procedure](#private-file-installation-linux-macos-and-nas).
+For an existing service, preserve its primary URL, credential, identity and
+other saved settings when scheduling the change; do not reinstall or restart
+merely to diagnose missing reports. Follow [backup safety](VM_DISK_MONITORING.md#backup-safety)
+if a guest or freeze/thaw operation is uncertain.
 
 Per-destination delivery status is exported on the health listener as
 `pulse_agent_destination_configured` and
 `pulse_agent_destination_delivery_up`, labelled by module, destination, and
-role.
+role. Check the intended destination and ordinary report timestamps separately;
+a configured destination is not an accepted report, and accepted agent
+telemetry is not confirmation of PVE/PBS registration. For a refused report,
+use the [401/403 reporting checks](#agent-lookup-returns-http-401-or-403), not
+broader permissions or another setup attempt.
 
 ### Advanced Flags
 
