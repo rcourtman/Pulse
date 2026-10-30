@@ -6427,6 +6427,20 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "pve-backup-poll-ownership",
+            "label": "connection-scoped single-flight backup scan and late publication proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/pve_backup_poll.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/pve_backup_lifecycle_test.go",
+              "internal/monitoring/pve_backup_scheduler_test.go"
+            ]
+          },
+          {
             "id": "task-log-response",
             "label": "bounded ordered task log admission and guest evidence continuity proof",
             "match_prefixes": [],
@@ -6920,6 +6934,7 @@
               "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
+              "internal/monitoring/pve_backup_lifecycle_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",
               "internal/monitoring/vzdump_cached_guest_test.go",
@@ -7024,6 +7039,8 @@
               "internal/monitoring/pbs_retryable_read_test.go",
               "internal/monitoring/physical_disk_roundtrip_test.go",
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
+              "internal/monitoring/pve_backup_lifecycle_test.go",
+              "internal/monitoring/pve_backup_scheduler_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
               "internal/monitoring/recovery_rollups_resilience_test.go",

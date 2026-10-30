@@ -17,6 +17,37 @@
 
 ## Purpose
 
+### Background backup scans belong to their configured connection
+
+PVE tasks, storage backups and guest snapshots share one in-flight owner per
+connection. Admission and the cadence timestamp are atomic. Cycle-based or
+short-interval scheduling cannot stack scans while an earlier client has not
+returned, even after cancellation. Completion, not launch, starts the next
+ordinary interval. The owner captures the runtime before dispatch and copies
+node origins/statuses; a later core cycle cannot mutate its read inputs.
+
+Client replacement (including fallback), runtime replacement and connection
+retirement cancel/invalidate that owner. Each local acceptance boundary checks
+the owner and registered client under the same publication fence used by those
+transitions. Late task/log/storage/snapshot reads cannot replace live inventory,
+renew accepted log observations, enqueue new recovery evidence, change access
+warnings, or rewrite a replacement's scheduling/cache state. Reusing a connection
+name/UPID does not reuse another binding's immutable log cache. Already accepted
+historical observations remain history; retirement does not delete them.
+
+The existing two-to-five-minute shared task/storage budget, independent bounded
+snapshot budget, read caps, partial/unread preservation, alert policy, identity,
+auth and guest-operation rules are unchanged. A task listing or log accepted
+before a later log exhausts the shared budget remains usable while its owner
+is current; a read returning after cancellation supplies no new guest facts. No guest operation is introduced.
+`pve_backup_lifecycle_test.go` covers saturated/concurrent admission, late reads
+at all five read boundaries, VM/LXC replacement/runtime/retirement, original
+observation preservation, reused UPIDs, independent connection state and ordinary
+recovery. Existing storage-cancellation and snapshot-budget controls still apply.
+Desktop/narrow consuming proof uses actual produced inventories before and after
+a late superseded read, not invented restore points or native recovery.
+
+
 ### Backup guest results require an unambiguous task log
 
 The task-log reader requests the prefix from line one and accepts only a whole,
