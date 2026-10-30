@@ -463,7 +463,9 @@ describe('GuestPhysicalDisks', () => {
       const active = document.activeElement;
       setError(undefined);
       await Promise.resolve();
-      expect(document.activeElement).toBe(active);
+      // A removed retry cannot keep focus. Hidden content must leave it on
+      // body rather than focusing the now-hidden inspection heading.
+      expect(document.activeElement).toBe(scenario === 'hidden' ? document.body : active);
     },
   );
 

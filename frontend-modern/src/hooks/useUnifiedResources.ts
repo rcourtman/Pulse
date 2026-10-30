@@ -1518,6 +1518,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const query = normalizeUnifiedResourcesQuery(options?.query ?? DEFAULT_UNIFIED_RESOURCES_QUERY);
   const cacheKey = (options?.cacheKey || query || 'all').trim();
   const initialHydration = options?.initialHydration ?? 'immediate';
+  const retainReadError = options?.retainReadError === true;
   const enabled = options?.enabled ?? (() => true);
   const realtimeEnabled = options?.realtimeEnabled ?? enabled;
   const localFilter = parseUnifiedResourcesLocalFilter(query);
@@ -1556,7 +1557,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const [facets, setFacets] = createSignal<UnifiedResourceFacets | null>(initialFacets);
   const [loading, setLoading] = createSignal(!hasCachedResources);
   const [error, setError] = createSignal<unknown>(
-    options?.retainReadError ? cacheEntry.readError : undefined,
+    retainReadError ? cacheEntry.readError : undefined,
   );
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
@@ -1632,7 +1633,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
           enrichCanonicalAllResourcesCache(allResourcesEntry, fetched);
           entryForRequest.realtimeVersion = allResourcesEntry.realtimeVersion;
         }
-        if (options?.retainReadError) entryForRequest.readError = undefined;
+        if (retainReadError) entryForRequest.readError = undefined;
         batch(() => {
           applyResources(fetched, entryForRequest);
           setError(undefined);
@@ -1640,8 +1641,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         return fetched;
       } catch (err) {
         if (isCurrentRequest()) {
-          if (options?.retainReadError) entryForRequest.readError = err;
-          if (!background || options?.retainReadError) setError(err);
+          if (retainReadError) entryForRequest.readError = err;
+          if (!background || retainReadError) setError(err);
         }
         throw err;
       } finally {
@@ -2150,7 +2151,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const scopedAggregations = cacheEntry.aggregations;
     const scopedFacets = cacheEntry.facets;
     batch(() => {
-      setError(options?.retainReadError ? nextCacheEntry.readError : undefined);
+      setError(retainReadError ? nextCacheEntry.readError : undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
       setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
       setPolicyPosture(scopedPolicyPosture);
