@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Manual licence recovery feedback
+
+The existing Plan page keeps the latest deliberate apply/clear-key result in
+the manual recovery disclosure, beside its controls. An error is an assertive
+alert and success is a polite status; neither expires or adds a floating toast.
+Starting another confirmed operation withdraws the previous result, and applying
+another key withdraws the previous activation-success summary. Current saved
+entitlements still come from their existing readers, not the feedback message.
+Cancelling clear keeps the current result and sends no request.
+
+An unavailable or rejected activation preserves the entered key for deliberate
+retry. While either operation is pending, the key and both actions are disabled
+and handlers reject overlapping submissions. Success retains the existing
+entitlement/runtime refresh and submitted-key clearing. Auth, private-runtime
+requirements, activation/refusal policy and unrelated notifications are unchanged.
+The Plan panel tests exercise outage → same-key success → genuine refusal,
+transport failures, cancelled/failed/successful clear and pending duplicate
+suppression through the actual recovery controls.
+
 ### Dormant transition refund preparation
 
 The expanded transition-refund proposal was withdrawn before activation.

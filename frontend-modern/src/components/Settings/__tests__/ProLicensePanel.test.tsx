@@ -21,6 +21,7 @@ import {
   SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
   SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
+  SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
@@ -209,6 +210,130 @@ describe('ProLicensePanel', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  const renderRecovery = () => {
+    useLocationMock.mockReturnValue({
+      search: `?details=${SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL}`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+    renderPanel();
+    return within(document.getElementById(SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID)!);
+  };
+
+  it('replaces an outage with same-key success and genuine refusal beside the recovery controls', async () => {
+    const outage =
+      'The license server is temporarily unavailable. Please try again in a few minutes.';
+    activateLicenseMock.mockResolvedValueOnce({ success: false, message: outage });
+    const recovery = renderRecovery();
+    const field = recovery.getByRole('textbox', { name: 'License key' });
+    const apply = recovery.getByRole('button', { name: 'Apply key' });
+    fireEvent.input(field, { target: { value: 'ppk_live_synthetic-original-key' } });
+    fireEvent.click(apply);
+    await waitFor(() => expect(recovery.getByRole('alert')).toHaveTextContent(outage));
+    expect(recovery.getByRole('alert')).toHaveAttribute('aria-live', 'assertive');
+    expect(field).toHaveValue('ppk_live_synthetic-original-key');
+    expect(apply).toBeEnabled();
+    expect(activateLicenseMock).toHaveBeenCalledTimes(1);
+
+    let completeRetry!: (value: { success: boolean; message: string }) => void;
+    activateLicenseMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        completeRetry = resolve;
+      }),
+    );
+    fireEvent.click(apply);
+    expect(recovery.queryByRole('alert')).not.toBeInTheDocument();
+    expect(recovery.queryByRole('status')).not.toBeInTheDocument();
+    expect(apply).toBeDisabled();
+    expect(field).toBeDisabled();
+    expect(recovery.getByRole('button', { name: 'Clear key' })).toBeDisabled();
+    fireEvent.click(apply);
+    fireEvent.click(recovery.getByRole('button', { name: 'Clear key' }));
+    expect(activateLicenseMock).toHaveBeenCalledTimes(2);
+    expect(clearLicenseMock).not.toHaveBeenCalled();
+
+    completeRetry({ success: true, message: 'License activated successfully' });
+    await waitFor(() =>
+      expect(recovery.getByRole('status')).toHaveTextContent('License activated successfully'),
+    );
+    expect(recovery.getByRole('status')).toHaveAttribute('aria-live', 'polite');
+    expect(field).toHaveValue('');
+    await waitFor(() => expect(field).toBeEnabled());
+    expect(recovery.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(outage)).not.toBeInTheDocument();
+
+    fireEvent.input(field, { target: { value: 'ppk_live_synthetic-original-key' } });
+    activateLicenseMock.mockResolvedValueOnce({
+      success: false,
+      message: 'Activation key has been revoked',
+    });
+    fireEvent.click(apply);
+    await waitFor(() =>
+      expect(recovery.getByRole('alert')).toHaveTextContent('Activation key has been revoked'),
+    );
+    expect(recovery.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('License activated successfully')).not.toBeInTheDocument();
+    expect(field).toHaveValue('ppk_live_synthetic-original-key');
+    expect(activateLicenseMock.mock.calls).toEqual(
+      Array.from({ length: 3 }, () => ['ppk_live_synthetic-original-key']),
+    );
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(notificationErrorMock).not.toHaveBeenCalled();
+  });
+
+  it.each([new Error('Synthetic connection failure'), 'unknown failure'])(
+    'keeps a failed activation retryable without a floating notification: %s',
+    async (error) => {
+      activateLicenseMock.mockRejectedValueOnce(error);
+      const recovery = renderRecovery();
+      const field = recovery.getByRole('textbox', { name: 'License key' });
+      fireEvent.input(field, { target: { value: 'synthetic-legacy-key' } });
+      fireEvent.click(recovery.getByRole('button', { name: 'Apply key' }));
+      await waitFor(() =>
+        expect(recovery.getByRole('alert')).toHaveTextContent(
+          error instanceof Error ? error.message : 'Failed to activate license',
+        ),
+      );
+      expect(field).toHaveValue('synthetic-legacy-key');
+      expect(recovery.getByRole('button', { name: 'Apply key' })).toBeEnabled();
+      expect(activateLicenseMock).toHaveBeenCalledTimes(1);
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps clear-key cancellation, failure and success explicit in the same recovery surface', async () => {
+    mockEntitlements = { ...mockEntitlements!, tier: 'pro', subscription_state: 'active' };
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    try {
+      const recovery = renderRecovery();
+      const clear = recovery.getByRole('button', { name: 'Clear key' });
+      await waitFor(() => expect(clear).toBeEnabled());
+      fireEvent.click(clear);
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(clearLicenseMock).not.toHaveBeenCalled();
+      expect(recovery.queryByRole('alert')).not.toBeInTheDocument();
+      expect(recovery.queryByRole('status')).not.toBeInTheDocument();
+
+      confirm.mockReturnValue(true);
+      clearLicenseMock.mockRejectedValueOnce(new Error('Synthetic clear failure'));
+      fireEvent.click(clear);
+      await waitFor(() =>
+        expect(recovery.getByRole('alert')).toHaveTextContent('Synthetic clear failure'),
+      );
+      clearLicenseMock.mockResolvedValueOnce({ success: true, message: 'License cleared' });
+      fireEvent.click(clear);
+      await waitFor(() =>
+        expect(recovery.getByRole('status')).toHaveTextContent('License cleared'),
+      );
+      expect(recovery.queryByRole('alert')).not.toBeInTheDocument();
+      expect(clearLicenseMock).toHaveBeenCalledTimes(2);
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+    } finally {
+      confirm.mockRestore();
+    }
   });
 
   it('fails closed until the session presentation policy is resolved', () => {
