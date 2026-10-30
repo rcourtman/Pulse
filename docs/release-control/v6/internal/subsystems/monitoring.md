@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### Backup guest results require an unambiguous task log
+
+The task-log reader requests the prefix from line one and accepts only a whole,
+bounded UTF-8 HTTP 200 response with an explicit array. Missing/null data,
+contradictory errors, duplicate/case-aliased fields, trailing JSON/text, unread
+suffixes and invalid rows reject the entire read. Each row needs a native
+integer line number and string text; numbers must be contiguous from one in
+response order. Do not sort, fill gaps, discard bad rows or silently cap an
+over-limit reply. Empty text, unique provider metadata, explicit empty arrays
+and contiguous prefixes up to the existing 20,000-line limit remain valid.
+
+A malformed success is unread, not empty or a permission denial. The ordinary
+collector fallback retains accepted guest results and their original log
+observation, never renewing alert deferral or inventing a guest completion.
+An ended parent still withdraws running intent without lending its result to
+a guest. Independent nodes/connections progress; an ordinary valid complete
+log recovers and uses the existing immutable cache. Explicit empty reads do
+not resurrect older guest data on a later failed read. Existing attribution,
+terminal-marker, request-budget, auth, scope and guest-operation rules stay
+unchanged. Format diagnostics never reproduce log payloads.
+
+`pkg/proxmox/task_log_response_test.go` exercises the real HTTP reader, body
+bounds/closure, line ordering, malformed fields and accepted capped prefixes.
+`internal/monitoring/vzdump_task_log_response_test.go` crosses HTTP, polling,
+accepted cache, durable task outcomes and backup-intent expiry in cold/warm,
+running/ended and ordinary recovery cycles. Actual produced frames are consumed
+by desktop/narrow Backups Coverage and task disclosures. These are read-only
+source correctness proofs, not native recovery or a restored guest.
+
+
 ### Unfinished backup logs cannot monopolise the read allowance
 
 Multi-guest vzdump log collection keeps its 25-request cap per poll. Pending
@@ -4042,6 +4072,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 21b. `pkg/proxmox/client.go`
 21c. `pkg/proxmox/io_counters.go`
 21d. `pkg/proxmox/backup_history_response.go`
+21e. `pkg/proxmox/task_log_response.go`
 22. `pkg/proxmox/zfs.go`
 22a. `pkg/pbs/client.go`
 23. `internal/monitoring/guest_memory_sources.go`
@@ -4818,7 +4849,10 @@ named and default organizations. The custom event envelope stays unchanged.
     `TestResolveBackupIntentContextAcceptsSynthesizedJobGuestTask` in
     `internal/monitoring/monitor_alert_intent_test.go`, and
     `TestClusterClient_GetTaskLog` in
-    `pkg/proxmox/cluster_client_api_test.go`.
+    `pkg/proxmox/cluster_client_api_test.go`. Task log response admission and
+    no-renewal/recovery behaviour are also checked by
+    `pkg/proxmox/task_log_response_test.go` and
+    `internal/monitoring/vzdump_task_log_response_test.go`.
 
 14. A TrueNAS app container reported as `EXITED` is a completed workload and
     must raise no incident. TrueNAS classifies container exits before Pulse

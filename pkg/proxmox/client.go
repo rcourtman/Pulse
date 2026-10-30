@@ -1476,25 +1476,7 @@ func (c *Client) GetTaskLog(ctx context.Context, node, upid string) ([]TaskLogLi
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("failed to get task log (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var result struct {
-		Data []TaskLogLine `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readTaskLogResponse(resp)
 }
 
 // GetContainerInterfaces returns the network interfaces (with IPs) for a container.

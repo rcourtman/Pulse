@@ -6416,6 +6416,7 @@
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
         "pkg/proxmox/io_counters.go",
+        "pkg/proxmox/task_log_response.go",
         "pkg/proxmox/zfs.go",
         "pkg/tlsutil/certificate.go"
       ],
@@ -6425,6 +6426,20 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "task-log-response",
+            "label": "bounded ordered task log admission and guest evidence continuity proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/task_log_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/vzdump_task_log_response_test.go",
+              "pkg/proxmox/task_log_response_test.go"
+            ]
+          },
           {
             "id": "backup-history-response",
             "label": "bounded backup inventory and completion evidence proof",
@@ -6747,7 +6762,7 @@
           },
           {
             "id": "proxmox-guest-counter-runtime",
-            "label": "Proxmox guest counter presence, receipt-time and memory integrity proof",
+            "label": "Proxmox guest counter, memory integrity and task log admission proof",
             "match_prefixes": [],
             "match_files": [
               "pkg/proxmox/client.go",
@@ -6763,7 +6778,8 @@
               "internal/monitoring/ratetracker_test.go",
               "pkg/proxmox/host_diagnostics_regression_test.go",
               "pkg/proxmox/io_counters_test.go",
-              "pkg/proxmox/meminfo_integrity_test.go"
+              "pkg/proxmox/meminfo_integrity_test.go",
+              "pkg/proxmox/task_log_response_test.go"
             ]
           },
           {
