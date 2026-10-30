@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "c5d8e7715d649963f8e96e4d44f310753f4bc803",
+  "verified_at": "2026-10-30T14:20:22.888238Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "29d44ae3314e8aa4f55bd4d07b7dcffd296a2b8e7ca99b158495955ebe0ae070"
+  },
+  "routes": [
+    "/proxmox/replication \u2014 offline source-bound shell mounts production fetchReplicationJobs/apiClient, parseReplicationInventory, createNonSuspendingQuery and ProxmoxReplicationTable. Safe synthetic complete inventories; not full App or provider acceptance."
+  ],
+  "states": [
+    "Chromium base control repairs an impossible date, assumes a browser timezone and labels future last sync just now. WebKit already rejects impossible dates, but both engines overclaim unparseable/absent last-sync evidence in the old drawer.",
+    "Current cells and drawers distinguish invalid/future last sync from missing/zero evidence; unknown phone cells carry full accessible labels and titles. Provider status and supported numeric wire fields remain unchanged.",
+    "Valid next sync remains a countdown and becomes overdue on the shared clock. Missing last sync says No last sync reported/Not reported rather than never run.",
+    "Malformed complete-inventory counts withdraw rows and display the existing safe read error; a native retry restores all ten jobs."
+  ],
+  "interactions": [
+    "64 passing checks across desktop Chromium keyboard disclosure and 320px WebKit row touch, collapse, fixed-clock aging, numeric controls and malformed read/retry. Ten safe local API GETs, no unexpected network or page errors.",
+    "All 14 retained captures were opened with native view_image; full unknown/unreported/future and aged-valid drawers inspected at both widths.",
+    "Desktop checks/captures completed before the first script failed its cross-engine phone calendar-control assumption; those completed checks were retained without replay. Phone proof then corrected that baseline assumption and used the existing native touch-row control rather than tapping its sr-only keyboard button. Both failed evidence-script results are retained, not silently passed."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "touch": false,
+      "colour_scheme": "light"
+    },
+    {
+      "width": 320,
+      "height": 1000,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "touch": true,
+      "colour_scheme": "dark"
+    }
+  ],
+  "evidence": "Repair lane RECEIPTS.md, BROWSER-BINDING.json, INITIAL-BROWSER-RESULT.json, PHONE-BROWSER-RESULT.json, SOURCE-BINDING.json, PIXEL-REVIEW.json and BROWSER.tar.xz. Playwright 1.56.1 matches the integration lock. Existing source-xsyld6se validation is unchanged; it was not replayed.",
+  "limitations": [
+    "No native job classification, scheduler, guest thaw or installed recovery is established; this does not resolve original #2605/#2606.",
+    "Prior browser-execution unavailable/unknown cleanup facts remain historical; subsequent completed guarded attempts establish this proof without changing host policy or using another identity.",
+    "Safe fixture shell, not native authentication or a newly added product route."
+  ]
+}
