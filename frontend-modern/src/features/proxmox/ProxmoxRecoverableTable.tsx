@@ -168,9 +168,19 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         }),
         makeDetailRow(
           'Size',
-          artifact.size && artifact.size > 0 ? formatPlatformTableBytesValue(artifact.size) : '',
+          artifact.size && artifact.size > 0
+            ? formatPlatformTableBytesValue(artifact.size)
+            : 'Unknown size',
+          { tone: artifact.size && artifact.size > 0 ? undefined : 'muted' },
         ),
       ]),
+      footerContent: (
+        <Show when={!(artifact.size && artifact.size > 0)}>
+          <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+            No usable size was reported. Unknown does not mean this restore point is empty.
+          </p>
+        </Show>
+      ),
     },
     {
       label: 'State',
@@ -387,7 +397,7 @@ export function ProxmoxRecoverableTable(props: {
           <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
             <Show
               when={artifact.size && artifact.size > 0}
-              fallback={<span class="text-muted">No size</span>}
+              fallback={<span class="text-muted">Unknown size</span>}
             >
               <RowMetricBar
                 valuePct={

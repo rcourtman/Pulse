@@ -943,6 +943,16 @@ export function ProxmoxCoverageTable(props: {
                                     </Show>
                                   </p>
                                 </Show>
+                                <Show
+                                  when={evidence().some(
+                                    (artifact) => !(artifact.size && artifact.size > 0),
+                                  )}
+                                >
+                                  <p class="px-2 py-2 text-[11px] leading-snug text-muted whitespace-normal wrap-anywhere">
+                                    Some restore-point sizes are unknown. Unknown does not mean
+                                    those points are empty.
+                                  </p>
+                                </Show>
                                 <PlatformDetailTable class="table-fixed text-[11px]">
                                   <PlatformDetailTableHeader>
                                     <TableHead class={getPlatformTableHeadClassForKind('name')}>
@@ -1009,6 +1019,24 @@ export function ProxmoxCoverageTable(props: {
                                                 Location: {artifact.location}
                                               </span>
                                             </Show>
+                                            <Show
+                                              when={
+                                                !isCoverageEvidenceColumnVisible(
+                                                  layoutMode(),
+                                                  'size',
+                                                )
+                                              }
+                                            >
+                                              <span
+                                                class="mt-1 block whitespace-normal text-muted leading-snug wrap-anywhere"
+                                                data-coverage-evidence-size
+                                              >
+                                                Size:{' '}
+                                                {artifact.size && artifact.size > 0
+                                                  ? formatPlatformTableBytesValue(artifact.size)
+                                                  : 'Unknown size'}
+                                              </span>
+                                            </Show>
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(
@@ -1045,7 +1073,9 @@ export function ProxmoxCoverageTable(props: {
                                             >
                                               <Show
                                                 when={artifact.size && artifact.size > 0}
-                                                fallback={<span class="text-muted">No size</span>}
+                                                fallback={
+                                                  <span class="text-muted">Unknown size</span>
+                                                }
                                               >
                                                 {formatPlatformTableBytesValue(artifact.size)}
                                               </Show>
