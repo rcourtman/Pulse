@@ -46,7 +46,7 @@ describe('Agent observer trust and API-access choice', () => {
 
   it('keeps the omitted-field default and irreversible-access limits beside the choice', () => {
     const section = observerSection();
-    const rows = [...section.querySelectorAll('tbody tr')];
+    const rows = [...section.querySelectorAll('li')];
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('"provisionProxmox": false');
     expect(rows[1].textContent).toContain('true, or the field omitted');

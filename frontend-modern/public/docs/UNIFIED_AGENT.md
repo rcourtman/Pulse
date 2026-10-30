@@ -670,10 +670,15 @@ requires its own `allowPlaintextHTTP` opt-in; that sends its API token and
 reports in cleartext. The primary server's HTTP consent does not authorise an
 observer.
 
-| Proxmox choice | Effect when Proxmox integration is enabled |
-| --- | --- |
-| `"provisionProxmox": false` | Sends agent telemetry without creating or repairing this observer's separately registered PVE/PBS source. It does not disable ordinary host, Docker/Podman or Kubernetes reports. |
-| `true`, or the field omitted | Includes this observer in Proxmox setup and periodic registration health checks. The agent can create or rotate a destination-scoped PVE/PBS API token and register its credentials with that Pulse server. |
+When Proxmox integration is enabled, the choices have different effects:
+
+- **`"provisionProxmox": false`** sends agent telemetry without creating or
+  repairing this observer's separately registered PVE/PBS source. It does not
+  disable ordinary host, Docker/Podman or Kubernetes reports.
+- **`true`, or the field omitted** includes this observer in Proxmox setup and
+  periodic registration health checks. The agent can create or rotate a
+  destination-scoped PVE/PBS API token and register its credentials with that
+  Pulse server.
 
 **Omitting the field defaults to `true`, not telemetry only.** Choose that
 additional API access deliberately; do not enable Proxmox integration or widen

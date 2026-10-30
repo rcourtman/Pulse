@@ -3,6 +3,7 @@ package agenttarget
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,7 +37,7 @@ func TestDocumentedObserverTelemetryChoice(t *testing.T) {
 	if target.ProvisionProxmox == nil || *target.ProvisionProxmox || target.InsecureSkipVerify || target.AllowPlaintextHTTP || !strings.HasPrefix(target.URL, "https://") {
 		t.Fatal("telemetry recipe must explicitly avoid extra API provisioning and retain verified HTTPS")
 	}
-	if !filepath.IsAbs(target.TokenFile) || target.ServerFingerprint == "" {
+	if !path.IsAbs(target.TokenFile) || target.ServerFingerprint == "" {
 		t.Fatal("recipe must use a private token file and explicit trust")
 	}
 
