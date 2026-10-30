@@ -151,7 +151,16 @@ func exercisePBSBudgetAcceptedListings(t *testing.T) {
 					}
 					f.m.mu.RUnlock()
 					if cold {
+						// A replacement monitor has durable history, but neither
+						// live snapshots nor their in-memory fetch timestamps.
+						// Orphan timestamps alone are not a reusable snapshot cache.
 						f.m.state.UpdatePBSBackups("pbs-main", nil)
+						f.m.mu.Lock()
+						delete(f.m.pbsBackupCacheTime, "pbs-main")
+						f.m.mu.Unlock()
+						for key := range cache {
+							cache[key] = time.Time{}
+						}
 					}
 					f.at.Add(15 * 60)
 					f.phase.Store(1)
