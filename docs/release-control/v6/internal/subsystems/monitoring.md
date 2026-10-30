@@ -39,11 +39,20 @@ The existing two-to-five-minute shared task/storage budget, independent bounded
 snapshot budget, read caps, partial/unread preservation, alert policy, identity,
 auth and guest-operation rules are unchanged. A task listing or log accepted
 before a later log exhausts the shared budget remains usable while its owner
-is current; a read returning after cancellation supplies no new guest facts. No guest operation is introduced.
+is current; a read returning after cancellation supplies no new guest facts.
+Snapshot listings accepted before optional size enrichment exhausts its child
+budget likewise remain usable, with missing sizes unknown. Neither a cancelled
+listing nor an expired sizing budget can authorise inventory reconciliation;
+runtime/connection withdrawal still fences every effect, including accepted
+listings whose sizing returns late. No guest operation is introduced.
 `pve_backup_lifecycle_test.go` covers saturated/concurrent admission, late reads
-at all five read boundaries, VM/LXC replacement/runtime/retirement, original
+at all six read boundaries (including snapshot sizing), VM/LXC
+replacement/runtime/retirement, original
 observation preservation, reused UPIDs, independent connection state and ordinary
 recovery. Existing storage-cancellation and snapshot-budget controls still apply.
+`TestPVESnapshotCancelledAfterListingsCannotReconcile` keeps accepted listings
+without removing durable history; `TestPVEBackupLifecycleSizingBudgetKeepsAcceptedListings`
+checks that independent sizing expiry loses neither listings nor the next poll.
 Desktop/narrow consuming proof uses actual produced inventories before and after
 a late superseded read, not invented restore points or native recovery.
 

@@ -1424,6 +1424,12 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			defer func() { <-sem }()
 
 			snapshots, err := fetchSnapshots(target)
+			// A provider returning nil error after cancellation did not supply
+			// an accepted listing. Optional sizing can exhaust its budget later,
+			// but cannot retroactively invalidate a listing accepted here.
+			if err == nil {
+				err = snapshotCtx.Err()
+			}
 			result := guestSnapshotPollResult{target: target, err: err}
 			if err == nil {
 				result.polled = true
@@ -1520,9 +1526,11 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		}
 	}
 
-	// A child snapshot budget may yield accepted partial results; a canceled
-	// runtime/connection owner may not publish even those results.
-	unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+	// Keep listings accepted before optional sizing exhausted the child budget.
+	// WithoutCancel retains the owner value: runtime cancellation, retirement
+	// and connection replacement still fence every local effect. A cancelled
+	// listing above is not observed evidence and cannot authorise removal.
+	unlock, current := m.beginPVEBackupPublication(context.WithoutCancel(ctx), instanceName)
 	if !current {
 		return
 	}

@@ -108,7 +108,7 @@ func TestPVEBackupLifecycleSingleFlight(t *testing.T) {
 
 func TestPVEBackupLifecycleLateReadsCannotReplaceCurrentEvidence(t *testing.T) {
 	for _, kind := range []string{"qemu", "lxc"} {
-		for _, phase := range []string{"tasks", "log", "storage", "content", "snapshots"} {
+		for _, phase := range []string{"tasks", "log", "storage", "content", "snapshots", "sizing"} {
 			for _, transition := range []string{"client", "runtime", "retire"} {
 				t.Run(kind+"/"+phase+"/"+transition, func(t *testing.T) {
 					synctest.Test(t, func(t *testing.T) {
@@ -120,9 +120,11 @@ func TestPVEBackupLifecycleLateReadsCannotReplaceCurrentEvidence(t *testing.T) {
 							}
 						}()
 						var reached atomic.Bool
+						var storageReads atomic.Int32
 						var oldCtx context.Context
 						old := &backupLifecycleClient{label: "old", read: func(ctx context.Context, p string) {
-							if p == phase {
+							sizing := p == "storage" && storageReads.Add(1) == 2
+							if p == phase || (phase == "sizing" && sizing) {
 								oldCtx = ctx
 								reached.Store(true)
 								<-release
@@ -311,6 +313,43 @@ func TestPVEBackupLifecycleCanceledCollectorsKeepEvidence(t *testing.T) {
 				require.Equal(t, cache.final, after.final)
 			})
 		}
+	}
+}
+
+func TestPVEBackupLifecycleSizingBudgetKeepsAcceptedListings(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				var storageReads atomic.Int32
+				c := &backupLifecycleClient{label: "accepted", read: func(ctx context.Context, phase string) {
+					if phase == "storage" && storageReads.Add(1) == 2 {
+						// The listing succeeded before this optional enrichment.
+						// Exhaust only the snapshot child, not its runtime owner.
+						<-ctx.Done()
+					}
+				}}
+				m := newBackupLifecycleMonitor(c, kind)
+				scheduleBackupLifecycle(m, c)
+				synctest.Wait()
+				require.Equal(t, int32(2), storageReads.Load(), "fixture must reach snapshot sizing")
+				time.Sleep(61 * time.Second)
+				synctest.Wait()
+				state := m.state.GetSnapshot()
+				require.Len(t, state.PVEBackups.GuestSnapshots, 2, "accepted listing and independent peer survive sizing timeout")
+				for _, snap := range state.PVEBackups.GuestSnapshots {
+					if snap.Instance == "site-a" {
+						require.Equal(t, "accepted", snap.Name)
+						require.Zero(t, snap.SizeBytes, "missing enrichment must not invent a size")
+					}
+				}
+				require.Empty(t, m.pveBackupPolls, "timed-out sizing must release the completed owner")
+				if os.Getenv("PULSE_BACKUP_LIFECYCLE_FRAMES") == "1" && kind == "qemu" {
+					data, err := json.Marshal(map[string]any{"accepted": state.PVEBackups, "vms": state.VMs, "containers": state.Containers})
+					require.NoError(t, err)
+					t.Log("BACKUP_SNAPSHOT_BUDGET_FRAME=" + string(data))
+				}
+			})
+		})
 	}
 }
 
