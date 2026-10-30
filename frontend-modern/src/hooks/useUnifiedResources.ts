@@ -588,6 +588,9 @@ type UnifiedResourcesSnapshot = {
 };
 
 type UnifiedResourcesCacheEntry = {
+  // Opt-in scoped consumers must not forget a failed read on a quick remount.
+  // Retained rows remain available internally; only a successful read clears it.
+  readError?: unknown;
   resources: Resource[];
   policyPosture: ResourcePolicyPostureSummary | null;
   aggregations: UnifiedResourceAggregations | null;
@@ -1507,12 +1510,15 @@ type UseUnifiedResourcesOptions = {
   enabled?: Accessor<boolean>;
   /** Keep cached/background data inert while another retained route is visible. */
   realtimeEnabled?: Accessor<boolean>;
+  /** Retain scoped read failures across remounts until a successful read. */
+  retainReadError?: boolean;
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const query = normalizeUnifiedResourcesQuery(options?.query ?? DEFAULT_UNIFIED_RESOURCES_QUERY);
   const cacheKey = (options?.cacheKey || query || 'all').trim();
   const initialHydration = options?.initialHydration ?? 'immediate';
+  const retainReadError = options?.retainReadError === true;
   const enabled = options?.enabled ?? (() => true);
   const realtimeEnabled = options?.realtimeEnabled ?? enabled;
   const localFilter = parseUnifiedResourcesLocalFilter(query);
@@ -1550,7 +1556,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   );
   const [facets, setFacets] = createSignal<UnifiedResourceFacets | null>(initialFacets);
   const [loading, setLoading] = createSignal(!hasCachedResources);
-  const [error, setError] = createSignal<unknown>(undefined);
+  const [error, setError] = createSignal<unknown>(
+    retainReadError ? cacheEntry.readError : undefined,
+  );
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
   let initialHydrationHandle: ReturnType<typeof setTimeout> | undefined;
@@ -1625,14 +1633,16 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
           enrichCanonicalAllResourcesCache(allResourcesEntry, fetched);
           entryForRequest.realtimeVersion = allResourcesEntry.realtimeVersion;
         }
+        if (retainReadError) entryForRequest.readError = undefined;
         batch(() => {
           applyResources(fetched, entryForRequest);
           setError(undefined);
         });
         return fetched;
       } catch (err) {
-        if (!background && isCurrentRequest()) {
-          setError(err);
+        if (isCurrentRequest()) {
+          if (retainReadError) entryForRequest.readError = err;
+          if (!background || retainReadError) setError(err);
         }
         throw err;
       } finally {
@@ -2141,7 +2151,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const scopedAggregations = cacheEntry.aggregations;
     const scopedFacets = cacheEntry.facets;
     batch(() => {
-      setError(undefined);
+      setError(retainReadError ? nextCacheEntry.readError : undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
       setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
       setPolicyPosture(scopedPolicyPosture);

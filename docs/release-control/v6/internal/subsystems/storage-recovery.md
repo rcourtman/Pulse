@@ -21,6 +21,34 @@
 
 ## Purpose
 
+### Guest SMART inspection withdraws a failed scoped read
+
+A failed guest physical-disk resource read must not leave cached health words,
+temperatures or open SMART/history panels presented as current below an error.
+The guest consumer withholds that entire disk list until a successful scoped
+read. Its opt-in retained read error survives a quick drawer remount; cached
+rows cannot clear it. Other parents, organisations and default consumers do not
+inherit it. The shared hook reports background failure for this opt-in consumer
+as well; a successful scoped read clears the retained failure. It renders no response text, no zero-disk inference and no recovery action
+against the guest. An explicit retry uses the same parent-scoped resource query;
+pending retries stay focusable, announce their busy state and reject duplicate
+activation. Failed retries keep the same control. Recovery shows only the newly
+admitted records, with closed disk disclosures. A valid empty response says that
+no records were returned, not that the guest has no disks. Uninstrumented guests
+still get no empty card on first inspection.
+
+When read failure or recovery removes focused content, focus returns to the
+surviving inspection heading, including empty recovery. It must not steal focus
+moved elsewhere, focus a hidden Overview or restore focus after leaving the guest.
+`useUnifiedResources.test.ts` covers retained read errors, remount, successful
+empty retry and scope/default isolation. `GuestPhysicalDisks.test.tsx` covers
+retained/open evidence, failure/pending/retry,
+recovery/empty, literal-response suppression and focus ownership. Desktop/narrow
+browser proof must exercise the actual resource reader through the guest drawer,
+scoped failure, keyboard/touch retry, recovery and inspected pixels. Resource and
+disk identity, auth, collection, thresholds, History targets and refresh cadence
+are unchanged; this is truthful inspection, not native disk or guest recovery.
+
 ### Coverage keeps its evidence disclosure visible on phones
 
 The existing Coverage chevron remains visible at phone widths, with the shared

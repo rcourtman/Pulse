@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "7b7f278b1a4e8060989cae3b58d725140bcf86d3",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "e466a4cd43a8d0cdaf4eb43fc26de8f56d8082ded034a60f516354ed5360b043",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "86d2331683741b78aa4d0708f80989b48bbe13ed752d846ff3796ff858c8f8ef"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000,
+      "browser": "Chromium141.0.7390.37",
+      "theme": "light",
+      "touch": false
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "Chromium141.0.7390.37",
+      "theme": "dark",
+      "touch": true
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "WebKit26.0",
+      "theme": "light",
+      "touch": true
+    }
+  ],
+  "states": [
+    "Admitted guest SMART details and their open charts",
+    "Scoped read failure and quick same-guest remount without stale health or temperature",
+    "Pending and failed retry, successful new reading and valid empty recovery",
+    "Independent same-VMID connection remains isolated"
+  ],
+  "interactions": [
+    "Native click/tap opens guest and SMART details",
+    "Native Tab/Enter/Space retry; duplicate activation sends no second read",
+    "Focused withdrawal and recovery return to the surviving inspection heading",
+    "Close/reopen retains read failure without an extra immediate cache read",
+    "Successful recovery closes the old disk disclosure; empty recovery does not claim disk absence"
+  ],
+  "verified_at": "2026-10-30T01:17:10Z",
+  "notes": "Unmodified production App and real parent-scoped resource reader against safe local HTTP/realtime fixtures.60 checks include source/asset integrity and no-overflow assertions. All12 final screenshots were opened with native view_image. Monitoring-read authentication, organisation and parent scope remain intact. Earlier fixture/driver failures are retained separately. This is inspection safety, not native disk/guest or published-release recovery."
+}
