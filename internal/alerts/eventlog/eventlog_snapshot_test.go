@@ -15,6 +15,9 @@ import (
 func TestOpenUpgradesPreSnapshotSchema(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, eventLogFileName)
+	// Keep the legacy row within normal retention. A fixed calendar date
+	// eventually tests expiry instead of whether the schema upgrade keeps it.
+	occurredAt := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
 	db, err := sql.Open("sqlite", sqliteDSN(dbPath))
 	if err != nil {
 		t.Fatal(err)
@@ -33,9 +36,13 @@ func TestOpenUpgradesPreSnapshotSchema(t *testing.T) {
 			message TEXT NOT NULL DEFAULT '',
 			details TEXT NOT NULL DEFAULT ''
 		);
-		INSERT INTO alert_events (occurred_at, event_type, alert_id)
-		VALUES ('2026-08-01T00:00:00Z', 'fired', 'legacy-alert');
 	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO alert_events (occurred_at, event_type, alert_id)
+		VALUES (?, 'fired', 'legacy-alert');
+	`, occurredAt.Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -54,6 +61,9 @@ func TestOpenUpgradesPreSnapshotSchema(t *testing.T) {
 	}
 	if len(events) != 1 {
 		t.Fatalf("expected the legacy row to survive, got %d events", len(events))
+	}
+	if got := events[0]; got.Type != TypeFired || got.AlertID != "legacy-alert" || !got.OccurredAt.Equal(occurredAt) {
+		t.Fatalf("legacy row changed during schema upgrade: %+v", got)
 	}
 	if len(events[0].Snapshot) != 0 {
 		t.Fatalf("legacy row grew a snapshot: %s", events[0].Snapshot)
