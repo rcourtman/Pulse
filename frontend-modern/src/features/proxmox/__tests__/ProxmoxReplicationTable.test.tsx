@@ -125,7 +125,7 @@ describe('ProxmoxReplicationTable', () => {
         within(panel).queryByText(/Not synced yet|Last synced|overdue|just now/),
       ).not.toBeInTheDocument();
       expect(within(panel).getAllByText('Unknown')).toHaveLength(2);
-      expect(within(panel).getByText('Healthy')).toBeInTheDocument();
+      expect(within(panel).getByRole('img', { name: 'Healthy' })).toBeInTheDocument();
     },
   );
 
