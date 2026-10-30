@@ -425,14 +425,40 @@ In shared-process multi-tenant mode (self-hosted with `PULSE_MULTI_TENANT_ENABLE
 
 Use this for one owner separating internal sites, departments, teams, or environments. It is not the canonical Pulse MSP model for separate customer businesses; MSP uses isolated client workspaces with their own runtime boundaries.
 
-The organization for a request is resolved in this order:
+### Select the organisation without widening access
 
-1. `X-Pulse-Org-ID: <orgID>` header (the way API clients or internal middleware should target a specific organization).
-2. `pulse_org_id` session cookie (browser sessions).
-3. An org-bound API token (a token scoped to a single org needs no header).
-4. Fallback: the `default` org.
+**Selection is not authorisation.** Pulse selects a request's organisation in
+this order, then checks whether the authenticated user or token may access it:
 
-Suspended or pending-deletion organizations return `403`, and an unknown org ID returns `400`.
+1. An explicit `X-Pulse-Org-ID` header.
+2. Otherwise, the `pulse_org_id` browser cookie.
+3. With neither present, a token bound to exactly one organisation selects it.
+4. Otherwise, the `default` organisation; this is not permission to access it.
+
+A header or cookie takes precedence over automatic token selection, but does
+not change the token's binding. A token supplied alongside a signed-in browser
+session is checked as that token: the user's administrator access does not
+widen it. A token bound to several organisations needs an explicit selection
+when targeting a non-default organisation; Pulse does not guess which one.
+
+For the UI, use the **Org Switcher** and confirm the ID in **Settings →
+Organization → Overview**, not just a similar display name. For automation,
+use a token bound to the intended organisation with only the required scopes.
+Keep authentication in a [private header file](API.md#api-token-recommended);
+do not copy browser cookies, CSRF tokens or credentials into commands. If you
+supply `X-Pulse-Org-ID`, it must name an organisation the token already allows.
+
+| Existing response | What to check before another change |
+|---|---|
+| `400 invalid_org` | Confirm the Pulse instance and exact organisation ID. An ID from another installation is not a destination on this one. |
+| `403 access_denied` | Check the selected header/cookie and the token's organisation binding, or the signed-in user's membership. Adding scopes does not grant access to another organisation. |
+| `403 org_suspended` | The organisation is suspended or pending deletion. Stop the integration change; renaming, recreating or re-enrolling it is not access recovery. |
+
+Read the error code and message locally: HTTP `403` alone does not distinguish
+organisation access from a missing scope or another gate. Do not replace a
+scoped token with an unrestricted one to clear the error. Keep complete
+webhook responses and configuration private; share only a locally reviewed,
+redacted error and consistent aliases if help is needed.
 
 ### Wiring organization alerts into external systems
 
@@ -448,7 +474,12 @@ conditions above](#-delivery-contract) and its [resolution reason](#resolved-doe
 Do not label a moved close as recovery. Add authentication as a custom header
 in the settings form; keep its value private.
 
-Configure it from the UI (**Alerts → Notifications → Add Webhook**) per org, or programmatically with an org-bound admin token:
+Configure it from the UI (**Alerts → Notifications → Add Webhook**) in the
+intended organisation. The HTTP example below describes the API contract;
+its authentication values are placeholders, not a command to paste into a
+terminal. Programmatic creation needs an organisation-bound token with
+`settings:write` and the matching selection above. Keep the receiver's own
+credential private too; it is not a Pulse API token.
 
 ```http
 POST /api/notifications/webhooks
