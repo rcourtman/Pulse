@@ -206,26 +206,53 @@ both paths in your firewall:
 | Proxmox/PBS polling | provider → client site, through the tunnel | 8006 / 8007 |
 | Agent check-in (hosts) | client site → provider agent ingest | `PULSE_AGENT_INGEST_PORT` (7656) |
 
-Per client, the steps are:
+Per client, choose the intended network, trust and access before adding the
+connection:
 
-1. Make the client's PVE/PBS API address reachable from the Docker host that
-   runs the client workspaces (route or interface into that client's
-   tunnel). From that host, make a bounded unauthenticated HTTPS request to
-   the PVE/PBS API with certificate verification enabled. For a private or
-   self-signed certificate, use `--cacert` with an independently verified
-   certificate/CA. A TLS error is not proof of a blocked tunnel, and an HTTP
-   response is not proof that Pulse's configured account can collect data.
-2. Open the client's workspace (portal → workspace → **Open**) and add the
-   node under **Settings → Infrastructure**, using the tunnel-reachable
-   address. The guided flow generates a setup command to run once on the
-   client's Proxmox host (over SSH through the same tunnel); it creates the
-   monitoring user, API token, and permissions. Self-signed certificates
-   are handled automatically (the certificate fingerprint is pinned on
-   first connect).
-3. If you create the token by hand instead, note that Proxmox
-   privilege-separated tokens need ACLs on the **token** as well as the
-   user, and the built-in `PVEAuditor` role is not sufficient on its own —
-   see [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the exact role setup.
+1. Route the client's PVE/PBS API address to the **client workspace's Pulse
+   runtime**, through that client's tunnel. Reaching it from the Docker host
+   is only a preliminary check: the runtime can have different routes, DNS
+   and certificate trust. An HTTP response proves neither authenticated
+   collection nor access to every cluster member. Keep the API behind the
+   intended VPN and firewall; do not expose it publicly to bypass a routing
+   problem.
+2. Establish certificate trust through an independently trusted client console
+   or administration channel. For a private CA, the **runtime** needs the
+   intended CA chain and matching endpoint hostname; alternatively use an
+   independently verified SHA-256 leaf fingerprint. Guided registration can
+   capture and pin the certificate it first reaches, but **first-seen pinning
+   does not independently authenticate the server**. Do not accept a suggested
+   replacement solely from the failing connection, copy one member's pin to
+   its peers, or disable verification. See [certificate trust and renewal](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed).
+3. Choose a dedicated API identity restricted to the intended client resources.
+   For PVE, `PVEAuditor` provides baseline inventory and metrics; optional guest
+   reads can need additional privileges. With privilege separation enabled,
+   effective access is the **intersection of the user and token permissions**
+   at the affected resource path. Keep privilege separation enabled and do not
+   modify the built-in role or widen access to other departments merely to
+   silence errors. For PBS, use its [dedicated read-only token guidance](PBS.md#pbs-permissions).
+4. If choosing guided PVE setup, have the client's administrator inspect it
+   before execution. It is an **administrative change, not a read-only test**:
+   it creates or updates the monitoring identity, token and ACLs at `/`, and
+   can add `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` on PVE 9, or the
+   broader legacy `VM.Monitor` fallback on PVE 8. An existing deliberately
+   scoped token can be entered directly instead. Keep token secrets in the
+   private setup prompt or connection form, never a command line or public
+   report. Do not rerun setup or rotate a working token to diagnose a missing
+   optional reading; [intentional optional denials](TROUBLESHOOTING.md#optional-proxmox-checks-return-403-repeatedly)
+   can remain unavailable without granting more access.
+5. Open the intended client's workspace (portal → workspace → **Open**) and
+   add its connection under **Settings → Infrastructure**, using the
+   tunnel-reachable endpoint and chosen trust and token. Check ordinary
+   polling for each intended member and reading; **Test Connection** on the
+   primary is not proof that all members or optional checks work. Keep
+   unavailable readings distinct from measured zero. Preserve existing
+   connections and credentials when a check fails; use the linked
+   troubleshooting guidance rather than repeating setup.
+
+During a backup, uncertain freeze/thaw or an unresponsive-guest incident,
+defer setup, live tests and guest-agent probes. Follow [backup safety](VM_DISK_MONITORING.md#backup-safety)
+first; this connection workflow is not guest recovery.
 
 Because each client workspace is its own runtime, overlapping RFC1918
 subnets across client sites never collide inside Pulse: each workspace only
