@@ -2983,6 +2983,8 @@ func TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots(t *test
 	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_config_backups.py"), "ConfigBackupPublication", []string{
 		"test_two_successful_same_second_copies_are_separate_complete_snapshots",
 		"test_failed_partial_copy_does_not_mutate_or_delete_a_previous_snapshot",
+		"test_copy_and_published_snapshot_remain_private_with_broad_source_permissions",
+		"test_snapshot_privacy_failure_preserves_prior_snapshots_without_rotation",
 		"test_allocation_failure_stops_before_copy_or_rotation",
 		"test_headroom_failure_creates_no_stage_and_preserves_prior_snapshot",
 		"test_failed_publication_does_not_rotate_or_publish_a_snapshot",

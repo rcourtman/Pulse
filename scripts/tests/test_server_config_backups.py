@@ -107,6 +107,61 @@ test -z "$LAST_CONFIG_BACKUP_DIR"
         self.assertEqual(self.completed(), [old])
         self.assert_no_stages()
 
+    def test_copy_and_published_snapshot_remain_private_with_broad_source_permissions(self):
+        # Older or manually managed configs can be traversable by other users.
+        # cp -a copies the source directory's owner/mode too, not just its files.
+        # Inspect the completed copy before publication, not just a later chmod.
+        self.config.chmod(0o755)
+        self.config.parent.chmod(0o755)
+        self.shell(r'''
+cp() {
+    command cp "$@" || return
+    python3 - "${@: -1}" "$(dirname "$CONFIG_DIR")" <<'PY'
+import os
+from pathlib import Path
+import stat
+import sys
+
+path, parent = (Path(arg).resolve() for arg in sys.argv[1:])
+while path != parent:
+    observed = path.stat()
+    if observed.st_uid == os.geteuid() and stat.S_IMODE(observed.st_mode) & 0o077 == 0:
+        break
+    path = path.parent
+else:
+    sys.exit("configuration copy exposed source permissions before publication")
+PY
+}
+backup_existing
+printf '%s\n' "$LAST_CONFIG_BACKUP_DIR" > "$FIXTURE/latest"
+''')
+        snapshot = Path((self.root / "latest").read_text().strip())
+        self.assertEqual(stat.S_IMODE(snapshot.stat().st_mode), 0o700)
+        self.assertEqual(snapshot.stat().st_uid, self.config.stat().st_uid)
+        self.assertEqual(snapshot.stat().st_gid, self.config.stat().st_gid)
+        self.assertEqual((snapshot / ".env").read_bytes(), (self.config / ".env").read_bytes())
+        self.assertEqual(stat.S_IMODE((snapshot / ".env").stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE((snapshot / "settings.json").stat().st_mode),
+                         stat.S_IMODE((self.config / "settings.json").stat().st_mode))
+        self.assertTrue((snapshot / "empty").is_dir())
+        self.assertEqual(os.readlink(snapshot / "setting-link"), "settings.json")
+        self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o755)
+        self.assert_no_stages()
+
+    def test_snapshot_privacy_failure_preserves_prior_snapshots_without_rotation(self):
+        old = self.old_snapshot("privacy-mode")
+        result = self.shell(r'''
+chmod() { return 23; }
+prune_config_backups() { echo unexpected-prune > "$FIXTURE/unexpected"; }
+if backup_existing; then exit 90; fi
+test -z "$LAST_CONFIG_BACKUP_DIR"
+''')
+        self.assertIn("Could not protect configuration backup", result.stderr)
+        self.assertFalse((self.root / "unexpected").exists())
+        self.assert_prior(old)
+        self.assert_no_stages()
+        self.assertEqual(self.completed(), [old])
+
     def test_allocation_failure_stops_before_copy_or_rotation(self):
         old = self.old_snapshot()
         self.shell(r'''

@@ -3090,7 +3090,7 @@ backup_existing() {
     LAST_CONFIG_BACKUP_DIR=""
     if [[ -d "$CONFIG_DIR" ]]; then
         print_info "Backing up existing configuration..."
-        local backup_parent backup_dir backup_stage stage_name
+        local backup_parent backup_dir backup_stage backup_payload stage_name
         backup_parent="$(dirname "$CONFIG_DIR")"
         if [[ ! -w "$backup_parent" ]]; then
             # The hardened pulse-update.service unit mounts /etc read-only
@@ -3104,25 +3104,38 @@ backup_existing() {
         # can already be another run's recovery copy: cp would nest into it,
         # and failed-copy cleanup would then erase that earlier snapshot.
         # Hidden, incomplete copies are not candidates for snapshot rotation.
+        # Keep a private outer enclosure: cp -a also adopts the source root's
+        # ownership/permissions, so copying directly into the reserved directory
+        # can expose a legacy broadly readable config before publication.
         if ! backup_stage=$(mktemp -d -- "$backup_parent/.$(basename "$CONFIG_DIR").backup.$(date +%Y%m%d-%H%M%S).XXXXXX"); then
             print_error "Could not create configuration backup; existing snapshots are unchanged"
             return 1
         fi
         stage_name="${backup_stage##*/}"
         backup_dir="$backup_parent/${stage_name#.}"
-        if ! cp -a -- "$CONFIG_DIR/." "$backup_stage/"; then
+        backup_payload="$backup_stage/snapshot"
+        if ! mkdir -- "$backup_payload" || ! cp -a -- "$CONFIG_DIR/." "$backup_payload/"; then
             rm -rf -- "$backup_stage"
             print_error "Configuration backup failed; existing snapshots are unchanged"
+            return 1
+        fi
+        # Retain the source ownership for direct recovery, including the root
+        # directory. Only its mode is tightened before leaving the private outer
+        # enclosure; nested file modes, hidden entries and links stay unchanged.
+        if ! chmod 700 -- "$backup_payload"; then
+            rm -rf -- "$backup_stage"
+            print_error "Could not protect configuration backup; existing snapshots are unchanged"
             return 1
         fi
         # GNU mv -n can return zero without moving anything. Admit publication
         # only when our stage actually disappeared; never merge or overwrite a
         # file, directory or link that appeared at the final path.
-        if ! mv -T -n -- "$backup_stage" "$backup_dir" || [[ -e "$backup_stage" || -L "$backup_stage" ]]; then
+        if ! mv -T -n -- "$backup_payload" "$backup_dir" || [[ -e "$backup_payload" || -L "$backup_payload" ]]; then
             rm -rf -- "$backup_stage"
             print_error "Could not publish configuration backup; existing snapshots are unchanged"
             return 1
         fi
+        rmdir -- "$backup_stage" || print_warn "Could not remove empty configuration backup staging directory"
         LAST_CONFIG_BACKUP_DIR="$backup_dir"
         prune_config_backups "$backup_parent" "$(basename "$CONFIG_DIR").backup." "$backup_dir"
     fi
