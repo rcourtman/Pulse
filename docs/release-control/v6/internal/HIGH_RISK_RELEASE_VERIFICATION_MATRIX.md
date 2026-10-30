@@ -1115,6 +1115,9 @@ Companion drill:
     verify each actual reader hash, including split update/removal, native
     fixture-runner, provider-startup and Windows controls. A missing input
     fails before any native qualification; it is not a runtime acceptance run.
+    Transitive closure must include Cloud startup/auth and network utility
+    packages; the reader also hashes the four committed Cloud favicon/portal
+    embed inputs. Production test exclusions remain unchanged.
   `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
   - `TestDemoReachabilityStopsBeforeUnreadyOrFailedTailnetProbes` executes

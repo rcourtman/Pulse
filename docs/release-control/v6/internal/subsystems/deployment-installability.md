@@ -3664,6 +3664,10 @@ artifact-selection behaviour.
    installer test missing from the exact-path manifest fails CI. This includes
    the split update, removal, fixture-runner, provider-startup and Windows
    controls; production roots still exclude their own `_test.go` files.
+   The compiled package's control-plane startup dependency also binds
+   `internal/cloudcp`, `pkg/cloudauth` and `pkg/netutil`, with the four
+   committed Cloud favicon/portal embed files explicitly hashed. These are
+   source inputs, not a change to their rendered content or a new service run.
    Source-binding validation does not execute native/rootful qualification or
    establish installed recovery.
    Qualification counts, readiness assertions, release gates, workflow
