@@ -318,10 +318,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
-		if ctx.Err() != nil {
-			return
-		}
-		if nodeEffectiveStatus[node.Node] != "online" {
+		if ctx.Err() != nil || nodeEffectiveStatus[node.Node] != "online" {
+			// A spent child budget is unread scope, not an empty listing.
+			// Finish classifying the remaining nodes without another API call.
 			unreadNodes[node.Node] = struct{}{}
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
 				confirmationPreserveNeeded[storageName] = struct{}{}
@@ -333,13 +332,16 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		var storages []proxmox.Storage
 		var err error
 
+	storageAttempts:
 		for attempt := 1; attempt <= 2; attempt++ {
 			if ctx.Err() != nil {
-				return
+				err = ctx.Err()
+				break
 			}
 			storages, err = client.GetStorage(ctx, node.Node)
 			if ctx.Err() != nil {
-				return
+				err = ctx.Err()
+				break
 			}
 			if err == nil {
 				break // Success
@@ -359,7 +361,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					select {
 					case <-ctx.Done():
 						timer.Stop()
-						return
+						err = ctx.Err()
+						break storageAttempts
 					case <-timer.C:
 					}
 					continue
@@ -390,9 +393,6 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
-			if ctx.Err() != nil {
-				return
-			}
 			// Check if storage supports backup content
 			if !strings.Contains(storage.Content, "backup") {
 				continue
@@ -417,10 +417,15 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				continue
 			}
 
-			// Get storage content
-			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
-			if ctx.Err() != nil {
-				return
+			// Classify every unattempted storage after expiry, but never start a
+			// late read or accept a nil-error response returned after its budget.
+			var contents []proxmox.StorageContent
+			err := ctx.Err()
+			if err == nil {
+				contents, err = client.GetStorageContent(ctx, node.Node, storage.Storage)
+				if ctx.Err() != nil {
+					err = ctx.Err()
+				}
 			}
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_content", instanceName, err).WithNode(node.Node)
@@ -579,7 +584,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 	}
 
-	if ctx.Err() != nil {
+	if ctx.Err() != nil && ctx.Err() != context.DeadlineExceeded {
 		return
 	}
 
@@ -589,22 +594,31 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// datacenter catalogue, once per poll; failed/missing config is not absence.
 	storageAssignments := make(map[string]string)
 	for scope := range skippedLocalStorages {
+		if ctx.Err() != nil {
+			break
+		}
 		if _, readElsewhere := storageSuccess[scope.storage]; !readElsewhere {
 			continue
 		}
-		if configured, err := client.GetAllStorage(ctx); err == nil {
+		if configured, err := client.GetAllStorage(ctx); err == nil && ctx.Err() == nil {
 			for _, storage := range configured {
 				storageAssignments[storage.Storage] = storage.Nodes
 			}
 		}
 		break
 	}
-	if ctx.Err() != nil {
-		// A cancelled enumeration cannot publish a successful empty inventory
-		// or renew provider evidence for a payload we did not accept.
+	if ctx.Err() != nil && ctx.Err() != context.DeadlineExceeded {
+		// Explicit cancellation still withdraws the entire enumeration.
 		return
 	}
-	unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+	// A later storage/assignment timeout cannot discard earlier accepted
+	// listings. Drop only the spent child budget: the owner value still fences
+	// runtime shutdown, connection replacement and retirement atomically.
+	publicationCtx := ctx
+	if ctx.Err() == context.DeadlineExceeded {
+		publicationCtx = context.WithoutCancel(ctx)
+	}
+	unlock, current := m.beginPVEBackupPublication(publicationCtx, instanceName)
 	if !current {
 		return
 	}
@@ -627,6 +641,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// Resolve name-wide skips/shared failures after every node, regardless of
 	// order. A local disk failure remains scoped to its own node below.
+	if len(unreadNodes) > 0 {
+		// Confirmation rows have no node provenance. An unread node cannot
+		// establish their absence, even after its live storage inventory was
+		// replaced. A successful read of that storage below still wins.
+		for _, confirmation := range m.state.PBSGuestConfirmationsForInstance(instanceName) {
+			confirmationPreserveNeeded[confirmation.Storage] = struct{}{}
+		}
+	}
 	for storageName := range storageSuccess {
 		delete(storagePreserveNeeded, storageName)
 	}
@@ -748,10 +770,17 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
 
-	m.checkBackupAlerts(ctx)
+	// Optional collection expiry is not a failed recovery-store read. Keep
+	// existing alerts for the next ordinary evaluation rather than issuing an
+	// already-expired read that would manufacture an evaluation-outage alert.
+	if ctx.Err() == nil {
+		m.checkBackupAlerts(ctx)
+	}
 
-	// Clear permission warning if no permission errors occurred this cycle
-	if !hadPermissionError {
+	// Only a complete accepted enumeration can clear an earlier access
+	// warning. An unread scope has not demonstrated permission recovery.
+	if !hadPermissionError && protectionObservationErr == nil &&
+		protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
 		m.mu.Lock()
 		delete(m.backupPermissionWarnings, instanceName)
 		m.mu.Unlock()
