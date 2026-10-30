@@ -6393,6 +6393,7 @@
         "pkg/agents/host/report.go",
         "pkg/agents/kubernetes/report.go",
         "pkg/proxmox/backup_history.go",
+        "pkg/proxmox/backup_history_response.go",
         "pkg/proxmox/ceph.go",
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
@@ -6406,6 +6407,20 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "backup-history-response",
+            "label": "bounded backup inventory and completion evidence proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/backup_history_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/backup_task_inventory_lifecycle_test.go",
+              "pkg/proxmox/backup_history_response_test.go"
+            ]
+          },
           {
             "id": "backup-history-collection",
             "label": "paginated backup execution history and collection quality proof",
@@ -6846,7 +6861,7 @@
             "test_prefixes": [],
             "exact_files": [
               "pkg/pbs/auth_session_concurrency_test.go",
-          "pkg/pbs/backup_snapshot_identity_test.go",
+              "pkg/pbs/backup_snapshot_identity_test.go",
               "pkg/pbs/client_http_test.go",
               "pkg/pbs/client_test.go",
               "pkg/pbs/host_diagnostics_regression_test.go",

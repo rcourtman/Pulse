@@ -4370,6 +4370,26 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_backup_history_response_has_explicit_ownership_and_proofs(self) -> None:
+        runtime = "pkg/proxmox/backup_history_response.go"
+        proofs = [
+            "internal/monitoring/backup_task_inventory_lifecycle_test.go",
+            "pkg/proxmox/backup_history_response_test.go",
+        ]
+        result = lookup_paths([runtime, *proofs])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        match = result["files"][0]["matches"]
+        self.assertEqual(len(match), 1)
+        self.assertEqual(match[0]["subsystem"], "monitoring")
+        self.assertEqual(match[0]["verification_requirement"]["id"], "backup-history-response")
+        self.assertEqual(match[0]["verification_requirement"]["exact_files"], proofs)
+        for entry in result["files"][1:]:
+            self.assertTrue(any(
+                item["subsystem"] == "monitoring" and
+                item["verification_requirement"]["id"] == "backup-history-response"
+                for item in entry["matches"]
+            ))
+
     def test_lookup_paths_assigns_pbs_client_runtime_to_monitoring(self) -> None:
         result = lookup_paths([
             "pkg/pbs/client.go",

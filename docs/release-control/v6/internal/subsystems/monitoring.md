@@ -17,6 +17,29 @@
 
 ## Purpose
 
+### Backup task results agree with their completion clocks
+
+The PVE backup-history reader accepts a live task only with an absent/zero end
+clock and an omitted/empty or native `running` status. Any exit-result text
+requires a positive, ordered end clock. An ended task cannot still say `running`
+or `active`. A contradictory row rejects its whole page through the existing
+unread path, without inferring completion, rewriting result text or inventing
+an end time. Ended rows with no result remain unknown, not successful; native
+warning/error results, zero-duration tasks and explicit empty inventories remain
+valid. Provider payloads stay out of format errors.
+
+`TestBackupHistoryTaskCompletionMustBeConsistent` covers native live, completed,
+unknown and contradictory clocks/results. The normal-suite
+`TestBackupHistoryUnreadTaskCannotCompleteRunningArchive` crosses the actual
+HTTP reader and VM/LXC poller: rejected results retain the accepted writer and
+its original observation, keep its partial archive uncompleted in recovery
+history, and leave the independent node's completed copy usable. Ordinary
+consistent completion recovers without resetting state. Desktop/narrow browser
+proof consumes these actual produced archive frames through Backups. No task,
+guest, backup or restore operation, policy, schema or public payload is changed.
+This is truthful evidence handling, not a diagnosis or original guest recovery.
+
+
 ### PBS snapshot reads retain their exact requested group
 
 A snapshot array is accepted only when every row's native backup kind and
@@ -3983,6 +4006,7 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 21a. `pkg/proxmox/cluster_client.go`
 21b. `pkg/proxmox/client.go`
 21c. `pkg/proxmox/io_counters.go`
+21d. `pkg/proxmox/backup_history_response.go`
 22. `pkg/proxmox/zfs.go`
 22a. `pkg/pbs/client.go`
 23. `internal/monitoring/guest_memory_sources.go`

@@ -209,3 +209,47 @@ func TestBackupHistoryMalformedLaterPageDoesNotQualifyPrefix(t *testing.T) {
 		})
 	}
 }
+
+// Native running tasks have no end time and may omit status. A result label
+// without its completion clock, or a running label with one, is unread evidence.
+func TestBackupHistoryTaskCompletionMustBeConsistent(t *testing.T) {
+	for _, tc := range []struct {
+		name, status string
+		end          int64
+		valid        bool
+	}{
+		{"running-status-omitted", "", 0, true},
+		{"running", "running", 0, true},
+		{"running-case", "RUNNING", 0, true},
+		{"completed-ok", "OK", 1700000060, true},
+		{"completed-warning", "WARNINGS: 1", 1700000060, true},
+		{"completed-error", "ERROR: interrupted", 1700000060, true},
+		{"completed-other-result", "interrupted by signal", 1700000060, true},
+		{"completed-result-unknown", "", 1700000060, true},
+		{"instant-completion", "OK", 1700000000, true},
+		{"ok-without-end", "OK", 0, false},
+		{"success-without-end", "success", 0, false},
+		{"warning-without-end", "WARNINGS: 1", 0, false},
+		{"error-without-end", "ERROR: interrupted", 0, false},
+		{"other-result-without-end", "interrupted by signal", 0, false},
+		{"running-with-end", "running", 1700000060, false},
+		{"running-case-with-end", "RUNNING", 1700000060, false},
+		{"active-with-end", "active", 1700000060, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			row := Task{UPID: "writer", Type: "vzdump", ID: "101", StartTime: 1700000000, EndTime: tc.end, Status: tc.status}
+			body, err := json.Marshal(map[string]any{"data": []Task{row}})
+			require.NoError(t, err)
+			resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(body)))}
+			tasks, err := readBackupTaskInventory(resp, "member")
+			if !tc.valid {
+				require.ErrorIs(t, err, errInvalidBackupHistoryResponse)
+				require.Empty(t, tasks, "contradictory completion cannot publish a partial row")
+				return
+			}
+			require.NoError(t, err)
+			row.Node = "member"
+			require.Equal(t, []Task{row}, tasks, "valid native clocks and result text stay unchanged")
+		})
+	}
+}

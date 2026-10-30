@@ -59,6 +59,25 @@ proof must consume the resource producer through the actual Backups surface and
 its existing drawer at desktop and narrow widths. This improves truthful
 inspection, not installed memory relief, a successful backup or guest recovery.
 
+### Contradictory task completion cannot complete an archive
+
+A PVE task's exit result and end clock must agree before its page can replace
+accepted live intent. A result without an end time, or an ended task still
+labelled running/active, is unread rather than proof that the archive writer
+finished. The existing node-scoped carry-forward preserves the last accepted
+writer without renewing it or re-ingesting it into durable history. Independent
+readable evidence progresses; ordinary consistent completion restores the same
+archive's usability. No end time, outcome or healthy restore point is fabricated.
+
+The normal-suite client completion-matrix and VM/LXC archive-lifecycle tests
+exercise missing/empty native live statuses, successful/failed/warning/unknown
+ended results, contradictory clocks, exact retained observations, incomplete
+history and independent-node/recovery controls. Desktop and 320px browser proof
+must consume the actual HTTP-client/poller outputs through the production
+Backups inventory, inspect the running archive and independent completed point,
+and follow normal completion without losing the open disclosure. Policy,
+retention, identity, payloads and guest/backup/restore operations are unchanged.
+
 ### Unread PVE task history cannot establish absence or completion
 
 The paginated backup-history collector admits only a complete, bounded HTTP200

@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -128,73 +129,89 @@ func TestBackupHistoryRetentionIsNodeScopedAndFreshEvidenceWins(t *testing.T) {
 
 func TestBackupHistoryUnreadTaskCannotCompleteRunningArchive(t *testing.T) {
 	for _, kind := range []string{"qemu", "lxc"} {
-		t.Run(kind, func(t *testing.T) {
-			f, storageClient := localArchiveIdentityFixture(t, kind)
-			now := time.Now().UTC().Truncate(time.Second)
-			f.client.at = now.Add(-time.Minute)
-			var phase atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/api2/json/nodes":
-					fmt.Fprint(w, `{"data":[{"node":"node-a","status":"online"},{"node":"node-b","status":"online"}]}`)
-				case "/api2/json/access/permissions":
-					json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{r.URL.Query().Get("path"): map[string]int{"Sys.Audit": 1}}})
-				case "/api2/json/nodes/node-a/tasks":
-					fmt.Fprint(w, `{"data":[]}`)
-				case "/api2/json/nodes/node-b/tasks":
-					if phase.Load() == 1 {
-						fmt.Fprint(w, `{"data":null}`)
-						return
+		for _, adverse := range []string{"unread", "ok-without-end", "warning-without-end", "error-without-end", "running-with-end", "active-with-end"} {
+			t.Run(kind+"/"+adverse, func(t *testing.T) {
+				f, storageClient := localArchiveIdentityFixture(t, kind)
+				now := time.Now().UTC().Truncate(time.Second)
+				f.client.at = now.Add(-time.Minute)
+				var phase atomic.Int32
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Path {
+					case "/api2/json/nodes":
+						fmt.Fprint(w, `{"data":[{"node":"node-a","status":"online"},{"node":"node-b","status":"online"}]}`)
+					case "/api2/json/access/permissions":
+						json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{r.URL.Query().Get("path"): map[string]int{"Sys.Audit": 1}}})
+					case "/api2/json/nodes/node-a/tasks":
+						fmt.Fprint(w, `{"data":[]}`)
+					case "/api2/json/nodes/node-b/tasks":
+						if phase.Load() == 1 && adverse == "unread" {
+							fmt.Fprint(w, `{"data":null}`)
+							return
+						}
+						task := proxmox.Task{UPID: "writer", Node: "node-b", Type: "vzdump", ID: "101", StartTime: now.Add(-10 * time.Minute).Unix(), Status: "running"}
+						if phase.Load() == 1 {
+							switch adverse {
+							case "ok-without-end":
+								task.Status = "OK"
+							case "warning-without-end":
+								task.Status = "WARNINGS: 1"
+							case "error-without-end":
+								task.Status = "ERROR: interrupted"
+							case "running-with-end":
+								task.EndTime = now.Unix()
+							case "active-with-end":
+								task.Status, task.EndTime = "active", now.Unix()
+							}
+						}
+						if phase.Load() == 2 {
+							task.Status, task.EndTime = "OK", now.Unix()
+						}
+						json.NewEncoder(w).Encode(map[string]any{"data": []proxmox.Task{task}})
+					default:
+						w.WriteHeader(http.StatusNotFound)
 					}
-					task := proxmox.Task{UPID: "writer", Node: "node-b", Type: "vzdump", ID: "101", StartTime: now.Add(-10 * time.Minute).Unix(), Status: "running"}
-					if phase.Load() == 2 {
-						task.Status, task.EndTime = "OK", now.Unix()
+				}))
+				defer server.Close()
+				client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pam!readonly", TokenValue: "fixture"})
+				require.NoError(t, err)
+				var before models.BackupTask
+				var beforePoint recovery.RecoveryPoint
+				for i := range 3 {
+					phase.Store(int32(i))
+					f.m.pollBackupTasks(context.Background(), "cluster", client)
+					f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", storageClient, f.nodes, f.online)
+					f.wait(t)
+					snapshot, points := f.m.state.GetSnapshot(), f.points(t)
+					taskPoint, exists := points["pve-task:cluster-writer"]
+					require.True(t, exists, "the actual task must reach retained execution history")
+					require.Len(t, snapshot.PVEBackups.BackupTasks, 1)
+					if i == 0 {
+						before = snapshot.PVEBackups.BackupTasks[0]
+						beforePoint = taskPoint
+					} else if i == 1 {
+						assert.Equal(t, before, snapshot.PVEBackups.BackupTasks[0], "unread task cannot refresh backup intent")
+						assert.Equal(t, beforePoint, taskPoint, "carried task cannot renew durable point evidence")
+						coverage, err := f.store.BackupHistoryCoverage(context.Background(), now.Add(-time.Hour), time.Now().UTC())
+						require.NoError(t, err)
+						require.Len(t, coverage.Sources, 1)
+						assert.False(t, coverage.Sources[0].Complete, "malformed task reads cannot qualify report history")
 					}
-					json.NewEncoder(w).Encode(map[string]any{"data": []proxmox.Task{task}})
-				default:
-					w.WriteHeader(http.StatusNotFound)
-				}
-			}))
-			defer server.Close()
-			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pam!readonly", TokenValue: "fixture"})
-			require.NoError(t, err)
-			var before models.BackupTask
-			var beforePoint recovery.RecoveryPoint
-			for i := range 3 {
-				phase.Store(int32(i))
-				f.m.pollBackupTasks(context.Background(), "cluster", client)
-				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", storageClient, f.nodes, f.online)
-				f.wait(t)
-				snapshot, points := f.m.state.GetSnapshot(), f.points(t)
-				taskPoint, exists := points["pve-task:cluster-writer"]
-				require.True(t, exists, "the actual task must reach retained execution history")
-				require.Len(t, snapshot.PVEBackups.BackupTasks, 1)
-				if i == 0 {
-					before = snapshot.PVEBackups.BackupTasks[0]
-					beforePoint = taskPoint
-				} else if i == 1 {
-					require.Equal(t, before, snapshot.PVEBackups.BackupTasks[0], "unread task cannot refresh backup intent")
-					require.Equal(t, beforePoint, taskPoint, "carried task cannot renew durable point evidence")
-					coverage, err := f.store.BackupHistoryCoverage(context.Background(), now.Add(-time.Hour), time.Now().UTC())
-					require.NoError(t, err)
-					require.Len(t, coverage.Sources, 1)
-					require.False(t, coverage.Sources[0].Complete, "malformed task reads cannot qualify report history")
-				}
-				require.Len(t, snapshot.PVEBackups.StorageBackups, 2)
-				for _, archive := range snapshot.PVEBackups.StorageBackups {
-					point := points["pve-backup:"+archive.ID]
-					partial := archive.StorageNode == "node-b" && i < 2
-					require.Equal(t, partial, archive.InProgress)
-					if partial {
-						require.Equal(t, recovery.OutcomeRunning, point.Outcome)
-						require.Nil(t, point.CompletedAt, "an unread task list cannot turn the writer's partial archive into success")
-					} else {
-						require.Equal(t, recovery.OutcomeSuccess, point.Outcome)
-						require.NotNil(t, point.CompletedAt, "independent completed archive and ordinary completion stay usable")
+					require.Len(t, snapshot.PVEBackups.StorageBackups, 2)
+					for _, archive := range snapshot.PVEBackups.StorageBackups {
+						point := points["pve-backup:"+archive.ID]
+						partial := archive.StorageNode == "node-b" && i < 2
+						assert.Equal(t, partial, archive.InProgress)
+						if partial {
+							assert.Equal(t, recovery.OutcomeRunning, point.Outcome)
+							assert.Nil(t, point.CompletedAt, "an unread task list cannot turn the writer's partial archive into success")
+						} else {
+							require.Equal(t, recovery.OutcomeSuccess, point.Outcome)
+							require.NotNil(t, point.CompletedAt, "independent completed archive and ordinary completion stay usable")
+						}
 					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
