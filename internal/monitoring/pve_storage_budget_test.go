@@ -340,6 +340,13 @@ func TestPVEStorageBudgetDoesNotInventAlertReadFailure(t *testing.T) {
 				f.m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{Type: alerts.BackupEvaluationAlertType, Level: alerts.AlertLevelWarning, Fingerprint: "prior-observed-read-failure", Message: "Prior observed reader failure"})
 			}
 			before := f.m.alertManager.GetActiveAlerts()
+			want := 1
+			if priorWarning {
+				want++
+			}
+			if len(before) != want {
+				t.Fatalf("missing wanted/prior alert control: %+v", before)
+			}
 			c.phase, c.at = "content/node-b/local", c.at.Add(15*time.Minute)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
