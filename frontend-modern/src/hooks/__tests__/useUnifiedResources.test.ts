@@ -3437,6 +3437,94 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('retains a scoped failed read across remounts until a real successful retry', async () => {
+    const options = {
+      query: 'type=physical_disk&parent=vm-alpha',
+      cacheKey: 'guest-physical-disks:vm-alpha',
+      retainReadError: true,
+    };
+    const mount = () => {
+      let dispose!: () => void;
+      let result!: ReturnType<typeof useUnifiedResources>;
+      createRoot((d) => {
+        dispose = d;
+        result = useUnifiedResources(options);
+      });
+      return { result, dispose };
+    };
+    const first = mount();
+    await waitForResourceCount(() => first.result.resources().length);
+    const failure = new Error('scoped read unavailable');
+    apiFetchMock.mockRejectedValueOnce(failure);
+    await expect(first.result.refetch()).rejects.toBe(failure);
+    expect(first.result.error()).toBe(failure);
+    expect(first.result.resources()).toHaveLength(1);
+    first.dispose();
+
+    const calls = apiFetchMock.mock.calls.length;
+    const reopened = mount();
+    await flushAsync();
+    expect(reopened.result.error()).toBe(failure);
+    expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+    // The normal cache/cadence is unchanged; cached bytes do not clear failure.
+    apiFetchMock.mockResolvedValueOnce(resourceResponse([]));
+    await reopened.result.refetch();
+    expect(reopened.result.error()).toBeUndefined();
+    expect(reopened.result.resources()).toHaveLength(0);
+    reopened.dispose();
+
+    const recovered = mount();
+    await flushAsync();
+    expect(recovered.result.error()).toBeUndefined();
+    expect(recovered.result.resources()).toHaveLength(0);
+    recovered.dispose();
+  });
+
+  it('does not lend a retained read failure to another parent, organisation or default consumer', async () => {
+    const options = {
+      query: 'type=physical_disk&parent=vm-alpha',
+      cacheKey: 'guest-physical-disks:vm-alpha',
+      retainReadError: true,
+    };
+    let dispose!: () => void;
+    let first!: ReturnType<typeof useUnifiedResources>;
+    createRoot((d) => {
+      dispose = d;
+      first = useUnifiedResources(options);
+    });
+    await waitForResourceCount(() => first.resources().length);
+    const failure = new Error('unavailable');
+    apiFetchMock.mockRejectedValueOnce(failure);
+    await expect(first.refetch()).rejects.toBe(failure);
+    dispose();
+
+    const disposals: (() => void)[] = [];
+    let peer!: ReturnType<typeof useUnifiedResources>;
+    let defaultConsumer!: ReturnType<typeof useUnifiedResources>;
+    let retainedConsumer!: ReturnType<typeof useUnifiedResources>;
+    createRoot((d) => {
+      disposals.push(d);
+      peer = useUnifiedResources({
+        ...options,
+        query: 'type=physical_disk&parent=vm-beta',
+        cacheKey: 'guest-physical-disks:vm-beta',
+      });
+      defaultConsumer = useUnifiedResources({ ...options, retainReadError: false });
+      retainedConsumer = useUnifiedResources(options);
+    });
+    await flushAsync();
+    expect(peer.error()).toBeUndefined();
+    expect(defaultConsumer.error()).toBeUndefined();
+    expect(retainedConsumer.error()).toBe(failure);
+    // No organisation may inherit the other organisation's unavailable read.
+    eventBus.emit('org_switched', 'other-org');
+    await flushAsync();
+    expect(peer.error()).toBeUndefined();
+    expect(defaultConsumer.error()).toBeUndefined();
+    expect(retainedConsumer.error()).toBeUndefined();
+    for (const cleanup of disposals) cleanup();
+  });
+
   it('uses the shared org scope helper for cache and fetch state', () => {
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
     expect(useUnifiedResourcesSource).toContain('supportsCanonicalWsHydration');

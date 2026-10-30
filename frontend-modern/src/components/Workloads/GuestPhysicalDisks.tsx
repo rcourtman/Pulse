@@ -1,7 +1,18 @@
-import { For, Show, Suspense, createMemo, createSignal, lazy, type Component } from 'solid-js';
+import {
+  For,
+  Show,
+  Suspense,
+  createEffect,
+  createMemo,
+  createSignal,
+  lazy,
+  onCleanup,
+  type Component,
+} from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
 import { getPhysicalDiskAlerts } from '@/components/Storage/physicalDiskAlertOwner';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -142,6 +153,7 @@ export const GuestPhysicalDisks: Component<{
   const source = useUnifiedResources({
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
     cacheKey: `guest-physical-disks:${parentId}`,
+    retainReadError: true,
     enabled: () => parentId.length > 0,
     realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
   });
@@ -150,32 +162,93 @@ export const GuestPhysicalDisks: Component<{
       .resources()
       .filter((resource) => resource.type === 'physical_disk' && resource.parentId === parentId);
 
+  // A failed scoped read can leave cached rows in the shared resource hook.
+  // Withdraw their health, temperatures and open charts together, not just add
+  // an unavailable notice beside readings that still look current.
+  const [hasShownInspection, setHasShownInspection] = createSignal(false);
+  createEffect(() => {
+    if (source.error() || disks().length > 0) setHasShownInspection(true);
+  });
+  let card: HTMLDivElement | undefined;
+  let heading: HTMLHeadingElement | undefined;
+  const retainInspectionFocus = (content: HTMLElement) => {
+    onCleanup(() => {
+      if (!content.contains(document.activeElement)) return;
+      queueMicrotask(() => {
+        if (
+          !card?.isConnected ||
+          props.historyEnabled === false ||
+          document.activeElement !== document.body
+        ) {
+          return;
+        }
+        // The heading survives both read failure and recovery, including a
+        // successful empty result. Never restore focus after leaving the guest.
+        heading?.focus({ preventScroll: true });
+      });
+    });
+  };
+
   return (
-    <>
-      <Show when={source.error()}>
-        <p class="text-xs text-muted" role="status">
-          Physical disk details are unavailable.
-        </p>
-      </Show>
-      <Show when={disks().length > 0}>
-        <InfoCardFrame data-testid="guest-physical-disks">
-          <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
-            Physical Disks &amp; SMART ({disks().length})
-          </h3>
-          <div class="space-y-2">
-            <For each={disks()}>
-              {(disk) => (
-                <GuestPhysicalDiskRow
-                  disk={disk}
-                  alertResourceIds={props.alertResourceIds ?? []}
-                  reportingAgentId={props.reportingAgentId}
-                  historyEnabled={props.historyEnabled !== false}
-                />
-              )}
-            </For>
-          </div>
-        </InfoCardFrame>
-      </Show>
-    </>
+    <Show when={hasShownInspection()}>
+      <InfoCardFrame ref={card} data-testid="guest-physical-disks">
+        <h3
+          ref={heading}
+          tabIndex={-1}
+          class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content"
+        >
+          Physical Disks &amp; SMART
+          <Show when={!source.error()}> ({disks().length})</Show>
+        </h3>
+        <Show
+          when={Boolean(source.error())}
+          fallback={
+            <div ref={retainInspectionFocus} class="space-y-2">
+              <Show when={disks().length === 0}>
+                <p class="text-xs text-muted" role="status">
+                  No physical disk records were returned for this guest. This does not mean the
+                  guest has no disks.
+                </p>
+              </Show>
+              <For each={disks()}>
+                {(disk) => (
+                  <GuestPhysicalDiskRow
+                    disk={disk}
+                    alertResourceIds={props.alertResourceIds ?? []}
+                    reportingAgentId={props.reportingAgentId}
+                    historyEnabled={props.historyEnabled !== false}
+                  />
+                )}
+              </For>
+            </div>
+          }
+        >
+          <InlineNotice
+            ref={retainInspectionFocus}
+            tone="warning"
+            role="status"
+            aria-label="Physical disk read unavailable"
+            class="text-xs"
+          >
+            <p>Physical disk details are unavailable.</p>
+            <p>
+              Previously shown disk readings are withheld until this read succeeds. This does not
+              establish that disks are absent or healthy.
+            </p>
+            <button
+              type="button"
+              aria-label="Retry physical disk read"
+              aria-disabled={source.loading()}
+              class="min-h-11 rounded-sm px-2 font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+              onClick={() => {
+                if (!source.loading()) void source.refetch().catch(() => undefined);
+              }}
+            >
+              {source.loading() ? 'Retrying…' : 'Retry physical disk read'}
+            </button>
+          </InlineNotice>
+        </Show>
+      </InfoCardFrame>
+    </Show>
   );
 };
