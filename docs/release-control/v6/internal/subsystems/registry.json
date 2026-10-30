@@ -7106,6 +7106,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/dockeragent/docker_hub_reference_test.go",
               "internal/dockeragent/image_replacement_test.go",
               "internal/dockeragent/registry_credentials_test.go",
               "internal/dockeragent/registry_image_change_test.go",

@@ -131,6 +131,12 @@ func TestCollectContainerImageReplacementRefreshesRegistry(t *testing.T) {
 				if len(active) != 0 {
 					t.Fatalf("%s: update alerted before its delay: %+v", phase, active)
 				}
+				// Accepted reports coalesce canonical publication over the
+				// monitor's normal two-second window. This fixture produces
+				// reports much faster than the real 30s collection interval;
+				// let the ordinary trailing publication run before the read.
+				// Do not force/invalidate the consumer's store or cache.
+				time.Sleep(2200 * time.Millisecond)
 				req := httptest.NewRequest(http.MethodGet, "/api/resources?type=app-container&limit=100", nil)
 				req.Header.Set("X-API-Token", readerToken)
 				rec := httptest.NewRecorder()
