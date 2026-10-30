@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### PBS collection expiry preserves accepted scopes without inventing safety
+
+PBS publishes namespace and snapshot listings accepted before a later child
+budget expires. Unread datastores/namespaces and failed or queued snapshot groups
+retain only existing raw history and cache times. Late responses are unread;
+accepted empty scopes remove only their own raw inventory. Partial enumeration
+does not reconcile durable absence, renew unread evidence, or claim protection.
+Unknown live-writer visibility keeps incomplete artifacts non-successful, never
+invents a completion. Explicit cancellation or an ended runtime/client binding
+still prevents publication, even after dropping a spent child deadline.
+
+`pbs_backup_budget_test.go` and the registered protection-observation entry point
+exercise actual PBS HTTP collection through live state, mapper, durable ingest
+and posture for VM/CT, warm/cold state, every expiry phase and ordinary recovery.
+Lifecycle tests cover the background owner and same-name client replacement.
+Desktop/narrow browser proof consumes those emitted inventory/posture frames
+through existing Backups polling and disclosures; dates, partial protection and
+independent unread records must remain legible. No new API, auth, policy,
+retention, guest operation, release or installed-recovery claim is implied.
+
 ### Selected PBS datastore remains inspectable without hover
 
 The existing PBS row disclosure is named by backup reader and datastore, rather
