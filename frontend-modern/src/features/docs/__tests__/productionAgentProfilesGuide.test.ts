@@ -64,7 +64,7 @@ describe('Production guide agent-profile choice', () => {
     expect(links).toHaveLength(2);
     expect(article.querySelector('#choose-a-linux-agent-profile')).not.toBeNull();
     expect(links[0].closest('table')).not.toBeNull();
-    expect(links[1].closest('li')?.textContent).toContain(
+    expect(links[1].closest('li')?.textContent?.replace(/\s+/g, ' ')).toContain(
       'Docker socket authority and reduced telemetry',
     );
   });
