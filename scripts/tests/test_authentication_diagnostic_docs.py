@@ -76,7 +76,10 @@ def proxy_server(status):
             pass
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # Poll only the fixture server more often so teardown need not wait 500 ms.
+    # This does not shorten any copied request, reader or cleanup deadline.
+    thread = threading.Thread(target=server.serve_forever,
+                              kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
     try:
         yield server.server_address[1], requests

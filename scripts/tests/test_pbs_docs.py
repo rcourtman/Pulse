@@ -93,7 +93,10 @@ def server(cert, key, status=200, installer=None, installer_path="/install.sh", 
     http = HTTPServer(("127.0.0.1", 0), Handler)
     context = server_context(cert, key)
     http.socket = context.wrap_socket(http.socket, server_side=True)
-    thread = threading.Thread(target=http.serve_forever, daemon=True)
+    # Poll only the fixture server more often so teardown need not wait 500 ms.
+    # This does not shorten any copied request, reader or cleanup deadline.
+    thread = threading.Thread(target=http.serve_forever,
+                              kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
     try:
         yield http.server_address[1], requests
