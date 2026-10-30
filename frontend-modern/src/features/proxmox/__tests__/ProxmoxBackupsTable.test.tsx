@@ -418,6 +418,11 @@ describe('ProxmoxBackupsTable', () => {
     expect(within(selected).getByText('Datastore').closest('tr')).toHaveTextContent('offsite');
     expect(within(selected).getByText('Backup reader').closest('tr')).toHaveTextContent('pbs-main');
     expect(within(selected).getByText('Capacity').closest('tr')).toHaveTextContent('25.0%');
+    // The surrounding scan table is nowrap; the interpretation must wrap too,
+    // not only the four fields protected by DetailSectionTable.wrapValues.
+    expect(within(selected).getByText(/Counts describe the loaded inventory/)).toHaveClass(
+      'whitespace-normal',
+    );
   });
 
   it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {

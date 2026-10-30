@@ -206,7 +206,7 @@ function BackupServerDatastoreContext(props: {
               { label: 'Backup entries', value: inventoryText(), layout: 'stacked' },
             ],
             footerContent: (
-              <p class="text-[11px] leading-snug text-muted">
+              <p class="whitespace-normal text-[11px] leading-snug text-muted">
                 Counts describe the loaded inventory, which can include in-progress and unverified
                 entries. They do not establish backup protection. Connection health and datastore
                 capacity are separate readings.
