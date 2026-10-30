@@ -69,8 +69,10 @@ func (m *Monitor) cancelPVEBackupPollLocked(instance string) {
 	if owner := m.pveBackupPolls[instance]; owner != nil {
 		owner.cancel()
 		delete(m.pveBackupPolls, instance)
-		delete(m.lastPVEBackupPoll, instance)
 	}
+	// A newly bound client needs its own first scan even when the old one
+	// completed before replacement and its configured interval has not elapsed.
+	delete(m.lastPVEBackupPoll, instance)
 }
 
 // Hold the connection publication reader across local acceptance, never across

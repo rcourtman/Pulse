@@ -292,3 +292,23 @@ func TestPVEBackupLifecycleCanceledCollectorsKeepEvidence(t *testing.T) {
 		}
 	}
 }
+
+func TestPVEBackupLifecycleCompletedReplacementRefreshesImmediately(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		old := &backupLifecycleClient{label: "old"}
+		m := newBackupLifecycleMonitor(old, "qemu")
+		m.config.BackupPollingInterval = 24 * time.Hour
+		scheduleBackupLifecycle(m, old)
+		synctest.Wait()
+		fresh := &backupLifecycleClient{label: "current"}
+		m.replacePVEClient("site-a", fresh)
+		scheduleBackupLifecycle(m, fresh)
+		synctest.Wait()
+		require.NotZero(t, fresh.calls.Load(), "a completed previous binding must not delay the new client's first scan")
+		for _, row := range m.state.GetSnapshot().PVEBackups.GuestSnapshots {
+			if row.Instance == "site-a" {
+				require.Equal(t, "current", row.Name)
+			}
+		}
+	})
+}
