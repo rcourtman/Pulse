@@ -77,7 +77,10 @@ def download_servers(root, mode):
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(root / "tls.crt", root / "tls.key")
     secure.socket = context.wrap_socket(secure.socket, server_side=True)
-    threads = [threading.Thread(target=server.serve_forever, daemon=True)
+    # Poll only the fixture server more often so teardown need not wait 500 ms.
+    # This does not shorten any copied request, reader or cleanup deadline.
+    threads = [threading.Thread(target=server.serve_forever,
+                                kwargs={"poll_interval": 0.05}, daemon=True)
                for server in (plain, secure)]
     for thread in threads:
         thread.start()
