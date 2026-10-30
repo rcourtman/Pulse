@@ -153,6 +153,7 @@ export const GuestPhysicalDisks: Component<{
   const source = useUnifiedResources({
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
     cacheKey: `guest-physical-disks:${parentId}`,
+    retainReadError: true,
     enabled: () => parentId.length > 0,
     realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
   });
