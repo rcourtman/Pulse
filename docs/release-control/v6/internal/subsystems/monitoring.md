@@ -17,6 +17,26 @@
 
 ## Purpose
 
+### Sensor units come from native subfeature keys
+
+Only `tempN_input` keys (one or more ASCII digits) supply Celsius in the shared
+Linux agent parser and the server's direct/SSH temperature parser. Arbitrary
+feature labels, fan RPM, voltage, current, power, energy, frequency and humidity
+inputs cannot become temperatures. Mixed feature maps keep their real
+`tempN_input` regardless of iteration order. The existing numeric/string and
+millidegree handling, CPU/core/GPU/NVMe identity, additional-temperature filters,
+fan RPM and missing-data semantics are unchanged. No sensor selection, thresholds,
+History, hardware probe or permission is added.
+
+`internal/sensors/temperature_input.go` owns the shared unit discriminator used
+by `internal/sensors/parser.go` and `internal/monitoring/temperature.go`.
+`temperature_input_test.go`, `parser_units_test.go`, `temperature_test.go` and
+`TestAgentMixedSensorUnitsReachReportWithoutFalseTemperatures` cover rejected
+units (including misleading CPU/GPU labels), accepted mixed measurements and a
+complete report from the real parser/agent path. The inferred #3565 sensor
+fixture is not an original JSON export or installed-host recovery. Consuming
+proof must use the complete emitted report, not a selected-value subset.
+
 ### Background backup scans belong to their configured connection
 
 PVE tasks, storage backups and guest snapshots share one in-flight owner per

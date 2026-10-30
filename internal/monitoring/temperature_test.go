@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strings"
@@ -310,4 +311,32 @@ func buildExitErrorWithStderr(t *testing.T, stderr string) error {
 	require.ErrorAs(t, err, &exitErr)
 
 	return err
+}
+
+func TestExtractTempInputKeepsSensorUnits(t *testing.T) {
+	for _, key := range []string{"fan1_input", "in1_input", "curr1_input", "power1_input", "freq1_input", "energy1_input", "temperature_input"} {
+		for _, value := range []any{6152.0, 45, "+45.0°C"} {
+			assert.True(t, math.IsNaN(extractTempInput(map[string]any{key: value})), "%s must not become Celsius", key)
+		}
+	}
+	for range 32 {
+		assert.Equal(t, 34.2, extractTempInput(map[string]any{"fan1_input": 6152.0, "in1_input": 12.1, "temp12_input": 34.2}))
+	}
+}
+
+func TestTemperatureCollectorNonTemperatureInputIsNotTypedTemperature(t *testing.T) {
+	for _, input := range []string{
+		`{"coretemp-isa-0000":{"Package id 0":{"fan1_input":6152},"Core 0":{"in1_input":12.1}}}`,
+		`{"nvme-pci-0200":{"Composite":{"power1_input":45}}}`,
+		`{"amdgpu-pci-0300":{"edge":{"curr1_input":2.5}}}`,
+		`{"nouveau-pci-0400":{"GPU core":{"freq1_input":2400}}}`,
+	} {
+		got, err := (&TemperatureCollector{}).parseSensorsJSON(input)
+		require.NoError(t, err)
+		assert.Zero(t, got.CPUPackage)
+		assert.Zero(t, got.CPUMax)
+		assert.Empty(t, got.Cores)
+		assert.Empty(t, got.NVMe)
+		assert.Empty(t, got.GPU)
+	}
 }

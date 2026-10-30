@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rs/zerolog/log"
 )
@@ -1009,7 +1010,7 @@ func (tc *TemperatureCollector) parseNouveauGPUTemps(chipName string, chipMap ma
 func extractTempInput(sensorMap map[string]interface{}) float64 {
 	// Look for temp*_input fields
 	for key, val := range sensorMap {
-		if strings.HasSuffix(key, "_input") {
+		if sensors.IsTemperatureInput(key) {
 			switch v := val.(type) {
 			case float64:
 				return v

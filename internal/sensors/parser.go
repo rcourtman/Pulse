@@ -273,7 +273,7 @@ func parseGPUTemps(chipName string, chipMap map[string]interface{}, data *Temper
 func extractTempInput(sensorMap map[string]interface{}) float64 {
 	// Look for temp*_input field (the actual temperature reading)
 	for key, value := range sensorMap {
-		if strings.HasSuffix(key, "_input") {
+		if IsTemperatureInput(key) {
 			switch v := value.(type) {
 			case float64:
 				return normalizeTemperatureValue(v)

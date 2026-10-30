@@ -6407,6 +6407,8 @@
         "internal/models/models_frontend.go",
         "internal/models/proxmox_guest_state.go",
         "internal/proxmoxidentity/backup_identity.go",
+        "internal/sensors/parser.go",
+        "internal/sensors/temperature_input.go",
         "pkg/agents/docker/report.go",
         "pkg/agents/host/report.go",
         "pkg/agents/kubernetes/report.go",
@@ -6426,6 +6428,24 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "temperature-input-units",
+            "label": "native lm-sensors unit admission and complete host report proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/temperature.go",
+              "internal/sensors/parser.go",
+              "internal/sensors/temperature_input.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/hostagent/agent_sensors_test.go",
+              "internal/monitoring/temperature_test.go",
+              "internal/sensors/parser_units_test.go",
+              "internal/sensors/temperature_input_test.go"
+            ]
+          },
           {
             "id": "pve-backup-poll-ownership",
             "label": "connection-scoped single-flight backup scan and late publication proof",
