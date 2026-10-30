@@ -17,6 +17,34 @@
 
 ## Purpose
 
+### Unfinished backup logs cannot monopolise the read allowance
+
+Multi-guest vzdump log collection keeps its 25-request cap per poll. Pending
+jobs are selected by least recent attempt within the connection, with never-read
+jobs first and provider order breaking ties. Running jobs use up to 24 turns
+first, preserving ordinary live reads; at least one turn remains for pending
+ended jobs even when live work fills the allowance. Unused turns serve either
+queue. Failures, empty, capped and
+incomplete logs spend their turn without becoming final; an unread older job
+must not be hidden forever by the same failing prefix. Only an actual request
+advances scheduling, not selection or cancellation. Execution follows that
+priority too, so one slow read exhausting the context cannot monopolise even a
+small queue. Selection leaves input and guest output ordering unchanged, completed attributed logs remain cached, and
+removed jobs discard their scheduling state with the existing cache pruning.
+
+Scheduling metadata is not an accepted observation. Skipped/failed reads retain
+the original guest evidence and its age; neither a retry nor an ended parent
+supplies a missing guest verdict. No allowance, provider permission, task/result
+schema, identity, protection rule or guest operation changes.
+`vzdump_job_log_scheduling_test.go` checks bounded progress, poll-to-guest results,
+immutable completion, live/history progress under saturation, cancellation,
+context-budget fairness, stable output order, pruning and concurrent connection
+isolation.
+The existing cached-guest tests retain their observation/intent assertions.
+Desktop/narrow proof consumes actual poll frames through Backups Coverage,
+including scoped task results without inventing a restore artifact or protection.
+
+
 ### Backup task results agree with their completion clocks
 
 The PVE backup-history reader accepts a live task only with an absent/zero end
@@ -4771,9 +4799,11 @@ named and default organizations. The custom event envelope stays unchanged.
     task listing queries `source=all` so running jobs are visible: a guest
     an in-progress job is currently backing up carries a `running`
     synthetic task, which is valid backup-intent evidence for
-    `resolveBackupIntentContext`. Finished job logs are immutable and are
+    `resolveBackupIntentContext`. Completely attributed finished job logs are immutable and are
     fetched at most once per instance|UPID, with a per-cycle fetch cap so
     a historical backlog cannot stall the shared backup poll budget.
+    Unfinished reads rotate by last attempt, including failures, so a
+    persistent prefix cannot prevent later jobs from supplying guest results.
     Regression coverage: `TestParseVzdumpJobLogFinishedJob`,
     `TestPollBackupTasksSynthesizesJobGuestTasks`, and
     `TestPollBackupTasksRunningJobRefetchesAndSuppressesAlerts` in

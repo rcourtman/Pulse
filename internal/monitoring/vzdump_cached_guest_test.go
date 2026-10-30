@@ -131,7 +131,10 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 					require.False(t, active, "parent termination withdraws intent even while the cached observation is fresh")
 				}
 				checkStored(recovery.OutcomeUnknown, false)
-				require.Equal(t, entry, m.vzdumpJobTaskCache[key], "fallback must not mutate/finalise accepted log data")
+				cached := m.vzdumpJobTaskCache[key]
+				require.True(t, cached.lastAttempt.After(entry.lastAttempt), "failed reads still advance scheduling")
+				entry.lastAttempt = cached.lastAttempt // scheduling is not guest observation evidence
+				require.Equal(t, entry, cached, "fallback must not mutate/finalise accepted log data")
 				require.Equal(t, 3, client.logRequests)
 
 				// Only an ordinary accepted log supplies the missing guest verdict.
@@ -167,7 +170,10 @@ func TestVzdumpCachedGuestUnreadLogUsesCurrentParent(t *testing.T) {
 			upids := map[string]string{job.ID: testJobUPID}
 			if blocked == "budget" {
 				for i := 0; i < maxVzdumpJobLogFetchesPerPoll; i++ {
-					filler := models.BackupTask{ID: fmt.Sprintf("filler-%d", i)}
+					// Compete within the ended-job queue. Running jobs now have
+					// their own reserved turns, so they cannot fill this fixture's
+					// entire allowance ahead of the ended cached parent.
+					filler := models.BackupTask{ID: fmt.Sprintf("filler-%d", i), EndTime: job.EndTime}
 					jobs = append(jobs, filler)
 					upids[filler.ID] = filler.ID
 				}
