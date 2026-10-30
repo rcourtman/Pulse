@@ -12,6 +12,8 @@ on:
       - "scripts/check_docs_mirror.py"
       - "scripts/readme_entrypoints_test.py"
       - "scripts/tests/**"
+      - "scripts/select-smoke-test-shard.py"
+      - ".github/scripts/docs-test-seconds.txt"
       - "scripts/test-vm-disk.sh"
       - ".github/workflows/public-docs.yml"
   push:
@@ -27,6 +29,8 @@ on:
       - "scripts/check_docs_mirror.py"
       - "scripts/readme_entrypoints_test.py"
       - "scripts/tests/**"
+      - "scripts/select-smoke-test-shard.py"
+      - ".github/scripts/docs-test-seconds.txt"
       - "scripts/test-vm-disk.sh"
       - ".github/workflows/public-docs.yml"
 
@@ -54,7 +58,8 @@ jobs:
 
       # Build and Test skips smoke for docs-only changes. Discover the complete
       # current docs suite here, including privacy, authentication and recovery.
-      # Isolated shards retain all recipe deadlines without a longer CI path.
+      # Measured whole-suite scheduling retains sorted, isolated execution and
+      # every recipe deadline; timing hints cannot add or omit coverage.
       - name: Exercise documentation safety and diagnostic recipes
         run: scripts/tests/run.sh --docs-shard "${{ matrix.shard }}"
 

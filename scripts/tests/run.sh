@@ -14,10 +14,10 @@ Usage: scripts/tests/run.sh [test-script ...]
        scripts/tests/run.sh --docs-shard <0|1|2|3>
 
 Run all scripts/tests/test-*.sh and scripts/tests/test_*.py tests or a subset
-when specified. Documentation CI discovers every documentation suite and runs
-one of four disjoint, sorted shards; it does not maintain a second suite list.
-Smoke CI balances the complete inventory across two isolated, sorted shards
-using measured suite durations. New suites receive a default scheduling weight.
+when specified. Documentation and smoke CI balance their complete discovered
+inventories across four and two isolated, sorted shards respectively, using
+measured suite durations. Hints never define coverage or change test deadlines;
+new suites receive a default scheduling weight.
 EOF
 }
 
@@ -121,10 +121,22 @@ main() {
     if ! discover_tests doc_tests docs; then
       return 1
     fi
-    local index
-    for ((index = $2; index < ${#doc_tests[@]}; index += 4)); do
-      tests+=("${doc_tests[index]}")
-    done
+    local doc_selection
+    if (( ${#doc_tests[@]} > 0 )); then
+      # Reuse smoke's whole-suite partitioner, with docs-only measurements.
+      # Discovery remains the inventory; admit no partial selector output.
+      if ! doc_selection="$(
+        printf '%s\n' "${doc_tests[@]}" | python3 \
+          "${ROOT_DIR}/scripts/select-smoke-test-shard.py" \
+          "${ROOT_DIR}/.github/scripts/docs-test-seconds.txt" 4 "$2"
+      )"; then
+        echo "Failed to partition the complete documentation test inventory" >&2
+        return 1
+      fi
+      if [[ -n "${doc_selection}" ]]; then
+        mapfile -t tests <<< "${doc_selection}"
+      fi
+    fi
     printf 'Documentation shard %s/4: %s of %s suites\n' "$2" "${#tests[@]}" "${#doc_tests[@]}"
   elif [[ "${1:-}" == --smoke-shard ]]; then
     if [[ $# -ne 2 || ! "${2:-}" =~ ^[0-1]$ ]]; then

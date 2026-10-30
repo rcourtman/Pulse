@@ -31,6 +31,8 @@ class SmokeRunnerTest(unittest.TestCase):
         self.weights = self.root / ".github/scripts/smoke-test-seconds.txt"
         self.weights.parent.mkdir(parents=True)
         self.weights.write_text("DEFAULT_WEIGHT 1\n", encoding="utf-8")
+        self.doc_weights = self.weights.with_name("docs-test-seconds.txt")
+        self.doc_weights.write_text("DEFAULT_WEIGHT 1\n", encoding="utf-8")
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.calls = self.root / "calls"
@@ -378,15 +380,93 @@ class SmokeRunnerTest(unittest.TestCase):
                 self.assertNotIn("Summary:", result.stdout)
                 self.assertEqual(self.observed_calls(), [])
 
-    def test_unsharded_explicit_and_docs_modes_do_not_consume_smoke_weights(self):
+    def test_unsharded_and_explicit_modes_need_no_selector_or_weights(self):
         self.python_fixture("test_first_docs.py")
         self.weights.unlink()
+        self.doc_weights.unlink()
         self.selector.unlink()
-        for arguments in ((), ("test_first_docs.py",), ("--docs-shard", "0")):
+        for arguments in ((), ("test_first_docs.py",)):
             with self.subTest(arguments=arguments):
                 result = self.run_runner(*arguments)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn("Summary: 1/1 passed", result.stdout)
+
+    def test_each_sharded_mode_only_consumes_its_own_hints(self):
+        self.python_fixture("test_first_docs.py")
+        self.weights.write_text("invalid smoke hints\n")
+        docs = self.run_runner("--docs-shard", 0)
+        self.assertEqual(docs.returncode, 0, docs.stdout + docs.stderr)
+        self.weights.write_text("DEFAULT_WEIGHT 1\n")
+        self.doc_weights.write_text("invalid docs hints\n")
+        smoke = self.run_runner("--smoke-shard", 0)
+        self.assertEqual(smoke.returncode, 0, smoke.stdout + smoke.stderr)
+
+    def test_doc_weights_separate_long_suites_without_changing_commands(self):
+        names = [f"test_{index:02d}_docs.py" for index in range(16)]
+        seconds = {name: 100 if index % 4 == 1 else 1 for index, name in enumerate(names)}
+        for index, name in enumerate(names):
+            # Each shard must retain an adverse verdict and all later suites.
+            self.python_fixture(name, 7 if index % 4 == 1 else 0)
+        self.doc_weights.write_text("DEFAULT_WEIGHT 1\n" + "".join(
+            f"{name} {value}\n" for name, value in seconds.items()))
+        seen = []
+        for shard in range(4):
+            before = len(self.observed_calls())
+            result = self.run_runner("--docs-shard", shard)
+            calls = self.observed_calls()[before:]
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(calls, sorted(calls))
+            self.assertEqual(sum(seconds[name] for name in calls), 103)
+            self.assertIn("Summary: 3/4 passed", result.stdout)
+            self.assertIn("Failures: 1", result.stdout)
+            seen.extend(calls)
+        self.assertEqual(sorted(seen), names)
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_doc_hints_cannot_add_removed_or_omit_new_and_legacy_suites(self):
+        names = ["test_a_docs.py", "test_new_docs.py", "test_renamed_docs.py",
+                 "test_vm_disk_diagnostics.py", "test_troubleshooting_logs.py"]
+        for name in names:
+            self.python_fixture(name)
+        names.append("test-retired-trial-acquisition-docs.sh")
+        self.shell_fixture(names[-1])
+        self.doc_weights.write_text("DEFAULT_WEIGHT 2.5\ntest_a_docs.py 20\ntest_removed_docs.py 9999\n")
+        for shard in range(4):
+            result = self.run_runner("--docs-shard", shard)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = self.observed_calls()
+        self.assertEqual(sorted(calls), sorted(names))
+        self.assertEqual(len(calls), len(set(calls)))
+
+    def test_failed_doc_selector_cannot_admit_a_partial_passing_shard(self):
+        passing = self.python_fixture("test_a_docs.py")
+        self.python_fixture("test_b_docs.py", 7)
+        self.selector.write_text(f"print({str(passing)!r})\nraise SystemExit(23)\n")
+        result = self.run_runner("--docs-shard", 0)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Failed to partition the complete documentation test inventory", result.stderr)
+        self.assertNotIn("Summary:", result.stdout)
+        self.assertEqual(self.observed_calls(), [])
+
+    def test_missing_or_invalid_doc_hints_reject_before_any_execution(self):
+        self.python_fixture("test_first_docs.py")
+        cases = [None, "", "test_first_docs.py 1\n", "DEFAULT_WEIGHT 1\nDEFAULT_WEIGHT 2\n",
+                 "DEFAULT_WEIGHT 1\ntest_first_docs.py 1\ntest_first_docs.py 2\n",
+                 "DEFAULT_WEIGHT 1\n../test_first_docs.py 1\n", "DEFAULT_WEIGHT 1\ninvalid row extra\n"]
+        cases.extend(f"DEFAULT_WEIGHT {value}\n" for value in ("nan", "Infinity", "0", "-1", "bad"))
+        cases.extend(f"DEFAULT_WEIGHT 1\ntest_first_docs.py {value}\n"
+                     for value in ("nan", "Infinity", "0", "-1", "bad"))
+        for contents in cases:
+            with self.subTest(contents=contents):
+                if contents is None:
+                    self.doc_weights.unlink()
+                else:
+                    self.doc_weights.write_text(contents)
+                result = self.run_runner("--docs-shard", 0)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Failed to partition the complete documentation test inventory", result.stderr)
+                self.assertNotIn("Summary:", result.stdout)
+                self.assertEqual(self.observed_calls(), [])
 
     def test_checked_in_hints_partition_complete_real_inventory_once(self):
         tests = sorted(str(path) for path in (ROOT / "scripts/tests").iterdir()
