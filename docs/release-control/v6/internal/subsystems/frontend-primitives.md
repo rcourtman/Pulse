@@ -10786,3 +10786,13 @@ reads, recovery to SSO/local login or confirmed setup, single-flight/cancellatio
 focus ownership and the established sign-in behaviours. Browser proof exercises
 the actual Login/API client/CSS with safe HTTP fixtures at desktop and narrow
 widths; it is not installed SSO or original private/access recovery.
+
+### Replication inventory failure presentation (30 October 2026)
+
+The Proxmox Replication table consumes the validated full inventory owned by
+unified-resources. Malformed successful HTTP responses use the existing
+`PlatformErrorState` and Refresh interaction with a fixed safe explanation:
+missing jobs do not establish that none are configured. Neither raw provider
+body nor JSON parser details enter the rendered error. This is a failed read,
+not an empty-state or a new error surface; full retry, normal status filters,
+phone columns and disclosure interactions retain their existing owners.

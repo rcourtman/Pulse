@@ -1843,6 +1843,18 @@ once at mount would age a job that keeps syncing and count it overdue.
 `apiFetch`, so a replaced or unmounted replication read stops instead of
 running on in the background, and it throws `apiErrorFromResponse` errors that
 keep the HTTP status, so a 401 or 403 withdraws the jobs as an access failure.
+The same read validates the complete replication snapshot through
+`proxmoxReplicationInventory.ts`: an explicit array and matching nonnegative
+integer `meta.total`, typed consumed job fields, boolean `enabled`, nonempty
+connection/native/projected identity and no repeated projected ID or native job
+within one connection. A malformed envelope, row, count or JSON document fails
+the whole read with a fixed safe format error; it is never a successful empty
+inventory, a partially filtered list or a truthy health flag. Additional fields
+and unfamiliar status strings remain readable. Native job IDs may repeat across
+independent connections. The parser changes no status or timestamp semantics.
+First-read failure keeps a direct Replication link on the existing error/Refresh;
+a failed poll keeps prior presence for navigation but the table displays the
+error, not old job health. Only a validated full retry replaces the observation.
 Kubernetes name columns hold the chevron, status dot and name inside one
 track, so their md widths leave the name room for a typical node or service
 name at a 768px viewport: Nodes 20 percent (with Capacity at 16 so its

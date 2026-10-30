@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "base_sha": "240b8fadab138f942026fd6d239c44827afcb46a",
+  "verified_at": "2026-10-30T09:32:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "073638ee19dd2b17e5cf4939e2dc3e91ab89b93eb8df4937af9972debd09221a",
+    "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts": "4778383ad96ba2c702249409ea3deb009685abb95bc02e63d3dec9cc966743fd"
+  },
+  "routes": [
+    "/proxmox/replication"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Production App reads authenticated, organisation-scoped raw replication HTTP fixtures through fetchReplicationJobs, the new complete-snapshot parser and the real page/table. Missing list, wrongly typed flag, invalid JSON, duplicate jobs and inconsistent totals display the fixed safe error rather than absence or stale health.",
+    "First failure preserves the direct inspection; a failed poll keeps known navigation presence but withdraws prior job health. A validated full retry restores current jobs, scoped search and disclosure. Valid false remains Disabled; repeated native IDs on independent connections remain independent jobs.",
+    "A 403 keeps the direct link on its existing access error and withdraws jobs/presence. A later valid empty snapshot alone retires that presence to Overview. Existing polling, auth, routes and source count are unchanged."
+  ],
+  "interactions": [
+    "Native Tab/Enter activates desktop Refresh/disclosure; real touch activates phone Refresh and the existing whole-row disclosure. No forced clicks or DOM-dispatched input. Native filtering finds one connection and its scoped guest link. Each completed retry reads the same producer once.",
+    "Two independent engines execute the complete ten-response matrix in the production consumer at 1600px Chromium/light and 320px WebKit/dark. Together with baseline and binding checks, 101 checks pass. All eight successful captures are opened with native view_image and visually inspected: wrapping safe errors and Refresh, retained tab, readable record detail and no document overflow.",
+    "Two earlier driver attempts are retained separately: networkidle timeout on a rendered baseline, then attempting to tap the keyboard-only compact disclosure. Final proof waits on real surface state and uses the existing touch row; product source and acceptance assertions are unchanged."
+  ],
+  "source_proof": {
+    "source_sha": "240b8fadab138f942026fd6d239c44827afcb46a",
+    "frontend_receipt": "source-yl3r767q",
+    "registry_receipt": "source-dgx05pbe",
+    "frontend_tests": 1436,
+    "registry_tests": 171,
+    "build": "Normal production/embed build and bundle limits pass; complete output/hash/input/export/cleanup facts retained in lane evidence."
+  },
+  "browser": {
+    "tool": "pulse-worker-browser",
+    "playwright": "1.56.1",
+    "engines": [
+      "Chromium 141.0.7390.37",
+      "WebKit 26.0"
+    ],
+    "checks": 101,
+    "read_only_fixture": true,
+    "replication_reads": 22,
+    "writes": 0,
+    "app_exceptions": 0
+  },
+  "captures": [
+    {
+      "name": "final-build-desktop-chromium-unavailable.png",
+      "sha256": "51540004b02895d83de81e69d7a87b2d27c041cb2d3fab3fafdd4900b06ced6f"
+    },
+    {
+      "name": "final-build-desktop-chromium-accepted-detail.png",
+      "sha256": "0d9dc1981007d73180d7e8d54892f2c0478435baa4bd5071a08cadbaa42d40b0"
+    },
+    {
+      "name": "final-build-desktop-chromium-failed-refresh.png",
+      "sha256": "12dc7df0c83629f39d46841f704c64925fd1807ca5996133313d0cd0a12152f3"
+    },
+    {
+      "name": "final-build-phone-webkit-unavailable.png",
+      "sha256": "c35f0b50e7cf5774aef7687f1ac63c65c2d48cd03eaf0f42d9991822b213d169"
+    },
+    {
+      "name": "final-build-phone-webkit-accepted-detail.png",
+      "sha256": "5f13bf4b97fb0cd7bc7871a610f9f46997dbd3d9cb8b789ea0a092a660f11fe8"
+    },
+    {
+      "name": "final-build-phone-webkit-failed-refresh.png",
+      "sha256": "2151f4bb1c96369ecb0c34bf9ac8997f0ac9497662197264ad87e421b2f19604"
+    }
+  ],
+  "limits": "Safe local synthetic monitoring data, not native replication completion, Pending-job recovery, guest thaw, installed acceptance or release availability. Prior observations retained for navigation are not shown as current health."
+}

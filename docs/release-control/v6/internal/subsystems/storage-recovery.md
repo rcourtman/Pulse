@@ -2262,6 +2262,12 @@ fallback for an empty answer) rather than reopening the route. An access
 denial (401 or 403) withdraws the jobs and the tab, and a direct link holds on
 the denial so the operator sees why. The poll re-reads the existing read-only
 `/api/replication/jobs` snapshot and opens no new storage or recovery path.
+A successful replication observation requires the unified-resources-owned
+inventory parser to accept the complete typed snapshot and matching total.
+Missing, null, malformed or ambiguous job lists are unavailable, not evidence
+that replication is unconfigured; they follow the same failed-read navigation
+and retry rules above. This validation neither changes PVE job status nor
+establishes a completed copy, guest thaw or native recovery.
 Proxmox backup-health and recoverable-artifact summary rows follow the same
 platform-table density contract as every other provider surface. Storage and
 recovery owns which backup, datastore, workload-type, and VMID facts matter to

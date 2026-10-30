@@ -40,7 +40,11 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
-import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
+import type { ReplicationJob } from '@/types/api';
+import {
+  parseReplicationInventory,
+  readReplicationInventoryJSON,
+} from './proxmoxReplicationInventory';
 import { buildPlatformSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 import { buildProxmoxGuestNativeId } from '@/utils/workloads';
@@ -430,8 +434,7 @@ export async function fetchReplicationJobs(signal?: AbortSignal): Promise<Replic
       `Failed to load replication jobs (${response.status})`,
     );
   }
-  const payload = (await response.json()) as ReplicationJobsResponse;
-  return Array.isArray(payload?.data) ? payload.data : [];
+  return parseReplicationInventory(await readReplicationInventoryJSON(response));
 }
 
 // The jobs resource lives in ProxmoxPageSurface (it also gates the

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
+import { ReplicationInventoryFormatError } from '../proxmoxReplicationInventory';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
@@ -802,7 +803,7 @@ describe('ProxmoxPageSurface contract', () => {
       );
 
       // A failed read reports the error but keeps the tab and the user on it.
-      mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+      mockFetchReplicationJobs.mockRejectedValueOnce(new ReplicationInventoryFormatError());
       vi.advanceTimersByTime(30_000);
       await waitFor(() =>
         expect(screen.getByTestId('replication-table')).toHaveAttribute('data-error', 'yes'),
@@ -835,7 +836,7 @@ describe('ProxmoxPageSurface contract', () => {
       refetch: vi.fn(async () => []),
     });
     mockFetchReplicationJobs.mockReset();
-    mockFetchReplicationJobs.mockRejectedValueOnce(new Error('replication read failed'));
+    mockFetchReplicationJobs.mockRejectedValueOnce(new ReplicationInventoryFormatError());
     mockFetchReplicationJobs.mockResolvedValueOnce([{ id: 'job-1' }]);
 
     try {

@@ -13,6 +13,7 @@ import {
   formatMobileReplicationGuestLabel,
 } from '../ProxmoxReplicationTable';
 import replicationTableSource from '../ProxmoxReplicationTable.tsx?raw';
+import { ReplicationInventoryFormatError } from '../proxmoxReplicationInventory';
 
 // Record drawers link to the object they are about, which needs a router.
 const renderInRouter = (component: () => JSX.Element) =>
@@ -210,6 +211,31 @@ describe('ProxmoxReplicationTable', () => {
 });
 
 describe('fetchReplicationJobs', () => {
+  it.each([
+    '{}',
+    '{"data":null,"meta":{"total":0}}',
+    '{"data":[null],"meta":{"total":1}}',
+    '{"data":[],"meta":{"total":1}}',
+    '{"data":[{"id":"private-invalid-row"}',
+  ])('rejects a malformed HTTP 200 response without leaking its body (%#)', async (body) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body));
+    await expect(fetchReplicationJobs()).rejects.toMatchObject({
+      name: 'ReplicationInventoryFormatError',
+      message: new ReplicationInventoryFormatError().message,
+    });
+  });
+
+  it('returns the complete typed HTTP inventory without changing job state', async () => {
+    const data = [
+      replicationJob(),
+      replicationJob({ id: 'site-b-100', instance: 'site-b', enabled: false }),
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ data, meta: { total: 2 } })),
+    );
+    await expect(fetchReplicationJobs()).resolves.toEqual(data);
+  });
+
   it('passes the caller abort signal to the network request', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
