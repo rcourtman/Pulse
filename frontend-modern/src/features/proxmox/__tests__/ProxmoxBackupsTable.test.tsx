@@ -1757,6 +1757,61 @@ describe('backup-identity: connected Coverage and By date', () => {
   };
   afterEach(() => vi.restoreAllMocks());
 
+  it.each([
+    ['pbs-100', 'pbs:pbs-100'],
+    ['FILE-100', 'archive:file-100'],
+    ['snapshot-100', 'snapshot:snapshot-100'],
+    ['local:backup/vzdump-qemu-100.vma.zst', 'archive:file-100'],
+  ])('retains the searched point and scoped owner across views: %s', async (query, pointID) => {
+    mockIdentityAPIs();
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[
+          identityGuest('west-100', 'west', 'pve-10'),
+          identityGuest('east-100', 'east', 'pve-1'),
+        ]}
+      />
+    ));
+    await waitFor(() => expect(recoverableRows()).toHaveLength(3));
+    const search = screen.getByPlaceholderText(/search backups by workload/i);
+    fireEvent.input(search, { target: { value: query } });
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+    expect(recoverableRows()[0]).toHaveTextContent('east-100');
+    fireEvent.click(
+      within(recoverableRows()[0] as HTMLElement).getByRole('button', {
+        name: /expand details/i,
+      }),
+    );
+    const detail = await screen.findByTestId('proxmox-recoverable-detail');
+    expect(detail).toHaveAttribute('data-inline-detail-for', pointID);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Coverage' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+    expect(new URLSearchParams(window.location.search).get('q')).toBe(query);
+    const rows = () => document.querySelectorAll('[data-proxmox-backup-row="coverage"]');
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toHaveTextContent('east-100');
+    expect(rows()[0]).not.toHaveTextContent('west-100');
+    // Lookup narrows the workload list, not its assessment or restore history.
+    fireEvent.click(
+      within(rows()[0] as HTMLElement).getByRole('button', { name: /expand details/i }),
+    );
+    const coverage = await screen.findByTestId('proxmox-coverage-detail');
+    expect(coverage).toHaveTextContent('PBS');
+    expect(coverage).toHaveTextContent('PVE file');
+    expect(coverage).toHaveTextContent('Snapshot');
+    expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+
+    fireEvent.input(search, { target: { value: 'absent-native-point' } });
+    await waitFor(() => expect(rows()).toHaveLength(0));
+    fireEvent.input(search, { target: { value: '' } });
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps all three artifacts and the successful task with the scoped owner through reorder and display rename', async () => {
     mockIdentityAPIs();
     window.history.replaceState({}, '', '/proxmox/backups/coverage');

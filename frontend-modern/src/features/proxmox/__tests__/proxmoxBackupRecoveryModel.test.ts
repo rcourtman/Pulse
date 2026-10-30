@@ -99,6 +99,60 @@ const protectionPosture = (resourceId: string, state: ProtectionState): Protecti
 });
 
 describe('proxmoxBackupRecoveryModel', () => {
+  it.each([
+    ['pbs-main/main/minipc/ct/112/2026-05-25T01:34:25Z', 'pbs'],
+    ['ARCHIVE-112', 'archive'],
+    [' snap-112 ', 'snapshot'],
+    ['local:backup/vzdump-lxc-112-2026_05_24-02_00_00.tar.zst', 'archive'],
+  ])('finds native identifiers and full file metadata in both views: %s', (query, source) => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [pbsBackup()],
+      archives: [archive()],
+      snapshots: [snapshot()],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+    const matches = model.recoverableArtifacts.filter((point) =>
+      recoverableArtifactMatchesSearch(point, query),
+    );
+    expect(matches).toHaveLength(1);
+    expect(matches[0].sourceKind).toBe(source);
+    expect(coverageRowMatchesSearch(model.coverageRows[0], query)).toBe(true);
+    expect(coverageRowMatchesSearch(model.coverageRows[0], 'absent-native-point')).toBe(false);
+    expect(
+      model.recoverableArtifacts.some((point) =>
+        recoverableArtifactMatchesSearch(point, 'absent-native-point'),
+      ),
+    ).toBe(false);
+  });
+
+  it('finds an incomplete undated point without conferring completion or changing its owner', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [
+        pbsBackup({
+          id: 'unfinished-native-id',
+          backupTime: 'invalid',
+          inProgress: true,
+          writeActivityObserved: true,
+          writeActive: false,
+        }),
+      ],
+      archives: [],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+    });
+    const point = model.recoverableArtifacts[0];
+    expect(recoverableArtifactMatchesSearch(point, 'unfinished-native-id')).toBe(true);
+    expect(coverageRowMatchesSearch(model.coverageRows[0], 'unfinished-native-id')).toBe(true);
+    expect(point).toMatchObject({ createdMs: undefined, failed: true, verified: undefined });
+    expect(model.coverageRows[0].workload.resourceId).toBe('vm-112');
+    expect(model.coverageRows[0].latestBackup).toBeUndefined();
+    expect(model.coverageSummary.recoverableArtifacts).toBe(0);
+  });
+
   it('retains task origin independently of migrated placement and exposed task search', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [workload({})],

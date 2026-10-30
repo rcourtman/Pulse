@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Existing backup search finds the native record in either view
+
+By date text search includes each admitted restore point's native Identifier.
+Coverage search includes those same identifiers and full archive file metadata,
+not just a shortened format label. Matching remains a case-insensitive literal
+substring after trimming the query; punctuation in provider IDs and file paths
+is not a filter expression or a new identity. Switching views retains the query
+and finds the scoped owner without filtering its evidence preview or inventing
+completion, protection or attribution. Existing node/location/type facets and
+failed-read withdrawal still apply; search performs no provider reads.
+
+`proxmoxBackupRecoveryModel.test.ts` covers all three source kinds, complete file
+metadata, negative matches and undated incomplete evidence. The normal
+`ProxmoxBackupsTable.test.tsx` consumes raw inventory and exercises input, selected
+point, cross-view query retention, namesake isolation and clearing without extra
+reads. Actual-App desktop/narrow proof checks lookup, native disclosure, scoped
+filtering and ordinary read-failure/recovery with inspected pixels. No shared
+search grammar, routes, API, source IDs, matching, policy or collection changes.
+
 ### A dated backup disclosure identifies the restore point, not only its owner
 
 The By date table keeps its existing native disclosure visible at phone widths,
