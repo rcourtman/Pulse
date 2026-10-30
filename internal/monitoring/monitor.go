@@ -1556,6 +1556,7 @@ type rrdMemCacheEntry struct {
 type pendingUpdatesCache struct {
 	count     int
 	checkedAt time.Time
+	deniedAt  time.Time // Retry clock only; never a successful observation.
 }
 
 // TTL for pending updates cache (30 minutes - balance between freshness and API load)

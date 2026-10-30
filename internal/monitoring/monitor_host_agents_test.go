@@ -131,7 +131,11 @@ func TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence(t *tes
 	m.guestMetadataCache = map[string]guestMetadataCacheEntry{key: metadata}
 	memKey := guestMemoryCacheKey("site-a", "node", 105)
 	memory := agentMemCacheEntry{info: memoryLifecycleSample(4096), fetchedAt: time.Now().Add(-time.Minute)}
-	m.vmAgentMemCache = map[string]agentMemCacheEntry{memKey: memory}
+	deniedKey := guestMemoryCacheKey("site-a", "node", 106)
+	denied := agentMemCacheEntry{negative: true, permissionDenied: true, fetchedAt: time.Now().Add(-time.Minute)}
+	apt := pendingUpdatesCache{count: 7, checkedAt: time.Now().Add(-time.Hour), deniedAt: time.Now().Add(-time.Minute)}
+	m.vmAgentMemCache = map[string]agentMemCacheEntry{memKey: memory, deniedKey: denied}
+	m.nodePendingUpdatesCache = map[string]pendingUpdatesCache{"site-a-node": apt}
 	ctx, owner := m.beginPVEGuestPoll(context.Background(), "site-a", c)
 	if owner == nil {
 		t.Fatal("registered cycle not admitted")
@@ -143,7 +147,8 @@ func TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence(t *tes
 	if owner.ctx.Err() == nil || len(m.GetDiagnosticSnapshots().Guests) != 0 || !reflect.DeepEqual(m.state.GetSnapshot().Hosts, hosts) {
 		t.Fatal("runtime withdrawal admitted obsolete guest evidence or withdrew independent agent memory")
 	}
-	if !reflect.DeepEqual(m.guestMetadataCache[key], metadata) || m.vmAgentMemCache[memKey] != memory {
+	if !reflect.DeepEqual(m.guestMetadataCache[key], metadata) || m.vmAgentMemCache[memKey] != memory ||
+		m.vmAgentMemCache[deniedKey] != denied || m.nodePendingUpdatesCache["site-a-node"] != apt {
 		t.Fatal("runtime withdrawal erased OS-command safety or renewed accepted cache age")
 	}
 }

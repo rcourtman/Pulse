@@ -2172,6 +2172,13 @@ update, profile rollout, command reachability, or fleet-control authority.
     own alert and names that agent as display text, but the link itself stays
     the agent lifecycle's, and the field cannot create, change or authorize it.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
+    The private `pendingUpdatesCache.deniedAt` is only the scheduled PVE APT
+    retry clock. It cannot change agent enrolment, report admission, tombstones,
+    links or independent host memory. Runtime guest-poll withdrawal keeps that
+    denial and the instance/node/VM-scoped memory denial without renewing them;
+    the ordinary independent host snapshot remains unchanged.
+    `TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence` pins
+    this separation alongside existing successful guest-memory evidence.
     Both live-mode startup and explicit discovery startup bind the discovery
     service to this monitor's organization. Discovery start, progress, found
     server, update and completion events stay within that organization; a

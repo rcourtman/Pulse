@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -20,10 +21,11 @@ const (
 )
 
 type agentMemCacheEntry struct {
-	available uint64
-	info      proxmox.LinuxMemoryAvailability
-	negative  bool
-	fetchedAt time.Time
+	available        uint64
+	info             proxmox.LinuxMemoryAvailability
+	negative         bool
+	permissionDenied bool // Only an observed HTTP 403 overrides known-Linux retry cadence.
+	fetchedAt        time.Time
 }
 
 type guestAgentMemAvailableClient interface {
@@ -110,7 +112,10 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
 		ttl := vmAgentMemCacheTTL
 		if entry.negative {
-			ttl = m.vmAgentMemNegativeCacheTTL(instanceName, node, vmid)
+			ttl = vmAgentMemNegativeTTL
+			if !entry.permissionDenied {
+				ttl = m.vmAgentMemNegativeCacheTTL(instanceName, node, vmid)
+			}
 		}
 		if now.Sub(entry.fetchedAt) < ttl {
 			m.rrdCacheMu.Unlock()
@@ -179,7 +184,12 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		m.vmAgentMemCache = make(map[string]agentMemCacheEntry)
 	}
 	if err != nil || info.Source == "" {
-		m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{negative: true, fetchedAt: now}
+		status, known := proxmox.APIErrorStatus(err)
+		m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{
+			negative:         true,
+			permissionDenied: known && status == http.StatusForbidden,
+			fetchedAt:        now,
+		}
 		if err == nil {
 			err = fmt.Errorf("guest agent meminfo fallback unavailable")
 		}
