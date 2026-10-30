@@ -122,8 +122,9 @@ describe('shipped temperature FAQ', () => {
     expect(text).toContain('does not mean Pulse will alert on it');
     expect(section.querySelector('pre, table')).toBeNull();
     expect(section.querySelector('a')?.getAttribute('href')).toBe(
-      '/docs/TEMPERATURE_MONITORING#check-existing-linux-readings-safely',
+      '#check-existing-linux-readings-safely',
     );
-    expect(section.querySelector('a')?.hasAttribute('data-doc-link')).toBe(true);
+    expect(guide.querySelector('#check-existing-linux-readings-safely')).not.toBeNull();
+    expect(section.querySelector('a')?.hasAttribute('target')).toBe(false);
   });
 });
