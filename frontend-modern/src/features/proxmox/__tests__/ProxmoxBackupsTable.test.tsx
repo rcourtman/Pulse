@@ -2382,7 +2382,11 @@ describe('restore volume with unavailable sizes', () => {
     expect(screen.getAllByRole('button', { name: /: 0 B$/ }).length).toBeGreaterThan(0);
     await fireEvent.focus(today);
     expect(screen.getByText('3.00 KB known · 1 size unknown')).toBeInTheDocument();
-    expect(screen.getByText('Unknown size')).toBeInTheDocument();
+    expect(
+      within(document.querySelector<HTMLElement>('[data-tooltip-portal]')!).getByText(
+        'Unknown size',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('1.00 KB (33%)')).not.toBeInTheDocument();
     await fireEvent.click(yesterday);
     expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
@@ -2393,6 +2397,25 @@ describe('restore volume with unavailable sizes', () => {
     expect(
       screen.getByRole('button', { name: /: 1 restore point, selected$/ }),
     ).toBeInTheDocument();
+  });
+
+  it('[point-size] keeps unavailable size explicit without changing verification or completed counts', async () => {
+    mountVolumeInventory();
+    const toggle = await screen.findByRole('button', {
+      name: /Expand details.*Identifier: pbs-100$/,
+    });
+    fireEvent.click(toggle);
+    const panel = screen.getByTestId('proxmox-recoverable-detail');
+    expect(within(panel).getByText('Size', { selector: 'td' }).closest('tr')).toHaveTextContent(
+      'Unknown size',
+    );
+    expect(panel).toHaveTextContent(
+      'No usable size was reported. Unknown does not mean this restore point is empty.',
+    );
+    expect(panel).not.toHaveTextContent('0 B');
+    expect(within(panel).getAllByText('Verified')).toHaveLength(2);
+    expect(document.body).toHaveTextContent('6 completed restore points');
+    expect(document.body).toHaveTextContent('1 running');
   });
 
   it('[volume-size] follows source scope without counting incomplete or out-of-window unknown sizes', async () => {

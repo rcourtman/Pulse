@@ -21,6 +21,30 @@
 
 ## Purpose
 
+### Unknown restore-point sizes stay unknown across inspection and sorting
+
+Raw inventory retains the provider's reported size. The recovery view admits
+only positive finite bytes for PBS snapshots, PVE backup files and guest
+snapshots; a missing or zero size is unavailable evidence, not a measured
+zero-byte point. Size sorting keeps those unknowns after known values in both
+directions. Existing completed-point counts, verification, retention, protection,
+known-volume chart semantics, identities, filters and requests do not change.
+
+The By date row and its open detail explicitly say **Unknown size**, rather than
+suggesting no size or hiding the field. The detail explains that unknown does
+not mean an empty point. Coverage uses the same wording and explains its limit;
+when the size column is hidden, each disclosed point keeps its size beside its
+source. Ordinary polling updates the same inspected point and focus without
+requiring a new request or dismissing unavailable data as zero.
+
+Normal-suite `backupSizeEvidence.test.tsx` consumes parsed raw PVE/PBS inventory
+and covers zero/missing/one-byte reports for all three sources, both sort
+directions, desktop/phone disclosure and same-point polling. Existing activity
+and inventory suites preserve chart/read semantics. Browser proof exercises
+these raw responses through the actual consuming Backups surface at desktop and
+narrow widths, including unknown/known transitions and inspected pixels. This
+is truthful recovery evidence, not a restored guest or an installed backup test.
+
 ### Selected PBS datastore remains inspectable without hover
 
 The existing PBS row disclosure is named by backup reader and datastore, rather

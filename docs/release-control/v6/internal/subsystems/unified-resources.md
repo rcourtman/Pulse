@@ -23,6 +23,18 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Restore-point size is evidence, not identity or protection
+
+The Backups consumer retains the same point/workload identity, provider state
+and completed-point count when reported size becomes unavailable or is later
+restored. Zero placeholders do not become measured zero-byte points or sort as
+known sizes. Open By date/Coverage details expose unknown size without hiding
+the record or changing its restore/protection meaning. Existing inline shells,
+owner links, filters, polling and raw API evidence are unchanged. The registered
+`ProxmoxBackupsTable.test.tsx` and normal `backupSizeEvidence.test.tsx` verify the
+parsed consumer, count/state independence and stable open-point focus; browser
+proof covers desktop/phone interactions and pixels.
+
 ### Selected PBS datastore remains inspectable without hover
 
 The existing PBS row disclosure is named by backup reader and datastore, rather

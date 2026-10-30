@@ -42,6 +42,7 @@ export interface RecoverableArtifact extends BackupLocationScope {
   workload: WorkloadReference;
   createdAt: string;
   createdMs?: number;
+  /** Positive reported bytes only. Missing/zero does not establish an empty point. */
   size?: number;
   location: string;
   detail: string;
@@ -166,6 +167,12 @@ export function isBackupArtifact(artifact: RecoverableArtifact): boolean {
 /** Incomplete artifacts remain evidence, but are not completed restore points. */
 export function isCompletedRecoveryArtifact(artifact: RecoverableArtifact): boolean {
   return !artifact.running && !artifact.failed;
+}
+
+// Zero is also the producer's missing-size placeholder. Keep it in the raw
+// inventory, but not as a measured zero in the recovery view (including sorts).
+function reportedSizeBytes(size: number | undefined): number | undefined {
+  return size !== undefined && Number.isFinite(size) && size > 0 ? size : undefined;
 }
 
 function archiveFileName(volid: string | undefined): string {
@@ -687,7 +694,7 @@ export function buildProxmoxBackupRecoveryModel(
       workload,
       createdAt: backup.backupTime,
       createdMs,
-      size: backup.size,
+      size: reportedSizeBytes(backup.size),
       location: `${backup.datastore || '—'} / ${backup.namespace?.trim() || '(root)'}`,
       ...backupLocationScope('pbs', backup.instance, backup.datastore),
       detail: pbsBackupFileDetailLabel(backup.files.length),
@@ -720,7 +727,7 @@ export function buildProxmoxBackupRecoveryModel(
       workload,
       createdAt: archive.time,
       createdMs,
-      size: archive.size,
+      size: reportedSizeBytes(archive.size),
       location: archive.storage || archive.node || '—',
       ...backupLocationScope('archive', archive.instance, archive.storage || archive.node),
       // The volid repeats the storage, guest type, VMID, and timestamp the row
@@ -756,7 +763,7 @@ export function buildProxmoxBackupRecoveryModel(
       workload,
       createdAt: snapshot.time,
       createdMs,
-      size: snapshot.sizeBytes,
+      size: reportedSizeBytes(snapshot.sizeBytes),
       location: snapshot.node || snapshot.instance || '—',
       ...backupLocationScope('snapshot', snapshot.instance, snapshot.node),
       detail: snapshot.description || snapshot.name || snapshotSource.detailFallbackLabel,
