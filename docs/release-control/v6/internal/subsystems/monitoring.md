@@ -17,6 +17,41 @@
 
 ## Purpose
 
+### Unfinished backup logs cannot monopolise the read allowance
+
+Multi-guest vzdump log collection keeps its 25-request cap per poll. Pending
+jobs are selected by least recent attempt within the connection, with never-read
+jobs first and provider order breaking ties. While ended work waits, admission keeps up to 24 running
+reads and reserves at least one of the 25 turns for pending ended history;
+unused turns serve either queue. Execution starts with the queue not served by
+the last actual request (live first without a prior request), then uses the admitted
+live-first order. Thus a read exhausting the shared context cannot indefinitely
+prevent the other queue from running. When both queues exhaust it on every
+request, their first turns alternate; when just one queue exhausts it, the
+other gets a request before it on the next poll. The request cap is not a
+promise that all admitted reads fit in the shared time budget.
+
+Failures, empty, capped and incomplete logs spend their turn without becoming
+final. Only an actual request advances either per-job age or the connection's
+queue cursor, not selection or cancellation before execution. The cursor is
+connection-local and discarded with an empty history window. Selection leaves
+input and guest output ordering unchanged, completed attributed logs remain
+cached, and removed jobs discard their scheduling state with cache pruning.
+
+Scheduling metadata is not an accepted observation. Skipped/failed reads retain
+the original guest evidence and its age; neither a retry nor an ended parent
+supplies a missing guest verdict. No allowance, provider permission, task/result
+schema, identity, protection rule or guest operation changes.
+`vzdump_job_log_scheduling_test.go` checks bounded progress, poll-to-guest results,
+immutable completion, live/history progress under saturation, cancellation,
+same-queue and mixed live/ended context exhaustion, fast live reads with a
+slow ended backlog, stable output order, cursor pruning and concurrent connection
+isolation.
+The existing cached-guest tests retain their observation/intent assertions.
+Desktop/narrow proof consumes actual poll frames through Backups Coverage,
+including scoped task results without inventing a restore artifact or protection.
+
+
 ### Backup task results agree with their completion clocks
 
 The PVE backup-history reader accepts a live task only with an absent/zero end
@@ -4771,9 +4806,11 @@ named and default organizations. The custom event envelope stays unchanged.
     task listing queries `source=all` so running jobs are visible: a guest
     an in-progress job is currently backing up carries a `running`
     synthetic task, which is valid backup-intent evidence for
-    `resolveBackupIntentContext`. Finished job logs are immutable and are
+    `resolveBackupIntentContext`. Completely attributed finished job logs are immutable and are
     fetched at most once per instance|UPID, with a per-cycle fetch cap so
     a historical backlog cannot stall the shared backup poll budget.
+    Unfinished reads rotate by last attempt, including failures, so a
+    persistent prefix cannot prevent later jobs from supplying guest results.
     Regression coverage: `TestParseVzdumpJobLogFinishedJob`,
     `TestPollBackupTasksSynthesizesJobGuestTasks`, and
     `TestPollBackupTasksRunningJobRefetchesAndSuppressesAlerts` in

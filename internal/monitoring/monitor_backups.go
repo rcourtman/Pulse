@@ -2701,11 +2701,14 @@ type vzdumpJobTaskCacheEntry struct {
 	tasks           []models.BackupTask
 	final           bool
 	historyComplete bool
+	lastAttempt     time.Time // scheduling metadata, not an accepted log observation
 }
 
 // maxVzdumpJobLogFetchesPerPoll bounds task-log requests per poll cycle so a
 // large backlog of historical job runs (e.g. right after startup) trickles in
-// over a few cycles instead of stalling the shared backup-poll budget.
+// over a few cycles instead of stalling the shared backup-poll budget. Pending
+// reads rotate by last attempt so errors and incomplete logs cannot consume the
+// entire allowance every cycle and permanently hide older guest results.
 const maxVzdumpJobLogFetchesPerPoll = 25
 
 // synthesizeVzdumpJobGuestTasks expands multi-guest vzdump job runs into one
@@ -2721,10 +2724,23 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 
 	now := time.Now().UTC()
 	seen := make(map[string]struct{}, len(jobTasks))
-	var synthesized []models.BackupTask
+	fetchJobs := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
+	order := make([]int, len(jobTasks))
+	for i := range order {
+		order[i] = i
+	}
+	// Execute selected reads in scheduling order as well: an early slow read
+	// can exhaust the shared context before the request-count cap is reached.
+	sort.SliceStable(order, func(i, j int) bool {
+		left := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[i]].ID]]
+		right := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[j]].ID]]
+		return left > 0 && (right == 0 || left < right)
+	})
+	byJob := make([][]models.BackupTask, len(jobTasks))
 	fetches := 0
 
-	for _, jobTask := range jobTasks {
+	for _, index := range order {
+		jobTask := jobTasks[index]
 		upid := jobUPIDs[jobTask.ID]
 		key := instanceName + "|" + upid
 		seen[key] = struct{}{}
@@ -2734,20 +2750,35 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		m.mu.RUnlock()
 
 		if cached && entry.final {
-			synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+			byJob[index] = refreshObservedAt(entry.tasks, now)
 			continue
 		}
 
-		if fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
+		if fetchJobs[key] == 0 || fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
 			// Serve a stale non-final entry if we have one; the next cycle
 			// will catch up. The current parent can end a cached running
 			// guest, but cannot supply its missing verdict or a fresh log read.
 			if cached {
-				synthesized = append(synthesized, cachedVzdumpGuestTasks(entry.tasks, jobTask)...)
+				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
 			continue
 		}
 		fetches++
+		delete(fetchJobs, key) // duplicate provider rows cannot spend the same turn twice
+		// A failed or incomplete read still spent the allowance. Keep attempt
+		// order separate from accepted observations so failure never freshens evidence.
+		m.mu.Lock()
+		if m.vzdumpJobTaskCache == nil {
+			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
+		}
+		attempted := m.vzdumpJobTaskCache[key]
+		attempted.lastAttempt = now
+		m.vzdumpJobTaskCache[key] = attempted
+		if m.vzdumpJobLogHistoryFirst == nil {
+			m.vzdumpJobLogHistoryFirst = make(map[string]bool)
+		}
+		m.vzdumpJobLogHistoryFirst[instanceName] = jobTask.EndTime.IsZero()
+		m.mu.Unlock()
 
 		logLines, err := client.GetTaskLog(ctx, jobTask.Node, upid)
 		if err != nil {
@@ -2756,7 +2787,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 				Str("upid", upid).
 				Msg("failed to fetch vzdump job task log; per-guest status unavailable this cycle")
 			if cached {
-				synthesized = append(synthesized, cachedVzdumpGuestTasks(entry.tasks, jobTask)...)
+				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
 			continue
 		}
@@ -2771,19 +2802,94 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			tasks:           guestTasks,
 			final:           historyComplete,
 			historyComplete: historyComplete,
+			lastAttempt:     now,
 		}
 		m.mu.Unlock()
-		synthesized = append(synthesized, guestTasks...)
+		byJob[index] = guestTasks
 	}
 
 	m.pruneVzdumpJobTaskCache(instanceName, seen)
+	var synthesized []models.BackupTask
+	for _, tasks := range byJob {
+		synthesized = append(synthesized, tasks...)
+	}
 	return synthesized
+}
+
+// Select without reordering the returned guest tasks or mutating the caller's
+// history. Keep ordinary running jobs current, but reserve at least one turn
+// for pending ended jobs even when live work fills the allowance. Within each
+// group, never-read then least recently attempted reads win; ties retain provider
+// order. The queue not served by the last actual request gets the first turn,
+// so either queue can progress even when one read exhausts the shared context.
+// Only actual calls advance scheduling, not selection or cancellation.
+func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]int {
+	type pendingRead struct {
+		key     string
+		attempt time.Time
+		running bool
+	}
+	pending := make([]pendingRead, 0, len(jobs))
+	seen := make(map[string]bool, len(jobs))
+	m.mu.RLock()
+	historyFirst := m.vzdumpJobLogHistoryFirst[instance]
+	for _, job := range jobs {
+		key := instance + "|" + upids[job.ID]
+		if seen[key] || m.vzdumpJobTaskCache[key].final {
+			continue
+		}
+		seen[key] = true
+		pending = append(pending, pendingRead{key: key, attempt: m.vzdumpJobTaskCache[key].lastAttempt, running: job.EndTime.IsZero()})
+	}
+	m.mu.RUnlock()
+	sort.SliceStable(pending, func(i, j int) bool {
+		return pending[i].attempt.Before(pending[j].attempt)
+	})
+	// Positive ranks bind both admission and execution order; zero is unselected.
+	selected := make(map[string]int, min(len(pending), maxVzdumpJobLogFetchesPerPoll))
+	for _, read := range pending {
+		if read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll-1 {
+			selected[read.key] = len(selected) + 1
+		}
+	}
+	for _, read := range pending {
+		if !read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll {
+			selected[read.key] = len(selected) + 1
+		}
+	}
+	for _, read := range pending {
+		if len(selected) >= maxVzdumpJobLogFetchesPerPoll {
+			break
+		}
+		if selected[read.key] == 0 {
+			selected[read.key] = len(selected) + 1
+		}
+	}
+	// Admission reserves live capacity and an ended turn; execution must share
+	// the context too. Move only the oldest selected ended read ahead of live
+	// work when the last actual request was live. If either queue exhausts the
+	// context, the other starts next poll, rather than waiting behind an entire
+	// slow backlog. The shared time budget can still defer admitted live reads.
+	if historyFirst {
+		for _, read := range pending {
+			if rank := selected[read.key]; !read.running && rank > 0 {
+				for key, priority := range selected {
+					if priority < rank {
+						selected[key] = priority + 1
+					}
+				}
+				selected[read.key] = 1
+				break
+			}
+		}
+	}
+	return selected
 }
 
 // Retain the last successful log observation when a non-final log is unread or
 // unavailable. A freshly ended parent proves the guest is no longer running,
-// not whether it succeeded. Do not mutate the cache: only another accepted log
-// read can complete attribution and make the entry final.
+// not whether it succeeded. Do not mutate accepted task evidence: only another
+// accepted log read can complete attribution and make the entry final.
 func cachedVzdumpGuestTasks(tasks []models.BackupTask, job models.BackupTask) []models.BackupTask {
 	out := append([]models.BackupTask(nil), tasks...)
 	if job.EndTime.IsZero() {
@@ -2806,6 +2912,9 @@ func cachedVzdumpGuestTasks(tasks []models.BackupTask, job models.BackupTask) []
 func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}) {
 	prefix := instanceName + "|"
 	m.mu.Lock()
+	if len(seen) == 0 {
+		delete(m.vzdumpJobLogHistoryFirst, instanceName)
+	}
 	for key := range m.vzdumpJobTaskCache {
 		if !strings.HasPrefix(key, prefix) {
 			continue

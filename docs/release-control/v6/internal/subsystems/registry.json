@@ -6906,6 +6906,8 @@
               "internal/monitoring/pbs_protection_observation_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",
+              "internal/monitoring/vzdump_cached_guest_test.go",
+              "internal/monitoring/vzdump_job_log_scheduling_test.go",
               "internal/recovery/mapper/proxmox/mapper_test.go",
               "internal/recovery/posture_test.go"
             ]
