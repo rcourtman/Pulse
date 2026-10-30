@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Image comparison refresh is not container lifecycle authority
+
+Docker/Podman collection can refresh stale registry evidence after a changed
+local RepoDigest without a manual update or container action. A one-minute
+per-reference/platform early-refresh budget and in-flight reservation prevent
+rolling replicas or rapid local churn from repeatedly refetching the same tag.
+Unseen mismatches waiting for that budget report unknown, not a false update
+or affirmative clear. Existing transient/rate-limit backoff, image matching,
+credential scope and action/enrolment boundaries stay intact. The monitoring
+contract and collector/registry replacement tests cover the comparison; no
+container recreate, command, restart or installed-recovery authority is added.
+
+
 ### API-backed disk rates preserve native-writer authority
 
 The physical-disk sync excludes Agent/Proxmox native writers and mock-owned
