@@ -23,7 +23,7 @@ export const MAX_CONFIG_IMPORT_REQUEST_BYTES = 1024 * 1024;
 
 export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowParams) {
   const [exportPassphrase, setExportPassphrase] = createSignal('');
-  const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
+  const [exportPassphraseConfirmation, setExportPassphraseConfirmation] = createSignal('');
   const [importPassphrase, setImportPassphrase] = createSignal('');
   const [importFile, setImportFile] = createSignal<File | null>(null);
   const [showExportDialog, showExport] = createSignal(false);
@@ -65,7 +65,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
     if (isTransferring()) return;
     showExport(false);
     setExportPassphrase('');
-    setUseCustomPassphrase(false);
+    setExportPassphraseConfirmation('');
     closeApiTokenModal();
   };
   const closeImportDialog = () => {
@@ -109,19 +109,19 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
     setTransferNotice('');
     const passphrase = exportPassphrase();
     if (!passphrase) {
-      fail(
-        securityStatus()?.hasAuthentication && !useCustomPassphrase()
-          ? 'Please enter your password'
-          : 'Please enter a passphrase',
-      );
+      fail('Please enter a backup passphrase');
       return;
     }
     if (passphrase.length < 12) {
-      fail(
-        securityStatus()?.hasAuthentication && !useCustomPassphrase()
-          ? 'Your password must be at least 12 characters. Please use a custom passphrase instead.'
-          : 'Passphrase must be at least 12 characters long',
-      );
+      fail('Passphrase must be at least 12 characters long');
+      return;
+    }
+    if (!exportPassphraseConfirmation()) {
+      fail('Please confirm the backup passphrase. No export was sent.');
+      return;
+    }
+    if (passphrase !== exportPassphraseConfirmation()) {
+      fail('Passphrases do not match. No export was sent.');
       return;
     }
     if (needsApiToken()) return;
@@ -154,7 +154,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       notificationStore.success('Configuration exported successfully');
       showExport(false);
       setExportPassphrase('');
-      setUseCustomPassphrase(false);
+      setExportPassphraseConfirmation('');
     } catch (error) {
       if (active) fail(error instanceof Error ? error.message : 'Failed to export configuration');
     } finally {
@@ -169,7 +169,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
     const passphrase = importPassphrase();
     const file = importFile();
     if (!passphrase) {
-      fail('Please enter the password');
+      fail('Please enter the backup passphrase');
       return;
     }
     if (!file) {
@@ -283,8 +283,8 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
   return {
     exportPassphrase,
     setExportPassphrase,
-    useCustomPassphrase,
-    setUseCustomPassphrase,
+    exportPassphraseConfirmation,
+    setExportPassphraseConfirmation,
     importPassphrase,
     setImportPassphrase,
     importFile,

@@ -74,7 +74,6 @@ describe('settings switch labels', () => {
     const [backupPollingUseCustom, setBackupPollingUseCustom] = createSignal(false);
     const [showExportDialog, setShowExportDialog] = createSignal(false);
     const [showImportDialog, setShowImportDialog] = createSignal(false);
-    const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
 
     render(() => (
       <RecoverySettingsPanel
@@ -94,12 +93,9 @@ describe('settings switch labels', () => {
         setShowExportDialog={setShowExportDialog}
         showImportDialog={showImportDialog}
         setShowImportDialog={setShowImportDialog}
-        setUseCustomPassphrase={setUseCustomPassphrase}
-        securityStatus={() => ({ hasAuthentication: true })}
       />
     ));
 
     expect(screen.getByRole('checkbox', { name: 'Enable backup polling' })).toBeChecked();
-    expect(useCustomPassphrase()).toBe(false);
   });
 });

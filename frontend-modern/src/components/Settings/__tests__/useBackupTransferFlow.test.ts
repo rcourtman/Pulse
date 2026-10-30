@@ -46,6 +46,7 @@ function setup(kind: 'export' | 'import' = 'import', tokenOnly = false) {
   else flow.setShowExportDialog(true);
   flow.setImportPassphrase(passphrase);
   flow.setExportPassphrase(passphrase);
+  flow.setExportPassphraseConfirmation(passphrase);
   const read = vi.fn().mockResolvedValue('{"data":"synthetic-archive"}');
   flow.setImportFile({ size: 28, text: read } as unknown as File);
   return { flow, read, dispose };
@@ -90,6 +91,76 @@ afterEach(() => {
 });
 
 describe('configuration transfers keep their confirmed workspace and one dispatch', () => {
+  it.each([
+    ['', passphrase, 'Please enter a backup passphrase'],
+    ['short', 'short', 'at least 12 characters'],
+    [passphrase, '', 'Please confirm the backup passphrase'],
+    [passphrase, `${passphrase}-typo`, 'Passphrases do not match'],
+  ])('rejects an unconfirmed export before asking for a token', async (value, confirm, message) => {
+    const { flow } = setup('export', true);
+    flow.setExportPassphrase(value);
+    flow.setExportPassphraseConfirmation(confirm);
+    await flow.handleExport();
+    expect(flow.transferError()).toContain(message);
+    expect(flow.showApiTokenModal()).toBe(false);
+    expect(flow.isTransferring()).toBe(false);
+    expect(flow.showExportDialog()).toBe(true);
+    expect(flow.exportPassphrase()).toBe(value);
+    expect(flow.exportPassphraseConfirmation()).toBe(confirm);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(notificationStore.success).not.toHaveBeenCalled();
+  });
+
+  it('requires exact confirmation, without trimming or changing the encryption passphrase', async () => {
+    const { flow } = setup('export');
+    const value = ` ${passphrase} `;
+    flow.setExportPassphrase(value);
+    await flow.handleExport();
+    expect(flow.transferError()).toContain('Passphrases do not match');
+    expect(fetchMock).not.toHaveBeenCalled();
+    flow.setExportPassphraseConfirmation(value);
+    await flow.handleExport();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ passphrase: value });
+    expect(flow.transferError()).toBe('');
+    expect(flow.exportPassphraseConfirmation()).toBe('');
+  });
+
+  it('clears both export secrets on close and when switching to import', () => {
+    const { flow } = setup('export');
+    flow.closeExportDialog();
+    expect(flow.exportPassphrase()).toBe('');
+    expect(flow.exportPassphraseConfirmation()).toBe('');
+    flow.setShowExportDialog(true);
+    flow.setExportPassphrase(passphrase);
+    flow.setExportPassphraseConfirmation(passphrase);
+    flow.setShowImportDialog(true);
+    expect(flow.exportPassphrase()).toBe('');
+    expect(flow.exportPassphraseConfirmation()).toBe('');
+    expect(flow.showExportDialog()).toBe(false);
+    expect(flow.showImportDialog()).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('freezes the confirmed export passphrase and never dispatches its confirmation', async () => {
+    const { flow } = setup('export');
+    const result = deferred<Response>();
+    fetchMock.mockReturnValue(result.promise);
+    const pending = flow.handleExport();
+    flow.setExportPassphrase('edited-after-submit');
+    flow.setExportPassphraseConfirmation('edited-confirmation');
+    await flow.handleExport();
+    flow.closeExportDialog();
+    expect(flow.showExportDialog()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ passphrase });
+    result.resolve(response());
+    await pending;
+    expect(flow.exportPassphrase()).toBe('');
+    expect(flow.exportPassphraseConfirmation()).toBe('');
+  });
+
   it('rejects an oversized file before reading it or asking for a token', async () => {
     const { flow, read } = setup('import', true);
     flow.setImportFile({ size: MAX_CONFIG_IMPORT_FILE_BYTES + 1, text: read } as unknown as File);
@@ -404,6 +475,7 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:synthetic');
     expect(flow.exportPassphrase()).toBe('');
+    expect(flow.exportPassphraseConfirmation()).toBe('');
     expect(flow.showExportDialog()).toBe(false);
   });
 

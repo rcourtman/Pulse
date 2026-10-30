@@ -105,8 +105,10 @@ configuration import as proof of a complete multi-organisation migration.
 1. Complete the [organisation and access checks](#confirm-organisation-and-access).
    On the old server, sign in and open **Settings → System → Recovery →
    Create Backup**. Use a strong, unique passphrase of at least 12 characters
-   and store it separately from the downloaded file. With password login,
-   choose **Use a custom passphrase** if you do not want to use that password.
+   and enter it again in **Confirm backup passphrase**. Use a different
+   passphrase from your Pulse or SSO login password: this encrypts the file,
+   not a sign-in check. Store it separately from the downloaded file; Pulse
+   cannot recover a forgotten passphrase.
    Keep the old instance and your separate full-state backup until validation
    is complete.
 2. Install Pulse at the destination using the [installation guide](INSTALL.md).
@@ -118,8 +120,10 @@ configuration import as proof of a complete multi-organisation migration.
    isolation for a full-state recovery trial too; give it separate restored
    storage, never the source's live data volume.
 3. If the destination already has useful settings, export them first. Open
-   **Settings → System → Recovery → Restore Configuration**, select the file
-   and enter its passphrase. Import replaces the included configuration and
+   **Settings → System → Recovery → Restore Backup**, select the file
+   and enter the original passphrase used for that file. Older backups still
+   accept the password or passphrase you chose when exporting, even if your
+   login password has since changed. Import replaces the included configuration and
    API-token records; it does not merge them with the destination's records.
 4. Check the result before changing DNS or agent addresses. A success message
    establishes neither full recovery nor fresh monitoring. For a

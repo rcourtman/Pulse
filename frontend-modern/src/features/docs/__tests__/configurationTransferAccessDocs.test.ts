@@ -32,6 +32,25 @@ function accessSection() {
 const textOf = (node: Element) => node.textContent!.replace(/\s+/g, ' ');
 
 describe('Configuration transfer access guidance', () => {
+  it('uses a confirmed recovery-only passphrase without invalidating older archives', () => {
+    const article = articleFor('MIGRATION');
+    const heading = article.querySelector('#transfer-the-included-configuration');
+    expect(heading).not.toBeNull();
+    const steps = heading!.nextElementSibling;
+    expect(steps?.tagName).toBe('OL');
+    const text = textOf(steps!);
+    expect(text).toContain('strong, unique passphrase of at least 12 characters');
+    expect(text).toContain('Confirm backup passphrase');
+    expect(text).toContain('different passphrase from your Pulse or SSO login password');
+    expect(text).toContain('not a sign-in check');
+    expect(text).toContain('Pulse cannot recover a forgotten passphrase');
+    expect(text).toContain('Restore Backup');
+    expect(text).toContain(
+      'Older backups still accept the password or passphrase you chose when exporting',
+    );
+    expect(text).not.toContain('Use a custom passphrase');
+  });
+
   it('places target checks before transfer and links them from the first step', () => {
     const article = articleFor('MIGRATION');
     const headings = [...article.querySelectorAll('h2')].map((heading) => heading.id);
