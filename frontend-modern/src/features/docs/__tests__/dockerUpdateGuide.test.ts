@@ -53,10 +53,12 @@ describe('shipped monitored-container update guide', () => {
       'utf8',
     );
     expect(registry).toMatch(/defaultCacheTTL\s*=\s*6\s*\*\s*time.Hour/);
-    const cacheHit = registry
-      .split('if cached := r.getCached(cacheKey); cached != nil {')[1]
-      .split('// Fetch latest digest from registry')[0];
-    expect(cacheHit).toMatch(/LatestDigest:\s+cached.latestDigest/);
+    // Bind both documented fields to the same successful cached result,
+    // independently of the condition that admits a cache hit.
+    const cacheHit = registry.match(
+      /return &ImageUpdateResult\{[^}]*LatestDigest:\s+cached\.latestDigest,[^}]*\}/,
+    )?.[0];
+    expect(cacheHit, 'successful cached update result').toBeDefined();
     expect(cacheHit).toMatch(/CheckedAt:\s+time.Now\(\)/);
     expect(collector).toMatch(/LastChecked:\s+result.CheckedAt/);
     expect(adapter).toContain('container.UpdateStatus.LastChecked.After(updatesLastCheckedAt)');
