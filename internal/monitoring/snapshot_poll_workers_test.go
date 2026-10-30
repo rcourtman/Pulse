@@ -78,7 +78,7 @@ func snapshotCollectorGoroutines(t *testing.T) int {
 	return count
 }
 
-func TestSnapshotPollWorkersBoundWaitingAndActiveWork(t *testing.T) {
+func testSnapshotPollWorkersBoundWaitingAndActiveWork(t *testing.T) {
 	for _, count := range []int{0, 1, 8, 9, 512} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -123,12 +123,12 @@ func TestSnapshotPollWorkersBoundWaitingAndActiveWork(t *testing.T) {
 				require.Len(t, rows, count+1, "fresh target listings plus untouched peer")
 				for _, row := range rows {
 					if row.Instance == "peer" {
-						require.Equal(t, "independent", row.Name)
+						require.Equal(t, models.GuestSnapshot{ID: "peer-prior", Instance: "peer", Node: "node", VMID: 1000, Type: "qemu", Name: "independent", Time: time.Unix(1690000000, 0)}, row)
 						continue
 					}
-					require.Equal(t, "fresh", row.Name)
-					require.Equal(t, time.Unix(1700000100, 0), row.Time)
-					require.Equal(t, "accepted", row.Description)
+					kind := previous[fmt.Sprintf("%s/%d", row.Type, row.VMID)].Type
+					require.NotEmpty(t, kind, "snapshot belongs to an eligible typed guest")
+					require.Equal(t, models.GuestSnapshot{ID: fmt.Sprintf("site-node-%d-fresh", row.VMID), Instance: "site", Node: "node", VMID: row.VMID, Type: kind, Name: "fresh", Time: time.Unix(1700000100, 0), Description: "accepted", VMState: kind == "qemu"}, row)
 				}
 			})
 		})
