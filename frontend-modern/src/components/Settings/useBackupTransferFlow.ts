@@ -15,6 +15,12 @@ interface UseBackupTransferFlowParams {
 const CHANGED_WORKSPACE =
   'Organisation changed. Close this dialog and reopen it in the intended workspace.';
 
+// Allow room for the exported JSON envelope/formatting without reading an
+// unbounded local file. The wire limit matches handleImportConfig's reader;
+// include JSON escaping and UTF-8 password bytes, not just ciphertext length.
+export const MAX_CONFIG_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_CONFIG_IMPORT_REQUEST_BYTES = 1024 * 1024;
+
 export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowParams) {
   const [exportPassphrase, setExportPassphrase] = createSignal('');
   const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
@@ -170,6 +176,12 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       fail('Please select a file to import');
       return;
     }
+    if (file.size > MAX_CONFIG_IMPORT_FILE_BYTES) {
+      fail(
+        'Configuration file exceeds the 2 MiB browser import limit. No import was sent. See the migration guide for recovery options.',
+      );
+      return;
+    }
     if (needsApiToken()) return;
 
     // Freeze the confirmed target and inputs before the asynchronous file read.
@@ -200,10 +212,18 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
         return;
       }
 
+      const body = JSON.stringify({ passphrase, data: encryptedData });
+      if (new Blob([body]).size > MAX_CONFIG_IMPORT_REQUEST_BYTES) {
+        fail(
+          'Import exceeds the server’s 1 MiB request limit, including the password. No import was sent. See the migration guide for recovery options.',
+        );
+        return;
+      }
+
       submitted = true;
       await apiFetchJSON('/api/config/import', {
         method: 'POST',
-        body: JSON.stringify({ passphrase, data: encryptedData }),
+        body,
         expectedOrgID: orgID,
         retry: false,
         signal,
