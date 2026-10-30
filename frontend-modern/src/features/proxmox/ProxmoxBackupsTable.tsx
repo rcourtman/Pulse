@@ -139,18 +139,27 @@ export const ProxmoxBackupsTable: Component<{
   // Recovering a read removes its notice (or the whole-inventory error).
   // Hand off only focus owned by that retiring content, never focus the
   // operator has moved elsewhere or focus after leaving this surface.
-  const retainRecoveryFocus = (notice: HTMLElement): void => {
+  const retainInspectionFocus = (content: HTMLElement, preferInventoryRetry = false): void => {
     onCleanup(() => {
-      if (!notice.contains(document.activeElement)) return;
+      if (!content.contains(document.activeElement)) return;
       queueMicrotask(() => {
         if (!inspection?.isConnected || document.activeElement !== document.body) return;
         const activeView = inspection.querySelector<HTMLElement>(
           'nav[aria-label="Backup views"] [aria-current="page"]',
         );
-        (activeView ?? inspection).focus();
+        const retry = preferInventoryRetry
+          ? inspection.querySelector<HTMLButtonElement>('button[data-backup-inventory-retry]')
+          : null;
+        (retry ?? activeView ?? inspection).focus({ preventScroll: true });
       });
     });
   };
+  const retainRecoveryFocus = (content: HTMLElement) => retainInspectionFocus(content);
+  // A failed read can retire an entire point, filtered workload, chart or
+  // inspection body, including the disclosure that would normally take focus
+  // back from its drawer. Restore only focus owned by that retiring evidence.
+  const retainEvidenceFocus = (content: HTMLElement) => retainInspectionFocus(content, true);
+
   // Independent read owners contain source failures and replace pending reads
   // on org changes/disposal. Refresh while mounted at the same bounded cadence
   // as protection posture; no cross-route inventory cache or per-row reads.
@@ -770,6 +779,7 @@ export const ProxmoxBackupsTable: Component<{
                   type="button"
                   class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50"
                   aria-label={`Retry ${label} inventory`}
+                  data-backup-inventory-retry
                   aria-disabled={query.loading()}
                   onClick={() => {
                     if (!query.loading()) void query.refetch();
@@ -816,7 +826,7 @@ export const ProxmoxBackupsTable: Component<{
             />
           }
         >
-          <div class="space-y-3">
+          <div ref={retainEvidenceFocus} class="space-y-3">
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
             <Show when={protectionPostures.response.error}>
               <div
@@ -951,7 +961,10 @@ export const ProxmoxBackupsTable: Component<{
               <Show
                 when={hasRecoverableActivityInRange()}
                 fallback={
-                  <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    ref={retainEvidenceFocus}
+                    class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <span>
                       No completed restore points with known dates in the selected {chartRange()}
                       -day window.
@@ -976,7 +989,7 @@ export const ProxmoxBackupsTable: Component<{
                   </div>
                 }
               >
-                <div class="space-y-1">
+                <div ref={retainEvidenceFocus} class="space-y-1">
                   <p class="text-xs text-muted">
                     Activity follows the backup filters. Selecting a day narrows only the list.
                   </p>
@@ -1072,6 +1085,7 @@ export const ProxmoxBackupsTable: Component<{
                 onSort={handleRecoverableSort}
                 sizeMaxBytes={recoverableSizeMaxBytes()}
                 groupByDay
+                retainInspectionFocus={retainEvidenceFocus}
               />
             </Show>
 
@@ -1100,6 +1114,7 @@ export const ProxmoxBackupsTable: Component<{
                 onSort={handleCoverageSort}
                 expandedKey={expandedCoverageKey()}
                 onToggleExpand={toggleCoverageExpansion}
+                retainInspectionFocus={retainEvidenceFocus}
                 showTaskColumn={coverageHasTask()}
                 evidenceLocationLabel={evidenceLocationLabel()}
                 historyReadIncomplete={
@@ -1110,7 +1125,7 @@ export const ProxmoxBackupsTable: Component<{
               />
 
               <Show when={orphanedTotalCount() > 0}>
-                <div class="rounded-lg border border-border-subtle">
+                <div ref={retainEvidenceFocus} class="rounded-lg border border-border-subtle">
                   <button
                     type="button"
                     onClick={() => setShowOrphaned((v) => !v)}
@@ -1142,6 +1157,7 @@ export const ProxmoxBackupsTable: Component<{
                         onSort={handleCoverageSort}
                         expandedKey={expandedCoverageKey()}
                         onToggleExpand={toggleCoverageExpansion}
+                        retainInspectionFocus={retainEvidenceFocus}
                         showTaskColumn={coverageHasTask()}
                         evidenceLocationLabel={evidenceLocationLabel()}
                         historyReadIncomplete={

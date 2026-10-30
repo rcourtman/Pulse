@@ -63,6 +63,7 @@ describe('InlineDetailTableRow', () => {
   });
 
   it('spans only the summary cells visible at the current responsive layout', async () => {
+    const consumerRef = vi.fn();
     render(() => (
       <Table>
         <TableBody>
@@ -71,7 +72,7 @@ describe('InlineDetailTableRow', () => {
             <td style={{ display: 'none' }}>Desktop-only detail</td>
             <td>State</td>
           </tr>
-          <InlineDetailTableRow colspan={3}>
+          <InlineDetailTableRow ref={consumerRef} colspan={3}>
             <div>Responsive detail content</div>
           </InlineDetailTableRow>
         </TableBody>
@@ -247,6 +248,7 @@ describe('InlineDetailTableRow', () => {
   });
 
   it('restores focus to the controlling disclosure when focused detail content closes', async () => {
+    const consumerRef = vi.fn();
     const Fixture = () => {
       const [open, setOpen] = createSignal(true);
       return (
@@ -260,7 +262,7 @@ describe('InlineDetailTableRow', () => {
               </td>
             </tr>
             <Show when={open()}>
-              <InlineDetailTableRow cellId="detail-row-focus" colspan={1}>
+              <InlineDetailTableRow ref={consumerRef} cellId="detail-row-focus" colspan={1}>
                 <button type="button" onClick={() => setOpen(false)}>
                   Close details
                 </button>
@@ -275,6 +277,7 @@ describe('InlineDetailTableRow', () => {
     const disclosure = screen.getByRole('button', { name: 'Resource details' });
     const disclosureFocus = vi.spyOn(disclosure, 'focus');
     const close = screen.getByRole('button', { name: 'Close details' });
+    expect(consumerRef).toHaveBeenCalledWith(close.closest('tr'));
     close.focus();
     await fireEvent.click(close);
 

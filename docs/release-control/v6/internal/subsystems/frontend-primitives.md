@@ -20,6 +20,33 @@
 
 ## Purpose
 
+### Withdrawn backup evidence retains keyboard position
+
+When polling removes a focused restore-point disclosure/detail, filtered Coverage
+row, activity chart or the whole inventory body, focus moves to an existing
+inventory retry if a source failed, otherwise the active Backups view. Kiosk mode
+falls back to the named inspection region. The fallback only takes focus owned by
+the retiring content, after removal, while the inspection is still connected and
+no other control has acquired focus; it never scrolls the page. A normal detail
+close still returns to that same point's surviving disclosure. Other-source
+readable evidence, query/filter state, native controls and the existing retry
+cadence remain unchanged; no stale point is retained to preserve focus.
+Filtered charts and unmatched-evidence disclosures use their own retiring owners.
+`InlineDetailTableRow` composes its internal native row ref with the consumer's
+ref; registering a consumer cleanup must not disable its responsive span or
+normal close-focus return. Its normal unit suite verifies both with a consumer
+ref present. No new shared component or inspection wrapper is introduced.
+
+Normal-suite `backupInventoryFocus.test.tsx` consumes parsed raw PVE/PBS responses
+and covers both sources, summary/detail retirement, Coverage lookup, chart and
+whole-body removal, accepted-empty polls, normal close, moved focus, kiosk and
+unmounting. `ProxmoxBackupsTable.test.tsx` also covers a later polling-failure
+notice after a fulfilled read, through pending retry and complete recovery.
+Actual production-App desktop/narrow browser proof exercises native
+keyboard focus and read-failure/retry through the real consumer, with inspected
+pixels. This is accessible inspection, not guest thaw, restore or installed
+recovery. No provider operation, route, auth or policy changes.
+
 The existing backup text search matches admitted native restore-point identifiers
 in both By date and Coverage, and full archive metadata in Coverage. This is a
 consumer haystack correction: the shared FilterBar/SearchInput, literal search
