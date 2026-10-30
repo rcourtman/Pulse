@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
-import { renderDocMarkdown, stripLeadingTitle } from '../docMarkdown';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { createGuideFixture } from './guideFixture';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const source = readFileSync(path.join(repoRoot, 'docs/TROUBLESHOOTING.md'), 'utf8');
@@ -10,10 +10,16 @@ const shipped = readFileSync(
   path.join(repoRoot, 'frontend-modern/public/docs/TROUBLESHOOTING.md'),
   'utf8',
 );
+const guide = createGuideFixture(() => shipped);
+
+// Parse and sanitise the complete shipped guide once during suite setup;
+// each assertion still receives an isolated full-document clone.
+beforeAll(() => {
+  guide('TROUBLESHOOTING');
+});
 
 function testScopeSection(): { article: HTMLElement; section: HTMLElement } {
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(stripLeadingTitle(shipped), 'TROUBLESHOOTING');
+  const article = guide('TROUBLESHOOTING');
   const heading = article.querySelector('#test-connection-succeeds-but-cluster-polling-fails');
   expect(heading?.tagName).toBe('H4');
   const section = document.createElement('section');
