@@ -96,4 +96,34 @@ describe('shipped temperature FAQ', () => {
       );
     }
   });
+
+  it('makes the existing extra-sensor view findable without promising battery alerts', () => {
+    const guide = document.createElement('article');
+    guide.innerHTML = renderDocMarkdown(
+      readFileSync(path.join(servedDocs, 'TEMPERATURE_MONITORING.md'), 'utf8'),
+      'TEMPERATURE_MONITORING',
+    );
+    const heading = guide.querySelector('#other-linux-sensors-and-fan-readings');
+    expect(heading).not.toBeNull();
+    const section = document.createElement('section');
+    for (let next = heading!.nextElementSibling; next; next = next.nextElementSibling) {
+      if (/^H[1-6]$/.test(next.tagName)) break;
+      section.appendChild(next.cloneNode(true));
+    }
+    const text = prose(section);
+    expect(text).toContain('Machines');
+    expect(text).toContain('Machine → Show details');
+    expect(text).toContain('Host → Show host');
+    expect(text).toContain('Thermals');
+    expect(text).toContain('Applesmc Tb0t');
+    expect(text).toContain('direct sysfs fallback is CPU/SoC-only');
+    expect(text).toContain('not a sensor picker');
+    expect(text).toContain('fan min/max');
+    expect(text).toContain('does not mean Pulse will alert on it');
+    expect(section.querySelector('pre, table')).toBeNull();
+    expect(section.querySelector('a')?.getAttribute('href')).toBe(
+      '/docs/TEMPERATURE_MONITORING#check-existing-linux-readings-safely',
+    );
+    expect(section.querySelector('a')?.hasAttribute('data-doc-link')).toBe(true);
+  });
 });

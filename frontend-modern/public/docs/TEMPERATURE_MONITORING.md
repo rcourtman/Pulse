@@ -35,6 +35,32 @@ Notes:
   before changing its setup. A current server does not upgrade every agent.
 - When a Proxmox host has recent usable agent temperature data, Pulse treats the agent as the source of truth and does not also try SSH temperature collection for that host.
 
+### Other Linux sensors and fan readings
+
+The overview's CPU temperature is not the full agent sensor list. On
+**Machines**, open the affected machine, expand **Details**, then **Machine →
+Show details**, and look for **Thermals**. For a merged Proxmox entry, the
+inner section is labelled **Host → Show host** instead. This card can show
+other temperatures and current fan RPM already present in the agent report;
+no SSH setup, driver change or additional permission is needed to open it.
+
+With usable `sensors -j` output, the Linux agent also retains positive
+non-CPU temperatures below 150 °C and positive fan RPM. Labels combine the
+chip type and sensor label: an applesmc `TB0T` reading can appear as
+**Applesmc Tb0t**, rather than **Battery**. Interpret chip-specific labels
+using that hardware's documentation; Pulse does not identify every sensor's
+physical location. A missing row is not a zero reading, and this is not an
+inventory of every `hwmon` file: the direct sysfs fallback is CPU/SoC-only.
+
+The card is a reading list, not a sensor picker. It does not offer friendly-name
+editing, fan min/max, a separate History series or an alert threshold for each
+extra sensor, or selection of a different sensor for the CPU row. CPU
+temperature History and CPU alerts remain CPU readings; a battery temperature
+must not be treated as CPU temperature. Seeing a battery reading here does not
+mean Pulse will alert on it. If a needed reading is absent, use the
+[existing-reading guidance](#check-existing-linux-readings-safely), not another
+agent install or wider host access.
+
 ### Check existing Linux readings safely
 
 Use the monitored host's trusted local console, not the Pulse LXC or container.
