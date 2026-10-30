@@ -499,6 +499,10 @@ if module.MAX_RECEIPT_BYTES <= 0:
     def test_manifest_contract_binds_transitive_harness_and_production_boundary(self) -> None:
         manifest = json.loads((Path(__file__).with_name("secure_runtime_rootful_source_manifest_v1.json")).read_text(encoding="utf-8"))
         required = {
+            "internal/cloudcp/favicon.svg",
+            "internal/cloudcp/portal/dist/portal_app.css",
+            "internal/cloudcp/portal/dist/portal_app.js",
+            "internal/cloudcp/portal/templates/portal.html",
             "scripts/installtests/native_agent_frontend_test.go",
             "scripts/installtests/release_notes_contract_test.go",
             "scripts/installtests/testdata/release-notes-v6.4.5-authored.md",
@@ -555,6 +559,23 @@ if module.MAX_RECEIPT_BYTES <= 0:
         self.assertIn("pkg/auth", manifest["recursive_roots"])
         self.assertIn("internal/filesystemprobe", manifest["recursive_roots"])
         self.assertIn("pkg/agents/filesystem", manifest["recursive_roots"])
+        self.assertIn("internal/cloudcp", manifest["recursive_roots"])
+        self.assertIn("pkg/cloudauth", manifest["recursive_roots"])
+        self.assertIn("pkg/netutil", manifest["recursive_roots"])
+
+    def test_manifest_reader_hashes_compiled_cloud_assets(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        _, source_hashes = attester.load_source_manifest(
+            repo_root, repo_root / attester.SOURCE_MANIFEST_PATH,
+        )
+        for relative in (
+            "internal/cloudcp/favicon.svg",
+            "internal/cloudcp/portal/dist/portal_app.css",
+            "internal/cloudcp/portal/dist/portal_app.js",
+            "internal/cloudcp/portal/templates/portal.html",
+        ):
+            with self.subTest(source=relative):
+                self.assertEqual(source_hashes.get(relative), sha((repo_root / relative).read_bytes()))
 
 
 if __name__ == "__main__":
