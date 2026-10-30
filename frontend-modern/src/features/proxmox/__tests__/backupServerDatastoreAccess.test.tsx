@@ -178,6 +178,7 @@ describe('selected PBS datastore inspection', () => {
       vmid: '101',
       backupType: 'vm',
       backupTime: '2026-10-30T18:00:00Z',
+      files: ['index.json.blob'],
       verified: false,
       inProgress: true,
     };
