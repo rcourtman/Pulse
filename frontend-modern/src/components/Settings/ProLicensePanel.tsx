@@ -113,6 +113,7 @@ const ProLicensePanelContent: Component = () => {
                   loading={state.loading()}
                   hasLicenseDetails={state.hasLicenseDetails()}
                   looksLikeLegacyLicenseKey={state.looksLikeLegacyLicenseKey()}
+                  feedback={state.recoveryFeedback()}
                   onLicenseKeyInput={state.setLicenseKey}
                   onActivate={state.handleActivate}
                   onClear={state.handleClear}

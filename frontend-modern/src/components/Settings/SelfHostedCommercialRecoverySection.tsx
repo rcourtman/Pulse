@@ -3,6 +3,7 @@ import { formField, controlClass } from '@/components/shared/Form';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { Button } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { SELF_HOSTED_RECOVERY_PRESENTATION } from '@/utils/licensePresentation';
 import { TERMS_DOC_URL } from '@/utils/docsLinks';
 import { CommercialSection } from './CommercialBillingSections';
@@ -17,6 +18,7 @@ interface SelfHostedCommercialRecoverySectionProps {
   loading: boolean;
   hasLicenseDetails: boolean;
   looksLikeLegacyLicenseKey: boolean;
+  feedback?: { type: 'success' | 'error'; message: string } | null;
   onLicenseKeyInput: (value: string) => void;
   onActivate: () => void;
   onClear: () => void;
@@ -55,6 +57,7 @@ export const SelfHostedCommercialRecoverySection: Component<
             textareaBaseClass={controlClass('min-h-[120px] font-mono')}
             placeholder={SELF_HOSTED_RECOVERY_PRESENTATION.fieldPlaceholder}
             value={props.licenseKey}
+            disabled={props.activating || props.clearing}
             onInput={(event) => props.onLicenseKeyInput(event.currentTarget.value)}
             help={
               <>
@@ -91,12 +94,26 @@ export const SelfHostedCommercialRecoverySection: Component<
           </Show>
         </div>
 
+        <Show when={props.feedback}>
+          {(feedback) => (
+            <InlineNotice
+              tone={feedback().type === 'error' ? 'danger' : 'success'}
+              role={feedback().type === 'error' ? 'alert' : 'status'}
+              aria-live={feedback().type === 'error' ? 'assertive' : 'polite'}
+              aria-atomic="true"
+              class="break-words [overflow-wrap:anywhere]"
+            >
+              {feedback().message}
+            </InlineNotice>
+          )}
+        </Show>
+
         <div class="flex flex-wrap items-center gap-2">
           <Button
             variant="primary"
             size="settingsAction"
             onClick={props.onActivate}
-            disabled={props.activating || !props.licenseKey.trim()}
+            disabled={props.activating || props.clearing || !props.licenseKey.trim()}
           >
             {props.activating
               ? SELF_HOSTED_RECOVERY_PRESENTATION.activatePendingLabel
@@ -106,7 +123,9 @@ export const SelfHostedCommercialRecoverySection: Component<
             variant="outline"
             size="settingsAction"
             onClick={props.onClear}
-            disabled={props.clearing || props.loading || !props.hasLicenseDetails}
+            disabled={
+              props.activating || props.clearing || props.loading || !props.hasLicenseDetails
+            }
           >
             {props.clearing
               ? SELF_HOSTED_RECOVERY_PRESENTATION.clearPendingLabel

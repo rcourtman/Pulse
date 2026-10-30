@@ -1,6 +1,5 @@
 import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { notificationStore } from '@/stores/notifications';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import {
@@ -82,6 +81,10 @@ export function useProLicensePanelState() {
   );
   const [activating, setActivating] = createSignal(false);
   const [clearing, setClearing] = createSignal(false);
+  const [recoveryFeedback, setRecoveryFeedback] = createSignal<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [purchaseActivationResult, setPurchaseActivationResult] = createSignal('');
   const [purchaseActivationIntent, setPurchaseActivationIntent] =
     createSignal<SelfHostedBillingPlanIntent | null>(null);
@@ -424,19 +427,28 @@ export function useProLicensePanelState() {
   });
 
   const handleActivate = async () => {
+    if (activating() || clearing()) return;
     const trimmedKey = licenseKey().trim();
     if (!trimmedKey) {
-      notificationStore.error('A license key is required');
+      setRecoveryFeedback({ type: 'error', message: 'A license key is required' });
       return;
     }
+    // Recovery feedback belongs to the current deliberate attempt, beside its
+    // controls. Earlier failures must not outlive a successful retry in a toast
+    // stack, or cover those controls on a phone.
+    setRecoveryFeedback(null);
+    setActivationSuccessSource(null);
     setActivating(true);
     try {
       const result = await LicenseAPI.activateLicense(trimmedKey);
       if (!result.success) {
-        notificationStore.error(result.message || 'Failed to activate license');
+        setRecoveryFeedback({
+          type: 'error',
+          message: result.message || 'Failed to activate license',
+        });
         return;
       }
-      notificationStore.success(result.message || 'License activated');
+      setRecoveryFeedback({ type: 'success', message: result.message || 'License activated' });
       setActivationSuccessSource('manual');
       setLicenseKey('');
       await Promise.all([
@@ -446,22 +458,25 @@ export function useProLicensePanelState() {
       ]);
       await loadPatrolOperatorStatusIfNeeded();
     } catch (error) {
-      notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to activate license',
-      );
+      setRecoveryFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to activate license',
+      });
     } finally {
       setActivating(false);
     }
   };
 
   const handleClear = async () => {
+    if (activating() || clearing()) return;
     if (!confirm('Clear the current Pro license?')) {
       return;
     }
+    setRecoveryFeedback(null);
     setClearing(true);
     try {
       const result = await LicenseAPI.clearLicense();
-      notificationStore.success(result.message || 'License cleared');
+      setRecoveryFeedback({ type: 'success', message: result.message || 'License cleared' });
       setActivationSuccessSource(null);
       await Promise.all([
         loadPanelData(),
@@ -470,7 +485,10 @@ export function useProLicensePanelState() {
       ]);
       await loadPatrolOperatorStatusIfNeeded();
     } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to clear license');
+      setRecoveryFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to clear license',
+      });
     } finally {
       setClearing(false);
     }
@@ -499,6 +517,7 @@ export function useProLicensePanelState() {
     planSelectionPrompt,
     purchaseActivationNotice,
     purchaseActivationAction,
+    recoveryFeedback,
     setActiveSection,
     setLicenseKey,
     showRecoveryByDefault,

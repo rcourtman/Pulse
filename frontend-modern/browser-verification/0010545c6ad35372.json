@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "588de0be87dda6313de30f19acead88f902c9e33",
+  "verified_at": "2026-10-30T21:01:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+    "frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "eb1c147bb2b724ffa7ab532bd905fc12b696f8e24d2b709c63ffcb4157ad2524",
+    "frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx": "a2289e6e336ad7f68001f1e46e41b04f919ecb995713c39a7b67b03502d5b017",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts": "e0940ca4352bb139d3292683d6fef432f69cedff8f8d38ec84e218d509164e60"
+  },
+  "routes": [
+    "/settings/system/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Real full-app production/embed build of the verified parent, using recorded activation and Plan API responses with empty safe bootstrap fixtures; not an installed runtime or a new producer execution.",
+    "Chromium 141.0.7390.37 at 1280x960 and WebKit 26.0 at 320x900, Playwright 1.56.1 matching the integration lock. Temporary unavailability preserves the original entered key; successful same-key retry clears it and updates the existing plan; genuine refusal remains an error.",
+    "One inline result at a time beside the actions, with no activation/clear toast or obsolete outage/success. Synthetic clear failure preserves the draft; clear success updates the Plan view. Feedback and both actions remain readable and unoccluded without horizontal overflow in all ten captured states.",
+    "Composite verification: the first browser driver completed all desktop states and three narrow states, then failed an exact innerText comparison after narrow cancellation. A remaining-states driver measured unchanged textContent with a WebKit trailing newline in innerText and completed only the unrun narrow clear states, using one explicit refusal setup. The original failure remains retained.",
+    "All ten final-source captures opened with native view_image; no clipped result or notification overlay on the recovery actions. Existing fixed header/navigation and normal vertical scrolling are unchanged."
+  ],
+  "interactions": [
+    "Opened manual recovery by keyboard, entered the recorded synthetic key and submitted via keyboard or touch. A held retry response verified disabled input and both actions, removal of old feedback, and suppression of a duplicate pending click.",
+    "Consumed six deliberate activation replies across the desktop/narrow journeys plus one refusal setup for the remaining narrow tail; no automatic retry. Cancelled clear sends no request and preserves the last result; confirmed clear consumes four declared safe success/failure fixtures.",
+    "Checked live alert/status semantics and no floating notification, key preservation/clearing, Plan refresh, action hit testing and viewport containment; ten captures inspected natively."
+  ]
+}
