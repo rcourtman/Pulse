@@ -113,6 +113,41 @@ class ProductionRolloutDocsTest(unittest.TestCase):
             self.assertIn(boundary, text)
         self.assertNotRegex(text, r"(?:--insecure|curl[^\n]*\||--token\s)")
 
+    def test_linux_profile_choice_matches_installer_authority_boundaries(self):
+        text = section("### Choose a Linux agent profile")
+        for boundary in ("two different least-privilege profiles",
+                         "--least-privilege --enable-privileged-helper",
+                         "root-owned binaries", "no membership in the rootful Docker group",
+                         "does not remove all root code", "Do not combine it",
+                         "--grant-smart", "--grant-pct", "PrivateNetwork",
+                         "root-equivalent", "NoNewPrivileges=false",
+                         "not the default or full-telemetry parity",
+                         "not container stats, image-update checks or lifecycle actions",
+                         "collector-owned rootless socket", "separately enabled action runner",
+                         "not NAS appliances or non-systemd platforms",
+                         "Ordinary `--update` preserves the installed profile",
+                         "not a diagnostic step"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, text)
+        installer = (ROOT / "scripts/install.sh").read_text()
+        # The summary must explain distinct real installer paths, not imply
+        # that adding every privilege flag produces the stronger profile.
+        for refusal in ("--enable-privileged-helper requires --least-privilege",
+                        "--enable-privileged-helper cannot be combined with legacy --grant-smart/--grant-pct sudo paths",
+                        "--least-privilege and --enable-commands are mutually exclusive",
+                        "--enable-action-runner requires the safe --least-privilege --enable-privileged-helper collector profile"):
+            self.assertIn(refusal, installer)
+        account = installer.split("provision_least_privilege_user() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('"$PRIVILEGED_HELPER_ENABLED" != "true" && "$ENABLE_DOCKER" != "false"', account)
+        self.assertIn('usermod -aG docker "$LEAST_PRIVILEGE_USER"', account)
+
+    def test_rollout_requires_profile_choice_not_root_as_the_only_host_path(self):
+        text = section("## Production rollout checklist")
+        self.assertIn("Add host agents only for needed local telemetry", text)
+        self.assertIn("#choose-a-linux-agent-profile", text)
+        self.assertIn("Docker socket authority and reduced telemetry", text)
+        self.assertNotIn("Add root agents only", text)
+
     def test_operational_upgrade_checks_are_observational_not_action_probes(self):
         text = " ".join(TRUST_DOC.read_text().split("### Read-only checks after upgrading\n", 1)[1].split())
         for boundary in ("existing authenticated browser session", "ordinary collection",

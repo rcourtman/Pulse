@@ -15,7 +15,7 @@ utilization, storage, guests, and status.
 | Collection path and coverage | Privilege boundary |
 | --- | --- |
 | **Proxmox API only:** PVE, PBS, and PMG inventory; node and guest state; storage usage; and normal API metrics | No Pulse software runs on the Proxmox host. Use a dedicated read-only or narrowly scoped API token. |
-| **Proxmox API plus host agent:** API coverage plus host-local SMART, temperatures, ZFS/Ceph/mdadm detail, arbitrary mount capacity, and full LXC filesystem capacity | The Linux agent runs as `root` by default for the supported full-telemetry profile. |
+| **Proxmox API plus host agent:** API coverage plus host-local telemetry; the available readings depend on the chosen agent profile | The full-telemetry Linux agent runs as `root` by default. Compare the [Linux agent profiles](#choose-a-linux-agent-profile) before granting host access. |
 | **Guest-local agent:** Host metrics and optional Docker/Podman inventory inside a VM or LXC | The agent is trusted inside that guest only; it does not grant Pulse access to the hypervisor. |
 
 For most Proxmox installations, begin with **Settings → Infrastructure**
@@ -66,13 +66,45 @@ unmarked installations remain in a visible `legacy` compatibility state during
 the migration. Agent Doctor reports both local authority and credential scope
 so an over-scoped monitoring install is not mistaken for a safe default.
 
-On standard Linux systemd hosts the installer also offers a supported
-least-privilege profile: `--least-privilege` runs the service as a dedicated
-`pulse-agent` system user, with optional `--grant-smart` and `--grant-pct`
-flags that restore SMART and Proxmox LXC filesystem collection through
-exact-command sudoers grants. Command execution and `pct exec` guest inventory
-stay root-profile features. If API data is sufficient, API-only monitoring
-remains the cleanest least-privilege choice of all — it needs no agent.
+### Choose a Linux agent profile
+
+If API data is sufficient, keep API-only monitoring: it needs no host agent.
+For standard Linux systemd hosts that need local readings, there are **two
+different least-privilege profiles**, not one interchangeable set of flags:
+
+- **Typed-helper profile — `--least-privilege --enable-privileged-helper`.**
+  The networked collector runs as `pulse-agent`, with root-owned binaries and
+  no membership in the rootful Docker group. A separate root helper, isolated
+  from the host network, handles bounded SMART, LXC filesystem and container
+  summary reads, and signed collector-update transactions. This reduces the
+  collector's authority; it does not remove all root code. Do not combine it
+  with `--grant-smart` or `--grant-pct`, or remove the helper's `PrivateNetwork`
+  isolation to recover a missing reading.
+- **Legacy compatibility profile — `--least-privilege` alone.** The collector
+  uses a non-root service account, but can join the `docker` group when Docker
+  monitoring is enabled. Access to a rootful Docker socket is root-equivalent;
+  a non-root username alone does not establish isolation. Optional
+  `--grant-smart` and `--grant-pct` use scoped sudo wrappers, not the typed
+  helper. An active sudo grant sets `NoNewPrivileges=false`; without those
+  grants it stays enabled. These are deliberate privilege trade-offs, not
+  fixes to apply automatically when telemetry is missing.
+
+The typed-helper profile is **opt-in, not the default or full-telemetry parity**.
+For rootful Docker or Podman it supplies container summaries, not container
+stats, image-update checks or lifecycle actions. Full container monitoring
+needs a supported collector-owned rootless socket; do not substitute a rootful
+socket to fill the gap. The collector cannot enable the combined command
+profile. A separately enabled action runner has its own credential and trust
+boundary; choosing the helper does not enable it.
+
+Both least-privilege choices are limited to standard Linux systemd hosts, not
+NAS appliances or non-systemd platforms; an unsupported-profile refusal is not
+a reason to bypass the installer. Check the
+[profile details](AGENT_SECURITY.md#least-privilege-agent-profile) and
+[support and qualification limits](AGENT_SECURITY.md#safe-profile-support-and-qualification-matrix)
+against the version you intend to install. Ordinary `--update` preserves the
+installed profile; it does not migrate a root collector to the typed helper.
+Changing profile is a separate planned operation, not a diagnostic step.
 
 See [Agent Security](AGENT_SECURITY.md) for the precise command, guest-access,
 update, and service-hardening boundaries.
@@ -208,7 +240,9 @@ and measure their own workload.
   allowlist for a temporary discovery run.
 - [ ] Confirm inventory, storage, backup, replication, and alert behavior on
   one cluster before adding the rest.
-- [ ] Add root agents only to hosts that need specific local telemetry; keep
+- [ ] Add host agents only for needed local telemetry. Compare the
+  [agent profiles](#choose-a-linux-agent-profile), including Docker socket
+  authority and reduced telemetry, before choosing root or sudo grants. Keep
   commands disabled unless there is a reviewed operational need.
 - [ ] Check existing inventory and provider identity before adding another
   cluster; matching node names or VMIDs do not establish the same resource.
