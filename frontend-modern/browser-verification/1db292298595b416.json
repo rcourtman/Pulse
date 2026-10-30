@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2c2a19b31f99618e349952bb1a2c1b74cd68e590",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "b1755e93dd0f9d6b33150be84cc3edd0f6a2e2045922c4368ad4ffdea7053343"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000,
+      "browser": "chromium 141.0.7390.37",
+      "theme": "light",
+      "touch": false
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "chromium 141.0.7390.37",
+      "theme": "dark",
+      "touch": true
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "webkit 26.0",
+      "theme": "light",
+      "touch": true
+    }
+  ],
+  "states": [
+    "Guest snapshot versus a separate backup",
+    "Provider verification, prune retention and their distinct limits",
+    "Conservative incomplete write activity, active writer and no-current-writer artifact",
+    "Unverified/missing verification, ordinary PVE file and host backup",
+    "Same-ID point refresh and recovery with one open detail and retained native focus"
+  ],
+  "interactions": [
+    "Native desktop Tab/Enter opens the point and Space closes it; native row taps and close controls at320px",
+    "Six ordinary polling updates change the same open point without stale verification or retention assurances",
+    "Host backup does not invent a guest thaw requirement; a PVE file does not borrow PBS verification"
+  ],
+  "verified_at": "2026-10-30T04:00:42.331019Z",
+  "notes": "Production App and exact final-source export (source-c6rzawqi) against safe local authenticated HTTP/realtime inventory fixtures.78 checks include2760 module-file and124 production-asset identities,63 monitoring/org-bound evidence reads, no writes/external requests/App errors and no overflow. All11 final captures were inspected with native view_image. This is existing inspection safety, not native guest/restore recovery or release availability. Earlier baseline-driver failures and the separate original proof143 remain retained."
+}
