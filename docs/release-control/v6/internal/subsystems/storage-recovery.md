@@ -21,6 +21,29 @@
 
 ## Purpose
 
+### A dated backup disclosure identifies the restore point, not only its owner
+
+The By date table keeps its existing native disclosure visible at phone widths,
+with a reserved 36px target beside the wrapping identity. A disclosure names the
+workload/PVE connection, source kind, precise creation time (or Unknown), backup
+reader, location and native identifier. Repeated workloads, tied dates and
+unavailable dates do not collapse into indistinguishable controls; sorting does
+not supply identity. Visible Created detail uses the same year/second/time-zone
+precision. Its Identifier is the native record ID, not a file count or format;
+the previous file/path metadata remains separately labelled. State-only polls do not rename the point; revised reader/location
+facts update the existing disclosure without dropping focus or changing owners.
+
+Normal-suite `ProxmoxRecoverableTable.test.tsx` and
+`recoverableIdentityAccess.test.tsx` cover names, unknown/tied dates, raw inventory
+consumption, visible controls, single native activation and scoped refresh.
+Actual-App desktop/narrow browser proof exercises point selection by accessible
+identity, keyboard/phone activation, close-focus return and same-ID polling,
+with inspected pixels. No shared primitive, source identity, provider read,
+classification, count, policy or guest/backup/restore operation changes. This
+makes existing inspection usable; it does not establish a tested restore,
+original guest recovery or release availability.
+
+
 ### Restore-point inspection states what its evidence cannot confirm
 
 The existing By date record detail places a visible, wrapping evidence-limits

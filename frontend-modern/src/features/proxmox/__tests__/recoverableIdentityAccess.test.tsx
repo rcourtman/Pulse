@@ -214,7 +214,54 @@ describe('restore-point identity without hover', () => {
     expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(panel);
     expect(panel).toHaveTextContent(reader);
     expect(panel).not.toHaveTextContent('pbs-before');
+    expect(toggle).toHaveAccessibleName(/Backup connection: pbs-after/);
+    expect(toggle).toHaveAccessibleName(/Location: after \/ pve-1/);
+    expect(toggle).not.toHaveAccessibleName(/pbs-before/);
     expect(document.activeElement).toBe(toggle);
     expect(api.fetch).toHaveBeenCalledTimes(4);
   });
+});
+
+it('names multiple dates, readers and same-time snapshots independently in the raw inventory consumer', async () => {
+  const dated = [
+    identityPBS({ id: 'newer', backupTime: '2026-10-04T10:00:01Z' }),
+    identityPBS({ id: 'older', backupTime: '2026-10-03T10:00:01Z' }),
+    identityPBS({ id: 'offsite', instance: 'offsite-reader', backupTime: '2026-10-04T10:00:01Z' }),
+  ];
+  mount({
+    guests: workloads().slice(0, 1),
+    pve: () => ({
+      ...emptyPVE,
+      guestSnapshots: [
+        identitySnapshot({ id: 'before-upgrade', instance: scopes[0] }),
+        identitySnapshot({ id: 'before-packages', instance: scopes[0], name: 'before-packages' }),
+      ],
+    }),
+    pbs: () => dated,
+  });
+  const points = await rows();
+  expect(points).toHaveLength(5);
+  const controls = points.map((row) => within(row).getByRole('button', { name: /Expand details/ }));
+  expect(new Set(controls.map((button) => button.getAttribute('aria-label'))).size).toBe(5);
+  for (const id of ['newer', 'older', 'offsite', 'before-upgrade', 'before-packages']) {
+    const button = screen.getByRole('button', { name: new RegExp(`Identifier: ${id}$`) });
+    expect(button).not.toHaveClass('sr-only');
+    expect(button).toHaveAccessibleName(/Created:/);
+    expect(button).toHaveAccessibleName(/PVE connection: pve.cluster.production.london/);
+    fireEvent.click(button);
+    const detail = screen.getByTestId('proxmox-recoverable-detail');
+    expect(detail).toHaveAttribute(
+      'data-inline-detail-for',
+      `${dated.some((p) => p.id === id) ? 'pbs' : 'snapshot'}:${id}`,
+    );
+    const created = within(detail)
+      .getByText('Created')
+      .closest('tr')!
+      .querySelector('td:last-child')!;
+    expect(button.getAttribute('aria-label')).toContain(`Created: ${created.textContent}`);
+    expect(created).toHaveTextContent('2026');
+    expect(within(detail).getByText('Identifier').closest('tr')).toHaveTextContent(id);
+  }
+  expect(screen.getAllByTestId('proxmox-recoverable-detail')).toHaveLength(1);
+  expect(api.fetch).toHaveBeenCalledTimes(2);
 });
