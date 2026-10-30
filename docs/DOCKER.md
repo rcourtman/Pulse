@@ -341,9 +341,42 @@ execution disabled when you only need monitoring.
 
 ### How It Works
 
-1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
+1. **Update Detection**: The agent compares the running image's registry digests with a registry tag lookup for the host's platform; that lookup can be cached
 2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
 3. **Reviewed Update**: Review the target and approve the action, then verify the application yourself
+
+### Reading an update indicator
+
+An update arrow is an image comparison, not an installation result or an
+application health check. Digests identify content; a difference alone does
+not establish which image is newer.
+
+**A recent check need not be a fresh registry lookup.** Successful registry
+lookups are cached for up to six hours. A container's checked timestamp can
+advance when the agent compares its current local image with a cached result.
+The host's **Last checked** is the newest container-check time, not proof that
+every container was checked. Reloading the page does not refresh the agent's
+registry cache. A missing result or a check error is unknown, not evidence
+that the image is up to date.
+
+Keep three different identities separate:
+
+- A tag such as `latest` is a mutable name. The same tag text can refer to
+  different images before and after an update.
+- The container's local **ImageID** identifies the image it actually uses,
+  not a registry manifest. Do not compare it directly with `latestDigest`.
+- A multi-platform tag's top-level index and its platform-specific manifest
+  have different digests. Compare the same repository, tag, platform and
+  manifest layer; different digest types do not by themselves prove an update.
+
+**If an update indicator returns after recreation, do not repeat the update
+just to clear it.** Reconcile the existing action receipt, your deployment
+manager's recorded running image and the application's ordinary health first.
+Use the [read-only workload state checks](#action-was-sent-or-its-outcome-is-unknown)
+when an action's outcome is uncertain; they do not pull or recreate anything.
+Do not restart or reinstall the agent, broaden a token, disable TLS verification
+or delete images or volumes to test the indicator. Keep full inspections,
+environments and registry credentials private.
 
 ### Updating a Container
 

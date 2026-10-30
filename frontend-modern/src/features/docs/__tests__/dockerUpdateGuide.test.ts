@@ -25,6 +25,87 @@ function section(article: HTMLElement, id: string): string {
 }
 
 describe('shipped monitored-container update guide', () => {
+  it('distinguishes a cached comparison and its timestamp from fresh registry evidence', () => {
+    const article = renderGuide();
+    const text = section(article, 'reading-an-update-indicator');
+    for (const phrase of [
+      'not an installation result or an application health check',
+      'a difference alone does not establish which image is newer',
+      'Successful registry lookups are cached for up to six hours',
+      'checked timestamp can advance',
+      'not proof that every container was checked',
+      "Reloading the page does not refresh the agent's registry cache",
+      'unknown, not evidence that the image is up to date',
+    ]) {
+      expect(text).toContain(phrase);
+    }
+    expect(section(article, 'how-it-works')).toContain('that lookup can be cached');
+    expect(section(article, 'how-it-works')).not.toContain('the latest digest');
+  });
+
+  it('keeps the documented cache and clock limits bound to their producers', () => {
+    // Source consistency only: this does not execute a registry check or
+    // reproduce the reporter's failed comparison after recreation.
+    const registry = readFileSync(
+      path.join(repoRoot, 'internal/dockeragent/registry.go'),
+      'utf8',
+    );
+    const collector = readFileSync(
+      path.join(repoRoot, 'internal/dockeragent/collect.go'),
+      'utf8',
+    );
+    const adapter = readFileSync(
+      path.join(repoRoot, 'internal/unifiedresources/adapters.go'),
+      'utf8',
+    );
+    expect(registry).toMatch(/defaultCacheTTL\s*=\s*6\s*\*\s*time.Hour/);
+    const cacheHit = registry
+      .split('if cached := r.getCached(cacheKey); cached != nil {')[1]
+      .split('// Fetch latest digest from registry')[0];
+    expect(cacheHit).toMatch(/LatestDigest:\s+cached.latestDigest/);
+    expect(cacheHit).toMatch(/CheckedAt:\s+time.Now\(\)/);
+    expect(collector).toMatch(/LastChecked:\s+result.CheckedAt/);
+    expect(adapter).toContain('container.UpdateStatus.LastChecked.After(updatesLastCheckedAt)');
+  });
+
+  it('does not compare local image IDs with registry or other-platform manifest digests', () => {
+    const text = section(renderGuide(), 'reading-an-update-indicator');
+    for (const phrase of [
+      'The same tag text can refer to different images',
+      'not a registry manifest. Do not compare it directly with latestDigest',
+      'top-level index and its platform-specific manifest have different digests',
+      'same repository, tag, platform and manifest layer',
+    ]) {
+      expect(text).toContain(phrase);
+    }
+  });
+
+  it('leads a returning indicator to existing read-only state checks, not a second update', () => {
+    const article = renderGuide();
+    const text = section(article, 'reading-an-update-indicator');
+    for (const phrase of [
+      'do not repeat the update just to clear it',
+      'existing action receipt',
+      "application's ordinary health first",
+      'they do not pull or recreate anything',
+      'Do not restart or reinstall the agent, broaden a token, disable TLS verification',
+      'delete images or volumes to test the indicator',
+      'Keep full inspections, environments and registry credentials private',
+    ]) {
+      expect(text).toContain(phrase);
+    }
+    const link = Array.from(article.querySelectorAll('a')).find(
+      (anchor) => anchor.textContent === 'read-only workload state checks',
+    );
+    expect(link?.getAttribute('href')).toBe(
+      '#action-was-sent-or-its-outcome-is-unknown',
+    );
+    expect(link?.hasAttribute('data-doc-link')).toBe(false);
+    expect(article.querySelector(link!.hash)?.textContent).toBe(
+      'Action was sent or its outcome is unknown',
+    );
+  });
+
   it('separates a legacy monitoring credential from independent runner posture and operator intent', () => {
     const text = section(renderGuide(), 'command-agent-is-not-connected');
     for (const phrase of [
