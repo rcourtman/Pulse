@@ -248,11 +248,14 @@ const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSect
     ),
     makeDetailRow(
       'Duration',
-      task.durationSeconds === undefined
-        ? 'Not reported'
-        : task.durationSeconds === 0
-          ? '0s'
-          : formatDurationFromSeconds(task.durationSeconds),
+      task.durationUnknown
+        ? 'Unknown'
+        : task.durationSeconds === undefined
+          ? 'Not reported'
+          : task.durationSeconds === 0
+            ? '0s'
+            : formatDurationFromSeconds(task.durationSeconds),
+      { tone: task.durationUnknown ? 'warning' : undefined },
     ),
     makeDetailRow(
       'Error',
@@ -272,6 +275,11 @@ const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSect
   ]),
   footerContent: (
     <>
+      <Show when={task.durationUnknown}>
+        <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+          The reported timestamps or running status do not establish a completed duration.
+        </p>
+      </Show>
       <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
         Task connection and node are reported by the task, not the workload’s current placement.
       </p>

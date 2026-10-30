@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "d7f7eaf52af61913f07de4cd80573e4d14171ce6",
+  "verified_at": "2026-10-30T15:36:40.455274Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "b5862589c40490206be2c541ae2419d65d4bc06dc8ba4aeadbb754d43b3427cc",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "c0dcad1ad27a86d90ac4bae123bc40be17b0d09634ac260af12cd584377979ea"
+  },
+  "routes": [
+    "/proxmox/backups/coverage \u2014 safe offline shell mounts production ProxmoxBackupsTable, actual inventory fetch/parser, recovery model, bounded query and detail UI; not full App/native auth."
+  ],
+  "states": [
+    "Baseline future-end and running-with-end tasks show numeric durations in both engines. Current duration is Unknown with an explanation, not Not reported or zero; provider status, error and protection remain separate.",
+    "Missing ends remain Not reported. Valid positive subsecond intervals remain 0s; valid offset instants display 1m 5s.",
+    "Possible latest tasks keep separate status, duration, full identity and literal error; unknown ordering is explicit. Ordinary polling withdraws/restores timing without replacing the inspected panel or losing summary focus. Namesake west receives no east task."
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard and 320px WebKit native touch disclosure/collapse, ordinary three-read polling, retained panel/focus, unknown/running/missing/zero, ambiguous task cards, valid offsets and namesake isolation. No unexpected network or mutations.",
+    "All 17 retained captures opened using native view_image and inspected. Unknown explanations and scoped identity are readable at desktop and 320px; cards stack without document overflow.",
+    "Completed browser portions were retained across two evidence-script assertion corrections: rendered uppercase headings and WebKit table-cell whitespace. Both failing results and raw scripts remain retained; no runtime source or capability change."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "touch": false,
+      "colour_scheme": "light"
+    },
+    {
+      "width": 320,
+      "height": 1000,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "touch": true,
+      "colour_scheme": "dark"
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, SOURCE-PROOF-BINDING.json, BROWSER-BINDING.json, three raw browser results, PIXEL-REVIEW.json and retained archives. Playwright 1.56.1 matches the integration lock. Builds bind source 09c79665 with identical runtime; later changes are test-only, with final format proof at this parent.",
+  "limitations": [
+    "No native task/guest/installed recovery, auth, provider operation or release acceptance.",
+    "Original older browser deadline and unobserved full descendant cleanup remain historical, not cleared by these completed later proofs."
+  ]
+}
