@@ -843,11 +843,13 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
       (task) => [task.label, task.error, task.id, task.instance, task.node],
     ),
     ...row.artifacts.flatMap((artifact) => [
+      artifact.nativeId,
       artifact.sourceLabel,
       artifact.sourceTitle,
       artifact.locationConnection || 'unknown connection',
       artifact.location,
       artifact.detail,
+      artifact.detailTitle,
     ]),
   ];
   return haystack.filter(Boolean).join(' ').toLowerCase().includes(normalizedTerm);
@@ -868,6 +870,7 @@ export function recoverableArtifactMatchesSearch(
     artifact.workload.nativeNode,
     ...(artifact.workload.nativeNodeAliases ?? []),
     artifact.workload.instance,
+    artifact.nativeId,
     artifact.sourceLabel,
     artifact.sourceTitle,
     artifact.locationConnection || 'unknown connection',

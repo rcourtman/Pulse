@@ -20,6 +20,13 @@
 
 ## Purpose
 
+The existing backup text search matches admitted native restore-point identifiers
+in both By date and Coverage, and full archive metadata in Coverage. This is a
+consumer haystack correction: the shared FilterBar/SearchInput, literal search
+grammar, keyboard and touch controls, and exact scope-filter keys are unchanged.
+Normal `ProxmoxBackupsTable.test.tsx` and actual-App desktop/narrow proof cover
+input and cross-view retention without additional provider reads.
+
 ### Summary buttons activate once per Space press
 
 Native summary disclosure and scope buttons retain their existing keydown-owned

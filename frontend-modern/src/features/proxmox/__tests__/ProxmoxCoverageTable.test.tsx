@@ -118,6 +118,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(screen.getAllByTestId('proxmox-coverage-detail')).toHaveLength(1);
   });
 
+  // This functional fixture renders four successive dense task-card previews.
+  // Like the full-history consumer test, give its JSDOM work an explicit budget;
+  // this is not a production render-time or query-latency assertion.
   it('resets a deliberate task preview when another workload is opened, not on a refresh', () => {
     const tasks = Array.from({ length: 24 }, (_, index) =>
       identityTask({ id: `candidate-${index}`, startTime: 'invalid' }),
@@ -165,7 +168,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
       'Showing 8 of 24 possible latest tasks.',
     );
-  });
+  }, 15_000);
 
   it('keeps malformed assessment dates unknown instead of normalising them or borrowing a clock', () => {
     renderInRouter(() => (

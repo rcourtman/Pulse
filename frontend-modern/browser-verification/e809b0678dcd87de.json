@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "27c75854a18eb3e20a897b583a3cdf88bd04bbc4",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "fd8006354268b2592578afb4ad7d84662f6e04a683bff6c50d332c6d599dec89"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Production App consumes safe authenticated raw PVE/PBS inventory with six points and same-name guests on independent connections. Native point ID and full archive path lookup select the admitted point and scoped owner.",
+    "Existing query persists across By date and Coverage; Coverage retains complete workload evidence and unchanged fleet posture, rather than guessing protection from lookup.",
+    "Case-insensitive ID lookup, negative match, clearing, ordinary30s refresh, PBS403 withdrawal and explicit retry recovery. Existing node facet continues excluding a mismatched point."
+  ],
+  "interactions": [
+    "Actual input and native Tab/Enter disclosure at desktop; native touch selection at320px Chromium/WebKit.",
+    "View links retain the exact query without additional inventory reads. Source failure withholds its matches, successful same-source retry restores its owner.",
+    "Desktop/narrow captures inspected with native view_image: complete Identifier and metadata, readable scopes and no document overflow."
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "verified_at": "2026-10-30T06:34:03Z",
+  "source_proof": {
+    "source_sha": "27c75854a18eb3e20a897b583a3cdf88bd04bbc4",
+    "receipt_id": "source-eti8n9fr",
+    "production_assets": 124
+  },
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "checks": 60,
+    "basis": "Two baseline and three final-App cases; baseline uses retained3f04de6e production assets whose1135runtime files match assigned main. No old build/tests replayed."
+  },
+  "captures": [
+    {
+      "name": "desktop-chromium-dated-point.png",
+      "sha256": "3292a37785e10b9420292721e3a7ce18f2b2bf92b18448ea95b82a7bc7485f80"
+    },
+    {
+      "name": "desktop-chromium-coverage-owner.png",
+      "sha256": "6cd818fc3b588118ee34588d5a15382a1872343d0bbcac1f51572a2e4ab69db1"
+    },
+    {
+      "name": "phone-chromium-dated-point.png",
+      "sha256": "1dd8d552104dca381c254626f4c095e7cf86e6b5b4f21f7dabb7c9032dc63c66"
+    },
+    {
+      "name": "phone-chromium-coverage-owner.png",
+      "sha256": "f4fa41fd2366c2ada1b4bbf2c02dcb20575bf4fd69a46a6dca8c425088f0605a"
+    },
+    {
+      "name": "phone-webkit-dated-point.png",
+      "sha256": "63fe36f854fb9dfa3b9901fc745ba8a7e020c1fa0c18df1a6f6e009f0e29bfac"
+    },
+    {
+      "name": "phone-webkit-coverage-owner.png",
+      "sha256": "3980bff8b3dfa236583b2437f10d46e1ad1595182405c47e9838602b263c7212"
+    }
+  ],
+  "limits": "Safe local read-only HTTP fixtures, not provider/installed recovery or publication."
+}
