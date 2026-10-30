@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Backup size uncertainty survives responsive disclosure
+
+The Backups consumer uses the existing byte formatter only for a positive
+reported size. Its row and open point explicitly label unavailable sizes rather
+than hiding them; Coverage folds the same per-point fact beside its source when
+the size column is hidden. Wrapping explanatory text keeps unknown distinct
+from an empty point without adding a shared primitive or changing byte units,
+layout breakpoints, control ownership or focus. Storage/recovery owns the size
+admission and ordering. Normal Proxmox consumer tests and desktop/narrow browser
+inspection cover the actual disclosure, including same-point polling.
+
 ### Selected PBS datastore remains inspectable without hover
 
 The existing PBS row disclosure is named by backup reader and datastore, rather
