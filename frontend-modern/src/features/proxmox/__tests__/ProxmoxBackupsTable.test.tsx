@@ -3074,7 +3074,7 @@ describe('By-date restore-point scope', () => {
       />
     ));
     const toggle = await screen.findByRole('button', {
-      name: 'Expand details for east-100 (VM 100) · PVE connection: east',
+      name: /^Expand details for east-100 \(VM 100\) · PVE connection: east · PBS snapshot/,
     });
     const point = toggle.closest('tr')!;
     expect(point.querySelector('[data-backup-workload-connection]')).toHaveTextContent('PVE: east');

@@ -109,6 +109,26 @@ const artifactVerificationText = (artifact: RecoverableArtifact): string => {
   return artifact.sourceKind === 'snapshot' ? '' : 'Not reported';
 };
 
+const artifactCreatedLabel = (artifact: RecoverableArtifact): string =>
+  artifact.createdMs === undefined
+    ? 'Unknown'
+    : formatPlatformTableDateTimeValue(artifact.createdMs, {
+        dateTimeFormat: { second: '2-digit', timeZoneName: 'short' },
+      });
+
+// A dated feed can contain many points for the same workload. Name the point,
+// not just its owner: source, repository scope and native ID also distinguish
+// tied/unknown dates without inventing an order or using an unstable row index.
+const artifactDisclosureLabel = (artifact: RecoverableArtifact): string =>
+  [
+    getBackupWorkloadDisclosureLabel(artifact.workload),
+    getProxmoxBackupSourcePresentation(artifact.sourceKind).detailFallbackLabel,
+    `Created: ${artifactCreatedLabel(artifact)}`,
+    `Backup connection: ${artifact.locationConnection || 'Not reported'}`,
+    `Location: ${artifact.location}`,
+    `Identifier: ${artifact.nativeId}`,
+  ].join(' · ');
+
 // State badges report provider evidence, not a tested recovery. Keep those
 // limits beside the open point's state, where keyboard and touch readers can
 // read them without hovering a badge or leaving for workload coverage.
@@ -143,13 +163,9 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         }),
         makeDetailRow('Connection', artifact.locationConnection || 'Not reported', { wrap: true }),
         makeDetailRow('Location', artifact.location, { wrap: true }),
-        makeDetailRow(
-          PROXMOX_BACKUP_COLUMN_LABELS.created,
-          artifact.createdMs === undefined
-            ? 'Unknown'
-            : formatPlatformTableDateTimeValue(artifact.createdMs),
-          { tone: artifact.createdMs === undefined ? 'warning' : undefined },
-        ),
+        makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.created, artifactCreatedLabel(artifact), {
+          tone: artifact.createdMs === undefined ? 'warning' : undefined,
+        }),
         makeDetailRow(
           'Size',
           artifact.size && artifact.size > 0 ? formatPlatformTableBytesValue(artifact.size) : '',
@@ -284,8 +300,10 @@ export function ProxmoxRecoverableTable(props: {
           <div class={`flex min-w-0 gap-2 ${stackedIdentity() ? 'items-start' : 'items-center'}`}>
             <PlatformResourceDetailToggleButton
               expanded={drawer.isExpanded(artifact)}
-              resourceLabel={getBackupWorkloadDisclosureLabel(artifact.workload)}
+              resourceLabel={artifactDisclosureLabel(artifact)}
               controlsId={drawer.detailRowId(artifact)}
+              hideWhenRowTappableOnMobile={false}
+              class="my-0"
               onToggle={() => drawer.toggle(artifact)}
             />
             <div class="min-w-0 flex-1">
