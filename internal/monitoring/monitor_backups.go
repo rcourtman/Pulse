@@ -768,8 +768,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	m.checkBackupAlerts(ctx)
 
-	// Clear permission warning if no permission errors occurred this cycle
-	if !hadPermissionError {
+	// Only a complete accepted enumeration can clear an earlier access
+	// warning. An unread scope has not demonstrated permission recovery.
+	if !hadPermissionError && protectionObservationErr == nil &&
+		protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
 		m.mu.Lock()
 		delete(m.backupPermissionWarnings, instanceName)
 		m.mu.Unlock()

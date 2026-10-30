@@ -139,6 +139,7 @@ func TestPVEStorageBudgetPublishesAcceptedListings(t *testing.T) {
 					}
 					c.at = c.at.Add(15 * time.Minute)
 					c.phase, c.calls = phase, nil
+					f.m.backupPermissionWarnings = map[string]string{"cluster": "previous access warning"}
 					// The timeout starts only after fixture/storage preparation.
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 					defer cancel()
@@ -204,6 +205,9 @@ func TestPVEStorageBudgetPublishesAcceptedListings(t *testing.T) {
 						}
 					}
 					f.assertHistory(t, recovery.ProtectionHistoryPartial, operationaltrust.EvidencePermissionsUnknown)
+					if f.m.backupPermissionWarnings["cluster"] != "previous access warning" {
+						t.Error("unread scope cleared its prior access warning")
+					}
 					frames["partial"] = storageBudgetFrame(t, f)
 					c.phase, c.calls = "", nil
 					pollStorageBudget(t, f, c, context.Background())
@@ -213,6 +217,9 @@ func TestPVEStorageBudgetPublishesAcceptedListings(t *testing.T) {
 						}
 					}
 					f.assertHistory(t, recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient)
+					if f.m.backupPermissionWarnings["cluster"] != "" {
+						t.Error("complete accepted enumeration failed to clear the recovered access warning")
+					}
 					frames["recovered"] = storageBudgetFrame(t, f)
 					if os.Getenv("PULSE_STORAGE_BUDGET_FRAMES") == "1" && kind == "qemu" && phase == "content/node-b/local" && !cold {
 						source, err := os.ReadFile("monitor_backups.go")

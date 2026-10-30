@@ -30,7 +30,7 @@ provider read starts after expiry. Remaining known local repositories and
 unlisted nodes retain their last live rows without renewing durable evidence;
 only accepted rows advance. An accepted empty repository can remove its raw
 rows, but incomplete instance-wide history cannot reconcile durable absence or
-claim complete protection. PBS attribution without node provenance survives an
+claim complete protection or clear an earlier access warning. PBS attribution without node provenance survives an
 unread node until an accepted storage or complete enumeration replaces it.
 
 Explicit request cancellation withdraws the enumeration. Dropping an expired
