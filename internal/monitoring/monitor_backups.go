@@ -25,6 +25,7 @@ import (
 
 const (
 	pbsBackupSnapshotFetchWorkers = 5
+	pveGuestSnapshotFetchWorkers  = 8
 	// runningVzdumpClockSkew is the slack applied when deciding whether a
 	// backup file's ctime falls inside a running vzdump task's window, so a
 	// small clock offset between Pulse and the node cannot misclassify the
@@ -1297,10 +1298,9 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	}
 
 	const (
-		minSnapshotTimeout              = 60 * time.Second
-		maxSnapshotTimeout              = 4 * time.Minute
-		snapshotTimeoutPerGuest         = 2 * time.Second
-		maxConcurrentGuestSnapshotPolls = 8
+		minSnapshotTimeout      = 60 * time.Second
+		maxSnapshotTimeout      = 4 * time.Minute
+		snapshotTimeoutPerGuest = 2 * time.Second
 	)
 
 	timeout := minSnapshotTimeout
@@ -1405,49 +1405,61 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		return client.GetVMSnapshots(snapshotCtx, target.node, target.vmid)
 	}
 
-	results := make(chan guestSnapshotPollResult, len(targets))
+	// Bound waiting goroutines as well as active provider reads. A semaphore
+	// inside one goroutine per guest still leaves thousands of suspended
+	// collectors on a large estate. The dispatcher stops on cancellation, and
+	// unattempted targets remain unpolled so their prior listings survive.
+	queue := make(chan guestSnapshotPollTarget)
+	results := make(chan guestSnapshotPollResult, pveGuestSnapshotFetchWorkers)
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, maxConcurrentGuestSnapshotPolls)
-
-	for _, target := range targets {
-		target := target
+	for i := 0; i < min(len(targets), pveGuestSnapshotFetchWorkers); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
-			select {
-			case sem <- struct{}{}:
-			case <-snapshotCtx.Done():
-				results <- guestSnapshotPollResult{target: target, err: snapshotCtx.Err()}
-				return
-			}
-			defer func() { <-sem }()
-
-			snapshots, err := fetchSnapshots(target)
-			// A provider returning nil error after cancellation did not supply
-			// an accepted listing. Optional sizing can exhaust its budget later,
-			// but cannot retroactively invalidate a listing accepted here.
-			if err == nil {
-				err = snapshotCtx.Err()
-			}
-			result := guestSnapshotPollResult{target: target, err: err}
-			if err == nil {
-				result.polled = true
-				result.snapshots = make([]models.GuestSnapshot, 0, len(snapshots))
-				for _, snap := range snapshots {
-					result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
+			for target := range queue {
+				// Dispatch and cancellation can become ready together. A queued
+				// target is not permission to start another expired provider read.
+				if snapshotCtx.Err() != nil {
+					return
 				}
-				// Only an accepted listing establishes membership, including an
-				// empty one. LXC 596/unavailable errors are not deletion evidence;
-				// leave failed guests unpolled so their last listing is retained.
+				snapshots, err := fetchSnapshots(target)
+				// A provider returning nil error after cancellation did not supply
+				// an accepted listing. Optional sizing can exhaust its budget later,
+				// but cannot retroactively invalidate a listing accepted here.
+				if err == nil {
+					err = snapshotCtx.Err()
+				}
+				result := guestSnapshotPollResult{target: target, err: err}
+				if err == nil {
+					result.polled = true
+					result.snapshots = make([]models.GuestSnapshot, 0, len(snapshots))
+					for _, snap := range snapshots {
+						result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
+					}
+					// Only an accepted listing establishes membership, including an
+					// empty one. LXC 596/unavailable errors are not deletion evidence;
+					// leave failed guests unpolled so their last listing is retained.
+				}
+				results <- result
 			}
-
-			results <- result
 		}()
 	}
-
-	wg.Wait()
-	close(results)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(queue)
+		for _, target := range targets {
+			select {
+			case queue <- target:
+			case <-snapshotCtx.Done():
+				return
+			}
+		}
+	}()
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	for result := range results {
 		if result.polled {
@@ -1488,6 +1500,9 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				Msg("Failed to get VM snapshots")
 		}
 	}
+	// The dispatcher can stop without a result for each unattempted guest.
+	// Those targets are unknown, not successful empty listings.
+	deadlineExceeded = deadlineExceeded || snapshotCtx.Err() != nil
 
 	// Retained live rows are continuity, not newly accepted provider evidence.
 	// Keep their count separate before merging so a failed listing cannot renew

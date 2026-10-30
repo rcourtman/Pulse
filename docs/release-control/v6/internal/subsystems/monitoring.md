@@ -17,6 +17,29 @@
 
 ## Purpose
 
+### Guest snapshot collection bounds waiting work as well as provider reads
+
+PVE guest snapshot polling uses at most eight collector workers, plus one
+dispatcher and one result closer, independent of the guest count. Both VM and
+LXC targets use the same queue; templates and other connections are excluded.
+The result channel is bounded to eight entries rather than the estate size.
+The existing guest-scaled 60-second-to-four-minute deadline and eight-way read
+concurrency are unchanged. Cancellation stops queued work before another
+provider call; it does not turn an unattempted guest into an empty listing.
+
+Accepted listings survive later cancellation, while failed, late and queued
+listings preserve their exact previous live rows. Complete successful reads
+still replace membership normally; independent connection rows, source identity,
+alert/recovery evidence rules and connection/runtime publication fences remain
+unchanged. No guest operation or extra provider request is added.
+
+`snapshot_poll_workers_test.go` measures suspended collector goroutines and
+active reads at 0, 1, 8, 9 and 512 guests, checks exactly-once VM/LXC admission,
+template/connection isolation and complete output, and exercises queued
+cancellation, deadline expiry, accepted/late listings and ordinary recovery.
+Its deterministic synthetic listings measure collector fan-out, not installed
+memory, CPU or original guest recovery.
+
 ### Sensor units come from native subfeature keys
 
 Only `tempN_input` keys (one or more ASCII digits) supply Celsius in the shared
