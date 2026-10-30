@@ -8630,8 +8630,8 @@
         "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
         "frontend-modern/src/features/proxmox/proxmoxPageModel.ts",
         "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
-        "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
         "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts",
+        "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
         "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
         "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
         "frontend-modern/src/features/standalone/standalonePageModel.ts",
@@ -8697,9 +8697,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxReplicationInventory.test.ts",
-              "frontend-modern/src/features/proxmox/__tests__/ProxmoxReplicationTable.test.tsx",
-              "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx"
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxReplicationTable.test.tsx"
             ]
           },
           {
