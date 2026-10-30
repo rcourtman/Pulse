@@ -2701,11 +2701,14 @@ type vzdumpJobTaskCacheEntry struct {
 	tasks           []models.BackupTask
 	final           bool
 	historyComplete bool
+	lastAttempt     time.Time // scheduling metadata, not an accepted log observation
 }
 
 // maxVzdumpJobLogFetchesPerPoll bounds task-log requests per poll cycle so a
 // large backlog of historical job runs (e.g. right after startup) trickles in
-// over a few cycles instead of stalling the shared backup-poll budget.
+// over a few cycles instead of stalling the shared backup-poll budget. Pending
+// reads rotate by last attempt so errors and incomplete logs cannot consume the
+// entire allowance every cycle and permanently hide older guest results.
 const maxVzdumpJobLogFetchesPerPoll = 25
 
 // synthesizeVzdumpJobGuestTasks expands multi-guest vzdump job runs into one
@@ -2721,6 +2724,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 
 	now := time.Now().UTC()
 	seen := make(map[string]struct{}, len(jobTasks))
+	fetchJobs := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
 	var synthesized []models.BackupTask
 	fetches := 0
 
@@ -2738,7 +2742,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			continue
 		}
 
-		if fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
+		if !fetchJobs[key] || fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
 			// Serve a stale non-final entry if we have one; the next cycle
 			// will catch up. The current parent can end a cached running
 			// guest, but cannot supply its missing verdict or a fresh log read.
@@ -2748,6 +2752,17 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			continue
 		}
 		fetches++
+		delete(fetchJobs, key) // duplicate provider rows cannot spend the same turn twice
+		// A failed or incomplete read still spent the allowance. Keep attempt
+		// order separate from accepted observations so failure never freshens evidence.
+		m.mu.Lock()
+		if m.vzdumpJobTaskCache == nil {
+			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
+		}
+		attempted := m.vzdumpJobTaskCache[key]
+		attempted.lastAttempt = now
+		m.vzdumpJobTaskCache[key] = attempted
+		m.mu.Unlock()
 
 		logLines, err := client.GetTaskLog(ctx, jobTask.Node, upid)
 		if err != nil {
@@ -2771,6 +2786,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			tasks:           guestTasks,
 			final:           historyComplete,
 			historyComplete: historyComplete,
+			lastAttempt:     now,
 		}
 		m.mu.Unlock()
 		synthesized = append(synthesized, guestTasks...)
@@ -2780,10 +2796,41 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 	return synthesized
 }
 
+// Select without reordering the returned guest tasks or mutating the caller's
+// history. Never-read jobs come first; ties retain provider order. Thereafter
+// the least recently attempted reads win, including failed reads. Only actual
+// calls advance scheduling, so cancellation cannot spend another job's turn.
+func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]bool {
+	type pendingRead struct {
+		key     string
+		attempt time.Time
+	}
+	pending := make([]pendingRead, 0, len(jobs))
+	seen := make(map[string]bool, len(jobs))
+	m.mu.RLock()
+	for _, job := range jobs {
+		key := instance + "|" + upids[job.ID]
+		if seen[key] || m.vzdumpJobTaskCache[key].final {
+			continue
+		}
+		seen[key] = true
+		pending = append(pending, pendingRead{key: key, attempt: m.vzdumpJobTaskCache[key].lastAttempt})
+	}
+	m.mu.RUnlock()
+	sort.SliceStable(pending, func(i, j int) bool {
+		return pending[i].attempt.Before(pending[j].attempt)
+	})
+	selected := make(map[string]bool, min(len(pending), maxVzdumpJobLogFetchesPerPoll))
+	for _, read := range pending[:min(len(pending), maxVzdumpJobLogFetchesPerPoll)] {
+		selected[read.key] = true
+	}
+	return selected
+}
+
 // Retain the last successful log observation when a non-final log is unread or
 // unavailable. A freshly ended parent proves the guest is no longer running,
-// not whether it succeeded. Do not mutate the cache: only another accepted log
-// read can complete attribution and make the entry final.
+// not whether it succeeded. Do not mutate accepted task evidence: only another
+// accepted log read can complete attribution and make the entry final.
 func cachedVzdumpGuestTasks(tasks []models.BackupTask, job models.BackupTask) []models.BackupTask {
 	out := append([]models.BackupTask(nil), tasks...)
 	if job.EndTime.IsZero() {

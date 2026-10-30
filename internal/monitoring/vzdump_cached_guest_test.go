@@ -131,7 +131,10 @@ func TestVzdumpCachedGuestReadFailureDoesNotRenewRunningIntent(t *testing.T) {
 					require.False(t, active, "parent termination withdraws intent even while the cached observation is fresh")
 				}
 				checkStored(recovery.OutcomeUnknown, false)
-				require.Equal(t, entry, m.vzdumpJobTaskCache[key], "fallback must not mutate/finalise accepted log data")
+				cached := m.vzdumpJobTaskCache[key]
+				require.True(t, cached.lastAttempt.After(entry.lastAttempt), "failed reads still advance scheduling")
+				entry.lastAttempt = cached.lastAttempt // scheduling is not guest observation evidence
+				require.Equal(t, entry, cached, "fallback must not mutate/finalise accepted log data")
 				require.Equal(t, 3, client.logRequests)
 
 				// Only an ordinary accepted log supplies the missing guest verdict.
