@@ -1136,3 +1136,48 @@ describe('indeterminate task order in the canonical Coverage consumer', () => {
     },
   );
 });
+
+describe('unknown duration in possible-latest task details', () => {
+  it.each([320, 1200])('preserves both statuses and only the valid duration at %ipx', (width) => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [identityGuest('east-100', 'east', 'pve-1')],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: [
+        identityTask({ id: 'future-end', endTime: '2026-10-04T12:05:00Z' }),
+        identityTask({ id: 'reported-failure', status: 'failed', error: 'Retain this error' }),
+      ],
+      nowMs: BACKUP_IDENTITY_NOW,
+    });
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={model.coverageRows}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={model.coverageRows[0].key}
+        onToggleExpand={() => {}}
+        layoutWidth={() => width}
+        showTaskColumn
+      />
+    ));
+    const taskCard = (id: string) => screen.getByText(id, { exact: true }).closest('tbody')!;
+    const duration = (card: HTMLElement) =>
+      within(card).getByText('Duration', { exact: true, selector: 'td' }).closest('tr')!;
+    expect(duration(taskCard('future-end'))).toHaveTextContent('Unknown');
+    expect(taskCard('future-end')).toHaveTextContent('OK');
+    expect(taskCard('future-end')).toHaveTextContent(
+      'The reported timestamps or running status do not establish a completed duration.',
+    );
+    expect(duration(taskCard('reported-failure'))).toHaveTextContent('5m 0s');
+    expect(taskCard('reported-failure')).toHaveTextContent('Failed');
+    expect(taskCard('reported-failure')).toHaveTextContent('Retain this error');
+    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent('Task order');
+    expect(model.coverageRows[0].posture).toBe('unknown');
+  });
+});

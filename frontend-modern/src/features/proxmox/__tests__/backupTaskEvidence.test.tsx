@@ -120,7 +120,10 @@ describe('latest backup task evidence through the inventory consumer', () => {
     mount();
     const section = taskSection(await open());
     expect(value(section, 'Started')).toHaveTextContent('Unknown');
-    expect(value(section, 'Duration')).toHaveTextContent('Not reported');
+    expect(value(section, 'Duration')).toHaveTextContent('Unknown');
+    expect(section).toHaveTextContent(
+      'The reported timestamps or running status do not establish a completed duration.',
+    );
     expect(value(section, 'Error')).toHaveTextContent('Not reported');
     expect(section).not.toHaveTextContent('Invalid Date');
     expect(section).not.toHaveTextContent('also-invalid');
@@ -128,7 +131,11 @@ describe('latest backup task evidence through the inventory consumer', () => {
 
   it.each([
     { status: 'running', endTime: undefined, duration: 'Not reported' },
-    { status: 'OK', endTime: '2026-10-04T10:59:00Z', duration: 'Not reported' },
+    { status: 'OK', endTime: '2026-10-04T10:59:00Z', duration: 'Unknown' },
+    { status: 'OK', endTime: '2026-10-04T12:00:01Z', duration: 'Unknown' },
+    { status: 'running', endTime: '2026-10-04T11:05:00Z', duration: 'Unknown' },
+    { status: 'OK', startTime: '2027-01-01T00:00:00Z', endTime: '2027-01-01T00:05:00Z', duration: 'Unknown' },
+    { status: 'OK', endTime: undefined, duration: 'Not reported' },
     { status: 'OK', endTime: '2026-10-04T11:00:00.100Z', duration: '0s' },
   ])('does not invent completion or protection for $status / $duration', async (extra) => {
     tasks = [identityTask(extra)];
@@ -138,9 +145,39 @@ describe('latest backup task evidence through the inventory consumer', () => {
       extra.status === 'running' ? 'Running' : 'OK',
     );
     expect(value(section, 'Duration')).toHaveTextContent(extra.duration);
+    const timingNotice = within(section).queryByText(
+      'The reported timestamps or running status do not establish a completed duration.',
+    );
+    if (extra.duration === 'Unknown') expect(timingNotice).toBeInTheDocument();
+    else expect(timingNotice).toBeNull();
     expect(within(section).queryByText('Error', { exact: true, selector: 'td' })).toBeNull();
     expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('A current verified backup is available.');
+  });
+
+  it('withdraws and restores duration in the same open task without reclassifying its status', async () => {
+    tasks = [identityTask()];
+    mount();
+    const panel = await open();
+    const toggle = screen.getByRole('button', {
+      name: 'Collapse details for same-name (VM 100) · PVE connection: east',
+    });
+    toggle.focus();
+    expect(value(taskSection(panel), 'Duration')).toHaveTextContent('5m 0s');
+    tasks = [identityTask({ endTime: '2026-10-04T12:05:00Z' })];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(value(taskSection(panel), 'Duration')).toHaveTextContent('Unknown'));
+    expect(value(taskSection(panel), 'Status')).toHaveTextContent('OK');
+    expect(document.activeElement).toBe(toggle);
+    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    tasks = [identityTask({ endTime: '2026-10-04T11:01:05Z' })];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(value(taskSection(panel), 'Duration')).toHaveTextContent('1m 5s'));
+    expect(taskSection(panel)).not.toHaveTextContent('do not establish a completed duration');
+    expect(document.activeElement).toBe(toggle);
+    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    expect(api.fetch).toHaveBeenCalledTimes(6);
   });
 
   it('updates failure, recovery and task removal in the same open panel on ordinary polling', async () => {

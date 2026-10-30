@@ -63,6 +63,8 @@ export interface CoverageTask {
   startedAt: string;
   startedMs?: number;
   durationSeconds?: number;
+  /** Reported timing/status cannot establish a completed duration; not missing data or zero. */
+  durationUnknown?: boolean;
   error?: string;
   /** Task-reported origin, independent of the workload's current placement. */
   instance?: string;
@@ -542,11 +544,27 @@ function taskLabel(task: BackupTask): string {
   return task.status || 'Unknown';
 }
 
-function taskDurationSeconds(task: BackupTask): number | undefined {
+function taskDuration(
+  task: BackupTask,
+  nowMs: number,
+): Pick<CoverageTask, 'durationSeconds' | 'durationUnknown'> {
+  if (!task.endTime) return {};
   const start = parseBackupTimestampMs(task.startTime);
   const end = parseBackupTimestampMs(task.endTime);
-  if (start === undefined || end === undefined || end <= start) return undefined;
-  return Math.round((end - start) / 1000);
+  // Parseable endpoints alone do not establish observed elapsed time. Apply
+  // the same positive/past-instant rule as task ordering, and never use a
+  // contradictory end time to make a running task look completed.
+  if (
+    normalizeKey(task.status) === 'running' ||
+    start === undefined ||
+    end === undefined ||
+    getRecoveryAgeBand(start, nowMs) === 'unknown' ||
+    getRecoveryAgeBand(end, nowMs) === 'unknown' ||
+    end <= start
+  ) {
+    return { durationUnknown: true };
+  }
+  return { durationSeconds: Math.round((end - start) / 1000) };
 }
 
 function selectLatestTask(
@@ -759,7 +777,7 @@ export function buildProxmoxBackupRecoveryModel(
       startedAt: task.startTime,
       startedMs:
         getRecoveryAgeBand(parsedStart, input.nowMs) === 'unknown' ? undefined : parsedStart,
-      durationSeconds: taskDurationSeconds(task),
+      ...taskDuration(task, input.nowMs),
       error: task.error,
       instance: task.instance?.trim() || undefined,
       node: task.node?.trim() || undefined,

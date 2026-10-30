@@ -20,6 +20,26 @@
 
 ## Purpose
 
+### Coverage duration requires observed task timing
+
+The existing Coverage task disclosure derives a duration only from positive,
+strict RFC3339 endpoints at or before the inventory observation time, with the
+end after the start and no reported running status. Future/invalid/nonpositive
+or reversed endpoints, or a running task carrying an end time, show **Unknown**
+and an explanation, not a numeric completed duration or **Not reported**.
+An absent end remains **Not reported**; a valid positive subsecond interval may
+round to **0s**. Valid offsets are compared as instants. Task-reported status,
+errors, identity, latest-task ordering, protection and restore evidence remain
+independent and unchanged. Ordinary polling can withdraw and restore duration
+within the same inspected task without replacing the panel or taking focus.
+
+Normal-suite `taskDurationEvidence.test.ts` consumes parsed raw inventory and
+covers adverse endpoints/status plus valid, missing, offset and zero controls.
+`backupTaskEvidence.test.tsx` exercises those states through the actual inventory
+consumer and ordinary polling. Desktop/narrow browser interactions and inspected
+pixels cover the changed producer-to-disclosure path. No new requests, provider
+operation, collection policy or native guest recovery is implied.
+
 ### Replication sync chronology stays unknown when unreadable
 
 The existing Replication table and disclosure validate sync instants before
