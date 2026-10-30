@@ -21,7 +21,6 @@ import {
   PlatformTableDurationValue,
   formatPlatformTableDurationValue,
   formatPlatformTableRelativeTimeValue,
-  PlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
@@ -48,6 +47,7 @@ import {
 import { buildPlatformSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 import { buildProxmoxGuestNativeId } from '@/utils/workloads';
+import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 
 // Replication is a Proxmox-specific concept (zfs send/receive scheduled
 // between PVE nodes), so this table is bespoke rather than a filtered
@@ -231,20 +231,55 @@ export function formatMobileReplicationGuestLabel(job: ReplicationJob): string {
   return formatGuestLabel(job);
 }
 
-function syncTimeValue(job: ReplicationJob): number | string | undefined {
-  if (job.lastSyncUnix && job.lastSyncUnix > 0) {
-    return job.lastSyncUnix * 1000;
+type ReplicationSyncTime =
+  { state: 'known'; ms: number } | { state: 'missing' } | { state: 'invalid' };
+
+// Keep the existing Unix companion precedence and numeric seconds/milliseconds
+// compatibility. Never let Date.parse repair an impossible calendar date or
+// assign the browser's timezone to a provider time. A malformed nonzero Unix
+// companion cannot be replaced with a more reassuring fallback.
+export function readReplicationSyncTime(
+  time: ReplicationJob['lastSyncTime'],
+  unix: number | undefined,
+  notAfter?: number,
+): ReplicationSyncTime {
+  let ms: number | undefined;
+  if (unix !== undefined && unix !== 0) {
+    ms = unix * 1000;
+  } else if (time === undefined || time === '' || time === 0) {
+    return { state: 'missing' };
+  } else {
+    ms =
+      typeof time === 'number' ? (time > 1e12 ? time : time * 1000) : parseBackupTimestampMs(time);
   }
-  return job.lastSyncTime;
+  if (
+    ms === undefined ||
+    !Number.isFinite(ms) ||
+    ms <= 0 ||
+    !Number.isFinite(new Date(ms).getTime()) ||
+    (notAfter !== undefined && ms > notAfter)
+  ) {
+    return { state: 'invalid' };
+  }
+  return { state: 'known', ms };
 }
 
-type NextSyncTone = 'overdue' | 'imminent' | 'normal' | 'muted';
+function lastSyncFor(job: ReplicationJob, now: number) {
+  const time = readReplicationSyncTime(job.lastSyncTime, job.lastSyncUnix, now);
+  if (time.state === 'missing') return { text: '—', summary: 'No last sync reported' };
+  if (time.state === 'invalid') return { text: 'Unknown', summary: 'Last sync time unknown' };
+  const text = formatPlatformTableRelativeTimeValue(new Date(time.ms), { now });
+  return { text, summary: `Last synced ${text}` };
+}
+
+type NextSyncTone = 'overdue' | 'imminent' | 'normal' | 'muted' | 'unknown';
 
 const NEXT_SYNC_TONE_CLASS: Record<NextSyncTone, string> = {
   overdue: 'text-red-600 dark:text-red-300 font-semibold',
   imminent: 'text-amber-600 dark:text-amber-300',
   normal: '',
   muted: 'text-muted',
+  unknown: 'text-muted',
 };
 
 // An overdue next-sync is the one signal that catches a stalled pvesr
@@ -255,16 +290,10 @@ const NEXT_SYNC_TONE_CLASS: Record<NextSyncTone, string> = {
 // render would sit at "in 3m" and never turn overdue.
 function nextSyncFor(job: ReplicationJob, now: number): { text: string; tone: NextSyncTone } {
   if (!job.enabled) return { text: '—', tone: 'muted' };
-  let target = 0;
-  if (job.nextSyncUnix && job.nextSyncUnix > 0) {
-    target = job.nextSyncUnix * 1000;
-  } else if (job.nextSyncTime) {
-    const raw = job.nextSyncTime;
-    const parsed = typeof raw === 'number' ? (raw > 1e12 ? raw : raw * 1000) : Date.parse(raw);
-    if (Number.isFinite(parsed)) target = parsed;
-  }
-  if (!target) return { text: '—', tone: 'muted' };
-  const minutes = Math.floor((target - now) / 60_000);
+  const time = readReplicationSyncTime(job.nextSyncTime, job.nextSyncUnix);
+  if (time.state === 'missing') return { text: '—', tone: 'muted' };
+  if (time.state === 'invalid') return { text: 'Unknown', tone: 'unknown' };
+  const minutes = Math.floor((time.ms - now) / 60_000);
   if (minutes < 0) {
     const overdue = Math.abs(minutes);
     const text = overdue < 60 ? `${overdue}m overdue` : `${Math.floor(overdue / 60)}h overdue`;
@@ -284,6 +313,7 @@ const NEXT_SYNC_DETAIL_TONE: Record<NextSyncTone, DetailValueTone | undefined> =
   imminent: 'warning',
   normal: undefined,
   muted: 'muted',
+  unknown: 'muted',
 };
 
 // The detail row id follows the job, not its place in the filtered list, so a
@@ -307,11 +337,15 @@ const replicationJobGuestSubject = (job: ReplicationJob) => {
 };
 
 const replicationJobSummary = (job: ReplicationJob, now: number): string => {
-  const last = formatPlatformTableRelativeTimeValue(syncTimeValue(job), { now, emptyText: '' });
+  const last = lastSyncFor(job, now);
   const next = nextSyncFor(job, now);
   return [
-    last ? `Last synced ${last}` : 'Not synced yet',
-    next.tone === 'muted' ? '' : `next sync ${next.text}`,
+    last.summary,
+    next.tone === 'muted'
+      ? ''
+      : next.tone === 'unknown'
+        ? 'next sync time unknown'
+        : `next sync ${next.text}`,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -324,6 +358,7 @@ const buildReplicationJobSections = (
   now: number,
 ): DetailSection[] => {
   const errorText = (job.error ?? '').trim();
+  const last = lastSyncFor(job, now);
   const next = nextSyncFor(job, now);
   const failCount = job.failCount ?? 0;
   return compactDetailSections([
@@ -363,10 +398,7 @@ const buildReplicationJobSections = (
       label: 'Schedule',
       rows: compactDetailRows([
         makeDetailRow('Schedule', job.schedule),
-        makeDetailRow(
-          'Last sync',
-          formatPlatformTableRelativeTimeValue(syncTimeValue(job), { now, emptyText: '' }),
-        ),
+        makeDetailRow('Last sync', last.text === '—' ? 'Not reported' : last.text),
         makeDetailRow('Next sync', next.tone === 'muted' ? '' : next.text, {
           tone: NEXT_SYNC_DETAIL_TONE[next.tone],
         }),
@@ -672,6 +704,7 @@ export const ProxmoxReplicationTable: Component<{
                       {(job, index) => {
                         const classification = classifyJob(job);
                         const ind = indicatorFor(classification);
+                        const last = () => lastSyncFor(job, now());
                         const next = () => nextSyncFor(job, now());
                         const sourceNode = (job.sourceNode ?? '').trim() || '—';
                         const targetNode = (job.targetNode ?? '').trim() || '—';
@@ -769,18 +802,21 @@ export const ProxmoxReplicationTable: Component<{
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content ${mobilePaddingClass()} ${mobileLastSyncClass()}`}
                               >
-                                <Show
-                                  when={isCompact()}
-                                  fallback={
-                                    <PlatformTableRelativeTimeValue value={syncTimeValue(job)} />
+                                <span
+                                  class={`tabular-nums ${isCompact() ? 'text-[10px]' : ''}`}
+                                  aria-label={
+                                    last().text === 'Unknown' ? 'Last sync time unknown' : undefined
+                                  }
+                                  title={
+                                    last().text === 'Unknown' ? 'Last sync time unknown' : undefined
                                   }
                                 >
-                                  <span class="tabular-nums text-[10px]">
-                                    {formatPlatformTableRelativeTimeValue(syncTimeValue(job), {
-                                      now: now(),
-                                    }).replace(/ ago$/, '')}
-                                  </span>
-                                </Show>
+                                  {isCompact()
+                                    ? last().text === 'Unknown'
+                                      ? '?'
+                                      : last().text.replace(/ ago$/, '')
+                                    : last().text}
+                                </span>
                               </TableCell>
                               <Show when={showNext()}>
                                 <TableCell
@@ -788,9 +824,21 @@ export const ProxmoxReplicationTable: Component<{
                                 >
                                   <span
                                     class={`${NEXT_SYNC_TONE_CLASS[next().tone]} ${isCompact() ? 'text-[10px]' : ''}`}
+                                    aria-label={
+                                      next().tone === 'unknown'
+                                        ? 'Next sync time unknown'
+                                        : undefined
+                                    }
+                                    title={
+                                      next().tone === 'unknown'
+                                        ? 'Next sync time unknown'
+                                        : undefined
+                                    }
                                   >
                                     {isCompact()
-                                      ? compactReplicationNextSyncText(next().text, next().tone)
+                                      ? next().tone === 'unknown'
+                                        ? '?'
+                                        : compactReplicationNextSyncText(next().text, next().tone)
                                       : next().text}
                                   </span>
                                 </TableCell>
