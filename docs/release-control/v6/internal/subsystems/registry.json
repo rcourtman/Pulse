@@ -2839,6 +2839,24 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "sso-provider-management",
+            "label": "SSO provider label, CRUD and runtime-preservation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/identity_sso_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/sso_provider_name_test.go",
+              "internal/api/sso_handlers_crud_test.go",
+              "internal/api/sso_presentation_update_test.go",
+              "internal/api/sso_config_preservation_test.go",
+              "internal/api/sso_admin_license_gating_test.go",
+              "internal/api/sso_handlers_test.go"
+            ]
+          },
+          {
             "id": "reporting-activity",
             "label": "reporting aggregate outcome proof",
             "match_prefixes": [],

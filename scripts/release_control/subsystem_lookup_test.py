@@ -97,6 +97,18 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 class SubsystemLookupTest(unittest.TestCase):
 
+    def test_sso_provider_management_uses_label_and_runtime_proof(self) -> None:
+        result = lookup_paths(["internal/api/identity_sso_handlers.go"])
+        file_result = result["files"][0]
+        match = next(item for item in file_result["matches"] if item["subsystem"] == "api-contracts")
+        proof = match["verification_requirement"]
+        self.assertEqual(proof["id"], "sso-provider-management")
+        self.assertFalse(proof["allow_same_subsystem_tests"])
+        self.assertEqual(proof["test_prefixes"], [])
+        self.assertIn("internal/api/sso_provider_name_test.go", proof["exact_files"])
+        self.assertIn("internal/api/sso_presentation_update_test.go", proof["exact_files"])
+        self.assertIn("internal/api/sso_config_preservation_test.go", proof["exact_files"])
+
     def test_proxmox_update_json_uses_authoritative_wire_proof(self) -> None:
         result = lookup_paths(["internal/unifiedresources/proxmox_update_evidence_json.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

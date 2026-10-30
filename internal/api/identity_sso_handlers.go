@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/crewjam/saml"
 	"github.com/google/uuid"
@@ -45,7 +46,13 @@ func validateProviderID(id string) bool {
 func sanitizeProviderName(name string) string {
 	name = strings.TrimSpace(name)
 	if len(name) > maxProviderNameLength {
-		name = name[:maxProviderNameLength]
+		// Keep the byte limit, without cutting a valid code point and
+		// turning its incomplete suffix into replacement characters below.
+		end := maxProviderNameLength
+		for end > 0 && !utf8.RuneStart(name[end]) {
+			end--
+		}
+		name = name[:end]
 	}
 	// Remove control characters
 	name = strings.Map(func(r rune) rune {
