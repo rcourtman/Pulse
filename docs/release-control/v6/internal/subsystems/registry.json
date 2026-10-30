@@ -8631,6 +8631,7 @@
         "frontend-modern/src/features/proxmox/proxmoxPageModel.ts",
         "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+        "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts",
         "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
         "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
         "frontend-modern/src/features/standalone/standalonePageModel.ts",
@@ -8685,6 +8686,22 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "replication-inventory",
+            "label": "complete typed replication inventory read proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts",
+              "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxReplicationInventory.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxReplicationTable.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx"
+            ]
+          },
           {
             "id": "proxmox-update-evidence-json",
             "label": "authoritative Proxmox update JSON clearing proof",

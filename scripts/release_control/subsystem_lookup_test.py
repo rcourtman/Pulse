@@ -97,6 +97,24 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 class SubsystemLookupTest(unittest.TestCase):
 
+    def test_replication_inventory_uses_complete_wire_and_consumer_proof(self):
+        paths = [
+            "frontend-modern/src/features/proxmox/proxmoxReplicationInventory.ts",
+            "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+        ]
+        result = lookup_paths(paths)
+        self.assertEqual(result["unowned_runtime_files"], [])
+        for entry in result["files"]:
+            match = next(item for item in entry["matches"] if item["subsystem"] == "unified-resources")
+            proof = match["verification_requirement"]
+            self.assertEqual(proof["id"], "replication-inventory")
+            self.assertFalse(proof["allow_same_subsystem_tests"])
+            self.assertEqual(proof["test_prefixes"], [])
+            self.assertIn("frontend-modern/src/features/proxmox/__tests__/proxmoxReplicationInventory.test.ts", proof["exact_files"])
+            self.assertIn("frontend-modern/src/features/proxmox/__tests__/ProxmoxReplicationTable.test.tsx", proof["exact_files"])
+            self.assertIn("frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx", proof["exact_files"])
+
+
     def test_sso_provider_management_uses_label_and_runtime_proof(self) -> None:
         result = lookup_paths(["internal/api/identity_sso_handlers.go"])
         file_result = result["files"][0]
