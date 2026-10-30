@@ -8886,7 +8886,13 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_nas_teardown.py"), "AgentNASTeardown", []string{
+	// Real kernel inventory must finish before any parallel fixture starts.
+	// The other NAS controls use private modelled ps/kill/flash tools, so they
+	// may share Go's existing worker budget without weakening this exclusion.
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_nas_teardown.py"), "AgentNASLiveTeardown", []string{
+		"test_actual_generated_watchdogs_and_children_become_quiescent",
+	}, 2*time.Minute)
+	runParallelPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_nas_teardown.py"), "AgentNASTeardown", []string{
 		"test_complete_process_evidence_is_required_before_boot_or_remote_mutation",
 		"test_unknown_relative_foreign_or_deferred_boot_owners_are_not_signalled",
 		"test_non_regular_foreign_wrapper_and_unselected_state_preserve_recovery",
@@ -8903,7 +8909,6 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 		"test_process_observation_returns_roles_not_arguments_and_stops_timeout_child",
 		"test_recovered_ordinary_linux_state_is_not_qnap_platform_authority",
 		"test_live_unraid_boot_shell_is_unknown_not_a_signal_target",
-		"test_actual_generated_watchdogs_and_children_become_quiescent",
 		"test_private_model_uses_selected_isolated_interpreter",
 		"test_timeout_child_absence_requires_observed_exit",
 		"test_control_timing_reports_cumulative_and_per_control_time",

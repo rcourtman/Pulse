@@ -203,6 +203,8 @@ class NASTimingResult(unittest.TextTestResult):
 
 
 class AgentNASTeardown(unittest.TestCase):
+    """Private model controls; no real machine-wide process inventory."""
+
     source = SOURCE.read_text()
 
     def exercise(self, platform, fault="", *, reply="confirmed", boot="canonical", wrapper="regular",
@@ -575,6 +577,57 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         for key in ('foreign', 'foreign/runtime.token', 'legacy/telegraf'):
             self.assertEqual(r[3][key], r[4][key])
 
+
+    def test_private_process_reader_requests_native_basename_and_full_argv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            native = root / 'native ps'
+            # Fixed synthetic argv recorder, not a process-inventory model.
+            native.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            native.chmod(0o700)
+            tools = root / 'tools'; tools.mkdir()
+            adapter = write_wide_ps_adapter(tools, native)
+            for fields in (
+                ['-ax', '-o', 'comm=', '-o', 'args='],
+                ['-ax', '-o', 'pid=', '-o', 'ppid=', '-o', 'comm=', '-o', 'args='],
+            ):
+                with self.subTest(fields=fields):
+                    result = subprocess.run([str(adapter), *fields], capture_output=True, text=True, check=True)
+                    self.assertEqual(result.stdout.splitlines(),
+                                     ['-ww', *(field if field != 'comm=' else 'ucomm=' for field in fields)])
+
+    def test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats(self):
+        runtime = Path('/synthetic/owned/bin/pulse-agent')
+        for comm in ('pulse-agent', str(runtime)):
+            with self.subTest(comm=comm):
+                self.assertTrue(generated_collector_is_running(f'{comm} {runtime} 30\n', runtime))
+        for listing in (
+            f'other {runtime} 30\n',
+            'pulse-agent /synthetic/foreign/bin/pulse-agent 30\n',
+            f'pulse-agent {runtime}-prod 30\n',
+            f'pulse-agent /bin/sh echo {runtime} 30\n',
+            f'/synthetic/owne {runtime} 30\n',  # Original Darwin middle-column truncation.
+            f'pulse-agent {runtime}\n',
+            'pulse-agent\n',
+            '',
+        ):
+            with self.subTest(listing=listing):
+                self.assertFalse(generated_collector_is_running(listing, runtime))
+
+    def test_caller_has_no_blanket_nas_or_legacy_tree_deletion(self):
+        caller = self.source.split('# --- Uninstall Logic ---\n', 1)[1].split('# --- Validation ---\n', 1)[0]
+        self.assertNotIn("sed -i '/pulse-agent/d'", caller)
+        self.assertNotIn('rm -rf /boot/config/pulse', caller)
+        self.assertNotIn('rm -rf "$qnap_state_dir"', caller)
+        self.assertIn('teardown_nas_agent_boot_owner "$uninstall_nas_platform"', caller)
+        self.assertIn('[[ "$uninstall_upstart" != true && -z "$uninstall_nas_platform" ]]', caller)
+
+
+class AgentNASLiveTeardown(unittest.TestCase):
+    """Real machine-wide process observation; the Go caller keeps this serial."""
+
+    source = SOURCE.read_text()
+
     def test_actual_generated_watchdogs_and_children_become_quiescent(self):
         # Private ordinary-user processes only. The full Go suite runs this in
         # the standard offline source VM; it is not native NAS/root acceptance.
@@ -673,50 +726,6 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                         try: os.killpg(process.pid, signal.SIGKILL)
                         except ProcessLookupError: pass
                         process.wait(timeout=3)
-
-    def test_private_process_reader_requests_native_basename_and_full_argv(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            native = root / 'native ps'
-            # Fixed synthetic argv recorder, not a process-inventory model.
-            native.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
-            native.chmod(0o700)
-            tools = root / 'tools'; tools.mkdir()
-            adapter = write_wide_ps_adapter(tools, native)
-            for fields in (
-                ['-ax', '-o', 'comm=', '-o', 'args='],
-                ['-ax', '-o', 'pid=', '-o', 'ppid=', '-o', 'comm=', '-o', 'args='],
-            ):
-                with self.subTest(fields=fields):
-                    result = subprocess.run([str(adapter), *fields], capture_output=True, text=True, check=True)
-                    self.assertEqual(result.stdout.splitlines(),
-                                     ['-ww', *(field if field != 'comm=' else 'ucomm=' for field in fields)])
-
-    def test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats(self):
-        runtime = Path('/synthetic/owned/bin/pulse-agent')
-        for comm in ('pulse-agent', str(runtime)):
-            with self.subTest(comm=comm):
-                self.assertTrue(generated_collector_is_running(f'{comm} {runtime} 30\n', runtime))
-        for listing in (
-            f'other {runtime} 30\n',
-            'pulse-agent /synthetic/foreign/bin/pulse-agent 30\n',
-            f'pulse-agent {runtime}-prod 30\n',
-            f'pulse-agent /bin/sh echo {runtime} 30\n',
-            f'/synthetic/owne {runtime} 30\n',  # Original Darwin middle-column truncation.
-            f'pulse-agent {runtime}\n',
-            'pulse-agent\n',
-            '',
-        ):
-            with self.subTest(listing=listing):
-                self.assertFalse(generated_collector_is_running(listing, runtime))
-
-    def test_caller_has_no_blanket_nas_or_legacy_tree_deletion(self):
-        caller = self.source.split('# --- Uninstall Logic ---\n', 1)[1].split('# --- Validation ---\n', 1)[0]
-        self.assertNotIn("sed -i '/pulse-agent/d'", caller)
-        self.assertNotIn('rm -rf /boot/config/pulse', caller)
-        self.assertNotIn('rm -rf "$qnap_state_dir"', caller)
-        self.assertIn('teardown_nas_agent_boot_owner "$uninstall_nas_platform"', caller)
-        self.assertIn('[[ "$uninstall_upstart" != true && -z "$uninstall_nas_platform" ]]', caller)
 
 
 if __name__ == '__main__':
