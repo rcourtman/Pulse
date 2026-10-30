@@ -7,6 +7,7 @@ import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { protectionPolicy } from '@/utils/__fixtures__/protectionPosture';
+import { WebSocketContext, DarkModeContext, type WebSocketStore } from '@/contexts/appRuntime';
 
 const api = vi.hoisted(() => ({ fetch: vi.fn(), json: vi.fn() }));
 vi.mock('@/utils/apiClient', () => ({ apiFetch: api.fetch, apiFetchJSON: api.json }));
@@ -35,9 +36,13 @@ const server = (datastores: ResourcePBSDatastore[] = [datastore]): Resource => (
 });
 const mount = (component: () => JSX.Element) =>
   render(() => (
-    <Router>
-      <Route path="/*" component={component} />
-    </Router>
+    <WebSocketContext.Provider value={{ activeAlerts: {} } as unknown as WebSocketStore}>
+      <DarkModeContext.Provider value={() => false}>
+        <Router>
+          <Route path="/*" component={component} />
+        </Router>
+      </DarkModeContext.Provider>
+    </WebSocketContext.Provider>
   ));
 const selected = () => screen.getByRole('region', { name: 'Selected PBS datastore' });
 const field = (name: string) => within(selected()).getByText(name).closest('tr')!;

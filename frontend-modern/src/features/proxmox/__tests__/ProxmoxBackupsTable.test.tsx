@@ -31,6 +31,7 @@ import {
 import { eventBus } from '@/stores/events';
 import { setKioskMode } from '@/utils/url';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
+import { WebSocketContext, DarkModeContext, type WebSocketStore } from '@/contexts/appRuntime';
 
 // ProxmoxBackupsTable reads URL search params (node/type scope filters), so it
 // must render inside a Router context.
@@ -368,11 +369,15 @@ describe('ProxmoxBackupsTable', () => {
       },
     } as Resource;
     const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable
-        emptyIcon={<span />}
-        workloads={[workloadResource]}
-        servers={[twoStores]}
-      />
+      <WebSocketContext.Provider value={{ activeAlerts: {} } as unknown as WebSocketStore}>
+        <DarkModeContext.Provider value={() => false}>
+          <ProxmoxBackupsTable
+            emptyIcon={<span />}
+            workloads={[workloadResource]}
+            servers={[twoStores]}
+          />
+        </DarkModeContext.Provider>
+      </WebSocketContext.Provider>
     ));
     await screen.findByText('offsite');
     const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
