@@ -24,7 +24,7 @@ jobs are selected by least recent attempt within the connection, with never-read
 jobs first and provider order breaking ties. While ended work waits, admission keeps up to 24 running
 reads and reserves at least one of the 25 turns for pending ended history;
 unused turns serve either queue. Execution starts with the queue not served by
-the last actual request (live first on a new connection), then uses the admitted
+the last actual request (live first without a prior request), then uses the admitted
 live-first order. Thus a read exhausting the shared context cannot indefinitely
 prevent the other queue from running. When both queues exhaust it on every
 request, their first turns alternate; when just one queue exhausts it, the

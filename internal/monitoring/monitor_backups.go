@@ -2868,8 +2868,8 @@ func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupT
 	// Admission reserves live capacity and an ended turn; execution must share
 	// the context too. Move only the oldest selected ended read ahead of live
 	// work when the last actual request was live. If either queue exhausts the
-	// context, the other starts next poll. Fast live reads still run every poll,
-	// without waiting behind a whole backlog of slow ended reads (or vice versa).
+	// context, the other starts next poll, rather than waiting behind an entire
+	// slow backlog. The shared time budget can still defer admitted live reads.
 	if historyFirst {
 		for _, read := range pending {
 			if rank := selected[read.key]; !read.running && rank > 0 {
