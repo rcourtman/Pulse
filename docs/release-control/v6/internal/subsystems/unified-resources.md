@@ -23,6 +23,25 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### PBS server counts belong to the exact backup reader and datastore
+
+The existing Backups server count matches `PBSBackup.instance` to the resource's
+configured connection `name` and matches the exact datastore name. Service IDs
+(`pbs-` plus the connection name), hostnames and display labels are not backup
+reader aliases; an empty tuple must not borrow another connection's inventory.
+Both identities retain their positions, punctuation and case without a joined
+separator key. Counts still include all admitted inventory entries and namespaces,
+not only completed or verified points. Loading/unavailable inventory remains
+non-numeric; independently observed capacity and reachability remain unchanged.
+
+Normal-suite `backupServerCountEvidence.test.tsx` consumes parsed inventory and
+checks prefix-alias and delimiter collisions, case, namespaces, valid zero and
+existing all-entry semantics. Its real table consumer checks ordinary polling,
+failed reads, retry and detail continuity without extra requests. Desktop and
+narrow browser proof exercises the same producer through the inventory consumer
+with native interactions and inspected pixels. No API, provider, guest, polling,
+auth, resource identity or protection-policy change, nor installed recovery claim.
+
 ### Coverage duration requires observed task timing
 
 The existing Coverage task disclosure derives a duration only from positive,

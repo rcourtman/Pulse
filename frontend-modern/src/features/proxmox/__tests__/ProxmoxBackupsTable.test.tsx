@@ -227,6 +227,19 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('does not treat a runtime service identity as a second backup reader', () => {
+    // The actual producer uses Name=main, ID=pbs-main. A separate configured
+    // reader may itself be named pbs-main; its snapshots cannot fill main.
+    const emptyReader = {
+      ...pbsServerResource,
+      name: 'main',
+      pbs: { ...pbsServerResource.pbs!, instanceId: 'pbs-main' },
+    } as Resource;
+    const other = pbsPayload.data.backups;
+    expect(buildBackupServerRows([emptyReader], other)[0].backupCount).toBe(0);
+    expect(buildBackupServerRows([pbsServerResource], other)[0].backupCount).toBe(1);
+  });
+
   it.each([
     { used: 9_500, usagePercent: 0, expected: '95.0%', tone: 'text-red-600' },
     { used: 8_000, usagePercent: 20, expected: '80.0%', tone: 'text-amber-600' },

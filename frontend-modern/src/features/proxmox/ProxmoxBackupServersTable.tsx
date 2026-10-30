@@ -72,11 +72,18 @@ interface BackupServerRow {
 }
 
 // Key by instance and datastore so multi-datastore servers get accurate counts.
-function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, number> {
-  const counts = new Map<string, number>();
+function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, Map<string, number>> {
+  const counts = new Map<string, Map<string, number>>();
   for (const backup of backups) {
-    const key = `${backup.instance ?? ''}::${backup.datastore ?? ''}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    // Both fields are provider identities, not a delimiter-joined display key.
+    // An unattributed entry cannot establish a count for any named datastore.
+    if (!backup.instance || !backup.datastore) continue;
+    let datastores = counts.get(backup.instance);
+    if (!datastores) {
+      datastores = new Map();
+      counts.set(backup.instance, datastores);
+    }
+    datastores.set(backup.datastore, (datastores.get(backup.datastore) ?? 0) + 1);
   }
   return counts;
 }
@@ -319,15 +326,12 @@ export function buildBackupServerRows(
 ): BackupServerRow[] {
   const rows: BackupServerRow[] = [];
   const counts = buildBackupCounts(backups);
-  // PBS backups carry instance; resources may expose it under name or pbs.instanceId.
-  const countFor = (server: Resource, datastoreName: string): number => {
-    const ids = [server.name, server.pbs?.instanceId].filter(Boolean) as string[];
-    for (const id of ids) {
-      const n = counts.get(`${id}::${datastoreName}`);
-      if (n !== undefined) return n;
-    }
-    return 0;
-  };
+  // The PBS producer reports the configured connection name in both
+  // PBSBackup.instance and Resource.name. PBS.instanceId is a service identity
+  // ("pbs-" + that name), not another backup reader: using it as a fallback can
+  // borrow a different connection's backups when this one has none.
+  const countFor = (server: Resource, datastoreName: string): number =>
+    counts.get(server.name)?.get(datastoreName) ?? 0;
   // `model().pbs` is scope-filtered (proxmox-pbs), which also catches PBS
   // *datastore* storage resources (type 'storage', sources ['pbs']). This table
   // is about the server, so keep only actual PBS server instances — otherwise a
