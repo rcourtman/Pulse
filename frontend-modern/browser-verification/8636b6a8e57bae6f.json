@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "6e82c650624f37f25b4d8d2acb2b79cbfb52b3a2",
+  "verified_at": "2026-10-30T22:01:15.484475Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "f9c86d6162fc8dbe9142882496461d1cdbf04d00184d3a08df254fef3145382c",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "f3bd651ef621641cc1a05abed04579d919550b05536b5901d7bdc1d98a491e32",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "99c6caeb8ec71f86afe44932b579a4321ff6b214fbff908b1b70515d675b60a4"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Full production/embed app from source-zwfur59g on the verified parent, consuming safe raw PVE/PBS inventory and canonical guest-resource fixtures. Not an executed native producer or installed recovery.",
+    "Chromium 141.0.7390.37 at 1280x960 and WebKit 26.0 at 320x900; Playwright 1.56.1 matches the integration lock. One-byte and 4 KiB controls remain measured; zero/missing PBS, archive and guest-snapshot sizes remain unknown.",
+    "By date and Coverage keep explicit Unknown size and a readable not-empty explanation. Phone Coverage folds each point\u2019s size beside its source without changing provider state or Unknown workload posture. Five completed points and one failed entry remain independent of sizes.",
+    "Composite verification, not one green driver: the first driver completes both backup journeys and seven captures, then exits 1 at its final auxiliary fixture audit on two undeclared GET /api/updates/check reads. It served HTTP 200 {} as empty shell data; no mutation or page error occurred. That original failure is retained.",
+    "The tail exits 0, explicitly declares that unchanged auxiliary reply and inspects only the previously uninspected phone Coverage size-body pixels. All nine captures were opened natively. Unknown and positive folded size text are within the viewport and above fixed navigation, with no horizontal overflow."
+  ],
+  "interactions": [
+    "Keyboard sorting puts measured values first; unit proof covers both directions. Keyboard/touch disclosure opens the actual restore point and Coverage row, not a fixture replacement component.",
+    "Ordinary polling changes the same open point from unknown to 8 KiB and withdraws it to unknown again. The same panel and disclosure focus survive; both source polls contribute exactly four inventory requests per viewport, with no size-specific requests.",
+    "Normal close returns focus to the surviving point disclosure. Phone tail scrolling inspects complete Unknown size and 4.00 KB text ranges and actual pixels; no completed sort or transition journey is replayed."
+  ]
+}
