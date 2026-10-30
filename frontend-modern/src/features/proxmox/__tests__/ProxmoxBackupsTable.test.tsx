@@ -3086,3 +3086,157 @@ describe('By-date restore-point scope', () => {
     vi.useRealTimers();
   });
 });
+
+describe('By date recovery evidence limits', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date'] });
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it.each([
+    {
+      name: 'guest snapshot',
+      pve: { ...emptyPVE.data, guestSnapshots: [identitySnapshot()] },
+      pbs: [] as ReturnType<typeof identityPBS>[],
+      explanation: /shares the guest's storage.*not a separate backup/,
+    },
+    {
+      name: 'verified PBS snapshot',
+      pve: emptyPVE.data,
+      pbs: [identityPBS({ protected: true })],
+      explanation: /Verified is the provider's reported backup check, not a tested restore/,
+    },
+    {
+      name: 'unverified PBS snapshot',
+      pve: emptyPVE.data,
+      pbs: [identityPBS({ verified: false })],
+      explanation: /not reported as verified.*does not establish a successful restore/,
+    },
+    {
+      name: 'PVE file without verification',
+      pve: { ...emptyPVE.data, storageBackups: [identityArchive({ protected: true })] },
+      pbs: [],
+      explanation: /verification is not reported.*does not establish a successful restore/,
+    },
+    {
+      name: 'PBS-backed PVE file',
+      pve: {
+        ...emptyPVE.data,
+        storageBackups: [identityArchive({ isPBS: true, verified: true })],
+      },
+      pbs: [],
+      explanation: /Verified is the provider's reported backup check, not a tested restore/,
+    },
+    {
+      name: 'running PBS snapshot',
+      pve: emptyPVE.data,
+      pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: true })],
+      explanation: /incomplete and may still be in progress.*not a completed restore point/,
+    },
+    {
+      name: 'incomplete PBS snapshot with unread write activity',
+      pve: emptyPVE.data,
+      pbs: [identityPBS({ inProgress: true })],
+      explanation: /incomplete and may still be in progress.*not a completed restore point/,
+    },
+    {
+      name: 'failed PBS snapshot',
+      pve: emptyPVE.data,
+      pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: false })],
+      explanation: /No current writer is reported.*not a completed restore point/,
+    },
+    {
+      name: 'running PVE file',
+      pve: { ...emptyPVE.data, storageBackups: [identityArchive({ inProgress: true })] },
+      pbs: [],
+      explanation: /incomplete and may still be in progress.*not a completed restore point/,
+    },
+  ])('explains $name without claiming a tested recovery', async ({ pve, pbs, explanation }) => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse({ data: url.endsWith('/pbs') ? { backups: pbs } : pve })),
+    );
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[identityGuest('guest-100', 'east', 'pve-1')]}
+      />
+    ));
+    const toggle = await screen.findByRole('button', { name: /Expand details/ });
+    fireEvent.click(toggle);
+    const detail = screen.getByTestId('proxmox-recoverable-detail');
+    const note = within(detail).getByRole('note', { name: 'Recovery evidence limits' });
+    expect(note).toBeVisible();
+    expect(note).toHaveTextContent(explanation);
+    expect(note).toHaveTextContent(/do not establish that the guest has thawed/);
+    expect(note).toHaveTextContent(/filesystems accept writes/);
+    expect(note).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    const kept =
+      pbs.some((point) => point.protected) || pve.storageBackups.some((point) => point.protected);
+    expect(
+      note.textContent?.includes('retention setting, not verification or workload protection'),
+    ).toBe(kept);
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not describe a host backup as a thawed guest', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url.endsWith('/pbs')
+            ? { data: { backups: [identityPBS({ backupType: 'host', vmid: 'host-proof' })] } }
+            : emptyPVE,
+        ),
+      ),
+    );
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Expand details/ }));
+    const note = screen.getByRole('note', { name: 'Recovery evidence limits' });
+    expect(note).toHaveTextContent(/not a tested restore/);
+    expect(note).not.toHaveTextContent(/guest|thawed|filesystems/);
+  });
+
+  it('updates the same open point from verified to incomplete and recovered without stale assurance', async () => {
+    vi.useFakeTimers({
+      now: BACKUP_IDENTITY_NOW,
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+    });
+    let point = identityPBS({ protected: true });
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(url.endsWith('/pbs') ? { data: { backups: [point] } } : emptyPVE),
+      ),
+    );
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+    const toggle = await screen.findByRole('button', { name: /Expand details/ });
+    fireEvent.click(toggle);
+    toggle.focus();
+    const detail = screen.getByTestId('proxmox-recoverable-detail');
+    expect(within(detail).getByRole('note')).toHaveTextContent(/not a tested restore/);
+    for (const [next, message] of [
+      [
+        identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: true }),
+        'incomplete and may still be in progress',
+      ],
+      [
+        identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: false }),
+        'No current writer is reported',
+      ],
+      [identityPBS({ verified: false }), 'not reported as verified'],
+      [identityPBS({ verified: true }), "provider's reported backup check"],
+    ] as const) {
+      point = next;
+      await vi.advanceTimersByTimeAsync(30_000);
+      await waitFor(() => expect(within(detail).getByRole('note')).toHaveTextContent(message));
+      expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(detail);
+      expect(toggle).toHaveFocus();
+      expect(within(detail).getByRole('note')).not.toHaveTextContent('retention setting');
+      if (next.inProgress)
+        expect(within(detail).getByRole('note')).not.toHaveTextContent(
+          "provider's reported backup check",
+        );
+    }
+    expect(apiFetchMock).toHaveBeenCalledTimes(10);
+  });
+});
