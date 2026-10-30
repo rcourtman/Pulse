@@ -1926,6 +1926,10 @@ Inspect the existing denial and compare it with the relevant read privileges:
 - On PVE 8, `VM.Monitor` is the legacy guest-agent fallback, not an extra
   requirement for PVE 9+.
 
+An intentionally denied optional read is not an access repair to perform. See
+[repeated optional-check refusals](#optional-proxmox-checks-return-403-repeatedly)
+before changing a role or testing the endpoint again.
+
 The built-in `PVEAuditor` role cannot be modified. Where a read privilege is
 actually missing, use the existing narrow custom role and matching scoped
 user/token ACLs. **Do not disable privilege separation, grant Administrator or
@@ -1948,6 +1952,35 @@ allowlist change or agent restart outside backups, following the guest OS's
 documentation. See [VM Disk Monitoring](VM_DISK_MONITORING.md) for the distinct
 permissions and backup safety boundary.
 
+### Optional Proxmox checks return 403 repeatedly
+
+A token can read ordinary inventory while an optional endpoint returns
+`403 Forbidden`. Identify the endpoint from an **existing** redacted error;
+HTTP 403 alone does not identify the missing privilege or mean the whole
+connection has failed.
+
+| Denied request | Reading affected | Keep the boundary |
+| --- | --- | --- |
+| `GET /nodes/{node}/apt/update` | Pending package updates | `Sys.Modify` is broader than read-only monitoring; an unavailable badge is a valid choice. See [pending-update access](#proxmox-pending-update-access). |
+| `/nodes/{node}/qemu/{vmid}/agent/file-read` for `/proc/meminfo` | Linux guest-memory detail | On PVE 9+, `VM.GuestAgent.FileRead` is separate from inventory and guest-audit access. Keep it denied if file reads are not intended. |
+
+Repeated refusals can be a polling-backoff defect, as reported in
+[#3546](https://github.com/rcourtman/Pulse/issues/3546), rather than a reason to
+grant more access. Lowering the log level or using **Pause Stream** does not
+reduce API requests. Do not rerun setup, rotate the token, disable privilege
+separation or add permissions just to silence them. Do not send manual
+guest-agent probes; keep the [backup safety boundary](VM_DISK_MONITORING.md#backup-safety).
+
+An unavailable reading is not measured zero. A retained update count and its
+last successful check time are historical evidence, not a fresh successful
+check on every poll. A denied guest-memory read does not by itself establish
+memory pressure or invalidate an independently collected memory source.
+
+Use the Pulse and Proxmox versions, endpoint, status and original times already
+available when reporting repeated refusals. Keep private names, full URLs,
+credentials and raw logs out of the report; no new request or diagnostics
+export is needed just to demonstrate an existing denial.
+
 ### Proxmox pending-update access
 
 A successful inventory check does not establish access to the package-update list.
@@ -1963,13 +1996,15 @@ unavailable update check is a valid choice; unavailable is not a confirmed zero.
 Older Pulse wording that says “Sys.Audit permission required” does not identify the
 actual missing privilege.
 
-For diagnosis, compare the affected node and endpoint using the exact credential
-configured in Pulse, not an administrator's browser session. Keep TLS verification
-enabled and credentials private; report only the HTTP status and a redacted denial
-or whether `data` is empty/nonempty. Do not use POST, Refresh or Upgrade as a test.
-If the matching GET succeeds but Pulse remains unavailable after its next update
-check, report the Pulse version and displayed check time/status separately; API
-success alone does not confirm the Pulse display has recovered.
+For diagnosis, use the existing result for the affected node and the credential
+configured in Pulse, not an administrator's browser session. If the denial is
+intentional, keep the token unchanged; do not repeat the GET merely to confirm
+it. Keep TLS verification enabled and credentials private; report only the HTTP
+status and a redacted denial. Do not use POST, Refresh or Upgrade as a test.
+If an already observed matching GET succeeds but Pulse remains unavailable
+after its next update check, report the Pulse version and displayed check
+time/status separately; API success alone does not confirm the Pulse display
+has recovered.
 
 ### Recovery Mode
 
