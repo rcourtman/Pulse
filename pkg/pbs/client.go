@@ -2059,6 +2059,22 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 		return nil, fmt.Errorf("snapshot list response contains no data array")
 	}
 
+	// The request selects one exact group. A foreign row or repeated native
+	// snapshot identity makes the whole read ambiguous, not partially usable
+	// history or an authoritative empty group. Validate before callers sort,
+	// cap or cache rows; their existing malformed-read path retains old evidence
+	// without renewing it. Do not put provider payloads in the error.
+	seen := make(map[int64]struct{}, len(result.Data))
+	for i, snapshot := range result.Data {
+		if snapshot.BackupType != backupType || snapshot.BackupID != backupID {
+			return nil, fmt.Errorf("snapshot list response row %d does not match requested backup group", i)
+		}
+		if _, exists := seen[snapshot.BackupTime]; exists {
+			return nil, fmt.Errorf("snapshot list response row %d repeats a snapshot time", i)
+		}
+		seen[snapshot.BackupTime] = struct{}{}
+	}
+
 	return result.Data, nil
 }
 

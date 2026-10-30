@@ -59,6 +59,57 @@ proof must consume the resource producer through the actual Backups surface and
 its existing drawer at desktop and narrow widths. This improves truthful
 inspection, not installed memory relief, a successful backup or guest recovery.
 
+### Unread PVE task history cannot establish absence or completion
+
+The paginated backup-history collector admits only a complete, bounded HTTP200
+response with an explicit task array and unambiguous, scoped task identities and
+times. Missing/null inventories, duplicate or case-conflicting fields, invalid
+rows, contradictory errors, trailing data and unfinished bodies are unread,
+not empty history. Audit authority likewise requires a whole unambiguous
+response granting `Sys.Audit` on the requested node; a valid prefix cannot
+qualify collection completeness. Valid empty arrays, independent accepted pages,
+provider metadata, multi-guest jobs and existing pagination bounds remain valid.
+
+Live tasks on a transiently unread/offline node retain only their last accepted
+connection-scoped observations. Accepted IDs win, other nodes still advance, and
+carried rows neither renew `ObservedAt` nor re-enter durable ingestion. Accepted
+empty reads and removed nodes withdraw their live rows. Explicit access denial
+withdraws that node's live rows and accepted page prefix; a later failed read
+cannot resurrect them. History coverage remains incomplete until its existing
+collection/authority checks pass. Retained running intent continues to keep its
+writer's partial archive from claiming completion. No new endpoint, field, token
+scope, policy, store/schema migration or guest/backup operation is introduced.
+
+Normal-suite `backup_history_response_test.go` covers adverse envelopes, rows,
+body completion, audit evidence and later-page failures; pagination controls
+remain required. `backup_task_inventory_lifecycle_test.go` exercises the actual
+HTTP client and poller through unread/empty/recovery/denial, connection isolation,
+fresh-page precedence and VM/LXC partial-archive ingestion. Desktop/narrow browser
+proof consumes those actual task frames in the production Backups table. These
+are source continuity and attribution proofs, not restore availability, original
+guest recovery or the cause of a reported freeze or stale date.
+
+### PBS snapshot group contradictions cannot renew recovery evidence
+
+Every returned PBS snapshot must belong to its exact requested kind/opaque ID,
+and each native snapshot time may occur only once within that group response.
+The PBS client rejects an ambiguous response as a whole, including invalid rows
+beyond the live retention cap. Existing malformed-read handling retains accepted
+raw/history evidence without cache or point renewal, marks collection partial
+rather than complete or access-denied, and never reconciles absence from that
+read. Independent readable namespaces remain usable. Only ordinary valid reads
+restore complete evidence; explicit empty arrays still reconcile confirmed
+absence. No guest, backup, restore, retention policy, access or schema changes.
+
+The normal-suite client `backup_snapshot_identity_test.go` and collector
+`pbs_snapshot_identity_test.go` cover exact subjects, opaque host IDs, duplicates,
+cold/warm VM/CT reads, historical preservation, cache/retry, independent scope,
+valid recovery and authoritative emptiness. Desktop/narrow browser proof must
+consume actual collector outputs through Backups inventory/posture clients,
+inspect retained evidence, uncertainty, recurrence and recovery with keyboard
+and touch. This proves truthful inspection, not original guest/native recovery.
+
+
 ### Fleet protection reads bound their request fan-out
 
 Coverage reads keep the existing 200-subject batch size and issue at most four

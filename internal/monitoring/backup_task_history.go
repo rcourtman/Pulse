@@ -38,7 +38,7 @@ type backupTaskHistoryClient interface {
 	GetBackupTaskHistory(context.Context, time.Time) (proxmox.BackupTaskHistory, error)
 }
 
-func (m *Monitor) readBackupTaskHistory(ctx context.Context, instance string, client PVEClientInterface) ([]proxmox.Task, model.BackupHistoryCollection, error) {
+func (m *Monitor) readBackupTaskHistory(ctx context.Context, instance string, client PVEClientInterface) (proxmox.BackupTaskHistory, model.BackupHistoryCollection, error) {
 	observation := model.BackupHistoryCollection{Provider: recovery.ProviderProxmoxPVE, Instance: instance}
 	m.mu.RLock()
 	interval := time.Duration(0)
@@ -92,14 +92,59 @@ func (m *Monitor) readBackupTaskHistory(ctx context.Context, instance string, cl
 		if len(history.Nodes) == 0 && err == nil {
 			observation.Reason = "no_nodes_observed"
 		}
-		return history.Tasks, observation, err
+		return history, observation, err
 	}
 	// Older provider adapters remain useful for live monitoring but cannot
 	// establish report completeness without collection-quality metadata.
 	tasks, err := client.GetBackupTasks(ctx)
 	observation.ObservedAt = time.Now().UTC()
 	observation.Reason = "collection_quality_unavailable"
-	return tasks, observation, err
+	return proxmox.BackupTaskHistory{Tasks: tasks}, observation, err
+}
+
+// Unread is not an authoritative empty inventory. Carry forward only the last
+// accepted live observations from that connection's failed/offline nodes. New
+// accepted pages win by exact ID; retained rows never re-enter durable ingestion
+// or acquire a new ObservedAt. A valid empty read, removed node or explicit
+// access denial withdraws its old live rows instead of resurrecting them.
+func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.BackupTaskHistoryNode, tasks []models.BackupTask) []models.BackupTask {
+	unread := make(map[string]bool)
+	for _, node := range nodes {
+		if node.Reason == "collection_failed" || node.Reason == "node_offline" {
+			unread[node.Node] = true
+		}
+	}
+	if len(unread) == 0 {
+		return tasks
+	}
+	seen := make(map[string]bool, len(tasks))
+	counts := make(map[string]int)
+	limits := make(map[string]int)
+	for _, task := range tasks {
+		seen[task.ID] = true
+		counts[task.Node]++
+	}
+	previous := m.state.GetBackupTasks()
+	for _, task := range previous {
+		if task.Instance == instance && unread[task.Node] {
+			limits[task.Node]++
+		}
+	}
+	// Share the existing 200-provider-task live window. Synthesized guest
+	// children can make a previously accepted payload larger; preserve that
+	// payload's bound, but never accumulate a fresh window of carried rows on
+	// every partially read poll. Accepted new rows always have priority.
+	for node := range unread {
+		limits[node] = max(200, limits[node], counts[node])
+	}
+	for _, task := range previous {
+		if task.Instance == instance && unread[task.Node] && !seen[task.ID] && counts[task.Node] < limits[task.Node] {
+			tasks = append(tasks, task)
+			seen[task.ID] = true
+			counts[task.Node]++
+		}
+	}
+	return tasks
 }
 
 func (m *Monitor) persistBackupTaskHistory(ctx context.Context, points []recovery.RecoveryPoint, observation model.BackupHistoryCollection) {

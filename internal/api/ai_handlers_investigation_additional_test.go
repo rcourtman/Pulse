@@ -1358,3 +1358,144 @@ func TestPatrolActionProjectionKeepsTheFullActionReference(t *testing.T) {
 		t.Fatalf("action = %+v, want the broker's result and verification with the causal attribution kept", got)
 	}
 }
+
+func TestAutoFixOrchestratorSetupUsesRequestedOrg(t *testing.T) {
+	for _, tc := range []struct{ input, org string }{
+		{"tenant-a", "tenant-a"}, {"tenant-b", "tenant-b"},
+		{"default", "default"}, {"", "default"}, {" tenant-a ", "tenant-a"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			f := newHistoryReadFixture(t)
+			before := historyFixtureFiles(t, f.root)
+			peers := make(map[string]aicontracts.InvestigationOrchestrator)
+			for org, svc := range f.services {
+				peers[org] = &stubInvestigationOrchestrator{}
+				svc.GetPatrolService().SetInvestigationOrchestrator(peers[org])
+			}
+			f.services[tc.org].GetPatrolService().SetInvestigationOrchestrator(nil)
+			factory := getCreateInvestigationOrchestrator()
+			SetCreateInvestigationOrchestrator(func(d aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator {
+				store := d.Store.(*historyReadDiskStore)
+				if store.org != tc.org {
+					t.Errorf("store belongs to %q, want %q", store.org, tc.org)
+				}
+				expectedChat := f.handler.chatHandler.defaultService
+				if tc.org != "default" {
+					expectedChat = f.handler.chatHandler.services[tc.org]
+				}
+				if got := d.ChatService.(*orchestratorChatAdapter).svc; got != expectedChat {
+					t.Error("factory received another organization's chat service")
+				}
+				finding := d.FindingsStore.Get("shared-history")
+				if finding == nil || finding.InvestigationSessionID != f.records[tc.org].SessionID {
+					t.Error("factory received another organization's findings store")
+				}
+				return factory(d)
+			})
+			deps := newAIAutoFixHandlerDeps(&Router{aiSettingsHandler: f.handler})
+			deps.SetupOrchestrator(tc.input)
+			for org, svc := range f.services {
+				got := svc.GetPatrolService().GetInvestigationOrchestrator()
+				if org == tc.org {
+					if got == nil || got == peers[org] {
+						t.Fatal("requested organization did not receive its orchestrator")
+					}
+					req := httptest.NewRequest(http.MethodPost, "/api/ai/findings/shared-history/reinvestigate", nil)
+					req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, org))
+					if deps.GetOrchestrator(req) != got || deps.GetInvestigationStore(org) == nil {
+						t.Error("extension cannot retrieve the exact scoped runtime it just installed")
+					}
+				} else if got != peers[org] {
+					t.Errorf("setup for %q replaced %q's orchestrator", tc.org, org)
+				}
+			}
+			for _, suffix := range []string{"", "/messages"} {
+				rec := f.read(tc.org, suffix)
+				if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), f.records[tc.org].SessionID) {
+					t.Fatalf("scoped history read: %d %s", rec.Code, rec.Body.String())
+				}
+				for other, record := range f.records {
+					if other != tc.org && strings.Contains(rec.Body.String(), record.SessionID) {
+						t.Error("scoped read contains another organization's session")
+					}
+				}
+			}
+			if f.factoryCalls.Load() != 1 || len(f.handler.investigationStores) != 1 {
+				t.Error("lazy setup or consuming read created an extra runtime")
+			}
+			if !reflect.DeepEqual(before, historyFixtureFiles(t, f.root)) {
+				t.Fatal("setup rewrote retained history, chat or encrypted credentials")
+			}
+		})
+	}
+}
+
+func TestAutoFixOrchestratorSetupDoesNotCreateOrBorrowAService(t *testing.T) {
+	for _, mode := range []string{"missing", "../tenant-a", "misbound", "single-tenant", "no-default"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newHistoryReadFixture(t)
+			before := historyFixtureFiles(t, f.root)
+			requested := mode
+			if mode == "misbound" {
+				f.handler.aiServices[mode] = f.services["default"]
+			}
+			if mode == "single-tenant" {
+				f.handler.mtPersistence = nil
+				requested = "tenant-a"
+			}
+			if mode == "no-default" {
+				f.handler.defaultAIService = nil
+				requested = "default"
+			}
+			servicesBefore := len(f.handler.aiServices)
+			peers := make(map[string]aicontracts.InvestigationOrchestrator)
+			for org, svc := range f.services {
+				peers[org] = &stubInvestigationOrchestrator{}
+				svc.GetPatrolService().SetInvestigationOrchestrator(peers[org])
+			}
+			deps := newAIAutoFixHandlerDeps(&Router{aiSettingsHandler: f.handler})
+			deps.SetupOrchestrator(requested)
+			if f.storeCalls.Load() != 0 || f.factoryCalls.Load() != 0 || len(f.handler.aiServices) != servicesBefore {
+				t.Error("unresolved org initialized a store, orchestrator or AI service")
+			}
+			for org, svc := range f.services {
+				if svc.GetPatrolService().GetInvestigationOrchestrator() != peers[org] {
+					t.Errorf("unresolved org changed %q's runtime", org)
+				}
+			}
+			if !reflect.DeepEqual(before, historyFixtureFiles(t, f.root)) {
+				t.Fatal("unresolved org changed retained state")
+			}
+		})
+	}
+}
+
+func TestAutoFixOrchestratorSetupConcurrentOrganizations(t *testing.T) {
+	f := newHistoryReadFixture(t)
+	before := historyFixtureFiles(t, f.root)
+	deps := newAIAutoFixHandlerDeps(&Router{aiSettingsHandler: f.handler})
+	var wg sync.WaitGroup
+	for org := range f.services {
+		wg.Add(1)
+		go func() { defer wg.Done(); deps.SetupOrchestrator(org) }()
+	}
+	wg.Wait()
+	for org, svc := range f.services {
+		runtime, ok := svc.GetPatrolService().GetInvestigationOrchestrator().(*historyReadOrchestrator)
+		if !ok || runtime.store.(*historyReadDiskStore).org != org {
+			t.Errorf("%q's concurrent setup did not bind its own retained store", org)
+		}
+		for _, suffix := range []string{"", "/messages"} {
+			rec := f.read(org, suffix)
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), f.records[org].SessionID) {
+				t.Errorf("concurrent setup lost %q's original thread: %d %s", org, rec.Code, rec.Body.String())
+			}
+		}
+	}
+	if f.factoryCalls.Load() != 3 || len(f.handler.investigationStores) != 3 {
+		t.Error("independent setup did not install exactly one runtime per organization")
+	}
+	if !reflect.DeepEqual(before, historyFixtureFiles(t, f.root)) {
+		t.Fatal("concurrent setup changed retained history or credentials")
+	}
+}

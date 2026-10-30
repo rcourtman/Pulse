@@ -20,7 +20,7 @@ func TestBackupHistoryPaginationAndCollectionQuality(t *testing.T) {
 		repeat     bool
 		expected   int
 		reason     string
-	}{{"full", true, false, false, 201, ""}, {"permission", false, false, false, 201, "audit_permission_unconfirmed"}, {"partial", true, true, false, 200, "collection_failed"}, {"repeated-page", true, false, true, 200, "history_truncated"}} {
+	}{{"full", true, false, false, 201, ""}, {"permission", false, false, false, 201, "audit_permission_unconfirmed"}, {"denied", true, true, false, 0, "access_denied"}, {"repeated-page", true, false, true, 200, "history_truncated"}} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -49,7 +49,7 @@ func TestBackupHistoryPaginationAndCollectionQuality(t *testing.T) {
 					}
 					tasks := make([]Task, count)
 					for i := range tasks {
-						tasks[i] = Task{UPID: fmt.Sprintf("task-%d", i+offset), Type: "vzdump"}
+						tasks[i] = Task{UPID: fmt.Sprintf("task-%d", i+offset), Type: "vzdump", StartTime: 1700000000}
 					}
 					json.NewEncoder(w).Encode(map[string]any{"data": tasks})
 				default:
