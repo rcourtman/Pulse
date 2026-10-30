@@ -770,7 +770,12 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
 
-	m.checkBackupAlerts(ctx)
+	// Optional collection expiry is not a failed recovery-store read. Keep
+	// existing alerts for the next ordinary evaluation rather than issuing an
+	// already-expired read that would manufacture an evaluation-outage alert.
+	if ctx.Err() == nil {
+		m.checkBackupAlerts(ctx)
+	}
 
 	// Only a complete accepted enumeration can clear an earlier access
 	// warning. An unread scope has not demonstrated permission recovery.

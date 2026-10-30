@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
@@ -319,6 +320,43 @@ func TestPVEStorageBudgetUnreadNodeKeepsUnscopedPBSConfirmation(t *testing.T) {
 			pollStorageBudget(t, f, c, context.Background())
 			if len(f.m.state.PBSGuestConfirmationsForInstance("cluster")) != 0 {
 				t.Error("complete read failed to remove absent PBS attribution")
+			}
+		})
+	}
+}
+
+// The collection budget cannot stand in for evidence that the recovery reader
+// failed. Preserve wanted alerts (and a real prior evaluation warning) until
+// an ordinary evaluation runs with a live context.
+func TestPVEStorageBudgetDoesNotInventAlertReadFailure(t *testing.T) {
+	for _, priorWarning := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prior-warning=%t", priorWarning), func(t *testing.T) {
+			f, c := newStorageBudgetFixture(t, "qemu")
+			pollStorageBudget(t, f, c, context.Background())
+			evaluator, _ := backupEvaluationMonitor(t)
+			f.m.alertManager = evaluator.alertManager
+			f.m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{Type: "fixture-wanted", Level: alerts.AlertLevelCritical, Fingerprint: "wanted-condition", Message: "Existing wanted condition"})
+			if priorWarning {
+				f.m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{Type: alerts.BackupEvaluationAlertType, Level: alerts.AlertLevelWarning, Fingerprint: "prior-observed-read-failure", Message: "Prior observed reader failure"})
+			}
+			before := f.m.alertManager.GetActiveAlerts()
+			c.phase, c.at = "content/node-b/local", c.at.Add(15*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			pollStorageBudget(t, f, c, ctx)
+			after := f.m.alertManager.GetActiveAlerts()
+			if len(after) != len(before) {
+				t.Fatalf("collection expiry invented or cleared an alert: before=%+v after=%+v", before, after)
+			}
+			byID := make(map[string]alerts.Alert, len(after))
+			for _, alert := range after {
+				byID[alert.ID] = alert
+			}
+			for _, old := range before {
+				got, ok := byID[old.ID]
+				if !ok || got.Type != old.Type || got.Level != old.Level || got.Message != old.Message || !got.StartTime.Equal(old.StartTime) || !reflect.DeepEqual(got.Metadata, old.Metadata) {
+					t.Errorf("collection budget changed an existing alert condition: before=%+v after=%+v", old, got)
+				}
 			}
 		})
 	}

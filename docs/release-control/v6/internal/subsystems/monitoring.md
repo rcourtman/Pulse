@@ -33,8 +33,11 @@ Explicit request cancellation withdraws the enumeration. Dropping an expired
 child deadline for local publication does not drop the connection owner:
 runtime shutdown/replacement, client replacement and retirement still prevent
 late publication. Unexpired publication retains its request cancellation signal.
-Independent connections, local-disk identity, permissions,
-alerts, guest operations and provider budgets are unchanged. Every node's
+A spent collection budget is not a recovery-store read failure: it does not
+start an already-expired backup-alert read, invent an evaluation-outage warning
+or clear existing wanted alerts. The next ordinary evaluation remains unchanged.
+Independent connections, local-disk identity, permissions, guest operations and
+provider budgets are unchanged. Every node's
 ordinary storage reads remain; an accepted shared view is not substituted for
 another node's access evidence.
 
