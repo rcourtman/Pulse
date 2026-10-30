@@ -142,7 +142,9 @@ func TestVzdumpTaskLogMalformedReadRetainsAcceptedEvidence(t *testing.T) {
 					} else if p < 3 && !seeded {
 						require.Empty(t, guests, "malformed cold reads cannot invent guest results")
 					} else if p == 1 {
-						require.Equal(t, accepted, guests, "unread log retains exact accepted evidence without renewal")
+						// State publishes tasks in its own chronology, not parser order.
+						// Compare every field and multiplicity without imposing a new order.
+						require.ElementsMatch(t, accepted, guests, "unread log retains exact accepted evidence without renewal")
 					} else if p == 2 {
 						assertVzdumpGuestResults(t, guests, "unknown")
 						for _, guest := range guests {
