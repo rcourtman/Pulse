@@ -100,12 +100,23 @@ manual probes during a freeze or thaw.
 | Goal | Recommended path | Host privilege needed? |
 |---|---|---|
 | PVE/PBS/PMG inventory, node status, VM/container status, storage usage, and normal Proxmox API metrics | Add the Proxmox connection with a read-only or narrowly scoped API token | No |
-| VM guest disk and memory details through QEMU Guest Agent | Use Proxmox API permissions such as `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` where supported | No host agent for the Proxmox node |
+| VM filesystem usage and guest information through QEMU Guest Agent | On PVE 9+, use `VM.GuestAgent.Audit` for intended guests; PVE 8 uses the legacy `VM.Monitor` privilege | No host agent for the Proxmox node |
+| Linux guest-memory detail by reading `/proc/meminfo` through QEMU Guest Agent | On PVE 9+, this separate read also needs `VM.GuestAgent.FileRead`; PVE 8 uses `VM.Monitor`. Leave file reads denied if they are not intended | No host agent for the Proxmox node |
 | Configured LXC filesystem capacities and usage | Install the Unified Agent on the owning PVE node; the safe profile uses [socket-free discovery and bounded mount probes](#proxmox-lxc-filesystem-readings-with-the-typed-helper) | Yes, but the safe profile confines it to the root helper rather than a root collector |
 | Docker/Podman containers inside a VM or LXC through guest-local reporting | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled, or use another explicit guest access/reporting path | Requires runtime-socket access: root-equivalent for a rootful daemon, or a collector-owned rootless socket |
 | Docker containers inside an LXC from a Proxmox host agent | Turn on **Discover Docker in LXC guests** in Settings → System → General (admin only), or start Pulse with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true` to lock it on; optionally limit guests with `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102` | Requires a root/equivalent Pulse agent on the Proxmox node and explicit server opt-in |
 | Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Varies: the safe typed helper covers SMART; capabilities outside the matrix still require the explicit root/full-telemetry profile |
 | Kubernetes node/pod monitoring from a cluster | Use the Kubernetes agent/DaemonSet profile | Depends on whether host metrics are enabled |
+
+**Filesystem auditing does not require Linux memory-file access on PVE 9+.**
+Windows has no `/proc/meminfo`; a failed read of that path is not evidence
+that Windows disk collection needs `VM.GuestAgent.FileRead`. A permitted read
+does not by itself prove fresh readings, workload health or backup safety.
+Review the [guest-read permission boundaries](TROUBLESHOOTING.md#check-permissions-proxmox)
+for the intended target, keeping privilege separation enabled. Repeated optional
+403s are not a reason to widen access, install another agent or rerun setup;
+use the [optional-read explanation](TROUBLESHOOTING.md#optional-proxmox-checks-return-403-repeatedly)
+and existing observations instead of manual guest-agent probes.
 
 Inside-guest runtime visibility is explicit. Installing the agent inside a VM or
 LXC authorizes that guest-local agent to report Docker/Podman monitoring data
