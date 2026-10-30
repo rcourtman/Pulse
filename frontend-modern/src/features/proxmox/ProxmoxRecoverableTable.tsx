@@ -254,6 +254,8 @@ export function ProxmoxRecoverableTable(props: {
   sizeMaxBytes: number;
   groupByDay?: boolean;
   layoutWidth?: Accessor<number | null | undefined>;
+  /** Register focus retention with each row/detail's own cleanup owner. */
+  retainInspectionFocus?: (content: HTMLElement) => void;
 }) {
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
@@ -290,6 +292,7 @@ export function ProxmoxRecoverableTable(props: {
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
     <>
       <TableRow
+        ref={(row) => props.retainInspectionFocus?.(row)}
         {...getPlatformResourceDetailRowInteractionProps({
           expanded: drawer.isExpanded(artifact),
           onToggle: () => drawer.toggle(artifact),
@@ -412,6 +415,7 @@ export function ProxmoxRecoverableTable(props: {
       </TableRow>
       <Show when={drawer.isExpanded(artifact)}>
         <InlineDetailTableRow
+          ref={(row) => props.retainInspectionFocus?.(row)}
           cellId={drawer.detailRowId(artifact)}
           class=""
           colspan={visibleColumns().length}

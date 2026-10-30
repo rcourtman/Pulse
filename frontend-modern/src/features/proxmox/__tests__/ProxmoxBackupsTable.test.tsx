@@ -1112,6 +1112,38 @@ describe('backup read recovery keeps keyboard position', () => {
     },
   );
 
+  it('retains retry focus when a new notice follows a successful read and later polling failure', async () => {
+    vi.useFakeTimers({
+      now: BACKUP_IDENTITY_NOW,
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+    });
+    try {
+      const fixture = setup('pbs');
+      fixture.mount();
+      const first = await screen.findByRole('button', { name: fixture.label });
+      let finish = fixture.pending();
+      fireEvent.click(first);
+      finish();
+      await waitFor(() => expect(first).not.toBeInTheDocument());
+      finish = fixture.pending();
+      await vi.advanceTimersByTimeAsync(30_000);
+      finish(false);
+      const later = await screen.findByRole('button', { name: fixture.label });
+      later.focus();
+      finish = fixture.pending();
+      fireEvent.click(later);
+      expect(later).toHaveFocus();
+      finish();
+      await waitFor(() => expect(later).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus());
+      expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+        '/proxmox/backups/coverage?q=backup#proof',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each(['pve', 'pbs', 'posture'] as const)(
     'does not steal focus moved away from the %s retry',
     async (source) => {

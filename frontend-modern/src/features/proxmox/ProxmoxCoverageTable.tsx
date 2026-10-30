@@ -482,6 +482,8 @@ export function ProxmoxCoverageTable(props: {
   /** Resolved restore-evidence filter; assessments and tasks remain workload-wide. */
   evidenceLocationLabel?: string;
   layoutWidth?: Accessor<number | null | undefined>;
+  /** Register focus retention with each row/detail's own cleanup owner. */
+  retainInspectionFocus?: (content: HTMLElement) => void;
 }) {
   const [evidenceLimit, setEvidenceLimit] = createSignal(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE);
   // There is one open workload. Keep its deliberate preview expansion across
@@ -630,6 +632,7 @@ export function ProxmoxCoverageTable(props: {
                   return (
                     <>
                       <TableRow
+                        ref={(row) => props.retainInspectionFocus?.(row)}
                         {...getPlatformResourceDetailRowInteractionProps({
                           expanded: isExpanded(),
                           onToggle: () => props.onToggleExpand(row.key),
@@ -856,6 +859,7 @@ export function ProxmoxCoverageTable(props: {
                       </TableRow>
                       <Show when={isExpanded()}>
                         <InlineDetailTableRow
+                          ref={(row) => props.retainInspectionFocus?.(row)}
                           cellId={detailRowId()}
                           class=""
                           colspan={columnCount()}

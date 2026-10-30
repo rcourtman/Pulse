@@ -25,6 +25,7 @@ export interface InlineDetailTableRowProps extends TableRowProps {
 export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
   const [local, rest] = splitProps(props, [
     'cellId',
+    'ref',
     'children',
     'class',
     'colSpan',
@@ -137,7 +138,16 @@ export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
   );
 
   return (
-    <TableRow ref={detailRow} class={local.class} {...rest} data-inline-detail-row>
+    <TableRow
+      ref={(row) => {
+        detailRow = row;
+        // A consumer's cleanup ref must not replace our measuring/focus owner.
+        if (typeof local.ref === 'function') local.ref(row);
+      }}
+      class={local.class}
+      {...rest}
+      data-inline-detail-row
+    >
       <TableCell
         id={local.cellId}
         colspan={effectiveColspan()}
