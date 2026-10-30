@@ -197,10 +197,12 @@ func TestPVEStorageBudgetPublishesAcceptedListings(t *testing.T) {
 							}
 						} else {
 							expected := old
-							expected.Time, expected.CTime = c.at, c.at.Unix()
+							// Match the provider-to-model Unix constructor as well as the instant;
+							// reflect compares time.Location representation, not just clocks.
+							expected.Time, expected.CTime = time.Unix(c.at.Unix(), 0), c.at.Unix()
 							expected.Notes = "accepted " + c.at.Format(time.RFC3339)
 							if !reflect.DeepEqual(raw, expected) {
-								t.Error("accepted raw archive did not advance exactly its observed fields")
+								t.Errorf("accepted raw archive did not advance exactly its observed fields: got=%#v want=%#v", raw, expected)
 							}
 						}
 					}

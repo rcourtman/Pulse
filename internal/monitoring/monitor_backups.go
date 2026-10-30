@@ -614,7 +614,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// A later storage/assignment timeout cannot discard earlier accepted
 	// listings. Drop only the spent child budget: the owner value still fences
 	// runtime shutdown, connection replacement and retirement atomically.
-	unlock, current := m.beginPVEBackupPublication(context.WithoutCancel(ctx), instanceName)
+	publicationCtx := ctx
+	if ctx.Err() == context.DeadlineExceeded {
+		publicationCtx = context.WithoutCancel(ctx)
+	}
+	unlock, current := m.beginPVEBackupPublication(publicationCtx, instanceName)
 	if !current {
 		return
 	}
