@@ -26,6 +26,10 @@ func TestPVEBackupLifecycleSchedulerLeavesBackgroundOwnerAlive(t *testing.T) {
 			<-release
 		}
 	}}}
+	// This scheduler also performs ordinary node reads. Supply the complete
+	// existing no-op adapter for methods the focused backup fake does not own,
+	// rather than forwarding those methods through a nil embedded interface.
+	c.mockPVEClientExtra.mockPVEClient.PVEClientInterface = &stubPVEClient{}
 	m := newReplicationLifecycleMonitor(t, c, false)
 	m.config.EnableBackupPolling = true
 	m.config.BackupPollingCycles = 1
