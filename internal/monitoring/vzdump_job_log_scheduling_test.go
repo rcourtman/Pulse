@@ -172,6 +172,8 @@ func TestVzdumpJobLogSchedulingConcurrentConnections(t *testing.T) {
 		go func(instance string) {
 			defer wg.Done()
 			jobs, upids := scheduledVzdumpJobs(maxVzdumpJobLogFetchesPerPoll+1, instance)
+			jobs[len(jobs)-1].EndTime = time.Time{}
+			jobs[len(jobs)-1].Status = "running"
 			client := &scheduledVzdumpClient{read: func(string) ([]proxmox.TaskLogLine, error) { return nil, nil }}
 			for cycle := 0; cycle < 3; cycle++ {
 				m.synthesizeVzdumpJobGuestTasks(context.Background(), instance, client, jobs, upids)
@@ -255,4 +257,153 @@ func TestVzdumpJobLogSchedulingOutputRetainsProviderOrder(t *testing.T) {
 		m.mu.Unlock()
 	}
 	require.Equal(t, []string{upids[jobs[0].ID], upids[jobs[1].ID], upids[jobs[1].ID], upids[jobs[0].ID]}, client.requests)
+}
+
+// A never-read ended job must run even if a live request consumes every poll's
+// context. This exercises the real poll-to-state path, not just admission ranks.
+func TestVzdumpJobLogSchedulingMixedQueuesContextProgress(t *testing.T) {
+	jobs, upids := scheduledVzdumpJobs(2, "site")
+	jobs[1].EndTime = time.Time{}
+	jobs[1].Status = "running"
+	client := &scheduledVzdumpClient{history: proxmox.BackupTaskHistory{Nodes: []proxmox.BackupTaskHistoryNode{{Node: "pve1", Complete: true}}}}
+	for _, job := range jobs {
+		end := int64(0)
+		if !job.EndTime.IsZero() {
+			end = job.EndTime.Unix()
+		}
+		client.history.Tasks = append(client.history.Tasks, proxmox.Task{UPID: upids[job.ID], Node: job.Node, Type: job.Type, Status: job.Status, StartTime: job.StartTime.Unix(), EndTime: end})
+	}
+	m := &Monitor{state: models.NewState()}
+	for cycle := 0; cycle < 4; cycle++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		client.read = func(upid string) ([]proxmox.TaskLogLine, error) {
+			if upid == upids[jobs[1].ID] {
+				cancel()
+				return nil, context.DeadlineExceeded
+			}
+			return testLogLines("INFO: Starting Backup of VM 501 (qemu)", "INFO: Finished Backup of VM 501 (00:00:30)", "TASK OK"), nil
+		}
+		m.pollBackupTasks(ctx, "site", client)
+		cancel()
+	}
+	require.Equal(t, []string{upids[jobs[1].ID], upids[jobs[0].ID], upids[jobs[1].ID], upids[jobs[1].ID], upids[jobs[1].ID]}, client.requests,
+		"ended evidence gets through on the second poll without delaying ordinary live attempts")
+	var guests []models.BackupTask
+	for _, task := range m.state.GetBackupTasks() {
+		if task.VMID > 0 {
+			guests = append(guests, task)
+		}
+	}
+	require.Len(t, guests, 1, "a timed-out live read supplies no invented guest outcome")
+	require.Equal(t, jobs[0].ID+"-vm501", guests[0].ID)
+	require.Equal(t, "OK", guests[0].Status)
+	require.True(t, m.vzdumpJobTaskCache["site|"+upids[jobs[0].ID]].historyComplete)
+	require.False(t, m.vzdumpJobTaskCache["site|"+upids[jobs[1].ID]].historyComplete)
+}
+
+func TestVzdumpJobLogSchedulingMixedQueuesBothExhaustContext(t *testing.T) {
+	for _, counts := range [][2]int{{1, 1}, {3, 2}, {maxVzdumpJobLogFetchesPerPoll + 1, maxVzdumpJobLogFetchesPerPoll + 2}} {
+		for _, liveFirst := range []bool{false, true} {
+			t.Run(fmt.Sprintf("live=%d/ended=%d/live-first=%t", counts[0], counts[1], liveFirst), func(t *testing.T) {
+				liveCount, endedCount := counts[0], counts[1]
+				jobs, upids := scheduledVzdumpJobs(liveCount+endedCount, "site")
+				live := make(map[string]bool)
+				for i := range jobs {
+					if (liveFirst && i < liveCount) || (!liveFirst && i >= endedCount) {
+						jobs[i].EndTime = time.Time{}
+						jobs[i].Status = "running"
+						live[upids[jobs[i].ID]] = true
+					}
+				}
+				original := append([]models.BackupTask(nil), jobs...)
+				client := &scheduledVzdumpClient{}
+				m := &Monitor{}
+				for cycle := 0; cycle < 2*max(liveCount, endedCount); cycle++ {
+					ctx, cancel := context.WithCancel(context.Background())
+					client.read = func(string) ([]proxmox.TaskLogLine, error) {
+						cancel()
+						return nil, context.DeadlineExceeded
+					}
+					before := len(client.requests)
+					tasks := m.synthesizeVzdumpJobGuestTasks(ctx, "site", client, jobs, upids)
+					cancel()
+					require.Empty(t, tasks)
+					require.Len(t, client.requests[before:], 1)
+					require.Equal(t, cycle%2 == 0, live[client.requests[before]], "actual first turns alternate even under saturation")
+				}
+				seen := make(map[string]bool)
+				for _, upid := range client.requests {
+					seen[upid] = true
+				}
+				require.Len(t, seen, len(jobs), "neither queue nor any pending job can be hidden forever")
+				require.Equal(t, original, jobs)
+			})
+		}
+	}
+}
+
+func TestVzdumpJobLogSchedulingFastLiveSurvivesSlowEndedBacklog(t *testing.T) {
+	const liveCount = 2
+	endedCount := maxVzdumpJobLogFetchesPerPoll + 2
+	jobs, upids := scheduledVzdumpJobs(endedCount+liveCount, "site")
+	live := make(map[string]bool)
+	for i := endedCount; i < len(jobs); i++ {
+		jobs[i].EndTime = time.Time{}
+		jobs[i].Status = "running"
+		live[upids[jobs[i].ID]] = true
+	}
+	client := &scheduledVzdumpClient{}
+	m := &Monitor{}
+	for cycle := 0; cycle < endedCount; cycle++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		client.read = func(upid string) ([]proxmox.TaskLogLine, error) {
+			if live[upid] {
+				return nil, nil
+			}
+			cancel()
+			return nil, context.DeadlineExceeded
+		}
+		before := len(client.requests)
+		m.synthesizeVzdumpJobGuestTasks(ctx, "site", client, jobs, upids)
+		cancel()
+		reads := client.requests[before:]
+		require.Len(t, reads, liveCount+1)
+		for _, job := range jobs[endedCount:] {
+			require.Contains(t, reads[:liveCount], upids[job.ID], "live work must not wait behind unread slow history")
+		}
+		require.Equal(t, upids[jobs[cycle].ID], reads[liveCount], "ended reads keep their own least-attempted order")
+	}
+}
+
+func TestVzdumpJobLogSchedulingQueueCursorOnlyTracksActualScopedReads(t *testing.T) {
+	jobs, upids := scheduledVzdumpJobs(2, "site")
+	jobs[1].EndTime = time.Time{}
+	jobs[1].Status = "running"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client := &scheduledVzdumpClient{read: func(string) ([]proxmox.TaskLogLine, error) {
+		cancel()
+		return nil, context.DeadlineExceeded
+	}}
+	m := &Monitor{}
+	m.synthesizeVzdumpJobGuestTasks(ctx, "site", client, jobs, upids)
+	require.Equal(t, []string{upids[jobs[1].ID]}, client.requests)
+	require.True(t, m.vzdumpJobLogHistoryFirst["site"])
+	// Repeated selection and a cancelled poll cannot spend the ended turn.
+	for i := 0; i < 2; i++ {
+		require.Equal(t, 1, m.selectVzdumpJobLogReads("site", jobs, upids)["site|"+upids[jobs[0].ID]])
+	}
+	m.synthesizeVzdumpJobGuestTasks(ctx, "site", client, jobs, upids)
+	require.Len(t, client.requests, 1)
+	require.True(t, m.vzdumpJobLogHistoryFirst["site"])
+	client.read = func(string) ([]proxmox.TaskLogLine, error) { return nil, nil }
+	m.synthesizeVzdumpJobGuestTasks(context.Background(), "other", client, jobs, upids)
+	require.Equal(t, upids[jobs[1].ID], client.requests[1], "a new connection starts live, regardless of its peer's cursor")
+	require.True(t, m.vzdumpJobLogHistoryFirst["site"])
+	m.synthesizeVzdumpJobGuestTasks(context.Background(), "site", client, nil, nil)
+	require.NotContains(t, m.vzdumpJobLogHistoryFirst, "site")
+	require.Contains(t, m.vzdumpJobLogHistoryFirst, "other")
+	for key := range m.vzdumpJobTaskCache {
+		require.NotContains(t, key, "site|")
+	}
 }

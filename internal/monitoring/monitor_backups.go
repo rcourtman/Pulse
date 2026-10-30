@@ -2774,6 +2774,10 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		attempted := m.vzdumpJobTaskCache[key]
 		attempted.lastAttempt = now
 		m.vzdumpJobTaskCache[key] = attempted
+		if m.vzdumpJobLogHistoryFirst == nil {
+			m.vzdumpJobLogHistoryFirst = make(map[string]bool)
+		}
+		m.vzdumpJobLogHistoryFirst[instanceName] = jobTask.EndTime.IsZero()
 		m.mu.Unlock()
 
 		logLines, err := client.GetTaskLog(ctx, jobTask.Node, upid)
@@ -2816,7 +2820,9 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 // history. Keep ordinary running jobs current, but reserve at least one turn
 // for pending ended jobs even when live work fills the allowance. Within each
 // group, never-read then least recently attempted reads win; ties retain provider
-// order. Only actual calls advance scheduling, not selection or cancellation.
+// order. The queue not served by the last actual request gets the first turn,
+// so either queue can progress even when one read exhausts the shared context.
+// Only actual calls advance scheduling, not selection or cancellation.
 func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]int {
 	type pendingRead struct {
 		key     string
@@ -2826,6 +2832,7 @@ func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupT
 	pending := make([]pendingRead, 0, len(jobs))
 	seen := make(map[string]bool, len(jobs))
 	m.mu.RLock()
+	historyFirst := m.vzdumpJobLogHistoryFirst[instance]
 	for _, job := range jobs {
 		key := instance + "|" + upids[job.ID]
 		if seen[key] || m.vzdumpJobTaskCache[key].final {
@@ -2858,6 +2865,24 @@ func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupT
 			selected[read.key] = len(selected) + 1
 		}
 	}
+	// Admission reserves live capacity and an ended turn; execution must share
+	// the context too. Move only the oldest selected ended read ahead of live
+	// work when the last actual request was live. If either queue exhausts the
+	// context, the other starts next poll. Fast live reads still run every poll,
+	// without waiting behind a whole backlog of slow ended reads (or vice versa).
+	if historyFirst {
+		for _, read := range pending {
+			if rank := selected[read.key]; !read.running && rank > 0 {
+				for key, priority := range selected {
+					if priority < rank {
+						selected[key] = priority + 1
+					}
+				}
+				selected[read.key] = 1
+				break
+			}
+		}
+	}
 	return selected
 }
 
@@ -2887,6 +2912,9 @@ func cachedVzdumpGuestTasks(tasks []models.BackupTask, job models.BackupTask) []
 func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}) {
 	prefix := instanceName + "|"
 	m.mu.Lock()
+	if len(seen) == 0 {
+		delete(m.vzdumpJobLogHistoryFirst, instanceName)
+	}
 	for key := range m.vzdumpJobTaskCache {
 		if !strings.HasPrefix(key, prefix) {
 			continue

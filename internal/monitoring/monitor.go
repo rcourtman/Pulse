@@ -1371,6 +1371,7 @@ type Monitor struct {
 	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
 	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
+	vzdumpJobLogHistoryFirst   map[string]bool                            // Last actual log read was running; next poll offers ended history the first turn. Guarded by mu.
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
 	pveBackupInventoryReady    map[string]map[string]bool                 // Track PVE guest inventory readiness for backup orphan detection
 	pveBackupTemplateSubjects  map[string]map[string]struct{}             // Track template VMIDs excluded from runtime workloads but valid for backups
