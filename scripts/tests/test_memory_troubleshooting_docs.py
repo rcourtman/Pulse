@@ -8,6 +8,7 @@ inspect a host service, database, heap or container daemon.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -18,8 +19,10 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -157,6 +160,11 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
         self.assertNotIn("Pulse process (PID and UTC start)", result.stdout)
         self.assertNotRegex(result.stdout, r"VmRSS:|RssAnon:|RssFile:|RssShmem:|VmSwap:")
 
+    def timed_exercise(self, **settings):
+        started = time.monotonic()
+        result = self.exercise(**settings)
+        return time.monotonic() - started, result
+
     def test_shipped_guide_is_the_exercised_source_and_shell_is_valid(self):
         self.assertEqual(DOC.read_bytes(),
                          (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
@@ -233,23 +241,26 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.count("0 kB"), 5)
 
-    def test_hung_service_reader_is_unavailable_before_the_test_deadline(self):
-        started = time.monotonic()
-        result, calls = self.exercise(HANG_TOOL="systemctl")
-        self.assertLess(time.monotonic() - started, 10)
-        self.assertEqual(result.returncode, 137, result.stderr)
-        self.assert_no_memory_claim(result)
-        self.assertIn("sample unavailable", result.stderr)
-        self.assertEqual([call["name"] for call in calls], ["date", "systemctl"])
-
-    def test_hung_counter_reader_never_publishes_identity_or_partial_memory(self):
-        started = time.monotonic()
-        result, calls = self.exercise(HANG_TOOL="awk")
-        self.assertLess(time.monotonic() - started, 10)
-        self.assertEqual(result.returncode, 137, result.stderr)
-        self.assert_no_memory_claim(result)
-        self.assertIn("sample unavailable", result.stderr)
-        self.assertEqual([call["name"] for call in calls], ["date", "systemctl", "ps", "awk"])
+    def test_hung_readers_are_unavailable_without_identity_or_partial_memory(self):
+        # Each exercise owns its directory, environment, process group and
+        # reader pidfd. Overlap only this fixed pair; keep the real 8s deadline
+        # and per-reader timing/termination oracles. Assertions and exception
+        # collection stay on the test thread, and the executor drains both
+        # submissions even when an observation fails.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending = [(tool, pool.submit(self.timed_exercise, HANG_TOOL=tool))
+                       for tool in ("systemctl", "awk")]
+            for tool, future in pending:
+                with self.subTest(tool=tool):
+                    elapsed, (result, calls) = future.result()
+                    self.assertLess(elapsed, 10)
+                    self.assertEqual(result.returncode, 137, result.stderr)
+                    self.assert_no_memory_claim(result)
+                    self.assertIn("sample unavailable", result.stderr)
+                    expected = ["date", "systemctl"]
+                    if tool == "awk":
+                        expected += ["ps", "awk"]
+                    self.assertEqual([call["name"] for call in calls], expected)
 
     def test_missing_deadline_utility_is_not_a_sample_or_an_unbounded_fallback(self):
         copied = recipe().replace("timeout", "pulse-missing-memory-deadline")
@@ -261,14 +272,17 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_term_resistant_readers_are_stopped_even_when_their_pipes_close(self):
-        for tool in ("systemctl", "awk"):
-            with self.subTest(tool=tool):
-                started = time.monotonic()
-                result, calls = self.exercise(HANG_TOOL=tool, IGNORE_TERM="1", CLOSE_PIPES="1")
-                self.assertLess(time.monotonic() - started, 10)
-                self.assertEqual(result.returncode, 137, result.stderr)
-                self.assert_no_memory_claim(result)
-                self.assertEqual(calls[-1]["name"], tool)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending = [(tool, pool.submit(self.timed_exercise, HANG_TOOL=tool,
+                                         IGNORE_TERM="1", CLOSE_PIPES="1"))
+                       for tool in ("systemctl", "awk")]
+            for tool, future in pending:
+                with self.subTest(tool=tool):
+                    elapsed, (result, calls) = future.result()
+                    self.assertLess(elapsed, 10)
+                    self.assertEqual(result.returncode, 137, result.stderr)
+                    self.assert_no_memory_claim(result)
+                    self.assertEqual(calls[-1]["name"], tool)
 
     def test_shell_exit_alone_does_not_pass_the_reader_termination_oracle(self):
         copied = recipe().replace("--signal=KILL 8s", "--kill-after=1s 8s")
@@ -342,6 +356,69 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
         self.assertIn("TROUBLESHOOTING.md#memory-use-keeps-growing", faq)
         self.assertEqual((ROOT / "docs/FAQ.md").read_bytes(),
                          (ROOT / "frontend-modern/public/docs/FAQ.md").read_bytes())
+
+
+class MemoryDeadlineSchedulingTest(unittest.TestCase):
+    """Require bounded overlap and every adverse observation, not a fast sample."""
+
+    controls = (
+        ("test_hung_readers_are_unavailable_without_identity_or_partial_memory", {}),
+        ("test_term_resistant_readers_are_stopped_even_when_their_pipes_close",
+         {"IGNORE_TERM": "1", "CLOSE_PIPES": "1"}),
+    )
+
+    def run_control(self, method, settings, *, failed=None, exceptional=None):
+        control = MemoryTroubleshootingDocsTest(method)
+        barrier = threading.Barrier(2)
+        readers = []
+
+        def exercise(**actual):
+            tool = actual.pop("HANG_TOOL")
+            self.assertIn(tool, ("systemctl", "awk"))
+            self.assertEqual(actual, settings)
+            readers.append(tool)
+            # Serial work cannot reach this rendezvous. This never shortens
+            # the copied recipe or signals a real reader, service or guest.
+            barrier.wait(timeout=2)
+            if tool == exceptional:
+                raise RuntimeError("synthetic memory observation failure")
+            result = subprocess.CompletedProcess([], 0 if tool == failed else 137,
+                                                 "", "Resident-memory sample unavailable\n")
+            names = ["date", "systemctl"] + (["ps", "awk"] if tool == "awk" else [])
+            return result, [{"name": name} for name in names]
+
+        result = unittest.TestResult()
+        with patch.object(control, "exercise", side_effect=exercise), \
+                patch(__name__ + ".ThreadPoolExecutor", wraps=ThreadPoolExecutor) as executor:
+            control.run(result)
+        executor.assert_called_once_with(max_workers=2)
+        self.assertCountEqual(readers, ("systemctl", "awk"))
+        self.assertEqual(result.testsRun, 1)
+        self.assertEqual(result.skipped, [])
+        return result
+
+    def test_each_reader_bad_result_still_fails_the_paired_control(self):
+        for method, settings in self.controls:
+            for failed in (None, "systemctl", "awk"):
+                with self.subTest(method=method, failed=failed):
+                    result = self.run_control(method, settings, failed=failed)
+                    self.assertEqual(result.errors, [])
+                    self.assertEqual(len(result.failures), int(failed is not None))
+                    if failed is not None:
+                        self.assertIn(f"tool={failed!r}", result.failures[0][0].id())
+
+    def test_exception_does_not_drop_the_other_reader_bad_result(self):
+        for method, settings in self.controls:
+            for exceptional in ("systemctl", "awk"):
+                with self.subTest(method=method, exceptional=exceptional):
+                    failed = "awk" if exceptional == "systemctl" else "systemctl"
+                    result = self.run_control(method, settings, failed=failed,
+                                              exceptional=exceptional)
+                    self.assertEqual(len(result.errors), 1)
+                    self.assertIn(f"tool={exceptional!r}", result.errors[0][0].id())
+                    self.assertIn("synthetic memory observation failure", result.errors[0][1])
+                    self.assertEqual(len(result.failures), 1)
+                    self.assertIn(f"tool={failed!r}", result.failures[0][0].id())
 
 
 class GuestMemoryInterpretationDocsTest(unittest.TestCase):
