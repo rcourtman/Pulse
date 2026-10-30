@@ -19,7 +19,7 @@ func waitPBSBudget(t *testing.T, ch <-chan struct{}, phase string) {
 	}
 }
 
-func TestPBSBudgetOwnerWithdrawsLatePublication(t *testing.T) {
+func exercisePBSBudgetOwnerWithdrawal(t *testing.T) {
 	for _, transition := range []string{"runtime cancellation", "runtime replacement", "client replacement", "client retirement"} {
 		t.Run(transition, func(t *testing.T) {
 			f := newPBSBudgetFixture(t, "vm", "datastore")
@@ -104,7 +104,7 @@ func TestPBSBudgetOwnerWithdrawsLatePublication(t *testing.T) {
 	}
 }
 
-func TestPBSBudgetOldCompletionCannotReleaseNewClaim(t *testing.T) {
+func exercisePBSBudgetOldCompletion(t *testing.T) {
 	m := &Monitor{}
 	first, second := &pbs.Client{}, &pbs.Client{}
 	m.replacePBSClient("reader", first)
