@@ -44,7 +44,7 @@ describe('copyable webhook example', () => {
       'private header file',
     );
     const example = [...article.querySelectorAll('pre code')].find((block) =>
-      block.textContent?.startsWith('POST /api/notifications/webhooks\n'),
+      block.textContent?.startsWith('POST /api/notifications/webhooks\nX-Pulse-Org-ID:'),
     )?.textContent;
     expect(example).toContain('X-Pulse-Org-ID: acme-corp');
     expect(example).toContain('Authorization: Bearer <token with settings:write>');
