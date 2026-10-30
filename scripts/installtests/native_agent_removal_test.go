@@ -10,6 +10,9 @@ import (
 )
 
 func TestNativeAgentRemovalSystemdRecipeRuntime(t *testing.T) {
+	// The controls use private directories and a closed service-manager model,
+	// not live machine inventory. Start the unchanged deadline after admission.
+	t.Parallel()
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux-only native systemd lab; Windows lifecycle remains independently required")
 	}

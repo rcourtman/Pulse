@@ -7604,6 +7604,9 @@ write_action_runner_config
 }
 
 func TestInstallSHActionRunnerRecoveredCollectorTrust(t *testing.T) {
+	// The real runner, TLS server and recovered state belong to this test;
+	// only child environments change. Share Go's existing parallel budget.
+	t.Parallel()
 	root := t.TempDir()
 	runnerBinary := filepath.Join(root, "pulse-agent-runner")
 	build := exec.Command("go", "build", "-o", runnerBinary, "./cmd/pulse-agent-runner")
