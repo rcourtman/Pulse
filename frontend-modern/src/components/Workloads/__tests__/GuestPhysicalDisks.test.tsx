@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertsAPI } from '@/api/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -13,6 +13,9 @@ const queryState = vi.hoisted(() => ({
   // Set to a signal accessor to drive live resource updates.
   accessor: undefined as (() => Resource[]) | undefined,
   error: undefined as unknown,
+  errorAccessor: undefined as (() => unknown) | undefined,
+  loading: () => false as boolean,
+  refetch: vi.fn<() => Promise<Resource[]>>(),
   query: '',
   enabled: false,
   realtimeEnabled: undefined as (() => boolean) | undefined,
@@ -56,7 +59,9 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     queryState.realtimeEnabled = options.realtimeEnabled;
     return {
       resources: () => (queryState.accessor ? queryState.accessor() : queryState.resources),
-      error: () => queryState.error,
+      error: () => queryState.errorAccessor?.() ?? queryState.error,
+      loading: () => queryState.loading(),
+      refetch: () => queryState.refetch(),
     };
   },
 }));
@@ -94,6 +99,9 @@ describe('GuestPhysicalDisks', () => {
     queryState.resources = [];
     queryState.accessor = undefined;
     queryState.error = undefined;
+    queryState.errorAccessor = undefined;
+    queryState.loading = () => false;
+    queryState.refetch.mockReset().mockResolvedValue([]);
     queryState.query = '';
     queryState.enabled = false;
     queryState.realtimeEnabled = undefined;
@@ -320,5 +328,153 @@ describe('GuestPhysicalDisks', () => {
     queryState.error = new Error('unavailable');
     render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
     expect(screen.getByRole('status')).toHaveTextContent('Physical disk details are unavailable.');
+  });
+
+  it('withholds cached health, temperatures and open charts after a scoped read fails', async () => {
+    const [error, setError] = createSignal<unknown>();
+    queryState.errorAccessor = error;
+    queryState.resources = [disk];
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
+    row.open = true;
+    fireEvent(row, new Event('toggle'));
+    await screen.findByTestId('history-chart');
+    row.querySelector('summary')!.focus();
+
+    setError(new Error('private provider response must not render'));
+    expect(screen.getByRole('status')).toHaveTextContent('Physical disk details are unavailable.');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'This does not establish that disks are absent or healthy.',
+    );
+    expect(screen.queryByTestId('guest-physical-disk')).toBeNull();
+    expect(screen.queryByTestId('disk-drawer-overview')).toBeNull();
+    expect(screen.queryByTestId('history-chart')).toBeNull();
+    expect(screen.queryByText('Healthy')).toBeNull();
+    expect(screen.queryByText('45°C')).toBeNull();
+    expect(screen.queryByText('private provider response must not render')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Physical Disks & SMART' })).not.toHaveTextContent(
+      '(0)',
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Physical Disks & SMART' })).toHaveFocus(),
+    );
+  });
+
+  it('keeps a pending/failed retry focusable and restores only the successful scoped read', async () => {
+    const [error, setError] = createSignal<unknown>(new Error('unavailable'));
+    const [loading, setLoading] = createSignal(false);
+    const [resources, setResources] = createSignal([disk]);
+    queryState.errorAccessor = error;
+    queryState.loading = loading;
+    queryState.accessor = resources;
+    let settle!: () => void;
+    queryState.refetch.mockImplementation(() => {
+      setLoading(true);
+      return new Promise<Resource[]>((resolve, reject) => {
+        settle = () => {
+          setLoading(false);
+          reject(new Error('unavailable'));
+        };
+      });
+    });
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const retry = screen.getByRole('button', { name: 'Retry physical disk read' });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(retry).toHaveTextContent('Retrying…');
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    expect(retry).not.toBeDisabled();
+    fireEvent.click(retry);
+    expect(queryState.refetch).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('guest-physical-disk')).toBeNull();
+    settle();
+    await waitFor(() => expect(retry).toHaveTextContent('Retry physical disk read'));
+    expect(retry).toHaveFocus();
+    expect(retry).toHaveAttribute('aria-disabled', 'false');
+
+    queryState.refetch.mockImplementationOnce(async () => {
+      batch(() => {
+        setResources([{ ...disk, physicalDisk: { ...disk.physicalDisk!, temperature: 47 } }]);
+        setError(undefined);
+      });
+      return resources();
+    });
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByText('47°C')).toBeInTheDocument());
+    expect(queryState.refetch).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'Retry physical disk read' })).toBeNull();
+    expect(screen.queryByText('45°C')).toBeNull();
+    expect(screen.getByTestId('guest-physical-disk')).not.toHaveAttribute('open');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Physical Disks & SMART (1)' })).toHaveFocus(),
+    );
+  });
+
+  it('distinguishes a successful empty retry from both failed reads and physical disk absence', async () => {
+    const [error, setError] = createSignal<unknown>(new Error('unavailable'));
+    const [resources, setResources] = createSignal([disk]);
+    queryState.errorAccessor = error;
+    queryState.accessor = resources;
+    queryState.refetch.mockImplementationOnce(async () => {
+      batch(() => {
+        setResources([]);
+        setError(undefined);
+      });
+      return [];
+    });
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const retry = screen.getByRole('button', { name: 'Retry physical disk read' });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'No physical disk records were returned for this guest. This does not mean the guest has no disks.',
+    );
+    expect(screen.queryByText('Physical disk details are unavailable.')).toBeNull();
+    expect(screen.queryByTestId('guest-physical-disk')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Physical Disks & SMART (0)' })).toHaveFocus(),
+    );
+  });
+
+  it.each(['elsewhere', 'hidden', 'disposed'] as const)(
+    'does not reclaim focus on recovery when the inspection is %s',
+    async (scenario) => {
+      const [error, setError] = createSignal<unknown>(new Error('unavailable'));
+      const [shown, setShown] = createSignal(true);
+      queryState.errorAccessor = error;
+      queryState.resources = [disk];
+      const rendered = render(() => (
+        <>
+          <button type="button">Outside inspection</button>
+          <GuestPhysicalDisks parentId="vm-resource-101" historyEnabled={shown()} />
+        </>
+      ));
+      const retry = screen.getByRole('button', { name: 'Retry physical disk read' });
+      retry.focus();
+      if (scenario === 'elsewhere')
+        screen.getByRole('button', { name: 'Outside inspection' }).focus();
+      if (scenario === 'hidden') setShown(false);
+      if (scenario === 'disposed') rendered.unmount();
+      const active = document.activeElement;
+      setError(undefined);
+      await Promise.resolve();
+      expect(document.activeElement).toBe(active);
+    },
+  );
+
+  it('keeps admitted rows during an ordinary pending refresh and withdraws valid empty results', () => {
+    const [loading, setLoading] = createSignal(false);
+    const [resources, setResources] = createSignal([disk]);
+    queryState.loading = loading;
+    queryState.accessor = resources;
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const summary = screen.getByTestId('guest-physical-disk').querySelector('summary');
+    setLoading(true);
+    expect(screen.getByText('Healthy')).toBeInTheDocument();
+    expect(screen.getByTestId('guest-physical-disk').querySelector('summary')).toBe(summary);
+    setLoading(false);
+    setResources([]);
+    expect(screen.queryByTestId('guest-physical-disk')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('No physical disk records were returned');
   });
 });

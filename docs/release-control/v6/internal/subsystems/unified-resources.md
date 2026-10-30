@@ -23,6 +23,29 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Guest SMART inspection withdraws a failed scoped read
+
+A failed guest physical-disk resource read must not leave cached health words,
+temperatures or open SMART/history panels presented as current below an error.
+The guest consumer withholds that entire disk list until a successful scoped
+read. It renders no response text, no zero-disk inference and no recovery action
+against the guest. An explicit retry uses the same parent-scoped resource query;
+pending retries stay focusable, announce their busy state and reject duplicate
+activation. Failed retries keep the same control. Recovery shows only the newly
+admitted records, with closed disk disclosures. A valid empty response says that
+no records were returned, not that the guest has no disks. Uninstrumented guests
+still get no empty card on first inspection.
+
+When read failure or recovery removes focused content, focus returns to the
+surviving inspection heading, including empty recovery. It must not steal focus
+moved elsewhere, focus a hidden Overview or restore focus after leaving the guest.
+`GuestPhysicalDisks.test.tsx` covers retained/open evidence, failure/pending/retry,
+recovery/empty, literal-response suppression and focus ownership. Desktop/narrow
+browser proof must exercise the actual resource reader through the guest drawer,
+scoped failure, keyboard/touch retry, recovery and inspected pixels. Resource and
+disk identity, auth, collection, thresholds, History targets and refresh cadence
+are unchanged; this is truthful inspection, not native disk or guest recovery.
+
 ### TrueNAS protection consumers do not repair malformed instants
 
 The Protection row, completion sorts and inline Started/Completed fields use the
