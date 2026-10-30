@@ -23,6 +23,27 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Restore-point inspection states what its evidence cannot confirm
+
+The existing By date record detail places a visible, wrapping evidence-limits
+note beside State. A guest snapshot shares the guest's storage and is not a
+separate backup; it does not count towards backup protection. Provider-reported
+verification is not a tested restore, and prune retention establishes neither
+verification nor workload protection. A running or failed point explicitly
+remains incomplete. Guest records do not establish thaw or filesystem writes;
+host backup records must not invent a guest. The note follows the current
+same-ID point during refresh without retaining an obsolete assurance.
+
+Normal-suite `ProxmoxBackupsTable.test.tsx` consumes raw PBS/PVE inventory for
+snapshot, verified/unverified/missing verification, PBS-backed file, running,
+failed, prune-retained and host cases, plus open-record refresh continuity.
+Actual-App browser proof must inspect desktop and 320px pixels and native
+keyboard/touch disclosure, including same-point activity and verification
+changes. No route, provider operation, auth, policy, count, classification,
+identity, collection or polling behaviour changes. This is truthful recovery
+inspection, not proof of a restore, guest recovery or published availability.
+
+
 ### Guest SMART inspection withdraws a failed scoped read
 
 A failed guest physical-disk resource read must not leave cached health words,

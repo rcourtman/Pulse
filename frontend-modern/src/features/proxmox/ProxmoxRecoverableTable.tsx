@@ -109,6 +109,27 @@ const artifactVerificationText = (artifact: RecoverableArtifact): string => {
   return artifact.sourceKind === 'snapshot' ? '' : 'Not reported';
 };
 
+// State badges report provider evidence, not a tested recovery. Keep those
+// limits beside the open point's state, where keyboard and touch readers can
+// read them without hovering a badge or leaving for workload coverage.
+const artifactEvidenceLimit = (artifact: RecoverableArtifact): string => {
+  if (artifact.sourceKind === 'snapshot') {
+    return "This guest snapshot shares the guest's storage. It is not a separate backup and does not count towards backup protection.";
+  }
+  if (artifact.running) {
+    return 'This backup is still being written. It is not a completed restore point.';
+  }
+  if (artifact.failed) {
+    return 'This backup is incomplete after a failed task. It is not a completed restore point.';
+  }
+  if (artifact.verified === true) {
+    return "Verified is the provider's reported backup check, not a tested restore.";
+  }
+  return artifact.verified === false
+    ? 'This backup is not reported as verified. Its presence does not establish a successful restore.'
+    : 'Backup verification is not reported. Its presence does not establish a successful restore.';
+};
+
 // Size and provider identifiers remain progressive detail. Workload and
 // repository identity must also be readable before choosing a point on a phone.
 const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSection[] => {
@@ -144,6 +165,26 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         }),
         makeDetailRow('Prune protection', artifact.protected ? 'Kept when pruning' : ''),
       ]),
+      footerContent: (
+        <div
+          role="note"
+          aria-label="Recovery evidence limits"
+          class="space-y-1 whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere"
+        >
+          <p>{artifactEvidenceLimit(artifact)}</p>
+          <Show when={artifact.protected}>
+            <p>
+              Kept when pruning is a retention setting, not verification or workload protection.
+            </p>
+          </Show>
+          <Show when={artifact.workload.type === 'vm' || artifact.workload.type === 'ct'}>
+            <p>
+              Backup and snapshot records do not establish that the guest has thawed or that its
+              filesystems accept writes.
+            </p>
+          </Show>
+        </div>
+      ),
     },
     {
       label: 'Workload',
