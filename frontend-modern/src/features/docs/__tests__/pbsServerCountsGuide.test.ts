@@ -54,7 +54,7 @@ const rows = (servers: Resource[], entries: ReturnType<typeof entry>[]) =>
 describe('PBS server count guidance', () => {
   it('ships a discoverable section, matching mirror and usable related links', () => {
     expect(read('frontend-modern/public/docs/PBS.md')).toBe(read('docs/PBS.md'));
-    expect(guide('PBS').querySelector(`a[href="/docs/PBS${fragment}"]`)?.textContent).toBe(
+    expect(guide('PBS').querySelector(`a[href="${fragment}"]`)?.textContent).toBe(
       'backup server counts',
     );
     for (const [name, hash] of [
@@ -62,7 +62,8 @@ describe('PBS server count guidance', () => {
       ['PBS', '#slow-backup-loading'],
       ['VM_DISK_MONITORING', '#backup-safety'],
     ]) {
-      expect(section().querySelector(`a[href="/docs/${name}${hash}"]`)).not.toBeNull();
+      const href = name === 'PBS' ? hash : `/docs/${name}${hash}`;
+      expect(section().querySelector(`a[href="${href}"]`)).not.toBeNull();
       expect(guide(name).querySelector(hash)).not.toBeNull();
     }
   });
