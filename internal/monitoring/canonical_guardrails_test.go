@@ -2599,7 +2599,12 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			"m.setRuntimeContext(ctx, wsHub)",
 		},
 		"monitor_backups.go": {
-			"parentCtx := m.getRuntimeContext()",
+			"owner := m.beginPVEBackupPoll(instanceName, client, lastPoll, newLast)",
+			"ctx := context.WithValue(owner.ctx, pveBackupPollContextKey{}, owner)",
+		},
+		"pve_backup_poll.go": {
+			"parent := m.runtimeCtx",
+			"ctx, cancel := context.WithCancel(parent)",
 		},
 		"monitor_pve.go": {
 			"parentCtx := m.getRuntimeContext()",

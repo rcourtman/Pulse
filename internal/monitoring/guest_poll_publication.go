@@ -144,6 +144,8 @@ func (m *Monitor) replacePVEClient(instance string, client PVEClientInterface) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cancelPVEGuestPollLocked(instance)
+	m.cancelPVEBackupPollLocked(instance)
+	m.discardPVEBackupTaskCacheLocked(instance)
 	if m.pveClients == nil {
 		m.pveClients = make(map[string]PVEClientInterface)
 	}

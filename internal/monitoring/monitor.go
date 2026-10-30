@@ -1306,7 +1306,7 @@ type Monitor struct {
 	mockUnifiedViewFixtureAt   time.Time // fixture freshness the published view was built from
 	mockUnifiedViewValid       bool
 	pveClients                 map[string]PVEClientInterface
-	pveGuestPublicationMu      sync.RWMutex             // Orders guest publication with connection/runtime replacement and retirement.
+	pveGuestPublicationMu      sync.RWMutex             // Orders guest/backup publication with connection/runtime replacement and retirement.
 	pveGuestPolls              map[string]*pveGuestPoll // Guarded by m.mu; canceled cycles retain ownership until completion unless the binding ends.
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
@@ -1368,6 +1368,7 @@ type Monitor struct {
 	lastAuthAttempt            map[string]time.Time                       // Track last auth attempt time
 	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
+	pveBackupPolls             map[string]*pveBackupPoll                  // Owned runtime/client-scoped backup scans; guarded by mu
 	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
 	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
@@ -1520,6 +1521,9 @@ func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
 	for name, poll := range m.pveReplicationPolls {
 		poll.cancel()
 		delete(m.pveReplicationPolls, name)
+	}
+	for name := range m.pveBackupPolls {
+		m.cancelPVEBackupPollLocked(name)
 	}
 	m.runtimeCtx = ctx
 	m.wsHub = hub

@@ -231,7 +231,7 @@ func TestPollStorageBackups_Issue1639HarvestsPBSGuestConfirmations(t *testing.T)
 	}
 }
 
-func TestPollPVEBackupsAsyncUsesRuntimeContextIndependentOfCycle(t *testing.T) {
+func TestPollPVEBackupsAsyncRejectsStoppedRuntime(t *testing.T) {
 	runtimeCtx, cancelRuntime := context.WithCancel(context.Background())
 	cancelRuntime()
 	m := &Monitor{
@@ -243,18 +243,20 @@ func TestPollPVEBackupsAsyncUsesRuntimeContextIndependentOfCycle(t *testing.T) {
 			BackupPollingCycles: 1,
 		},
 	}
+	client := &mockPVEClientExtra{}
+	m.pveClients = map[string]PVEClientInterface{"cluster-a": client}
 	m.pollPVEBackupsAsync(
 		"cluster-a",
 		&config.PVEInstance{MonitorBackups: true},
-		&mockPVEClientExtra{},
+		client,
 		nil,
 		map[string]string{},
 	)
 	m.mu.RLock()
 	scheduledAt := m.lastPVEBackupPoll["cluster-a"]
 	m.mu.RUnlock()
-	if scheduledAt.IsZero() {
-		t.Fatal("backup polling was not scheduled on the monitor runtime context")
+	if !scheduledAt.IsZero() {
+		t.Fatal("stopped runtime scheduled a new backup poll")
 	}
 }
 

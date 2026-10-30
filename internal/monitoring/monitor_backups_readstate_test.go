@@ -698,7 +698,10 @@ func TestMonitorPollGuestSnapshots_RefreshesStaleCanonicalStoreForClusterGuest(t
 		resourceStore: adapter,
 	}
 
-	client := &backupStorageTimeoutSnapshotClient{
+	// This checks canonical guest lookup, not storage-budget exhaustion. The
+	// timeout fake deliberately blocks snapshot sizing until the caller ends,
+	// conflating an accepted listing with a cancelled publication.
+	client := &mockPVEClientSnapshots{
 		snapshots: []pveapi.Snapshot{{
 			Name:        "cluster-snap",
 			SnapTime:    now.Unix(),
@@ -709,10 +712,6 @@ func TestMonitorPollGuestSnapshots_RefreshesStaleCanonicalStoreForClusterGuest(t
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	m.pollGuestSnapshots(ctx, "homelab", client)
-
-	if client.snapshotCalls == 0 {
-		t.Fatal("expected guest snapshot polling to use fresh clustered guest state")
-	}
 
 	snapshot := state.GetSnapshot()
 	if len(snapshot.PVEBackups.GuestSnapshots) != 1 {

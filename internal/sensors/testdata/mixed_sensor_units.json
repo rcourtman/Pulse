@@ -1,0 +1,24 @@
+{
+  "applesmc-isa-0300": {
+    "Adapter": "ISA adapter",
+    "TB0T": {"temp1_input": 34.2},
+    "TB1T": {"temp2_input": 29.2},
+    "Th1H": {"temp3_input": 44.5},
+    "TG1D": {"temp4_input": -127},
+    "TCMc": {"temp5_input": 0},
+    "Left side": {"fan1_input": 6152, "fan1_min": 2160, "fan1_max": 6156},
+    "Right side": {"fan2_input": 5699, "fan2_min": 2000, "fan2_max": 5700},
+    "Supply": {"in1_input": 12.1},
+    "Battery current": {"curr1_input": 2.5},
+    "Battery power": {"power1_input": 45},
+    "Clock": {"freq1_input": 2400},
+    "Energy": {"energy1_input": 42000},
+    "Humidity": {"humidity1_input": 40}
+  },
+  "coretemp-isa-0000": {
+    "Package id 0": {"temp1_input": 91},
+    "Core 0": {"temp2_input": 87}
+  },
+  "nvme-pci-0200": {"Composite": {"temp1_input": 36.9}},
+  "amdgpu-pci-0300": {"edge": {"temp1_input": 58}}
+}

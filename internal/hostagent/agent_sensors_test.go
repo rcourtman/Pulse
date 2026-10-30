@@ -2,12 +2,15 @@ package hostagent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
+	"reflect"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
 
@@ -429,5 +432,33 @@ dev.cpu.3.temperature: 55.0C
 	}
 	if got.TemperatureCelsius["cpu_core_3"] != 55.0 {
 		t.Fatalf("expected cpu_core_3=55.0, got %v", got.TemperatureCelsius["cpu_core_3"])
+	}
+}
+
+func TestAgentMixedSensorUnitsReachReportWithoutFalseTemperatures(t *testing.T) {
+	input, err := os.ReadFile("../sensors/testdata/mixed_sensor_units.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mc := &mockCollector{
+		goos:           "linux",
+		sensorsLocalFn: func(context.Context) (string, error) { return string(input), nil },
+		sensorsParseFn: sensors.Parse,
+	}
+	got := (&Agent{logger: zerolog.Nop(), collector: mc}).collectTemperatures(context.Background())
+	want := agentshost.Sensors{
+		TemperatureCelsius: map[string]float64{"cpu_package": 91, "cpu_core_0": 87, "nvme0": 36.9, "amdgpu-pci-0300_edge": 58},
+		FanRPM:             map[string]float64{"applesmc_left_side": 6152, "applesmc_right_side": 5699},
+		Additional:         map[string]float64{"applesmc_tb0t": 34.2, "applesmc_tb1t": 29.2, "applesmc_th1h": 44.5},
+	}
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("full sensor report = %+v, want %+v", got, want)
+	}
+	if os.Getenv("PULSE_SENSOR_UNITS_FRAME") == "1" {
+		data, err := json.Marshal(got)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Log("SENSOR_UNITS_FRAME=" + string(data))
 	}
 }

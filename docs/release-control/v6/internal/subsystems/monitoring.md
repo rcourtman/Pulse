@@ -17,6 +17,66 @@
 
 ## Purpose
 
+### Sensor units come from native subfeature keys
+
+Only `tempN_input` keys (one or more ASCII digits) supply Celsius in the shared
+Linux agent parser and the server's direct/SSH temperature parser. Arbitrary
+feature labels, fan RPM, voltage, current, power, energy, frequency and humidity
+inputs cannot become temperatures. Mixed feature maps keep their real
+`tempN_input` regardless of iteration order. The existing numeric/string and
+millidegree handling, CPU/core/GPU/NVMe identity, additional-temperature filters,
+fan RPM and missing-data semantics are unchanged. No sensor selection, thresholds,
+History, hardware probe or permission is added.
+
+`internal/sensors/temperature_input.go` owns the shared unit discriminator used
+by `internal/sensors/parser.go` and `internal/monitoring/temperature.go`.
+`temperature_input_test.go`, `parser_units_test.go`, `temperature_test.go` and
+`TestAgentMixedSensorUnitsReachReportWithoutFalseTemperatures` cover rejected
+units (including misleading CPU/GPU labels), accepted mixed measurements and a
+complete report from the real parser/agent path. The inferred #3565 sensor
+fixture is not an original JSON export or installed-host recovery. Consuming
+proof must use the complete emitted report, not a selected-value subset.
+
+### Background backup scans belong to their configured connection
+
+PVE tasks, storage backups and guest snapshots share one in-flight owner per
+connection. Admission and the cadence timestamp are atomic. Cycle-based or
+short-interval scheduling cannot stack scans while an earlier client has not
+returned, even after cancellation. Completion, not launch, starts the next
+ordinary interval. The owner captures the runtime before dispatch and copies
+node origins/statuses; a later core cycle cannot mutate its read inputs.
+
+Client replacement (including fallback), runtime replacement and connection
+retirement cancel/invalidate that owner. Each local acceptance boundary checks
+the owner and registered client under the same publication fence used by those
+transitions. Late task/log/storage/snapshot reads cannot replace live inventory,
+renew accepted log observations, enqueue new recovery evidence, change access
+warnings, or rewrite a replacement's scheduling/cache state. Reusing a connection
+name/UPID does not reuse another binding's immutable log cache. Already accepted
+historical observations remain history; retirement does not delete them.
+
+The existing two-to-five-minute shared task/storage budget, independent bounded
+snapshot budget, read caps, partial/unread preservation, alert policy, identity,
+auth and guest-operation rules are unchanged. A task listing or log accepted
+before a later log exhausts the shared budget remains usable while its owner
+is current; a read returning after cancellation supplies no new guest facts.
+Snapshot listings accepted before optional size enrichment exhausts its child
+budget likewise remain usable, with missing sizes unknown. Neither a cancelled
+listing nor an expired sizing budget can authorise inventory reconciliation;
+runtime/connection withdrawal still fences every effect, including accepted
+listings whose sizing returns late. No guest operation is introduced.
+`pve_backup_lifecycle_test.go` covers saturated/concurrent admission, late reads
+at all six read boundaries (including snapshot sizing), VM/LXC
+replacement/runtime/retirement, original
+observation preservation, reused UPIDs, independent connection state and ordinary
+recovery. Existing storage-cancellation and snapshot-budget controls still apply.
+`TestPVESnapshotCancelledAfterListingsCannotReconcile` keeps accepted listings
+without removing durable history; `TestPVEBackupLifecycleSizingBudgetKeepsAcceptedListings`
+checks that independent sizing expiry loses neither listings nor the next poll.
+Desktop/narrow consuming proof uses actual produced inventories before and after
+a late superseded read, not invented restore points or native recovery.
+
+
 ### Backup guest results require an unambiguous task log
 
 The task-log reader requests the prefix from line one and accepts only a whole,

@@ -6407,6 +6407,8 @@
         "internal/models/models_frontend.go",
         "internal/models/proxmox_guest_state.go",
         "internal/proxmoxidentity/backup_identity.go",
+        "internal/sensors/parser.go",
+        "internal/sensors/temperature_input.go",
         "pkg/agents/docker/report.go",
         "pkg/agents/host/report.go",
         "pkg/agents/kubernetes/report.go",
@@ -6426,6 +6428,38 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "temperature-input-units",
+            "label": "native lm-sensors unit admission and complete host report proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/temperature.go",
+              "internal/sensors/parser.go",
+              "internal/sensors/temperature_input.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/hostagent/agent_sensors_test.go",
+              "internal/monitoring/temperature_test.go",
+              "internal/sensors/parser_units_test.go",
+              "internal/sensors/temperature_input_test.go"
+            ]
+          },
+          {
+            "id": "pve-backup-poll-ownership",
+            "label": "connection-scoped single-flight backup scan and late publication proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/pve_backup_poll.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/pve_backup_lifecycle_test.go",
+              "internal/monitoring/pve_backup_scheduler_test.go"
+            ]
+          },
           {
             "id": "task-log-response",
             "label": "bounded ordered task log admission and guest evidence continuity proof",
@@ -6920,6 +6954,7 @@
               "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
+              "internal/monitoring/pve_backup_lifecycle_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",
               "internal/monitoring/vzdump_cached_guest_test.go",
@@ -7024,6 +7059,8 @@
               "internal/monitoring/pbs_retryable_read_test.go",
               "internal/monitoring/physical_disk_roundtrip_test.go",
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
+              "internal/monitoring/pve_backup_lifecycle_test.go",
+              "internal/monitoring/pve_backup_scheduler_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
               "internal/monitoring/recovery_rollups_resilience_test.go",
