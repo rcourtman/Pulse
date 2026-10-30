@@ -5,12 +5,15 @@ These are ordinary-user installer controls, not native systemd acceptance.
 """
 
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 import os
 import itertools
 import subprocess
 import tempfile
 import tarfile
+import threading
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -236,23 +239,30 @@ class ServerInstallerStopTest(unittest.TestCase):
             }
 
     def test_refused_replacements_preserve_installed_bytes_and_modes(self):
-        for flow in ("archive", "source"):
+        # Each exercise owns its directory, archive, environment and subprocess.
+        # Overlap only the two fixed flows; keep the real installer deadlines
+        # and collect every result/exception on the test thread. The executor
+        # drains even after a failed subtest; batches never share fixture state.
+        with ThreadPoolExecutor(max_workers=2) as pool:
             for case in ("stop_error", "stop_timeout", "query_error", "query_timeout",
                          "still_active", "post_query_error", "post_transition", "post_failed",
                          "activating", "deactivating", "reloading", "unknown", "empty", "malformed"):
-                with self.subTest(flow=flow, case=case):
-                    observation = self.exercise(REPLACEMENT, flow, case)
-                    result = observation["result"]
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("refusing binary replacement", result.stderr)
-                    self.assertEqual(observation["files"], observation["originals"])
-                    self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
-                    self.assertNotIn("REPLACED", observation["calls"])
-                    self.assertNotIn("RENAME", observation["calls"])
-                    self.assertEqual(observation["stage_paths"], [])
-                    self.assertEqual(observation["temporary_paths_remaining"], [])
-                    self.assertNotRegex(observation["calls"], r"(?m)^(start|restart)\b")
-                    self.assertFalse(observation["archive_retained"])
+                pending = [(flow, pool.submit(self.exercise, REPLACEMENT, flow, case))
+                           for flow in ("archive", "source")]
+                for flow, future in pending:
+                    with self.subTest(flow=flow, case=case):
+                        observation = future.result()
+                        result = observation["result"]
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("refusing binary replacement", result.stderr)
+                        self.assertEqual(observation["files"], observation["originals"])
+                        self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
+                        self.assertNotIn("REPLACED", observation["calls"])
+                        self.assertNotIn("RENAME", observation["calls"])
+                        self.assertEqual(observation["stage_paths"], [])
+                        self.assertEqual(observation["temporary_paths_remaining"], [])
+                        self.assertNotRegex(observation["calls"], r"(?m)^(start|restart)\b")
+                        self.assertFalse(observation["archive_retained"])
 
     def test_confirmed_stop_and_inactive_installs_keep_liveness_attribution(self):
         for flow in ("archive", "source"):
@@ -268,21 +278,24 @@ class ServerInstallerStopTest(unittest.TestCase):
                     self.assertFalse(observation["archive_retained"])
 
     def test_archive_admission_failures_never_stop_or_mutate_pulse(self):
-        for flow in ("archive", "local_archive"):
+        with ThreadPoolExecutor(max_workers=2) as pool:
             for fault in ("missing_signature", "signature", "extract_directory", "extraction",
                           "missing_binary", "architecture", "stage_directory", "copy",
                           "permissions", "ownership", "version_exit", "version_timeout",
                           "version_unknown", "version_mismatch"):
-                with self.subTest(flow=flow, fault=fault):
-                    observation = self.exercise(REPLACEMENT, flow, "active", fault)
-                    self.assertNotEqual(observation["result"].returncode, 0)
-                    self.assertEqual(observation["files"], observation["originals"])
-                    self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
-                    self.assertNotRegex(observation["calls"], r"(?m)^(show|stop|start|restart|RENAME|AGENTS|SCRIPTS)\b")
-                    self.assertEqual(observation["stage_paths"], [])
-                    self.assertEqual(observation["temporary_paths_remaining"], [])
-                    self.assertFalse(observation["archive_retained"])
-                    self.assertTrue(observation["local_archive_retained"])
+                pending = [(flow, pool.submit(self.exercise, REPLACEMENT, flow, "active", fault))
+                           for flow in ("archive", "local_archive")]
+                for flow, future in pending:
+                    with self.subTest(flow=flow, fault=fault):
+                        observation = future.result()
+                        self.assertNotEqual(observation["result"].returncode, 0)
+                        self.assertEqual(observation["files"], observation["originals"])
+                        self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
+                        self.assertNotRegex(observation["calls"], r"(?m)^(show|stop|start|restart|RENAME|AGENTS|SCRIPTS)\b")
+                        self.assertEqual(observation["stage_paths"], [])
+                        self.assertEqual(observation["temporary_paths_remaining"], [])
+                        self.assertFalse(observation["archive_retained"])
+                        self.assertTrue(observation["local_archive_retained"])
 
     def test_atomic_rename_failure_restores_only_a_previously_active_service(self):
         for flow, state, fault in itertools.product(
@@ -375,6 +388,84 @@ class ServerInstallerStopTest(unittest.TestCase):
                 self.assertEqual(observation["result"].returncode, 42, observation["result"].stderr)
                 self.assertEqual(observation["files"], observation["originals"])
                 self.assertNotRegex(observation["calls"], r"(?m)^stop\b")
+
+
+class InstallerStopSchedulingTest(unittest.TestCase):
+    """The faster schedule must retain every original adverse verdict."""
+
+    controls = (
+        ("test_refused_replacements_preserve_installed_bytes_and_modes",
+         ("archive", "source"),
+         ("stop_error", "stop_timeout", "query_error", "query_timeout",
+          "still_active", "post_query_error", "post_transition", "post_failed",
+          "activating", "deactivating", "reloading", "unknown", "empty", "malformed"),
+         "stop_timeout"),
+        ("test_archive_admission_failures_never_stop_or_mutate_pulse",
+         ("archive", "local_archive"),
+         ("missing_signature", "signature", "extract_directory", "extraction",
+          "missing_binary", "architecture", "stage_directory", "copy",
+          "permissions", "ownership", "version_exit", "version_timeout",
+          "version_unknown", "version_mismatch"),
+         "version_timeout"),
+    )
+
+    def run_control(self, method, flows, cases, adverse, *, failed=None, exceptional=None):
+        control = ServerInstallerStopTest(method)
+        barrier = threading.Barrier(2)
+        observations = []
+        archive = method == "test_archive_admission_failures_never_stop_or_mutate_pulse"
+
+        def exercise(script, flow, case, fault=""):
+            self.assertEqual(script, REPLACEMENT)
+            self.assertEqual(case if archive else fault, "active" if archive else "")
+            selected = fault if archive else case
+            observations.append((flow, selected))
+            # Serial execution cannot rendezvous. These are synthetic results,
+            # not shorter installer deadlines or interactions with a service.
+            barrier.wait(timeout=2)
+            if selected == adverse and flow == exceptional:
+                raise RuntimeError("synthetic installer observation failure")
+            status = 0 if selected == adverse and flow == failed else 1
+            originals = {"install/bin/pulse": b"old executable", "config/private-state": b"private state"}
+            return {
+                "result": subprocess.CompletedProcess([], status, "", "refusing binary replacement"),
+                "files": originals.copy(), "originals": originals,
+                "modes": {name: 0o600 for name in originals}, "calls": "",
+                "stage_paths": [], "temporary_paths_remaining": [],
+                "archive_retained": False, "local_archive_retained": True,
+            }
+
+        result = unittest.TestResult()
+        with patch.object(control, "exercise", side_effect=exercise), \
+                patch(__name__ + ".ThreadPoolExecutor", wraps=ThreadPoolExecutor) as executor:
+            control.run(result)
+        executor.assert_called_once_with(max_workers=2)
+        self.assertCountEqual(observations, itertools.product(flows, cases))
+        self.assertEqual(result.testsRun, 1)
+        self.assertEqual(result.skipped, [])
+        return result
+
+    def test_each_flow_bad_result_still_fails_the_complete_matrix(self):
+        for method, flows, cases, adverse in self.controls:
+            for failed in (None, *flows):
+                with self.subTest(method=method, failed=failed):
+                    result = self.run_control(method, flows, cases, adverse, failed=failed)
+                    self.assertEqual(result.errors, [])
+                    self.assertEqual(len(result.failures), int(failed is not None))
+                    if failed is not None:
+                        self.assertIn(f"flow={failed!r}", result.failures[0][0].id())
+
+    def test_exception_does_not_drop_sibling_or_later_case_verdicts(self):
+        for method, flows, cases, adverse in self.controls:
+            for exceptional, failed in (flows, flows[::-1]):
+                with self.subTest(method=method, exceptional=exceptional):
+                    result = self.run_control(method, flows, cases, adverse,
+                                              failed=failed, exceptional=exceptional)
+                    self.assertEqual(len(result.errors), 1)
+                    self.assertIn(f"flow={exceptional!r}", result.errors[0][0].id())
+                    self.assertIn("synthetic installer observation failure", result.errors[0][1])
+                    self.assertEqual(len(result.failures), 1)
+                    self.assertIn(f"flow={failed!r}", result.failures[0][0].id())
 
 
 if __name__ == "__main__":
