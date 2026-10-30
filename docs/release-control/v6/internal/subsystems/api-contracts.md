@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Lazy investigation setup keeps the resolved service scope
+
+The internal `SetupOrchestrator(orgID string)` callback binds only an already
+resolved AI service whose own organisation matches the requested scope. Empty
+and whitespace-default aliases normalise consistently; a missing, unavailable
+or misbound tenant service cannot borrow or replace the default runtime. The
+AI-service selection does not construct a tenant service or run its provider
+initialisation. Existing scoped chat dependency setup is unchanged. The caller
+must supply the authenticated request's organisation, not a literal fallback.
+The callback ABI, route authentication, entitlements and execution authority
+are unchanged.
+
+`TestAutoFixOrchestratorSetupUsesRequestedOrg` checks the real public callback,
+scoped chat/findings/retained-store dependencies, untouched peer orchestrators
+and consuming History/thread HTTP reads for default and two named tenants.
+The unavailable-service and concurrent-organisation cases pin fail-closed
+selection, independent initialisation and unchanged retained credentials/files.
+The tests pre-seed unstarted chat services and make no provider call or new run.
+The private caller and combined private consumer proof remain Enterprise-owned;
+these public seam tests establish no installed sign-in or investigation run.
+
 A member test announces and reveals its result beside that exact member rather
 than leaving feedback in the off-screen global footer. The normal primary
 Test connection result stays in the footer; both remain endpoint-qualified

@@ -2605,7 +2605,7 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
-	tasks, collection, err := m.readBackupTaskHistory(ctx, instanceName, client)
+	history, collection, err := m.readBackupTaskHistory(ctx, instanceName, client)
 	if err != nil {
 		m.persistBackupTaskHistory(ctx, nil, collection)
 		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
@@ -2619,7 +2619,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	liveJobIDs := make(map[string]bool)
 	var jobTasks []models.BackupTask
 	jobUPIDs := make(map[string]string)
-	for _, task := range tasks {
+	for _, task := range history.Tasks {
 		// Extract VMID from task ID (format: "UPID:node:pid:starttime:type:vmid:user@realm:")
 		vmid := 0
 		if task.ID != "" {
@@ -2674,7 +2674,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	}
 
 	// Update state with new backup tasks for this instance
-	m.state.UpdateBackupTasksForInstance(instanceName, liveTasks)
+	m.state.UpdateBackupTasksForInstance(instanceName, m.retainUnreadBackupTasks(instanceName, history.Nodes, liveTasks))
 
 	// Retain execution history before qualifying collection coverage. Task rows
 	// are not reconciled against the provider's shrinking inventory window.

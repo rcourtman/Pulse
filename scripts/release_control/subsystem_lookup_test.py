@@ -4371,7 +4371,11 @@ class SubsystemLookupTest(unittest.TestCase):
         )
 
     def test_lookup_paths_assigns_pbs_client_runtime_to_monitoring(self) -> None:
-        result = lookup_paths(["pkg/pbs/client.go", "pkg/pbs/client_http_test.go"])
+        result = lookup_paths([
+            "pkg/pbs/client.go",
+            "pkg/pbs/client_http_test.go",
+            "pkg/pbs/backup_snapshot_identity_test.go",
+        ])
         self.assertEqual(result["unowned_runtime_files"], [])
 
         for file_entry in result["files"]:
@@ -4391,6 +4395,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 match["verification_requirement"]["exact_files"],
                 [
                     "pkg/pbs/auth_session_concurrency_test.go",
+                    "pkg/pbs/backup_snapshot_identity_test.go",
                     "pkg/pbs/client_http_test.go",
                     "pkg/pbs/client_test.go",
                     "pkg/pbs/host_diagnostics_regression_test.go",

@@ -2,8 +2,8 @@ package proxmox
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
 )
@@ -38,24 +38,24 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 			continue
 		}
 		seen := map[string]bool{}
+		var nodeTasks []Task
 		for page := 0; page < 30; page++ {
 			params := url.Values{"typefilter": {"vzdump"}, "source": {"all"}, "limit": {"200"}, "start": {fmt.Sprint(page * 200)}, "since": {fmt.Sprint(since.Unix())}, "until": {fmt.Sprint(until)}}
 			resp, readErr := c.get(ctx, "/nodes/"+url.PathEscape(node.Node)+"/tasks?"+params.Encode())
 			if readErr != nil {
 				observation.Reason = "collection_failed"
+				if status, known := APIErrorStatus(readErr); known && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
+					observation.Reason = "access_denied"
+				}
 				break
 			}
-			var result struct {
-				Data []Task `json:"data"`
-			}
-			readErr = json.NewDecoder(resp.Body).Decode(&result)
-			resp.Body.Close()
+			tasks, readErr := readBackupTaskInventory(resp, node.Node)
 			if readErr != nil {
 				observation.Reason = "collection_failed"
 				break
 			}
 			added := 0
-			for _, task := range result.Data {
+			for _, task := range tasks {
 				if task.Type != "vzdump" || task.UPID == "" || seen[task.UPID] {
 					continue
 				}
@@ -63,10 +63,10 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 				if task.Node == "" {
 					task.Node = node.Node
 				}
-				history.Tasks = append(history.Tasks, task)
+				nodeTasks = append(nodeTasks, task)
 				added++
 			}
-			if len(result.Data) < 200 {
+			if len(tasks) < 200 {
 				observation.Complete = true
 				break
 			}
@@ -79,6 +79,9 @@ func (c *Client) GetBackupTaskHistory(ctx context.Context, since time.Time) (Bac
 			observation.Complete = false
 			observation.Reason = "audit_permission_unconfirmed"
 		}
+		if observation.Reason != "access_denied" {
+			history.Tasks = append(history.Tasks, nodeTasks...)
+		}
 		history.Nodes = append(history.Nodes, observation)
 	}
 	return history, nil
@@ -90,14 +93,7 @@ func (c *Client) backupHistoryAuditPermission(ctx context.Context, node string) 
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
-	var result struct {
-		Data map[string]map[string]int `json:"data"`
-	}
-	if json.NewDecoder(resp.Body).Decode(&result) != nil {
-		return false
-	}
-	return result.Data[path]["Sys.Audit"] == 1
+	return readBackupHistoryAuditPermission(resp, path)
 }
 
 func (cc *ClusterClient) GetBackupTaskHistory(ctx context.Context, since time.Time) (BackupTaskHistory, error) {
