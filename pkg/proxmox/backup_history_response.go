@@ -68,6 +68,16 @@ func readBackupTaskInventory(resp *http.Response, node string) ([]Task, error) {
 			task.EndTime < 0 || (task.EndTime > 0 && task.EndTime < task.StartTime) || (task.Node != "" && task.Node != node) {
 			return nil, errInvalidBackupHistoryResponse
 		}
+		// PVE may omit the status of a running task, but an exit result is
+		// not completion evidence without an end clock. Equally, a live
+		// status cannot contradict an observed end. Treat the page as unread
+		// rather than replacing accepted running intent and thereby allowing
+		// its still-growing archive to appear complete.
+		status := strings.ToLower(strings.TrimSpace(task.Status))
+		if (task.EndTime == 0 && status != "" && status != "running") ||
+			(task.EndTime > 0 && (status == "running" || status == "active")) {
+			return nil, errInvalidBackupHistoryResponse
+		}
 		if task.Type == "vzdump" && task.ID != "" {
 			vmid, err := strconv.ParseUint(task.ID, 10, 32)
 			if err != nil || vmid == 0 {
