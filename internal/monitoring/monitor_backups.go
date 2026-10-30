@@ -2797,13 +2797,15 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 }
 
 // Select without reordering the returned guest tasks or mutating the caller's
-// history. Never-read jobs come first; ties retain provider order. Thereafter
-// the least recently attempted reads win, including failed reads. Only actual
-// calls advance scheduling, so cancellation cannot spend another job's turn.
+// history. Keep ordinary running jobs current, but reserve at least one turn
+// for pending ended jobs even when live work fills the allowance. Within each
+// group, never-read then least recently attempted reads win; ties retain provider
+// order. Only actual calls advance scheduling, not selection or cancellation.
 func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]bool {
 	type pendingRead struct {
 		key     string
 		attempt time.Time
+		running bool
 	}
 	pending := make([]pendingRead, 0, len(jobs))
 	seen := make(map[string]bool, len(jobs))
@@ -2814,14 +2816,27 @@ func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupT
 			continue
 		}
 		seen[key] = true
-		pending = append(pending, pendingRead{key: key, attempt: m.vzdumpJobTaskCache[key].lastAttempt})
+		pending = append(pending, pendingRead{key: key, attempt: m.vzdumpJobTaskCache[key].lastAttempt, running: job.EndTime.IsZero()})
 	}
 	m.mu.RUnlock()
 	sort.SliceStable(pending, func(i, j int) bool {
 		return pending[i].attempt.Before(pending[j].attempt)
 	})
 	selected := make(map[string]bool, min(len(pending), maxVzdumpJobLogFetchesPerPoll))
-	for _, read := range pending[:min(len(pending), maxVzdumpJobLogFetchesPerPoll)] {
+	for _, read := range pending {
+		if read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll-1 {
+			selected[read.key] = true
+		}
+	}
+	for _, read := range pending {
+		if !read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll {
+			selected[read.key] = true
+		}
+	}
+	for _, read := range pending {
+		if len(selected) >= maxVzdumpJobLogFetchesPerPoll {
+			break
+		}
 		selected[read.key] = true
 	}
 	return selected

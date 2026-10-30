@@ -181,3 +181,40 @@ func TestVzdumpJobLogSchedulingConcurrentConnections(t *testing.T) {
 	wg.Wait()
 	require.Len(t, m.vzdumpJobTaskCache, 3*(maxVzdumpJobLogFetchesPerPoll+1))
 }
+
+func TestVzdumpJobLogSchedulingKeepsLiveReadsAndHistoryMoving(t *testing.T) {
+	for _, liveCount := range []int{1, maxVzdumpJobLogFetchesPerPoll + 1} {
+		t.Run(fmt.Sprint(liveCount), func(t *testing.T) {
+			jobs, upids := scheduledVzdumpJobs(2*maxVzdumpJobLogFetchesPerPoll+liveCount, "site")
+			live := make(map[string]bool)
+			for i := 2 * maxVzdumpJobLogFetchesPerPoll; i < len(jobs); i++ {
+				jobs[i].EndTime = time.Time{}
+				jobs[i].Status = "running"
+				live[upids[jobs[i].ID]] = true
+			}
+			client := &scheduledVzdumpClient{read: func(string) ([]proxmox.TaskLogLine, error) { return nil, nil }}
+			m := &Monitor{}
+			seen := make(map[string]bool)
+			// Even a saturated live queue leaves one history turn per poll.
+			for cycle := 0; cycle < 2*maxVzdumpJobLogFetchesPerPoll; cycle++ {
+				before := len(client.requests)
+				m.synthesizeVzdumpJobGuestTasks(context.Background(), "site", client, jobs, upids)
+				reads := client.requests[before:]
+				require.Len(t, reads, maxVzdumpJobLogFetchesPerPoll)
+				liveReads := 0
+				for _, upid := range reads {
+					seen[upid] = true
+					if live[upid] {
+						liveReads++
+					}
+				}
+				if liveCount == 1 {
+					require.Equal(t, 1, liveReads, "ordinary live work is not delayed behind history")
+				} else {
+					require.Equal(t, maxVzdumpJobLogFetchesPerPoll-1, liveReads, "saturated live work still reserves history progress")
+				}
+			}
+			require.Len(t, seen, len(jobs), "both live and ended queues must make progress")
+		})
+	}
+}

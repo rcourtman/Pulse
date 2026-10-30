@@ -21,7 +21,10 @@
 
 Multi-guest vzdump log collection keeps its 25-request cap per poll. Pending
 jobs are selected by least recent attempt within the connection, with never-read
-jobs first and provider order breaking ties. Failures, empty, capped and
+jobs first and provider order breaking ties. Running jobs use up to 24 turns
+first, preserving ordinary live reads; at least one turn remains for pending
+ended jobs even when live work fills the allowance. Unused turns serve either
+queue. Failures, empty, capped and
 incomplete logs spend their turn without becoming final; an unread older job
 must not be hidden forever by the same failing prefix. Only an actual request
 advances scheduling, not selection or cancellation. Selection leaves input and
@@ -33,7 +36,8 @@ the original guest evidence and its age; neither a retry nor an ended parent
 supplies a missing guest verdict. No allowance, provider permission, task/result
 schema, identity, protection rule or guest operation changes.
 `vzdump_job_log_scheduling_test.go` checks bounded progress, poll-to-guest results,
-immutable completion, cancellation, pruning and concurrent connection isolation.
+immutable completion, live/history progress under saturation, cancellation,
+pruning and concurrent connection isolation.
 The existing cached-guest tests retain their observation/intent assertions.
 Desktop/narrow proof consumes actual poll frames through Backups Coverage,
 including scoped task results without inventing a restore artifact or protection.
