@@ -6,6 +6,7 @@ This checks shell behaviour, not an installed Pulse service or Docker daemon.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import Mock, call, patch
 
@@ -305,12 +307,20 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
                 self.assertIn("Log read unavailable (exit 2)", result.stderr)
 
     def test_hung_readers_withhold_partial_matches_and_stop_by_deadline(self):
-        for reader in recipes():
-            with self.subTest(reader=reader):
-                result = self.exercise(reader, stdout=JSON_LOG, hang="term")
-                self.assertEqual(result.returncode, 137, result.stderr)
-                self.assertEqual(result.stdout, "")
-                self.assertIn("Log read unavailable", result.stderr)
+        # Each exercise owns its directory, environment, process group and
+        # reader pidfd. Overlap only this fixed pair, keeping the real 8s
+        # deadline and 500ms survival/cleanup observations unchanged. Collect
+        # both verdicts on the test thread even if a future raises; the
+        # executor drains all submitted work before this method returns.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending = [(reader, pool.submit(self.exercise, reader, stdout=JSON_LOG, hang="term"))
+                       for reader in recipes()]
+            for reader, future in pending:
+                with self.subTest(reader=reader):
+                    result = future.result()
+                    self.assertEqual(result.returncode, 137, result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("Log read unavailable", result.stderr)
 
     def test_missing_timeout_stops_before_either_reader(self):
         for reader in recipes():
@@ -387,12 +397,17 @@ class GeneralLogEvidenceTest(unittest.TestCase):
                 self.assertNotIn("private access error", result.stderr)
 
     def test_general_readers_stop_and_withhold_partial_errors_at_real_deadline(self):
-        for reader in recipes("### Inspect Notification Logs"):
-            with self.subTest(reader=reader):
-                result = self.exercise(reader, stdout="partial error\n", hang="term")
-                self.assertEqual(result.returncode, 137, result.stderr)
-                self.assertEqual(result.stdout, "")
-                self.assertIn("Log read unavailable (exit 137)", result.stderr)
+        # Only the two private wait-bound fixtures overlap, not other tests
+        # or their process-global mocks. Keep every real deadline and oracle.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending = [(reader, pool.submit(self.exercise, reader, stdout="partial error\n", hang="term"))
+                       for reader in recipes("### Inspect Notification Logs")]
+            for reader, future in pending:
+                with self.subTest(reader=reader):
+                    result = future.result()
+                    self.assertEqual(result.returncode, 137, result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("Log read unavailable (exit 137)", result.stderr)
 
     def test_general_readers_do_not_fall_back_when_timeout_is_missing(self):
         for reader in recipes("### Inspect Notification Logs"):
@@ -553,14 +568,18 @@ class LogByteBoundsTest(unittest.TestCase):
     def test_hard_deadline_terminates_closed_pipe_term_resistant_readers_and_cleans_buffer(self):
         selected = [("docker", recipes("### Inspect Notification Logs")["docker"]),
                     ("journalctl", self.copied_recipes()[-1][2])]
-        for reader, recipe in selected:
-            with self.subTest(reader=reader):
-                result, _ = self.exercise(reader, recipe, stdout="partial private log\n",
-                                          hang="ignore-term-closed-pipes")
-                self.assertEqual(result.returncode, 137, result.stderr)
-                self.assertEqual(result.stdout, "")
-                self.assertNotIn("partial private log", result.stderr)
-                self.assertEqual(len(result.log_cleanup), 1)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending = [(reader, pool.submit(self.exercise, reader, recipe,
+                                           stdout="partial private log\n",
+                                           hang="ignore-term-closed-pipes"))
+                       for reader, recipe in selected]
+            for reader, future in pending:
+                with self.subTest(reader=reader):
+                    result, _ = future.result()
+                    self.assertEqual(result.returncode, 137, result.stderr)
+                    self.assertEqual(result.stdout, "")
+                    self.assertNotIn("partial private log", result.stderr)
+                    self.assertEqual(len(result.log_cleanup), 1)
 
     def test_each_entry_keeps_collection_deadline_pipe_failures_and_byte_limiter_together(self):
         for heading, reader, recipe in self.copied_recipes():
@@ -570,6 +589,72 @@ class LogByteBoundsTest(unittest.TestCase):
                               "2>&1 | head -c 262145", '" -gt 262144 ]', "trap 'rm --"):
                     self.assertIn(bound, recipe)
                 self.assertNotIn("--foreground", recipe)
+
+
+class LogDeadlineSchedulingTest(unittest.TestCase):
+    """Prove bounded overlap without a timing threshold or real reader replay."""
+
+    controls = (
+        (TroubleshootingLogRecipesTest,
+         "test_hung_readers_withhold_partial_matches_and_stop_by_deadline", "term"),
+        (GeneralLogEvidenceTest,
+         "test_general_readers_stop_and_withhold_partial_errors_at_real_deadline", "term"),
+        (LogByteBoundsTest,
+         "test_hard_deadline_terminates_closed_pipe_term_resistant_readers_and_cleans_buffer",
+         "ignore-term-closed-pipes"),
+    )
+
+    def run_control(self, case, *, failed=None, exceptional=None):
+        test_class, method, hang = case
+        control = test_class(method)
+        barrier = threading.Barrier(2)
+        readers = []
+
+        def exercise(reader, *args, **settings):
+            self.assertIn(reader, ("docker", "journalctl"))
+            self.assertEqual(settings["hang"], hang)
+            readers.append(reader)
+            # A serial implementation cannot satisfy this rendezvous. Neither
+            # a shorter safeguard nor a favourable wall-clock sample can pass.
+            barrier.wait(timeout=2)
+            if reader == exceptional:
+                raise RuntimeError("synthetic log observation failure")
+            result = subprocess.CompletedProcess([], 0 if reader == failed else 137,
+                                                 "", "Log read unavailable (exit 137)\n")
+            result.log_cleanup = [{"mode": 0o600, "bytes": 0}]
+            return (result, None) if args else result
+
+        result = unittest.TestResult()
+        with patch.object(control, "exercise", side_effect=exercise), \
+                patch(__name__ + ".ThreadPoolExecutor", wraps=ThreadPoolExecutor) as executor:
+            control.run(result)
+        executor.assert_called_once_with(max_workers=2)
+        self.assertCountEqual(readers, ("docker", "journalctl"))
+        self.assertEqual(result.testsRun, 1)
+        self.assertEqual(result.skipped, [])
+        return result
+
+    def test_two_reader_overlap_keeps_each_failure_gating(self):
+        for case in self.controls:
+            for failed in (None, "docker", "journalctl"):
+                with self.subTest(method=case[1], failed=failed):
+                    result = self.run_control(case, failed=failed)
+                    self.assertEqual(result.errors, [])
+                    self.assertEqual(len(result.failures), int(failed is not None))
+                    if failed is not None:
+                        self.assertIn(f"reader={failed!r}", result.failures[0][0].id())
+
+    def test_exception_still_collects_the_other_readers_failure(self):
+        for case in self.controls:
+            for exceptional in ("docker", "journalctl"):
+                with self.subTest(method=case[1], exceptional=exceptional):
+                    failed = "journalctl" if exceptional == "docker" else "docker"
+                    result = self.run_control(case, failed=failed, exceptional=exceptional)
+                    self.assertEqual(len(result.errors), 1)
+                    self.assertIn(f"reader={exceptional!r}", result.errors[0][0].id())
+                    self.assertIn("synthetic log observation failure", result.errors[0][1])
+                    self.assertEqual(len(result.failures), 1)
+                    self.assertIn(f"reader={failed!r}", result.failures[0][0].id())
 
 
 if __name__ == "__main__":
