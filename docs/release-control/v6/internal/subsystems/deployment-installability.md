@@ -8993,6 +8993,17 @@ directory or dangling link at the final path stops the update, even when GNU
 `mv -n` returns zero after skipping. Copy/allocation/publication failure removes
 only the invocation's incomplete stage and never rotates earlier snapshots.
 
+The incomplete copy stays inside an installer-owned mode-0700 outer enclosure.
+`cp -a` may adopt the source directory's owner and permissions, including a
+legacy broadly traversable mode, only on the enclosed payload. Before that
+payload can be published, its root must have mode 0700. Source ownership,
+including the root directory's owner/group, stays preserved for direct recovery;
+so do nested modes, hidden entries, empty directories and links. The live
+configuration is not changed. Failure to set the private mode removes only the
+incomplete copy, leaves the recorded
+completed-snapshot path empty and never rotates previous recovery copies. The
+completed snapshot retains the existing flat recovery layout and private root.
+
 Incomplete hidden stages are not retention candidates. After publication,
 rotation still keeps the configured number of snapshots (five by default),
 including the current invocation's completed copy for positive retention counts
@@ -9006,7 +9017,12 @@ backup fails, including when their caller suppresses implicit shell `errexit`.
 
 `scripts/tests/test_server_config_backups.py` exercises real fixture files,
 copy/rename/retention, metadata and links; injected failures cover allocation,
-copy and publication, including exit-zero late collisions. It checks rapid
+copy, privacy admission and publication, including exit-zero late collisions.
+It observes the real copy before publication with mode-0755 source configuration
+and requires a private installer-owned ancestor, then checks the completed root
+and unchanged ownership/nested metadata/source permissions. Mode-setting failure
+also runs under a conditional caller so implicit shell `errexit` cannot admit it.
+It checks rapid
 retries, clock reversal, another invocation's retention, fallback, owned discard
 and the actual three update entries. The discovered Go installer suite executes
 it on the existing repository test routes. These are disposable filesystem
