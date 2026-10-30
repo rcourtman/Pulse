@@ -16,6 +16,9 @@ import (
 // exercise its exact recipe, admission, signature/archive and recovery wiring;
 // the hosted runner still supplies the actual systemd/real-Pulse verdict.
 func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
+	// Each harness control owns its files, signer and modelled manager. Only
+	// admission overlaps; all phase/cleanup oracles and deadlines stay intact.
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_systemd.py"), "-v")
@@ -854,6 +857,10 @@ echo "AFTER_CALLER"
 // Only downloads and systemd are replaced; file copies, comparisons, renames,
 // executable version reads and SSH signature verification are real and local.
 func TestAutoUpdateBackupTransaction(t *testing.T) {
+	// The complete signed transaction matrix owns its temporary paths and
+	// command doubles. Keep its scenarios ordered within one parallel worker;
+	// no real process inventory or service manager is shared with other tests.
+	t.Parallel()
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
 		t.Skip("ssh-keygen unavailable for signed offline installer fixture")
 	}

@@ -4829,6 +4829,10 @@ func TestRootInstallTemporaryInputsRemainPrivateAndAuthenticated(t *testing.T) {
 // Execute discovery and every installer refresh consumer together. systemd
 // manager operations are confined doubles; real inventory uses a fixture root.
 func TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh(t *testing.T) {
+	// The manager doubles and real systemctl --root reads own a private unit
+	// tree. Admit this suite through Go's existing parallel budget, without
+	// changing its internal order or starting its watchdog while it is queued.
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_update_timer.py"), "-v")
@@ -4842,6 +4846,10 @@ func TestRootInstallTimerDiscoveryReachesConsentPreservingRefresh(t *testing.T) 
 // Execute both standalone discovery producers and every mutation-owning
 // consumer, including OR-list callers where Bash disables function errexit.
 func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
+	// No live manager is consulted: even the real systemctl controls read an
+	// isolated --root. Other private installer suites need not wait for these
+	// unchanged inventory timeouts and mutation-refusal controls.
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_service_discovery.py"), "-v")
