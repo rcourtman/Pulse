@@ -2848,12 +2848,12 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/api/sso_provider_name_test.go",
-              "internal/api/sso_handlers_crud_test.go",
-              "internal/api/sso_presentation_update_test.go",
-              "internal/api/sso_config_preservation_test.go",
               "internal/api/sso_admin_license_gating_test.go",
-              "internal/api/sso_handlers_test.go"
+              "internal/api/sso_config_preservation_test.go",
+              "internal/api/sso_handlers_crud_test.go",
+              "internal/api/sso_handlers_test.go",
+              "internal/api/sso_presentation_update_test.go",
+              "internal/api/sso_provider_name_test.go"
             ]
           },
           {
