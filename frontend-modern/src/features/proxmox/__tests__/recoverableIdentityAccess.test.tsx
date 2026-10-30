@@ -259,6 +259,8 @@ it('names multiple dates, readers and same-time snapshots independently in the r
       .closest('tr')!
       .querySelector('td:last-child')!;
     expect(button.getAttribute('aria-label')).toContain(`Created: ${created.textContent}`);
+    expect(created).toHaveTextContent('2026');
+    expect(within(detail).getByText('Identifier').closest('tr')).toHaveTextContent(id);
   }
   expect(screen.getAllByTestId('proxmox-recoverable-detail')).toHaveLength(1);
   expect(api.fetch).toHaveBeenCalledTimes(2);

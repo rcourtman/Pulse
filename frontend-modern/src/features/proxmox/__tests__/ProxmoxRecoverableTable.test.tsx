@@ -103,6 +103,10 @@ describe('ProxmoxRecoverableTable record drawer', () => {
     expect(within(panel).getByText('Prune protection')).toBeInTheDocument();
     expect(within(panel).getByText('Kept when pruning')).toBeInTheDocument();
     expect(within(panel).getByText('5 PBS files')).toBeInTheDocument();
+    expect(within(panel).getByText('Identifier').closest('tr')).toHaveTextContent(
+      artifact.nativeId,
+    );
+    expect(within(panel).getByText('Created').closest('tr')).toHaveTextContent('2026');
     expect(within(panel).getByRole('link', { name: 'Open web' })).toHaveAttribute(
       'href',
       '/proxmox/overview?resource=vm-100',
@@ -252,12 +256,16 @@ describe('restore-point disclosure identity', () => {
           expect(button).toHaveAccessibleName(/Created: Unknown/);
         } else {
           expect(button).not.toHaveAccessibleName(/Created: Unknown/);
+          expect(button).toHaveAccessibleName(/Created: .*2026/);
         }
       }
       fireEvent.click(toggles[2]);
       const detail = screen.getByTestId('proxmox-recoverable-detail');
       expect(detail).toHaveAttribute('data-inline-detail-for', 'unknown');
       expect(within(detail).getByText('Created').closest('tr')).toHaveTextContent('Unknown');
+      expect(within(detail).getByText('Identifier').closest('tr')).toHaveTextContent(
+        'native:unknown',
+      );
       expect(toggles[2]).toHaveAttribute('aria-expanded', 'true');
       expect(toggles[0]).toHaveAttribute('aria-expanded', 'false');
     },

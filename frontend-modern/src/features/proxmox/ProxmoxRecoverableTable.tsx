@@ -113,7 +113,7 @@ const artifactCreatedLabel = (artifact: RecoverableArtifact): string =>
   artifact.createdMs === undefined
     ? 'Unknown'
     : formatPlatformTableDateTimeValue(artifact.createdMs, {
-        dateTimeFormat: { second: '2-digit', timeZoneName: 'short' },
+        dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
       });
 
 // A dated feed can contain many points for the same workload. Name the point,
@@ -216,7 +216,8 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
     {
       label: PROXMOX_BACKUP_COLUMN_LABELS.details,
       rows: compactDetailRows([
-        makeDetailRow('Identifier', artifact.detailTitle || artifact.detail, { wrap: true }),
+        makeDetailRow('Identifier', artifact.nativeId, { wrap: true }),
+        makeDetailRow('Metadata', artifact.detailTitle || artifact.detail, { wrap: true }),
       ]),
     },
   ]);

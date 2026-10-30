@@ -28,8 +28,9 @@ with a reserved 36px target beside the wrapping identity. A disclosure names the
 workload/PVE connection, source kind, precise creation time (or Unknown), backup
 reader, location and native identifier. Repeated workloads, tied dates and
 unavailable dates do not collapse into indistinguishable controls; sorting does
-not supply identity. Visible Created detail uses the same second/time-zone
-precision. State-only polls do not rename the point; revised reader/location
+not supply identity. Visible Created detail uses the same year/second/time-zone
+precision. Its Identifier is the native record ID, not a file count or format;
+the previous file/path metadata remains separately labelled. State-only polls do not rename the point; revised reader/location
 facts update the existing disclosure without dropping focus or changing owners.
 
 Normal-suite `ProxmoxRecoverableTable.test.tsx` and
