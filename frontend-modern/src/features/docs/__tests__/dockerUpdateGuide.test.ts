@@ -46,14 +46,8 @@ describe('shipped monitored-container update guide', () => {
   it('keeps the documented cache and clock limits bound to their producers', () => {
     // Source consistency only: this does not execute a registry check or
     // reproduce the reporter's failed comparison after recreation.
-    const registry = readFileSync(
-      path.join(repoRoot, 'internal/dockeragent/registry.go'),
-      'utf8',
-    );
-    const collector = readFileSync(
-      path.join(repoRoot, 'internal/dockeragent/collect.go'),
-      'utf8',
-    );
+    const registry = readFileSync(path.join(repoRoot, 'internal/dockeragent/registry.go'), 'utf8');
+    const collector = readFileSync(path.join(repoRoot, 'internal/dockeragent/collect.go'), 'utf8');
     const adapter = readFileSync(
       path.join(repoRoot, 'internal/unifiedresources/adapters.go'),
       'utf8',
@@ -97,9 +91,7 @@ describe('shipped monitored-container update guide', () => {
     const link = Array.from(article.querySelectorAll('a')).find(
       (anchor) => anchor.textContent === 'read-only workload state checks',
     );
-    expect(link?.getAttribute('href')).toBe(
-      '#action-was-sent-or-its-outcome-is-unknown',
-    );
+    expect(link?.getAttribute('href')).toBe('#action-was-sent-or-its-outcome-is-unknown');
     expect(link?.hasAttribute('data-doc-link')).toBe(false);
     expect(article.querySelector(link!.hash)?.textContent).toBe(
       'Action was sent or its outcome is unknown',
