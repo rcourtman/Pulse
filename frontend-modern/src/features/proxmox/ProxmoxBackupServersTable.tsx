@@ -160,11 +160,10 @@ function BackupServerDatastoreContext(props: {
   row: BackupServerRow;
   inventoryState?: 'available' | 'loading' | 'unavailable';
 }) {
-  const capacity = () => datastoreCapacity(props.row.datastore, props.row.online);
   const capacityText = () => {
     const datastore = props.row.datastore;
     if (!datastore) return 'No datastore data';
-    const reading = capacity();
+    const reading = datastoreCapacity(datastore, props.row.online);
     if (reading.state !== 'available') {
       return `${reading.state === 'unavailable' ? 'Unavailable' : 'Unknown'}. This does not mean the datastore is empty.`;
     }
@@ -177,7 +176,7 @@ function BackupServerDatastoreContext(props: {
     return formatPlatformTableIntegerValue(props.row.backupCount);
   };
   const capacityTone = (): DetailValueTone | undefined => {
-    const reading = capacity();
+    const reading = datastoreCapacity(props.row.datastore, props.row.online);
     if (reading.state === 'unavailable' || reading.state === 'unknown') return 'warning';
     if (reading.percent !== undefined && reading.percent >= 90) return 'danger';
     if (reading.percent !== undefined && reading.percent >= 75) return 'warning';
