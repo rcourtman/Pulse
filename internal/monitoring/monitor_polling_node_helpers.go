@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -439,74 +440,71 @@ func (m *Monitor) applyNodePendingUpdates(ctx context.Context, instanceName stri
 		return
 	}
 
-	// Poll pending apt updates (less frequently - every 30 minutes)
-	// Only for online nodes to avoid wasting API calls on offline nodes
-	if effectiveStatus == "online" {
-		now := time.Now()
-		m.mu.RLock()
-		if m.nodePendingUpdatesCache == nil {
-			m.mu.RUnlock()
+	// Successful observations and explicit access denials have separate clocks.
+	// Reusing a denial must not turn an old count (including zero) current.
+	now := time.Now()
+	m.mu.RLock()
+	cached := m.nodePendingUpdatesCache[nodeID]
+	m.mu.RUnlock()
+
+	if !cached.deniedAt.IsZero() && !cached.deniedAt.After(now) && now.Sub(cached.deniedAt) < pendingUpdatesCacheTTL {
+		modelNode.PendingUpdatesReason = "permission_denied"
+	} else if !cached.checkedAt.IsZero() && now.Sub(cached.checkedAt) < pendingUpdatesCacheTTL {
+		modelNode.PendingUpdates = cached.count
+		modelNode.PendingUpdatesCheckedAt = cached.checkedAt
+		modelNode.PendingUpdatesStatus = "checked"
+		return
+	} else {
+		pendingPkgs, err := client.GetNodePendingUpdates(ctx, node.Node)
+		if err == nil {
+			modelNode.PendingUpdates = len(pendingPkgs)
+			modelNode.PendingUpdatesCheckedAt = now
+			modelNode.PendingUpdatesStatus = "checked"
 			m.mu.Lock()
 			if m.nodePendingUpdatesCache == nil {
 				m.nodePendingUpdatesCache = make(map[string]pendingUpdatesCache)
 			}
+			m.nodePendingUpdatesCache[nodeID] = pendingUpdatesCache{count: len(pendingPkgs), checkedAt: now}
 			m.mu.Unlock()
-			m.mu.RLock()
+			return
 		}
-		cached, hasCached := m.nodePendingUpdatesCache[nodeID]
-		m.mu.RUnlock()
-
-		if !hasCached || now.Sub(cached.checkedAt) >= pendingUpdatesCacheTTL {
-			// Time to check for updates
-			pendingPkgs, err := client.GetNodePendingUpdates(ctx, node.Node)
-			if err != nil {
-				// Preserve the last successful value, but mark it stale rather than
-				// presenting a permission or reachability failure as a confirmed zero.
-				log.Debug().
-					Err(err).
-					Str("node", node.Node).
-					Str("instance", instanceName).
-					Msg("Could not check pending apt updates with configured Proxmox credentials")
-				modelNode.PendingUpdatesReason = pendingUpdatesFailureReason(err)
-				if hasCached {
-					modelNode.PendingUpdates = cached.count
-					modelNode.PendingUpdatesCheckedAt = cached.checkedAt
-					modelNode.PendingUpdatesStatus = "stale"
-				} else {
-					modelNode.PendingUpdatesStatus = "unavailable"
-				}
-			} else {
-				updateCount := len(pendingPkgs)
-				modelNode.PendingUpdates = updateCount
-				modelNode.PendingUpdatesCheckedAt = now
-				modelNode.PendingUpdatesStatus = "checked"
-
-				// Cache the result
-				m.mu.Lock()
-				m.nodePendingUpdatesCache[nodeID] = pendingUpdatesCache{
-					count:     updateCount,
-					checkedAt: now,
-				}
-				m.mu.Unlock()
-
-				log.Debug().
-					Str("node", node.Node).
-					Str("instance", instanceName).
-					Int("pendingUpdates", updateCount).
-					Msg("Checked pending apt updates")
+		log.Debug().Err(err).Str("node", node.Node).Str("instance", instanceName).
+			Msg("Could not check pending apt updates with configured Proxmox credentials")
+		modelNode.PendingUpdatesReason = pendingUpdatesFailureReason(err)
+		if status, known := proxmox.APIErrorStatus(err); known && status == http.StatusForbidden {
+			// A quoted status in an error body is not access-denial evidence.
+			// Keep ordinary transient failures on their existing retry path.
+			cached.deniedAt = now
+			m.mu.Lock()
+			if m.nodePendingUpdatesCache == nil {
+				m.nodePendingUpdatesCache = make(map[string]pendingUpdatesCache)
 			}
-		} else {
-			// Use cached value
-			modelNode.PendingUpdates = cached.count
-			modelNode.PendingUpdatesCheckedAt = cached.checkedAt
-			modelNode.PendingUpdatesStatus = "checked"
+			m.nodePendingUpdatesCache[nodeID] = cached
+			m.mu.Unlock()
 		}
+	}
+
+	modelNode.PendingUpdates = cached.count
+	modelNode.PendingUpdatesCheckedAt = cached.checkedAt
+	modelNode.PendingUpdatesStatus = "unavailable"
+	if !cached.checkedAt.IsZero() {
+		modelNode.PendingUpdatesStatus = "stale"
 	}
 }
 
 func pendingUpdatesFailureReason(err error) string {
 	if err == nil {
 		return ""
+	}
+	if status, known := proxmox.APIErrorStatus(err); known {
+		switch {
+		case status == http.StatusForbidden:
+			return "permission_denied"
+		case status >= http.StatusInternalServerError:
+			return "source_unavailable"
+		default:
+			return "check_failed"
+		}
 	}
 	message := strings.ToLower(err.Error())
 	switch {

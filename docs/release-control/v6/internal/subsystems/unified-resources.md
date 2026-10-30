@@ -46,6 +46,26 @@ makes existing inspection usable; it does not establish a tested restore,
 original guest recovery or release availability.
 
 
+### Explicit Proxmox update verdicts carry their complete wire observation
+
+`internal/unifiedresources/proxmox_update_evidence_json.go` serializes a PVE
+node's explicit pending-update status with its count, successful origin and
+fixed reason together. It includes a measured zero, an empty cleared reason
+and a null absent origin. Generic canonical facet merges otherwise retain
+omitted keys: after a stale seven-package observation, a successful empty
+response must show checked zero without inherited access-denial help. Losing
+the successful origin must likewise clear it, not retain an older date.
+
+The canonical API resource and realtime/broadcast projection use the same
+Proxmox metadata serializer. Guests and legacy sources without an explicit
+update verdict retain their previous payload exactly, including omitted zero
+fields; no new observation, permission, identity, polling or UI policy is added.
+`proxmox_update_evidence_test.go` covers checked/stale zero, unavailable/offline
+clears, generic merge behaviour, API/realtime parity and unchanged guest/legacy/
+nil payloads. Consuming browser proof must exercise the actual producer frames
+through the existing canonical merger and open node drawer at desktop/narrow
+widths, not replace an omitted zero with a fixture-supplied value.
+
 ### Restore-point inspection states what its evidence cannot confirm
 
 The existing By date record detail places a visible, wrapping evidence-limits

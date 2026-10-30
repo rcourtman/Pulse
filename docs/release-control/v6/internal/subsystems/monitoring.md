@@ -8117,10 +8117,35 @@ cache entry exists. An offline node is `not_checked` with `node_offline`.
 
 Failures never refresh the successful timestamp or convert permission and
 reachability errors into zero. Cached successful observations remain checked
-until their normal refresh boundary, and a failed refresh is retried without
-discarding the cache. `node_pending_updates_evidence_test.go` and the cluster
-client pending-update tests pin zero, permission, reachability, stale-cache,
-and offline behavior.
+until their normal refresh boundary. An observed HTTP 403 backs off the optional
+APT check for 30 minutes per existing node identity. Its private denial clock
+never replaces the last successful count or timestamp: no prior success stays
+`unavailable`, and prior success (including a measured zero) stays `stale` on
+every backoff poll. Expiry permits an ordinary reprobe; a successful empty list
+is a fresh checked zero and clears the denial. Offline nodes issue no check.
+
+Guest Linux `/proc/meminfo` likewise retains the existing five-minute negative
+interval for an observed HTTP 403, even when known-Linux metadata would normally
+allow a 30-second retry. Successful memory reads still cache for 60 seconds;
+non-403 failures keep their ordinary OS-specific cadence. Denial is not a memory
+sample or a new successful origin. The same instance/node/VM key, read ownership,
+lifecycle invalidation, cancellation and uncertainty fences remain effective.
+
+The unified wire serializer keeps an explicit update verdict atomic: measured
+zero, cleared reason and absent origin must replace their stale predecessors
+in the consuming node drawer. Its registered JSON and desktop/narrow consuming
+proof is owned by the unified-resources contract, not a new collection policy.
+
+Both paths use `proxmox.APIErrorStatus`, including wrapped client/cluster errors,
+not a quoted status in a provider body. A known non-403 HTTP error cannot be
+labelled permission-denied from its text. No token permission, guest operation,
+public field, rendering policy or observation-age window changes.
+`optional_permission_denial_regression_test.go` and
+`optional_permission_denial_test.go` pin real synthetic direct/cluster HTTP
+refusals, prior/absent/zero evidence, no renewal, independent target isolation,
+expiry/recovery, repeat denial, quoted-status controls and late lifecycle replies.
+`node_pending_updates_evidence_test.go` and the existing memory, Windows,
+cancellation and optional-read suites continue to cover their independent paths.
 
 ### Summary-only container collection remains explicit through ingestion
 
