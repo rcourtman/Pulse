@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "187b3034d1baf74c0c0f987bb1013b956d382985",
+  "verified_at": "2026-10-30T17:08:17.979014Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "bdc5666c6aa042ba607a449321eb999af48b9d5581a9345ef89f165bdca277b8"
+  },
+  "routes": [
+    "/proxmox/backups/date \u2014 safe offline shell mounts production inventory consumer/parser/count producer and native server detail; not full App or live auth."
+  ],
+  "states": [
+    "Exact baseline borrows another connection through the pbs-service-ID alias and collides separator tuples; corrected counts use exact positional reader/datastore identity, with namespace counts and accepted-empty0 preserved.",
+    "Ordinary polling replaces each exact count while retaining the inspected main detail DOM node. Failed reads show no numeric count, leave independent capacity/reachability intact, and retry to an accepted empty list restores genuine0."
+  ],
+  "interactions": [
+    "Chromium1440px native keyboard disclosure/collapse and retry; WebKit600px/320px native touch row disclosure/collapse and retry; keyed detail continuity and desktop keyboard focus survive polling.",
+    "All13 retained captures opened with native view_image. Count cells readable at desktop/600px;320px intentionally hides count and keeps its existing compact identity/capacity.",
+    "First evidence shell lacked required runtime context on server-detail activation; retained as failed with inspected captures. Existing contexts supplied only in proof shell, final current probe rebuilt; desktop completed baseline/initial portions not replayed. Final matrix has no page errors or unexpected network/mutations."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "touch": false,
+      "colour_scheme": "light"
+    },
+    {
+      "width": 600,
+      "height": 1000,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "touch": true,
+      "colour_scheme": "dark"
+    },
+    {
+      "width": 320,
+      "height": 1000,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "touch": true,
+      "colour_scheme": "dark"
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, SOURCE-PROOF-BINDING.json, BROWSER-BINDING.json, PIXEL-REVIEW.json and retained raw source/browser archives; Playwright1.56.1 matches integration lock. Source-72ga83ga passes1366 tests, types, lint, production/embed and bundle budgets; source-_r1oxnha repairs only proof context.",
+  "limitations": [
+    "No native guest/restore, installed recovery or release availability claim.",
+    "Unchanged600px failure count cells truncate Unavailable; the full source-level notice remains readable. One unrelated desktop empty-card capture is mid-fade, not proof of its legibility."
+  ]
+}
