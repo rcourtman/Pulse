@@ -130,17 +130,7 @@ func TestActionTruthTypesStayUnifiedResourceOwned(t *testing.T) {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
-		err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			source, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
+		err := walkProductionGoFiles(path, func(path string, source []byte) error {
 			for _, pattern := range forbidden {
 				if pattern.Match(source) {
 					t.Errorf("%s declares workflow-local action truth; use unifiedresources.ActionResultV2", filepath.ToSlash(path))
@@ -200,17 +190,7 @@ func TestOperationReceiptProtocolRemainsInternalToIngestAndRuntime(t *testing.T)
 		if _, err := os.Stat(root); os.IsNotExist(err) {
 			continue
 		}
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			source, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
+		err := walkProductionGoFiles(root, func(path string, source []byte) error {
 			if regexp.MustCompile(`(?m)^\s*OperationReceiptVersion\s+`).Match(source) {
 				t.Errorf("%s declares workflow-local receipt protocol truth", filepath.ToSlash(path))
 			}
@@ -271,17 +251,7 @@ func TestActionPolicyDecisionProvenanceHasOneOwnerAndNoPublicAuthorityField(t *t
 	declaration := regexp.MustCompile(`(?m)^type\s+ActionPolicyDecisionProvenance\b`)
 	found := []string{}
 	for _, root := range []string{"..", "../../pkg"} {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			source, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
+		err := walkProductionGoFiles(root, func(path string, source []byte) error {
 			if declaration.Match(source) {
 				found = append(found, filepath.ToSlash(path))
 			}
@@ -326,17 +296,7 @@ func TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner(t *t
 		"../mock/action_fixtures.go": true,
 	}
 	pattern := regexp.MustCompile(`(?s)\bActionPlan\s*\{\s*[A-Za-z_][A-Za-z0-9_]*\s*:`)
-	err := filepath.Walk("..", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		source, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
+	err := walkProductionGoFiles("..", func(path string, source []byte) error {
 		if pattern.Match(source) && !allowed[filepath.ToSlash(path)] {
 			t.Errorf("%s constructs ActionPlan outside the canonical planner or named compatibility boundary", filepath.ToSlash(path))
 		}
@@ -365,20 +325,7 @@ func readConsumerGoFiles(t *testing.T, relDir string) map[string]string {
 	internalDir := filepath.Join("..", relDir)
 
 	files := make(map[string]string)
-	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			t.Fatalf("failed to read %s: %v", path, readErr)
-		}
+	err := walkProductionGoFiles(internalDir, func(path string, data []byte) error {
 		files[path] = string(data)
 		return nil
 	})
@@ -1869,21 +1816,7 @@ func TestCanonicalIdentityIsCanonicalResourceField(t *testing.T) {
 // CanonicalResourceType() for legacy normalization.
 func TestNoLegacyHostResourceTypeSymbol(t *testing.T) {
 	internalDir := filepath.Join("..")
-	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
+	err := walkProductionGoFiles(internalDir, func(path string, data []byte) error {
 		content := string(data)
 		if !strings.Contains(content, "ResourceTypeHost") {
 			return nil
@@ -2032,21 +1965,7 @@ func TestNoLegacyMigrationHintsInRuntimeCode(t *testing.T) {
 	}
 
 	internalDir := filepath.Join("..")
-	err := filepath.Walk(internalDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
+	err := walkProductionGoFiles(internalDir, func(path string, data []byte) error {
 		content := string(data)
 		normalizedPath := filepath.ToSlash(path)
 		for _, phrase := range bannedPhrases {
