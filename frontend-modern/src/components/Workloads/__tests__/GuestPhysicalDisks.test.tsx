@@ -18,6 +18,7 @@ const queryState = vi.hoisted(() => ({
   refetch: vi.fn<() => Promise<Resource[]>>(),
   query: '',
   enabled: false,
+  retainReadError: false,
   realtimeEnabled: undefined as (() => boolean) | undefined,
 }));
 
@@ -53,9 +54,11 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     query: string;
     enabled: () => boolean;
     realtimeEnabled?: () => boolean;
+    retainReadError?: boolean;
   }) => {
     queryState.query = options.query;
     queryState.enabled = options.enabled();
+    queryState.retainReadError = options.retainReadError === true;
     queryState.realtimeEnabled = options.realtimeEnabled;
     return {
       resources: () => (queryState.accessor ? queryState.accessor() : queryState.resources),
@@ -104,6 +107,7 @@ describe('GuestPhysicalDisks', () => {
     queryState.refetch.mockReset().mockResolvedValue([]);
     queryState.query = '';
     queryState.enabled = false;
+    queryState.retainReadError = false;
     queryState.realtimeEnabled = undefined;
   });
   afterEach(() => {
@@ -116,6 +120,7 @@ describe('GuestPhysicalDisks', () => {
     render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
     expect(queryState.query).toBe('type=physical_disk&parent=vm-resource-101');
     expect(queryState.enabled).toBe(true);
+    expect(queryState.retainReadError).toBe(true);
     const card = screen.getByTestId('guest-physical-disks');
     expect(within(card).getByText('Physical Disks & SMART (1)')).toBeInTheDocument();
     expect(within(card).getByText('Guest SATA')).toBeInTheDocument();
@@ -370,7 +375,7 @@ describe('GuestPhysicalDisks', () => {
     let settle!: () => void;
     queryState.refetch.mockImplementation(() => {
       setLoading(true);
-      return new Promise<Resource[]>((resolve, reject) => {
+      return new Promise<Resource[]>((_resolve, reject) => {
         settle = () => {
           setLoading(false);
           reject(new Error('unavailable'));

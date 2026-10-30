@@ -3501,6 +3501,7 @@ describe('useUnifiedResources', () => {
     const disposals: (() => void)[] = [];
     let peer!: ReturnType<typeof useUnifiedResources>;
     let defaultConsumer!: ReturnType<typeof useUnifiedResources>;
+    let retainedConsumer!: ReturnType<typeof useUnifiedResources>;
     createRoot((d) => {
       disposals.push(d);
       peer = useUnifiedResources({
@@ -3509,15 +3510,18 @@ describe('useUnifiedResources', () => {
         cacheKey: 'guest-physical-disks:vm-beta',
       });
       defaultConsumer = useUnifiedResources({ ...options, retainReadError: false });
+      retainedConsumer = useUnifiedResources(options);
     });
     await flushAsync();
     expect(peer.error()).toBeUndefined();
     expect(defaultConsumer.error()).toBeUndefined();
+    expect(retainedConsumer.error()).toBe(failure);
     // No organisation may inherit the other organisation's unavailable read.
     eventBus.emit('org_switched', 'other-org');
     await flushAsync();
     expect(peer.error()).toBeUndefined();
     expect(defaultConsumer.error()).toBeUndefined();
+    expect(retainedConsumer.error()).toBeUndefined();
     for (const cleanup of disposals) cleanup();
   });
 
