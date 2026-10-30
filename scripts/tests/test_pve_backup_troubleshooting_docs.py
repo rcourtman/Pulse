@@ -81,6 +81,39 @@ class BackupAgeEvaluationDocsTest(unittest.TestCase):
 
 
 class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
+    def test_optional_denial_help_distinguishes_endpoints_without_more_requests(self):
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        section = trouble.split("### Optional Proxmox checks return 403 repeatedly\n", 1)[1].split("\n### ", 1)[0]
+        text = " ".join(section.split())
+        for distinction in ("existing", "HTTP 403 alone does not identify",
+                            "GET /nodes/{node}/apt/update", "Sys.Modify",
+                            "/nodes/{node}/qemu/{vmid}/agent/file-read", "/proc/meminfo",
+                            "VM.GuestAgent.FileRead", "separate from inventory and guest-audit access",
+                            "polling-backoff defect", "does not reduce API requests",
+                            "not measured zero", "last successful check time",
+                            "independently collected memory source", "no new request or diagnostics"):
+            self.assertIn(distinction, text)
+        for boundary in ("Do not rerun setup", "rotate the token", "disable privilege",
+                         "Do not send manual", "VM_DISK_MONITORING.md#backup-safety",
+                         "credentials and raw logs out of the report"):
+            self.assertIn(boundary, text)
+        self.assertNotIn("```", section, "reuse existing denials, not a credential-bearing probe")
+        permission_help = trouble.split("### Check Permissions (Proxmox)\n", 1)[1].split("\n### ", 1)[0]
+        self.assertIn("#optional-proxmox-checks-return-403-repeatedly", permission_help)
+        self.assertEqual((ROOT / "docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+
+    def test_pending_update_help_keeps_intentional_denials_out_of_probe_recipes(self):
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        section = trouble.split("### Proxmox pending-update access\n", 1)[1].split("\n### ", 1)[0]
+        text = " ".join(section.split())
+        for boundary in ("use the existing result", "keep the token unchanged",
+                         "do not repeat the GET", "Keep TLS verification enabled",
+                         "Do not use POST, Refresh or Upgrade as a test",
+                         "API success alone does not confirm the Pulse display has recovered"):
+            self.assertIn(boundary, text)
+        self.assertNotIn("```", section)
+
     def test_guest_disk_permission_help_preserves_intended_access_and_backup_safety(self):
         guide = (ROOT / "docs/VM_DISK_MONITORING.md").read_text()
         section = guide.split("## ⚙️ Permissions\n", 1)[1].split("\n## ", 1)[0]
