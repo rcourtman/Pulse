@@ -2,6 +2,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import type { BackupTask } from '@/types/api';
+import { buildProxmoxBackupRecoveryModel } from '@/features/proxmox/proxmoxBackupRecoveryModel';
+import {
+  BACKUP_IDENTITY_NOW,
+  identityGuest,
+  identityTask,
+} from '@/features/proxmox/__fixtures__/backupIdentity';
 import { COVERAGE_COLUMNS } from '@/features/proxmox/proxmoxBackupsTablePresentation';
 import { createGuideFixture } from './guideFixture';
 
@@ -74,6 +81,91 @@ describe('backup task evidence guidance', () => {
       'Not reported under Error is not proof that there was no error',
       'Status, Started, Duration, Error and Task ID',
       'same owning installation and guest',
+    ]) {
+      expect(text).toContain(distinction);
+    }
+  });
+
+  it.each<{
+    name: string;
+    input: Partial<BackupTask>;
+    label: string;
+    explanation: string;
+  }>([
+    {
+      name: 'unreported end',
+      input: { endTime: undefined },
+      label: 'Not reported',
+      explanation: 'no end time was supplied',
+    },
+    {
+      name: 'missing start with a reported end',
+      input: { startTime: '' },
+      label: 'Unknown',
+      explanation: 'a missing or invalid start',
+    },
+    {
+      name: 'future end',
+      input: { endTime: '2026-10-04T12:00:01Z' },
+      label: 'Unknown',
+      explanation: 'a future time',
+    },
+    {
+      name: 'equal endpoints',
+      input: { endTime: '2026-10-04T11:00:00Z' },
+      label: 'Unknown',
+      explanation: 'an end at or before the start',
+    },
+    {
+      name: 'running with a reported end',
+      input: { status: 'running' },
+      label: 'Unknown',
+      explanation: 'Running with a reported end',
+    },
+    {
+      name: 'positive subsecond interval',
+      input: { endTime: '2026-10-04T11:00:00.1Z' },
+      label: '0s',
+      explanation: 'a valid positive interval shorter than half a second can round to zero',
+    },
+  ])(
+    'explains $name with the label produced by the current model',
+    ({ input, label, explanation }) => {
+      const task = buildProxmoxBackupRecoveryModel({
+        workloads: [identityGuest('east-100', 'east', 'pve-1')],
+        tasks: [identityTask(input)],
+        pbsBackups: [],
+        archives: [],
+        snapshots: [],
+        nowMs: BACKUP_IDENTITY_NOW,
+      }).coverageRows[0].latestTask!;
+      const actual = task.durationUnknown
+        ? 'Unknown'
+        : task.durationSeconds === undefined
+          ? 'Not reported'
+          : `${task.durationSeconds}s`;
+      expect(actual).toBe(label);
+      expect(task.status).toBe(input.status ?? 'OK');
+      const item = [...section().querySelectorAll('li')].find(
+        (value) => value.firstElementChild?.textContent === label,
+      );
+      expect(item?.textContent?.replace(/\s+/g, ' ')).toContain(explanation);
+    },
+  );
+
+  it('does not turn duration into a timer, a task result or a reason to repeat a backup', () => {
+    const text = prose();
+    for (const distinction of [
+      'not a live running timer or backup age',
+      'Read it separately from Status and Error',
+      'This alone does not establish whether the task is still running, completed or failed',
+      'Unknown timing does not turn an OK status into a failure or clear a reported error',
+      'Equal start and end times are Unknown, not a measured zero',
+      'absent or invalid timing is never replaced with 0s',
+      "do not fill a missing duration with the time since Started or another task's time",
+      'A displayed duration does not establish success, verification or guest safety',
+      'Older versions may not distinguish missing and invalid timing',
+      'use the existing native record if the labels differ',
     ]) {
       expect(text).toContain(distinction);
     }
