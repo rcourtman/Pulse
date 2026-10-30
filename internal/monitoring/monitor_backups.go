@@ -137,7 +137,12 @@ func pveBackupAccessWarning(instanceCfg *config.PVEInstance, endpoint string, er
 	return cause + " Rejected endpoint: " + strconv.Quote(endpoint) + ". " + pveBackupPermissionWarning(instanceCfg)
 }
 
-func (m *Monitor) recordPVEBackupAccessWarning(instanceName, endpoint string, err error) {
+func (m *Monitor) recordPVEBackupAccessWarning(ctx context.Context, instanceName, endpoint string, err error) {
+	unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+	if !current {
+		return
+	}
+	defer unlock()
 	warning := pveBackupAccessWarning(m.getInstanceConfig(instanceName), endpoint, err)
 	m.mu.Lock()
 	if m.backupPermissionWarnings == nil {
@@ -367,7 +372,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if isPVEBackupPermissionError(err) {
 				hadPermissionError = true
 				permissionFailureCount++
-				m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage", node.Node), err)
+				m.recordPVEBackupAccessWarning(ctx, instanceName, fmt.Sprintf("/nodes/%s/storage", node.Node), err)
 			}
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
@@ -422,7 +427,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if isPVEBackupPermissionError(err) {
 					hadPermissionError = true
 					permissionFailureCount++
-					m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage/%s/content", node.Node, storage.Storage), err)
+					m.recordPVEBackupAccessWarning(ctx, instanceName, fmt.Sprintf("/nodes/%s/storage/%s/content", node.Node, storage.Storage), err)
 				} else {
 					log.Debug().Err(monErr).
 						Str("node", node.Node).
@@ -598,6 +603,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		// or renew provider evidence for a payload we did not accept.
 		return
 	}
+	unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+	if !current {
+		return
+	}
+	defer unlock()
 	for scope := range skippedLocalStorages {
 		if assignment, known := storageAssignments[scope.storage]; known &&
 			clusterStorageRestrictedToOtherNodes(assignment, scope.node) {
@@ -1208,6 +1218,9 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 
 // pollGuestSnapshots polls snapshots for all VMs and containers
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
+	if ctx.Err() != nil {
+		return
+	}
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
 	// The guest inventory comes from the fixture read view in mock mode.
@@ -1506,6 +1519,14 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			}
 		}
 	}
+
+	// A child snapshot budget may yield accepted partial results; a canceled
+	// runtime/connection owner may not publish even those results.
+	unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+	if !current {
+		return
+	}
+	defer unlock()
 
 	// Update state with guest snapshots for this instance
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
@@ -2603,11 +2624,17 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 
 // pollBackupTasks polls backup tasks from a PVE instance
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
+	if ctx.Err() != nil {
+		return
+	}
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
 	history, collection, err := m.readBackupTaskHistory(ctx, instanceName, client)
 	if err != nil {
-		m.persistBackupTaskHistory(ctx, nil, collection)
+		if unlock, current := m.beginPVEBackupPublication(ctx, instanceName); current {
+			m.persistBackupTaskHistory(ctx, nil, collection)
+			unlock()
+		}
 		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
 		return
@@ -2673,6 +2700,12 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
+	unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+	if !current {
+		return
+	}
+	defer unlock()
+
 	// Update state with new backup tasks for this instance
 	m.state.UpdateBackupTasksForInstance(instanceName, m.retainUnreadBackupTasks(instanceName, history.Nodes, liveTasks))
 
@@ -2717,8 +2750,14 @@ const maxVzdumpJobLogFetchesPerPoll = 25
 // fetched only once. Running jobs are re-parsed every cycle to pick up guests
 // as the job progresses.
 func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string) []models.BackupTask {
+	if ctx.Err() != nil {
+		return nil
+	}
 	if len(jobTasks) == 0 {
-		m.pruneVzdumpJobTaskCache(instanceName, nil)
+		if unlock, current := m.beginPVEBackupPublication(ctx, instanceName); current {
+			m.pruneVzdumpJobTaskCache(instanceName, nil)
+			unlock()
+		}
 		return nil
 	}
 
@@ -2763,6 +2802,10 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			}
 			continue
 		}
+		unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+		if !current {
+			return nil
+		}
 		fetches++
 		delete(fetchJobs, key) // duplicate provider rows cannot spend the same turn twice
 		// A failed or incomplete read still spent the allowance. Keep attempt
@@ -2779,6 +2822,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		}
 		m.vzdumpJobLogHistoryFirst[instanceName] = jobTask.EndTime.IsZero()
 		m.mu.Unlock()
+		unlock()
 
 		logLines, err := client.GetTaskLog(ctx, jobTask.Node, upid)
 		if err != nil {
@@ -2792,6 +2836,10 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			continue
 		}
 
+		unlock, current = m.beginPVEBackupPublication(ctx, instanceName)
+		if !current {
+			return nil
+		}
 		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
 		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
 		m.mu.Lock()
@@ -2806,9 +2854,13 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		}
 		m.mu.Unlock()
 		byJob[index] = guestTasks
+		unlock()
 	}
 
-	m.pruneVzdumpJobTaskCache(instanceName, seen)
+	if unlock, current := m.beginPVEBackupPublication(ctx, instanceName); current {
+		m.pruneVzdumpJobTaskCache(instanceName, seen)
+		unlock()
+	}
 	var synthesized []models.BackupTask
 	for _, tasks := range byJob {
 		synthesized = append(synthesized, tasks...)
@@ -3086,16 +3138,24 @@ func (m *Monitor) pollPVEBackupsAsync(
 		return
 	}
 
-	// Set initial timestamp before starting goroutine (prevents concurrent starts).
-	// This optional work owns a runtime-scoped timeout below; the completed core
-	// PVE generation must not be reclassified as unreachable merely because its
-	// per-cycle context expired before background scheduling.
-	m.mu.Lock()
-	m.lastPVEBackupPoll[instanceName] = newLast
-	m.mu.Unlock()
+	// Atomically claim this connection before dispatch. A timestamp is cadence,
+	// not an in-flight fence: a scan can outlast the next eligible core cycle.
+	owner := m.beginPVEBackupPoll(instanceName, client, lastPoll, newLast)
+	if owner == nil {
+		return
+	}
+	// Core-cycle cancellation must not cancel optional background inventory.
+	ctx := context.WithValue(owner.ctx, pveBackupPollContextKey{}, owner)
+	// The caller may reuse its inventory slices/maps on the next core cycle.
+	nodes = append([]proxmox.Node(nil), nodes...)
+	statuses := make(map[string]string, len(nodeEffectiveStatus))
+	for node, status := range nodeEffectiveStatus {
+		statuses[node] = status
+	}
 
 	// Run backup polling in a separate goroutine to avoid blocking real-time stats
 	go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
+		defer m.finishPVEBackupPoll(inst, owner)
 		defer recoverFromPanic(fmt.Sprintf("pollPVEBackups-%s", inst))
 		timeout := m.calculateBackupOperationTimeout(inst)
 		log.Info().
@@ -3103,14 +3163,7 @@ func (m *Monitor) pollPVEBackupsAsync(
 			Dur("timeout", timeout).
 			Msg("Starting background backup/snapshot polling")
 
-		// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-		// so derive the backup poll context from the long-lived runtime context instead.
-		parentCtx := m.getRuntimeContext()
-		if parentCtx == nil {
-			parentCtx = context.Background()
-		}
-
-		m.pollPVEBackupsAndSnapshots(parentCtx, inst, pveClient, nodes, nodeEffectiveStatus, timeout)
+		m.pollPVEBackupsAndSnapshots(ctx, inst, pveClient, nodes, statuses, timeout)
 
 		duration := time.Since(startTime)
 		log.Info().
@@ -3118,10 +3171,6 @@ func (m *Monitor) pollPVEBackupsAsync(
 			Dur("duration", duration).
 			Msg("Completed background backup/snapshot polling")
 
-		// Update timestamp after completion for accurate interval scheduling
-		m.mu.Lock()
-		m.lastPVEBackupPoll[inst] = time.Now()
-		m.mu.Unlock()
 	}(now, instanceName, client)
 
 }
