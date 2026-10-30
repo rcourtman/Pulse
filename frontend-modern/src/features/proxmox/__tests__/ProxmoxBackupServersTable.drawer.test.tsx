@@ -72,7 +72,9 @@ describe('ProxmoxBackupServersTable details', () => {
     const [servers, setServers] = createSignal<Resource[]>([makePbsResource()]);
     render(() => <ProxmoxBackupServersTable servers={servers()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+    );
     expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
 
     const refreshed = makePbsResource();
@@ -100,10 +102,14 @@ describe('ProxmoxBackupServersTable details', () => {
     const [servers, setServers] = createSignal(makeServers());
     const { container } = render(() => <ProxmoxBackupServersTable servers={servers()} />);
     const datastoreNames = () =>
-      Array.from(container.querySelectorAll('tbody tr td:first-child[title]')).map((cell) =>
-        cell.getAttribute('title'),
-      );
-    fireEvent.click(screen.getAllByRole('button', { name: 'Expand details for pbs-main' })[1]);
+      Array.from(
+        container
+          .querySelector('table')!
+          .querySelectorAll(':scope > tbody > tr > td:first-child[title]'),
+      ).map((cell) => cell.getAttribute('title'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+    );
     const detail = screen.getByTestId('pbs-resource-detail');
     expect(datastoreNames()).toEqual(['pbs-main · archive', 'pbs-main · tank']);
 
@@ -118,7 +124,9 @@ describe('ProxmoxBackupServersTable details', () => {
   it('opens the canonical resource drawer with merged host details expanded', () => {
     render(() => <ProxmoxBackupServersTable servers={[makePbsResource()]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+    );
 
     const detail = screen.getByTestId('pbs-resource-detail');
     expect(detail).toHaveAttribute('data-resource-id', 'pbs-1');
@@ -160,7 +168,9 @@ describe('ProxmoxBackupServersTable details', () => {
 
       expect(agent.disk).toBeUndefined();
       render(() => <ProxmoxBackupServersTable servers={[pbs, agent]} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+      );
 
       const detail = screen.getByTestId('pbs-resource-detail');
       expect(detail).toHaveAttribute('data-resource-id', 'pbs-1');
@@ -183,7 +193,9 @@ describe('ProxmoxBackupServersTable details', () => {
       metricsTarget: { resourceType: 'vm', resourceId: 'unrelated' },
     } as Resource;
     render(() => <ProxmoxBackupServersTable servers={[pbs, guest]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+    );
     expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
       'data-metrics-resource-id',
       'pbs-main',
@@ -214,7 +226,9 @@ describe('ProxmoxBackupServersTable details', () => {
     } as Resource;
     const [servers, setServers] = createSignal([pbs, host, unrelated]);
     render(() => <ProxmoxBackupServersTable servers={servers()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+    );
     const detail = screen.getByTestId('pbs-resource-detail');
     expect(detail).toHaveAttribute('data-metrics-resource-id', 'agent-pbs-1');
 
@@ -240,7 +254,9 @@ describe('ProxmoxBackupServersTable details', () => {
     const original = JSON.stringify([pbs, host]);
     const [servers, setServers] = createSignal([pbs, host]);
     render(() => <ProxmoxBackupServersTable servers={servers()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+    );
     const detail = screen.getByTestId('pbs-resource-detail');
     expect(detail).toHaveAttribute('data-metrics-resource-id', 'pbs-main');
 
@@ -282,7 +298,9 @@ describe('ProxmoxBackupServersTable details', () => {
           servers={[pbs, candidate('agent-pbs-a'), candidate('agent-pbs-b')]}
         />
       ));
-      fireEvent.click(screen.getByRole('button', { name: 'Expand details for pbs-main' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Expand details for pbs-main · datastore tank' }),
+      );
 
       expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
         'data-metrics-resource-id',
@@ -335,7 +353,9 @@ describe('ProxmoxBackupServersTable details', () => {
     } as Resource;
 
     render(() => <ProxmoxBackupServersTable servers={[pbs, agent]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for backup-connection' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for backup-connection · datastore tank' }),
+    );
 
     const detail = screen.getByTestId('pbs-resource-detail');
     expect(detail).toHaveAttribute('data-agent-id', 'agent-pbs-1');
@@ -399,7 +419,9 @@ describe('ProxmoxBackupServersTable details', () => {
     } as Resource;
 
     render(() => <ProxmoxBackupServersTable servers={[pbs, guest, standalone]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for proxback' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for proxback · datastore tank' }),
+    );
 
     expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
       'data-metrics-resource-type',
@@ -458,7 +480,9 @@ describe('ProxmoxBackupServersTable details', () => {
     const [servers, setServers] = createSignal<Resource[]>([pbs, agent]);
     render(() => <ProxmoxBackupServersTable servers={servers()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand details for proxback' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for proxback · datastore tank' }),
+    );
     expect(screen.getByTestId('pbs-resource-detail')).toHaveAttribute(
       'data-metrics-resource-id',
       'agent-proxback',
