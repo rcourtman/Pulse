@@ -121,6 +121,8 @@ export const PlatformResourceDetailTableRow: Component<{
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
   initialShowHostDetails?: boolean;
+  /** Row-specific evidence, separate from the canonical host/resource inspector. */
+  context?: JSX.Element;
   onResourceActionSettled?: () => void | Promise<void>;
   onClose?: () => void;
 }> = (props) => {
@@ -132,6 +134,7 @@ export const PlatformResourceDetailTableRow: Component<{
         data-inline-detail-for={props.resource.id}
         data-inline-platform-resource-detail-for={props.resource.id}
       >
+        {props.context}
         <ResourceDetailDrawer
           resource={props.resource}
           statusIndicator={props.statusIndicator}

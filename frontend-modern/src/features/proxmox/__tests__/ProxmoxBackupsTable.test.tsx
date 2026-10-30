@@ -400,6 +400,19 @@ describe('ProxmoxBackupsTable', () => {
     expect(cellText(0, 'datastore')).toBe('main');
     expect(cellText(1, 'datastore')).toBe('offsite');
     expect(cellText(1, 'used')).toContain('25');
+    const offsite = within(table).getByRole('button', {
+      name: 'Expand details for pbs-main · datastore offsite',
+    });
+    expect(
+      within(table).getByRole('button', {
+        name: 'Expand details for pbs-main · datastore main',
+      }),
+    ).not.toBe(offsite);
+    fireEvent.click(offsite);
+    const selected = screen.getByRole('region', { name: 'Selected PBS datastore' });
+    expect(within(selected).getByText('Datastore').closest('tr')).toHaveTextContent('offsite');
+    expect(within(selected).getByText('Backup reader').closest('tr')).toHaveTextContent('pbs-main');
+    expect(within(selected).getByText('Capacity').closest('tr')).toHaveTextContent('25.0%');
   });
 
   it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {

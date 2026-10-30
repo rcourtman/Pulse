@@ -1,14 +1,71 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import type { Resource } from '@/types/resource';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
   PlatformResourceDetailToggleButton,
+  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
   getPlatformResourceDetailRowInteractionProps,
 } from '../PlatformResourceDetailTableRow';
 
+vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
+  ResourceDetailDrawer: (props: { resource: Resource }) => (
+    <div data-testid="canonical-resource-inspector">{props.resource.id}</div>
+  ),
+}));
+
 afterEach(cleanup);
+
+describe('platform resource row context', () => {
+  it('mounts row-specific context only inside an open detail without changing the canonical resource', () => {
+    const [open, setOpen] = createSignal(false);
+    render(() => (
+      <table>
+        <tbody>
+          <PlatformResourceDetailTableRow
+            resource={{ id: 'canonical-host' } as Resource}
+            open={open()}
+            detailRowId="selected-row"
+            colSpan={4}
+            context={
+              <section aria-label="Selected row">Selected datastore, not a host identity</section>
+            }
+          />
+        </tbody>
+      </table>
+    ));
+    expect(screen.queryByRole('region')).toBeNull();
+    expect(screen.queryByTestId('canonical-resource-inspector')).toBeNull();
+    setOpen(true);
+    expect(screen.getByRole('region', { name: 'Selected row' })).toHaveTextContent(
+      'Selected datastore',
+    );
+    expect(document.getElementById('selected-row')).toContainElement(screen.getByRole('region'));
+    expect(screen.getByTestId('canonical-resource-inspector')).toHaveTextContent('canonical-host');
+    setOpen(false);
+    expect(screen.queryByRole('region')).toBeNull();
+  });
+
+  it('leaves context-free inspectors unchanged', () => {
+    render(() => (
+      <table>
+        <tbody>
+          <PlatformResourceDetailTableRow
+            resource={{ id: 'ordinary-host' } as Resource}
+            open
+            detailRowId="ordinary-row"
+            colSpan={4}
+          />
+        </tbody>
+      </table>
+    ));
+    expect(screen.queryByRole('region')).toBeNull();
+    expect(screen.getByTestId('canonical-resource-inspector')).toHaveTextContent('ordinary-host');
+  });
+});
 
 describe('getPlatformResourceDetailRowInteractionProps', () => {
   const renderRow = (onToggle = vi.fn()) => {
