@@ -2639,6 +2639,11 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
 		return
 	}
+	// A read returning after cancellation is not accepted history. Once the
+	// listing is accepted, later log-budget exhaustion must not hide it.
+	if ctx.Err() != nil {
+		return
+	}
 
 	var backupTasks []models.BackupTask
 	var liveTasks []models.BackupTask
@@ -2700,7 +2705,10 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
+	// Preserve the accepted listing and earlier log reads if a later log used
+	// the shared budget. WithoutCancel drops only that child budget: the owner
+	// value still fences explicit connection/runtime withdrawal below.
+	unlock, current := m.beginPVEBackupPublication(context.WithoutCancel(ctx), instanceName)
 	if !current {
 		return
 	}
@@ -2750,9 +2758,6 @@ const maxVzdumpJobLogFetchesPerPoll = 25
 // fetched only once. Running jobs are re-parsed every cycle to pick up guests
 // as the job progresses.
 func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string) []models.BackupTask {
-	if ctx.Err() != nil {
-		return nil
-	}
 	if len(jobTasks) == 0 {
 		if unlock, current := m.beginPVEBackupPublication(ctx, instanceName); current {
 			m.pruneVzdumpJobTaskCache(instanceName, nil)
@@ -2804,7 +2809,10 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		}
 		unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
 		if !current {
-			return nil
+			if cached {
+				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
+			}
+			continue
 		}
 		fetches++
 		delete(fetchJobs, key) // duplicate provider rows cannot spend the same turn twice
@@ -2838,7 +2846,10 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 
 		unlock, current = m.beginPVEBackupPublication(ctx, instanceName)
 		if !current {
-			return nil
+			if cached {
+				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
+			}
+			continue
 		}
 		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
 		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)

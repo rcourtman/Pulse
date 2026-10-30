@@ -284,7 +284,28 @@ func TestPVEBackupLifecycleCanceledCollectorsKeepEvidence(t *testing.T) {
 				} else {
 					m.pollBackupTasks(ctx, "site-a", c)
 				}
-				require.Equal(t, before, m.state.GetSnapshot().PVEBackups)
+				observed := m.state.GetSnapshot().PVEBackups
+				if phase == "log" {
+					// The parent listing was accepted before this log exhausted
+					// the budget. Its observation may advance; cached guest facts
+					// may not. A canceled read supplied no new guest verdict.
+					var beforeGuests, afterGuests []models.BackupTask
+					for _, row := range before.BackupTasks {
+						if row.VMID > 0 {
+							beforeGuests = append(beforeGuests, row)
+						}
+					}
+					for _, row := range observed.BackupTasks {
+						if row.VMID > 0 {
+							afterGuests = append(afterGuests, row)
+						}
+					}
+					require.Equal(t, beforeGuests, afterGuests)
+					require.Equal(t, before.StorageBackups, observed.StorageBackups)
+					require.Equal(t, before.GuestSnapshots, observed.GuestSnapshots)
+				} else {
+					require.Equal(t, before, observed)
+				}
 				after := m.vzdumpJobTaskCache[key]
 				require.Equal(t, cache.tasks, after.tasks, "cancellation replaced accepted log evidence")
 				require.Equal(t, cache.final, after.final)

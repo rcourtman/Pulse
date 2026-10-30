@@ -37,7 +37,9 @@ historical observations remain history; retirement does not delete them.
 
 The existing two-to-five-minute shared task/storage budget, independent bounded
 snapshot budget, read caps, partial/unread preservation, alert policy, identity,
-auth and guest-operation rules are unchanged. No guest operation is introduced.
+auth and guest-operation rules are unchanged. A task listing or log accepted
+before a later log exhausts the shared budget remains usable while its owner
+is current; a read returning after cancellation supplies no new guest facts. No guest operation is introduced.
 `pve_backup_lifecycle_test.go` covers saturated/concurrent admission, late reads
 at all five read boundaries, VM/LXC replacement/runtime/retirement, original
 observation preservation, reused UPIDs, independent connection state and ordinary
