@@ -80,7 +80,9 @@ describe('PBS Backups web-interface parity', () => {
       }
       expect(container.innerHTML).not.toContain('UNRELATED-HOST');
       fireEvent.click(
-        within(container).getAllByRole('button', { name: 'Expand details for pbs-main' })[0],
+        within(container).getByRole('button', {
+          name: 'Expand details for pbs-main · datastore archive',
+        }),
       );
       expect(within(container).getByTestId('pbs-detail')).toHaveAttribute(
         'data-resource-id',

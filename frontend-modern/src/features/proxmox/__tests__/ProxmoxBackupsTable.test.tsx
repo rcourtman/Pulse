@@ -31,6 +31,7 @@ import {
 import { eventBus } from '@/stores/events';
 import { setKioskMode } from '@/utils/url';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
+import { WebSocketContext, DarkModeContext, type WebSocketStore } from '@/contexts/appRuntime';
 
 // ProxmoxBackupsTable reads URL search params (node/type scope filters), so it
 // must render inside a Router context.
@@ -368,11 +369,15 @@ describe('ProxmoxBackupsTable', () => {
       },
     } as Resource;
     const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable
-        emptyIcon={<span />}
-        workloads={[workloadResource]}
-        servers={[twoStores]}
-      />
+      <WebSocketContext.Provider value={{ activeAlerts: {} } as unknown as WebSocketStore}>
+        <DarkModeContext.Provider value={() => false}>
+          <ProxmoxBackupsTable
+            emptyIcon={<span />}
+            workloads={[workloadResource]}
+            servers={[twoStores]}
+          />
+        </DarkModeContext.Provider>
+      </WebSocketContext.Provider>
     ));
     await screen.findByText('offsite');
     const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
@@ -400,6 +405,24 @@ describe('ProxmoxBackupsTable', () => {
     expect(cellText(0, 'datastore')).toBe('main');
     expect(cellText(1, 'datastore')).toBe('offsite');
     expect(cellText(1, 'used')).toContain('25');
+    const offsite = within(table).getByRole('button', {
+      name: 'Expand details for pbs-main · datastore offsite',
+    });
+    expect(
+      within(table).getByRole('button', {
+        name: 'Expand details for pbs-main · datastore main',
+      }),
+    ).not.toBe(offsite);
+    fireEvent.click(offsite);
+    const selected = screen.getByRole('region', { name: 'Selected PBS datastore' });
+    expect(within(selected).getByText('Datastore').closest('tr')).toHaveTextContent('offsite');
+    expect(within(selected).getByText('Backup reader').closest('tr')).toHaveTextContent('pbs-main');
+    expect(within(selected).getByText('Capacity').closest('tr')).toHaveTextContent('25.0%');
+    // The surrounding scan table is nowrap; the interpretation must wrap too,
+    // not only the four fields protected by DetailSectionTable.wrapValues.
+    expect(within(selected).getByText(/Counts describe the loaded inventory/)).toHaveClass(
+      'whitespace-normal',
+    );
   });
 
   it('uses a corroborated PBS host link for Backups History despite a PVE-only name collision', () => {

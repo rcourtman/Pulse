@@ -4,6 +4,7 @@ import { unwrap } from 'solid-js/store';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { DetailSectionTable, type DetailValueTone } from '@/components/shared/DetailSectionTable';
 import {
   formatPlatformTableBytesValue,
   formatPlatformTableIntegerValue,
@@ -149,6 +150,73 @@ function usageToneClass(pct: number | undefined): string {
   if (pct >= 90) return 'text-red-600 dark:text-red-300';
   if (pct >= 75) return 'text-amber-600 dark:text-amber-300';
   return 'text-base-content';
+}
+
+// A server can have several identically prefixed datastore names. The compact
+// scan keeps its single-line cells, but hover titles are not an inspection path
+// on a phone. Keep the selected store's full identity and admitted readings in
+// its existing disclosure, without changing the host inspector's identity.
+function BackupServerDatastoreContext(props: {
+  row: BackupServerRow;
+  inventoryState?: 'available' | 'loading' | 'unavailable';
+}) {
+  const capacityText = () => {
+    const datastore = props.row.datastore;
+    if (!datastore) return 'No datastore data';
+    const reading = datastoreCapacity(datastore, props.row.online);
+    if (reading.state !== 'available') {
+      return `${reading.state === 'unavailable' ? 'Unavailable' : 'Unknown'}. This does not mean the datastore is empty.`;
+    }
+    return `${formatPlatformTablePercentValue(reading.percent)} used · ${formatPlatformTableBytesValue(datastore.used, '0 B')} / ${formatPlatformTableBytesValue(datastore.total)}`;
+  };
+  const inventoryText = () => {
+    if (!props.row.datastore) return 'Not reported';
+    if (props.inventoryState === 'loading') return 'Loading';
+    if (props.inventoryState === 'unavailable') return 'Unavailable';
+    return formatPlatformTableIntegerValue(props.row.backupCount);
+  };
+  const capacityTone = (): DetailValueTone | undefined => {
+    const reading = datastoreCapacity(props.row.datastore, props.row.online);
+    if (reading.state === 'unavailable' || reading.state === 'unknown') return 'warning';
+    if (reading.percent !== undefined && reading.percent >= 90) return 'danger';
+    if (reading.percent !== undefined && reading.percent >= 75) return 'warning';
+    return undefined;
+  };
+
+  return (
+    <section class="mb-3" aria-label="Selected PBS datastore">
+      <DetailSectionTable
+        wrapValues
+        sections={[
+          {
+            label: 'Selected datastore',
+            rows: [
+              { label: 'Backup reader', value: props.row.serverName, layout: 'stacked' },
+              {
+                label: 'Datastore',
+                value: props.row.datastore?.name ?? 'Not reported',
+                layout: 'stacked',
+              },
+              {
+                label: 'Capacity',
+                value: capacityText(),
+                layout: 'stacked',
+                tone: capacityTone(),
+              },
+              { label: 'Backup entries', value: inventoryText(), layout: 'stacked' },
+            ],
+            footerContent: (
+              <p class="whitespace-normal text-[11px] leading-snug text-muted">
+                Counts describe the loaded inventory, which can include in-progress and unverified
+                entries. They do not establish backup protection. Connection health and datastore
+                capacity are separate readings.
+              </p>
+            ),
+          },
+        ]}
+      />
+    </section>
+  );
 }
 
 // Only the hostname PBS reports about itself can corroborate a host without
@@ -582,7 +650,11 @@ export function ProxmoxBackupServersTable(props: {
                           <div class="flex min-w-0 items-center gap-1">
                             <PlatformResourceDetailToggleButton
                               expanded={isExpanded()}
-                              resourceLabel={row.serverName}
+                              resourceLabel={
+                                row.datastore
+                                  ? `${row.serverName} · datastore ${row.datastore.name}`
+                                  : row.serverName
+                              }
                               controlsId={detailRowId()}
                               onToggle={() => detail.toggle(rowIdentity)}
                             />
@@ -815,6 +887,12 @@ export function ProxmoxBackupServersTable(props: {
                         open={isExpanded()}
                         detailRowId={detailRowId()}
                         colSpan={visibleColumns().length}
+                        context={
+                          <BackupServerDatastoreContext
+                            row={row}
+                            inventoryState={props.backupInventoryState}
+                          />
+                        }
                         initialShowHostDetails
                         onClose={() => detail.close(rowIdentity)}
                       />

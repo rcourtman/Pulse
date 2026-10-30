@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "1271fb075741fcc079d983befb4af46587b3a138",
+  "verified_at": "2026-10-30T20:02:49.548010Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "ec360d96d57270bb80e529ba2e406af5c86b95f732f04e0d9e1900b548da33fd",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "6b774748ab5d19f3ebc5fdeaabd6e17d950741f84a75ad0444455a9a5c3539fc"
+  },
+  "routes": [
+    "/proxmox/backups/date \u2014 actual production inventory consumer and native host inspector, in a safe offline shell, not full App/live auth."
+  ],
+  "states": [
+    "Selected reader/datastore identity and admitted capacity/count remain readable; countLoading/Unavailable/real0 and capacityUnknown/Unavailable remain independent ofHealthy reachability. Missing datastore does not become a store or zero.",
+    "Full count/protection/capacity interpretation wraps at320/600px after native pixel review caught and repaired inheritednowrap clipping. Final containing source1271fb passes41 current-source checks at1440/320/600px."
+  ],
+  "interactions": [
+    "Native Chromium keyboard and WebKit touch disclosure/close, correct namesake selection, same open DOM through retry/poll/reorder, truezero/exact2 counts and focus retention. Lifecycle on30b is fulfilled; only caption whitespace changes afterwards.",
+    "Four retained browser parts disclose16/22/53/41 assertion events (including setup, not distinct tests), two driver-selector timeouts and the native-caption adverse result. All14 capture files opened with nativeview_image; final source pixels pass."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 1000,
+      "browser": "WebKit",
+      "version": "26.0",
+      "touch": true
+    },
+    {
+      "width": 600,
+      "height": 1000,
+      "browser": "WebKit",
+      "version": "26.0",
+      "touch": true
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, SOURCE-PROOF-BINDING.json (source-myg5gy7y/k3xnnmtz/4hb0vchx/7vwtcm8d), BROWSER-BINDING.json, PIXEL-REVIEW.json and SOURCE/BROWSER archives. Playwright1.56.1 matches integration lock. Broad1396/1406 test run remains failed; its10 failed roots pass with corrected fixtures, then affected current producers/types/lint/build/budgets pass. No aggregate green is invented.",
+  "limitations": [
+    "Summary datastore names and the no-datastore phone capacity cell retain single-line truncation; existing disclosure now supplies their complete values without hover.",
+    "Synthetic fixtures and source/pixel proof are not guest thaw, restore, original installed recovery or release availability."
+  ]
+}

@@ -39,6 +39,7 @@ import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorag
 // current table owners.
 import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
 import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
+import platformResourceDetailRowSource from '@/features/platformPage/PlatformResourceDetailTableRow.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
 import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
@@ -256,6 +257,23 @@ function enclosingTab(tag: ts.Node): string | undefined {
 }
 
 describe('platform overview layout guardrails', () => {
+  it('keeps selected datastore context outside the canonical host inspector', () => {
+    const resourceRow = proxmoxBackupServersTableSource.match(
+      /<PlatformResourceDetailTableRow\b[\s\S]*?\n\s*\/>/,
+    )?.[0];
+    expect(resourceRow).toContain('resource={row.resource}');
+    expect(resourceRow).toContain('<BackupServerDatastoreContext');
+    expect(resourceRow).not.toMatch(/resource=\{\{[\s\S]*?datastore/);
+    const contextAt = platformResourceDetailRowSource.indexOf('{props.context}');
+    const inspectorAt = platformResourceDetailRowSource.indexOf('<ResourceDetailDrawer');
+    expect(contextAt).toBeGreaterThan(-1);
+    expect(inspectorAt).toBeGreaterThan(contextAt);
+    // A store is row evidence, never another canonical resource/History target.
+    expect(platformResourceDetailRowSource.slice(inspectorAt)).not.toContain('props.context');
+    expect(platformResourceDetailRowSource.slice(inspectorAt)).toContain(
+      'resource={props.resource}',
+    );
+  });
   it('keeps attention summaries canonical without a competing estate panel', () => {
     for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
       expect(source).toContain('withPlatformStatusCounts');

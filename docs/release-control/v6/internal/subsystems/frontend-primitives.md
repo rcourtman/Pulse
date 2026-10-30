@@ -20,6 +20,32 @@
 
 ## Purpose
 
+### Selected PBS datastore remains inspectable without hover
+
+The existing PBS row disclosure is named by backup reader and datastore, rather
+than giving every store on one server the same control label. Single-line scan
+cells and responsive widths are unchanged. Its open detail presents the full,
+wrapping reader/store identities and admitted capacity bytes/percentage and
+inventory count, including when those columns are hidden or truncated. The
+shared platform detail row accepts optional row context inside the same native
+inline shell; this does not replace the canonical resource or its History target.
+
+Loading and unavailable inventory remain nonnumeric; accepted empty inventory
+is zero. Unavailable/unknown capacity never becomes zero, even with a Healthy
+connection. A server without datastore data has neither a made-up store nor a
+count. Counts describe loaded entries, including in-progress/unverified entries,
+not backup protection. These independent evidence meanings, correlation, read
+cadence, retry, API, auth and protection policy are unchanged.
+
+Normal-suite `backupServerDatastoreAccess.test.tsx` exercises long namesakes,
+responsive projections, parsed inventory loading/failure/retry/polling, capacity
+admission, no-store data, live reordering and retained detail/focus. The registered
+`ProxmoxBackupsTable.test.tsx` verifies the selected consumer; shared detail-row
+and platform-layout tests preserve the separate context/host owners. Browser
+proof exercises actual keyboard/touch disclosure, open-record refresh and
+complete wrapping identifiers at desktop/narrow widths with pixel inspection.
+This is safer evidence inspection, not original guest or installed recovery.
+
 ### Backup-server read states remain legible at intermediate widths
 
 The existing PBS server table reserves enough count-column width for the full
