@@ -7,6 +7,7 @@ database, Docker socket, workload or destination is used.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import errno
 import json
 import os
@@ -16,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -27,6 +29,9 @@ DOCKER_IDENTITY = f"{CONTAINER_ID} 2026-10-02T20:00:00Z true 0"
 PROCESS_IDENTITY = "4321 Sat Oct 3 00:00:00 2026"
 DEFAULT_IO = ("rchar: 987654\nwchar: 999999\nwrite_bytes: 1000\ncancelled_write_bytes: 20\n",
               "rchar: 999999\nwchar: 999999\nwrite_bytes: 13000\ncancelled_write_bytes: 30\n")
+DEADLINE_CASES = (("systemd", "systemctl", False),
+                  ("docker", "docker", False),
+                  ("docker", "docker", True))
 
 
 def section() -> str:
@@ -392,21 +397,80 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
                     self.assert_unavailable(result)
                     self.assertIn("GNU timeout is required", result.stderr)
 
-    def test_real_deadline_stops_a_hung_reader_in_both_recipes(self):
-        for deployment, name in (("systemd", "systemctl"), ("docker", "docker")):
-            with self.subTest(deployment=deployment):
-                started = time.monotonic()
-                result, _ = self.exercise(deployment, HANG_TOOL=name)
-                self.assert_unavailable(result)
-                self.assertEqual(result.returncode, 137)
-                self.assertLess(time.monotonic() - started, 83)
+    def test_real_deadlines_stop_all_owned_readers(self):
+        def exercise_case(case):
+            deployment, name, ignore_term = case
+            settings = {"HANG_TOOL": name}
+            if ignore_term:
+                settings["IGNORE_TERM"] = "1"
+            started = time.monotonic()
+            result, _ = self.exercise(deployment, **settings)
+            return result, time.monotonic() - started
 
-    def test_real_whole_group_deadline_stops_a_reader_ignoring_term(self):
-        started = time.monotonic()
-        result, _ = self.exercise("docker", HANG_TOOL="docker", IGNORE_TERM="1")
-        self.assert_unavailable(result)
-        self.assertEqual(result.returncode, 137)
-        self.assertLess(time.monotonic() - started, 83)
+        # These three wait-bound controls share no fixture, environment or
+        # process group: exercise() owns a private directory and run_owned()
+        # starts a new session for each. Overlap only these fixed cases, not
+        # unittest's process-global mock controls or arbitrary smoke suites.
+        # Observe every future on the main test thread, including after a
+        # failed/exceptional case; leaving the executor drains all its work.
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            pending = [(case, pool.submit(exercise_case, case)) for case in DEADLINE_CASES]
+            for case, future in pending:
+                with self.subTest(deployment=case[0], ignore_term=case[2]):
+                    result, elapsed = future.result()
+                    self.assert_unavailable(result)
+                    self.assertEqual(result.returncode, 137)
+                    self.assertLess(elapsed, 83)
+
+    def test_deadline_controls_overlap_and_keep_every_case_gating(self):
+        # A barrier is causal proof of three live workers, not a fragile
+        # elapsed-time speed assertion. Each selected bad result must fail
+        # its own subtest while every other case is still observed.
+        for failed_case in (None, *DEADLINE_CASES):
+            with self.subTest(failed_case=failed_case):
+                barrier = threading.Barrier(3)
+                calls = []
+
+                def exercise(deployment, **settings):
+                    case = (deployment, settings["HANG_TOOL"], settings.get("IGNORE_TERM") == "1")
+                    calls.append(case)
+                    barrier.wait(timeout=2)
+                    status = 0 if case == failed_case else 137
+                    return subprocess.CompletedProcess([], status, "", "unavailable"), []
+
+                control = type(self)("test_real_deadlines_stop_all_owned_readers")
+                result = unittest.TestResult()
+                with mock.patch.object(control, "exercise", side_effect=exercise):
+                    control.run(result)
+                self.assertEqual(sorted(calls), sorted(DEADLINE_CASES))
+                self.assertEqual(result.errors, [])
+                self.assertEqual(len(result.failures), int(failed_case is not None))
+                if failed_case is not None:
+                    self.assertIn(f"deployment={failed_case[0]!r}", result.failures[0][0].id())
+                    self.assertIn(f"ignore_term={failed_case[2]!r}", result.failures[0][0].id())
+
+    def test_deadline_control_exceptions_do_not_lose_other_results(self):
+        barrier = threading.Barrier(3)
+        completed = []
+
+        def exercise(deployment, **settings):
+            case = (deployment, settings["HANG_TOOL"], settings.get("IGNORE_TERM") == "1")
+            barrier.wait(timeout=2)
+            if case == DEADLINE_CASES[0]:
+                raise RuntimeError("synthetic owned-reader observation failure")
+            completed.append(case)
+            # Both later cases fail too: merely submitting them or draining
+            # their commands is not enough; their verdicts must be collected.
+            return subprocess.CompletedProcess([], 0, "", "unavailable"), []
+
+        control = type(self)("test_real_deadlines_stop_all_owned_readers")
+        result = unittest.TestResult()
+        with mock.patch.object(control, "exercise", side_effect=exercise):
+            control.run(result)
+        self.assertEqual(sorted(completed), sorted(DEADLINE_CASES[1:]))
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("synthetic owned-reader observation failure", result.errors[0][1])
+        self.assertEqual(len(result.failures), 2)
 
     def test_guidance_preserves_scope_units_baselines_and_data_safety(self):
         guide = " ".join(section().split())
