@@ -13,10 +13,14 @@ import (
 // This exercises reset_pulse from the actual sourced installer. All systemctl
 // calls pass through the real timeout binary to a stateful executable double.
 // Deletion is confined to fixture configuration; no host installation is used.
+// Each case owns its files and child environment. Use Go's existing parallel
+// budget, starting the unchanged action/fixture deadlines only after admission.
 func TestRootInstallResetRejectsUnusableObservationsBeforeMutation(t *testing.T) {
+	t.Parallel()
 	for _, unit := range []string{"pulse.service", "pulse-update.timer", "pulse-update.service", "pulse-backend.service", "pulse-backend-update.timer", "pulse-backend-update.service"} {
 		for _, mode := range []string{"query-fails", "empty-load", "unknown-load", "empty-active", "unsettled", "empty-enabled", "unknown-enabled", "enabled-query-fails"} {
 			t.Run(unit+"/"+mode, func(t *testing.T) {
+				t.Parallel()
 				r := runServerResetFixture(t, mode, unit, "active", "enabled", false)
 				assertResetIncomplete(t, r, true)
 				for _, action := range []string{"stop ", "disable ", "start ", "enable "} {
@@ -30,9 +34,11 @@ func TestRootInstallResetRejectsUnusableObservationsBeforeMutation(t *testing.T)
 }
 
 func TestRootInstallResetPreservesDataOnUnconfirmedQuiescence(t *testing.T) {
+	t.Parallel()
 	for _, unit := range []string{"pulse.service", "pulse-update.timer", "pulse-update.service", "pulse-backend.service", "pulse-backend-update.timer", "pulse-backend-update.service"} {
 		for _, mode := range []string{"stop-fails", "stop-ignored", "stop-readback-fails", "still-failed", "reactivated"} {
 			t.Run(unit+"/"+mode, func(t *testing.T) {
+				t.Parallel()
 				assertResetIncomplete(t, runServerResetFixture(t, mode, unit, "active", "enabled", false), true)
 			})
 		}
@@ -40,6 +46,7 @@ func TestRootInstallResetPreservesDataOnUnconfirmedQuiescence(t *testing.T) {
 	for _, unit := range []string{"pulse-update.timer", "pulse-backend-update.timer"} {
 		for _, mode := range []string{"disable-fails", "disable-ignored", "reenabled"} {
 			t.Run(unit+"/"+mode, func(t *testing.T) {
+				t.Parallel()
 				assertResetIncomplete(t, runServerResetFixture(t, mode, unit, "active", "enabled", false), true)
 			})
 		}
@@ -47,9 +54,11 @@ func TestRootInstallResetPreservesDataOnUnconfirmedQuiescence(t *testing.T) {
 }
 
 func TestRootInstallResetRestoresOnlyPriorActiveStates(t *testing.T) {
+	t.Parallel()
 	for _, active := range []string{"active", "inactive", "failed"} {
 		for _, enabled := range []string{"enabled", "enabled-runtime", "disabled", "static", "indirect", "masked", "masked-runtime", "linked", "linked-runtime"} {
 			t.Run(active+"/"+enabled, func(t *testing.T) {
+				t.Parallel()
 				r := runServerResetFixture(t, "normal", "", active, enabled, false)
 				if r.err != nil || !strings.Contains(r.output, "Pulse configuration has been reset") || r.configPresent {
 					t.Fatalf("reset failed: %v\n%s\n%s", r.err, r.output, r.calls)
@@ -103,6 +112,7 @@ func TestRootInstallResetRestoresOnlyPriorActiveStates(t *testing.T) {
 }
 
 func TestRootInstallResetReportsIncompleteDeletionOrRestoration(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ mode, target string }{
 		{"delete-fails", ""},
 		{"start-fails", "pulse.service"},
@@ -116,6 +126,7 @@ func TestRootInstallResetReportsIncompleteDeletionOrRestoration(t *testing.T) {
 		{"final-updater-active", "pulse-update.service"},
 	} {
 		t.Run(tc.mode+"/"+tc.target, func(t *testing.T) {
+			t.Parallel()
 			r := runServerResetFixture(t, tc.mode, tc.target, "active", "enabled", false)
 			assertResetIncomplete(t, r, tc.mode == "delete-fails")
 			if tc.mode == "delete-fails" || tc.target == "pulse.service" {
@@ -128,8 +139,10 @@ func TestRootInstallResetReportsIncompleteDeletionOrRestoration(t *testing.T) {
 }
 
 func TestRootInstallResetEnforcesSystemdDeadlines(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"query-timeout", "stop-timeout"} {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
 			start := time.Now()
 			r := runServerResetFixture(t, mode, "pulse-update.service", "active", "enabled", false)
 			assertResetIncomplete(t, r, true)
@@ -141,6 +154,7 @@ func TestRootInstallResetEnforcesSystemdDeadlines(t *testing.T) {
 }
 
 func TestRootInstallResetDoesNotStartAnIdleServerWhenTimerWasActive(t *testing.T) {
+	t.Parallel()
 	r := runServerResetFixture(t, "mixed", "", "active", "enabled", false)
 	if r.err != nil || r.configPresent || strings.Contains(r.calls, "start pulse.service") || strings.Contains(r.calls, "start pulse-backend.service") {
 		t.Fatalf("idle/failed server was restarted: %v\n%s\n%s", r.err, r.output, r.calls)
@@ -151,6 +165,7 @@ func TestRootInstallResetDoesNotStartAnIdleServerWhenTimerWasActive(t *testing.T
 }
 
 func TestRootInstallResetKeepsCustomInstanceIsolated(t *testing.T) {
+	t.Parallel()
 	r := runServerResetFixture(t, "normal", "", "active", "enabled", true)
 	if r.err != nil || r.configPresent {
 		t.Fatalf("custom reset failed: %v\n%s\n%s", r.err, r.output, r.calls)
@@ -163,6 +178,7 @@ func TestRootInstallResetKeepsCustomInstanceIsolated(t *testing.T) {
 }
 
 func TestRootInstallResetKeepsUpdateSuffixedServerRole(t *testing.T) {
+	t.Parallel()
 	r := runServerResetFixture(t, "update-named-server", "", "active", "enabled", true)
 	if r.err != nil || r.states["pulse-other-update.service.active"] != "active" || !strings.Contains(r.calls, "start pulse-other-update.service") || strings.Contains(r.calls, "start pulse-other-update-update.service") {
 		t.Fatalf("server name was confused with updater role: %v\n%s\n%s", r.err, r.output, r.calls)
@@ -170,6 +186,7 @@ func TestRootInstallResetKeepsUpdateSuffixedServerRole(t *testing.T) {
 }
 
 func TestRootInstallResetHandlesAbsentOptionalUnits(t *testing.T) {
+	t.Parallel()
 	r := runServerResetFixture(t, "optional-absent", "", "inactive", "disabled", false)
 	if r.err != nil || r.configPresent || strings.Contains(r.calls, "stop ") || strings.Contains(r.calls, "start ") || strings.Contains(r.calls, "disable ") {
 		t.Fatalf("absent optional units should not cause mutation: %v\n%s\n%s", r.err, r.output, r.calls)
