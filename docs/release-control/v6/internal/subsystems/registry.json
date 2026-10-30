@@ -6440,7 +6440,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/monitoring/pve_backup_lifecycle_test.go"
+              "internal/monitoring/pve_backup_lifecycle_test.go",
+              "internal/monitoring/pve_backup_scheduler_test.go"
             ]
           },
           {

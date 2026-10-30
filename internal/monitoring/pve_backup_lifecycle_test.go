@@ -312,3 +312,29 @@ func TestPVEBackupLifecycleCompletedReplacementRefreshesImmediately(t *testing.T
 		}
 	})
 }
+
+func TestPVEBackupLifecycleRuntimeReplacementKeepsSameClientSafe(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		var taskReads atomic.Int32
+		var oldCtx context.Context
+		c := &backupLifecycleClient{label: "accepted", read: func(ctx context.Context, p string) {
+			if p == "tasks" && taskReads.Add(1) == 1 {
+				oldCtx = ctx
+				<-release
+			}
+		}}
+		m := newBackupLifecycleMonitor(c, "qemu")
+		scheduleBackupLifecycle(m, c)
+		synctest.Wait()
+		m.setRuntimeContext(context.Background(), nil)
+		scheduleBackupLifecycle(m, c)
+		synctest.Wait()
+		before := m.state.GetSnapshot().PVEBackups
+		require.Equal(t, int32(2), taskReads.Load())
+		close(release)
+		synctest.Wait()
+		require.Error(t, oldCtx.Err())
+		require.Equal(t, before, m.state.GetSnapshot().PVEBackups)
+	})
+}
