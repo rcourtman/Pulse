@@ -101,17 +101,19 @@ const BACKUP_SERVER_WEIGHTS: Record<
   // Capacity must fit "Unavailable", not just a short percentage. Keep the
   // shared 40% identity anchor; the compact status omits its redundant dot.
   compact: { server: 40, status: 18, datastore: 17, used: 25 },
-  // Just above the phone projection the used cell carries its used/total
-  // pair again, the longest value in the row, so it takes the most room.
-  basic: { server: 24, status: 13.6, datastore: 18.2, used: 28.4, backups: 9.8 },
+  // Count must fit Loading and Unavailable, not just a short number. Keep
+  // reachability and the used/total pair; datastore names already disclose
+  // their full value on hover and in the existing detail. The 30% identity
+  // anchor below still owns the server column in this band.
+  basic: { server: 30, status: 13.6, datastore: 14, used: 26.9, backups: 15.5 },
   operational: {
     server: 20,
     status: 12,
     cpu: 10,
     memory: 12,
-    datastore: 16,
+    datastore: 14,
     used: 20,
-    backups: 10,
+    backups: 12,
   },
   expanded: {
     server: 18,
@@ -119,9 +121,9 @@ const BACKUP_SERVER_WEIGHTS: Record<
     cpu: 8,
     memory: 11,
     uptime: 9,
-    datastore: 16,
+    datastore: 14.5,
     used: 18,
-    backups: 9,
+    backups: 10.5,
   },
   // Memory and Used carry a percentage plus a used/total pair, the longest
   // values in the row, so they take the slack from the one-word status and

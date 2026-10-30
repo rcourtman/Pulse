@@ -23,6 +23,24 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup-server read states remain legible at intermediate widths
+
+The existing PBS server table reserves enough count-column width for the full
+Loading and Unavailable labels, not only numeric counts, at basic, operational
+and expanded container widths. The shared 30% basic identity anchor, visible
+columns, 32px scan rhythm, independent connection/capacity evidence and full
+layout remain unchanged. Datastore names keep their existing truncation, title
+and detail access; no identity, count, polling, read/retry or protection rule
+changes. An unread inventory still never establishes a real zero.
+
+Normal-suite `proxmoxBackupsTablePresentation.test.ts` verifies width allocation
+and complete column totals; the registered `ProxmoxBackupsTable.test.tsx`
+exercises actual loading/failure/accepted-empty cells with independent healthy
+capacity. Browser proof must inspect the consuming table at desktop, phone and
+intermediate container boundaries, including loading, failure, retry, real zero,
+ordinary polling and native detail interactions. This is readable inspection,
+not installed or original guest recovery.
+
 ### PBS server counts belong to the exact backup reader and datastore
 
 The existing Backups server count matches `PBSBackup.instance` to the resource's

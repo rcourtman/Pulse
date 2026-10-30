@@ -12,7 +12,7 @@ import {
   identitySnapshot,
   identityTask,
 } from '../__fixtures__/backupIdentity';
-import { buildBackupServerRows } from '../ProxmoxBackupServersTable';
+import { buildBackupServerRows, ProxmoxBackupServersTable } from '../ProxmoxBackupServersTable';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
@@ -3338,5 +3338,51 @@ describe('By date recovery evidence limits', () => {
         );
     }
     expect(apiFetchMock).toHaveBeenCalledTimes(10);
+  });
+});
+
+describe('PBS inventory state column', () => {
+  it('reserves readable count space without changing loading, failure or real zero', () => {
+    const [state, setState] = createSignal<'loading' | 'unavailable' | 'available'>('loading');
+    const { container } = render(() => (
+      <ProxmoxBackupServersTable
+        servers={[
+          {
+            id: 'pbs-readable',
+            name: 'main',
+            displayName: 'main',
+            type: 'pbs',
+            status: 'online',
+            lastSeen: BACKUP_IDENTITY_NOW,
+            platformId: 'proxmox-pbs',
+            platformType: 'proxmox-pbs',
+            sourceType: 'api',
+            pbs: {
+              instanceId: 'pbs-main',
+              connectionHealth: 'healthy',
+              datastores: [{ name: 'tank', total: 1000, used: 400 }],
+            },
+          },
+        ]}
+        backups={[]}
+        backupInventoryState={state()}
+        layoutWidth={() => 520}
+      />
+    ));
+    const table = container.querySelector('table')!;
+    const countColumn = table.querySelector<HTMLElement>(
+      'col[data-proxmox-backups-column="backups"]',
+    )!;
+    const cells = table.querySelector('tbody tr')!.querySelectorAll('td');
+    expect(countColumn.style.width).toBe('15.5%');
+    expect(cells[4]).toHaveTextContent(/^Loading$/);
+    setState('unavailable');
+    expect(cells[4]).toHaveTextContent(/^Unavailable$/);
+    expect(cells[1]).toHaveTextContent('Healthy');
+    expect(cells[3]).toHaveTextContent('40.0%');
+    expect(cells[3]).toHaveTextContent('400 B / 1000 B');
+    setState('available');
+    expect(cells[4]).toHaveTextContent(/^0$/);
+    expect(countColumn.style.width).toBe('15.5%');
   });
 });

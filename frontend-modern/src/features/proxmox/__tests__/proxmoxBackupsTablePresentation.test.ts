@@ -70,6 +70,25 @@ describe('Proxmox backups responsive table presentation', () => {
     expect(ids(getBackupServerColumns('full'))).toHaveLength(10);
   });
 
+  it.each([
+    ['basic', '15.5%'],
+    ['operational', '12%'],
+    ['expanded', '10.5%'],
+    ['full', '8%'],
+  ] as const)(
+    'reserves room for nonnumeric inventory states in %s count cells',
+    (layout, width) => {
+      expect(getBackupServerColumnWidthStyle('backups', layout)).toEqual({ width });
+      const total = getBackupServerColumns(layout).reduce(
+        (sum, column) =>
+          sum +
+          Number.parseFloat(getBackupServerColumnWidthStyle(column.id, layout).width as string),
+        0,
+      );
+      expect(total).toBeCloseTo(100, 3);
+    },
+  );
+
   it('prioritizes workload posture, restore freshness, and task failures in coverage', () => {
     const withTasks = { task: true };
     expect(ids(getCoverageColumns('compact', withTasks))).toEqual([
