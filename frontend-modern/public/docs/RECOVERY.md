@@ -305,6 +305,26 @@ same owning installation and guest, not just a repeated name or VMID.
   under Error is not proof that there was no error. If your version has no
   task details, use the existing native task record rather than assuming success.
 
+**Duration** is a reported completed interval, not a live running timer or
+backup age. Read it separately from **Status** and **Error**:
+
+- **Not reported**: no end time was supplied. This alone does not establish
+  whether the task is still running, completed or failed.
+- **Unknown**: an end time was supplied, but the timestamps or running status
+  do not establish a completed duration. Examples include a missing or invalid
+  start, a future time, an end at or before the start, or **Running** with a
+  reported end. Unknown timing does not turn an OK status into a failure or
+  clear a reported error.
+- **0s**: a valid positive interval shorter than half a second can round to
+  zero. Equal start and end times are **Unknown**, not a measured zero;
+  absent or invalid timing is never replaced with 0s.
+
+Compare the matching native task's existing start, end and status if available;
+do not fill a missing duration with the time since **Started** or another
+task's time. A displayed duration does not establish success, verification or
+guest safety. Older versions may not distinguish missing and invalid timing;
+use the existing native record if the labels differ.
+
 Use the records already available. Do not run another backup, verification,
 restore or guest-agent probe, restart monitoring, clear History or change
 retention merely to reconcile these readings. Keep full task IDs, private
