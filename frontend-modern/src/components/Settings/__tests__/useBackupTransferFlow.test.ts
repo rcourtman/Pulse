@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { apiClient, clearApiToken, getApiToken, getOrgID, setOrgID } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
-import { useBackupTransferFlow } from '../useBackupTransferFlow';
+import {
+  MAX_CONFIG_IMPORT_FILE_BYTES,
+  MAX_CONFIG_IMPORT_REQUEST_BYTES,
+  useBackupTransferFlow,
+} from '../useBackupTransferFlow';
 
 vi.mock('@/stores/notifications', () => ({
   notificationStore: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
@@ -43,7 +47,7 @@ function setup(kind: 'export' | 'import' = 'import', tokenOnly = false) {
   flow.setImportPassphrase(passphrase);
   flow.setExportPassphrase(passphrase);
   const read = vi.fn().mockResolvedValue('{"data":"synthetic-archive"}');
-  flow.setImportFile({ text: read } as unknown as File);
+  flow.setImportFile({ size: 28, text: read } as unknown as File);
   return { flow, read, dispose };
 }
 
@@ -86,6 +90,90 @@ afterEach(() => {
 });
 
 describe('configuration transfers keep their confirmed workspace and one dispatch', () => {
+  it('rejects an oversized file before reading it or asking for a token', async () => {
+    const { flow, read } = setup('import', true);
+    flow.setImportFile({ size: MAX_CONFIG_IMPORT_FILE_BYTES + 1, text: read } as unknown as File);
+    await flow.handleImport();
+    expect(read).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(flow.showApiTokenModal()).toBe(false);
+    expect(flow.isTransferring()).toBe(false);
+    expect(flow.transferError()).toContain('2 MiB browser import limit. No import was sent.');
+    expect(flow.transferError()).not.toContain('may have applied');
+    expect(flow.importFile()).not.toBeNull();
+    expect(flow.importPassphrase()).toBe(passphrase);
+    expect(reloadTimers()).toHaveLength(0);
+    expect(notificationStore.success).not.toHaveBeenCalled();
+  });
+
+  it('accepts file formatting at the local read limit when the actual request fits', async () => {
+    const { flow, read } = setup();
+    const envelope = '{"data":"synthetic-archive"}';
+    read.mockResolvedValue(envelope.padEnd(MAX_CONFIG_IMPORT_FILE_BYTES));
+    flow.setImportFile({ size: MAX_CONFIG_IMPORT_FILE_BYTES, text: read } as unknown as File);
+    await flow.handleImport();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      passphrase,
+      data: 'synthetic-archive',
+    });
+    expect(flow.transferError()).toBe('');
+  });
+
+  it.each([-1, 0, 1])('checks the complete request at the byte boundary (%i)', async (delta) => {
+    const { flow, read } = setup();
+    const overhead = new Blob([JSON.stringify({ passphrase, data: '' })]).size;
+    const data = 'A'.repeat(MAX_CONFIG_IMPORT_REQUEST_BYTES - overhead + delta);
+    read.mockResolvedValue(JSON.stringify({ data }));
+    await flow.handleImport();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(delta > 0 ? 0 : 1);
+    if (delta > 0) {
+      expect(flow.transferError()).toContain('server’s 1 MiB request limit');
+      expect(flow.transferError()).toContain('No import was sent');
+      expect(flow.transferError()).not.toContain('may have applied');
+      expect(flow.showImportDialog()).toBe(true);
+      expect(reloadTimers()).toHaveLength(0);
+      expect(notificationStore.success).not.toHaveBeenCalled();
+    } else {
+      expect(new Blob([fetchMock.mock.calls[0][1].body]).size).toBe(
+        MAX_CONFIG_IMPORT_REQUEST_BYTES + delta,
+      );
+      expect(flow.transferError()).toBe('');
+    }
+    expect(flow.isTransferring()).toBe(false);
+  });
+
+  it.each(['🔒'.repeat(8), '"\\\n'.repeat(8)])(
+    'includes UTF-8 and JSON escaping in the password budget',
+    async (password) => {
+      const { flow, read } = setup();
+      // The ASCII request would fit exactly, but this password costs more bytes.
+      const overhead = new Blob([JSON.stringify({ passphrase, data: '' })]).size;
+      const data = 'A'.repeat(MAX_CONFIG_IMPORT_REQUEST_BYTES - overhead);
+      read.mockResolvedValue(JSON.stringify({ data }));
+      flow.setImportPassphrase(password);
+      await flow.handleImport();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(flow.transferError()).toContain('including the password. No import was sent.');
+      expect(flow.importPassphrase()).toBe(password);
+      expect(flow.isTransferring()).toBe(false);
+    },
+  );
+
+  it('allows a deliberate corrected submission after a local size rejection', async () => {
+    const { flow, read } = setup();
+    read.mockResolvedValue(JSON.stringify({ data: 'A'.repeat(MAX_CONFIG_IMPORT_REQUEST_BYTES) }));
+    await flow.handleImport();
+    expect(fetchMock).not.toHaveBeenCalled();
+    read.mockResolvedValue('{"data":"synthetic-archive"}');
+    await flow.handleImport();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(flow.transferError()).toBe('');
+    expect(flow.showImportDialog()).toBe(false);
+  });
+
   it.each(['export', 'import'] as const)(
     'does not send %s after the workspace changes before confirmation',
     async (kind) => {

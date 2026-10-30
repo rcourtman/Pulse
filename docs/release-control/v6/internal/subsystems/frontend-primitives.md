@@ -5084,6 +5084,30 @@ resolves late` in
 
 ## Current State
 
+### Configuration import is bounded before dispatch
+
+The existing Settings recovery import reads at most a 2 MiB selected file,
+allowing space for the export envelope and formatting. A larger file is rejected
+before `File.text()`, credential prompting or any import request. After parsing
+the supported JSON envelope, JSON string or raw CLI data, the complete serialized
+request (ciphertext, password, JSON escaping and UTF-8 bytes) must not exceed
+1 MiB, matching `configapi.handleImportConfig`'s request reader. File size alone
+cannot establish that the request fits.
+
+Local size failures remain in the active import dialog, say no import was sent,
+preserve the inputs and allow an explicit corrected submission. They neither
+reload nor claim an uncertain applied import. Requests actually dispatched retain
+the existing non-retrying, workspace-bound and uncertain-outcome behaviour. The
+file control associates visible size guidance through `aria-describedby`.
+
+`useBackupTransferFlow.test.ts` covers unread oversized files, the local file
+boundary, exact/under/over request bytes, multibyte/escaped passwords and explicit
+correction. `BackupTransferDialogs.test.tsx` checks the consuming accessible
+guidance. Desktop/narrow browser proof exercises the production transfer flow and
+recovery dialog with safe local responses; it does not establish native recovery
+or change any server limit, credential permission, archive or guest operation.
+
+
 ### Retained monitoring status remains reactive (11 October 2026)
 
 The existing Machines status dot subscribes to the shared relative-time clock

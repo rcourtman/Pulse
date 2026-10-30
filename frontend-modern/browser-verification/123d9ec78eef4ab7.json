@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "a57085af7250f9316aa173cd10f949eac5f1f380",
+  "verified_at": "2026-10-30T11:04:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "c9b064b27114e75500803580af9b52ac1e6bdd6afff75fc31c4bc3768f1a519e",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "c224ce76a660bfc0a8c820b23c49c6da8a05590bb5b5b3b5274f2d25d0adca1b"
+  },
+  "routes": [
+    "/settings/system-recovery (offline fixture mounting production RecoverySettingsPanel, useBackupTransferFlow/apiClient, BackupTransferDialogs, Dialog, ToastContainer and CSS; not full app/auth)"
+  ],
+  "states": [
+    "Assigned-base control reads and sends an oversized file, then shows generic Invalid request body/possible-application feedback.",
+    "Final local file limit rejects without File.text or fetch; normalized wire size rejects after one bounded read without fetch, preserves inputs and states no import was sent.",
+    "Exact 1 MiB serialized request can dispatch; UTF-8 password bytes can push the same data over the limit and prevent dispatch.",
+    "2 MiB formatted file can normalize to a small accepted request. JSON envelopes, JSON string and raw CLI data retain deliberate single submission.",
+    "Actually dispatched synthetic rejections retain uncertain-outcome feedback; no success or reload. Closing restores opener focus and reopening clears file/password/errors."
+  ],
+  "interactions": [
+    "Desktop keyboard focus/Enter and 320px touch open the existing Recovery dialog, select real browser File objects, fill masked passwords and submit.",
+    "51 checks and 12 observed synthetic local requests; source, byte size, fixed organization and CSRF presence checked without logging request content.",
+    "All eight final viewport captures inspected with native view_image; desktop light Chromium and narrow dark WebKit; no external or unknown API traffic and complete browser/server cleanup."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 940,
+      "browser": "WebKit",
+      "browser_version": "26.0",
+      "touch": true,
+      "colour_scheme": "dark"
+    }
+  ],
+  "evidence": "Lane OUTCOME/RECEIPTS.md, SOURCE-RECEIPT.json, SOURCE-PROOF.tar.xz, BROWSER-BINDING.json, BROWSER-RESULT.json, BROWSER.tar.xz and PIXEL-REVIEW.json. Final fixtures built with exact prepared dependency graph in source-ry7hlgyw; Playwright 1.56.1 matches the integration lock.",
+  "limitations": [
+    "Safe synthetic response fixtures do not exercise backend authentication, archive cryptography, full application, private or native recovery, or release availability.",
+    "Server limit, accepted archive formats, workspace binding, non-retry behavior and actual-request uncertainty remain unchanged."
+  ]
+}

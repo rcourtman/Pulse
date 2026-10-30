@@ -81,6 +81,9 @@ describe('BackupTransferDialogs', () => {
     expect(guide).toHaveAttribute('href', '/docs/MIGRATION');
     expect(guide).toHaveAttribute('target', '_blank');
     expect(guide).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getByLabelText('Configuration File')).toHaveAccessibleDescription(
+      'Files up to 2 MiB are read locally. Import requests, including the password, must fit the server’s 1 MiB limit.',
+    );
   });
 
   it.each(['export', 'import'] as const)(
