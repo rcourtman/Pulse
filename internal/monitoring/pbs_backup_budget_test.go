@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -274,5 +275,55 @@ func TestPBSBudgetAcceptedEmptyDoesNotProveUnreadAbsence(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func exercisePBSBudgetExpiredAlertEvaluation(t *testing.T) {
+	f := newPBSBudgetFixture(t, "vm", "datastore")
+	f.at.Store(time.Now().Add(-4 * 24 * time.Hour).Unix())
+	f.collect(t, context.Background())
+	am := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(am.Stop)
+	cfg := am.GetConfig()
+	cfg.Enabled, cfg.BackupDefaults.Enabled = true, true
+	cfg.ActivationState = alerts.ActivationActive
+	cfg.BackupDefaults.WarningDays, cfg.BackupDefaults.CriticalDays = 1, 2
+	am.UpdateConfig(cfg)
+	f.m.alertManager = am
+	f.m.checkBackupAlerts(context.Background())
+	if self, ages := backupEvaluationAlerts(t, f.m); self != nil || ages != 3 {
+		t.Fatalf("wanted backup-age controls self=%v ages=%d", self, ages)
+	}
+	// Simulate an already-visible evaluation warning, not an actual store
+	// outage or a new diagnostic request. Collection expiry must not clear it.
+	am.RaiseSystemAlert(alerts.SystemAlertInput{Type: alerts.BackupEvaluationAlertType,
+		Level: alerts.AlertLevelWarning, Message: "Fixture standing evaluation warning", Fingerprint: "fixture-standing"})
+	before := map[string]alerts.Alert{}
+	for _, alert := range am.GetActiveAlerts() {
+		before[alert.ID] = alert
+	}
+	f.at.Store(time.Now().Add(-time.Hour).Unix())
+	f.phase.Store(1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	f.collect(t, ctx)
+	if ctx.Err() != context.DeadlineExceeded {
+		t.Fatal("fixture did not spend the collection budget")
+	}
+	active := am.GetActiveAlerts()
+	if len(active) != len(before) {
+		t.Error("spent collection budget evaluated/cleared standing alerts")
+	}
+	for _, alert := range active {
+		old, ok := before[alert.ID]
+		if !ok || old.Level != alert.Level || old.Message != alert.Message || !old.StartTime.Equal(alert.StartTime) {
+			t.Error("spent collection budget replaced a standing alert")
+		}
+	}
+	// A separate ordinary evaluation may use the accepted fresh point. It
+	// resolves only its age and the evaluation warning, not unread siblings.
+	f.m.checkBackupAlerts(context.Background())
+	if self, ages := backupEvaluationAlerts(t, f.m); self != nil || ages != 2 {
+		t.Errorf("ordinary evaluation self=%v age alerts=%d; want only the two unread workloads", self, ages)
 	}
 }
