@@ -6457,6 +6457,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/pve_backup_lifecycle_test.go",
+          "internal/monitoring/pve_storage_budget_test.go",
               "internal/monitoring/pve_backup_scheduler_test.go"
             ]
           },
@@ -6955,6 +6956,7 @@
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
               "internal/monitoring/pve_backup_lifecycle_test.go",
+          "internal/monitoring/pve_storage_budget_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",
               "internal/monitoring/snapshot_poll_workers_test.go",
@@ -7061,6 +7063,7 @@
               "internal/monitoring/physical_disk_roundtrip_test.go",
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
               "internal/monitoring/pve_backup_lifecycle_test.go",
+          "internal/monitoring/pve_storage_budget_test.go",
               "internal/monitoring/pve_backup_scheduler_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",

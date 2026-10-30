@@ -17,6 +17,33 @@
 
 ## Purpose
 
+### Accepted storage listings survive a later child-budget timeout
+
+PVE storage polling commits listings accepted before a later node, content,
+retry-wait or assignment read exhausts the child budget. A nil-error response
+returned after expiry is unread, not a successful empty listing. No queued
+provider read starts after expiry. Remaining known local repositories and
+unlisted nodes retain their last live rows without renewing durable evidence;
+only accepted rows advance. An accepted empty repository can remove its raw
+rows, but incomplete instance-wide history cannot reconcile durable absence or
+claim complete protection. PBS attribution without node provenance survives an
+unread node until an accepted storage or complete enumeration replaces it.
+
+Explicit request cancellation withdraws the enumeration. Dropping an expired
+child deadline for local publication does not drop the connection owner:
+runtime shutdown/replacement, client replacement and retirement still prevent
+late publication. Independent connections, local-disk identity, permissions,
+alerts, guest operations and provider budgets are unchanged. Every node's
+ordinary storage reads remain; an accepted shared view is not substituted for
+another node's access evidence.
+
+`pve_storage_budget_test.go` covers VM/LXC, warm/cold live inventory, all five
+expiry phases, exact retained/advanced raw and durable fields, accepted empty
+membership, ordinary complete recovery, PBS attribution and owner withdrawal.
+Source-bound desktop/narrow browser proof consumes emitted inventory/posture
+frames through the existing Backups surface; this is not original installed
+or frozen-guest recovery.
+
 ### Guest snapshot collection bounds waiting work as well as provider reads
 
 PVE guest snapshot polling uses at most eight collector workers, plus one
