@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "9091994283d1924675b5bb9f7d7f94e501cf4b18",
+  "verified_at": "2026-10-30T18:22:28.437456Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "fb0fed3a7528cac09a2cf8629c820f9e27e38f0179cd177af4c6549755486e18"
+  },
+  "routes": [
+    "/proxmox/backups/date \u2014 production inventory consumer and native server detail in a safe offline shell, not full App/live auth."
+  ],
+  "states": [
+    "Loading/Unavailable labels fit whole at basic, operational and expanded reveal boundaries without invented zero; exact old600px clipping is retained.",
+    "Read failure and pending retry remain nonnumeric; accepted empty read restores0; ordinary polling restores0/2/1 exact store counts. Connection/capacity evidence remains independent."
+  ],
+  "interactions": [
+    "Chromium keyboard and WebKit touch native server detail, explicit single-flight retry, retained detail DOM across retry/polling, desktop focus through polling, native collapse.",
+    "All20 new retained captures plus two prior captures opened with native view_image. Final matrix124 checks and26 local GETs has no page errors/unexpected network/mutations; failures and completed partial portions remain retained separately."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "version": "141.0.7390.37",
+      "local_container_widths": [
+        519,
+        520,
+        719,
+        720,
+        899,
+        900,
+        1119,
+        1120
+      ]
+    },
+    {
+      "width": 600,
+      "height": 1000,
+      "browser": "WebKit",
+      "version": "26.0",
+      "touch": true
+    },
+    {
+      "width": 320,
+      "height": 1000,
+      "browser": "WebKit",
+      "version": "26.0",
+      "touch": true
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, SOURCE-PROOF-BINDING.json (source-ayew3v4b), BROWSER-BINDING.json, PIXEL-REVIEW.json and raw SOURCE/BROWSER archives. Playwright1.56.1 matches integration lock;1371 tests/types/lint/production+embed/bundle checks pass.",
+  "limitations": [
+    "Nominal32px assertions observed33/33/32.5px in wide exact old/new tables; exact comparison across open/collapsed states also observed a32px row. Final criterion is no added row height against exact baseline, with whole count/capacity text and no document overflow independently checked.",
+    "At720px local container the unchanged secondary Used byte pair truncates. Its percentage and failure states remain full; this is not a claim that every byte pair or datastore name fits.",
+    "No live auth, original guest/restore, installed recovery or release-availability claim."
+  ]
+}
