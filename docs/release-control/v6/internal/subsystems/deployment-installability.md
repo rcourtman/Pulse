@@ -3659,7 +3659,13 @@ artifact-selection behaviour.
    test must appear in the manifest's exact paths even though recursive
    production roots exclude `_test.go`; the real manifest reader must hash
    each of those files. Accepting new installer tests must not silently narrow
-   that attested source boundary.
+   that attested source boundary. Canonical Governance runs the rootful
+   attestation validator tests on pull requests and main, so a newly compiled
+   installer test missing from the exact-path manifest fails CI. This includes
+   the split update, removal, fixture-runner, provider-startup and Windows
+   controls; production roots still exclude their own `_test.go` files.
+   Source-binding validation does not execute native/rootful qualification or
+   establish installed recovery.
    Qualification counts, readiness assertions, release gates, workflow
    narration, artifact identity, and promotion metadata stay in governed
    workflow summaries and evidence records rather than the public changelog.

@@ -178,6 +178,12 @@ jobs:
       - name: Run canonical completion history unit tests
         run: python3 scripts/release_control/canonical_completion_history_test.py
 
+      - name: Run rootful installer source-binding tests
+        # The test binary compiles the whole installtests package, not just
+        # the selected runtime probe. Keep every added input in its manifest.
+        # These validator tests do not execute native/rootful qualification.
+        run: python3 scripts/release_control/secure_runtime_rootful_attestation_v1_test.py
+
       - name: Run browser verification guard unit tests
         run: python3 scripts/release_control/browser_verification_guard_test.py
 

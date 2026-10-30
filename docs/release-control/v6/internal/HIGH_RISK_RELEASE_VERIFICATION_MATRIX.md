@@ -1109,6 +1109,12 @@ Companion drill:
   - The rootful source-closure test must cover the current filesystem probe and
     shared filesystem evidence packages as well as the compiled harness. Its
     complete missing-package list is a failed boundary check, not qualification.
+  - Canonical Governance runs `secure_runtime_rootful_attestation_v1_test.py`
+    on pull requests and main. Its two compiled-input checks require every
+    current `scripts/installtests/*_test.go` in the exact-path manifest and
+    verify each actual reader hash, including split update/removal, native
+    fixture-runner, provider-startup and Windows controls. A missing input
+    fails before any native qualification; it is not a runtime acceptance run.
   `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
   - `TestDemoReachabilityStopsBeforeUnreadyOrFailedTailnetProbes` executes
