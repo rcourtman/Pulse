@@ -6431,11 +6431,11 @@
             "label": "connection-scoped single-flight backup scan and late publication proof",
             "match_prefixes": [],
             "match_files": [
-              "internal/monitoring/pve_backup_poll.go",
               "internal/monitoring/guest_poll_publication.go",
+              "internal/monitoring/monitor.go",
               "internal/monitoring/monitor_cluster_dedupe.go",
               "internal/monitoring/monitor_pve.go",
-              "internal/monitoring/monitor.go"
+              "internal/monitoring/pve_backup_poll.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
