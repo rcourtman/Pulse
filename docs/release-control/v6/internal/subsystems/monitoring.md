@@ -8131,6 +8131,11 @@ non-403 failures keep their ordinary OS-specific cadence. Denial is not a memory
 sample or a new successful origin. The same instance/node/VM key, read ownership,
 lifecycle invalidation, cancellation and uncertainty fences remain effective.
 
+The unified wire serializer keeps an explicit update verdict atomic: measured
+zero, cleared reason and absent origin must replace their stale predecessors
+in the consuming node drawer. Its registered JSON and desktop/narrow consuming
+proof is owned by the unified-resources contract, not a new collection policy.
+
 Both paths use `proxmox.APIErrorStatus`, including wrapped client/cluster errors,
 not a quoted status in a provider body. A known non-403 HTTP error cannot be
 labelled permission-denied from its text. No token permission, guest operation,

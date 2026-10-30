@@ -97,6 +97,16 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 class SubsystemLookupTest(unittest.TestCase):
 
+    def test_proxmox_update_json_uses_authoritative_wire_proof(self) -> None:
+        result = lookup_paths(["internal/unifiedresources/proxmox_update_evidence_json.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        matches = result["files"][0]["matches"]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["subsystem"], "unified-resources")
+        proof = matches[0]["verification_requirement"]
+        self.assertEqual(proof["id"], "proxmox-update-evidence-json")
+        self.assertEqual(proof["exact_files"], ["internal/unifiedresources/proxmox_update_evidence_test.go"])
+
     def test_release_presentation_proofs_do_not_widen_promotion_metadata(self):
         paths = [
             ".github/PULL_REQUEST_TEMPLATE.md",

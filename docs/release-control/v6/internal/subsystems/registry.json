@@ -8668,6 +8668,19 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "proxmox-update-evidence-json",
+            "label": "authoritative Proxmox update JSON clearing proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/proxmox_update_evidence_json.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/proxmox_update_evidence_test.go"
+            ]
+          },
+          {
             "id": "identity-canonicalization",
             "label": "canonical identity proof",
             "match_prefixes": [],
