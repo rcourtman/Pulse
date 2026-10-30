@@ -2,15 +2,17 @@
 """Run one exhaustive, order-preserving slice of a slow backend test package.
 
 The two fixed packages have outgrown whole-package CI balancing. Source supplies
-the test inventory; no timing file or maintained test-name allowlist defines
-coverage. The existing JSON recorder checks every selected root's completion,
-including explicit skips, and preserves failures and unfinished output.
+the test inventory; measured weights only move the contiguous boundary. Reuse
+the API selector without changing source order, worker counts or test deadlines.
+The existing JSON recorder checks every selected root's completion, including
+explicit skips, and preserves failures and unfinished output.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -21,6 +23,11 @@ ROOT = Path(__file__).resolve().parents[2]
 MODULE = "github.com/rcourtman/pulse-go-rewrite/"
 PACKAGES = ("internal/monitoring", "scripts/installtests")
 RECORDER = ROOT / ".github/scripts/record-internal-api-test-seconds.py"
+SELECTOR = ROOT / ".github/scripts/select-internal-api-shard.sh"
+WEIGHTS = {
+    package: ROOT / f"scripts/release_control/{package.rsplit('/', 1)[-1]}-test-seconds.txt"
+    for package in PACKAGES
+}
 
 
 def source_tests(output: str) -> list[str]:
@@ -31,10 +38,25 @@ def source_tests(output: str) -> list[str]:
     return names
 
 
-def select(names: list[str], index: int) -> list[str]:
+def select(names: list[str], index: int, weights: Path | None = None) -> list[str]:
     if index not in (0, 1) or len(names) < 2:
         raise ValueError("two nonempty slices and an index of 0 or 1 are required")
-    return names[len(names) * index // 2:len(names) * (index + 1) // 2]
+    if weights is None:
+        return names[len(names) * index // 2:len(names) * (index + 1) // 2]
+    # The same selector already keeps API tests in contiguous source order.
+    # Ignore ambient overrides: both workers must use the committed weights
+    # and the same default for new, renamed or unmeasured source tests.
+    env = {key: value for key, value in os.environ.items() if key != "DEFAULT_WEIGHT"}
+    result = subprocess.run(["bash", str(SELECTOR), str(weights), "2", str(index)],
+                            input="\n".join(names) + "\n", capture_output=True,
+                            text=True, env=env, check=True)
+    selected = result.stdout.splitlines()
+    # Fail before test execution on a broken selector, never fall back to an
+    # apparently successful partial selection. The source list is authority.
+    if (not selected or len(selected) >= len(names) or
+            selected != (names[:len(selected)] if index == 0 else names[-len(selected):])):
+        raise ValueError("weighted selection is not a nonempty contiguous source slice")
+    return selected
 
 
 def test_filter(names: list[str], selected: list[str]) -> list[str]:
@@ -65,10 +87,14 @@ def main() -> int:
         return listing.returncode
     try:
         names = source_tests(listing.stdout)
-        selected = select(names, args.index)
+        weights = WEIGHTS[args.package]
+        selected = select(names, args.index, weights)
         filters = test_filter(names, selected)
-    except ValueError as error:
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"Backend slice selection failed: {error}", file=sys.stderr)
+        if isinstance(error, subprocess.CalledProcessError):
+            sys.stdout.write(error.stdout or "")
+            sys.stderr.write(error.stderr or "")
         return 2
     (args.output / "listed.tests").write_text("\n".join(names) + "\n")
     selection = args.output / "selected.tests"
@@ -86,6 +112,7 @@ def main() -> int:
         test_exit = process.wait()
     receipt = {"package": MODULE + args.package, "index": args.index, "count": 2,
                "listed_roots": len(names), "selected_roots": len(selected),
+               "weights": str(weights.relative_to(ROOT)),
                "test_exit": test_exit, "recorder_exit": recorded.returncode}
     (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps(receipt), flush=True)

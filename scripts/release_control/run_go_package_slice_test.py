@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +27,46 @@ def job(name):
 
 
 class SliceTest(unittest.TestCase):
+    def test_measured_boundary_balances_estimates_without_changing_source_coverage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            weights = Path(temporary) / 'weights'
+            names = [f'TestZ{i}' for i in range(7)]
+            for costs in ([1]*7, [100, 1, 1, 1, 1, 1, 1], [1, 1, 1, 100, 1, 1, 1],
+                          [1, 1, 1, 1, 1, 1, 100], [3, 8, 2, 15, 4, 7, 11]):
+                weights.write_text('DEFAULT_WEIGHT 1\nTestDeleted 99999\n' +
+                                   '\n'.join(f'{n} {c}' for n, c in zip(names, costs)))
+                with patch.dict(os.environ, {'DEFAULT_WEIGHT': '99999'}):
+                    pieces = [runner.select(names, i, weights) for i in (0, 1)]
+                self.assertTrue(all(pieces))
+                self.assertEqual(pieces[0] + pieces[1], names)
+                cut = len(pieces[0])
+                self.assertEqual(max(sum(costs[:cut]), sum(costs[cut:])),
+                                 min(max(sum(costs[:j]), sum(costs[j:]))
+                                     for j in range(1, len(names))))
+            # Weights can be stale or empty. They cannot define coverage or
+            # a different default in one worker's environment.
+            weights.write_text('# no measured source tests\nDEFAULT_WEIGHT 1\nTestDeleted 100\n')
+            self.assertEqual([runner.select(names, i, weights) for i in (0, 1)],
+                             [names[:4], names[4:]])
+
+    def test_unavailable_invalid_or_noncontiguous_selection_cannot_admit_tests(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            weights = Path(temporary) / 'weights'
+            names = ['TestA', 'TestB', 'TestC']
+            with self.assertRaises(subprocess.CalledProcessError):
+                runner.select(names, 0, weights)
+            for bad in ('TestA NaN', 'TestA 0', 'TestA -1', 'broken line extra'):
+                weights.write_text(bad+'\n')
+                with self.assertRaises(subprocess.CalledProcessError):
+                    runner.select(names, 0, weights)
+            for index, selected in ((0, ''), (0, 'TestB\n'), (1, 'TestA\n'),
+                                    (0, 'TestA\nTestA\n'), (1, 'TestB\nTestForeign\n'),
+                                    (0, '\n'.join(names)+'\n')):
+                with patch.object(runner.subprocess, 'run', return_value=
+                                  subprocess.CompletedProcess([], 0, selected, '')):
+                    with self.assertRaises(ValueError):
+                        runner.select(names, index, weights)
+
     def test_slices_are_contiguous_disjoint_exhaustive_and_keep_source_order(self):
         for count in (2, 3, 17, 10000):
             names = [f"TestZ{i}" for i in range(count)]
@@ -86,7 +127,8 @@ if events and '-list' not in args:
 if '-list' not in args and '-json' not in args:
     print('ok ordinary packages 0.01s')
     sys.exit(int(os.environ.get('ORDINARY_EXIT','0')))
-names = ['TestZ', 'TestA', 'FuzzB', 'ExampleC', 'TestLast']
+names = json.loads(os.environ.get('SOURCE_NAMES',
+                    '["TestZ", "TestA", "FuzzB", "ExampleC", "TestLast"]'))
 if '-list' in args:
     if os.environ.get('LISTING_EXIT'):
         print('original listing failure', file=sys.stderr)
@@ -143,7 +185,24 @@ sys.exit(int(os.environ.get('TEST_EXIT','0')))
         result, target = self.execute(MODE="skip")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         sidecar = json.loads((target / "timings.txt.failures.json").read_text())
-        self.assertEqual(sidecar['skipped_top_level_tests']['names'], ['TestA', 'TestZ'])
+        self.assertEqual(sidecar['skipped_top_level_tests']['names'], ['FuzzB', 'TestA', 'TestZ'])
+
+    def test_actual_runner_uses_package_weights_not_their_names_as_an_allowlist(self):
+        for package, weights in runner.WEIGHTS.items():
+            heavy = max((line.split() for line in weights.read_text().splitlines()
+                         if line and not line.startswith(('#', 'DEFAULT_WEIGHT'))),
+                        key=lambda fields: float(fields[1]))[0]
+            names = [heavy] + [f'TestNewUnmeasured{i}' for i in range(6)]
+            pieces = []
+            for index in (0, 1):
+                result, target = self.execute(package, index,
+                                              SOURCE_NAMES=json.dumps(names), DEFAULT_WEIGHT='99999')
+                self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+                pieces.append((target / 'selected.tests').read_text().splitlines())
+                receipt = json.loads((target / 'receipt.json').read_text())
+                self.assertEqual(receipt['listed_roots'], len(names))
+                self.assertEqual(receipt['weights'], str(weights.relative_to(ROOT)))
+            self.assertEqual(pieces, [names[:1], names[1:]])
 
     def test_actual_pipeline_cannot_hide_go_recorder_or_incomplete_coverage_failure(self):
         for options in ({"TEST_EXIT": "9"}, {"LISTING_EXIT": "7"},
@@ -180,6 +239,9 @@ class WorkflowTest(unittest.TestCase):
         root = fixture.root
         for name in ('scripts/release_control/run_go_package_slice.py',
                      'scripts/release_control/run_go_rest_shard.py',
+                     'scripts/release_control/monitoring-test-seconds.txt',
+                     'scripts/release_control/installtests-test-seconds.txt',
+                     '.github/scripts/select-internal-api-shard.sh',
                      '.github/scripts/record-internal-api-test-seconds.py',
                      '.github/scripts/select-go-package-shard.py',
                      '.github/scripts/go-package-test-seconds.txt'):
@@ -282,6 +344,8 @@ class WorkflowTest(unittest.TestCase):
         self.assertTrue(RUNNER.is_relative_to(ROOT / 'scripts/release_control'))
         self.assertTrue(SHARD.is_relative_to(ROOT / 'scripts/release_control'))
         self.assertTrue(Path(__file__).is_relative_to(ROOT / 'scripts/release_control'))
+        self.assertTrue(all(path.is_relative_to(ROOT / 'scripts/release_control')
+                            for path in runner.WEIGHTS.values()))
         self.assertIn('python3 scripts/release_control/run_go_package_slice_test.py', job('backend'))
 
 
