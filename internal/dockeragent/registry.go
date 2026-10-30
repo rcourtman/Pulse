@@ -101,11 +101,20 @@ type cacheEntry struct {
 	comparisonDigests string
 	expiresAt         time.Time
 	err               string // cached error message
+	// Successes remember local images already compared with this tag. Mixed
+	// old/new replicas must share the refreshed result, not invalidate it in turn.
+	observedLocalDigests string
+	refreshAfter         time.Time
+	refreshing           bool
 }
 
 const (
 	// DefaultCacheTTL is the default time-to-live for cached digests.
 	defaultCacheTTL = 6 * time.Hour
+	// A newly observed local image can supersede a success before its TTL.
+	// Bound rapid replacements per reference/platform, not per container.
+	localImageRefreshInterval = time.Minute
+	maxObservedLocalDigests   = 64
 	// ErrorCacheTTL is the TTL for caching errors (shorter to allow retry).
 	errorCacheTTL = 15 * time.Minute
 	// RateLimitCacheTTL is the TTL for rate-limited lookups. Retrying these on
@@ -117,6 +126,8 @@ const (
 	// DefaultCheckInterval is how often to check for updates.
 	defaultCheckInterval = 6 * time.Hour
 )
+
+const imageChangeRefreshPending = "local image changed; registry refresh pending"
 
 // ImageUpdateResult contains the result of an image update check.
 type ImageUpdateResult struct {
@@ -280,7 +291,8 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, goos, variant)
 	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking update (internal)")
 
-	if cached := r.getCached(cacheKey); cached != nil {
+	cached, refresh := r.cachedForLocalImage(cacheKey, currentDigest)
+	if cached != nil && !refresh {
 		r.logger.Debug().Str("image", image).Msg("cache hit for update check")
 		if cached.err != "" {
 			return &ImageUpdateResult{
@@ -334,7 +346,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	// Cache the successful result
-	r.cacheDigestResult(cacheKey, publicLatestDigest, comparisonDigests)
+	r.cacheImageDigestResult(cacheKey, publicLatestDigest, comparisonDigests, currentDigest, cached)
 
 	updateAvailable := r.digestsDiffer(currentDigest, comparisonDigests)
 
@@ -873,6 +885,83 @@ func (r *RegistryChecker) getCached(key string) *cacheEntry {
 		return nil
 	}
 	return &entry
+}
+
+// cachedForLocalImage reserves at most one early refresh when a new local
+// image disagrees with registry evidence collected for an older image. A cache
+// hit alone must never assert that an unseen replacement has a pending update.
+// The reservation and cooldown are shared by all containers on this tag/platform.
+func (r *RegistryChecker) cachedForLocalImage(key, current string) (*cacheEntry, bool) {
+	r.cache.mu.Lock()
+	defer r.cache.mu.Unlock()
+
+	now := time.Now()
+	entry, ok := r.cache.entries[key]
+	if !ok || now.After(entry.expiresAt) {
+		return nil, false
+	}
+	// Local churn must not bypass registry error/rate-limit backoff. A local
+	// digest matching either registry layer already proves it is current.
+	if entry.err != "" {
+		return &entry, false
+	}
+	if !r.digestsDiffer(current, entry.comparisonDigests) ||
+		!r.digestsDiffer(current, entry.observedLocalDigests) {
+		entry.observedLocalDigests = mergeObservedLocalDigests(current, entry.observedLocalDigests)
+		r.cache.entries[key] = entry // Do not slide expiry or the refresh budget.
+		return &entry, false
+	}
+	if entry.refreshing || now.Before(entry.refreshAfter) {
+		// Unknown is not an affirmative clear. Existing alert consumers retain
+		// wanted incidents on errors, and the UI does not offer a false update.
+		return &cacheEntry{err: imageChangeRefreshPending}, false
+	}
+	entry.refreshing = true
+	entry.refreshAfter = now.Add(localImageRefreshInterval)
+	r.cache.entries[key] = entry
+	return &entry, true
+}
+
+// Keep recent local digest identities, not container IDs. Reordering Docker's
+// RepoDigests or reporting the index instead of its platform must not cause
+// another lookup. Bounded history also prevents long-running local churn from
+// retaining every image ever seen; an evicted identity gets the same cooldown.
+func mergeObservedLocalDigests(current, previous string) string {
+	seen := make(map[string]struct{})
+	var digests []string
+	for _, list := range []string{current, previous} {
+		for _, value := range strings.Split(list, ",") {
+			digest := normalizeComparisonDigest(value)
+			if digest == "" {
+				continue
+			}
+			if _, ok := seen[digest]; ok {
+				continue
+			}
+			seen[digest] = struct{}{}
+			digests = append(digests, digest)
+			if len(digests) == maxObservedLocalDigests {
+				return strings.Join(digests, ",")
+			}
+		}
+	}
+	return strings.Join(digests, ",")
+}
+
+func (r *RegistryChecker) cacheImageDigestResult(key, latestDigest, comparisonDigests, current string, previous *cacheEntry) {
+	entry := cacheEntry{
+		latestDigest:         latestDigest,
+		comparisonDigests:    comparisonDigests,
+		expiresAt:            time.Now().Add(defaultCacheTTL),
+		observedLocalDigests: mergeObservedLocalDigests(current, ""),
+	}
+	if previous != nil {
+		entry.observedLocalDigests = mergeObservedLocalDigests(current, previous.observedLocalDigests)
+		entry.refreshAfter = time.Now().Add(localImageRefreshInterval)
+	}
+	r.cache.mu.Lock()
+	defer r.cache.mu.Unlock()
+	r.cache.entries[key] = entry
 }
 
 func (r *RegistryChecker) cacheDigest(key, digest string) {

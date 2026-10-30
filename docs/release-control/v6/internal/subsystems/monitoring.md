@@ -17,6 +17,34 @@
 
 ## Purpose
 
+### Docker image replacements invalidate older tag comparisons
+
+Successful tag/platform results are cached for six hours. If an unseen local
+RepoDigest disagrees with that result, ordinary collection refreshes the registry
+instead of asserting an update against evidence for the previous image (#2048).
+An index or platform match is sufficient and needs no refetch. Old/new replicas
+share the latest comparison and bounded local-digest history (64 digests), not a
+cache per container. Reordering or duplicating RepoDigests does not invalidate it.
+
+The first replacement can refresh immediately; further mismatching unseen local
+images share one refresh per minute per reference/platform, with an in-flight
+reservation. While waiting, the status is unknown (`local image changed; registry
+refresh pending`), with no target digest or false update. It is not an affirmative
+clear: existing update-alert error handling preserves wanted incidents. Registry
+failures keep their existing 15-minute transient / one-hour rate-limit backoff,
+regardless of local churn. Ordinary hits extend neither TTL nor cooldown; expiry
+and explicit ForceCheck retain their normal meanings. Registry authentication,
+redaction, manifest validation and public report shapes are unchanged.
+
+`image_replacement_test.go` carries real collection of both reported reference
+forms through ingestion, wanted-alert evaluation and scoped HTTP resource reads.
+`registry_image_change_test.go` pins rolling replicas, rapid churn, reference/OS/
+architecture/variant isolation, concurrency, error backoff and bounded history.
+The Docker/registry package suites remain controls. Synthetic transport and
+browser fixtures establish the source path, not original installed recovery,
+notification receipt, a release, or resolution of every #2048 symptom.
+
+
 ### Accepted storage listings survive a later child-budget timeout
 
 PVE storage polling commits listings accepted before a later node, content,

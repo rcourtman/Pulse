@@ -6388,6 +6388,7 @@
         "internal/dockeragent/collect.go",
         "internal/dockeragent/container_filesystems.go",
         "internal/dockeragent/docker_client.go",
+        "internal/dockeragent/registry.go",
         "internal/dockeragent/swarm.go",
         "internal/kubernetesagent/agent.go",
         "internal/mock/action_fixtures.go",
@@ -7093,6 +7094,24 @@
               "internal/filesystemprobe/observer_test.go",
               "internal/monitoring/docker_filesystem_evidence_test.go",
               "pkg/agents/filesystem/report_test.go"
+            ]
+          },
+          {
+            "id": "docker-registry-comparison-runtime",
+            "label": "post-replacement registry comparison, bounded refresh and consuming report proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/dockeragent/registry.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/dockeragent/docker_hub_reference_test.go",
+              "internal/dockeragent/image_replacement_test.go",
+              "internal/dockeragent/registry_credentials_test.go",
+              "internal/dockeragent/registry_image_change_test.go",
+              "internal/dockeragent/registry_manifest_test.go",
+              "internal/dockeragent/registry_response_validation_test.go"
             ]
           }
         ],

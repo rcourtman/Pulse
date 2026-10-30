@@ -110,17 +110,19 @@ func TestDockerHubAliasLookupContract(t *testing.T) {
 					if len(requests) != 3 {
 						t.Fatalf("requests = %v, want token, HEAD and GET", requests)
 					}
+					// A different mismatching local image refreshes once; equivalent Hub
+					// aliases for that same image then share the refreshed result.
 					for _, cachedRef := range []string{wantRepo + ":stable", "docker.io/" + wantRepo + ":stable", "index.docker.io/" + wantRepo + ":stable"} {
 						got = checker.CheckImageUpdate(context.Background(), cachedRef, "sha256:old", "amd64", "linux", "")
 						if got == nil || got.Error != "" || !got.UpdateAvailable || got.LatestDigest != indexDigest {
 							t.Fatalf("changed-image cached lookup = %+v", got)
 						}
 					}
-					if len(requests) != 3 {
-						t.Error("equivalent Hub aliases repeated a cached registry lookup")
+					if len(requests) != 6 {
+						t.Error("equivalent Hub aliases did not share one replacement refresh")
 					}
 					got = checker.CheckImageUpdate(context.Background(), ref, "sha256:armv7", "arm", "linux", "v7")
-					if got == nil || got.Error != "" || got.UpdateAvailable || got.LatestDigest != indexDigest || len(requests) != 6 {
+					if got == nil || got.Error != "" || got.UpdateAvailable || got.LatestDigest != indexDigest || len(requests) != 9 {
 						t.Fatalf("ARMv7 lookup did not keep its separate platform cache: %+v", got)
 					}
 				})
