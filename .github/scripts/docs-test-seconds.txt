@@ -1,0 +1,21 @@
+# Documentation suite seconds in complete successful main CI, 2026-10-30.
+# Run 41109701017 at 387249c8ad0ef3562db979cb9819a45d01d3fcfb;
+# jobs 124248628165 / 124248628457 / 124248628657 / 124248628615.
+# Measured between suite headers, including the last suite through Summary.
+# Scheduling hints only: discovery defines coverage, never these names.
+# Suites under 5s and new/unmeasured suites use the measured under-5s mean.
+# Refresh from complete passing docs logs if imbalance returns.
+DEFAULT_WEIGHT 0.539578
+test_admin_docs.py 10.442204
+test_agent_log_docs.py 16.497535
+test_authentication_diagnostic_docs.py 14.153713
+test_docker_troubleshooting_docs.py 15.532539
+test_icmp_privilege_docs.py 8.267716
+test_memory_troubleshooting_docs.py 28.289320
+test_notification_troubleshooting_docs.py 25.115456
+test_performance_troubleshooting_docs.py 92.960586
+test_public_docs_workflow.py 26.553607
+test_server_update_containment_docs.py 6.773839
+test_troubleshooting_logs.py 37.678946
+test_truenas_docs.py 25.534737
+test_vm_disk_diagnostics.py 40.923979

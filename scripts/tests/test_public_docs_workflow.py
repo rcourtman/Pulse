@@ -89,6 +89,7 @@ class PublicDocsWorkflowTest(unittest.TestCase):
             ".github/ISSUE_TEMPLATE/**", ".github/PULL_REQUEST_TEMPLATE.md",
             "scripts/check_public_docs.py", "scripts/check_docs_mirror.py",
             "scripts/readme_entrypoints_test.py", "scripts/tests/**",
+            "scripts/select-smoke-test-shard.py", ".github/scripts/docs-test-seconds.txt",
             "scripts/test-vm-disk.sh", ".github/workflows/public-docs.yml",
         }
         for event in ("pull_request", "push"):
@@ -153,6 +154,11 @@ class PublicDocsWorkflowTest(unittest.TestCase):
             tests.mkdir(parents=True)
             shutil.copyfile(ROOT / "scripts/tests/run.sh", tests / "run.sh")
             (tests / "run.sh").chmod(0o700)
+            shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py",
+                            root / "scripts/select-smoke-test-shard.py")
+            hints = root / ".github/scripts/docs-test-seconds.txt"
+            hints.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / ".github/scripts/docs-test-seconds.txt", hints)
             for name in documentation_suites():
                 status = 1 if name == failing else 0
                 if name.endswith(".sh"):
@@ -174,21 +180,31 @@ class PublicDocsWorkflowTest(unittest.TestCase):
         for shard in range(4):
             result, calls = self.run_adapters(shard)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual(calls, documentation_suites()[shard::4])
+            self.assertTrue(calls)
+            self.assertEqual(calls, sorted(calls))
             self.assertIn(f"Summary: {len(calls)}/{len(calls)} passed", result.stdout)
             seen.extend(calls)
         self.assertEqual(sorted(seen), documentation_suites())
         self.assertEqual(len(seen), len(set(seen)))
 
     def test_each_failed_suite_fails_its_actual_workflow_command(self):
-        for index, failing in enumerate(documentation_suites()):
-            with self.subTest(failing=failing):
-                shard = index % 4
-                result, calls = self.run_adapters(shard, failing)
-                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertEqual(calls, documentation_suites()[shard::4])
-                self.assertIn(f"Summary: {len(calls)-1}/{len(calls)} passed", result.stdout)
-                self.assertIn("Failures: 1", result.stdout)
+        seen = []
+        for shard in range(4):
+            # Observe actual membership, not obsolete filename parity. The
+            # complete-union assertion independently catches missing coverage.
+            selected, names = self.run_adapters(shard)
+            self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
+            self.assertTrue(names)
+            for failing in names:
+                with self.subTest(failing=failing, shard=shard):
+                    result, calls = self.run_adapters(shard, failing)
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(calls, names)
+                    self.assertIn(f"Summary: {len(calls)-1}/{len(calls)} passed", result.stdout)
+                    self.assertIn("Failures: 1", result.stdout)
+                    seen.append(failing)
+        self.assertEqual(sorted(seen), documentation_suites())
+        self.assertEqual(len(seen), len(set(seen)))
 
 
 if __name__ == "__main__":
