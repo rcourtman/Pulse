@@ -1852,6 +1852,23 @@ the whole read with a fixed safe format error; it is never a successful empty
 inventory, a partially filtered list or a truthy health flag. Additional fields
 and unfamiliar status strings remain readable. Native job IDs may repeat across
 independent connections. The parser changes no status or timestamp semantics.
+Replication timestamp presentation separately requires a calendar-valid,
+explicit-zone RFC3339 string or a finite, positive, Date-representable numeric
+instant. It retains existing Unix-second companion precedence and numeric
+seconds/milliseconds compatibility; an invalid nonzero companion is unknown,
+not permission to select a more reassuring fallback. A future last sync is
+unknown rather than a just-now success. Next sync may legitimately be future
+and still turns overdue on the shared clock. Missing/zero values stay distinct
+from malformed chronology: the drawer says no last sync was reported, never
+that a job has not run. Unknown times remain visible in cells and Schedule
+details without removing the job or altering the provider-owned status. Phone
+cells use a compact question mark with a full accessible name/title and the
+same full drawer explanation. Normal-suite `ProxmoxReplicationTable.test.tsx`
+covers supported formats, calendar/timezone/bounds failures, precedence, future
+last-sync rejection and parsed-inventory cell/drawer consumption; its existing
+clock-aging controls remain. Desktop/narrow consuming browser proof inspects
+these states and ordinary read/retry with pixels. This is truthful chronology,
+not original Pending-job, scheduler, guest-thaw or installed recovery.
 First-read failure keeps a direct Replication link on the existing error/Refresh;
 a failed poll keeps prior presence for navigation but the table displays the
 error, not old job health. Only a validated full retry replaces the observation.

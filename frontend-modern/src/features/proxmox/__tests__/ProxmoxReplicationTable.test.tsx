@@ -11,9 +11,13 @@ import {
   compactReplicationNextSyncText,
   fetchReplicationJobs,
   formatMobileReplicationGuestLabel,
+  readReplicationSyncTime,
 } from '../ProxmoxReplicationTable';
 import replicationTableSource from '../ProxmoxReplicationTable.tsx?raw';
-import { ReplicationInventoryFormatError } from '../proxmoxReplicationInventory';
+import {
+  ReplicationInventoryFormatError,
+  parseReplicationInventory,
+} from '../proxmoxReplicationInventory';
 
 // Record drawers link to the object they are about, which needs a router.
 const renderInRouter = (component: () => JSX.Element) =>
@@ -46,6 +50,128 @@ afterEach(() => {
 });
 
 describe('ProxmoxReplicationTable', () => {
+  it.each([
+    ['2026-10-30T10:00:00Z', Date.parse('2026-10-30T10:00:00Z')],
+    ['2026-10-30T11:00:00+01:00', Date.parse('2026-10-30T10:00:00Z')],
+    ['2024-02-29T10:00:00.123456789Z', Date.parse('2024-02-29T10:00:00.123Z')],
+    [1_793_354_400, 1_793_354_400_000],
+    [1_793_354_400_000, 1_793_354_400_000],
+  ])('preserves supported explicit-zone and numeric sync times (%s)', (time, ms) => {
+    expect(readReplicationSyncTime(time, undefined)).toEqual({ state: 'known', ms });
+  });
+
+  it.each([
+    '2026-02-30T10:00:00Z',
+    '2026-10-30T10:00:00',
+    '2026-10-30',
+    'October 30, 2026 10:00:00 GMT',
+    '2026-10-30T24:00:00Z',
+    '2026-10-30T10:00:00+25:00',
+    'unreadable',
+    ' ',
+    -1,
+    NaN,
+    Infinity,
+    8_640_000_000_000_001,
+  ])('keeps unreadable chronology unknown (%s)', (time) => {
+    expect(readReplicationSyncTime(time, undefined)).toEqual({ state: 'invalid' });
+  });
+
+  it('keeps absent/zero fields distinct and retains Unix companion precedence', () => {
+    for (const time of [undefined, '', 0]) {
+      expect(readReplicationSyncTime(time, 0)).toEqual({ state: 'missing' });
+    }
+    expect(readReplicationSyncTime('unreadable', 1_793_354_400)).toEqual({
+      state: 'known',
+      ms: 1_793_354_400_000,
+    });
+    for (const unix of [-1, NaN, Infinity, 8_640_000_000_001]) {
+      expect(readReplicationSyncTime('2026-10-30T10:00:00Z', unix)).toEqual({ state: 'invalid' });
+    }
+    expect(readReplicationSyncTime('2026-10-30T10:00:00Z', 0)).toEqual({
+      state: 'known',
+      ms: 1_793_354_400_000,
+    });
+  });
+
+  it.each(['2026-02-30T10:00:00Z', '2026-10-30T10:00:00', 'unreadable', -1, 8_640_000_000_000_001])(
+    'renders invalid parsed inventory dates as unknown in cells and disclosure (%s)',
+    async (time) => {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-30T11:00:00Z'));
+      const data = [replicationJob({ lastSyncUnix: 0, lastSyncTime: time, nextSyncTime: time })];
+      const jobs = parseReplicationInventory({ data, meta: { total: 1 } });
+      renderInRouter(() => (
+        <ProxmoxReplicationTable
+          jobs={jobs}
+          error={undefined}
+          onRetry={() => undefined}
+          emptyIcon={<span />}
+          emptyTitle="No replication jobs"
+          emptyDescription="Replication jobs appear here."
+        />
+      ));
+      expect(screen.getByLabelText('Last sync time unknown')).toBeInTheDocument();
+      expect(screen.getByLabelText('Next sync time unknown')).toBeInTheDocument();
+      // Chronology does not erase the job or reclassify the provider's status.
+      expect(screen.getByText('100 (web)')).toBeInTheDocument();
+      await fireEvent.click(
+        screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+      );
+      const panel = screen.getByTestId('replication-job-detail');
+      expect(
+        within(panel).getByText('Last sync time unknown · next sync time unknown'),
+      ).toBeInTheDocument();
+      expect(
+        within(panel).queryByText(/Not synced yet|Last synced|overdue|just now/),
+      ).not.toBeInTheDocument();
+      expect(within(panel).getAllByText('Unknown')).toHaveLength(2);
+      expect(within(panel).getByText('Healthy')).toBeInTheDocument();
+    },
+  );
+
+  it('does not turn a future last sync into a just-now success or suppress a valid next sync', async () => {
+    const now = Date.parse('2026-10-30T11:00:00Z');
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    const future = (now + 10 * 60_000) / 1000;
+    const jobs = [replicationJob({ lastSyncUnix: future, nextSyncUnix: future })];
+    renderInRouter(() => (
+      <ProxmoxReplicationTable
+        jobs={jobs}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+    expect(screen.getByLabelText('Last sync time unknown')).toBeInTheDocument();
+    expect(screen.queryByText('just now')).not.toBeInTheDocument();
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+    expect(screen.getByText('Last sync time unknown · next sync in 10m')).toBeInTheDocument();
+  });
+
+  it('describes omitted last-sync evidence as unreported, not as proof a job never ran', async () => {
+    renderInRouter(() => (
+      <ProxmoxReplicationTable
+        jobs={[replicationJob({ lastSyncUnix: 0 })]}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+    const panel = screen.getByTestId('replication-job-detail');
+    expect(within(panel).getByText('No last sync reported')).toBeInTheDocument();
+    expect(within(panel).getByText('Not reported')).toBeInTheDocument();
+    expect(within(panel).queryByText('Not synced yet')).not.toBeInTheDocument();
+  });
+
   it('uses five readable columns and compact time direction across phone widths', () => {
     expect(REPLICATION_MOBILE_COLUMNS).toEqual([
       'guest',

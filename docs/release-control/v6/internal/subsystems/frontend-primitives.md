@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Replication sync chronology stays unknown when unreadable
+
+The existing Replication table and disclosure validate sync instants before
+passing them to shared age formatting or building a countdown. Impossible dates,
+timezone-less strings, out-of-range numbers and future last-sync values do not
+become repaired dates, overdue schedules or just-now successes. Unknown remains
+visible and distinct from unreported/zero values; the latter are not proof that
+a job never ran. Narrow cells use a question mark with a full accessible
+name/title, while Schedule details and the summary retain full wording. The
+existing Unix companion precedence, supported numeric forms, provider status,
+shared aging clock, disclosure controls and read/retry behaviour remain intact.
+`ProxmoxReplicationTable.test.tsx` consumes parsed raw inventory for unknown,
+future, unreported and valid controls; desktop/narrow browser interactions and
+pixel inspection cover the same producer-to-consumer path. This changes no
+shared formatter or primitive and does not establish native job/guest recovery.
+
 ### Withdrawn backup evidence retains keyboard position
 
 When polling removes a focused restore-point disclosure/detail, filtered Coverage
