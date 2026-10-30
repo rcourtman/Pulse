@@ -113,6 +113,8 @@ func newPBSBudgetFixture(t *testing.T, kind, boundary string) *pbsBudgetFixture 
 	if err != nil {
 		t.Fatal(err)
 	}
+	f.m.pbsClients = map[string]*pbs.Client{"pbs-main": f.client}
+	f.m.setRuntimeContext(context.Background(), nil)
 	return f
 }
 
@@ -125,7 +127,7 @@ func (f *pbsBudgetFixture) collect(t *testing.T, ctx context.Context) {
 func (f *pbsBudgetFixture) frame(t *testing.T) map[string]any {
 	t.Helper()
 	return map[string]any{
-		"pbs":      map[string]any{"data": f.m.state.GetSnapshot().PBSBackups},
+		"pbs":      map[string]any{"data": map[string]any{"backups": f.m.state.GetSnapshot().PBSBackups}},
 		"pve":      map[string]any{"data": f.m.state.GetSnapshot().PVEBackups},
 		"postures": map[string]any{"data": f.postures(t), "policy": recovery.DefaultProtectionPosturePolicy.Payload()},
 		"points":   f.points(t, "pbs-main"),
@@ -154,7 +156,13 @@ func exercisePBSBudgetAcceptedListings(t *testing.T) {
 					f.at.Add(15 * 60)
 					f.phase.Store(1)
 					startReads := f.reads.Load()
-					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					owner := f.m.beginPBSBackupPoll("pbs-main", f.client, time.Time{}, time.Now())
+					if owner == nil {
+						t.Fatal("collection owner was not admitted")
+					}
+					defer f.m.finishPBSBackupPoll("pbs-main", owner)
+					parent := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)
+					ctx, cancel := context.WithTimeout(parent, time.Second)
 					defer cancel()
 					f.collect(t, ctx)
 					if ctx.Err() != context.DeadlineExceeded || f.lateReads.Load() != 0 {
