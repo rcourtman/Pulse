@@ -212,7 +212,8 @@ func (rr *ResourceRegistry) dockerHistoryOwnerLocked(ref string) string {
 //   - "agent:<host ID>/storage:<array>" (Unraid array) is the agent source ID
 //     "<host ID>/storage:<array>" of the host's array storage.
 //   - "agent:<host ID>/disk:<mount or device>", ".../disk_temp:<device>",
-//     ".../raid:<device>" and ".../custom:<sensor>" belong to the host.
+//     ".../raid:<device>", ".../custom:<sensor>" and ".../sensor:<hex of a
+//     native sensor ID>" belong to the host.
 //
 // Pool, mount and kernel device labels are names: a device name can belong to
 // a different disk after a reboot, so these never bind a physical disk.
@@ -226,7 +227,7 @@ func historySubResourceOwner(ref string) (ownerRef string, ownerType ResourceTyp
 		switch kind {
 		case "storage":
 			return hostID + "/" + child, ResourceTypeStorage, true
-		case "disk", "disk_temp", "raid", "custom":
+		case "disk", "disk_temp", "raid", "custom", "sensor":
 			return "agent:" + hostID, ResourceTypeAgent, true
 		}
 		return "", "", false

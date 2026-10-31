@@ -75,14 +75,15 @@ type Manager struct {
 	// through evaluateCanonicalLifecycleAlert and the poll-driven recovery
 	// paths (docs/ALERT_ENGINE_EVOLUTION.md, Phase 2). Access under m.mu.
 	core                         *reducer.State
-	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
-	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
-	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
-	hostDiskTempPendingContexts  map[string]hostDiskTempContext  // Only live pending temperature runs; config saves need link/type identity
-	hostSMARTRiskAbsences        map[string]int                  // Consecutive non-empty reports omitting a SMART risk resource
-	hostDiskTempAbsences         map[string]int                  // Track consecutive SMART reports missing a disk that holds temperature alert state
-	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
-	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
+	unifiedIncidentConfirmations map[string]int                     // Track consecutive provider-incident observations before activation
+	unifiedIncidentFirstSeen     map[string]time.Time               // Preserve the first confirmed observation as lifecycle start
+	unifiedIncidentRecoveries    map[string]int                     // Track consecutive healthy observations before provider-incident recovery
+	hostDiskTempPendingContexts  map[string]hostDiskTempContext     // Only live pending temperature runs; config saves need link/type identity
+	hostNativeSensorPendingCtx   map[string]hostNativeSensorContext // Only live pending native sensor runs; config saves need the host's link identity
+	hostSMARTRiskAbsences        map[string]int                     // Consecutive non-empty reports omitting a SMART risk resource
+	hostDiskTempAbsences         map[string]int                     // Track consecutive SMART reports missing a disk that holds temperature alert state
+	dockerRestartTracking        map[string]*dockerRestartRecord    // Track restart counts and times for restart loop detection
+	dockerUpdateFirstSeen        map[string]time.Time               // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
 	dockerUpdateFirstSeenByIdentity map[string]time.Time
 	dockerUpdateLastObserved        map[string]time.Time // Resource and stable identity keys; activity, not pending age.

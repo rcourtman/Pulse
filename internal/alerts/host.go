@@ -179,6 +179,12 @@ func (m *Manager) resolveHostAlertThresholdsNoLock(alert *Alert, resourceID stri
 			thresholds.DiskTemperature = m.lowestHostDiskTemperatureThresholdNoLock(thresholds.DiskTemperature)
 		}
 	}
+	// A native sensor alert is judged by its own override's temperature alone,
+	// as CheckHost judges it, never by the host's or a linked node's CPU
+	// temperature threshold. A removed or disabled override resolves it.
+	if alert != nil && isHostNativeSensorResourceID(resourceID) {
+		thresholds.Temperature = m.hostNativeSensorThresholdNoLock(strings.TrimSpace(resourceID))
+	}
 	// A filesystem alert is judged by the threshold CheckHost evaluates that
 	// filesystem against, so a config save does not resolve an alert its
 	// override or per-type fill threshold still holds. A disabled filesystem
@@ -343,6 +349,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostRAIDAlerts(host.ID)
 		m.clearHostUnraidAlerts(host.ID)
 		m.clearHostCustomSensorAlerts(host.ID)
+		m.clearHostNativeSensorAlerts(host.ID)
 		return
 	}
 
@@ -353,6 +360,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostRAIDAlerts(host.ID)
 		m.clearHostUnraidAlerts(host.ID)
 		m.clearHostCustomSensorAlerts(host.ID)
+		m.clearHostNativeSensorAlerts(host.ID)
 		return
 	}
 
@@ -386,6 +394,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		baseMetadata["tags"] = append([]string(nil), host.Tags...)
 	}
 	m.syncHostCustomSensorAlerts(host, nodeName, instanceName, baseMetadata)
+	m.syncHostNativeSensorAlerts(host, nodeName, instanceName, baseMetadata)
 
 	cpuEvaluated := false
 	if thresholds.CPU != nil {
@@ -815,6 +824,7 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 	m.clearHostRAIDAlerts(host.ID)
 	m.clearHostUnraidAlerts(host.ID)
 	m.clearHostCustomSensorAlerts(host.ID)
+	m.clearHostNativeSensorAlerts(host.ID)
 	// No later report will close the host's pending disk temperature runs or
 	// reset its disk absence counts.
 	m.clearHostDiskTemperatureAlerts(host.ID)
@@ -831,6 +841,7 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 
 	// Expiry interrupts timing, not the separate connectivity confirmation.
 	m.interruptHostDiskTemperatureRuns(host.ID)
+	m.interruptHostNativeSensorRuns(host.ID)
 	m.resetHostSMARTDiskAbsences(host.ID)
 
 	if host.Unraid != nil {
@@ -855,6 +866,7 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 		m.clearHostRAIDAlerts(host.ID)
 		m.clearHostUnraidAlerts(host.ID)
 		m.clearHostCustomSensorAlerts(host.ID)
+		m.clearHostNativeSensorAlerts(host.ID)
 		return
 	}
 	m.clearHostCustomSensorAlerts(host.ID)
@@ -1031,6 +1043,7 @@ func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation
 	diskResourcePrefixes := []string{
 		fmt.Sprintf("%s/disk:", resourceKey),
 		hostDiskTemperatureResourcePrefix(host.ID),
+		hostNativeSensorResourcePrefix(host.ID),
 	}
 	raidAlertPrefix := fmt.Sprintf("host-%s-raid-", host.ID)
 	var alertsToClear []string

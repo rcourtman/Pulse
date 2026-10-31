@@ -416,3 +416,32 @@ func TestGetResourceCurrentState_PresentChildSubjectIsNotRemoved(t *testing.T) {
 		}
 	}
 }
+
+func TestPatrolReviewNeverResolvesNativeSensorAlerts(t *testing.T) {
+	now := time.Now().UTC()
+	ps := NewPatrolService(nil, nil)
+	resolver := &stubAlertResolver{alerts: []AlertInfo{{
+		ID:           "sensor-alert",
+		Type:         "temperature",
+		ResourceID:   "agent:host-1/sensor:6170706c65736d632d6973612d303330302f74656d7031",
+		ResourceType: "agent-sensor",
+		Threshold:    45,
+		Value:        47,
+		StartTime:    now.Add(-2 * time.Hour),
+	}}}
+	ps.alertResolver = resolver
+	provider := &mockPatrolProvider{response: "ALERT 1: RESOLVE: the machine looks cool now"}
+	ps.aiService = &Service{provider: provider, cfg: &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}}
+	snap := newPatrolRuntimeState(models.StateSnapshot{Hosts: []models.Host{{ID: "host-1", Hostname: "macbook-pve", Status: "online"}}})
+
+	resolved := ps.reviewAndResolveAlertsState(context.Background(), snap, true, "")
+	if provider.calls != 1 {
+		t.Fatalf("model review calls = %d, want the alert to reach review so the guard is exercised", provider.calls)
+	}
+	if resolved != 0 || len(resolver.clears) != 0 {
+		t.Fatalf("Patrol resolved a native sensor alert without that sensor's reading: resolved=%d clears=%v", resolved, resolver.clears)
+	}
+	if !isNativeSensorAlertResource(" agent:host-1/sensor:00 ") || isNativeSensorAlertResource("agent:host-1/custom:fan") || isNativeSensorAlertResource("agent:host-1") || isNativeSensorAlertResource("node:sensor:00") {
+		t.Fatal("native sensor alert resource matching is wrong")
+	}
+}

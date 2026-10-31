@@ -132,6 +132,9 @@ func (m *Manager) updateConfigLocked(config AlertConfig) {
 	if m.reevaluateHostDiskTemperaturePendingNoLock() {
 		m.saveActiveAlertsAsync("disk temperature pending policy disabled")
 	}
+	if m.reevaluateHostNativeSensorPendingNoLock() {
+		m.saveActiveAlertsAsync("native sensor pending policy removed")
+	}
 
 	// Re-evaluate active alerts against new thresholds
 	m.reevaluateActiveAlertsLocked()

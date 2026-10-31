@@ -7231,8 +7231,9 @@ owner whose durable ID they carry (`historySubResourceOwner`): ZFS pool and
 device alerts (`<storage ID>/zfs-pool:<pool>[/device:<device>]`) to the
 storage, the Unraid array alert (`agent:<host ID>/storage:unraid-array`) to
 the array storage with that agent source ID, and host filesystem, SMART disk,
-disk temperature, RAID and custom-sensor alerts (`agent:<host ID>/disk:`,
-`/disk_temp:`, `/raid:`, `/custom:`) to the host. The owner reference must
+disk temperature, RAID, custom-sensor and native-sensor alerts
+(`agent:<host ID>/disk:`, `/disk_temp:`, `/raid:`, `/custom:`, `/sensor:`) to
+the host. The owner reference must
 resolve to exactly one resource of the expected type; an ambiguous or
 incompatible owner is a conflict, so the event keeps its own reference,
 follows no retained binding and is retried. Pool, mount and kernel device labels are names,
