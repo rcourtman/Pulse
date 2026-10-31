@@ -32,7 +32,10 @@ The rollup's `jobState` is displayed as Reported outcome, never Job or Collectio
 an inventory observation can supply it, but a newer retained point can also
 supply the outcome beside an older observation's source. Visible wrapping copy
 keeps this evidence distinct from actual task and restore-point states. History,
-access, reported values, protection, dates and policy do not change.
+access, reported values, protection, dates and policy do not change. The shipped
+PBS/PVE comparison guides name the same Source/Reported outcome fields and
+keep successful inventory reads separate from backup-task completion. Rendered
+help tests preserve this distinction and every original-recovery safety limit.
 
 Normal-suite `ProxmoxCoverageTable.test.tsx` covers known/unknown/literal sources,
 all reported outcomes and narrow/wide rendering. `ProxmoxBackupsTable.test.tsx`

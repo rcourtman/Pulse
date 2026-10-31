@@ -403,8 +403,11 @@ backup or working protection from the strip alone.
 Check one affected guest without changing its setup:
 
 1. Open **Proxmox → Backups → Coverage** and expand that guest. Read its
-   protection explanation and the PBS **Job**, **History** and **Access**
-   evidence. Access describes permissions; if provider evidence is absent,
+   protection explanation and the PBS **Source**, **Reported outcome**,
+   **History** and **Access** evidence. Source distinguishes backup inventories
+   from retained points. A successful inventory read is not a successful backup
+   job; the outcome can also include retained-point evidence. Access describes
+   permissions; if provider evidence is absent,
    record that rather than interpreting it as healthy. These are backup
    evidence states, not the PBS host's CPU/metrics History chart.
 2. Compare the listed backup with the existing record in PBS: server,
@@ -417,7 +420,7 @@ Check one affected guest without changing its setup:
    timestamp. A **guest snapshot** is not a PBS backup. Check the existing
    backup task and verification result for that same point in PBS.
 3. If the records still disagree, report the Pulse version, one guest's
-   protection explanation, PBS Job/History/Access values and the matching
+   protection explanation, PBS Source/Reported outcome/History/Access values and the matching
    point's Created time, State and PBS verification result. Use consistent
    placeholders for private server, datastore, namespace and guest identities.
    Do not share tokens, full API responses, HAR exports, or screenshots with secrets.
@@ -431,8 +434,9 @@ its explanation and Provider evidence. A **Kept** point has no reported
 verification result. **Prune protection** is shown separately in the By date
 detail and never replaces a reported **Verified** or **Unverified** state.
 Older Pulse versions may show **Protected** for the prune flag instead. That
-point label alone does not establish verification. **Job OK** is not an
-individual point's verification result. Use the records already available,
+point label alone does not establish verification. **Reported outcome: Success**
+can describe an inventory read, not a backup job or an individual point's
+verification result. Use the records already available,
 without running Diagnostics or another verification just to compare them.
 
 Do not delete backups, clear History, change retention or freshness settings,
