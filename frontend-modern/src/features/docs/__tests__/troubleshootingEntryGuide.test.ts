@@ -91,6 +91,10 @@ describe('troubleshooting workflow entry', () => {
         ['/docs/TROUBLESHOOTING#unraid-reports-missing-disks-in-empty-slots'],
       ],
       [
+        'Dashboard is stuck on “Connecting to Pulse” or stops updating:',
+        ['#health-is-green-but-the-dashboard-is-stalled'],
+      ],
+      [
         'Cannot sign in:',
         [
           '/docs/TROUBLESHOOTING#i-forgot-my-password',

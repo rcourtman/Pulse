@@ -156,7 +156,7 @@ HTTP/error status, not cookies, proxy secrets or a full network export.
 
 ### Other Issues
 
-- **"Connection lost" (Workloads) or "Disconnected", "Reconnecting...", "Sync reconnecting" or "Backend healthy" in the header status badge**: the live data stream is not connected, which can happen when the WebSocket upgrade fails. Check the proxy's `Upgrade` and `Connection` headers.
+- **"Connection lost" (Workloads), "Disconnected", "Reconnecting...", "Sync reconnecting", "Backend healthy" or a stuck "Connecting to Pulse" screen:** separate the WebSocket upgrade from state delivery. If an already-observed upgrade failed through this proxy, check its `Upgrade` and `Connection` forwarding. An HTTP 101 or welcome message without subsequent state is a different failure; changing those headers is not an established remedy. Use the [stalled-dashboard guidance](TROUBLESHOOTING.md#health-is-green-but-the-dashboard-is-stalled), even if `/api/health` returns 200. Keep authentication, TLS and origin checks enabled; do not expose the backend to test a bypass.
 - **502 Bad Gateway**: Check Pulse's actual listener and the proxy's upstream address, port and network reachability; this does not by itself prove Pulse is stopped. Container `localhost` refers to that container, not another service.
 - **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` if needed.
 - **OIDC redirects fail**: Ensure `X-Forwarded-Proto` is set (see above).

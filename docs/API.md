@@ -207,16 +207,37 @@ reports, accept tokens bound to that organization with the listed scope.
 ## 📡 Core Endpoints
 
 ### System Health
-`GET /api/health`
-Check if Pulse is running.
+`GET /api/health` (also accepts `HEAD`)
+
+Public server liveness response: `200` for the handler's healthy condition,
+`503` for its unhealthy condition. A GET response can include:
+
 ```json
 {
   "status": "healthy",
   "timestamp": 1700000000,
   "uptime": 3600,
-  "devModeSSH": false
+  "devModeSSH": false,
+  "dependencies": {
+    "monitor": true,
+    "scheduler": true,
+    "websocket": true
+  }
 }
 ```
+
+**Liveness is not end-to-end readiness.** A `200`, `"status": "healthy"`, or
+true dependency flags do not establish successful authentication, current
+polling, delivery of dashboard state over `/ws`, or notification delivery.
+In particular, `websocket: true` is not proof that a browser received its
+initial state; a successful WebSocket upgrade or welcome message is not that
+proof either. A container health badge based only on this endpoint inherits
+these limits.
+
+If health is green while the dashboard is stuck or stale, use the
+[stalled-dashboard guidance](TROUBLESHOOTING.md#health-is-green-but-the-dashboard-is-stalled).
+Do not add repeated state requests or an automatic restart loop to turn this
+limited check into a readiness test; preserve the original failure evidence.
 
 ### System State
 `GET /api/state`
