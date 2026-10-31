@@ -20,6 +20,24 @@
 
 ## Purpose
 
+### Coverage restore points retain their identifiers without hover
+
+The existing open Coverage evidence rows show each point's full identifier and
+metadata, including an archive's full volume identifier rather than only its
+format/hover title. When the Details column is hidden, those same facts fold
+beside the source. Literal text wraps at every width; it is not interpreted as
+markup. Same-time points remain distinguishable without changing inventory
+identity, preview selection/order/limits, requests, counts, posture or state.
+Ordinary polling updates the same open rows and preserves disclosure focus.
+
+Normal-suite `coverageRestorePointIdentity.test.tsx` consumes parsed PBS/PVE
+inventory with tied dates for all three source kinds, literal markup, long
+volume identifiers, an incomplete point and namesake guests. It covers responsive
+projections and same-panel polling. Desktop/narrow browser proof exercises the
+real Backups consumer with readable, inspected identifier and metadata pixels.
+This is safer evidence inspection, not a restored guest or installed recovery.
+
+
 ### Backup size uncertainty survives responsive disclosure
 
 The Backups consumer uses the existing byte formatter only for a positive

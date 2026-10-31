@@ -878,7 +878,9 @@ describe('ProxmoxBackupsTable', () => {
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
     const peer = screen.getByTestId('proxmox-coverage-detail');
     expect(within(peer).getByText('Restore evidence')).toBeInTheDocument();
-    expect(within(peer).getByText('pre-upgrade')).toBeInTheDocument();
+    expect(peer.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
+      'Metadata: pre-upgrade',
+    );
     expect(within(peer).queryByRole('status')).not.toBeInTheDocument();
     expect(
       screen.queryByText('previously recorded evidence', { exact: false }),
