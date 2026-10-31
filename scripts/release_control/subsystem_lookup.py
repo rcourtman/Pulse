@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import sys
@@ -244,10 +245,22 @@ def compact_lookup_result(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
-    normalized = [normalize_input_path(path) for path in paths if path.strip()]
+@dataclass(frozen=True)
+class _LookupEvidence:
+    rules: list[dict[str, Any]]
+    contract_index: dict[str, dict[str, Any]]
+    shared_ownership_by_path: dict[str, dict[str, Any]]
+    status_report: dict[str, Any]
+
+
+def _load_lookup_evidence() -> _LookupEvidence:
+    """Read fresh evidence for one invocation, never a process-wide cache.
+
+    Keeping ingestion separate lets classification tests share an explicit
+    fixture without replacing the ownership or verification logic they test.
+    Live callers always load again, including after edits and deletions.
+    """
     rules = load_subsystem_rules()
-    rules_by_id = {str(rule["id"]): rule for rule in rules}
     contract_index = load_contract_index()
     registry_payload = load_registry_payload()
     shared_ownership_by_path = {
@@ -256,6 +269,17 @@ def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
         if isinstance(entry, dict) and isinstance(entry.get("path"), str)
     }
     status_report = audit_status_payload(load_status_payload())
+    return _LookupEvidence(rules, contract_index, shared_ownership_by_path, status_report)
+
+
+def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
+    normalized = [normalize_input_path(path) for path in paths if path.strip()]
+    evidence = _load_lookup_evidence()
+    rules = evidence.rules
+    rules_by_id = {str(rule["id"]): rule for rule in rules}
+    contract_index = evidence.contract_index
+    shared_ownership_by_path = evidence.shared_ownership_by_path
+    status_report = evidence.status_report
     impacted = infer_impacted_subsystems(normalized)
     contract_updates = required_contract_updates(normalized, impacted, contract_index=contract_index)
     path_entries: list[dict[str, Any]] = []
