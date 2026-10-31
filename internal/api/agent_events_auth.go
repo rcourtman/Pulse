@@ -24,6 +24,7 @@ func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bo
 	source, tenantInventory := req.Context().Value(tenantTokenSourceContextKey).(tenantTokenSource)
 	tenantInventory = tenantInventory && source.orgID != "" && source.orgID != "default"
 	checker := NewAuthorizationChecker(nil)
+	admittedContext := req.Context()
 
 	return func() bool {
 		if !provided || raw == "" {
@@ -52,7 +53,12 @@ func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bo
 		}
 		// In particular, withdrawing ai:execute must redact the very next
 		// action/approval frame, even though monitoring:read still permits it.
-		attachAPITokenRecord(req, current)
+		// Replace from the admitted context, not the previous refresh: wrapping
+		// req.Context() here would retain every earlier token snapshot for the
+		// lifetime of the stream. Keep its cancellation and other values intact.
+		refreshed := req.WithContext(admittedContext)
+		attachAPITokenRecord(refreshed, current)
+		*req = *refreshed
 		return true
 	}
 }

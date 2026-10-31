@@ -28,6 +28,13 @@ Withdrawing only `ai:execute` keeps the permitted monitoring stream but redacts
 the next approval/action payload using its current scopes. Canonical evidence
 and other subscribers are not rewritten. Session/proxy behaviour is unchanged.
 
+The current disclosure snapshot is replaced over the original admitted context,
+never chained onto prior refreshes. This bounds per-stream retained snapshots
+without caching authority or losing original cancellation, deadline or identity
+context. `TestAgentEventTokenRefreshKeepsBoundedContext` checks repeated real
+approval/action frames with scope withdrawal/restoration and cancellation cleanup;
+the unchanged lifecycle suite retains current tenant-owner and revocation checks.
+
 The normal `agent_events_auth_test.go`, route-inventory persisted-delete test
 and contract disclosure test cover invalidation, independent subscribers and
 the shared SSE-to-MCP consumer through real authenticated HTTP. Connection close

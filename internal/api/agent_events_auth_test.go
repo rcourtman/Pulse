@@ -2,12 +2,14 @@ package api
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +114,137 @@ func newAgentLifecycleRouter(t *testing.T, heartbeat time.Duration) (*Router, *c
 	server := httptest.NewServer(router.Handler())
 	t.Cleanup(server.Close)
 	return router, cfg, server
+}
+
+type agentEventRefreshWriter struct {
+	*httptest.ResponseRecorder
+	afterFlush func()
+}
+
+func (w *agentEventRefreshWriter) Flush() {
+	w.ResponseRecorder.Flush()
+	w.afterFlush()
+}
+
+// Exercise the actual stream's refresh/redaction loop, without timing or heap
+// thresholds. Each flush schedules exactly one next frame on the same goroutine;
+// the last cancels the original context. Inspect only the exported parent field
+// of WithValue's context to prove it cannot retain earlier refresh snapshots.
+func TestAgentEventTokenRefreshKeepsBoundedContext(t *testing.T) {
+	for _, transport := range []string{"header", "bearer"} {
+		t.Run(transport, func(t *testing.T) {
+			const orgID = "refresh-tenant"
+			token := newTokenRecord(t, agentEventLifecycleToken, []string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
+			token.OrgID = orgID
+			cfg := newTestConfigWithTokens(t, token)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			type requestMarker struct{}
+			ctx = context.WithValue(ctx, requestMarker{}, "admitted-value")
+			ctx = context.WithValue(ctx, OrgIDContextKey, orgID)
+			ctx = internalauth.WithUser(ctx, apiTokenAuthenticatedUser(&token))
+			req := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil).WithContext(ctx)
+			if transport == "bearer" {
+				req.Header.Set("Authorization", "Bearer "+agentEventLifecycleToken)
+			} else {
+				req.Header.Set("X-API-Token", agentEventLifecycleToken)
+			}
+			attachAPITokenRecord(req, &token)
+			admittedContext := req.Context()
+			admittedToken := internalauth.GetAPIToken(admittedContext)
+			deadline, _ := admittedContext.Deadline()
+			broadcaster := NewAgentEventBroadcaster()
+			broadcaster.heartbeatInterval = time.Hour
+			router := &Router{config: cfg, agentEventBroadcaster: broadcaster}
+			record := agentDisclosureRecord(t, false)
+			before, err := json.Marshal(record)
+			if err != nil {
+				t.Fatal(err)
+			}
+			const productFrames = 512
+			flushed := 0
+			restricted := false
+			writer := &agentEventRefreshWriter{ResponseRecorder: httptest.NewRecorder()}
+			writer.afterFlush = func() {
+				// WithValue must be one fresh layer over the original context,
+				// never over the layer created by the previous frame/heartbeat.
+				parent := reflect.ValueOf(req.Context()).Elem().FieldByName("Context")
+				if !parent.IsValid() || !parent.CanInterface() || parent.Interface() != admittedContext {
+					t.Fatalf("refresh %d retained a previous token context instead of the admitted context", flushed+1)
+				}
+				if req.Context().Done() != admittedContext.Done() || req.Context().Value(requestMarker{}) != "admitted-value" ||
+					GetOrgID(req.Context()) != orgID || internalauth.GetUser(req.Context()) != apiTokenAuthenticatedUser(&token) {
+					t.Fatal("refresh lost admitted cancellation, request value, organization or principal")
+				}
+				if got, ok := req.Context().Deadline(); !ok || !got.Equal(deadline) {
+					t.Fatal("refresh changed the admitted deadline")
+				}
+				snapshot := getAPITokenRecordFromRequest(req)
+				if snapshot == nil || snapshot.ID != token.ID || snapshot.HasScope(config.ScopeAIExecute) == restricted {
+					t.Fatal("refresh lost admitted identity or current disclosure scopes")
+				}
+				stream := &agentLifecycleStream{reader: bufio.NewReader(strings.NewReader(writer.Body.String()))}
+				event, err := stream.read()
+				if err != nil {
+					t.Fatal(err)
+				}
+				writer.Body.Reset()
+				if flushed == 0 {
+					if event.Kind != AgentEventStreamConnected {
+						t.Fatalf("first frame = %q, want connected", event.Kind)
+					}
+				} else if flushed%2 == 1 {
+					if event.Kind != AgentEventApprovalPending {
+						t.Fatalf("frame = %q, want approval", event.Kind)
+					}
+					var approval AgentEventApprovalPendingPayload
+					body, _ := json.Marshal(event.Payload)
+					if err := json.Unmarshal(body, &approval); err != nil {
+						t.Fatal(err)
+					}
+					if approval.CommandRedacted != restricted || (approval.Command == "") != restricted {
+						t.Fatal("approval did not use current disclosure scopes")
+					}
+				} else {
+					if event.Kind != AgentEventActionCompleted {
+						t.Fatalf("frame = %q, want action", event.Kind)
+					}
+					body, _ := json.Marshal(event)
+					assertAgentDisclosureWire(t, body, restricted)
+				}
+				if flushed == productFrames {
+					cancel()
+					return
+				}
+				// Change scopes before the next pair of approval/action frames.
+				restricted = (flushed/2)%2 == 1
+				config.Mu.Lock()
+				cfg.APITokens[0].Scopes = []string{config.ScopeMonitoringRead}
+				if !restricted {
+					cfg.APITokens[0].Scopes = append(cfg.APITokens[0].Scopes, config.ScopeAIExecute)
+				}
+				config.Mu.Unlock()
+				if flushed%2 == 0 {
+					broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{ApprovalID: "refresh-approval", Command: agentPrivateDetail})
+				} else {
+					broadcaster.PublishActionCompletedRecord(record)
+				}
+				flushed++
+			}
+			router.handleAgentEvents(writer, req)
+			if flushed != productFrames || broadcaster.SubscriberCount() != 0 || req.Context().Err() != context.Canceled {
+				t.Fatalf("stream did not finish all frames and unsubscribe on original cancellation: frames=%d subscribers=%d err=%v", flushed, broadcaster.SubscriberCount(), req.Context().Err())
+			}
+			if !admittedToken.HasScope(config.ScopeAIExecute) {
+				t.Fatal("live refresh mutated the admitted token snapshot")
+			}
+			after, _ := json.Marshal(record)
+			if !bytes.Equal(before, after) {
+				t.Fatal("live redaction changed canonical evidence")
+			}
+			t.Logf("%d product frames: bounded context parent, live approval/action redaction and original cancellation verified", flushed)
+		})
+	}
 }
 
 func TestAgentEventTokenLifecycleRejectsWithdrawnAuthority(t *testing.T) {

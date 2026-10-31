@@ -31,6 +31,13 @@ No error body is appended to SSE and no event kind, route or grant is added;
 reconnects use normal HTTP authentication/scope enforcement. Frames already
 admitted before a concurrent withdrawal may still be in flight.
 
+Refreshing disclosure replaces one context layer rooted at the original admitted
+request; it does not accumulate earlier token snapshots or context ancestors.
+`TestAgentEventTokenRefreshKeepsBoundedContext` checks repeated actual SSE frames,
+live approval/action redaction, preserved context values/deadline and cancellation
+unsubscription for both token headers. Wire payloads and last-use updates are
+unchanged by this bounded-state correction.
+
 `TestAgentEventTokenLifecycleDeleteThroughHTTP` in the route inventory executes
 the actual persisted DELETE and rejects both continued delivery and reconnect.
 `TestAgentEventTokenLifecycleRefreshesDisclosure` in the contract suite checks
