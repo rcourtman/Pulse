@@ -165,7 +165,14 @@ record completion
 
 
 class ServerScriptPublication(unittest.TestCase):
+    def setUp(self):
+        self.fixture_count = 0
+
+    def tearDown(self):
+        print(f"Executed {self.fixture_count} confined fixture(s)")
+
     def exercise(self, fault="", flow="direct", prior=True, existing=True, sidecars=True, target="directory"):
+        self.fixture_count += 1
         with tempfile.TemporaryDirectory(prefix="pulse-script-publication-") as temporary:
             f = Path(temporary)
             install = f / "install"
@@ -197,9 +204,17 @@ class ServerScriptPublication(unittest.TestCase):
             binary.chmod(0o755)
             (install / "bin/pulse").write_bytes(b"old executable")
             (install / "VERSION").write_text("v6.5.0\n")
-            saved = f / "config/.encryption.key"
-            saved.write_bytes(b"synthetic saved key and identity")
-            saved.chmod(0o600)
+            saved_state = {
+                f / "config/.encryption.key": b"synthetic saved key",
+                f / "config/.env": b"PULSE_MOCK_MODE=false\n",
+                f / "config/system.json": b'{"preserve":"configuration"}\n',
+                f / "config/agent-id": b"synthetic saved identity",
+                f / "config.backup.keep/.encryption.key": b"synthetic recovery key",
+            }
+            for path, content in saved_state.items():
+                path.parent.mkdir(exist_ok=True)
+                path.write_bytes(content)
+                path.chmod(0o600)
             with tarfile.open(f / "input.tgz", "w:gz") as archive:
                 for child in (f / "input").iterdir():
                     archive.add(child, arcname=child.name)
@@ -210,8 +225,9 @@ class ServerScriptPublication(unittest.TestCase):
                        PULSE_CONFIG_DIR=str(f / "config"), PULSE_SERVICE_NAME="pulse-script-fixture")
             result = subprocess.run(["bash", "-c", HARNESS], cwd=f, env=env,
                                     text=True, capture_output=True, timeout=15)
-            self.assertEqual(saved.read_bytes(), b"synthetic saved key and identity")
-            self.assertEqual(stat.S_IMODE(saved.stat().st_mode), 0o600)
+            for path, content in saved_state.items():
+                self.assertEqual(path.read_bytes(), content)
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
             self.assertEqual(outside.read_bytes(), b"unrelated file")
             live = install / "scripts"
             contents = {p.name: p.read_bytes() for p in live.iterdir()} if live.is_dir() else {}

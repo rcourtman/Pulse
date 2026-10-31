@@ -43,11 +43,12 @@ a concurrent-writer or power-loss transaction guarantee: there is a short gap
 between the two directory renames while the server is stopped.
 
 Ordinary preparation failures and successful bundle restoration can use only
-the existing prior-active recovery-start path. The server binary has already
-been replaced at this point; a recovery start runs that admitted new binary,
-not the previous binary. Configuration, keys and identity are not restored or
-deleted, and the install still returns failure. Native recovery, sustained
-health, full-runtime rollback and historical stopped updates remain separate.
+the existing prior-active recovery-start path. The binary at the replacement
+destination has already changed; starting the existing unit is not a binary
+rollback or proof of its running executable's identity. Configuration, keys
+and identity are not restored or deleted, and the install still returns failure.
+Native recovery, sustained health, full-runtime rollback and historical stopped
+updates remain separate.
 
 `TestRootInstallAgentScriptPublicationPreservesPreviousBundle` registers the
 ordinary private-file failure/success controls, both real archive/source
