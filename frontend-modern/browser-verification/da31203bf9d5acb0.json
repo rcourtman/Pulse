@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "9a06fd3e83282078ed4270862bb377d9cab52676",
+  "verified_at": "2026-10-31T04:25:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "6698b600bed407e8c91898a635948072fee7b731f6f3ae5d4cc6f11650c9c27b"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Real production app consumes safe raw PVE/PBS inventory for all three source kinds; exact offset/fraction, invalid, future, missing and markup-like reported dates remain inspectable without hover.",
+    "Unknown Created remains unknown; existing unavailable-date/day-filter explanation and source/state/recovery limits remain unchanged.",
+    "Ordinary polling replaces then withdraws the open date, including movement into Unknown date, retaining the same panel and connected owned focus."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch disclosure for six evidence cases, with all 16 captures opened through native view_image and inspected.",
+    "Four polls per viewport each make two ordinary inventory GETs and no mutations: owned focus survives grouping changes and external search focus is not stolen.",
+    "Close returns disclosure focus; namesake points retain their own date and owner link. Day filtering excludes unknown dates; clearing restores all seven points."
+  ],
+  "evidence": {
+    "source_proof_receipt": "source-dt92_xaw",
+    "source": "9a06fd3e83282078ed4270862bb377d9cab52676",
+    "playwright": "1.56.1",
+    "pixel_capture_sha256": {
+      "captures/desktop-exact-pbs.png": "98f7c20c1f4315ba6a870d9e8de3b1b434f86dfdf97580c20eddbfd0b9564714",
+      "captures/desktop-invalid-pbs.png": "78f3249837f15e2f49c209d715e8dd67fe192520cfa85235b1f5fadeb41ec328",
+      "captures/desktop-exact-archive.png": "22839277e2302b71edcc27367cea14ab57bc80978c86c1a99be59606280b6fad",
+      "captures/desktop-future-archive.png": "f483f8e2e0ece82978051e14550b4e5faeda8ca51f209fc92c78f53e3ac583c8",
+      "captures/desktop-missing-snapshot.png": "99f186c122b47f3143aa25f2f45b735c3ef66c1d2c477db85ddc931d52bd1481",
+      "captures/desktop-literal-snapshot.png": "5808bdd35452e3377792abcab6f486a3a24c658a57d51d63c344f26f2dda9643",
+      "captures/desktop-updated-pbs.png": "3fa95aa105211379c818bdca259ebe255051f22fac5253910bc24b0b332434e4",
+      "captures/desktop-withdrawn-pbs.png": "be013659590d0de9c93b1e398603d61c01048a5170c4807d60255d680c974326",
+      "captures/narrow-exact-pbs.png": "872ff5c8e5306d8d666d0a0289bcc09c28523e8e6a0584a5bc1b7410c311aea7",
+      "captures/narrow-invalid-pbs.png": "18f1c6e9756fb47cd1e41e93d567ec8aac08998556745158e19bed0fbb781448",
+      "captures/narrow-exact-archive.png": "ccacbeec11a8f1963eeba3859b4cab4d248d6137cf165c4b057f5d0413a2ca5c",
+      "captures/narrow-future-archive.png": "fa4209c8a777fe9c3e50fc9ba61c8d96a30a71637b1e50652aa23a02c1801600",
+      "captures/narrow-missing-snapshot.png": "a50856ba24517761472a748c0b70e95748c770f479bd5f0d4cda577bdf916573",
+      "captures/narrow-literal-snapshot.png": "b966692851962b9af65fa78dd24f95e0629bfc412c1ac328394a2e739170f7af",
+      "captures/narrow-updated-pbs.png": "39a4b809ab683ae2a0fda6ab7d7950910b9c51b515cadd86a2afc680bd29055a",
+      "captures/narrow-withdrawn-pbs.png": "b803706faebe21b5a0325ead9945ea97824b03a3bd80743717436df43b9ea48d"
+    },
+    "output_receipts": "RECEIPTS.md, BROWSER-BINDING.json, BROWSER-SUMMARY.json and PIXEL-REVIEW.json in the retained Web outcome dossier."
+  }
+}
