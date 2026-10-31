@@ -60,6 +60,7 @@ describe('SecurityAPI', () => {
   });
 
   describe('listTokens', () => {
+    const record = { id: 't1', name: 'Known', prefix: 'pmp_', suffix: '1234', createdAt: '' };
     it('fetches all tokens', async () => {
       const mockTokens: APITokenRecord[] = [
         {
@@ -87,17 +88,22 @@ describe('SecurityAPI', () => {
       expect(result).toEqual([]);
     });
 
-    it.each([
-      null,
-      [],
-      {},
-      { tokens: 'bad' },
-      { tokens: {} },
-      { tokens: [null] },
-      { tokens: [{ id: 't1', scopes: 'monitoring:read' }] },
-      { tokens: [{ id: 't1', scopes: [null] }] },
-      { tokens: [{ id: '' }] },
-    ])('rejects an unreadable inventory instead of inventing absence (%j)', async (response) => {
+    it.each(
+      [
+        null,
+        [],
+        {},
+        { tokens: 'bad' },
+        { tokens: {} },
+        { tokens: [null] },
+        { tokens: [{ ...record, scopes: 'monitoring:read' }] },
+        { tokens: [{ ...record, scopes: [null] }] },
+        { tokens: [{ ...record, scopes: [''] }] },
+        { tokens: [{ ...record, id: '' }] },
+        { tokens: [{ ...record, name: {} }] },
+        { tokens: [record, record] },
+      ].map((response) => ({ response })),
+    )('rejects an unreadable inventory instead of inventing absence (%j)', async ({ response }) => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(response);
       await expect(SecurityAPI.listTokens()).rejects.toThrow('Invalid API token inventory.');
       expect(apiFetchJSON).toHaveBeenCalledTimes(1);
@@ -120,9 +126,9 @@ describe('SecurityAPI', () => {
       await expect(SecurityAPI.listTokens()).rejects.toThrow('Invalid API token inventory.');
     });
 
-    it.each([undefined, null, [], ['*'], ['future:scope']])(
+    it.each([undefined, null, [], ['*'], ['future:scope']].map((scopes) => ({ scopes })))(
       'preserves supported and legacy scopes (%j)',
-      async (scopes) => {
+      async ({ scopes }) => {
         const token = { id: 't1', name: '', prefix: 'pmp_', suffix: '1234', createdAt: '', scopes };
         vi.mocked(apiFetchJSON).mockResolvedValueOnce({ tokens: [token] });
         await expect(SecurityAPI.listTokens()).resolves.toEqual([token]);

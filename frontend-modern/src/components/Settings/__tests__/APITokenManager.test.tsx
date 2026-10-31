@@ -421,6 +421,35 @@ describe('APITokenManager', () => {
     expect(renameTokenMock).not.toHaveBeenCalled();
   });
 
+  it('keeps inventory recovery explicit across repeated failures before accepting empty', async () => {
+    listTokensMock
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockRejectedValueOnce(new Error('still unavailable'))
+      .mockResolvedValueOnce([]);
+    mockResources = [
+      makeResource({
+        platformData: { agent: { agentId: 'agent-1', tokenId: 'unread-token' } },
+      }),
+    ];
+    render(() => <APITokenManager canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry token inventory' }));
+    await screen.findByRole('button', { name: 'Retry token inventory' });
+    expect(listTokensMock).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByText('Unknown')).toHaveLength(3);
+    expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
+    expect(markAgentsTokenRevokedMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry token inventory' }));
+    await screen.findByText(/No tokens yet/);
+    expect(listTokensMock).toHaveBeenCalledTimes(3);
+    expect(screen.getAllByText('0')).toHaveLength(3);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(markAgentsTokenRevokedMock).toHaveBeenCalledWith('unread-token', ['agent-1']);
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(updateTokenScopesMock).not.toHaveBeenCalled();
+    expect(renameTokenMock).not.toHaveBeenCalled();
+  });
+
   it('does not call a partially known inventory complete after creating a token', async () => {
     listTokensMock.mockRejectedValueOnce(new Error('unavailable'));
     render(() => <APITokenManager canManage />);

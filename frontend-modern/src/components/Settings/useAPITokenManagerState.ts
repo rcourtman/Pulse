@@ -73,6 +73,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [tokens, setTokens] = createSignal<APITokenRecord[]>([]);
   const [tokensLoaded, setTokensLoaded] = createSignal(false);
   const [loading, setLoading] = createSignal(true);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [updatingTokenId, setUpdatingTokenId] = createSignal<string | null>(null);
   const [isRenaming, setIsRenaming] = createSignal(false);
@@ -160,17 +161,23 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     if (routeFocusTimer) window.clearTimeout(routeFocusTimer);
   });
 
+  let tokenReadInFlight = false;
   const loadTokens = async () => {
+    if (tokenReadInFlight) return;
+    tokenReadInFlight = true;
     setLoading(true);
     setTokensLoaded(false);
+    setLoadError(null);
     try {
       const list = await SecurityAPI.listTokens();
       setTokens(list);
       setTokensLoaded(true);
     } catch (err) {
+      setLoadError(getAPITokensLoadErrorMessage());
       logger.error('Failed to load API tokens', err);
       notificationStore.error(getAPITokensLoadErrorMessage());
     } finally {
+      tokenReadInFlight = false;
       setLoading(false);
     }
   };
@@ -507,6 +514,9 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     isRenaming,
     isRevealActiveForCurrentToken,
     loading,
+    loadError,
+    loadTokens,
+    tokensLoaded,
     nameInput,
     newMonitoringKioskLink,
     newTokenRecord,

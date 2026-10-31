@@ -21,6 +21,30 @@
 
 ## Purpose
 
+### Token inventory must be read before absence is presented
+
+The API Access consumer distinguishes loading, failed and accepted token
+inventories. Pending reads show nonnumeric loading values; rejected reads keep
+counts and scope posture unknown, with persistent bounded feedback and an
+explicit Retry token inventory action. Only an accepted empty list establishes
+zero visible tokens. Counts describe credentials visible to the account, not
+instance-wide access. Retry invokes only the existing list read, admits one
+consumer request at a time and preserves creation drafts and selected scopes.
+It neither grants write authority nor replays a token mutation.
+
+`SecurityAPI.listTokens` rejects missing, malformed or partially unreadable
+inventories as a whole, including invalid record identities/scopes and duplicate
+IDs. It never drops bad members into a plausible smaller list. Explicit empty
+arrays and legacy nil lists remain empty; absent/nil/empty record scopes retain
+their legacy full-access meaning and unknown string scopes remain visible.
+Unread inventory cannot drive the existing token-absence reconciliation.
+
+Normal-suite `security.test.ts` and `APITokenManager.test.tsx` cover admission,
+loading, denial/failure, repeat retry, accepted empty and populated results,
+draft preservation, partial local creation and unchanged read-only controls.
+Desktop/narrow browser verification exercises the real API Access producer and
+consumer using safe HTTP responses, not a replacement component page.
+
 ### Lazy investigation setup keeps the resolved service scope
 
 The internal `SetupOrchestrator(orgID string)` callback binds only an already

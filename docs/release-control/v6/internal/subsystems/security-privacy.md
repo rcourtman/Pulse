@@ -18,6 +18,30 @@
 
 ## Purpose
 
+### Unread token inventory is not a safe access posture
+
+API Access never claims no credentials or no full-access credentials from a
+pending, denied, failed or malformed inventory read. Counts remain nonnumeric
+until a complete supported response is admitted; inventory totals describe
+only credentials visible to the caller. Malformed members and duplicate IDs
+reject the whole response rather than inventing absence or a smaller inventory.
+Legacy explicit nil lists and missing/nil/empty scope lists retain their existing
+empty-inventory and full-access meanings respectively.
+
+Persistent fixed-text feedback does not render server error bodies. Its explicit
+retry runs the existing read only, one consumer request at a time; it preserves
+token-name/scope drafts and existing read-only write restrictions. Creation of
+one known token does not establish a complete inventory after an unread list.
+Failed reads do not trigger the existing absent-token revocation reconciliation.
+No server authorisation, session, scope, token reveal or mutation rule changes.
+
+Normal-suite `security.test.ts` and `APITokenManager.test.tsx` cover invalid
+envelopes/members/scopes, supported legacy shapes, pending and repeated failed
+reads, explicit empty recovery, draft and authority preservation. Browser proof
+uses safe denied/failed/malformed/populated/empty responses through the real
+Settings consumer at desktop and narrow widths; it is not installed account
+recovery or a claim about the separate private authoriser repair.
+
 ### OIDC retains the bounded JOSE key and token verifier
 
 OIDC discovery, remote JWKS and signed ID tokens use go-oidc's real verifier
