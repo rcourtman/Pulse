@@ -1361,7 +1361,6 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
 			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
 			"m.checkBackupAlerts(ctx)",
-			"m.checkBackupAlerts(context.Background())",
 		},
 		"recovery_rollups.go": {
 			"m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())",
@@ -1393,6 +1392,10 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			}
 		}
 	}
+	// Inventory-readiness scope still owns orphan detection. The old spelling
+	// check also required an unbounded PBS alert read; exercise its actual
+	// expiry/ordinary-recovery behaviour instead of preserving that choice.
+	exercisePBSBudgetExpiredAlertEvaluation(t)
 }
 
 func TestStoragePollingUsesCanonicalPoolMetadataForZFSAttachment(t *testing.T) {

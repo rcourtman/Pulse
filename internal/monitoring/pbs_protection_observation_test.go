@@ -23,6 +23,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
 
+// The ordinary poll must retain accepted scopes after a later child timeout,
+// without renewing unread history or confusing partial collection with safety.
+func TestPBSBudgetPublishesAcceptedListings(t *testing.T) {
+	exercisePBSBudgetAcceptedListings(t)
+}
+
 func TestBuildPBSProtectionProviderObservationMapsEvidenceQuality(t *testing.T) {
 	t.Parallel()
 
@@ -392,6 +398,7 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 		{Name: "pbs-main", Host: server.URL, MonitorDatastores: true, MonitorBackups: true},
 		{Name: "pbs-other", Host: server.URL, MonitorDatastores: true, MonitorBackups: true},
 	}}
+	m.pbsClients = map[string]*pbs.Client{"pbs-main": f.client, "pbs-other": f.client}
 	m.lastPBSBackupPoll = make(map[string]time.Time)
 	m.pollStatusMap = make(map[string]*pollStatus)
 	return f
