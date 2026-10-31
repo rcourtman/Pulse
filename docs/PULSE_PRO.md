@@ -229,7 +229,46 @@ Pulse plan upgrades are activated locally with a license key.
 - Pulse v6 prefers v6 activation keys, but it can migrate valid Pulse v5 Pro or Lifetime JWT-style licenses into the v6 activation model.
 - If a v5 license is already persisted on disk during upgrade and no v6 activation state exists yet, Pulse will try to auto-exchange it on startup.
 - If you are activating manually in v6, paste the v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email. You can also paste a valid v5 Pro or Lifetime license key and Pulse will try to exchange it automatically.
-- If the exchange cannot complete, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key.
+- If activation or migration fails, use the [recovery distinctions below](#activation-succeeds-but-pro-features-are-unavailable) before applying the key again. Self-serve retrieval is for recovering a key, not installing the Pro runtime.
+
+### Activation succeeds but Pro features are unavailable
+
+**An accepted key and an installed Pro runtime are separate requirements.**
+Open **Plans & Billing → Plan** on the intended Pulse instance and organisation.
+Read the current plan, runtime notice and specific error before changing anything:
+
+- **The plan is active, but “Pro runtime missing” or “Pulse Pro runtime required”
+  is shown:** public GitHub archives and the public `rcourtman/pulse` image are
+  Community builds. They can accept a licence, but applying it again does not
+  install the private Pro runtime. Use **Open Pulse Pro downloads**, or open
+  <https://pulserelay.pro/download.html> yourself and enter the existing activation
+  key only in that trusted page. Choose the private image or archive for your
+  deployment; follow [existing-installation preparation](AUTO_UPDATE.md#manual-update-methods)
+  and preserve the configuration, data, keys and service identity. Do not replace
+  an existing private image with the public image or buy another licence to fix
+  this mismatch.
+- **The key is rejected, expired or cannot be verified:** retain the specific
+  message. A key-format error, an unavailable licence service and a build without
+  a validation key need different remedies; none is proof that your purchase is
+  missing. After correcting the named cause, expand **License recovery → Manual
+  key recovery** and use **Apply key** for the intended key correction or
+  supported legacy migration. Do not use **Clear key** as a diagnostic
+  reset, delete licence files or change unrelated authentication settings.
+- **Plan status cannot be loaded:** the read is unavailable, not proof that the
+  licence was removed or the subscription ended. Keep the original error and
+  time rather than repeatedly applying a key, clearing it or starting checkout.
+
+After a deliberate runtime change, check the running edition, loaded plan and
+the particular capability you needed. A successful download, activation banner
+or server restart alone does not establish that the private runtime is running
+or that monitoring recovered. Licence activation does not upgrade installed agents.
+
+Keep activation keys, licence files, account links, session cookies and full
+configuration private. Do not paste them into shell commands, URLs or public
+reports. For a technical report, use the running version, deployment type,
+displayed runtime/plan and locally redacted error; unknown is valid. Use the
+private account/support route for purchase, payment or licence-ownership disputes,
+not a public issue containing account evidence.
 
 ### Feature Status API
 
