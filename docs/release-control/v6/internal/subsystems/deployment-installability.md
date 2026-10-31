@@ -36,6 +36,41 @@ all operations with private text files and inert ownership/lifecycle doubles,
 including every failure boundary and all five callers. It is source-bound
 failure/preservation proof, not native signed upgrade or original recovery.
 
+### Configuration snapshot deletion requires ownership evidence
+
+A directory name, even an exact timestamp-shaped snapshot name, is not deletion
+ownership. Before rotation or pre-mutation discard can remove a completed copy,
+a bounded regular non-symlink `.pulse-snapshot` sidecar must match the format
+version, exact configured source pathname, exact snapshot pathname and current
+directory device/inode. NUL-delimited fields preserve all pathname bytes. A
+missing, malformed, oversized, foreign, symlinked or stale record never admits
+deletion. This is accidental-deletion protection, not defence against a hostile
+privileged writer or a power-loss/concurrent-filesystem transaction guarantee.
+
+Publication prepares the mode-0600 sidecar in the private outer stage, without
+altering or adding files inside the configuration payload. Both final renames
+are non-overwriting and check that their source disappeared. Receipt-preparation
+failure leaves no published copy and never rotates. If receipt publication fails
+after the copy moved, the new unmarked private copy remains, the update fails
+with its location and no rotation, and prior copies/foreign receipts stay intact.
+
+Only recognised copies count toward default, positive and zero retention. Old
+unmarked snapshots are deliberately preserved, not automatically adopted from
+their names; one warning reports the skipped count. This changes the earlier
+legacy-name eligibility choice to prevent deletion of a different live directory
+sharing that prefix. Operators can still inspect/recover older copies privately;
+the ownership record is not restore-readiness or application-consistency proof.
+Successful pruning/discard removes that copy's sidecar too. A replaced directory
+must survive even if its old receipt remains. Existing fallback, privacy, literal
+pathname, clock reversal and explicit backup-failure admission remain in force.
+
+`TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots` registers
+real-file controls for each receipt boundary, unknown/legacy preservation at
+0/1/5 retention, repeated real publications, unchanged copied hidden files,
+late receipt collisions and replaced-directory rotation/discard. The in-app
+installer guide uses the real Markdown renderer and explains disk-space and
+recovery limits without instructing operators to fabricate ownership records.
+
 ### Configuration snapshot rotation stays in its literal instance namespace
 
 The installer's configuration snapshot rotation treats the configured basename
@@ -47,7 +82,8 @@ the C locale. Only immediate real directories qualify: regular files, directory
 symlinks, broken links and absent inventories are not removal candidates.
 
 Default/fixed retention counts, explicit zero retention and preservation of the
-current completed snapshot after a backwards clock step remain unchanged. The
+current completed snapshot after a backwards clock step remain unchanged for
+copies admitted by the ownership receipt above. Unrecognised copies stay put. The
 existing registered `TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots`
 executes the real backup/rotation with literal-name, embedded-newline, foreign
 state, file/link and empty-inventory controls. These private text-file fixtures
@@ -9064,8 +9100,9 @@ Incomplete hidden stages are not retention candidates. After publication,
 rotation still keeps the configured number of snapshots (five by default),
 including the current invocation's completed copy for positive retention counts
 after same-second retries or a backwards clock step. Zero still disables
-completed-snapshot retention. Legacy timestamp-only snapshots remain eligible for
-ordinary rotation, not rewritten or treated as incomplete. The existing
+completed-snapshot retention for recognised copies. Legacy timestamp-only copies
+without ownership receipts stay unchanged and outside the retention count; names
+alone do not establish deletion ownership. The existing
 read-only-parent fallback and disk-headroom admission remain. Discard after a
 pre-mutation staging failure names only this invocation's completed snapshot.
 All three existing-install update/reinstall entries explicitly stop if the
