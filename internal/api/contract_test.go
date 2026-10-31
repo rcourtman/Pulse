@@ -28815,5 +28815,5 @@ func TestContract_AgentRecentChangesRunbookProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertJSONSnapshot(t, got, `{"reason":"Runbook executed (partial)","metadata":{"alert_identifier":"alert-1","runbook_id":"rb-1","outcome":"partial","automatic":false},"commandRedacted":true}`)
+	assertJSONSnapshot(t, got, `{"commandRedacted":true,"metadata":{"alert_identifier":"alert-1","automatic":false,"outcome":"partial","runbook_id":"rb-1"},"reason":"Runbook executed (partial)"}`)
 }
