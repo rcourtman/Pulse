@@ -475,11 +475,9 @@ function CoverageRestorePointDetails(props: { artifact: RecoverableArtifact }) {
       <span class="block" data-coverage-evidence-identifier>
         Identifier: {props.artifact.nativeId}
       </span>
-      <Show when={props.artifact.detailTitle || props.artifact.detail}>
-        <span class="mt-1 block" data-coverage-evidence-metadata>
-          Metadata: {props.artifact.detailTitle || props.artifact.detail}
-        </span>
-      </Show>
+      <span class="mt-1 block" data-coverage-evidence-metadata>
+        Metadata: {props.artifact.detailTitle || props.artifact.detail}
+      </span>
     </div>
   );
 }
@@ -1067,9 +1065,7 @@ export function ProxmoxCoverageTable(props: {
                                                 )
                                               }
                                             >
-                                              <div class="mt-1">
-                                                <CoverageRestorePointDetails artifact={artifact} />
-                                              </div>
+                                              <CoverageRestorePointDetails artifact={artifact} />
                                             </Show>
                                           </TableCell>
                                           <Show
