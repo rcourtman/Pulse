@@ -42,7 +42,9 @@ describe('restore-point size guidance', () => {
     }
     expect(text()).toContain('On a phone, expand the restore-point row');
     expect(text()).toContain('A hidden column is not a missing reading');
-    expect(text()).toContain('Sorting it keeps measured sizes ahead of unknowns in both directions');
+    expect(text()).toContain(
+      'Sorting it keeps measured sizes ahead of unknowns in both directions',
+    );
     expect(text()).toContain("narrow layouts show it alongside the point's identity");
   });
 
