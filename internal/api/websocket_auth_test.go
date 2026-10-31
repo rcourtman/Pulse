@@ -153,8 +153,22 @@ func TestMonitoringWebSocketRejectsWithdrawnTokenAuthority(t *testing.T) {
 					if err != nil {
 						t.Fatalf("new valid identity could not reconnect: %v", err)
 					}
+				} else if change == "org_rebound" {
+					// Without an explicit org header/cookie, normal middleware
+					// resolves the token's newly bound (nonexistent) org before
+					// websocket admission. Preserve that exact existing refusal.
+					if err == nil || resp == nil || resp.StatusCode != http.StatusBadRequest {
+						t.Fatalf("unknown-org reconnect: %v, %v", resp, err)
+					}
+					var denial map[string]any
+					if err := json.NewDecoder(resp.Body).Decode(&denial); err != nil || denial["error"] != "invalid_org" {
+						t.Fatalf("unknown-org reconnect lost its exact refusal: %v, %v", denial, err)
+					}
 				} else if err == nil || resp == nil || (resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden) {
 					t.Fatalf("withdrawn reconnect: %v, %v", resp, err)
+				}
+				if resp != nil && resp.Body != nil {
+					resp.Body.Close()
 				}
 			})
 		}
