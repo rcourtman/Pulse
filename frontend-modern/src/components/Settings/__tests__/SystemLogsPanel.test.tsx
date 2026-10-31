@@ -10,6 +10,7 @@ vi.mock('../useSystemLogsPanelState', () => ({
     logs: () => [],
     level: () => 'info',
     isPaused: () => false,
+    connectionState: () => 'streaming',
     isLoading: () => false,
     maxLogs: 1000,
     clearLogs: vi.fn(),

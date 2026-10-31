@@ -55,6 +55,21 @@ describe('systemLogsPresentation', () => {
     });
   });
 
+  it('gives connection loss precedence over display state without changing Pause/Resume controls', () => {
+    for (const [connection, label] of [
+      ['connecting', 'Connecting'],
+      ['reconnecting', 'Reconnecting'],
+      ['disconnected', 'Disconnected'],
+    ] as const) {
+      for (const paused of [false, true]) {
+        const result = getSystemLogStreamPresentation(paused, connection);
+        expect(result.label).toBe(label + (paused ? ' · paused' : ''));
+        expect(result.indicatorClass).not.toContain('emerald');
+        expect(result.toggleTitle).toBe(paused ? 'Resume Stream' : 'Pause Stream');
+      }
+    }
+  });
+
   it('formats the canonical log buffer summary', () => {
     expect(getSystemLogBufferSummary(24, 500)).toBe('Buffer: 24 / 500 lines');
   });

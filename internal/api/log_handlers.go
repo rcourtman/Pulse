@@ -29,6 +29,20 @@ func NewLogHandlers(cfg *config.Config, persistence *config.ConfigPersistence) *
 
 // HandleStreamLogs streams logs using SSE (Server-Sent Events)
 func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
+	revalidate := tokenStreamSnapshotRevalidator(h.config, r, config.ScopeSettingsRead)
+	allowed := func() bool {
+		if revalidate == nil {
+			// Existing browser-session/proxy admission remains with the route.
+			return true
+		}
+		current, ok := revalidate()
+		return ok && tokenActsForInstance(current)
+	}
+	if !allowed() {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
@@ -45,6 +59,9 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 
 	// Send history first
 	for _, line := range history {
+		if !allowed() {
+			return
+		}
 		if _, err := fmt.Fprintf(w, "data: %s\n\n", line); err != nil {
 			return
 		}
@@ -52,11 +69,22 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	notify := r.Context().Done()
+	// End an idle withdrawn token reader too, without generating log entries,
+	// writing keepalive frames or changing session/proxy stream behaviour.
+	var recheck <-chan time.Time
+	if revalidate != nil {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		recheck = ticker.C
+	}
 
 	for {
 		select {
 		case msg, ok := <-ch:
 			if !ok {
+				return
+			}
+			if !allowed() {
 				return
 			}
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", msg); err != nil {
@@ -65,6 +93,10 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case <-notify:
 			return
+		case <-recheck:
+			if !allowed() {
+				return
+			}
 		}
 	}
 }

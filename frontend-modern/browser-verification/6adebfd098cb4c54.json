@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "a707900690f58373b1f8712077e231fcba043f4b",
+  "verified_at": "2026-10-31T22:08:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
+    "frontend-modern/src/utils/systemLogsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "43418ef0b0a58bc72b85060f9ffc73848d425f5b3575ae98437f338f5334cdad",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts": "386edf20ec884b46c740582c378bf488a654695fe12e319d1becdda7a79c726f",
+    "frontend-modern/src/utils/systemLogsPresentation.ts": "b6a6f04d5b2b1d6b968f423677feb5a586080cc102cced21723fcee58bff5a4d"
+  },
+  "routes": [
+    "Evidence-only / entry mounts the production SystemLogsPanel, state hook, API parser, shared controls and product stylesheet; no fixture route is committed.",
+    "Native EventSource GET /api/logs/stream and GET /api/logs/level use safe local HTTP adapters bound to the registered Go producer."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1050
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "31 browser checks pass with Chromium 141.0.7390.37 and Playwright 1.56.1, matching the integration lock. Four full-page captures opened with native view_image at original detail: desktop light and 320px dark connected/disconnected.",
+    "Connecting, Streaming, Reconnecting after EOF, automatic transient recovery, then Disconnected after the producer-matched 401 reconnect. Paused display remains visibly disconnected; its controls cannot claim reconnection.",
+    "The exact registered Go log route, with persisted HTTP token deletion, emits the admitted synthetic SSE frame, no post-withdrawal bytes, EOF and 401. A separately permitted token receives the later synthetic line. Browser adapters replay these exact observed frames/status, not an actual Go process or installed authority transition.",
+    "Accepted lines stay visible; the deliberate transient reconnect replays existing history and may duplicate a line, as before. No withdrawn line, API mutation, page error or horizontal page overflow. Only the two expected native 401 console errors occur. Browser/server cleanup completes.",
+    "Production frontend built at b732ff2b40ed70add381eda7626041342a77b288 is byte-identical for all changed runtime paths to this receipt parent; a707900690 changes only the existing shell-test fixture. Backend native proof binds that containing source. No private build, installed recovery, session/proxy withdrawal, exploitation census or publication is claimed."
+  ],
+  "interactions": [
+    "Open actual panel while native stream admission is held; confirm Connecting, release native SSE frame and confirm log rendering/Streaming.",
+    "End stream transiently and observe native retry/onopen recovery; then replay native EOF plus denied reconnect and verify truthful terminal status.",
+    "Keep an independently permitted native reader active; verify it receives the producer control frame, not the withdrawn reader.",
+    "Desktop keyboard Enter/Space and narrow touch Pause/Resume/Clear keep display-only semantics and do not change server level, create a replacement source or conceal connection loss. Privacy help remains attached and readable."
+  ]
+}

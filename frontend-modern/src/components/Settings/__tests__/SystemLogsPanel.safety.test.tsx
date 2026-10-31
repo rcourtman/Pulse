@@ -11,6 +11,9 @@ vi.mock('@/stores/notifications', () => ({
 
 class DisplayStream {
   static instances: DisplayStream[] = [];
+  static CLOSED = 2;
+  readyState = 0;
+  onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   close = vi.fn();
@@ -41,6 +44,29 @@ describe('SystemLogsPanel control safety', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('does not call a disconnected or reconnecting native stream Streaming, even when the display is paused', async () => {
+    const { stream } = await mountPanel();
+    expect(screen.getByRole('status')).toHaveTextContent('Connecting');
+    stream.onopen?.();
+    expect(screen.getByRole('status')).toHaveTextContent('Streaming');
+    stream.readyState = 0;
+    stream.onerror?.();
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting');
+    fireEvent.click(screen.getByRole('button', { name: 'Pause Stream' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting · paused');
+    stream.readyState = 2;
+    stream.onerror?.();
+    expect(screen.getByRole('status')).toHaveTextContent('Disconnected · paused');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Streaming');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Log Output' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Disconnected · paused');
+    stream.onopen?.();
+    expect(screen.getByRole('status')).toHaveTextContent('Paused');
+    fireEvent.click(screen.getByRole('button', { name: 'Resume Stream' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Streaming');
+    expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
   });
 
   it('describes the server-wide threshold at the level control without changing it on mount', async () => {

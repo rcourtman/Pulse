@@ -5,6 +5,8 @@ export type SystemLogStreamPresentation = {
   toggleTitle: string;
 };
 
+export type SystemLogConnectionState = 'connecting' | 'streaming' | 'reconnecting' | 'disconnected';
+
 export type SystemLogLevelOption = {
   value: 'debug' | 'info' | 'warn' | 'error';
   label: string;
@@ -64,8 +66,22 @@ export function getSystemLogLineClass(log: string): string {
   return 'text-slate-300';
 }
 
-export function getSystemLogStreamPresentation(paused: boolean): SystemLogStreamPresentation {
-  return paused ? STREAM_PRESENTATION.paused : STREAM_PRESENTATION.live;
+export function getSystemLogStreamPresentation(
+  paused: boolean,
+  connection: SystemLogConnectionState = 'streaming',
+): SystemLogStreamPresentation {
+  const display = paused ? STREAM_PRESENTATION.paused : STREAM_PRESENTATION.live;
+  if (connection === 'streaming') return display;
+  const labels = {
+    connecting: 'Connecting',
+    reconnecting: 'Reconnecting',
+    disconnected: 'Disconnected',
+  };
+  return {
+    ...display,
+    indicatorClass: connection === 'disconnected' ? 'bg-slate-400' : 'bg-amber-400',
+    label: `${labels[connection]}${paused ? ' · paused' : ''}`,
+  };
 }
 
 export function getSystemLogBufferSummary(logCount: number, maxLogs: number): string {

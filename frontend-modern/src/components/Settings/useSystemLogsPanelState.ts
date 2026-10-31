@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import type { SystemLogConnectionState } from '@/utils/systemLogsPresentation';
 
 const MAX_LOGS = 1000;
 
@@ -10,6 +11,8 @@ export function useSystemLogsPanelState() {
   const [isPaused, setIsPaused] = createSignal(false);
   const [level, setLevel] = createSignal('info');
   const [isLoading, setIsLoading] = createSignal(true);
+  const [connectionState, setConnectionState] =
+    createSignal<SystemLogConnectionState>('connecting');
 
   let logContainer: HTMLDivElement | undefined;
   let eventSource: EventSource | null = null;
@@ -69,9 +72,16 @@ export function useSystemLogsPanelState() {
     if (disposed) return;
 
     eventSource = new EventSource('/api/logs/stream');
+    const source = eventSource;
 
-    eventSource.onmessage = (event) => {
-      if (disposed || isPaused()) return;
+    source.onopen = () => {
+      if (!disposed) setConnectionState('streaming');
+    };
+
+    source.onmessage = (event) => {
+      if (disposed) return;
+      setConnectionState('streaming');
+      if (isPaused()) return;
 
       pendingLogs[pendingNext] = event.data;
       pendingNext = (pendingNext + 1) % MAX_LOGS;
@@ -84,9 +94,14 @@ export function useSystemLogsPanelState() {
       }
     };
 
-    eventSource.onerror = () => {
+    source.onerror = () => {
       if (disposed) return;
-      logger.debug('SSE stream disconnected, reconnecting...');
+      // Native EventSource retries transient EOF, but stops after a denied
+      // reconnect. Neither state is evidence of a live stream or its cause.
+      setConnectionState(
+        source.readyState === EventSource.CLOSED ? 'disconnected' : 'reconnecting',
+      );
+      logger.debug('SSE log stream disconnected');
     };
   };
 
@@ -139,6 +154,7 @@ export function useSystemLogsPanelState() {
 
   return {
     clearLogs,
+    connectionState,
     handleDownload,
     handleLevelChange,
     isLoading,
