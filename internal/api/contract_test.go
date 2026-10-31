@@ -23121,13 +23121,9 @@ func TestContract_AgentOperationsLoopStatusEndpointSurfacesStableShape(t *testin
 // poll /api/actions/{id} after every dispatch, defeating the
 // substrate's push-notification guarantee for dispatch certainty.
 func TestContract_ActionCompletedPayloadCarriesVerification(t *testing.T) {
-	source, err := os.ReadFile("agent_events.go")
-	if err != nil {
-		t.Fatalf("read agent_events.go: %v", err)
-	}
-	src := string(source)
-	if !strings.Contains(src, "Verification    *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
-		t.Error("AgentEventActionCompletedPayload must carry Verification as a *AgentResourceActionVerification — agents close the certainty loop on this field")
+	field, ok := reflect.TypeOf(AgentEventActionCompletedPayload{}).FieldByName("Verification")
+	if !ok || field.Type != reflect.TypeOf((*AgentResourceActionVerification)(nil)) || field.Tag.Get("json") != "verification,omitempty" {
+		t.Error("AgentEventActionCompletedPayload must carry optional pointer verification with its stable JSON name — agents close the certainty loop on this field")
 	}
 }
 
@@ -23165,8 +23161,9 @@ func TestContract_AgentResourceActionSummaryCarriesVerification(t *testing.T) {
 		t.Fatalf("read agent_resource_context.go: %v", err)
 	}
 	src := string(source)
-	if !strings.Contains(src, "Verification    *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
-		t.Error("AgentResourceActionSummary must carry Verification so the bundle's recent-actions and the action.completed SSE payload speak the same vocabulary")
+	field, ok := reflect.TypeOf(AgentResourceActionSummary{}).FieldByName("Verification")
+	if !ok || field.Type != reflect.TypeOf((*AgentResourceActionVerification)(nil)) || field.Tag.Get("json") != "verification,omitempty" {
+		t.Error("AgentResourceActionSummary must carry the same optional pointer verification and JSON name as the action.completed SSE payload")
 	}
 	if !strings.Contains(src, "func projectAgentResourceVerification(v *unified.ActionVerificationResult)") {
 		t.Error("projectAgentResourceVerification must exist as the shared helper — both the SSE bridge and the bundle's projector route through it so the wire shape cannot drift between surfaces")
