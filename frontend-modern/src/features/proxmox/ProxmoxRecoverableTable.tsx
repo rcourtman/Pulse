@@ -154,6 +154,7 @@ const artifactEvidenceLimit = (artifact: RecoverableArtifact): string => {
 // repository identity must also be readable before choosing a point on a phone.
 const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSection[] => {
   const source = getProxmoxBackupSourcePresentation(artifact.sourceKind);
+  const hasSize = artifact.size && artifact.size > 0;
   return compactDetailSections([
     {
       label: 'Restore point',
@@ -166,16 +167,17 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.created, artifactCreatedLabel(artifact), {
           tone: artifact.createdMs === undefined ? 'warning' : undefined,
         }),
+        // Keep the provider's exact value beside its interpretation. Formatting
+        // loses subsecond precision/offsets; Unknown otherwise hides bad dates.
+        makeDetailRow('Reported date', artifact.createdAt || 'Not reported', { wrap: true }),
         makeDetailRow(
           'Size',
-          artifact.size && artifact.size > 0
-            ? formatPlatformTableBytesValue(artifact.size)
-            : 'Unknown size',
-          { tone: artifact.size && artifact.size > 0 ? undefined : 'muted' },
+          hasSize ? formatPlatformTableBytesValue(artifact.size) : 'Unknown size',
+          { tone: hasSize ? undefined : 'muted' },
         ),
       ]),
       footerContent: (
-        <Show when={!(artifact.size && artifact.size > 0)}>
+        <Show when={!hasSize}>
           <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
             No usable size was reported. Unknown does not mean this restore point is empty.
           </p>
@@ -267,6 +269,7 @@ export function ProxmoxRecoverableTable(props: {
   /** Register focus retention with each row/detail's own cleanup owner. */
   retainInspectionFocus?: (content: HTMLElement) => void;
 }) {
+  let table: HTMLDivElement | undefined;
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
     const width = props.layoutWidth?.() ?? observedWidth.width();
@@ -280,6 +283,15 @@ export function ProxmoxRecoverableTable(props: {
     visibleColumns().some((candidate) => candidate.id === column);
   const showDayGroups = () => props.groupByDay && props.sortKey() === 'created';
   const tableItems = createMemo<RecoverableTableItem[]>(() => {
+    // Moving a retained keyed row between date groups can blur its control in
+    // real browsers. Restore only owned, still-mounted focus lost by this move.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && table?.contains(active)) {
+      queueMicrotask(() => {
+        if (active.isConnected && document.activeElement === document.body)
+          active.focus({ preventScroll: true });
+      });
+    }
     if (!showDayGroups()) {
       return props.artifacts.map((item) => ({
         kind: 'artifact',
@@ -457,7 +469,10 @@ export function ProxmoxRecoverableTable(props: {
       }
     >
       <div
-        ref={observedWidth.setElement}
+        ref={(element) => {
+          table = element;
+          observedWidth.setElement(element);
+        }}
         data-proxmox-backups-table="recoverable"
         data-proxmox-backups-layout={layoutMode()}
       >
