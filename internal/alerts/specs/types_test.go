@@ -338,6 +338,27 @@ func TestResourceAlertSpecValidateAllowsAgentDiskMigrationBridgeType(t *testing.
 	}
 }
 
+func TestResourceAlertSpecValidateAllowsAgentSensorMigrationBridgeType(t *testing.T) {
+	t.Parallel()
+
+	spec := ResourceAlertSpec{
+		ID:           "agent:host1/sensor:6170706c65736d632d6973612d303330302f74656d7031::metric-threshold:temperature",
+		ResourceID:   "agent:host1/sensor:6170706c65736d632d6973612d303330302f74656d7031",
+		ResourceType: unifiedresources.ResourceType("agent-sensor"),
+		Kind:         AlertSpecKindMetricThreshold,
+		Severity:     AlertSeverityWarning,
+		MetricThreshold: &MetricThresholdSpec{
+			Metric:    "temperature",
+			Direction: ThresholdDirectionAbove,
+			Trigger:   45,
+		},
+	}
+
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestResourceAlertSpecValidateAllowsDockerHostMigrationBridgeType(t *testing.T) {
 	t.Parallel()
 

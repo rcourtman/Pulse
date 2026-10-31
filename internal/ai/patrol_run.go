@@ -2924,6 +2924,13 @@ func (p *PatrolService) reviewAlertBatchState(ctx context.Context, batch []Alert
 	// guest measurement. Missing/stale/cache-inclusive memory cannot prove a
 	// memory alert recovered, even if the model asks to resolve it.
 	for i, alert := range batch {
+		// The snapshot carries no native sensor readings, so nothing in it
+		// can show that one sensor's temperature recovered.
+		if isNativeSensorAlertResource(alert.ResourceID) {
+			verdicts[i].resolve = false
+			verdicts[i].reason = ""
+			continue
+		}
 		if alert.Type != "memory" {
 			continue
 		}
@@ -2935,6 +2942,17 @@ func (p *PatrolService) reviewAlertBatchState(ctx context.Context, batch []Alert
 	}
 
 	return verdicts
+}
+
+// isNativeSensorAlertResource reports whether an alert names one native
+// sensor of a host agent ("agent:<host>/sensor:<hex>").
+func isNativeSensorAlertResource(resourceID string) bool {
+	rest, ok := strings.CutPrefix(strings.TrimSpace(resourceID), "agent:")
+	if !ok {
+		return false
+	}
+	_, child, ok := strings.Cut(rest, "/")
+	return ok && strings.HasPrefix(child, "sensor:")
 }
 
 // buildAlertReviewPromptState formats the batched alert-review prompt: one

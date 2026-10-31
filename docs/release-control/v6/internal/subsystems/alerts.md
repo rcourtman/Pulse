@@ -1669,6 +1669,66 @@ type, severity and metric fields. Presentation must advertise the backend-owned
 template data rather than asking operators to parse the English alert message
 or reach into metadata for canonical alert identity.
 
+### Native sensor temperatures alert only on their own threshold
+
+A host agent's native lm-sensors temperature (`HostSensorSummary.Native`, kind
+`temperature`) raises an alert only when its own override sets a threshold:
+`AlertConfig.Overrides["agent:<host ID>/sensor:<hex>"].Temperature`, where
+`<hex>` is the lower-case hex of the sensor ID's UTF-8 bytes
+(`HostNativeSensorResourceID`), so IDs that differ only by case or
+punctuation stay apart after the lower-casing host child IDs and metric names
+receive. A sensor has no default and never inherits the host's, a linked
+node's or a guest's CPU `Temperature`; a missing, disabled or zero override
+raises nothing. The alert uses the canonical metric path with metric
+`temperature` and spec resource type `agent-sensor` (a migration bridge type
+in spec validation), so its ID is
+`agent:<host>/sensor:<hex>::metric-threshold:temperature`, it inherits the
+temperature stability delay, critical escalation and performance quiet-hours
+category, and its message names the sensor's label. Fan inputs raise nothing.
+
+The spec resource type is also the runtime classification, so
+`agent-sensor` delay and intent rules apply on top of the agent ones.
+
+An invalid reading, a reading without a value, a configured sensor missing
+from the report, an empty inventory and telemetry expiry interrupt the run and
+hold a firing alert: the inventory carries no completeness state, so absence is
+not evidence of removal. The hold is not indefinite: like any alert, one with
+no observation for 24 hours is auto-resolved by the stale sweep as no longer
+monitored, and retention cleanup applies as usual. Removing, disabling or
+zeroing the override, switching off the host's or all agents' alerting, and
+removing the host resolve it and drop its pending run; cleanup walks active,
+reducer-pending and intent-pending state as well as configured overrides, so
+removing an override still reaches its run. A confirmed offline host clears
+the alert with its other child alerts. A configuration save re-judges a firing
+sensor alert by its own override only, and interrupts a pending run when the
+save switched off its threshold, its host (directly or through an inherited
+linked-resource override), all agents or global alerting, using the host link
+identity recorded with the run; a run without that identity is interrupted.
+A re-enabled threshold therefore cannot reuse earlier grace. In `CheckHost`,
+global alerts-off returns early without clearing, as for the other host
+children; telemetry expiry with alerting off clears them. Clearing all active
+alerts also drops native sensor pending runs and their recorded identity, and
+the stale-map sweep drops identity whose run is no longer pending. As for every
+host metric, `CheckHost` reads policy at the start of a report (the sensor's
+own threshold separately from the host gates, delay and intent policy during
+evaluation), so a report in flight during a save can act on the old policy.
+The next report corrects a sensor threshold or host gate; if the save turned
+global alerting off, `CheckHost` returns early and the stale-policy alert
+remains until alerting is on again or the stale sweep resolves it. Overrides are
+keyed by the reporting host ID and are not migrated when a host's identity is
+healed to a new ID, as for agent filesystem overrides; the threshold must be
+set again. The alert belongs to the host for history; operator intent, like
+the other host child alerts, still resolves under the child ID. Tests in
+`internal/alerts/operational_contract_test.go`
+(`TestHostNativeSensorResourceIDIsCollisionFree`,
+`TestHostNativeSensorThresholdRaisesOnlyFromItsOwnOverride`,
+`TestHostNativeSensorGapsHoldAndPolicyResolves`,
+`TestHostNativeSensorConfigSaveKeepsAlertItsOverrideStillHolds`,
+`TestHostNativeSensorPendingRunRestartsAfterPolicyOff`,
+`TestHostNativeSensorUsesSensorDelayPolicy`) and
+`TestResourceAlertSpecValidateAllowsAgentSensorMigrationBridgeType` pin this.
+No Thresholds UI writes these overrides yet.
+
 ### Agent custom sensors use canonical health-assessment alerts
 
 Typed `HostSensorSummary.Custom` numeric, boolean, or timestamp readings with

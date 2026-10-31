@@ -513,14 +513,15 @@ func TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences(t *testing.T
 	require.NotEmpty(t, diskID)
 
 	bound := map[string]string{
-		"lab-pve1-local-zfs/zfs-pool:local-zfs":             storageID,
-		"lab-pve1-local-zfs/zfs-pool:local-zfs/device:sda2": storageID,
-		"agent:host-pve1/disk:var":                          nodeID,
-		"agent:host-pve1/disk:sda":                          nodeID,
-		"agent:host-pve1/disk_temp:sda":                     nodeID,
-		"agent:host-pve1/raid:md0":                          nodeID,
-		"agent:host-pve1/custom:fan1":                       nodeID,
-		"agent:host-nas/storage:unraid-array":               unraidID,
+		"lab-pve1-local-zfs/zfs-pool:local-zfs":                                 storageID,
+		"lab-pve1-local-zfs/zfs-pool:local-zfs/device:sda2":                     storageID,
+		"agent:host-pve1/disk:var":                                              nodeID,
+		"agent:host-pve1/disk:sda":                                              nodeID,
+		"agent:host-pve1/disk_temp:sda":                                         nodeID,
+		"agent:host-pve1/raid:md0":                                              nodeID,
+		"agent:host-pve1/custom:fan1":                                           nodeID,
+		"agent:host-pve1/sensor:6170706c65736d632d6973612d303330302f74656d7031": nodeID,
+		"agent:host-nas/storage:unraid-array":                                   unraidID,
 	}
 	unbound := []string{
 		"lab-pve1/zfs-pool:local-zfs",  // the owner part names a node, not a storage
@@ -528,6 +529,7 @@ func TestHistoryIdentityMonitorAdapterResolvesSubResourceReferences(t *testing.T
 		"agent:pve1/disk:var",          // a hostname, not the host ID
 		"agent:host-pve1/service:sshd", // not a sub-resource shape any producer emits
 		"agent:host-pve1/disk:",
+		"agent:host-pve1/sensor:",
 	}
 	refs := append([]string{}, unbound...)
 	for ref := range bound {
@@ -975,8 +977,9 @@ func TestAlertResourceReferenceMarksComponentOwners(t *testing.T) {
 		"agent:host-src-1/disk_temp:sda":            true,
 		"agent:host-src-1/raid:md0":                 true,
 		"agent:host-src-1/custom:fan":               true,
-		"docker:dh-7f3a":                            false,
-		"docker:dh-7f3a/" + container:               false,
+		"agent:host-src-1/sensor:636f726574656d702d6973612d303030302f74656d7031": true,
+		"docker:dh-7f3a":              false,
+		"docker:dh-7f3a/" + container: false,
 	} {
 		binding, claimed := registry.ResolveAlertResourceReference(ref)
 		require.True(t, claimed, ref)

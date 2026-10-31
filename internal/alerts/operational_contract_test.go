@@ -1076,3 +1076,250 @@ func TestHistoryOutputKeepsTheRecordAndOnlyTheNewestEvidence(t *testing.T) {
 		t.Fatalf("shaping history output changed its input alert to %d envelopes", len(alert.Evidence))
 	}
 }
+
+func nativeSensorManager(t *testing.T) *Manager {
+	t.Helper()
+	m, _ := continuityManager(t, false)
+	m.mu.Lock()
+	m.config.MetricTimeThresholds = map[string]map[string]int{"all": {"temperature": 0}}
+	m.mu.Unlock()
+	return m
+}
+
+func nativeSensorHost(value *float64, status string) models.Host {
+	return models.Host{ID: "host-mbp", Hostname: "macbook-pve", Status: "online", LinkedNodeID: "node-mbp",
+		Sensors: models.HostSensorSummary{Native: []models.HostNativeSensor{
+			{ID: "applesmc-isa-0300/temp1", Chip: "applesmc-isa-0300", Channel: "temp1", Label: "TB0T", Kind: "temperature", Unit: "celsius", Value: value, Status: status},
+			// Differs from TB0T's ID only by case after the channel; must stay its own resource.
+			{ID: "applesmc-isa-0300/temp2", Chip: "applesmc-isa-0300", Channel: "temp2", Label: "TC1f", Kind: "temperature", Unit: "celsius", Value: value, Status: status},
+		}}}
+}
+
+func nativeSensorAlerts(m *Manager) []Alert {
+	var out []Alert
+	for _, alert := range m.GetActiveAlerts() {
+		if isHostNativeSensorResourceID(alert.ResourceID) {
+			out = append(out, alert)
+		}
+	}
+	return out
+}
+
+func TestHostNativeSensorResourceIDIsCollisionFree(t *testing.T) {
+	// Lower-case hex of the UTF-8 bytes: case, punctuation and non-ASCII
+	// differences survive, and the key carries no '/' or ':'.
+	for sensorID, want := range map[string]string{
+		"applesmc-isa-0300/temp1": "agent:h/sensor:6170706c65736d632d6973612d303330302f74656d7031",
+		"A/temp1":                 "agent:h/sensor:412f74656d7031",
+		"a/temp1":                 "agent:h/sensor:612f74656d7031",
+		"é/temp1":                 "agent:h/sensor:c3a92f74656d7031",
+	} {
+		if got := HostNativeSensorResourceID("h", sensorID); got != want {
+			t.Errorf("HostNativeSensorResourceID(%q) = %q, want %q", sensorID, got, want)
+		}
+	}
+	if !isHostNativeSensorResourceID("agent:h/sensor:00") || isHostNativeSensorResourceID("agent:h/custom:fan") || isHostNativeSensorResourceID("agent:h") {
+		t.Fatal("native sensor resource ID classification is wrong")
+	}
+}
+
+func TestHostNativeSensorThresholdRaisesOnlyFromItsOwnOverride(t *testing.T) {
+	m := nativeSensorManager(t)
+	hot := 47.0
+	host := nativeSensorHost(&hot, "ok")
+	battery := HostNativeSensorResourceID(host.ID, "applesmc-isa-0300/temp1")
+
+	// No override: no default, and neither the host's nor the linked node's
+	// CPU temperature threshold is inherited.
+	m.mu.Lock()
+	m.config.AgentDefaults.Temperature = &HysteresisThreshold{Trigger: 30, Clear: 25}
+	m.config.Overrides[host.LinkedNodeID] = ThresholdConfig{Temperature: &HysteresisThreshold{Trigger: 30, Clear: 25}}
+	m.mu.Unlock()
+	m.CheckHost(host)
+	if alerts := nativeSensorAlerts(m); len(alerts) != 0 {
+		t.Fatalf("sensor without its own override raised %+v", alerts)
+	}
+
+	m.mu.Lock()
+	m.config.Overrides[battery] = ThresholdConfig{Temperature: &HysteresisThreshold{Trigger: 45, Clear: 40}}
+	m.mu.Unlock()
+	m.CheckHost(host)
+	alerts := nativeSensorAlerts(m)
+	if len(alerts) != 1 {
+		t.Fatalf("battery override raised %d sensor alerts, want exactly the battery's", len(alerts))
+	}
+	alert := alerts[0]
+	if alert.ResourceID != battery || alert.Type != "temperature" || alert.ID != battery+"::metric-threshold:temperature" ||
+		alert.Value != hot || alert.Threshold != 45 || alert.ResourceName != "macbook-pve (Host Agent) (TB0T)" ||
+		alert.Message != "TB0T temperature at 47.0°C" {
+		t.Fatalf("battery alert = %+v", alert)
+	}
+	if alert.Metadata["sensorId"] != "applesmc-isa-0300/temp1" || alert.Metadata["sensorLabel"] != "TB0T" || alert.Metadata["resourceType"] != "agent-sensor" {
+		t.Fatalf("battery alert metadata = %+v", alert.Metadata)
+	}
+
+	cool := 38.0
+	m.CheckHost(nativeSensorHost(&cool, "ok"))
+	if alerts := nativeSensorAlerts(m); len(alerts) != 0 {
+		t.Fatalf("reading below the clear value kept %+v", alerts)
+	}
+}
+
+func TestHostNativeSensorGapsHoldAndPolicyResolves(t *testing.T) {
+	hot := 47.0
+	for _, gap := range []string{"invalid", "no-value", "missing", "empty-inventory", "expired"} {
+		for _, policy := range []string{"override-removed", "override-disabled", "override-zero", "config-save", "host-disabled", "agents-disabled", "host-removed"} {
+			t.Run(gap+"/"+policy, func(t *testing.T) {
+				m := nativeSensorManager(t)
+				host := nativeSensorHost(&hot, "ok")
+				battery := HostNativeSensorResourceID(host.ID, "applesmc-isa-0300/temp1")
+				m.mu.Lock()
+				m.config.Overrides[battery] = ThresholdConfig{Temperature: &HysteresisThreshold{Trigger: 45, Clear: 40}}
+				m.mu.Unlock()
+				m.CheckHost(host)
+				if len(nativeSensorAlerts(m)) != 1 {
+					t.Fatal("control must fire")
+				}
+
+				gapped := nativeSensorHost(&hot, "ok")
+				switch gap {
+				case "invalid":
+					unattached := -127.0
+					gapped = nativeSensorHost(&unattached, "invalid")
+				case "no-value":
+					gapped = nativeSensorHost(nil, "invalid")
+				case "missing":
+					gapped.Sensors.Native = gapped.Sensors.Native[1:]
+				case "empty-inventory":
+					gapped.Sensors.Native = nil
+				}
+				if gap == "expired" {
+					m.HandleHostTelemetryExpired(host)
+				} else {
+					m.CheckHost(gapped)
+				}
+				if alerts := nativeSensorAlerts(m); len(alerts) != 1 || alerts[0].ResourceID != battery {
+					t.Fatalf("a %s reading resolved or duplicated the held alert: %+v", gap, alerts)
+				}
+
+				switch policy {
+				case "config-save":
+					cfg := m.GetConfig()
+					delete(cfg.Overrides, battery)
+					m.UpdateConfig(cfg)
+				case "host-removed":
+					m.HandleHostRemoved(gapped)
+				default:
+					m.mu.Lock()
+					switch policy {
+					case "override-removed":
+						delete(m.config.Overrides, battery)
+					case "override-disabled":
+						m.config.Overrides[battery] = ThresholdConfig{Disabled: true, Temperature: &HysteresisThreshold{Trigger: 45, Clear: 40}}
+					case "override-zero":
+						m.config.Overrides[battery] = ThresholdConfig{Temperature: &HysteresisThreshold{}}
+					case "host-disabled":
+						m.config.Overrides[host.ID] = ThresholdConfig{Disabled: true}
+					case "agents-disabled":
+						m.config.DisableAllAgents = true
+					}
+					m.mu.Unlock()
+					m.CheckHost(gapped)
+				}
+				if alerts := nativeSensorAlerts(m); len(alerts) != 0 {
+					t.Fatalf("%s left %+v", policy, alerts)
+				}
+			})
+		}
+	}
+}
+
+func TestHostNativeSensorConfigSaveKeepsAlertItsOverrideStillHolds(t *testing.T) {
+	m := nativeSensorManager(t)
+	hot := 47.0
+	host := nativeSensorHost(&hot, "ok")
+	battery := HostNativeSensorResourceID(host.ID, "applesmc-isa-0300/temp1")
+	m.mu.Lock()
+	m.config.Overrides[battery] = ThresholdConfig{Temperature: &HysteresisThreshold{Trigger: 45, Clear: 40}}
+	m.mu.Unlock()
+	m.CheckHost(host)
+	// Any save re-judges active alerts. The host has no CPU temperature
+	// threshold, so a resolver that read the host's would resolve this.
+	cfg := m.GetConfig()
+	cfg.AgentDefaults.Temperature = nil
+	m.UpdateConfig(cfg)
+	if alerts := nativeSensorAlerts(m); len(alerts) != 1 {
+		t.Fatalf("config save resolved a sensor alert its own override still holds: %+v", alerts)
+	}
+	if got := m.GetConfig().Overrides[battery].Temperature; got == nil || got.Trigger != 45 {
+		t.Fatalf("saved sensor override = %+v, want trigger 45 preserved", got)
+	}
+}
+
+func TestHostNativeSensorPendingRunRestartsAfterPolicyOff(t *testing.T) {
+	for _, policy := range []string{"override-removed", "host-disabled", "agents-disabled", "alerts-disabled", "alerts-cleared"} {
+		t.Run(policy, func(t *testing.T) {
+			m, elapsed := continuityManager(t, false)
+			hot := 47.0
+			host := nativeSensorHost(&hot, "ok")
+			battery := HostNativeSensorResourceID(host.ID, "applesmc-isa-0300/temp1")
+			setPolicy := func(on bool) {
+				cfg := m.GetConfig()
+				cfg.Overrides[battery] = ThresholdConfig{Temperature: &HysteresisThreshold{Trigger: 45, Clear: 40}}
+				switch policy {
+				case "override-removed":
+					if !on {
+						delete(cfg.Overrides, battery)
+					}
+				case "host-disabled":
+					if on {
+						delete(cfg.Overrides, host.ID)
+					} else {
+						cfg.Overrides[host.ID] = ThresholdConfig{Disabled: true}
+					}
+				case "agents-disabled":
+					cfg.DisableAllAgents = !on
+				case "alerts-disabled":
+					cfg.Enabled = on
+				}
+				m.UpdateConfig(cfg)
+			}
+			setPolicy(true)
+			m.CheckHost(host) // starts the 60s temperature grace
+			elapsed.Store(int64(40 * time.Second))
+			if policy == "alerts-cleared" {
+				m.ClearActiveAlerts()
+			} else {
+				setPolicy(false)
+				setPolicy(true)
+			}
+			elapsed.Store(int64(70 * time.Second))
+			m.CheckHost(host)
+			if alerts := nativeSensorAlerts(m); len(alerts) != 0 {
+				t.Fatalf("re-enabled sensor reused grace from before %s: %+v", policy, alerts)
+			}
+			elapsed.Store(int64(131 * time.Second))
+			m.CheckHost(host)
+			if alerts := nativeSensorAlerts(m); len(alerts) != 1 {
+				t.Fatalf("sustained reading after re-enable did not fire: %+v", alerts)
+			}
+		})
+	}
+}
+
+func TestHostNativeSensorUsesSensorDelayPolicy(t *testing.T) {
+	m, _ := continuityManager(t, false)
+	hot := 47.0
+	host := nativeSensorHost(&hot, "ok")
+	battery := HostNativeSensorResourceID(host.ID, "applesmc-isa-0300/temp1")
+	cfg := m.GetConfig()
+	cfg.Overrides[battery] = ThresholdConfig{Temperature: &HysteresisThreshold{Trigger: 45, Clear: 40}}
+	// The agent-wide temperature delay stays 60s; a sensor-specific delay of
+	// zero must win for sensor alerts.
+	cfg.MetricTimeThresholds = map[string]map[string]int{"all": {"temperature": 60}, "agent-sensor": {"temperature": 0}}
+	m.UpdateConfig(cfg)
+	m.CheckHost(host)
+	if alerts := nativeSensorAlerts(m); len(alerts) != 1 {
+		t.Fatalf("sensor-specific zero delay was ignored: %+v", alerts)
+	}
+}

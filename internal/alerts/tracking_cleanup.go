@@ -34,6 +34,13 @@ func (m *Manager) cleanupStaleMaps() {
 	cleaned := 0
 
 	cleaned += m.core.PruneStalePending(now.Add(-staleThreshold))
+	// A native sensor's link identity is kept only while its run is pending.
+	for resourceID := range m.hostNativeSensorPendingCtx {
+		if !m.hostNativeSensorPendingNoLock(resourceID) {
+			delete(m.hostNativeSensorPendingCtx, resourceID)
+			cleaned++
+		}
+	}
 
 	for alertID, history := range m.flappingHistory {
 		if !m.hasActiveAlertNoLock(alertID) {

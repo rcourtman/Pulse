@@ -35,6 +35,8 @@ func resourceTypeLabel(resourceType string) string {
 		return "Application container"
 	case "agent-disk":
 		return "Disk"
+	case "agent-sensor":
+		return "Sensor"
 	case "agent":
 		return "Agent"
 	case "node":

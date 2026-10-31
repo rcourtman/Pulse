@@ -4288,7 +4288,10 @@ candidates are reviewed in batched `QuickAnalysis` calls of at most
 `patrolAlertReviewBatchSize` alerts with numbered per-alert verdict
 lines; verdict parsing is fail-safe (unparseable or out-of-range
 verdicts default to KEEP, a bare `RESOLVE:` response is honored only
-for single-alert batches), and the recorded usage events carry use
+for single-alert batches; a native sensor alert, `agent:<host>/sensor:<hex>`,
+is always kept, because the review snapshot carries no native sensor reading
+that could show it recovered, as `TestPatrolReviewNeverResolvesNativeSensorAlerts`
+pins), and the recorded usage events carry use
 case `patrol` with `TargetType` `alert_autoresolve` so cost telemetry
 can decompose alert-review spend from the main Patrol analysis pass.
 This replaced the prior one-model-call-per-alert-per-run loop that
