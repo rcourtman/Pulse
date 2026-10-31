@@ -18,6 +18,33 @@
 
 ## Purpose
 
+### Agent action details follow command-disclosure authority
+
+The existing agent event and resource-context reads require `monitoring:read`,
+but that scope does not disclose command/output detail. API tokens without
+`ai:execute` receive no full `actionResultV2`: arbitrary result summaries,
+reason strings, evidence identities/references and recovery detail can carry
+command or provider output even after credential-pattern redaction. Instead,
+`actionResultSummary` explicitly sets `detailsRedacted:true` and preserves only
+validated execution status, verification status/evidence class, compensation
+support/status and any nested compensation execution/verification axes. This
+is a read projection, not a canonical evidence envelope; no evidence is deleted,
+re-digested or invented, and a malformed canonical result remains inconclusive.
+
+Restricted legacy errors retain only an exact known refusal prefix (such as
+`plan_drift:`), never its arbitrary suffix or an unknown prefix. Verification
+notes follow the command redaction rule even when the command is absent.
+Session and existing `ai:execute` disclosure are unchanged. Per-request copies
+must preserve other subscribers' and stored evidence, auth and tenant boundaries.
+
+Ordinary-suite `agent_action_disclosure_test.go` checks both completion producers,
+pointer/value payloads, legacy/V2 records, scoped/session/wildcard callers,
+independent outcome axes, malformed digests, durable context HTTP reads and
+concurrent authenticated SSE subscribers. `action_disclosure_test.go` in the MCP
+adapter runs the real authenticated handlers through tools/call text/structured
+output and live JSON-RPC notifications. `TestContract_AgentScopedActionResultIsAnExplicitSummary`
+pins the distinction between withheld detail and canonical evidence.
+
 ### Unread token inventory is not a safe access posture
 
 API Access never claims no credentials or no full-access credentials from a

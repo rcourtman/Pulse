@@ -45,6 +45,22 @@ source-bound collector frames, its separate task/evidence meanings and readable
 source/outcome/qualifier. This is safer inspection, not backup-job execution,
 original guest recovery, a tested restore or published availability.
 
+### Scoped agent outcome reads do not disclose execution detail
+
+The agent event/resource-context projections preserve validated execution,
+verification/evidence-class and compensation axes in an explicitly redacted
+`actionResultSummary` for tokens without `ai:execute`. Full canonical evidence,
+free-form result/error text and verification notes are withheld rather than
+rewritten into new evidence. Known refusal prefixes remain branchable; session
+and existing command-capable reads remain unchanged. No stored evidence, agent
+command admission, recovery action or recovery-data identity changes.
+
+The ordinary API disclosure/contract tests check legacy and V2 producers,
+malformed-digest fallback, stored-evidence preservation and scoped concurrent
+streams. The MCP consumer test checks real authenticated tools/call and live
+notification readback. A content-free outcome is not independent recovery proof
+or permission to replay any stopped operation.
+
 ### Datastore discovery cannot turn unread history into absence
 
 PBS datastore enumeration uses the same bounded, fully read and closed HTTP 200
