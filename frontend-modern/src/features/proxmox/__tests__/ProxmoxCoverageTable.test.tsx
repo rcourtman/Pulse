@@ -795,6 +795,84 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 });
 
+describe('Coverage provider-outcome-meaning', () => {
+  const mount = (source: string, jobState = 'success', width = 320) =>
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[
+          {
+            ...row,
+            protectionPosture: {
+              ...row.protectionPosture!,
+              providerStates: [{ ...row.protectionPosture!.providerStates[0], source, jobState }],
+            },
+          } as WorkloadCoverageRow,
+        ]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={row.key}
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        layoutWidth={() => width}
+      />
+    ));
+
+  it.each([
+    ['pbs-backup-enumeration', 'PBS backup inventory'],
+    ['pve-backup-enumeration', 'PVE backup inventory'],
+    ['legacy-recovery-point', 'Retained restore point'],
+    ['future-backup-enumeration', 'future-backup-enumeration'],
+    ['', 'Unknown'],
+    ['   ', 'Unknown'],
+  ])('identifies %j without guessing a backup job result', (source, label) => {
+    mount(` ${source} `);
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(panel).getByText(`Source ${label}`)).toHaveClass(
+      'whitespace-normal',
+      'wrap-anywhere',
+    );
+    expect(within(panel).getByText('Reported outcome Success')).toBeVisible();
+    expect(panel).not.toHaveTextContent('Job Success');
+    // Source and outcome can come from different-aged inputs to the rollup.
+    // Replacing Job with Collection would create another unsupported claim.
+    expect(panel).not.toHaveTextContent('Collection Success');
+    expect(panel).toHaveTextContent(
+      'Provider evidence describes inventory reads or retained restore points, not a backup job result.',
+    );
+    expect(panel).toHaveTextContent('Task and restore-point states are shown separately.');
+  });
+
+  it.each(['success', 'warning', 'failed', 'running', 'unknown'])(
+    'retains the reported %s without changing protection, history or access',
+    (outcome) => {
+      mount('pbs-backup-enumeration', outcome, 1200);
+      const panel = screen.getByTestId('proxmox-coverage-detail');
+      expect(panel).toHaveTextContent(
+        `Reported outcome ${outcome.charAt(0).toUpperCase() + outcome.slice(1)}`,
+      );
+      expect(panel).toHaveTextContent('History Complete');
+      expect(panel).toHaveTextContent('Access Sufficient');
+      expect(within(panel).getByRole('img', { name: 'Protected' })).toBeInTheDocument();
+    },
+  );
+
+  it.each([320, 1200])('keeps an unknown source literal and wrapping at %ipx', (width) => {
+    const source = '<img src=x onerror=alert(1)>' + 'source-'.repeat(30);
+    mount(source, 'unknown', width);
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const label = within(panel).getByText(`Source ${source}`);
+    expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    expect(label).not.toHaveClass('truncate');
+    expect(label.querySelector('img, a')).toBeNull();
+    expect(panel).toHaveTextContent('Reported outcome Unknown');
+  });
+});
+
 describe('Coverage absence requires readable, complete history', () => {
   const unknownTitle =
     'No completed backup is visible in the current list. Missing entries do not mean no backups exist. Expand this row to inspect the evidence.';

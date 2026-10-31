@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Coverage keeps provider provenance separate from task state
+
+The existing Coverage drawer uses the shared wrapping detail-section pattern
+for each provider's scope, evidence source and Reported outcome. Known PBS/PVE
+inventory sources are named; unknown sources stay literal text. The summary is
+not labelled a job or collection result because the rollup can combine sources
+of different ages. A visible qualifier distinguishes provider evidence from
+actual task and restore-point states without changing their semantics or shared
+primitives. `ProxmoxCoverageTable.test.tsx` and `ProxmoxBackupsTable.test.tsx`
+cover source meaning, unknown/literal values, independent states, polling and
+focus. Actual desktop/narrow Backups pixels must confirm readable wrapping.
+
 ### Coverage dates are inspectable without hover
 
 Open Coverage evidence retains each point’s exact reported date as wrapping

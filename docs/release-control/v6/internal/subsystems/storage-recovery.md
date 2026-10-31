@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Coverage provider outcomes are not backup job results
+
+Provider evidence identifies the source of each scoped assessment: PBS/PVE
+backup inventories have explicit names; legacy restore-point evidence is named
+as such, and unrecognised sources remain literal text (or Unknown when absent).
+The rollup's `jobState` is displayed as Reported outcome, never Job or Collection:
+an inventory observation can supply it, but a newer retained point can also
+supply the outcome beside an older observation's source. Visible wrapping copy
+keeps this evidence distinct from actual task and restore-point states. History,
+access, reported values, protection, dates and policy do not change.
+
+Normal-suite `ProxmoxCoverageTable.test.tsx` covers known/unknown/literal sources,
+all reported outcomes and narrow/wide rendering. `ProxmoxBackupsTable.test.tsx`
+passes parsed inventory and posture reads through the consuming surface,
+retaining a Running/unprotected point and a real OK task independently of
+successful or failed inventory evidence, including polling and owned focus.
+Desktop/narrow browser proof must inspect the production Backups consumer with
+source-bound collector frames, its separate task/evidence meanings and readable
+source/outcome/qualifier. This is safer inspection, not backup-job execution,
+original guest recovery, a tested restore or published availability.
+
 ### PBS backup listings require the whole response
 
 Namespace, group and snapshot reads accept one unambiguous JSON envelope only

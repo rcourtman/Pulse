@@ -189,6 +189,19 @@ const evidenceQualityLabel = (value: string): string => {
   return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
+const providerEvidenceSourceLabel = (source: string | undefined): string => {
+  switch (source?.trim()) {
+    case 'pbs-backup-enumeration':
+      return 'PBS backup inventory';
+    case 'pve-backup-enumeration':
+      return 'PVE backup inventory';
+    case 'legacy-recovery-point':
+      return 'Retained restore point';
+    default:
+      return source?.trim() || 'Unknown';
+  }
+};
+
 const postureExplanation = (row: WorkloadCoverageRow): string => {
   if (row.protectionPosture?.explanation) return row.protectionPosture.explanation;
   if (row.posture === 'checking') return "Pulse is checking this guest's backups.";
@@ -394,8 +407,11 @@ function CoverageTaskCandidates(props: { tasks: readonly CoverageTask[] }) {
   );
 }
 
-// Provider evidence quality (did the job run, is history complete, can Pulse
-// read it) explains a posture; it is detail, not the answer.
+// Provider outcomes can come from an inventory observation or a retained point.
+// The rollup may keep a newer point's outcome beside an older observation's
+// source, so neither "Job" nor "Collection" accurately names every outcome.
+// Keep its reported value, identify the source, and leave actual task/point
+// states in their own sections. Provider quality explains a posture, not a job.
 const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] =>
   compactDetailSections([
     {
@@ -438,7 +454,8 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
             providerLabel(provider.provider),
             [
               `Scope ${provider.scope?.trim() || 'Unknown'}`,
-              `Job ${evidenceQualityLabel(provider.jobState)}`,
+              `Source ${providerEvidenceSourceLabel(provider.source)}`,
+              `Reported outcome ${evidenceQualityLabel(provider.jobState)}`,
               `History ${evidenceQualityLabel(provider.historyCompleteness)}`,
               `Access ${evidenceQualityLabel(provider.permissions)}`,
             ].join(' · '),
@@ -449,8 +466,11 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
                   <span class="block whitespace-normal wrap-anywhere">
                     Scope {provider.scope?.trim() || 'Unknown'}
                   </span>
+                  <span class="block whitespace-normal wrap-anywhere">
+                    Source {providerEvidenceSourceLabel(provider.source)}
+                  </span>
                   <span class="flex flex-wrap gap-x-3">
-                    <span>Job {evidenceQualityLabel(provider.jobState)}</span>
+                    <span>Reported outcome {evidenceQualityLabel(provider.jobState)}</span>
                     <span>History {evidenceQualityLabel(provider.historyCompleteness)}</span>
                     <span>Access {evidenceQualityLabel(provider.permissions)}</span>
                   </span>
@@ -460,6 +480,12 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
           ),
         ),
       ),
+      footerContent: row.protectionPosture?.providerStates.length ? (
+        <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+          Provider evidence describes inventory reads or retained restore points, not a backup job
+          result. Task and restore-point states are shown separately.
+        </p>
+      ) : undefined,
     },
   ]);
 
