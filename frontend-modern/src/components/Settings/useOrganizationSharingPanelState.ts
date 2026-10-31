@@ -80,6 +80,9 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   let disposed = false;
   let readController: AbortController | undefined;
   let mutationController: AbortController | undefined;
+  // Losing a destination is a draft decision, not a transient read error.
+  // Keep it invalid across refreshes until a current destination is chosen.
+  let targetOrgNeedsReselection = false;
   const surfaceEnabled = () =>
     isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
   const selectionIsCurrent = () =>
@@ -171,6 +174,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     setIncomingShares([]);
   };
   const clearDraft = () => {
+    targetOrgNeedsReselection = false;
     setTargetOrgId('');
     setResourceType('');
     setResourceId('');
@@ -245,11 +249,15 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
         const draftTarget = targetOrgId().trim();
         // If a previously chosen destination disappeared, require a new choice
         // rather than retaining an invisible value or choosing a different org.
-        const firstTarget = draftTarget
-          ? allOrgs.some((candidate) => candidate.id === draftTarget && candidate.id !== orgId)
-            ? draftTarget
-            : ''
-          : allOrgs.find((candidate) => candidate.id !== orgId)?.id || '';
+        if (
+          draftTarget &&
+          !allOrgs.some((candidate) => candidate.id === draftTarget && candidate.id !== orgId)
+        ) {
+          targetOrgNeedsReselection = true;
+        }
+        const firstTarget = targetOrgNeedsReselection
+          ? ''
+          : draftTarget || allOrgs.find((candidate) => candidate.id !== orgId)?.id || '';
         setTargetOrgId(firstTarget);
         setTargetOrgError(firstTarget === '' ? getOrganizationShareTargetOrgRequiredMessage() : '');
       });
@@ -329,6 +337,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   };
 
   const updateTargetOrg = (value: string) => {
+    targetOrgNeedsReselection = !targetOrgOptions().some((candidate) => candidate.id === value);
     setTargetOrgId(value);
     setTargetOrgError(value.trim() === '' ? getOrganizationShareTargetOrgRequiredMessage() : '');
   };

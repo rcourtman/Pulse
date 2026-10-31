@@ -639,6 +639,101 @@ describe('sharing read admission and recovery', () => {
     expect(createShareMock.mock.calls[0][1].targetOrgId).toBe('org-c');
   });
 
+  it.each(['reload', 'directory event', 'failed read recovery', 'returned destination'])(
+    'keeps a removed destination invalid across %s until an explicit current choice',
+    async (refresh) => {
+      const replacementOrg = { ...targetOrg, id: 'org-c', displayName: 'Organization C' };
+      const { state } = renderState();
+      await accepted(state);
+      state.applyResourceQuickPick('vm::vm-100');
+      expect(state.targetOrgId()).toBe('org-b');
+      listOrgsMock.mockResolvedValue([baseOrg, replacementOrg]);
+      await state.loadSharingData();
+      expect(state.targetOrgId()).toBe('');
+      expect(state.canCreateShare()).toBe(false);
+      await state.createShare();
+      expect(createShareMock).not.toHaveBeenCalled();
+
+      if (refresh === 'directory event') {
+        const calls = listOrgsMock.mock.calls.length;
+        emit('organizations_changed');
+        expect(listOrgsMock).toHaveBeenCalledTimes(calls + 1);
+        await accepted(state);
+      } else {
+        if (refresh === 'failed read recovery') {
+          orgGetMock.mockRejectedValueOnce(new Error('503'));
+          await state.loadSharingData();
+          expect(state.loadError()).toBeTruthy();
+          await state.createShare();
+          expect(createShareMock).not.toHaveBeenCalled();
+        }
+        if (refresh === 'returned destination') {
+          listOrgsMock.mockResolvedValue([baseOrg, targetOrg, replacementOrg]);
+        }
+        await state.loadSharingData();
+      }
+      // Neither another accepted read nor the old destination returning is consent.
+      expect(state.targetOrgId()).toBe('');
+      expect(state.targetOrgError()).toBeTruthy();
+      expect(state.selectedQuickPick()).toBe('vm::vm-100');
+      expect(state.resourceId()).toBe('vm-100');
+      expect(state.canCreateShare()).toBe(false);
+      await state.createShare();
+      expect(createShareMock).not.toHaveBeenCalled();
+      state.updateTargetOrg('not-in-directory');
+      await state.loadSharingData();
+      expect(state.targetOrgId()).toBe('');
+      await state.createShare();
+      expect(createShareMock).not.toHaveBeenCalled();
+
+      state.updateTargetOrg('org-c');
+      await state.loadSharingData();
+      expect(state.canCreateShare()).toBe(true);
+      await state.createShare();
+      await accepted(state);
+      expect(createShareMock).toHaveBeenCalledTimes(1);
+      expect(createShareMock).toHaveBeenCalledWith(
+        'org-a',
+        expect.objectContaining({
+          targetOrgId: 'org-c',
+          resourceId: 'vm-100',
+          accessRole: 'viewer',
+        }),
+        strictOptions(),
+      );
+    },
+  );
+
+  it.each(['organization', 'user'])(
+    'clears the invalid destination and resource draft when the selected %s changes',
+    async (selection) => {
+      const replacementOrg = { ...targetOrg, id: 'org-c', displayName: 'Organization C' };
+      const { state, setUser } = renderState();
+      await accepted(state);
+      state.applyResourceQuickPick('vm::vm-100');
+      listOrgsMock.mockResolvedValue([baseOrg, replacementOrg]);
+      await state.loadSharingData();
+      expect(state.targetOrgId()).toBe('');
+      if (selection === 'organization') {
+        getOrgIDMock.mockReturnValue('org-c');
+        orgGetMock.mockResolvedValue({ ...replacementOrg, ownerUserId: 'user-1' });
+        emit('org_switched');
+      } else {
+        orgGetMock.mockResolvedValue({ ...baseOrg, ownerUserId: 'user-3' });
+        setUser('user-3');
+      }
+      await accepted(state);
+      expect(state.targetOrgId()).toBe(selection === 'organization' ? 'org-a' : 'org-c');
+      expect(state.selectedQuickPick()).toBe('');
+      expect(state.resourceType()).toBe('');
+      expect(state.resourceId()).toBe('');
+      expect(state.resourceName()).toBe('');
+      expect(state.canCreateShare()).toBe(false);
+      await state.createShare();
+      expect(createShareMock).not.toHaveBeenCalled();
+    },
+  );
+
   it('ignores a late failure without suppressing current actions or emitting a stale error', async () => {
     const old = deferred<typeof baseOrg>();
     orgGetMock.mockReturnValueOnce(old.promise);
