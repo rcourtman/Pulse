@@ -401,7 +401,8 @@ not a full-state recovery tool, and a recorded backup path is not proof of a
 complete backup.
 
 Check the [version-specific snapshot scope](AUTO_UPDATE.md#what-an-update-snapshot-contains)
-and use the [stopped-service recovery procedure](AUTO_UPDATE.md#manual-rollback)
+and the separate [installer configuration snapshots](AUTO_UPDATE.md#installer-configuration-snapshots).
+Use the [stopped-service recovery procedure](AUTO_UPDATE.md#manual-rollback)
 when data needs restoring. Keep matching data and keys together, verify the
 backup privately and preserve reversible copies of the failed state. Do not
 replace live runtime data or delete it to make a rollback fit.
