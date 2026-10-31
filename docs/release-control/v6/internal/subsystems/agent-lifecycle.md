@@ -15,6 +15,30 @@
 
 ## Purpose
 
+### Agent event subscriptions follow their current token inventory
+
+Before streaming each frame, API-token subscribers revalidate against the
+inventory that admitted them. Metadata normalization and last-use updates reuse
+authentication's exclusive lock and detached snapshot. Tenant streams resolve
+the current cached owner both before and after validation, never start a cold
+runtime or fall back to a global duplicate after revocation/replacement.
+Idle heartbeats also check authority; withdrawal releases the subscription.
+
+Each refreshed disclosure snapshot replaces a single context layer above the
+admitted request context, not above the previous refresh. Retained ancestry and
+token snapshots stay bounded per connection; cancellation, deadline, principal,
+organization and other admitted values remain intact. The ordinary
+`TestAgentEventTokenRefreshKeepsBoundedContext` streams repeated approval/action
+frames with changing scopes and proves bounded ancestry and cancellation cleanup.
+
+The normal lifecycle tests cover removed/replaced owners, scope changes in a
+replacement owner, an owner changing across validation and refusal of global
+fallback. Real registered-route HTTP and shared MCP tests cover durable
+revocation, idle expiry, scope reduction and independent unaffected subscribers.
+No enrolment, runtime action, token scope, recovery operation or event type is
+added. Session/proxy authentication retains its existing lifecycle.
+
+
 ### Public-URL token checks share authentication ownership
 
 The pre-route public-URL authority check uses the existing locked token

@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Long-lived agent reads preserve current token boundaries
+
+Agent event subscriptions revalidate API-token authority before admitting
+product frames and idle heartbeats. Withdrawing command scope changes the
+read projection, never canonical action/evidence or recovery data. Revocation,
+expiry, invalid identity/principal/role or loss of organization/read authority
+closes the stream without executing anything. Tenant-owner replacement cannot
+retain a stale inventory or borrow a global duplicate credential.
+
+Disclosure refreshes replace a bounded context layer above the admitted request,
+not a growing chain of retained token snapshots. The normal repeated-frame
+`TestAgentEventTokenRefreshKeepsBoundedContext` verifies live redaction, unchanged
+canonical evidence and original cancellation cleanup; this is not a recovery or
+filesystem operation.
+
+Normal lifecycle, real registered-route persisted deletion, contract disclosure
+and shared MCP-consumer tests cover the boundary and unchanged canonical record.
+No history source, retention, backup, thaw or filesystem operation is added.
+Previously stopped recovery work remains stopped; source proof is not recovery.
+
+
 ### Backup views share bounded owned-focus restoration
 
 Coverage posture sorting and By date regrouping use the same existing backups
