@@ -446,7 +446,7 @@ describe('selected sharing snapshot', () => {
     await waitFor(() =>
       expect(screen.queryByText('Alpha private workload')).not.toBeInTheDocument(),
     );
-    expect(screen.queryByRole('button', { name: 'Remove', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Create Share' })).not.toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Reload sharing' })).toBeEnabled();
   });
@@ -588,7 +588,7 @@ describe('sharing read admission and recovery', () => {
     listSharesMock.mockReturnValueOnce(next.promise);
     emit('organizations_changed');
     expect(screen.queryByText(outgoing.resourceName)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remove', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     next.resolve([]);
     await screen.findByRole('heading', { name: 'Outgoing Shares' });
     expect(screen.queryByText(outgoing.resourceName)).not.toBeInTheDocument();
