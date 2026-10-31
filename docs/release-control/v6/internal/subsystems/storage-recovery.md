@@ -21,6 +21,30 @@
 
 ## Purpose
 
+### Datastore discovery cannot turn unread history into absence
+
+PBS datastore enumeration uses the same bounded, fully read and closed HTTP 200
+transport and unambiguous envelope admission as namespace, group, snapshot and
+writer inventories. Duplicate/case-aliased fields, non-null errors, invalid
+UTF-8 and partial/other success statuses are unread, not an accepted empty outer
+scope. Validate the entire enumeration before exclusions or any per-datastore
+requests. Retain payload-free diagnostics and existing HTML/HTTPS guidance.
+Explicit empty arrays and unique future metadata remain valid; filtering,
+status collection, permissions, auth, poll budgets and guest operations do not
+change.
+
+`TestDatastoreInventoryRequiresWholeResponse` and the complete-body/valid-scope
+controls exercise the client, including read/close/bound failures and excluded
+stores. Normal-suite `TestPBSDatastoreWholeResponseRetainsEvidence` drives the
+public poll and background worker for VM/CT warm/cold-live states: unread
+discovery retains raw and durable evidence without renewal or guessed child
+reads, withdraws protection without claiming an access denial, and ordinary
+complete/empty reads recover and reconcile absence. The consumer lifecycle
+exports these exact producer results for desktop/narrow Backups interactions
+and pixel inspection. Existing discovery denial, skip, other-connection and
+connectivity-fallback controls remain. No original guest recovery, production
+occurrence, issue cause or containing release is established by this proof.
+
 ### PBS backup listings require the whole response
 
 Namespace, group and snapshot reads accept one unambiguous JSON envelope only

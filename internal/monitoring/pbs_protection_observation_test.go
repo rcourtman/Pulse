@@ -314,18 +314,31 @@ type pbsNamespacePollFixture struct {
 	ids              []string
 }
 
-func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
+func newPBSNamespacePollFixture(t *testing.T, kinds ...string) *pbsNamespacePollFixture {
 	t.Helper()
 	m, manager := recoveryIngestTestMonitor(t)
 	f := &pbsNamespacePollFixture{m: m}
 	f.backupAt.Store(time.Now().UTC().Add(-time.Hour).Truncate(time.Second).Unix())
 	m.state = models.NewState()
-	m.state.UpdateVMs([]models.VM{
-		{ID: makeGuestID("cluster", "node-a", 100), VMID: 100, Instance: "cluster", Node: "node-a", Name: "guest-100", Status: "running"},
-		{ID: makeGuestID("cluster", "node-b", 101), VMID: 101, Instance: "cluster", Node: "node-b", Name: "guest-101", Status: "running"},
-	})
+	kind := "vm"
+	if len(kinds) > 0 {
+		kind = kinds[0]
+	}
+	resourceType := unifiedresources.ResourceTypeVM
+	if kind == "ct" {
+		resourceType = unifiedresources.ResourceTypeSystemContainer
+		m.state.UpdateContainers([]models.Container{
+			{ID: makeGuestID("cluster", "node-a", 100), VMID: 100, Instance: "cluster", Node: "node-a", Name: "guest-100", Status: "running"},
+			{ID: makeGuestID("cluster", "node-b", 101), VMID: 101, Instance: "cluster", Node: "node-b", Name: "guest-101", Status: "running"},
+		})
+	} else {
+		m.state.UpdateVMs([]models.VM{
+			{ID: makeGuestID("cluster", "node-a", 100), VMID: 100, Instance: "cluster", Node: "node-a", Name: "guest-100", Status: "running"},
+			{ID: makeGuestID("cluster", "node-b", 101), VMID: 101, Instance: "cluster", Node: "node-b", Name: "guest-101", Status: "running"},
+		})
+	}
 	for _, id := range []int{100, 101} {
-		f.ids = append(f.ids, unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster", id))
+		f.ids = append(f.ids, unifiedresources.ProxmoxGuestCanonicalID(resourceType, "cluster", id))
 	}
 	var err error
 	f.store, err = manager.StoreForOrg("default")
@@ -345,8 +358,11 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 			data = map[string]any{"version": "3.4.2"}
 		case "/api2/json/admin/datastore":
 			if status := f.datastoreStatus.Load(); status != 0 {
-				http.Error(w, "fixture discovery unavailable", int(status))
-				return
+				if status >= 400 {
+					http.Error(w, "fixture discovery unavailable", int(status))
+					return
+				}
+				w.WriteHeader(int(status))
 			}
 			if body := f.datastoreBody.Load(); body != nil {
 				_, _ = w.Write([]byte(*body))
@@ -376,7 +392,7 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 				f.childReads.Add(1)
 			}
 			if id != "100" || !f.rootEmpty.Load() {
-				data = []map[string]any{{"backup-type": "vm", "backup-id": id, "last-backup": f.backupAt.Load(), "backup-count": 1}}
+				data = []map[string]any{{"backup-type": kind, "backup-id": id, "last-backup": f.backupAt.Load(), "backup-count": 1}}
 			}
 		case "/api2/json/admin/datastore/archive/snapshots":
 			f.backupReads.Add(1)
@@ -384,7 +400,7 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 			if r.URL.Query().Get("ns") == "tenant" {
 				f.childReads.Add(1)
 			}
-			data = []map[string]any{{"backup-type": "vm", "backup-id": id, "backup-time": f.backupAt.Load(), "size": 1024,
+			data = []map[string]any{{"backup-type": kind, "backup-id": id, "backup-time": f.backupAt.Load(), "size": 1024,
 				"files": []string{"index.json.blob"}, "verification": map[string]any{"state": "ok"}, "comment": "guest-" + id}}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
