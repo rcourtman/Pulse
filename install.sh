@@ -3780,7 +3780,18 @@ install_pulse_archive() {
     rm -rf "$binary_stage"
 
     install_additional_agent_binaries "$expected_release" "$temp_extract"
-    deploy_agent_scripts "$temp_extract"
+    local script_status=0
+    deploy_agent_scripts "$temp_extract" || script_status=$?
+    if [[ "$script_status" -ne 0 ]]; then
+        print_error "Pulse binary was installed, but agent script deployment is incomplete; installation has not completed"
+        rm -rf "$temp_extract"
+        if [[ "$script_status" -eq 1 ]]; then
+            recover_pulse_after_failed_replacement "$service_name"
+        else
+            print_error "Agent script destination needs manual reconciliation; Pulse has not been restarted"
+        fi
+        return 1
+    fi
     chown_install_dir_for_pulse
 
     print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
@@ -4021,47 +4032,101 @@ deploy_agent_scripts() {
         return
     fi
 
-    mkdir -p "$INSTALL_DIR/scripts"
-
     local scripts=(
         "install-container-agent.sh"
         "install-docker.sh"
         "install.sh"
         "install.ps1"
     )
-
-    local deployed=0
+    local deployed=0 script sidecar stage="" live="$INSTALL_DIR/scripts"
     for script in "${scripts[@]}"; do
-        if [[ -f "$extract_dir/scripts/$script" ]]; then
-            cp "$extract_dir/scripts/$script" "$INSTALL_DIR/scripts/$script"
-            chmod 755 "$INSTALL_DIR/scripts/$script"
-            chown pulse:pulse "$INSTALL_DIR/scripts/$script"
-            # Deploy the detached release signatures next to the script. The
-            # running server serves these local copies at /install.sh and
-            # /install.ps1 (the "Install on Linux/Windows" agent wizard), and for
-            # published releases the handler only serves the local file when its
-            # .sig and .sshsig sidecars are present. Without them it falls back to
-            # proxying the top-level GitHub install.sh asset, which is the SERVER
-            # installer, not the agent installer, so the wizard's --url/--token-file
-            # command is rejected with "Unknown option". The Docker image deploys
-            # these same sidecars (see Dockerfile); LXC/systemd installs must match.
-            local sidecar
-            for sidecar in "${script}.sig" "${script}.sshsig"; do
-                if [[ -f "$extract_dir/scripts/$sidecar" ]]; then
-                    cp "$extract_dir/scripts/$sidecar" "$INSTALL_DIR/scripts/$sidecar"
-                    chmod 644 "$INSTALL_DIR/scripts/$sidecar"
-                    chown pulse:pulse "$INSTALL_DIR/scripts/$sidecar"
-                fi
-            done
-            deployed=$((deployed + 1))
-        fi
+        [[ ! -f "$extract_dir/scripts/$script" ]] || deployed=$((deployed + 1))
     done
-
-    if [[ $deployed -gt 0 ]]; then
-        print_success "Deployed $deployed agent installation script(s)"
-    else
+    if [[ $deployed -eq 0 ]]; then
         print_warn "No agent installation scripts found in archive"
+        return 0
     fi
+
+    # A script and its detached signatures are one served bundle. Prepare all
+    # bytes/permissions in a private enclosure before touching the old bundle;
+    # cp failure must never truncate the currently served installer. Preserve
+    # unrelated local scripts, but never follow an overridden file's symlink.
+    if [[ -L "$live" || ( -e "$live" && ! -d "$live" ) ]]; then
+        print_error "Agent script destination is not a regular directory; existing path is unchanged"
+        return 2
+    fi
+    if ! stage=$(mktemp -d -- "$INSTALL_DIR/.pulse-scripts-XXXXXX"); then
+        print_error "Could not stage agent scripts; existing scripts are unchanged"
+        return 1
+    fi
+    if ! mkdir -- "$stage/next" ||
+       { [[ -d "$live" ]] && ! cp -a -- "$live/." "$stage/next/"; }; then
+        rm -rf -- "$stage"
+        print_error "Could not prepare agent scripts; existing scripts are unchanged"
+        return 1
+    fi
+    for script in "${scripts[@]}"; do
+        [[ -f "$extract_dir/scripts/$script" ]] || continue
+        if ! cp --remove-destination -- "$extract_dir/scripts/$script" "$stage/next/$script" ||
+           ! chmod 755 -- "$stage/next/$script" || ! chown pulse:pulse "$stage/next/$script"; then
+            rm -rf -- "$stage"
+            print_error "Could not prepare agent script $script; existing scripts are unchanged"
+            return 1
+        fi
+        # Published archives carry both sidecars for the local /install.sh and
+        # /install.ps1 routes. Source/legacy scripts may have neither: do not
+        # attach a previous release's signature to newly copied unsigned bytes.
+        for sidecar in "${script}.sig" "${script}.sshsig"; do
+            if [[ -f "$extract_dir/scripts/$sidecar" ]]; then
+                if ! cp --remove-destination -- "$extract_dir/scripts/$sidecar" "$stage/next/$sidecar" ||
+                   ! chmod 644 -- "$stage/next/$sidecar" || ! chown pulse:pulse "$stage/next/$sidecar"; then
+                    rm -rf -- "$stage"
+                    print_error "Could not prepare agent script signature $sidecar; existing scripts are unchanged"
+                    return 1
+                fi
+            elif ! rm -f -- "$stage/next/$sidecar"; then
+                rm -rf -- "$stage"
+                print_error "Could not remove a stale agent script signature; existing scripts are unchanged"
+                return 1
+            fi
+        done
+    done
+    if ! chown pulse:pulse "$stage/next"; then
+        rm -rf -- "$stage"
+        print_error "Could not prepare agent script directory ownership; existing scripts are unchanged"
+        return 1
+    fi
+
+    # Consumers have already confirmed the server stopped. These are same-
+    # filesystem renames, not a recursive copy onto live files. Never overwrite
+    # an unexpected destination, including mv -n's successful no-op result.
+    if [[ -d "$live" ]]; then
+        if ! mv -T -n -- "$live" "$stage/previous" || [[ -e "$live" || -L "$live" ]]; then
+            if [[ -e "$stage/previous" || -L "$stage/previous" ]]; then
+                print_error "Agent script reservation is incomplete; previous scripts retained at $stage/previous. Reconcile the destination before recovery."
+                return 2
+            fi
+            rm -rf -- "$stage"
+            print_error "Could not reserve the previous agent scripts; publication is incomplete"
+            return 1
+        fi
+    fi
+    if ! mv -T -n -- "$stage/next" "$live" || [[ -e "$stage/next" || -L "$stage/next" ]]; then
+        if [[ -d "$stage/previous" ]] &&
+           { ! mv -T -n -- "$stage/previous" "$live" || [[ -e "$stage/previous" || -L "$stage/previous" ]]; }; then
+            print_error "Agent script publication and restore are incomplete; previous scripts retained at $stage/previous. Reconcile the destination before recovery."
+            return 2
+        fi
+        rm -rf -- "$stage"
+        print_error "Could not publish agent scripts; previous scripts were not replaced"
+        return 1
+    fi
+    if ! rm -rf -- "$stage"; then
+        print_error "Agent scripts published, but previous-bundle cleanup is incomplete at $stage"
+        return 1
+    fi
+    print_success "Deployed $deployed agent installation script(s)"
+    return 0
 }
 
 build_from_source() {
@@ -4243,14 +4308,19 @@ build_from_source() {
     fi
     rm -rf "$binary_stage"
 
-    mkdir -p "$INSTALL_DIR/scripts"
-
-    for script_name in install-container-agent.sh install-docker.sh install.sh install.ps1; do
-        if [[ -f "scripts/$script_name" ]]; then
-            cp "scripts/$script_name" "$INSTALL_DIR/scripts/$script_name"
-            chmod 755 "$INSTALL_DIR/scripts/$script_name"
+    local script_status=0
+    deploy_agent_scripts "$temp_build/Pulse" || script_status=$?
+    if [[ "$script_status" -ne 0 ]]; then
+        print_error "Built Pulse binary was installed, but agent script deployment is incomplete; installation has not completed"
+        cd "$original_dir" >/dev/null 2>&1 || true
+        rm -rf "$temp_build"
+        if [[ "$script_status" -eq 1 ]]; then
+            recover_pulse_after_failed_replacement "$service_name"
+        else
+            print_error "Agent script destination needs manual reconciliation; Pulse has not been restarted"
         fi
-    done
+        return 1
+    fi
 
     install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
