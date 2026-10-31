@@ -26,8 +26,9 @@ const guests = [
 const literal = '<img src=x onerror=alert(1)>';
 const volume = `local:backup/very-long-production-archive-${'preserved-'.repeat(8)}.vma.zst`;
 let updated: boolean;
+let dateEvidence: boolean;
 function inventories() {
-  return {
+  const data = {
     backups: [
       identityPBS({ id: 'same-time-pbs-a', namespace: 'east', size: updated ? 0 : 2048 }),
       identityPBS({
@@ -53,6 +54,17 @@ function inventories() {
     ],
     backupTasks: [],
   };
+  if (dateEvidence) {
+    data.backups[0].backupTime = updated
+      ? '2026-10-04T10:15:34.123456789+02:00'
+      : '2026-10-04T10:00:00.123456789Z';
+    data.backups[1].backupTime = '2026-09-31T10:00:00Z';
+    data.storageBackups[0].time = '2026-10-04T11:00:01+00:00';
+    data.storageBackups[1].time = '2099-10-04T11:00:00Z';
+    data.guestSnapshots[0].time = '';
+    data.guestSnapshots[1].time = literal;
+  }
+  return data;
 }
 function mount() {
   api.fetch.mockImplementation((url: string) => {
@@ -94,6 +106,7 @@ beforeEach(() => {
   resetCreateNonSuspendingQueryCacheForTest();
   api.width = 320;
   updated = false;
+  dateEvidence = false;
   window.history.replaceState({}, '', '/proxmox/backups/coverage');
 });
 afterEach(() => {
@@ -103,6 +116,55 @@ afterEach(() => {
 });
 
 describe('Coverage restore-point identity through parsed inventory', () => {
+  it.each([320, 480, 720, 1200])(
+    'keeps exact reported dates inspectable without hover at %ipx',
+    async (width) => {
+      api.width = width;
+      dateEvidence = true;
+      mount();
+      const panel = await open();
+      const expected = [
+        ['same-time-pbs-a', '2026-10-04T10:00:00.123456789Z'],
+        ['same-time-pbs-b', '2026-09-31T10:00:00Z'],
+        ['same-time-archive-a', '2026-10-04T11:00:01+00:00'],
+        [`same-time-archive-b ${literal}`, '2099-10-04T11:00:00Z'],
+        ['same-time-snapshot-a', 'Not reported'],
+        ['same-time-snapshot-b', literal],
+      ];
+      for (const [id, date] of expected) {
+        const details = Array.from(
+          panel.querySelectorAll<HTMLElement>('[data-coverage-evidence-detail]'),
+        ).find((element) => element.textContent?.startsWith(`Identifier: ${id}\n`))!;
+        expect(details).toHaveTextContent(`Reported date: ${date}`);
+        expect(details).not.toHaveAttribute('title');
+        expect(details).toHaveClass('whitespace-pre-line', 'wrap-anywhere');
+        if (id !== 'same-time-pbs-a' && id !== 'same-time-archive-a') {
+          expect(
+            within(details.closest('tr')!).getByText('Unknown', { exact: true }),
+          ).toBeVisible();
+        }
+      }
+      expect(panel.querySelector('img')).toBeNull();
+      expect(panel).toHaveTextContent('entries cannot be placed in time');
+      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      const before = evidenceRows(panel);
+      const toggle = screen.getByRole('button', { name: /Collapse details for east-100/ });
+      toggle.focus();
+      updated = true;
+      await vi.advanceTimersByTimeAsync(30_000);
+      await waitFor(() =>
+        expect(panel).toHaveTextContent('Reported date: 2026-10-04T10:15:34.123456789+02:00'),
+      );
+      expect(panel).not.toHaveTextContent('2026-10-04T10:00:00.123456789Z');
+      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      for (const row of before) expect(evidenceRows(panel)).toContain(row);
+      expect(toggle).toHaveFocus();
+      expect(api.fetch).toHaveBeenCalledTimes(4);
+      await fireEvent.click(screen.getByRole('button', { name: /Expand details for west-100/ }));
+      expect(screen.getByTestId('proxmox-coverage-detail')).not.toHaveTextContent('Reported date:');
+    },
+  );
+
   it.each([320, 479, 480, 719, 720, 960, 1200])(
     'distinguishes same-time points with full identifiers and metadata at %ipx',
     async (width) => {

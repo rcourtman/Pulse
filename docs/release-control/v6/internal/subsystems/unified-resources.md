@@ -23,6 +23,23 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Coverage dates are inspectable without hover
+
+Open Coverage evidence retains each point’s exact reported date as wrapping
+literal text beside its identifier and metadata, including seconds, fractions
+and timezone offsets. Missing dates say “Not reported”. Invalid and future raw
+dates remain inspectable without becoming valid ages or ordered evidence. The
+existing Unknown age and uncertainty notices still apply. This works in both
+the Details column and its folded phone projection; it adds no read or recovery
+operation and does not change completion, posture, chronology or preview rules.
+
+Normal-suite `coverageRestorePointIdentity.test.tsx` exercises parsed PVE/PBS
+inventory for all three point kinds, valid/invalid/future/missing/literal dates,
+responsive projections, same-row polling and namesake isolation. Desktop and
+narrow browser proof inspects the real Backups consumer and its updated dates.
+The canonical bytes formatter supplies the existing Unknown size fallback in
+both projections; no byte admission or sorting rule changes.
+
 ### Coverage restore points retain their identifiers without hover
 
 The existing open Coverage evidence rows show each point's full identifier and
