@@ -3062,16 +3062,23 @@ prune_config_backups() {
     local snapshot_prefix="$2"
     local keep="${CONFIG_BACKUP_KEEP_COUNT:-5}"
     local current_backup="${3:-}" current_count=0
+    local LC_ALL=C
     local backups=()
     local entry
 
-    while IFS= read -r entry; do
+    # Expand only the final wildcard, never the instance's literal prefix.
+    # A find -name pattern borrows []?* from a custom config name; line-based
+    # output also turns an embedded newline into a different deletion target.
+    # Bash's ordered pathname expansion keeps each complete path as one word.
+    # Match find's non-following directory scope, including an empty inventory.
+    for entry in "$backup_parent/$snapshot_prefix"*; do
+        [[ -d "$entry" && ! -L "$entry" ]] || continue
         if [[ "$entry" == "$current_backup" ]] && (( keep > 0 )); then
             current_count=1
             continue
         fi
-        [[ -n "$entry" ]] && backups+=("$entry")
-    done < <(find "$backup_parent" -maxdepth 1 -mindepth 1 -type d -name "${snapshot_prefix}*" 2>/dev/null | sort)
+        backups+=("$entry")
+    done
 
     local excess=$(( ${#backups[@]} + current_count - keep ))
     if (( excess <= 0 )); then
