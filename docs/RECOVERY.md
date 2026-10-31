@@ -68,7 +68,8 @@ answer different questions:
   counts normally in **Count**. Amber marks days with unknown sizes, not zero
   volume. When a day mixes known and unknown sizes, its known volume is a lower
   bound, not a complete total. These are recorded artifact sizes, not
-  PBS datastore usage or deduplicated physical space.
+  PBS datastore usage or deduplicated physical space. For a row marked
+  **Unknown size**, use the [individual size checks](#restore-point-sizes-and-unknown-values).
 - Guest **snapshots** can contribute to completed-point and chart totals.
   They are not independent backups and do not fill Coverage's **Last backup**.
   If a completed backup's date is unavailable or in the future, the latest
@@ -96,6 +97,30 @@ History to make totals agree. For contradictory PBS verification or protection,
 use the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unprotected).
 An unresponsive guest or uncertain freeze/thaw needs the
 [backup safety precaution](VM_DISK_MONITORING.md#backup-safety), not a chart check.
+
+## Restore-point sizes and unknown values
+
+In **Proxmox → Backups → By date**, **Unknown size** means no usable byte
+count was reported, not that the restore point is empty, corrupt or failed.
+Missing sizes and zero placeholders both remain unknown. The point stays in
+the inventory; its completion, verification and protection are separate evidence.
+A positive size is the reported artifact size, not the guest's disk capacity,
+PBS datastore usage or deduplicated physical space.
+
+On a wide screen, use the **Size** column. Sorting it keeps measured sizes
+ahead of unknowns in **both directions**; reversing the sort reverses only
+the measured order. On a phone, expand the restore-point row and read **Size**
+under **Restore point**. A hidden column is not a missing reading. In
+**Coverage**, expand the workload to see each point's size; narrow layouts
+show it alongside the point's identity. One known size does not fill the gaps
+for other points. For daily totals, see [why counts and volume differ](#why-proxmox-backup-counts-differ).
+
+Compare the same workload, repository and time in existing provider records
+before drawing a conclusion. Do not run another backup, verification or
+restore, delete a point or clear History just to obtain a size. Older versions
+may show a dash or zero instead; neither establishes an empty backup. If a
+guest is unresponsive or thaw is uncertain, stop this display comparison and
+follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 
 ## What the evidence means
 
