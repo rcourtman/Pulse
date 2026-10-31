@@ -3052,6 +3052,29 @@ create_user() {
     fi
 }
 
+config_backup_receipt_matches() {
+    local backup_dir="$1" receipt="$1.pulse-snapshot"
+    local size identity version source recorded_path recorded_identity remainder=""
+    # A name is not evidence that this installer created the directory. Bind
+    # the private sidecar to the exact source, destination and directory inode.
+    # Replaced directories, copied receipts, links and malformed records stay put.
+    [[ -d "$backup_dir" && ! -L "$backup_dir" && -f "$receipt" && ! -L "$receipt" ]] || return 1
+    size=$(stat -c '%s' -- "$receipt") || return 1
+    [[ "$size" =~ ^[0-9]+$ ]] && (( size <= 16384 )) || return 1
+    identity=$(stat -c '%d:%i' -- "$backup_dir") || return 1
+    {
+        IFS= read -r -d '' version &&
+            IFS= read -r -d '' source &&
+            IFS= read -r -d '' recorded_path &&
+            IFS= read -r -d '' recorded_identity || return 1
+        if IFS= read -r -d '' remainder || [[ -n "$remainder" ]]; then
+            return 1
+        fi
+        [[ "$version" == pulse-config-snapshot-v1 && "$source" == "$CONFIG_DIR" &&
+           "$recorded_path" == "$backup_dir" && "$recorded_identity" == "$identity" ]]
+    } < "$receipt"
+}
+
 prune_config_backups() {
     # Unattended updates create one snapshot per run; without rotation they
     # fill small root filesystems (issue #1646). Keep the newest snapshots
@@ -3064,7 +3087,7 @@ prune_config_backups() {
     local current_backup="${3:-}" current_count=0
     local LC_ALL=C
     local backups=()
-    local entry
+    local entry unrecognised=0
 
     # Expand only the final wildcard, never the instance's literal prefix.
     # A find -name pattern borrows []?* from a custom config name; line-based
@@ -3073,12 +3096,19 @@ prune_config_backups() {
     # Match find's non-following directory scope, including an empty inventory.
     for entry in "$backup_parent/$snapshot_prefix"*; do
         [[ -d "$entry" && ! -L "$entry" ]] || continue
+        if ! config_backup_receipt_matches "$entry"; then
+            (( unrecognised += 1 ))
+            continue
+        fi
         if [[ "$entry" == "$current_backup" ]] && (( keep > 0 )); then
             current_count=1
             continue
         fi
         backups+=("$entry")
     done
+    if (( unrecognised > 0 )); then
+        print_warn "Left $unrecognised unrecognised configuration backup directories unchanged; retention applies only to verified installer snapshots"
+    fi
 
     local excess=$(( ${#backups[@]} + current_count - keep ))
     if (( excess <= 0 )); then
@@ -3089,6 +3119,8 @@ prune_config_backups() {
     for (( i = 0; i < excess; i++ )); do
         if ! rm -rf -- "${backups[$i]}"; then
             print_warn "Could not remove old configuration backup ${backups[$i]}"
+        elif ! rm -f -- "${backups[$i]}.pulse-snapshot"; then
+            print_warn "Could not remove configuration backup receipt ${backups[$i]}.pulse-snapshot"
         fi
     done
 }
@@ -3097,7 +3129,7 @@ backup_existing() {
     LAST_CONFIG_BACKUP_DIR=""
     if [[ -d "$CONFIG_DIR" ]]; then
         print_info "Backing up existing configuration..."
-        local backup_parent backup_dir backup_stage backup_payload stage_name config_name
+        local backup_parent backup_dir backup_stage backup_payload stage_name config_name backup_identity
         # Command substitution strips every trailing newline, including bytes
         # in the configured name or its parent. Keep a sentinel until after
         # capture, then remove only the utility's one output newline and marker.
@@ -3147,12 +3179,29 @@ backup_existing() {
             print_error "Could not protect configuration backup; existing snapshots are unchanged"
             return 1
         fi
+        # The sidecar is outside the copied tree: never overwrite a source
+        # file or add metadata to the recovery payload itself. NUL delimiters
+        # retain every pathname byte, including embedded/trailing newlines.
+        if ! backup_identity=$(stat -c '%d:%i' -- "$backup_payload") ||
+           ! (umask 077; printf 'pulse-config-snapshot-v1\0%s\0%s\0%s\0' \
+               "$CONFIG_DIR" "$backup_dir" "$backup_identity" > "$backup_stage/receipt") ||
+           [[ -e "$backup_dir.pulse-snapshot" || -L "$backup_dir.pulse-snapshot" ]]; then
+            rm -rf -- "$backup_stage"
+            print_error "Could not prepare configuration backup ownership receipt; existing snapshots are unchanged"
+            return 1
+        fi
         # GNU mv -n can return zero without moving anything. Admit publication
         # only when our stage actually disappeared; never merge or overwrite a
         # file, directory or link that appeared at the final path.
         if ! mv -T -n -- "$backup_payload" "$backup_dir" || [[ -e "$backup_payload" || -L "$backup_payload" ]]; then
             rm -rf -- "$backup_stage"
             print_error "Could not publish configuration backup; existing snapshots are unchanged"
+            return 1
+        fi
+        if ! mv -T -n -- "$backup_stage/receipt" "$backup_dir.pulse-snapshot" ||
+           [[ -e "$backup_stage/receipt" || -L "$backup_stage/receipt" ]]; then
+            rm -rf -- "$backup_stage"
+            print_error "Configuration copy retained at $backup_dir, but its ownership receipt could not be published; no snapshots were rotated"
             return 1
         fi
         rmdir -- "$backup_stage" || print_warn "Could not remove empty configuration backup staging directory"
@@ -3168,8 +3217,12 @@ backup_existing() {
 # automatic retry until the filesystem fills (#2127).
 discard_last_config_backup() {
     if [[ -n "${LAST_CONFIG_BACKUP_DIR:-}" && -e "$LAST_CONFIG_BACKUP_DIR" ]]; then
-        if ! rm -rf -- "$LAST_CONFIG_BACKUP_DIR"; then
+        if ! config_backup_receipt_matches "$LAST_CONFIG_BACKUP_DIR"; then
+            print_warn "Configuration backup ownership is unverified; leaving $LAST_CONFIG_BACKUP_DIR unchanged"
+        elif ! rm -rf -- "$LAST_CONFIG_BACKUP_DIR"; then
             print_warn "Could not remove unneeded configuration backup ${LAST_CONFIG_BACKUP_DIR}"
+        elif ! rm -f -- "$LAST_CONFIG_BACKUP_DIR.pulse-snapshot"; then
+            print_warn "Could not remove configuration backup receipt $LAST_CONFIG_BACKUP_DIR.pulse-snapshot"
         fi
     fi
     LAST_CONFIG_BACKUP_DIR=""

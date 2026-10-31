@@ -604,8 +604,13 @@ func TestRootInstallScriptConfigBackupRotatesOldSnapshots(t *testing.T) {
 ` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
 ` + extractRootInstallShellFunction(t, "get_directory_size_bytes") + `
 ` + extractRootInstallShellFunction(t, "ensure_config_backup_headroom") + `
-` + extractRootInstallShellFunction(t, "prune_config_backups") + `
+` + extractRootInstallShellFunction(t, "config_backup_receipt_matches") + "\n" +
+		extractRootInstallShellFunction(t, "prune_config_backups") + `
 ` + extractRootInstallShellFunction(t, "backup_existing") + `
+		for entry in "$INSTALL_DIR/config-backups"/*; do
+			(umask 077; printf 'pulse-config-snapshot-v1\0%s\0%s\0%s\0' \
+				"$CONFIG_DIR" "$entry" "$(stat -c '%d:%i' -- "$entry")" > "$entry.pulse-snapshot")
+		done
 		date() { printf '20260706-020000\n'; }
 		chmod a-w "$(dirname "$CONFIG_DIR_UNDER_TEST")" 2>/dev/null || true
 		trap 'chmod u+w "$(dirname "$CONFIG_DIR_UNDER_TEST")" 2>/dev/null || true' EXIT
@@ -628,7 +633,9 @@ func TestRootInstallScriptConfigBackupRotatesOldSnapshots(t *testing.T) {
 	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		names = append(names, entry.Name())
+		if entry.IsDir() {
+			names = append(names, entry.Name())
+		}
 	}
 	if len(names) != 5 {
 		t.Fatalf("expected 5 snapshots after rotation, got %d: %v", len(names), names)
@@ -675,7 +682,8 @@ func TestRootInstallScriptDiscardsUnneededConfigBackup(t *testing.T) {
 ` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
 ` + extractRootInstallShellFunction(t, "get_directory_size_bytes") + `
 ` + extractRootInstallShellFunction(t, "ensure_config_backup_headroom") + `
-` + extractRootInstallShellFunction(t, "prune_config_backups") + `
+` + extractRootInstallShellFunction(t, "config_backup_receipt_matches") + "\n" +
+		extractRootInstallShellFunction(t, "prune_config_backups") + `
 ` + extractRootInstallShellFunction(t, "backup_existing") + `
 ` + extractRootInstallShellFunction(t, "discard_last_config_backup") + `
 		date() { printf '20260920-160000\n'; }
@@ -2960,7 +2968,8 @@ func TestRootInstallScriptConfigBackupZeroRetention(t *testing.T) {
 print_info() { :; }; print_warn() { :; }; print_error() { :; }
 ensure_config_backup_headroom() { :; }
 CONFIG_BACKUP_KEEP_COUNT=0
-` + extractRootInstallShellFunction(t, "prune_config_backups") + "\n" +
+` + extractRootInstallShellFunction(t, "config_backup_receipt_matches") + "\n" +
+		extractRootInstallShellFunction(t, "prune_config_backups") + "\n" +
 		extractRootInstallShellFunction(t, "backup_existing") + `
 backup_existing
 test -f "$CONFIG_DIR/settings.json"
@@ -3000,6 +3009,13 @@ func TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots(t *test
 		"test_discard_removes_only_this_invocations_new_snapshot",
 		"test_missing_config_clears_stale_ownership_without_deleting_prior_snapshot",
 		"test_read_only_config_parent_uses_the_existing_hardened_unit_fallback",
+		"test_unmarked_prefix_directories_and_legacy_copies_are_never_deleted",
+		"test_only_exact_bounded_regular_ownership_receipts_admit_rotation",
+		"test_receipt_is_private_and_does_not_change_the_copied_configuration",
+		"test_receipt_preparation_failure_stops_without_publication_or_rotation",
+		"test_receipt_publication_failures_retain_the_copy_without_rotation",
+		"test_repeated_real_publications_rotate_receipts_and_preserve_legacy_copies",
+		"test_replaced_snapshot_cannot_be_deleted_by_rotation_or_discard",
 		"test_every_update_entry_stops_on_failed_backup_even_in_an_or_list",
 	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
 }

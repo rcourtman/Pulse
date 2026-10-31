@@ -79,6 +79,21 @@ describe('installer configuration snapshot guidance', () => {
     expect(rendered.querySelector('pre')).toBeNull();
   });
 
+  it('explains the ownership limit without adopting unmarked or historical directories', () => {
+    const copy = section().textContent!.replace(/\s+/g, ' ');
+    for (const distinction of [
+      'matching .pulse-snapshot ownership sidecar',
+      'Older copies without a sidecar',
+      'left unchanged and reported',
+      'do not count towards that limit',
+      'can still occupy disk space',
+      'Do not create or copy a sidecar',
+      'does not establish that the copy can be restored',
+    ]) {
+      expect(copy).toContain(distinction);
+    }
+  });
+
   it('reaches real shipped recovery sections from the existing installation guide', () => {
     expect(
       article('INSTALL').querySelector(

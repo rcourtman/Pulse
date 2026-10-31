@@ -43,11 +43,23 @@ class ConfigBackupPublication(unittest.TestCase):
         self.install = self.root / "install"
         self.install.mkdir()
 
-    def old_snapshot(self, stamp=STAMP):
+    def old_snapshot(self, stamp=STAMP, owned=True):
         path = self.config.parent / (self.config.name + ".backup." + stamp)
         path.mkdir()
         (path / "settings.json").write_text("prior recovery state\n")
+        if owned:
+            self.write_receipt(path)
         return path
+
+    def write_receipt(self, path, source=None, destination=None, identity=None):
+        observed = path.stat()
+        fields = (b"pulse-config-snapshot-v1", os.fsencode(source or self.config),
+                  os.fsencode(destination or path),
+                  (identity or f"{observed.st_dev}:{observed.st_ino}").encode())
+        receipt = Path(str(path) + ".pulse-snapshot")
+        receipt.write_bytes(b"\0".join(fields) + b"\0")
+        receipt.chmod(0o600)
+        return receipt
 
     def shell(self, body, **extra):
         env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
@@ -62,7 +74,9 @@ class ConfigBackupPublication(unittest.TestCase):
     def completed(self):
         # The configured namespace is data, not a glob in the oracle either.
         return sorted(p for p in self.config.parent.iterdir()
-                      if p.name.startswith(self.config.name + ".backup."))
+                      if p.is_dir() and not p.is_symlink()
+                      and p.name.startswith(self.config.name + ".backup.")
+                      and not p.name.endswith(".pulse-snapshot"))
 
     def assert_no_stages(self):
         self.assertEqual([p for p in self.config.parent.iterdir()
@@ -432,6 +446,189 @@ discard_last_config_backup
             self.assertEqual(list(latest.parent.glob(".*.backup.*")), [])
         finally:
             self.config.parent.chmod(0o700)
+
+
+    def test_unmarked_prefix_directories_and_legacy_copies_are_never_deleted(self):
+        for keep in (0, 1, 5):
+            with self.subTest(keep=keep):
+                self.config = self.root / f"unmarked-{keep}" / "config"
+                self.config.mkdir(parents=True)
+                (self.config / "settings.json").write_text("selected live state\n")
+                peers = [self.old_snapshot("000-live", owned=False),
+                         self.old_snapshot("19000101-000000.Abc123", owned=False)]
+                legacy = [self.old_snapshot(f"202610{day:02d}-000000", owned=False)
+                          for day in range(1, 7)]
+                for peer in peers:
+                    (peer / ".encryption.key").write_text("synthetic peer key\n")
+                result = self.shell('backup_existing\n', CONFIG_BACKUP_KEEP_COUNT=str(keep))
+                self.assertIn("unrecognised", result.stderr)
+                for path in peers + legacy:
+                    self.assertEqual((path / "settings.json").read_text(), "prior recovery state\n")
+                for peer in peers:
+                    self.assertEqual((peer / ".encryption.key").read_text(), "synthetic peer key\n")
+                self.assertEqual(len(self.completed()), len(peers + legacy) + min(keep, 1))
+                self.assertEqual((self.config / "settings.json").read_text(), "selected live state\n")
+                self.assert_no_stages()
+
+    def test_only_exact_bounded_regular_ownership_receipts_admit_rotation(self):
+        for kind in ("source", "destination", "identity", "version", "truncated",
+                     "trailing", "extra-null", "oversized", "link", "directory"):
+            with self.subTest(kind=kind):
+                old = self.old_snapshot("invalid-" + kind)
+                receipt = Path(str(old) + ".pulse-snapshot")
+                if kind == "source":
+                    self.write_receipt(old, source=self.root / "other-config")
+                elif kind == "destination":
+                    self.write_receipt(old, destination=self.root / "other-copy")
+                elif kind == "identity":
+                    self.write_receipt(old, identity="0:0")
+                elif kind == "version":
+                    receipt.write_bytes(receipt.read_bytes().replace(b"-v1", b"-v2", 1))
+                elif kind == "truncated":
+                    receipt.write_bytes(receipt.read_bytes()[:-1])
+                elif kind == "trailing":
+                    receipt.write_bytes(receipt.read_bytes() + b"unexpected")
+                elif kind == "extra-null":
+                    receipt.write_bytes(receipt.read_bytes() + b"\0")
+                elif kind == "oversized":
+                    receipt.write_bytes(b"x" * 16385)
+                else:
+                    saved = self.root / ("receipt-" + kind)
+                    receipt.rename(saved)
+                    if kind == "link":
+                        receipt.symlink_to(saved)
+                    else:
+                        receipt.mkdir()
+                self.shell('backup_existing\n', CONFIG_BACKUP_KEEP_COUNT="0")
+                self.assert_prior(old)
+                self.assertTrue(receipt.exists())
+                self.assert_no_stages()
+
+    def test_receipt_is_private_and_does_not_change_the_copied_configuration(self):
+        (self.config / ".pulse-snapshot").write_text("existing private source file\n")
+        self.shell('backup_existing\nprintf "%s" "$LAST_CONFIG_BACKUP_DIR" > "$FIXTURE/latest"\n')
+        latest = Path((self.root / "latest").read_text())
+        receipt = Path(str(latest) + ".pulse-snapshot")
+        observed = latest.stat()
+        self.assertEqual(receipt.read_bytes(), b"\0".join((b"pulse-config-snapshot-v1",
+                         os.fsencode(self.config), os.fsencode(latest),
+                         f"{observed.st_dev}:{observed.st_ino}".encode())) + b"\0")
+        self.assertEqual(stat.S_IMODE(receipt.stat().st_mode), 0o600)
+        self.assertEqual((latest / ".pulse-snapshot").read_bytes(),
+                         (self.config / ".pulse-snapshot").read_bytes())
+        self.assertEqual((latest / ".env").read_bytes(), (self.config / ".env").read_bytes())
+        self.assert_no_stages()
+
+    def test_receipt_preparation_failure_stops_without_publication_or_rotation(self):
+        for kind in ("stat", "write", "collision"):
+            with self.subTest(kind=kind):
+                old = self.old_snapshot("prepare-" + kind)
+                result = self.shell(r'''
+case "$KIND" in
+  stat) stat() { return 23; } ;;
+  write) printf() { [[ "$1" != pulse-config-snapshot-v1* ]] || return 23; builtin printf "$@"; } ;;
+  collision) mktemp() {
+    local stage
+    stage=$(command mktemp "$@") || return
+    local name="${stage##*/}"
+    local final="${stage%/*}/${name#.}"
+    printf 'foreign receipt\n' > "$final.pulse-snapshot"
+    printf '%s' "$final.pulse-snapshot" > "$FIXTURE/collision-receipt"
+    printf '%s\n' "$stage"
+  } ;;
+esac
+if backup_existing; then exit 90; fi
+test -z "$LAST_CONFIG_BACKUP_DIR"
+''', KIND=kind)
+                self.assertIn("Could not prepare configuration backup ownership receipt", result.stderr)
+                self.assert_prior(old)
+                self.assert_no_stages()
+                if kind == "collision":
+                    receipt = Path((self.root / "collision-receipt").read_text())
+                    self.assertEqual(receipt.read_text(), "foreign receipt\n")
+                    self.assertFalse(Path(str(receipt).removesuffix(".pulse-snapshot")).exists())
+
+    def test_receipt_publication_failures_retain_the_copy_without_rotation(self):
+        for kind in ("failure", "skipped", "file", "directory", "link"):
+            with self.subTest(kind=kind):
+                old = self.old_snapshot("publish-" + kind)
+                result = self.shell(r'''
+mv() {
+    local destination="${@: -1}"
+    if [[ "$destination" == *.pulse-snapshot ]]; then
+        printf '%s' "${destination%.pulse-snapshot}" > "$FIXTURE/retained-copy"
+        case "$KIND" in
+          failure) return 23 ;;
+          skipped) return 0 ;;
+          file) printf 'foreign receipt\n' > "$destination" ;;
+          directory) mkdir "$destination"; printf 'foreign receipt\n' > "$destination/retained" ;;
+          link) ln -s "$FIXTURE/missing-receipt" "$destination" ;;
+        esac
+    fi
+    command mv "$@"
+}
+if backup_existing; then exit 90; fi
+test -z "$LAST_CONFIG_BACKUP_DIR"
+''', KIND=kind)
+                self.assertIn("no snapshots were rotated", result.stderr)
+                copy = Path((self.root / "retained-copy").read_text())
+                self.assertEqual((copy / "settings.json").read_text(), "current state\n")
+                self.assertEqual((copy / ".env").read_bytes(), (self.config / ".env").read_bytes())
+                self.assert_prior(old)
+                self.assert_no_stages()
+                receipt = Path(str(copy) + ".pulse-snapshot")
+                if kind == "file":
+                    self.assertEqual(receipt.read_text(), "foreign receipt\n")
+                elif kind == "directory":
+                    self.assertEqual((receipt / "retained").read_text(), "foreign receipt\n")
+                elif kind == "link":
+                    self.assertEqual(os.readlink(receipt), str(self.root / "missing-receipt"))
+                else:
+                    self.assertFalse(receipt.exists())
+
+    def test_repeated_real_publications_rotate_receipts_and_preserve_legacy_copies(self):
+        for keep in (0, 1, 5):
+            with self.subTest(keep=keep):
+                self.config = self.root / f"real-{keep}" / "config"
+                self.config.mkdir(parents=True)
+                (self.config / "settings.json").write_text("selected live state\n")
+                legacy = self.old_snapshot("20260101-000000", owned=False)
+                self.shell(r'''
+for day in 01 02 03 04 05 06 07 08; do
+    date() { printf '202610%s-000000\n' "$day"; }
+    backup_existing
+done
+''', CONFIG_BACKUP_KEEP_COUNT=str(keep))
+                self.assert_prior(legacy)
+                copies = [p for p in self.completed() if p != legacy]
+                self.assertEqual(len(copies), keep)
+                receipts = list(self.config.parent.glob("*.pulse-snapshot"))
+                self.assertEqual(len(receipts), keep)
+                self.assertEqual({Path(str(p) + ".pulse-snapshot") for p in copies}, set(receipts))
+                for copy in copies:
+                    self.assertEqual((copy / "settings.json").read_text(), "selected live state\n")
+                self.assert_no_stages()
+
+    def test_replaced_snapshot_cannot_be_deleted_by_rotation_or_discard(self):
+        for action in ("rotate", "discard"):
+            with self.subTest(action=action):
+                result = self.shell(r'''
+backup_existing
+current="$LAST_CONFIG_BACKUP_DIR"
+command mv -- "$current" "$FIXTURE/owned-original-$ACTION"
+mkdir -- "$current"
+printf 'replacement live state\n' > "$current/settings.json"
+if [[ "$ACTION" == rotate ]]; then
+    CONFIG_BACKUP_KEEP_COUNT=0 prune_config_backups "${current%/*}" "${current##*/}"
+else
+    discard_last_config_backup
+    test -z "$LAST_CONFIG_BACKUP_DIR"
+fi
+test "$(cat "$current/settings.json")" = 'replacement live state'
+test "$(cat "$FIXTURE/owned-original-$ACTION/settings.json")" = 'current state'
+''', ACTION=action)
+                self.assertIn("unverified" if action == "discard" else "unrecognised", result.stderr)
+                self.assert_no_stages()
 
     def test_every_update_entry_stops_on_failed_backup_even_in_an_or_list(self):
         for flow in ("pinned", "menu-update", "menu-reinstall"):

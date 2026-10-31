@@ -298,8 +298,15 @@ sessions and monitoring data, even if their names say only “configuration”.
 
 The installer normally retains five completed copies for that configuration
 name, ordered by their timestamped names, not by verified restore readiness.
-An update that aborts before replacing files can remove the copy it just made.
-Later runs can rotate older copies away, so these are not a durable archive.
+New installers rotate only copies with a matching `.pulse-snapshot` ownership
+sidecar beside the directory. Older copies without a sidecar, unrecognised
+records and replaced directories are left unchanged and reported; they do not
+count towards that limit and can still occupy disk space. Do not create or
+copy a sidecar to make a directory eligible for deletion. The record identifies
+an installer copy; it does not establish that the copy can be restored.
+An update that aborts before replacing files can remove the verified copy it
+just made. Later runs can rotate older verified copies away, so these are not
+a durable archive.
 An absent copy does not prove that the update completed or that data was lost.
 Preserve the current state and original evidence; do not delete another
 instance's snapshots, change retention or reset keys to make recovery fit.
