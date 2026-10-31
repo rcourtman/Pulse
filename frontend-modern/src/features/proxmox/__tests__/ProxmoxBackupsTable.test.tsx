@@ -1734,6 +1734,26 @@ describe('backup-date-evidence connected inventory', () => {
     ));
 
   it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
+    '[regression] By date exposes the reported %s without granting it an age',
+    async (date) => {
+      window.history.replaceState({}, '', '/?view=date');
+      supply(date);
+      mount();
+      const toggle = await screen.findByRole('button', { name: /Expand details.*Identifier:/ });
+      await fireEvent.click(toggle);
+      const panel = screen.getByTestId('proxmox-recoverable-detail');
+      expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(date);
+      expect(within(panel).getByText('Created').closest('tr')).toHaveTextContent('Unknown');
+      const notice = screen.getByText(
+        /Backup entries with unavailable or future dates remain listed/,
+      );
+      expect(notice).toHaveTextContent('Their ages are unknown.');
+      expect(notice).toHaveTextContent('excluded from the activity chart and day filters');
+      expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
     '[regression] Coverage preserves %s uncertainty instead of absence or healthy age',
     async (date) => {
       window.history.replaceState({}, '', '/?view=coverage');

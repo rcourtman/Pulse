@@ -92,16 +92,22 @@ function groupByDay(artifacts: readonly RecoverableArtifact[]): DayGroup[] {
 }
 
 // The drawer dot repeats the row's State badge: the same states, the same colours.
-const artifactStateIndicator = (artifact: RecoverableArtifact): StatusIndicator => {
-  const label = artifactStateLabel(artifact);
-  if (artifact.running) return { variant: 'info', label };
-  if (artifact.failed) return { variant: 'danger', label };
-  if (artifact.sourceKind === 'snapshot') return { variant: 'info', label };
-  if (artifact.verified === true) return { variant: 'success', label };
-  if (artifact.verified === false) return { variant: 'warning', label };
-  if (artifact.protected) return { variant: 'info', label };
-  return { variant: 'muted', label };
-};
+const artifactStateIndicator = (artifact: RecoverableArtifact): StatusIndicator => ({
+  variant: artifact.running
+    ? 'info'
+    : artifact.failed
+      ? 'danger'
+      : artifact.sourceKind === 'snapshot'
+        ? 'info'
+        : artifact.verified === true
+          ? 'success'
+          : artifact.verified === false
+            ? 'warning'
+            : artifact.protected
+              ? 'info'
+              : 'muted',
+  label: artifactStateLabel(artifact),
+});
 
 const artifactVerificationText = (artifact: RecoverableArtifact): string => {
   if (artifact.verified === true) return 'Verified';
@@ -154,6 +160,7 @@ const artifactEvidenceLimit = (artifact: RecoverableArtifact): string => {
 // repository identity must also be readable before choosing a point on a phone.
 const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSection[] => {
   const source = getProxmoxBackupSourcePresentation(artifact.sourceKind);
+  const hasSize = artifact.size && artifact.size > 0;
   return compactDetailSections([
     {
       label: 'Restore point',
@@ -166,16 +173,17 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.created, artifactCreatedLabel(artifact), {
           tone: artifact.createdMs === undefined ? 'warning' : undefined,
         }),
+        // Keep the provider's exact value beside its interpretation. Formatting
+        // loses subsecond precision/offsets; Unknown otherwise hides bad dates.
+        makeDetailRow('Reported date', artifact.createdAt || 'Not reported', { wrap: true }),
         makeDetailRow(
           'Size',
-          artifact.size && artifact.size > 0
-            ? formatPlatformTableBytesValue(artifact.size)
-            : 'Unknown size',
-          { tone: artifact.size && artifact.size > 0 ? undefined : 'muted' },
+          hasSize ? formatPlatformTableBytesValue(artifact.size) : 'Unknown size',
+          { tone: hasSize ? undefined : 'muted' },
         ),
       ]),
       footerContent: (
-        <Show when={!(artifact.size && artifact.size > 0)}>
+        <Show when={!hasSize}>
           <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
             No usable size was reported. Unknown does not mean this restore point is empty.
           </p>

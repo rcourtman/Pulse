@@ -107,6 +107,9 @@ describe('ProxmoxRecoverableTable record drawer', () => {
       artifact.nativeId,
     );
     expect(within(panel).getByText('Created').closest('tr')).toHaveTextContent('2026');
+    expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(
+      artifact.createdAt,
+    );
     expect(within(panel).getByRole('link', { name: 'Open web' })).toHaveAttribute(
       'href',
       '/proxmox/overview?resource=vm-100',
