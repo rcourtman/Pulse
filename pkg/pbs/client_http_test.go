@@ -1030,3 +1030,142 @@ func TestClient_GetNodeStatus_MetricCompleteness(t *testing.T) {
 		})
 	}
 }
+
+// All three listings carry inventory authority: an accepted empty list may
+// remove previous backup evidence. A decodable prefix is not a complete read.
+func backupInventoryReaders() []struct {
+	name string
+	read func(*Client) (bool, error)
+} {
+	return []struct {
+		name string
+		read func(*Client) (bool, error)
+	}{
+		{"namespaces", func(c *Client) (bool, error) {
+			rows, err := c.ListNamespaces(context.Background(), "archive", "tenant", 2)
+			return rows == nil, err
+		}},
+		{"groups", func(c *Client) (bool, error) {
+			rows, err := c.ListBackupGroups(context.Background(), "archive", "tenant")
+			return rows == nil, err
+		}},
+		{"snapshots", func(c *Client) (bool, error) {
+			rows, err := c.ListBackupSnapshots(context.Background(), "archive", "tenant", "vm", "101")
+			return rows == nil, err
+		}},
+	}
+}
+
+func TestBackupInventoryRequiresWholeResponse(t *testing.T) {
+	bodies := map[string]string{
+		"second value":           `{"data":[]} {"data":[]}`,
+		"trailing garbage":       `{"data":[]} private-provider-detail`,
+		"reported error":         `{"data":[],"errors":{"private":"private-provider-detail"}}`,
+		"empty errors object":    `{"data":[],"errors":{}}`,
+		"false errors":           `{"data":[],"errors":false}`,
+		"duplicate data":         `{"data":null,"data":[]}`,
+		"escaped duplicate data": `{"data":null,"d\u0061ta":[]}`,
+		"duplicate errors":       `{"errors":{"private":"private-provider-detail"},"data":[],"errors":null}`,
+		"case data":              `{"data":null,"Data":[]}`,
+		"case errors":            `{"data":[],"errors":{"private":"private-provider-detail"},"Errors":null}`,
+		"invalid utf8":           "{\"data\":[],\"metadata\":\"\xff\"}",
+	}
+	for _, reader := range backupInventoryReaders() {
+		for name, body := range bodies {
+			t.Run(reader.name+"/"+name, func(t *testing.T) {
+				reads := 0
+				client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+					reads++
+					if r.Method != http.MethodGet {
+						t.Errorf("inventory attempted %s", r.Method)
+					}
+					_, _ = w.Write([]byte(body))
+				})
+				defer server.Close()
+				isNil, err := reader.read(client)
+				if err == nil || !isNil {
+					t.Fatalf("unread inventory accepted: nil=%t err=%v", isNil, err)
+				}
+				if strings.Contains(err.Error(), "private-provider-detail") {
+					t.Fatal("provider contents leaked in format diagnostic")
+				}
+				if reads != 1 {
+					t.Fatalf("malformed inventory caused %d requests", reads)
+				}
+			})
+		}
+	}
+}
+
+type inventoryResponseBody struct {
+	io.Reader
+	closeErr error
+	closed   bool
+	bytes    int
+}
+
+func (b *inventoryResponseBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	b.bytes += n
+	return n, err
+}
+func (b *inventoryResponseBody) Close() error { b.closed = true; return b.closeErr }
+
+type inventoryReadFailure struct{}
+
+func (inventoryReadFailure) Read([]byte) (int, error) { return 0, errors.New("fixture read failure") }
+
+func TestBackupInventoryRequiresCompleteBody(t *testing.T) {
+	for _, reader := range backupInventoryReaders() {
+		for _, failure := range []string{"read after JSON", "close", "size", "partial status"} {
+			t.Run(reader.name+"/"+failure, func(t *testing.T) {
+				body := &inventoryResponseBody{Reader: strings.NewReader(`{"data":[]}`)}
+				status := http.StatusOK
+				switch failure {
+				case "read after JSON":
+					body.Reader = io.MultiReader(body.Reader, inventoryReadFailure{})
+				case "close":
+					body.closeErr = errors.New("fixture close failure")
+				case "size":
+					body.Reader = io.MultiReader(body.Reader, strings.NewReader(strings.Repeat(" ", int(maxResponseBodyBytes))))
+				case "partial status":
+					status = http.StatusPartialContent
+				}
+				client, err := NewClient(ClientConfig{Host: "https://fixture.invalid", TokenName: "fixture@pbs!read", TokenValue: "fixture-only"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				reads := 0
+				client.httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					reads++
+					return &http.Response{StatusCode: status, Body: body, Header: make(http.Header)}, nil
+				})}
+				isNil, err := reader.read(client)
+				if err == nil || !isNil {
+					t.Errorf("incomplete inventory accepted: nil=%t err=%v", isNil, err)
+				}
+				if reads != 1 || !body.closed {
+					t.Errorf("reads=%d closed=%t", reads, body.closed)
+				}
+				if int64(body.bytes) > maxResponseBodyBytes+1 {
+					t.Errorf("read %d bytes past body bound", body.bytes)
+				}
+			})
+		}
+	}
+}
+
+func TestBackupInventoryAcceptsCompleteEmptyResponse(t *testing.T) {
+	for _, reader := range backupInventoryReaders() {
+		for _, body := range []string{`{"data":[]}`, ` {"data":[],"errors":null,"total":0,"metadata":{"future":"温度"}} `} {
+			t.Run(reader.name+"/"+body, func(t *testing.T) {
+				client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) })
+				defer server.Close()
+				isNil, err := reader.read(client)
+				if err != nil || isNil {
+					t.Fatalf("complete empty read rejected: nil=%t err=%v", isNil, err)
+				}
+			})
+		}
+	}
+}
