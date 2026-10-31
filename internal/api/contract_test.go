@@ -22899,6 +22899,33 @@ func TestContract_AgentCommandPayloadsRequireActionScope(t *testing.T) {
 	}
 }
 
+// The scoped action view is not a canonical result with its evidence removed.
+// Keep the explicit summary distinct so consumers cannot mistake withheld
+// digests or raw executor text for independently inspectable evidence.
+func TestContract_AgentScopedActionResultIsAnExplicitSummary(t *testing.T) {
+	record := agentDisclosureRecord(t, false)
+	payload, ok := projectAgentActionCompletedPayload(record)
+	if !ok {
+		t.Fatal("terminal action not projected")
+	}
+	restricted := redactAgentEventActionCompletedCommand(payload)
+	if restricted.ActionResultV2 != nil || restricted.ActionResultSummary == nil || !restricted.ActionResultSummary.DetailsRedacted {
+		t.Fatal("restricted canonical details must be withheld, not rewritten")
+	}
+	encoded, err := json.Marshal(restricted.ActionResultSummary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"digest", "summary", "reasonCode", "method", "subjectId", "refs", agentPrivateDetail} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Errorf("content-free summary retained %q: %s", forbidden, encoded)
+		}
+	}
+	if restricted.ActionResultSummary.Execution.Status != record.Result.ActionResultV2.Execution.Status || restricted.ActionResultSummary.Verification.EvidenceClass != record.Result.ActionResultV2.Verification.EvidenceClass {
+		t.Fatal("scope projection collapsed execution or evidence-class truth")
+	}
+}
+
 // TestContract_AgentFleetContextEndpointSurfacesStableShape pins the
 // agent-paradigm fleet view contract: the endpoint must return a
 // `resources` array (never null) so agents iterate without
