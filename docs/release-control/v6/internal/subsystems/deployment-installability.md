@@ -9051,6 +9051,15 @@ pre-mutation staging failure names only this invocation's completed snapshot.
 All three existing-install update/reinstall entries explicitly stop if the
 backup fails, including when their caller suppresses implicit shell `errexit`.
 
+Snapshot construction and rotation must also preserve trailing newline bytes in
+the configuration name and parent. Capturing `dirname` or `basename` output must
+remove only the utility's output delimiter, not any pathname bytes: otherwise a
+distinct instance's snapshots can be rotated and the new recovery copy published
+in that peer's namespace. Option-shaped relative names are data, and ordinary
+trailing directory slashes retain their existing path meaning. Failure to resolve
+either component stops before allocating, copying or rotating any snapshot, also
+under a conditional caller.
+
 `scripts/tests/test_server_config_backups.py` exercises real fixture files,
 copy/rename/retention, metadata and links; injected failures cover allocation,
 copy, privacy admission and publication, including exit-zero late collisions.
@@ -9058,6 +9067,11 @@ It observes the real copy before publication with mode-0755 source configuration
 and requires a private installer-owned ancestor, then checks the completed root
 and unchanged ownership/nested metadata/source permissions. Mode-setting failure
 also runs under a conditional caller so implicit shell `errexit` cannot admit it.
+Trailing-newline controls cover one and two newline bytes in the final name,
+parent and both, at zero, one and five retained snapshots; the selected namespace,
+peer recovery copies and both live configurations are checked independently.
+Relative option-shaped names, trailing slashes and both component-resolution
+failures run through the same registered fixture suite.
 It checks rapid
 retries, clock reversal, another invocation's retention, fallback, owned discard
 and the actual three update entries. The discovered Go installer suite executes

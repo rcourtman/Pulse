@@ -3097,8 +3097,21 @@ backup_existing() {
     LAST_CONFIG_BACKUP_DIR=""
     if [[ -d "$CONFIG_DIR" ]]; then
         print_info "Backing up existing configuration..."
-        local backup_parent backup_dir backup_stage backup_payload stage_name
-        backup_parent="$(dirname "$CONFIG_DIR")"
+        local backup_parent backup_dir backup_stage backup_payload stage_name config_name
+        # Command substitution strips every trailing newline, including bytes
+        # in the configured name or its parent. Keep a sentinel until after
+        # capture, then remove only the utility's one output newline and marker.
+        # The same literal name must select both publication and retention.
+        if ! backup_parent=$(dirname -- "$CONFIG_DIR" && printf '.'); then
+            print_error "Could not resolve configuration backup parent; existing snapshots are unchanged"
+            return 1
+        fi
+        backup_parent="${backup_parent%$'\n.'}"
+        if ! config_name=$(basename -- "$CONFIG_DIR" && printf '.'); then
+            print_error "Could not resolve configuration backup name; existing snapshots are unchanged"
+            return 1
+        fi
+        config_name="${config_name%$'\n.'}"
         if [[ ! -w "$backup_parent" ]]; then
             # The hardened pulse-update.service unit mounts /etc read-only
             # (ProtectSystem=strict; only /opt/pulse, /etc/pulse and /tmp are
@@ -3114,7 +3127,7 @@ backup_existing() {
         # Keep a private outer enclosure: cp -a also adopts the source root's
         # ownership/permissions, so copying directly into the reserved directory
         # can expose a legacy broadly readable config before publication.
-        if ! backup_stage=$(mktemp -d -- "$backup_parent/.$(basename "$CONFIG_DIR").backup.$(date +%Y%m%d-%H%M%S).XXXXXX"); then
+        if ! backup_stage=$(mktemp -d -- "$backup_parent/.$config_name.backup.$(date +%Y%m%d-%H%M%S).XXXXXX"); then
             print_error "Could not create configuration backup; existing snapshots are unchanged"
             return 1
         fi
@@ -3144,7 +3157,7 @@ backup_existing() {
         fi
         rmdir -- "$backup_stage" || print_warn "Could not remove empty configuration backup staging directory"
         LAST_CONFIG_BACKUP_DIR="$backup_dir"
-        prune_config_backups "$backup_parent" "$(basename "$CONFIG_DIR").backup." "$backup_dir"
+        prune_config_backups "$backup_parent" "$config_name.backup." "$backup_dir"
     fi
 }
 
