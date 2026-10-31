@@ -16,6 +16,29 @@
 
 ## Purpose
 
+### Completion requires confirmed server startup
+
+All five server installer entry paths require successful `start_pulse` before
+writing the completion marker or reporting installation success, including
+conditional/OR-list callers that disable Bash `errexit`. A failed or timed-out
+start, or unavailable/inactive readback, cannot be softened into a promise that
+the service will start on the next container boot. Boot-time enablement remains
+a separate observation: its failure warns without claiming a known cause.
+
+Fresh and previously stopped installations wait for an active-state readback
+within the existing bounded polling policy. Only updates that stopped a running
+Pulse keep the existing single explicit recovery-start retry. A confirmed active
+service can satisfy startup even when the start command returned an error; the
+error remains visible. An unconfirmed result fails with service-specific status
+and journal guidance, retaining installed files, configuration and recovery data.
+It does not claim rollback, HTTP health, sustained liveness or native recovery.
+
+`TestRootInstallStartupRequiresActiveReadback` registers confined controls for
+command/query failures and timeouts, delayed activation, prior-active retry,
+missing units, all five actual main consumers and preservation of synthetic
+configuration/key/identity bytes. No real service or original stopped workload
+is operated by those controls.
+
 ### Directory setup failure cannot become installation success
 
 The server installer's five source, pinned, menu-update, reinstall and fresh

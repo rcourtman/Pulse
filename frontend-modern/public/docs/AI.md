@@ -28,7 +28,9 @@ Pulse Patrol is a **scheduled and event-triggered governed operator** that:
 - **Routes governed actions** through approval, entitlement, policy, verification, and audit boundaries
 - **Preserves operator feedback** as context for future model runs without converting it into Pulse-authored fixes
 
-All while running entirely on your infrastructure with BYOK for complete privacy.
+Pulse runs collection and orchestration on your server. **BYOK does not make
+model processing local:** a hosted model receives provider-bound context. Read
+[AI privacy](#privacy) before enabling Patrol or an investigation.
 
 📖 **For a deep technical dive into the Patrol runtime, see [Patrol architecture](PATROL_ARCHITECTURE.md).**
 
@@ -871,7 +873,42 @@ Use this only in trusted environments.
 
 ## Privacy
 
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Outbound usage telemetry (a rotating pseudonymous install ID, counts, feature flags, and coarse Patrol mode and governed Pulse Intelligence operations adoption flags and counters only; no hostnames, credentials, prompts, chat messages, command text, action output, token values, IP addresses, or resource identifiers in the payload) is enabled by default and can be disabled any time. See [Privacy](PRIVACY.md) for details.
+**BYOK is not local-only processing.** It supplies your own provider credentials,
+not a guarantee that infrastructure data stays on your server. Model processing
+happens at the configured endpoint. With a hosted model, context travels directly
+from a self-managed Pulse instance to that provider, not through Pulse
+infrastructure.
+
+- **Model context differs from usage telemetry.** It can include resource names
+  and addresses, monitoring state, relationships, operator notes and objectives,
+  prior findings and tool results used in the run. Review the chosen provider's
+  retention and training policies before enabling scheduled Patrol or an
+  investigation; Pulse does not set those policies for you.
+- **Redaction has a scope.** Non-local model requests apply secret filtering and
+  resource-policy handling: local-only resource details are omitted or
+  summarised, and known restricted identifiers are redacted. **Internal and
+  Sensitive resources can still be shared with a hosted model.** These safeguards
+  do not make every note or tool result anonymous. Keep credentials out of notes
+  and prompts; do not treat a sensitivity label as a promise of local processing.
+- **Local processing depends on the endpoint.** If context must stay within
+  your network, use a trusted local model endpoint and verify that it does not
+  forward requests elsewhere. BYOK or an API-compatible endpoint alone does not
+  establish that. Local inference does not disable Pulse's other outbound
+  connections.
+- **Usage telemetry is separate.** Its enabled-by-default heartbeat contains a
+  rotating pseudonymous install ID, aggregate counts and coarse flags, not model
+  prompts or tool output. Turning off **Outbound usage telemetry** does not stop
+  AI provider requests or delete locally retained AI history.
+- **External MCP clients have their own data flow.** Review the external
+  client's model provider and data-handling settings too: it can pass the Pulse
+  tool results it is authorised to read to its own model, independently of
+  Pulse's selected provider.
+
+See [AI provider data](PRIVACY.md#ai-provider-data) for outbound handling and
+[local history privacy](CONFIGURATION.md#handle-configuration-and-history-privately)
+before sharing saved records. Do not attach prompts, run histories or raw tool
+output to a public report; use only a relevant, locally reviewed and redacted
+excerpt.
 
 ---
 

@@ -903,11 +903,9 @@ func (c *Client) GetDatastoresFiltered(
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	body, err := readResponseBodyLimited(resp.Body)
+	body, err := readBackupInventoryBody(resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to read datastore inventory: %w", err)
 	}
 
 	// Check if response is HTML (error page) instead of JSON
@@ -919,14 +917,12 @@ func (c *Client) GetDatastoresFiltered(
 		return nil, fmt.Errorf("PBS returned HTML instead of JSON (likely an error page). Please check your PBS URL and port (default is 8007)")
 	}
 
-	var datastoreList struct {
-		Data []struct {
-			Store   string `json:"store"`
-			Comment string `json:"comment,omitempty"`
-		} `json:"data"`
+	type datastoreEntry struct {
+		Store   string `json:"store"`
+		Comment string `json:"comment,omitempty"`
 	}
-
-	if err := json.Unmarshal(body, &datastoreList); err != nil {
+	datastoreList, err := decodeBackupInventory[datastoreEntry](body)
+	if err != nil {
 		log.Error().
 			Int("responseBytes", len(body)).
 			Err(err).
@@ -936,10 +932,7 @@ func (c *Client) GetDatastoresFiltered(
 	// Only an explicit array establishes the datastore scope. In particular,
 	// missing/null data and nameless rows are not an authoritative empty list:
 	// callers use a successful empty enumeration to reconcile backup history.
-	if datastoreList.Data == nil {
-		return nil, fmt.Errorf("datastore list response contains no data array")
-	}
-	for _, ds := range datastoreList.Data {
+	for _, ds := range datastoreList {
 		if strings.TrimSpace(ds.Store) == "" {
 			return nil, fmt.Errorf("datastore list response contains an unnamed datastore")
 		}
@@ -947,7 +940,7 @@ func (c *Client) GetDatastoresFiltered(
 
 	// Now get status for each datastore
 	var datastores []Datastore
-	for _, ds := range datastoreList.Data {
+	for _, ds := range datastoreList {
 		if include != nil && !include(ds.Store) {
 			continue
 		}

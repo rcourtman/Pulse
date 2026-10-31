@@ -1253,3 +1253,129 @@ func TestClient_ListRunningDataTasksRequiresHTTP200(t *testing.T) {
 		}
 	}
 }
+
+// Datastore names establish the outer scope used to reconcile every backup.
+// Validate the complete envelope before applying exclusions or reading children.
+func TestDatastoreInventoryRequiresWholeResponse(t *testing.T) {
+	for name, body := range map[string]string{
+		"second value":        `{"data":[]} {"data":[]}`,
+		"trailing garbage":    `{"data":[]} private-provider-detail`,
+		"reported error":      `{"data":[],"errors":{"private":"private-provider-detail"}}`,
+		"empty errors":        `{"data":[],"errors":{}}`,
+		"duplicate data":      `{"data":null,"data":[]}`,
+		"discarded datastore": `{"data":[{"store":"archive"}],"data":[]}`,
+		"escaped duplicate":   `{"data":null,"d\u0061ta":[]}`,
+		"duplicate errors":    `{"data":[],"errors":{"private":"private-provider-detail"},"errors":null}`,
+		"case data":           `{"data":null,"DATA":[]}`,
+		"case errors":         `{"data":[],"errors":{"private":"private-provider-detail"},"Errors":null}`,
+		"duplicate metadata":  `{"data":[],"total":1,"total":0}`,
+		"invalid utf8":        "{\"data\":[],\"metadata\":\"\xff\"}",
+	} {
+		for _, excluded := range []bool{false, true} {
+			suffix := "/included"
+			if excluded {
+				suffix = "/excluded"
+			}
+			t.Run(name+suffix, func(t *testing.T) {
+				reads, filtered := 0, 0
+				client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+					reads++
+					if r.Method != http.MethodGet || r.URL.Path != "/api2/json/admin/datastore" {
+						t.Errorf("unread discovery caused a child or mutation request: %s %s", r.Method, r.URL)
+					}
+					_, _ = w.Write([]byte(body))
+				})
+				defer server.Close()
+				rows, err := client.GetDatastoresFiltered(context.Background(), func(string) bool { filtered++; return !excluded })
+				if err == nil || rows != nil {
+					t.Fatalf("unread datastore scope accepted: rows=%+v err=%v", rows, err)
+				}
+				if strings.Contains(err.Error(), "private-provider-detail") {
+					t.Error("provider text leaked into format error")
+				}
+				if reads != 1 || filtered != 0 {
+					t.Errorf("discovery failed after side effects: reads=%d filters=%d", reads, filtered)
+				}
+			})
+		}
+	}
+}
+
+func TestDatastoreInventoryRequiresCompleteHTTP200Body(t *testing.T) {
+	for _, failure := range []string{"read after JSON", "close", "size", "created", "accepted", "partial"} {
+		t.Run(failure, func(t *testing.T) {
+			body := &inventoryResponseBody{Reader: strings.NewReader(`{"data":[]}`)}
+			status := http.StatusOK
+			switch failure {
+			case "read after JSON":
+				body.Reader = io.MultiReader(body.Reader, inventoryReadFailure{})
+			case "close":
+				body.closeErr = errors.New("fixture close failure")
+			case "size":
+				body.Reader = io.MultiReader(body.Reader, strings.NewReader(strings.Repeat(" ", int(maxResponseBodyBytes))))
+			case "created":
+				status = http.StatusCreated
+			case "accepted":
+				status = http.StatusAccepted
+			case "partial":
+				status = http.StatusPartialContent
+			}
+			client, err := NewClient(ClientConfig{Host: "https://fixture.invalid", TokenName: "fixture@pbs!read", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			reads := 0
+			client.httpClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				reads++
+				return &http.Response{StatusCode: status, Body: body, Header: make(http.Header)}, nil
+			})}
+			rows, err := client.GetDatastores(context.Background())
+			if err == nil || rows != nil {
+				t.Errorf("incomplete datastore response accepted: rows=%+v err=%v", rows, err)
+			}
+			if reads != 1 || !body.closed || int64(body.bytes) > maxResponseBodyBytes+1 {
+				t.Errorf("reads=%d closed=%t bytes=%d", reads, body.closed, body.bytes)
+			}
+		})
+	}
+}
+
+func TestDatastoreInventoryAcceptsCompleteScopeBeforeFiltering(t *testing.T) {
+	for _, empty := range []bool{false, true} {
+		t.Run(map[bool]string{false: "included-and-excluded", true: "empty"}[empty], func(t *testing.T) {
+			requests := []string{}
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				requests = append(requests, r.URL.RequestURI())
+				switch r.URL.Path {
+				case "/api2/json/admin/datastore":
+					data := []map[string]string{}
+					if !empty {
+						data = []map[string]string{{"store": "archive", "comment": "literal <not markup>"}, {"store": "excluded"}}
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": data, "errors": nil, "metadata": map[string]any{"future": "温度"}})
+				case "/api2/json/admin/datastore/archive/rrd":
+					_, _ = w.Write([]byte(`{"data":[]}`))
+				case "/api2/json/admin/datastore/archive/status":
+					_, _ = w.Write([]byte(`{"data":{"total":100,"used":40,"avail":60,"deduplication-factor":2}}`))
+				default:
+					t.Errorf("unexpected child read: %s", r.URL)
+					http.NotFound(w, r)
+				}
+			})
+			defer server.Close()
+			rows, err := client.GetDatastoresFiltered(context.Background(), func(name string) bool { return name != "excluded" })
+			if err != nil {
+				t.Fatal(err)
+			}
+			if empty {
+				if len(rows) != 0 || len(requests) != 1 {
+					t.Fatalf("empty response rows=%+v requests=%v", rows, requests)
+				}
+				return
+			}
+			if len(rows) != 1 || rows[0].Store != "archive" || rows[0].Status != "available" || rows[0].Total != 100 || rows[0].Used != 40 || rows[0].Avail != 60 || rows[0].DeduplicationFactor != 2 || len(requests) != 3 {
+				t.Fatalf("ordinary read/filter changed: rows=%+v requests=%v", rows, requests)
+			}
+		})
+	}
+}
