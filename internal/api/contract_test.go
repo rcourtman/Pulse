@@ -28848,3 +28848,7 @@ func TestAgentEventTokenLifecycleRefreshesDisclosure(t *testing.T) {
 		t.Fatal("refresh/redaction changed the published canonical record")
 	}
 }
+
+func TestContract_MonitoringWebSocketTokenDeleteThroughHTTP(t *testing.T) {
+	deleteMonitoringWebSocketTokenThroughHTTP(t)
+}

@@ -15,6 +15,19 @@
 
 ## Purpose
 
+### Dashboard token lifetime is not agent-execution authority
+
+An already-open dashboard `/ws` read loses access when its admitted API token
+is revoked, expires or loses its identity/principal, organization or monitoring
+read authority. The shared current-inventory validator supplies detached
+snapshots; the socket writer checks each data/queued frame and its existing
+idle ping. Policy close 1008 uses only a fixed reason. Agent command sockets,
+enrollment, sessions, origin/licensing checks and token grants are unchanged.
+The ordinary registered-route deletion and writer queue/idle tests establish
+read withdrawal, not installed agent or original guest recovery. SSE retains
+its bounded context replacement and fresh disclosure scopes.
+
+
 ### Agent event subscriptions follow their current token inventory
 
 Before streaming each frame, API-token subscribers revalidate against the

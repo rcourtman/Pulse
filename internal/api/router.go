@@ -7556,7 +7556,7 @@ func (r *Router) handleWebSocket(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.wsHub.HandleWebSocket(w, boundReq)
+	r.wsHub.HandleWebSocketWithAuthorization(w, boundReq, monitoringWebSocketAuthorization(r.config, boundReq))
 }
 
 // handleSimpleStats serves a simple stats page

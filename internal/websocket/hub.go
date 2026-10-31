@@ -296,6 +296,9 @@ type Client struct {
 	// display snapshots and the socket deliberately has no delta baseline.
 	restRecovery    bool
 	maxInboundBytes atomic.Int64
+	// authorizeWrite is immutable after admission and called only by writePump.
+	// Authentication remains owned by the API, not this transport package.
+	authorizeWrite func() bool
 }
 
 func (c *Client) inboundLimitBytes() int64 {
@@ -1032,6 +1035,13 @@ func (h *Hub) tryRegisterClient(client *Client) bool {
 
 // HandleWebSocket handles WebSocket upgrade requests
 func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	h.HandleWebSocketWithAuthorization(w, r, nil)
+}
+
+// HandleWebSocketWithAuthorization keeps an admitted connection subject to
+// current authority. The callback runs only on its writer, before every frame
+// (including queued frames and idle pings). Nil preserves existing callers.
+func (h *Hub) HandleWebSocketWithAuthorization(w http.ResponseWriter, r *http.Request, authorize func() bool) {
 	log.Info().
 		Str("origin", r.Header.Get("Origin")).
 		Str("host", r.Host).
@@ -1150,9 +1160,10 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		conn:  conn,
 		orgID: orgID,
 		// Keep buffer bounded to avoid holding large state snapshots indefinitely if a client stalls.
-		send:     make(chan []byte, 128),
-		id:       clientID,
-		lastPing: time.Now(),
+		send:           make(chan []byte, 128),
+		id:             clientID,
+		lastPing:       time.Now(),
+		authorizeWrite: authorize,
 	}
 	// This must be captured from the upgrade URL before registration: initial
 	// state construction begins as soon as the hub accepts the client.
@@ -1946,7 +1957,20 @@ func (c *Client) readPump() {
 	}
 }
 
-// writePump handles outgoing messages to the client
+// allowWrite checks current authority without disclosing authentication detail.
+func (c *Client) allowWrite() bool {
+	if c.authorizeWrite == nil || c.authorizeWrite() {
+		return true
+	}
+	// Never send an HTTP error or queued data after authority ends. The fixed
+	// policy close is understood by the existing frontend authentication path.
+	_ = c.conn.WriteControl(websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Monitoring access ended"),
+		time.Now().Add(10*time.Second))
+	return false
+}
+
+// writePump handles outgoing messages to the client.
 func (c *Client) writePump() {
 	// Maximum consecutive write failures before disconnecting.
 	// This provides graceful degradation for slow clients.
@@ -1981,6 +2005,9 @@ func (c *Client) writePump() {
 				}
 				return
 			}
+			if !c.allowWrite() {
+				return
+			}
 
 			// Send the primary message
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
@@ -2012,7 +2039,10 @@ func (c *Client) writePump() {
 		flushLoop:
 			for i := 0; i < n; i++ {
 				select {
-				case msg := <-c.send:
+				case msg, ok := <-c.send:
+					if !ok || !c.allowWrite() {
+						return
+					}
 					if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 						log.Warn().Err(err).Str("client", c.id).Int("msgSize", len(msg)).Msg("failed to flush queued message")
 						// Don't disconnect on queued message failure, just break the flush loop
@@ -2024,6 +2054,9 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
+			if !c.allowWrite() {
+				return
+			}
 			if err := c.conn.SetWriteDeadline(time.Now().Add(pingDeadline)); err != nil {
 				log.Warn().Err(err).Str("client", c.id).Msg("failed to set write deadline for ping")
 			}

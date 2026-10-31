@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Revoked monitoring sockets do not preserve recovery access
+
+Dashboard `/ws` token reads revalidate current authority before data/queued
+frames and idle pings; refusal closes only that connection, without sending
+queued state. Current tenant ownership is resolved without stale/global
+fallback. This neither removes saved inventory, data or credentials nor changes
+storage/backup operations, authorized sessions or independent administrator
+access. Real persisted token DELETE and immutable-request/tenant tests cover
+the boundary. It does not establish original workload thaw, filesystem writes,
+credential recovery, publication or an installed runtime outcome.
+
+
 ### Long-lived agent reads preserve current token boundaries
 
 Agent event subscriptions revalidate API-token authority before admitting

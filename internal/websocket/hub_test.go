@@ -2,9 +2,12 @@ package websocket
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1469,5 +1472,87 @@ func TestHubInstanceEventsReachAllTenants(t *testing.T) {
 				t.Fatalf("got %q, want %q", got.Type, messageType)
 			}
 		}
+	}
+}
+
+// Queue all frames before starting the real writer. Revalidation only around
+// the outer select would admit the second/third frame through its flush loop.
+func TestClientWriterRevalidatesEveryQueuedFrame(t *testing.T) {
+	var calls atomic.Int32
+	done := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer close(done)
+		conn, err := (&gorillawebsocket.Upgrader{}).Upgrade(w, req, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		client := &Client{conn: conn, send: make(chan []byte, 3), authorizeWrite: func() bool {
+			return calls.Add(1) == 1
+		}}
+		client.send <- []byte("admitted-frame")
+		client.send <- []byte("queued-after-withdrawal-1")
+		client.send <- []byte("queued-after-withdrawal-2")
+		client.writePump()
+	}))
+	defer server.Close()
+	conn, _, err := gorillawebsocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, first, err := conn.ReadMessage()
+	if err != nil || string(first) != "admitted-frame" {
+		t.Fatalf("first frame = %q, %v", first, err)
+	}
+	_, second, err := conn.ReadMessage()
+	var closed *gorillawebsocket.CloseError
+	if !errors.As(err, &closed) || closed.Code != gorillawebsocket.ClosePolicyViolation || closed.Text != "Monitoring access ended" {
+		t.Fatalf("queued write after withdrawal = %q, %v", second, err)
+	}
+	<-done
+	if calls.Load() != 2 {
+		t.Fatalf("authorization calls = %d, want one for each attempted data frame", calls.Load())
+	}
+}
+
+func TestClientWriterRevalidatesIdleConnection(t *testing.T) {
+	var calls atomic.Int32
+	done := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer close(done)
+		conn, err := (&gorillawebsocket.Upgrader{}).Upgrade(w, req, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		client := &Client{conn: conn, send: make(chan []byte), authorizeWrite: func() bool {
+			calls.Add(1)
+			return false
+		}}
+		// No data or inbound request triggers this writer: its actual existing
+		// 30-second ping must revalidate before sending any keepalive.
+		client.writePump()
+	}))
+	defer server.Close()
+	conn, _, err := gorillawebsocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(time.Now().Add(45 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, body, err := conn.ReadMessage()
+	var closed *gorillawebsocket.CloseError
+	if !errors.As(err, &closed) || closed.Code != gorillawebsocket.ClosePolicyViolation || closed.Text != "Monitoring access ended" {
+		t.Fatalf("idle withdrawal = %q, %v", body, err)
+	}
+	<-done
+	if calls.Load() != 1 {
+		t.Fatalf("idle authorization calls = %d, want 1", calls.Load())
 	}
 }
