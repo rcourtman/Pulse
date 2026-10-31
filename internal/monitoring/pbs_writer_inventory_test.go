@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -24,8 +25,27 @@ import (
 func TestPBSWriterInventoryDoesNotInventTerminalFailure(t *testing.T) {
 	for _, kind := range []string{"vm", "ct"} {
 		for _, family := range []string{"backup", "syncjob"} {
-			for _, invalid := range []string{`{}`, `{"data":null}`, `{"data":[{}]}`, `{"data":[null]}`, `{"data":[],"errors":{"private":"fixture-only"}}`} {
-				t.Run(kind+"/"+family+"/"+invalid, func(t *testing.T) {
+			for _, invalid := range []struct {
+				name, body string
+				status     int
+			}{
+				{"missing-data", `{}`, 0},
+				{"null-data", `{"data":null}`, 0},
+				{"missing-worker", `{"data":[{}]}`, 0},
+				{"null-worker", `{"data":[null]}`, 0},
+				{"provider-error", `{"data":[],"errors":{"private":"fixture-only"}}`, 0},
+				{"duplicate-data", `{"data":null,"data":[]}`, 0},
+				{"discarded-writer", `{"data":[{"worker_type":"backup","worker_id":"archive:vm/100"}],"data":[]}`, 0},
+				{"case-data", `{"data":null,"DATA":[]}`, 0},
+				{"duplicate-errors", `{"data":[],"errors":{"private":"fixture-only"},"errors":null}`, 0},
+				{"case-errors", `{"data":[],"errors":{"private":"fixture-only"},"Errors":null}`, 0},
+				{"duplicate-metadata", `{"data":[],"total":1,"total":0}`, 0},
+				{"escaped-duplicate", `{"data":null,"d\u0061ta":[]}`, 0},
+				{"invalid-utf8", "{\"data\":[],\"metadata\":\"\xff\"}", 0},
+				{"created-response", `{"data":[]}`, http.StatusCreated},
+				{"partial-response", `{"data":[]}`, http.StatusPartialContent},
+			} {
+				t.Run(kind+"/"+family+"/"+invalid.name, func(t *testing.T) {
 					f := newPBSPosturePollFixture(t, 2, kind)
 					var phase atomic.Int32
 					var writes atomic.Int32
@@ -49,7 +69,10 @@ func TestPBSWriterInventoryDoesNotInventTerminalFailure(t *testing.T) {
 							_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{row}})
 						case strings.HasSuffix(r.URL.Path, "/tasks"):
 							if (phase.Load() == 1 || phase.Load() == 3) && r.URL.Query().Get("typefilter") == family {
-								_, _ = w.Write([]byte(invalid))
+								if invalid.status != 0 {
+									w.WriteHeader(invalid.status)
+								}
+								_, _ = w.Write([]byte(invalid.body))
 							} else if (phase.Load() == 0 || phase.Load() == 4) && r.URL.Query().Get("typefilter") == "backup" {
 								_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"worker_type": "backup", "worker_id": "archive:" + kind + "/100"}}})
 							} else {
@@ -117,8 +140,14 @@ func TestPBSWriterInventoryDoesNotInventTerminalFailure(t *testing.T) {
 						}
 					}
 					require.Zero(t, writes.Load())
-					if dir := os.Getenv("PULSE_PBS_WRITER_FRAMES"); dir != "" && invalid == `{}` && family == "syncjob" {
-						data, err := json.Marshal(frames)
+					if dir := os.Getenv("PULSE_PBS_WRITER_FRAMES"); dir != "" && invalid.name == "duplicate-data" && family == "syncjob" {
+						hashes := map[string]string{}
+						for _, file := range []string{"monitor_backups.go", "backup_guard.go", "../../pkg/pbs/client.go", "../../pkg/pbs/backup_inventory_response.go"} {
+							content, err := os.ReadFile(file)
+							require.NoError(t, err)
+							hashes[file] = fmt.Sprintf("%x", sha256.Sum256(content))
+						}
+						data, err := json.Marshal(map[string]any{"runtime_sha256": hashes, "resource_ids": f.ids, "frames": frames})
 						require.NoError(t, err)
 						require.NoError(t, os.WriteFile(dir+"/frames-"+kind+".json", data, 0600))
 					}

@@ -1210,27 +1210,15 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 			if err != nil {
 				return nil, err
 			}
-			body, readErr := readResponseBodyLimited(resp.Body)
-			closeErr := resp.Body.Close()
-			if readErr != nil {
-				return nil, fmt.Errorf("failed to read running PBS %s tasks: %w", requestedType, readErr)
-			}
-			if closeErr != nil {
-				return nil, fmt.Errorf("failed to close running PBS %s task response: %w", requestedType, closeErr)
-			}
-			var result struct {
-				Data   []map[string]interface{} `json:"data"`
-				Errors json.RawMessage          `json:"errors"`
-			}
-			if json.Unmarshal(body, &result) != nil || result.Data == nil ||
-				(len(result.Errors) > 0 && !bytes.Equal(bytes.TrimSpace(result.Errors), []byte("null"))) {
-				// Only an explicit, fully read inventory can establish no writer.
-				// Keep provider bodies out of diagnostics and do not return a
-				// partial writer set if a later family/page is unreadable.
-				return nil, fmt.Errorf("invalid running PBS %s task inventory", requestedType)
+			// Writer absence can turn an incomplete artifact into a failed
+			// backup. Admit the same whole, unambiguous inventory envelope as
+			// the snapshot reader; last-field-wins decoding is not evidence.
+			rows, err := readBackupInventory[map[string]interface{}](resp)
+			if err != nil {
+				return nil, fmt.Errorf("invalid running PBS %s task inventory: %w", requestedType, err)
 			}
 
-			for _, raw := range result.Data {
+			for _, raw := range rows {
 				workerType := strings.ToLower(stringJobField(raw, "worker-type", "worker_type", "type"))
 				if workerType == "" {
 					return nil, fmt.Errorf("running PBS %s task inventory contains no worker type", requestedType)
@@ -1244,7 +1232,7 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 					StartTime:  int64JobField(raw, "starttime", "start-time", "start_time"),
 				})
 			}
-			if len(result.Data) < limit {
+			if len(rows) < limit {
 				break
 			}
 			if page == maxPages-1 {
