@@ -9344,6 +9344,19 @@ tool/partition and frontend-preparation controls still require the complete
 Unix inventory. This fixes check admission, not a macOS verdict, published-key
 installation, LXC restoration or the cause of a customer's stopped update.
 
+The macOS Linux-server fixture tool directory also supplies verified GNU `cp`.
+The server's script-bundle publisher uses `cp --remove-destination` so replacing
+a staged symlink cannot overwrite its unrelated target; native BSD `cp` cannot
+execute that call. Keep this dependency local to both installer-test phases,
+not on the native agent/runtime path. Missing or non-GNU copies must fail tool
+preparation before exporting the fixture path. The registered
+`TestNativeInstallerFixtureToolsAreRealAndStepLocal` executes both phase shells
+with an unusable native `cp`, checks the selected executable, and exercises the
+actual replacement flag with file bytes and an unchanged symlink target. The
+signature-sidecar fixture also supplies the publisher's error logger, so a
+failed copy reports its real diagnostic rather than a missing shell function.
+This supplies Linux fixture semantics, not a macOS or installed-upgrade verdict.
+
 ### Bounded Docker module-proxy recovery (7 October 2026)
 
 The Docker backend builder uses `scripts/go-mod-download.sh` with the same
