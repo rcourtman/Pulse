@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "base_sha": "e85886d3a1d880bca1c4b6572374c0db794c6196",
+  "verified_at": "2026-10-31T12:11:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "e0c95f084ddbb05b48c3da3d1a803978ce67063cb5e05a4692f4e2948da5bb6a"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+    "/docs/RECOVERY#local-pve-backups-are-newer-than-coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Provider Source names PBS/PVE inventory or retained points; unknown source remains literal wrapping text. The mixed-age rollup value is Reported outcome, not Job or Collection.",
+    "Actual Running/unprotected and Verified/protected points, separate OK task, history/access quality and unknown clocks retain server meanings. No new reads, mutations, protection or restore assertions.",
+    "Existing PBS/PVE help uses the same fields and explains that an inventory read is not a backup job. Actual Docs consumer and in-app link render the committed mirrored content."
+  ],
+  "interactions": [
+    "Keyboard desktop and touch narrow disclosure, passive inventory/posture polling, search/clear and Docs in-app navigation complete. Earlier partial source-bound captures are retained; completed presentation states are not replayed as a favourable repeat.",
+    "All 17 retained images (16 final presentation, one before-change focus control) were opened with native view_image, original detail. Sources, qualifiers and literal data wrap without document overflow.",
+    "The bounded old/current VM/CT comparison preserves a pre-existing quality-transition focus loss to BODY; no new focus regression is evidenced there and no existing gap is called fixed. The earlier ordinary CT focus observation remains adverse."
+  ],
+  "evidence": {
+    "source": "e85886d3a1d880bca1c4b6572374c0db794c6196",
+    "source_proof": "source-70idaxfs",
+    "source_summary": "385 affected help tests / 54 files, 63 mirrors, whole format/types and production/embed build plus budgets pass. Broad suite retained 23850 passing / three failing / three skipped assertions at 8ee9; direct help failure subsequently corrected, two unchanged token tests remain unexplained despite a 30-test isolated pass.",
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "current_capture_sha256": {
+      "desktop-ct-active.png": "41b05c60f1e7b362b44f11452c20cf944eebd5a86f5f8634ab5e461a1045d6f2",
+      "desktop-ct-complete.png": "7850edfc92e541ea4284a633465d73e2ca5bf85864a5cb037b9462353fec1ae4",
+      "desktop-docs-pbs-outcome.png": "5fbdcef55a07fa461ac30ba2422b0ed788aa87cad9d10413c830f9ab2e1d2218",
+      "desktop-docs-pbs-steps.png": "39d7ba1dd3884f941e3572b29daba1c4ff5bc90c50590d1ae07609617d56651a",
+      "desktop-docs-pve-steps.png": "8e6725ad7381e3c20cfc389b4d879732ab214860563da34e33d82eb4e9d42588",
+      "desktop-vm-active.png": "b75bc7eb6df7fedbc0b98c4ca7330c89164ed4c5c84b30f3ba0433b7d10240b5",
+      "desktop-vm-complete.png": "fd8352ee8ec53c463d24f02f00652cc8787b04fa61336a1453925978a46fda34",
+      "desktop-vm-read-quality.png": "4d04b9dda2b73013fdf4f36e016bd2abd22aa19381dd13909af5c89a3d8c8337",
+      "narrow-ct-active.png": "7ce89d4f4d0610c92e02ad0c265612d706cedd3abccdcda9f2740d5fb7b6498f",
+      "narrow-ct-complete.png": "9beab93eb82f5ea39487c0d906cf9da31af1e8ee2a90ece3a461543e1b692819",
+      "narrow-docs-pbs-outcome.png": "d953a5cddd5acb6089bf5aaae7666d14650ff9b43d2c6c9b8f2718964fcb405b",
+      "narrow-docs-pbs-steps.png": "5724e94f57cc829fd454c352a3198897ff404cabc1f7d8aa84167c0e9a24072a",
+      "narrow-docs-pve-steps.png": "c15993a81555a1db1d98e481bae54a735f5e954087ba112e13cfec14d87b0837",
+      "narrow-vm-active.png": "4cfe7f9951d1a259d5492d3118b1a5d912bb9734f6a7dcfeb2eeb3b437518e35",
+      "narrow-vm-complete.png": "c149ab22b951a014f16ecddf110e06d3990ec40daa98c700bc5e207a33293c04",
+      "narrow-vm-read-quality.png": "a67c1660af9940abf2ed5ac3e20f4687121145465ded16aca9f6c74b2ca6194c"
+    },
+    "before_change_control_sha256": "539b9c8b27a2245641c12d9c7b096987da01667429b3a87cfacead9705805100",
+    "doc_sha256": {
+      "PBS": "c470ba7c2e229e00ad1c2f627bf7048cf99cf39ec87702b0d67c66e1f9f0c238",
+      "RECOVERY": "34ea72cb47cd72114162af747251009852626f0936e5f0dfa556c5affa465164"
+    },
+    "retained": "Web outcome RECEIPTS.md, VALIDATION-SUMMARY.json, BROWSER-SUMMARY.json, PIXEL-REVIEW.json, FOCUS-FINDING.json and CURRENT.tar.xz retain original results, failures, source/asset binding and all native-viewed images."
+  }
+}
