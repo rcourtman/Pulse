@@ -802,7 +802,8 @@ func TestTelemetryPrivacyDocsKeepObserverProposalContentLocal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", relativePath, err)
 		}
-		content := string(raw)
+		// Markdown wrapping must not change the required privacy disclosures.
+		content := strings.Join(strings.Fields(string(raw)), " ")
 		for _, required := range []string{
 			"model-authored observer proposal",
 			"encrypts that artifact with the retained objective",

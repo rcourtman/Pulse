@@ -7,7 +7,17 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../'
 const readRepoFile = (relativePath: string) =>
   readFileSync(resolve(repoRoot, relativePath), 'utf-8');
 
+// Provider privacy disclosures must be able to describe remote models. This
+// guard concerns the retired Pulse-hosted offering, not an operator's provider.
+const pulseHostedOffering = /Pulse[- ]hosted (?:AI|models?)/i;
+
 describe('quickstart copy contract', () => {
+  it('distinguishes provider privacy disclosures from a Pulse-hosted offering', () => {
+    expect('a hosted model receives provider-bound context').not.toMatch(pulseHostedOffering);
+    expect('Pulse-hosted AI with no API key').toMatch(pulseHostedOffering);
+    expect('Pulse-hosted model').toMatch(pulseHostedOffering);
+  });
+
   it('keeps self-hosted public docs free of hosted quickstart claims', () => {
     const readme = readRepoFile('README.md');
     const pulsePro = readRepoFile('docs/PULSE_PRO.md');
@@ -34,8 +44,7 @@ describe('quickstart copy contract', () => {
     ]) {
       expect(copy).not.toMatch(/quickstart/i);
       expect(copy).not.toContain('quickstart:pulse-hosted');
-      expect(copy).not.toMatch(/hosted AI/i);
-      expect(copy).not.toMatch(/hosted model/i);
+      expect(copy).not.toMatch(pulseHostedOffering);
       expect(copy).not.toMatch(/hosted[\s\S]{0,120}no API key/i);
       expect(copy).not.toMatch(/Pulse-hosted[\s\S]{0,120}no API key/i);
       expect(copy).not.toMatch(/Pulse Account[\s\S]{0,120}no API key/i);
