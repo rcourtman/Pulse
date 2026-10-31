@@ -1894,13 +1894,19 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		return a.collectNVIDIATemperatureSensors(ctx)
 	}
 
-	if !tempData.Available {
+	// A chip with only a stopped fan or out-of-range inputs leaves the legacy
+	// maps empty but still has an inventory worth reporting.
+	if !tempData.Available && len(tempData.Native) == 0 {
 		a.logger.Debug().Msg("No temperature sensors available on this system")
 		return a.collectNVIDIATemperatureSensors(ctx)
 	}
 
 	result := convertTemperatureDataToSensors(tempData)
 	a.mergeNVIDIATemperatures(ctx, &result)
+	if !tempData.Available {
+		// Inventory only: keep the existing gate on power collection.
+		return result
+	}
 
 	// Collect power consumption data (Intel RAPL, etc.)
 	if powerData, err := a.collector.SensorsPower(ctx); err == nil && powerData != nil && powerData.Available {
@@ -1971,6 +1977,24 @@ func convertTemperatureDataToSensors(tempData *sensors.TemperatureData) agentsho
 		result.Additional = make(map[string]float64)
 		for sensorName, temp := range tempData.Other {
 			result.Additional[sensorName] = temp
+		}
+	}
+
+	// Add the full temperature and fan inventory with stable identities.
+	if len(tempData.Native) > 0 {
+		result.Native = make([]agentshost.NativeSensor, len(tempData.Native))
+		for i, sensor := range tempData.Native {
+			result.Native[i] = agentshost.NativeSensor{
+				ID:      sensor.ID,
+				Chip:    sensor.Chip,
+				Adapter: sensor.Adapter,
+				Channel: sensor.Channel,
+				Label:   sensor.Label,
+				Kind:    sensor.Kind,
+				Unit:    sensor.Unit,
+				Value:   sensor.Value,
+				Status:  sensor.Status,
+			}
 		}
 	}
 

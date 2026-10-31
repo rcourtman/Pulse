@@ -369,6 +369,7 @@ type Sensors struct {
 	PowerWatts         map[string]float64   `json:"powerWatts,omitempty"` // Power consumption (e.g., cpu_package, dram)
 	Additional         map[string]float64   `json:"additional,omitempty"`
 	Custom             []CustomSensorMetric `json:"custom,omitempty"`
+	Native             []NativeSensor       `json:"native,omitempty"`
 	GPU                []GPUSensor          `json:"gpu,omitempty"`
 	ThermalState       *ThermalState        `json:"thermalState,omitempty"`
 	SMART              []DiskSMART          `json:"smart,omitempty"` // S.M.A.R.T. disk data
@@ -401,6 +402,40 @@ type CustomSensorMetric struct {
 	Error        string     `json:"error,omitempty"`
 	AlertOnError bool       `json:"alertOnError,omitempty"`
 	Stale        bool       `json:"stale,omitempty"`
+}
+
+const (
+	NativeSensorKindTemperature = "temperature"
+	NativeSensorKindFan         = "fan"
+	NativeSensorUnitCelsius     = "celsius"
+	NativeSensorUnitRPM         = "rpm"
+	NativeSensorStatusOK        = "ok"
+	NativeSensorStatusInvalid   = "invalid"
+)
+
+// NativeSensor is one lm-sensors temperature or fan input as the host
+// reported it. ID is "<chip>/<channel>" (for example
+// "applesmc-isa-0300/temp1"): the full chip name with its bus address plus
+// the canonical input channel. It is a host-scoped source key that keeps chips
+// of one type, and labels that differ only by case, apart, and stays the same
+// while the kernel enumerates the chip the same way; it is not a
+// physical-device identity. Label is the chip's original feature name. Value
+// is the Celsius or RPM lm-sensors reported, unconverted, and is omitted when
+// the chip returned no finite number. An invalid status marks a reading
+// outside the plausible range, such as -127 °C from an unattached SMC input;
+// the server recomputes it on ingest. This inventory sits beside the legacy
+// TemperatureCelsius, FanRPM and Additional maps, which keep their existing
+// keys and filtering.
+type NativeSensor struct {
+	ID      string   `json:"id"`
+	Chip    string   `json:"chip"`
+	Adapter string   `json:"adapter,omitempty"`
+	Channel string   `json:"channel"`
+	Label   string   `json:"label"`
+	Kind    string   `json:"kind"`
+	Unit    string   `json:"unit"`
+	Value   *float64 `json:"value,omitempty"`
+	Status  string   `json:"status"`
 }
 
 // GPUSensor captures direct GPU telemetry reported by a local host agent.

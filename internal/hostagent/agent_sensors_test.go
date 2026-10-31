@@ -450,6 +450,19 @@ func TestAgentMixedSensorUnitsReachReportWithoutFalseTemperatures(t *testing.T) 
 		TemperatureCelsius: map[string]float64{"cpu_package": 91, "cpu_core_0": 87, "nvme0": 36.9, "amdgpu-pci-0300_edge": 58},
 		FanRPM:             map[string]float64{"applesmc_left_side": 6152, "applesmc_right_side": 5699},
 		Additional:         map[string]float64{"applesmc_tb0t": 34.2, "applesmc_tb1t": 29.2, "applesmc_th1h": 44.5},
+		Native: []agentshost.NativeSensor{
+			reportNativeSensor("amdgpu-pci-0300", "", "temp1", "edge", agentshost.NativeSensorKindTemperature, 58, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("applesmc-isa-0300", "ISA adapter", "temp1", "TB0T", agentshost.NativeSensorKindTemperature, 34.2, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("applesmc-isa-0300", "ISA adapter", "temp2", "TB1T", agentshost.NativeSensorKindTemperature, 29.2, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("applesmc-isa-0300", "ISA adapter", "temp3", "Th1H", agentshost.NativeSensorKindTemperature, 44.5, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("applesmc-isa-0300", "ISA adapter", "temp4", "TG1D", agentshost.NativeSensorKindTemperature, -127, agentshost.NativeSensorStatusInvalid),
+			reportNativeSensor("applesmc-isa-0300", "ISA adapter", "temp5", "TCMc", agentshost.NativeSensorKindTemperature, 0, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("applesmc-isa-0300", "ISA adapter", "fan1", "Left side", agentshost.NativeSensorKindFan, 6152, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("applesmc-isa-0300", "ISA adapter", "fan2", "Right side", agentshost.NativeSensorKindFan, 5699, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("coretemp-isa-0000", "", "temp1", "Package id 0", agentshost.NativeSensorKindTemperature, 91, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("coretemp-isa-0000", "", "temp2", "Core 0", agentshost.NativeSensorKindTemperature, 87, agentshost.NativeSensorStatusOK),
+			reportNativeSensor("nvme-pci-0200", "", "temp1", "Composite", agentshost.NativeSensorKindTemperature, 36.9, agentshost.NativeSensorStatusOK),
+		},
 	}
 	if !reflect.DeepEqual(want, got) {
 		t.Fatalf("full sensor report = %+v, want %+v", got, want)
@@ -460,5 +473,44 @@ func TestAgentMixedSensorUnitsReachReportWithoutFalseTemperatures(t *testing.T) 
 			t.Fatal(err)
 		}
 		t.Log("SENSOR_UNITS_FRAME=" + string(data))
+	}
+}
+
+func reportNativeSensor(chip, adapter, channel, label, kind string, value float64, status string) agentshost.NativeSensor {
+	unit := agentshost.NativeSensorUnitCelsius
+	if kind == agentshost.NativeSensorKindFan {
+		unit = agentshost.NativeSensorUnitRPM
+	}
+	return agentshost.NativeSensor{ID: chip + "/" + channel, Chip: chip, Adapter: adapter, Channel: channel, Label: label,
+		Kind: kind, Unit: unit, Value: &value, Status: status}
+}
+
+func TestAgentReportsNativeInventoryWithoutLegacyReadings(t *testing.T) {
+	// A stopped fan and an unattached input give the legacy maps nothing, so
+	// the parser marks the data unavailable, but the inventory still says
+	// what the chip exposes.
+	mc := &mockCollector{
+		goos: "linux",
+		sensorsLocalFn: func(context.Context) (string, error) {
+			return `{"applesmc-isa-0300":{"Adapter":"ISA adapter","Exhaust":{"fan1_input":0},"TG1D":{"temp1_input":-127}}}`, nil
+		},
+		sensorsParseFn: sensors.Parse,
+		sensorsPowerFn: func(context.Context) (*sensors.PowerData, error) {
+			return &sensors.PowerData{PackageWatts: 18, Available: true, Source: "rapl"}, nil
+		},
+	}
+	got := (&Agent{logger: zerolog.Nop(), collector: mc}).collectTemperatures(context.Background())
+	want := []agentshost.NativeSensor{
+		reportNativeSensor("applesmc-isa-0300", "ISA adapter", "temp1", "TG1D", agentshost.NativeSensorKindTemperature, -127, agentshost.NativeSensorStatusInvalid),
+		reportNativeSensor("applesmc-isa-0300", "ISA adapter", "fan1", "Exhaust", agentshost.NativeSensorKindFan, 0, agentshost.NativeSensorStatusOK),
+	}
+	if !reflect.DeepEqual(got.Native, want) {
+		t.Fatalf("native inventory = %+v, want %+v", got.Native, want)
+	}
+	if len(got.TemperatureCelsius) != 0 || len(got.Additional) != 0 || len(got.FanRPM) != 0 {
+		t.Fatalf("legacy maps = %+v, want them empty", got)
+	}
+	if len(got.PowerWatts) != 0 {
+		t.Fatalf("power readings = %+v, want the existing gate to skip power collection", got.PowerWatts)
 	}
 }

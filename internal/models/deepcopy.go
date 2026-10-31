@@ -259,6 +259,7 @@ func cloneHostSensorSummary(src HostSensorSummary) HostSensorSummary {
 		PowerWatts:         cloneStringFloat64Map(src.PowerWatts),
 		Additional:         cloneStringFloat64Map(src.Additional),
 		Custom:             cloneHostCustomSensors(src.Custom),
+		Native:             cloneHostNativeSensors(src.Native),
 		GPU:                cloneHostGPUSensors(src.GPU),
 		ThermalState:       cloneHostThermalState(src.ThermalState),
 		SMART:              cloneHostDiskSMART(src.SMART),
@@ -274,6 +275,18 @@ func cloneHostCustomSensors(src []HostCustomSensorMetric) []HostCustomSensorMetr
 		dest[i] = metric
 		dest[i].Value = cloneFloat64Ptr(metric.Value)
 		dest[i].EventAt = cloneTimePtr(metric.EventAt)
+	}
+	return dest
+}
+
+func cloneHostNativeSensors(src []HostNativeSensor) []HostNativeSensor {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]HostNativeSensor, len(src))
+	for i, sensor := range src {
+		dest[i] = sensor
+		dest[i].Value = cloneFloat64Ptr(sensor.Value)
 	}
 	return dest
 }

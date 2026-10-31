@@ -4219,6 +4219,22 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 			}
 		}
 	}
+	if len(sensors.Native) > 0 {
+		out.Native = make([]models.HostNativeSensor, len(sensors.Native))
+		for i, sensor := range sensors.Native {
+			out.Native[i] = models.HostNativeSensor{
+				ID:      sensor.ID,
+				Chip:    sensor.Chip,
+				Adapter: sensor.Adapter,
+				Channel: sensor.Channel,
+				Label:   sensor.Label,
+				Kind:    sensor.Kind,
+				Unit:    sensor.Unit,
+				Value:   cloneFloat64Ptr(sensor.Value),
+				Status:  sensor.Status,
+			}
+		}
+	}
 	if len(sensors.GPU) > 0 {
 		out.GPU = make([]models.HostGPUSensor, len(sensors.GPU))
 		for i, gpu := range sensors.GPU {

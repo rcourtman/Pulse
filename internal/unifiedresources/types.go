@@ -648,9 +648,26 @@ type HostSensorMeta struct {
 	PowerWatts         map[string]float64       `json:"powerWatts,omitempty"`
 	Additional         map[string]float64       `json:"additional,omitempty"`
 	Custom             []HostCustomSensorMetric `json:"custom,omitempty"`
+	Native             []HostNativeSensor       `json:"native,omitempty"`
 	GPU                []HostGPUSensor          `json:"gpu,omitempty"`
 	ThermalState       *HostThermalState        `json:"thermalState,omitempty"`
 	SMART              []HostSMARTMeta          `json:"smart,omitempty"`
+}
+
+// HostNativeSensor is one lm-sensors temperature or fan input from a host
+// agent's inventory, keyed by its host-scoped "<chip>/<channel>" source key.
+// The key stays the same while the kernel enumerates the chip the same way;
+// it is not a physical-device identity.
+type HostNativeSensor struct {
+	ID      string   `json:"id"`
+	Chip    string   `json:"chip"`
+	Adapter string   `json:"adapter,omitempty"`
+	Channel string   `json:"channel"`
+	Label   string   `json:"label"`
+	Kind    string   `json:"kind"`
+	Unit    string   `json:"unit"`
+	Value   *float64 `json:"value,omitempty"`
+	Status  string   `json:"status"`
 }
 
 type HostCustomSensorMetric struct {

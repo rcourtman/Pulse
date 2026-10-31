@@ -2227,6 +2227,19 @@ descriptive host context. Unified-resource consumers must not promote power
 sensors into separate hardware resources, lifecycle state, workload identity,
 storage health, alert metrics, or history targets without a separate governed
 metric contract.
+The native lm-sensors inventory follows that same route.
+`HostSensorMeta.native` carries each temperature and fan input's host-scoped
+`<chip>/<channel>` source key (not a physical-device identity), chip, adapter,
+channel, original label, kind, unit,
+value and `ok`/`invalid` status through `resourceFromHost`, clone and the
+read-state projection back to `models.HostSensorSummary`, with a private slice
+and value pointers. It stays descriptive host context on the agent facet: a
+sensor is not a separate resource, child alert target, operator-posture
+target or history identity until a later governed contract defines its owner
+resolution, Thresholds projection and migration.
+`TestResourceFromHostPreservesNativeSensorInventory` and
+`TestCloneHostSensorMetaIsolatesNativeInventory` cover the adapter and clone
+isolation.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

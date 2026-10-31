@@ -4172,6 +4172,12 @@ recovery scope, or a storage/recovery-owned secret source.
     disk cache, ZFS ARC sizing, storage-tier health, or capacity-planning
     evidence; disk and pool truth stays on the canonical storage and
     physical-disk resources.
+    `internal/unifiedresources/types.go` also carries `HostSensorMeta.native`,
+    the agent's lm-sensors temperature and fan inventory. An NVMe or drive-bay
+    entry there is descriptive host context: storage and recovery must keep
+    disk temperature, SMART and disk-heat truth on the physical-disk resources
+    and must not read a native sensor as disk health, protection or recovery
+    evidence. The inventory opens no storage or recovery path.
     `internal/unifiedresources/types.go` also carries `AvailabilityData`
     (probe protocol, address, latency, failure state) as a resource facet for
     agentless monitoring. Storage and recovery must not treat that availability

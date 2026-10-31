@@ -762,9 +762,27 @@ type HostSensorSummary struct {
 	PowerWatts         map[string]float64       `json:"powerWatts,omitempty"`
 	Additional         map[string]float64       `json:"additional,omitempty"`
 	Custom             []HostCustomSensorMetric `json:"custom,omitempty"`
+	Native             []HostNativeSensor       `json:"native,omitempty"`
 	GPU                []HostGPUSensor          `json:"gpu,omitempty"`
 	ThermalState       *HostThermalState        `json:"thermalState,omitempty"`
 	SMART              []HostDiskSMART          `json:"smart,omitempty"` // S.M.A.R.T. disk data
+}
+
+// HostNativeSensor is one lm-sensors temperature or fan input from the host
+// agent's inventory. ID is the host-scoped "<chip>/<channel>" source key, not
+// a physical-device identity; Label is the chip's original feature name and is
+// not unique. Status "invalid" marks an implausible reading, judged on ingest,
+// and Value is nil when the chip gave no number.
+type HostNativeSensor struct {
+	ID      string   `json:"id"`
+	Chip    string   `json:"chip"`
+	Adapter string   `json:"adapter,omitempty"`
+	Channel string   `json:"channel"`
+	Label   string   `json:"label"`
+	Kind    string   `json:"kind"`
+	Unit    string   `json:"unit"`
+	Value   *float64 `json:"value,omitempty"`
+	Status  string   `json:"status"`
 }
 
 type HostCustomSensorMetric struct {
@@ -816,6 +834,9 @@ func (s HostSensorSummary) NormalizeCollections() HostSensorSummary {
 	}
 	if s.Custom == nil {
 		s.Custom = []HostCustomSensorMetric{}
+	}
+	if s.Native == nil {
+		s.Native = []HostNativeSensor{}
 	}
 	if s.GPU == nil {
 		s.GPU = []HostGPUSensor{}

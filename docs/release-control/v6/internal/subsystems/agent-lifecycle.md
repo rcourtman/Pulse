@@ -3701,6 +3701,14 @@ unauthenticated bootstrap behavior.
    maps warning, critical, and opted-in error states into canonical alerts.
    Enabling custom sensors must not imply `agent:exec`, AI command authority, or
    any general remote-shell capability.
+   Hardware temperatures and fans the agent already reads through lm-sensors
+   belong in the additive `sensors.native` inventory, not in custom sensors:
+   one entry per `tempN_input`/`fanN_input`, keyed `<chip>/<channel>` with the
+   full chip name, original label, kind, unit, unconverted value and
+   `ok`/`invalid` status, bounded at 256 entries on both sides of the report;
+   the server rebuilds the key check and the status on ingest. It needs no new
+   collector, command, permission or configuration, and an agent that predates
+   it simply omits the field. Cluster peer entries carry no inventory.
    Runtime RAID collection uses `/proc/mdstat` as the canonical discovery
    baseline for Linux md arrays. `mdadm --detail` may enrich level, state,
    member, UUID, and rebuild fields when available, but missing or failing

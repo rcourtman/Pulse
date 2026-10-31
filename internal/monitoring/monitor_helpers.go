@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
@@ -744,6 +745,65 @@ func convertAgentCustomSensorsToModels(metrics []agentshost.CustomSensorMetric) 
 			AlertOnError: metric.AlertOnError,
 			Stale:        metric.Stale,
 		}
+	}
+	return result
+}
+
+// maxReportedNativeSensors bounds the native sensor inventory accepted from
+// one host report, matching the agent's own limit.
+const maxReportedNativeSensors = sensors.MaxNativeSensors
+
+// convertAgentNativeSensorsToModels accepts the agent's temperature and fan
+// inventory. An entry is kept only when its ID is exactly "<chip>/<channel>"
+// for a canonical tempN or fanN channel of the reported kind, so a malformed
+// report cannot describe one input under two identities. The unit follows the
+// kind, and the server recomputes the ok/invalid status with the shared
+// plausibility policy instead of trusting the agent's. A repeated ID keeps its
+// first entry.
+func convertAgentNativeSensorsToModels(reported []agentshost.NativeSensor) []models.HostNativeSensor {
+	if len(reported) == 0 {
+		return nil
+	}
+	result := make([]models.HostNativeSensor, 0, min(len(reported), maxReportedNativeSensors))
+	seen := make(map[string]struct{}, cap(result))
+	for _, sensor := range reported {
+		if len(result) == maxReportedNativeSensors {
+			break
+		}
+		chip := strings.TrimSpace(sensor.Chip)
+		channel := strings.TrimSpace(sensor.Channel)
+		kind := strings.TrimSpace(sensor.Kind)
+		id := strings.TrimSpace(sensor.ID)
+		channelKind, canonical := sensors.NativeSensorChannelKind(channel)
+		if chip == "" || !canonical || channelKind != kind || id != chip+"/"+channel {
+			continue
+		}
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		unit := agentshost.NativeSensorUnitCelsius
+		if kind == agentshost.NativeSensorKindFan {
+			unit = agentshost.NativeSensorUnitRPM
+		}
+		value := cloneFloat64Ptr(sensor.Value)
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {
+			value = nil
+		}
+		result = append(result, models.HostNativeSensor{
+			ID:      id,
+			Chip:    chip,
+			Adapter: strings.TrimSpace(sensor.Adapter),
+			Channel: channel,
+			Label:   strings.TrimSpace(sensor.Label),
+			Kind:    kind,
+			Unit:    unit,
+			Value:   value,
+			Status:  sensors.NativeSensorStatus(kind, value),
+		})
+	}
+	if len(result) == 0 {
+		return nil
 	}
 	return result
 }

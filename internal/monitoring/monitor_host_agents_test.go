@@ -11,6 +11,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -3579,6 +3580,103 @@ func TestApplyHostReportPreservesPowerSensorSummary(t *testing.T) {
 	})
 	if got := projected.PowerWatts["cpu_package"]; got != 82.4 {
 		t.Fatalf("read-state power projection = %.1f, want 82.4", got)
+	}
+}
+
+func TestApplyHostReportPreservesNativeSensorInventory(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	battery, unattached, fan := 34.2, -127.0, 6152.0
+	reportedBattery := battery
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-native", Version: "1.0.0", IntervalSeconds: 30},
+		Host:  agentshost.HostInfo{ID: "machine-native", Hostname: "macbook-pve", MachineID: "machine-native"},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			Additional: map[string]float64{"applesmc_tb0t": battery},
+			Native: []agentshost.NativeSensor{
+				{ID: " applesmc-isa-0300/temp1 ", Chip: "applesmc-isa-0300", Adapter: "ISA adapter", Channel: "temp1", Label: " TB0T ",
+					Kind: agentshost.NativeSensorKindTemperature, Unit: "kelvin", Value: &reportedBattery, Status: agentshost.NativeSensorStatusOK},
+				// The server judges plausibility itself, whatever the agent claims.
+				{ID: "applesmc-isa-0300/temp4", Chip: "applesmc-isa-0300", Channel: "temp4", Label: "TG1D",
+					Kind: agentshost.NativeSensorKindTemperature, Value: &unattached, Status: agentshost.NativeSensorStatusOK},
+				{ID: "applesmc-isa-0300/fan1", Chip: "applesmc-isa-0300", Channel: "fan1", Label: "Left side",
+					Kind: agentshost.NativeSensorKindFan, Unit: agentshost.NativeSensorUnitRPM, Value: &fan, Status: agentshost.NativeSensorStatusOK},
+				{ID: "applesmc-isa-0300/temp2", Chip: "applesmc-isa-0300", Channel: "temp2", Label: "TB1T",
+					Kind: agentshost.NativeSensorKindTemperature, Status: agentshost.NativeSensorStatusOK},
+				{ID: "applesmc-isa-0300/temp1", Chip: "applesmc-isa-0300", Channel: "temp1", Label: "duplicate",
+					Kind: agentshost.NativeSensorKindTemperature, Status: agentshost.NativeSensorStatusOK},
+				// Identities that do not follow "<chip>/<channel>" for a canonical
+				// channel of the reported kind are rejected.
+				{ID: "applesmc-isa-0300/temp9", Chip: "applesmc-isa-0300", Channel: "temp8", Label: "mismatch",
+					Kind: agentshost.NativeSensorKindTemperature, Value: &battery, Status: agentshost.NativeSensorStatusOK},
+				{ID: "applesmc-isa-0300/temp01", Chip: "applesmc-isa-0300", Channel: "temp01", Label: "leading zero",
+					Kind: agentshost.NativeSensorKindTemperature, Value: &battery, Status: agentshost.NativeSensorStatusOK},
+				{ID: "applesmc-isa-0300/fan2", Chip: "applesmc-isa-0300", Channel: "fan2", Label: "wrong kind",
+					Kind: agentshost.NativeSensorKindTemperature, Value: &battery, Status: agentshost.NativeSensorStatusOK},
+				{ID: "/temp3", Channel: "temp3", Label: "no chip", Kind: agentshost.NativeSensorKindTemperature, Value: &battery, Status: agentshost.NativeSensorStatusOK},
+				{ID: "", Label: "no identity", Kind: agentshost.NativeSensorKindTemperature, Status: agentshost.NativeSensorStatusOK},
+				{ID: "board-isa-0000/in0", Label: "Vcore", Kind: "voltage", Status: agentshost.NativeSensorStatusOK},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	want := []models.HostNativeSensor{
+		{ID: "applesmc-isa-0300/temp1", Chip: "applesmc-isa-0300", Adapter: "ISA adapter", Channel: "temp1", Label: "TB0T",
+			Kind: agentshost.NativeSensorKindTemperature, Unit: agentshost.NativeSensorUnitCelsius, Value: &battery, Status: agentshost.NativeSensorStatusOK},
+		{ID: "applesmc-isa-0300/temp4", Chip: "applesmc-isa-0300", Channel: "temp4", Label: "TG1D",
+			Kind: agentshost.NativeSensorKindTemperature, Unit: agentshost.NativeSensorUnitCelsius, Value: &unattached, Status: agentshost.NativeSensorStatusInvalid},
+		{ID: "applesmc-isa-0300/fan1", Chip: "applesmc-isa-0300", Channel: "fan1", Label: "Left side",
+			Kind: agentshost.NativeSensorKindFan, Unit: agentshost.NativeSensorUnitRPM, Value: &fan, Status: agentshost.NativeSensorStatusOK},
+		{ID: "applesmc-isa-0300/temp2", Chip: "applesmc-isa-0300", Channel: "temp2", Label: "TB1T",
+			Kind: agentshost.NativeSensorKindTemperature, Unit: agentshost.NativeSensorUnitCelsius, Status: agentshost.NativeSensorStatusInvalid},
+	}
+	if !reflect.DeepEqual(host.Sensors.Native, want) {
+		t.Fatalf("native inventory = %+v, want %+v", host.Sensors.Native, want)
+	}
+	if host.Sensors.Additional["applesmc_tb0t"] != battery {
+		t.Fatalf("legacy additional reading = %+v, want it unchanged", host.Sensors.Additional)
+	}
+	*report.Sensors.Native[0].Value = 99
+	if got := *host.Sensors.Native[0].Value; got != battery {
+		t.Fatalf("host inventory shares the report's value pointer, got %.1f want %.1f", got, battery)
+	}
+
+	frontend := host.ToFrontend()
+	if frontend.Sensors == nil || len(frontend.Sensors.Native) != len(want) || frontend.Sensors.Native[0].Label != "TB0T" {
+		t.Fatalf("frontend inventory = %+v, want the four accepted sensors", frontend.Sensors)
+	}
+
+	oversized := make([]agentshost.NativeSensor, 300)
+	for i := range oversized {
+		channel := "temp" + strconv.Itoa(i+1)
+		oversized[i] = agentshost.NativeSensor{ID: "board-isa-0000/" + channel, Chip: "board-isa-0000", Channel: channel,
+			Kind: agentshost.NativeSensorKindTemperature, Value: &battery}
+	}
+	if got := convertAgentNativeSensorsToModels(oversized); len(got) != 256 || got[255].ID != "board-isa-0000/temp256" {
+		t.Fatalf("server kept %d native sensors, want the first 256", len(got))
+	}
+
+	projected := hostSensorsFromReadStateView(&unifiedresources.HostSensorMeta{
+		Native: []unifiedresources.HostNativeSensor{{ID: "applesmc-isa-0300/temp1", Chip: "applesmc-isa-0300", Channel: "temp1", Label: "TB0T",
+			Kind: agentshost.NativeSensorKindTemperature, Unit: agentshost.NativeSensorUnitCelsius, Value: &battery, Status: agentshost.NativeSensorStatusOK}},
+	})
+	if len(projected.Native) != 1 || projected.Native[0].Value == nil || *projected.Native[0].Value != battery || projected.Native[0].Label != "TB0T" {
+		t.Fatalf("read-state inventory projection = %+v, want the battery sensor", projected.Native)
 	}
 }
 

@@ -77,6 +77,24 @@ func TestCloneResourceRefreshesScopeAndPolicyMetadata(t *testing.T) {
 
 // --- cloneResource: top-level isolation ---
 
+func TestCloneHostSensorMetaIsolatesNativeInventory(t *testing.T) {
+	battery := 34.2
+	original := &HostSensorMeta{Native: []HostNativeSensor{{ID: "applesmc-isa-0300/temp1", Chip: "applesmc-isa-0300", Channel: "temp1",
+		Label: "TB0T", Kind: "temperature", Unit: "celsius", Value: &battery, Status: "ok"}}}
+	clone := cloneHostSensorMeta(original)
+	if !reflect.DeepEqual(clone.Native, original.Native) {
+		t.Fatalf("cloned inventory = %+v, want %+v", clone.Native, original.Native)
+	}
+	*clone.Native[0].Value = 12
+	clone.Native[0].Label = "changed"
+	if *original.Native[0].Value != 34.2 || original.Native[0].Label != "TB0T" {
+		t.Fatalf("clone shares inventory memory with the original: %+v", original.Native[0])
+	}
+	if cloneHostSensorMeta(&HostSensorMeta{}).Native != nil {
+		t.Fatal("an empty inventory must stay nil through clone")
+	}
+}
+
 func TestCloneResource_Nil(t *testing.T) {
 	out := cloneResource(nil)
 	if out.ID != "" {

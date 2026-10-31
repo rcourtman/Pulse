@@ -897,7 +897,7 @@ func (s DockerSwarmInfo) ToFrontend() DockerSwarmFrontend {
 }
 
 func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {
-	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.PowerWatts) == 0 && len(src.Additional) == 0 && len(src.Custom) == 0 && len(src.GPU) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
+	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.PowerWatts) == 0 && len(src.Additional) == 0 && len(src.Custom) == 0 && len(src.Native) == 0 && len(src.GPU) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
 		return nil
 	}
 
@@ -934,6 +934,7 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 			}
 		}
 	}
+	dest.Native = cloneHostNativeSensors(src.Native)
 	if len(src.GPU) > 0 {
 		dest.GPU = make([]HostGPUSensorFrontend, len(src.GPU))
 		for i, gpu := range src.GPU {
