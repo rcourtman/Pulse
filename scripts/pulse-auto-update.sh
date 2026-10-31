@@ -500,6 +500,15 @@ verify_update_running_executable() {
         log error "Running Pulse identity changed during verification ($service_name)" >&2
         return 2
     fi
+    # The final manager read does not keep the installation path stable. A
+    # concurrent replacement/removal can leave the same process active while
+    # the next start would use different or unusable bytes. Recheck the same
+    # selected path after that read; uncertainty still grants no recovery.
+    if [[ ! -f "$binary" || ! -x "$binary" ]] ||
+       ! timeout -k 1 5 cmp -s -- "$binary" "/proc/$after_pid/exe"; then
+        log error "Installed Pulse executable changed during verification ($service_name)" >&2
+        return 2
+    fi
     return 0
 }
 

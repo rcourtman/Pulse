@@ -633,7 +633,7 @@ class UpdateServiceState(UpdaterFixture):
 
 
 PROCESS_MANAGER = r'''#!/usr/bin/env python3
-import os, sys, time
+import os, shutil, sys, time
 from pathlib import Path
 f = Path(os.environ["FIXTURE"])
 args = sys.argv[1:]
@@ -644,6 +644,24 @@ count = int((f / "observations").read_text()) + 1 if (f / "observations").exists
 mode = os.environ["IDENTITY_MODE"]
 if mode == "error": sys.exit(1)
 if mode == "hang": time.sleep(30)
+if mode.startswith("disk-drift:") and count == 2:
+    installed = Path(os.environ["SELECTED_BINARY"])
+    fault = mode.partition(":")[2]
+    if fault in ("different", "same-copy"):
+        replacement = f / "drift-replacement"
+        shutil.copyfile("/bin/sleep" if fault == "different" else sys.executable, replacement)
+        replacement.chmod(0o700)
+        replacement.replace(installed)
+    elif fault == "nonexecutable": installed.chmod(0o600)
+    elif fault == "missing": installed.unlink()
+    elif fault == "wrong-symlink":
+        installed.unlink()
+        installed.symlink_to("/bin/sleep")
+    elif fault == "directory":
+        installed.unlink()
+        installed.mkdir()
+    else: sys.exit(97)
+    (f / "identity-drift-applied").write_text(fault)
 pid = os.environ["OWNED_PID"]
 if mode == "pid-zero": pid = "0"
 if mode == "pid-negative": pid = "-1"
@@ -702,12 +720,15 @@ class RunningExecutable(unittest.TestCase):
                 env = dict(os.environ, FIXTURE=str(f), UPDATER=str(UPDATER),
                            PULSE_INSTALL_DIR=str(f / "install"), OWNED_PID=str(child.pid),
                            DIFFERENT_PID=str(os.getpid()), IDENTITY_MODE=mode,
+                           SELECTED_BINARY=str(f / "install/pulse" if binary_mode == "legacy" else installed),
                            PATH=str(f / "tools") + os.pathsep + os.environ["PATH"])
                 script = ('set -euo pipefail\nsource "$UPDATER"\nlog() { :; }\n'
                           'status=0\nverify_update_running_executable pulse-custom@department || status=$?\n'
                           'printf "IDENTITY_STATUS=%s\\n" "$status"\nexit "$status"\n')
                 started = time.monotonic()
                 r = subprocess.run(["bash", "-c", script], env=env, capture_output=True, timeout=10)
+                if mode.startswith("disk-drift:"):
+                    self.assertEqual((f / "identity-drift-applied").read_text(), mode.partition(":")[2])
                 return r, time.monotonic() - started, int((f / "observations").read_text())
             finally:
                 child.terminate()
@@ -731,6 +752,22 @@ class RunningExecutable(unittest.TestCase):
                 accepted = mode in ("normal", "masked")
                 self.assertEqual(r.returncode, 0 if accepted else 2, r.stderr)
                 self.assertEqual(observations, 2 if accepted or mode in ("pid-moved", "state-moved") else 1)
+
+    def test_final_manager_read_cannot_hide_installed_executable_drift(self):
+        # The first real /proc comparison succeeds. Change only the selected
+        # installation path during the second manager read, leaving the owned
+        # process/PID active. Equal-byte atomic replacement remains supported.
+        for binary in ("same", "legacy", "symlink"):
+            for fault in ("different", "nonexecutable", "missing", "wrong-symlink", "directory", "same-copy"):
+                # Never chmod the shared interpreter behind a symlink.
+                if binary == "symlink" and fault == "nonexecutable":
+                    continue
+                with self.subTest(binary=binary, fault=fault):
+                    result, _, observations = self.run_identity(mode="disk-drift:" + fault, binary_mode=binary)
+                    expected = 0 if fault == "same-copy" else 2
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    self.assertIn(f"IDENTITY_STATUS={expected}".encode(), result.stdout)
+                    self.assertEqual(observations, 2)
 
     def test_manager_diagnostics_refuse_either_running_identity_read(self):
         # These read the actual private child's /proc executable before and

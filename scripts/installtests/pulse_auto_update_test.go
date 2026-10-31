@@ -204,6 +204,7 @@ func TestAutoUpdateRunningExecutableIdentity(t *testing.T) {
 	for _, name := range []string{
 		"test_actual_process_not_replaced_disk_path_is_checked",
 		"test_complete_stable_main_pid_tuple_is_required",
+		"test_final_manager_read_cannot_hide_installed_executable_drift",
 		"test_manager_diagnostics_refuse_either_running_identity_read",
 		"test_identity_read_timeout_is_bounded_and_owned_process_is_reaped",
 	} {

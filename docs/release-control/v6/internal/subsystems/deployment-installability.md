@@ -570,8 +570,12 @@ compares the selected executable with the actual Linux `/proc/MainPID/exe` bytes
 Two complete, bounded observations of the exact unit's LoadState, ActiveState
 and positive MainPID must surround that comparison and retain the same active
 PID. Successful recovery of a previously active unit has the same requirement
-before releasing its rollback backup. Equivalent bytes at a custom or symlinked
-path are admitted; replacing an old process's on-disk path is not proof that
+before releasing its rollback backup. After the second manager read, the same
+selected installation path must still be a regular executable whose bytes match
+that process. An unchanged PID cannot hide a replaced, removed, non-executable
+or redirected destination during readback. This is a bounded readback fence,
+not an atomic lock against all later external writes. Equivalent bytes at a
+custom or symlinked path are admitted; replacing an old process's on-disk path is not proof that
 that process uses the replacement. A broken primary executable never falls
 back to an unrelated legacy file.
 
@@ -587,6 +591,10 @@ active, its actual running executable must be checked too.
 restore refusal controls. `TestAutoUpdateRunningExecutableIdentity` requires
 Linux owned-process byte/readback/deadline controls: they run a private
 executable, atomically replace its path and inspect its real `/proc` entry.
+The final-read drift control changes primary, legacy and symlinked destinations
+during the second manager observation and requires uncertainty, while equal-byte
+atomic replacement remains accepted. It also checks that the selected mutation
+actually occurred; a failed fixture write cannot substitute for drift refusal.
 They do not use a native manager or install Pulse. Existing signed/manager-double
 matrices keep that distinction explicit. The containing hosted systemd recipe
 supplies real-Pulse/source/native evidence; this source repair alone establishes
