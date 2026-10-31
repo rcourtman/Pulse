@@ -618,6 +618,27 @@ describe('sharing read admission and recovery', () => {
     expect(state.targetOrgId()).toBe('org-a');
   });
 
+  it('requires a new destination when a retained target disappears instead of silently choosing a peer', async () => {
+    const { state } = renderState();
+    await accepted(state);
+    state.applyResourceQuickPick('vm::vm-100');
+    expect(state.targetOrgId()).toBe('org-b');
+    listOrgsMock.mockResolvedValue([
+      baseOrg,
+      { ...targetOrg, id: 'org-c', displayName: 'Organization C' },
+    ]);
+    await state.loadSharingData();
+    expect(state.targetOrgId()).toBe('');
+    expect(state.canCreateShare()).toBe(false);
+    state.updateTargetOrg('org-b');
+    await state.createShare();
+    expect(createShareMock).not.toHaveBeenCalled();
+    state.updateTargetOrg('org-c');
+    await state.createShare();
+    expect(createShareMock).toHaveBeenCalledTimes(1);
+    expect(createShareMock.mock.calls[0][1].targetOrgId).toBe('org-c');
+  });
+
   it('ignores a late failure without suppressing current actions or emitting a stale error', async () => {
     const old = deferred<typeof baseOrg>();
     orgGetMock.mockReturnValueOnce(old.promise);

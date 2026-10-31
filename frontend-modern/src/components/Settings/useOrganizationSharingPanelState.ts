@@ -121,7 +121,9 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     normalizeCanonicalResourceTypeInput(resourceType()),
   );
   const normalizedResourceId = createMemo(() => resourceId().trim());
-  const hasTargetOrg = createMemo(() => targetOrgId().trim() !== '');
+  const hasTargetOrg = createMemo(() =>
+    targetOrgOptions().some((candidate) => candidate.id === targetOrgId().trim()),
+  );
   // Match the complete opaque resource ID rather than splitting on a delimiter
   // that may occur inside it. A removed quick pick is not a valid manual draft.
   const selectedResource = createMemo(() =>
@@ -240,8 +242,14 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
         setOrgs(allOrgs);
         setOutgoingShares(outgoing);
         setIncomingShares(incoming);
-        const firstTarget =
-          targetOrgId().trim() || allOrgs.find((candidate) => candidate.id !== orgId)?.id || '';
+        const draftTarget = targetOrgId().trim();
+        // If a previously chosen destination disappeared, require a new choice
+        // rather than retaining an invisible value or choosing a different org.
+        const firstTarget = draftTarget
+          ? allOrgs.some((candidate) => candidate.id === draftTarget && candidate.id !== orgId)
+            ? draftTarget
+            : ''
+          : allOrgs.find((candidate) => candidate.id !== orgId)?.id || '';
         setTargetOrgId(firstTarget);
         setTargetOrgError(firstTarget === '' ? getOrganizationShareTargetOrgRequiredMessage() : '');
       });
@@ -373,7 +381,8 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
       );
     }
 
-    if (!nextTargetOrgId) {
+    if (!nextTargetOrgId || !hasTargetOrg()) {
+      setTargetOrgError(getOrganizationShareTargetOrgRequiredMessage());
       notificationStore.error(getOrganizationShareTargetOrgRequiredMessage());
       return;
     }
