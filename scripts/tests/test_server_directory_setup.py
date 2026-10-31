@@ -140,7 +140,6 @@ backup_existing() { :; }
 install_dependencies() { :; }
 create_user() { :; }
 download_pulse() { :; }
-setup_directories() { printf 'directory admission refused\n' >&2; return 23; }
 # No real build, systemd, updater, process or HOME marker is admitted.
 after_failure() { printf '%s\n' unexpected >> "$FIXTURE/unexpected"; }
 build_from_source() { after_failure; }
@@ -156,10 +155,10 @@ print_completion() { after_failure; }
 status=0
 main || status=$?
 printf 'MAIN_EXIT=%s\n' "$status"
-''', FLOW=flow)
+''', FLOW=flow, fault="chown:" + str(self.config))
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn("MAIN_EXIT=1\n", result.stdout)
-                self.assertIn("directory admission refused", result.stderr)
+                self.assertIn("Could not set Pulse directory ownership or permissions", result.stderr)
                 self.assertFalse((self.root / "unexpected").exists(), result.stdout + result.stderr)
                 self.assert_preserved()
 
