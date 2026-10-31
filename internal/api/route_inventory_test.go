@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -907,5 +908,39 @@ func TestRegisteredTestNotificationAdmitsRequestOrganizationManagers(t *testing.
 		if rec.Code != tc.status {
 			t.Fatalf("%s test notification status = %d, want %d: %s", tc.user, rec.Code, tc.status, rec.Body.String())
 		}
+	}
+}
+
+func TestAgentEventTokenLifecycleDeleteThroughHTTP(t *testing.T) {
+	router, cfg, server := newAgentLifecycleRouter(t, time.Hour)
+	primary := openAgentLifecycleStream(t, server, agentEventLifecycleToken, "header")
+	id := cfg.APITokens[0].ID
+	req, _ := http.NewRequest(http.MethodDelete, server.URL+"/api/security/tokens/"+id, nil)
+	req.Header.Set("X-API-Token", agentEventControlToken)
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("real token deletion = %d: %s", resp.StatusCode, body)
+	}
+	persisted, err := router.persistence.LoadAPITokens()
+	if err != nil || len(persisted) != 1 || persisted[0].ID == id {
+		t.Fatalf("revocation was not persisted: %v, %d tokens", err, len(persisted))
+	}
+	router.agentEventBroadcaster.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "after-durable-revoke"})
+	primary.wantClosed(t)
+
+	req, _ = http.NewRequest(http.MethodGet, server.URL+"/api/agent/events", nil)
+	req.Header.Set("X-API-Token", agentEventLifecycleToken)
+	resp, err = server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("revoked reconnect = %d, want 401", resp.StatusCode)
 	}
 }

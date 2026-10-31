@@ -28817,3 +28817,34 @@ func TestContract_AgentRecentChangesRunbookProjection(t *testing.T) {
 	}
 	assertJSONSnapshot(t, got, `{"commandRedacted":true,"metadata":{"alert_identifier":"alert-1","automatic":false,"outcome":"partial","runbook_id":"rb-1"},"reason":"Runbook executed (partial)"}`)
 }
+
+func TestAgentEventTokenLifecycleRefreshesDisclosure(t *testing.T) {
+	router, cfg, server := newAgentLifecycleRouter(t, time.Hour)
+	primary := openAgentLifecycleStream(t, server, agentEventLifecycleToken, "bearer")
+	control := openAgentLifecycleStream(t, server, agentEventControlToken, "header")
+	record := agentDisclosureRecord(t, false)
+	before, _ := json.Marshal(record)
+	router.agentEventBroadcaster.PublishActionCompletedRecord(record)
+	for _, stream := range []*agentLifecycleStream{primary, control} {
+		body, _ := json.Marshal(stream.next(t))
+		assertAgentDisclosureWire(t, body, false)
+	}
+
+	config.Mu.Lock()
+	cfg.APITokens[0].Scopes = []string{config.ScopeMonitoringRead}
+	config.Mu.Unlock()
+	router.agentEventBroadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{ApprovalID: "after-downgrade", Command: agentPrivateDetail})
+	router.agentEventBroadcaster.PublishActionCompletedRecord(record)
+	for i, stream := range []*agentLifecycleStream{primary, control} {
+		approval, _ := json.Marshal(stream.next(t))
+		if strings.Contains(string(approval), agentPrivateDetail) != (i == 1) {
+			t.Fatalf("approval did not use current disclosure authority: %s", approval)
+		}
+		action, _ := json.Marshal(stream.next(t))
+		assertAgentDisclosureWire(t, action, i == 0)
+	}
+	after, _ := json.Marshal(record)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("refresh/redaction changed the published canonical record")
+	}
+}

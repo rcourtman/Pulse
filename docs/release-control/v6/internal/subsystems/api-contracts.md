@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Agent event streams retain live API-token authority
+
+The registered agent SSE route revalidates its admitted token before the
+connected frame, each visible product frame and each 15-second idle heartbeat.
+Revocation, expiry, loss of monitoring-read scope, changed identity/principal or
+loss of the selected organization closes the stream and releases its subscription.
+No error body is appended to SSE and no event kind, route or grant is added;
+reconnects use normal HTTP authentication/scope enforcement. Frames already
+admitted before a concurrent withdrawal may still be in flight.
+
+`TestAgentEventTokenLifecycleDeleteThroughHTTP` in the route inventory executes
+the actual persisted DELETE and rejects both continued delivery and reconnect.
+`TestAgentEventTokenLifecycleRefreshesDisclosure` in the contract suite checks
+live command-scope withdrawal, independent subscriber detail and unchanged
+canonical evidence. The normal lifecycle suite covers both token headers,
+idle expiry/revocation, tenant replacement and the shared real MCP consumer.
+Sessions/proxy authentication and existing event payload shapes stay unchanged.
+
+
 ### Public-URL token checks share authentication ownership
 
 The pre-route public-URL authority check uses the existing locked token

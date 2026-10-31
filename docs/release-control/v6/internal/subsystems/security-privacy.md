@@ -18,6 +18,24 @@
 
 ## Purpose
 
+### Token withdrawal applies to existing agent streams
+
+A successful stream connection does not retain permanent API-token authority.
+The registered SSE handler refreshes a detached, live token snapshot before
+admitting each visible frame or idle heartbeat. Current expiry, runtime-role,
+monitoring-read, organization and admitted identity/principal checks apply.
+Withdrawing only `ai:execute` keeps the permitted monitoring stream but redacts
+the next approval/action payload using its current scopes. Canonical evidence
+and other subscribers are not rewritten. Session/proxy behaviour is unchanged.
+
+The normal `agent_events_auth_test.go`, route-inventory persisted-delete test
+and contract disclosure test cover invalidation, independent subscribers and
+the shared SSE-to-MCP consumer through real authenticated HTTP. Connection close
+adds no new event/error payload; it cannot retract a frame admitted before a
+concurrent withdrawal. This changes neither token grants nor administrator or
+private-authorizer recovery, and source proof is not installed recovery.
+
+
 ### Public-URL token checks share authentication ownership
 
 The pre-route public-URL authority check uses the existing locked token
