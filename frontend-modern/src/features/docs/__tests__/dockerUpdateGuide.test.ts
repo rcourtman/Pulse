@@ -53,12 +53,13 @@ describe('shipped monitored-container update guide', () => {
       'utf8',
     );
     expect(registry).toMatch(/defaultCacheTTL\s*=\s*6\s*\*\s*time.Hour/);
-    // Bind both documented fields to the same successful cached result,
-    // independently of the condition that admits a cache hit.
+    // Local replacements now go through the shared refresh selector. Keep
+    // checking the reusable-cache branch, not the superseded getCached call.
     const cacheHit = registry.match(
-      /return &ImageUpdateResult\{[^}]*LatestDigest:\s+cached\.latestDigest,[^}]*\}/,
-    )?.[0];
-    expect(cacheHit, 'successful cached update result').toBeDefined();
+      /cached, refresh := r\.cachedForLocalImage\(cacheKey, currentDigest\)\s+if cached != nil && !refresh \{([\s\S]*?)\n\t\}/,
+    )?.[1];
+    expect(cacheHit, 'missing reusable registry-cache branch').toBeDefined();
+    expect(cacheHit).toMatch(/LatestDigest:\s+cached.latestDigest/);
     expect(cacheHit).toMatch(/CheckedAt:\s+time.Now\(\)/);
     expect(collector).toMatch(/LastChecked:\s+result.CheckedAt/);
     expect(adapter).toContain('container.UpdateStatus.LastChecked.After(updatesLastCheckedAt)');
