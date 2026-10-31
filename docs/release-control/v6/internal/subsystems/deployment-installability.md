@@ -16,6 +16,24 @@
 
 ## Purpose
 
+### Configuration snapshot rotation stays in its literal instance namespace
+
+The installer's configuration snapshot rotation treats the configured basename
+as literal pathname data. Only its final snapshot-suffix wildcard expands;
+brackets, question marks, asterisks and embedded newlines in a custom name must
+not select another instance's recovery copies or split into a different live
+configuration path. Complete paths remain individual shell words, ordered in
+the C locale. Only immediate real directories qualify: regular files, directory
+symlinks, broken links and absent inventories are not removal candidates.
+
+Default/fixed retention counts, explicit zero retention and preservation of the
+current completed snapshot after a backwards clock step remain unchanged. The
+existing registered `TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots`
+executes the real backup/rotation with literal-name, embedded-newline, foreign
+state, file/link and empty-inventory controls. These private text-file fixtures
+prove pathname selection and retention, not application-consistent backups,
+original guest recovery or published/native update acceptance.
+
 ### macOS native contract Python prerequisite
 
 The native Unix installer inventory invokes the registered frontend workflow

@@ -60,10 +60,13 @@ class ConfigBackupPublication(unittest.TestCase):
         return result
 
     def completed(self):
-        return sorted(self.config.parent.glob(self.config.name + ".backup.*"))
+        # The configured namespace is data, not a glob in the oracle either.
+        return sorted(p for p in self.config.parent.iterdir()
+                      if p.name.startswith(self.config.name + ".backup."))
 
     def assert_no_stages(self):
-        self.assertEqual(list(self.config.parent.glob("." + self.config.name + ".backup.*")), [])
+        self.assertEqual([p for p in self.config.parent.iterdir()
+                          if p.name.startswith("." + self.config.name + ".backup.")], [])
 
     def assert_prior(self, old):
         self.assertEqual((old / "settings.json").read_text(), "prior recovery state\n")
@@ -239,6 +242,69 @@ test -z "$LAST_CONFIG_BACKUP_DIR"
         self.assertEqual(len(self.completed()), 5)
         self.assertFalse((self.config.parent / (self.config.name + ".backup.20261024-154500")).exists())
         self.assert_no_stages()
+
+    def test_rotation_uses_the_literal_config_namespace(self):
+        for case, (name, other_name) in enumerate((("config[1]", "config1"),
+                                                  ("config?", "configA"),
+                                                  ("config*", "config-extra"))):
+            for keep in (0, 1, 5):
+                with self.subTest(config=name, keep=keep):
+                    self.config = self.root / f"case-{case}-{keep}" / name
+                    self.config.mkdir(parents=True)
+                    (self.config / "settings.json").write_text("current state\n")
+                    prior = [self.old_snapshot(f"202610{day:02d}-154500") for day in range(1, 7)]
+                    others = []
+                    for day in range(1, 7):
+                        path = self.config.parent / f"{other_name}.backup.202610{day:02d}-154500"
+                        path.mkdir()
+                        (path / "settings.json").write_text("other instance recovery state\n")
+                        others.append(path)
+                    self.shell('backup_existing\n', CONFIG_BACKUP_KEEP_COUNT=str(keep))
+                    for path in others:
+                        self.assertEqual((path / "settings.json").read_text(), "other instance recovery state\n")
+                    self.assertEqual(len(self.completed()), keep)
+                    # The fresh snapshot counts toward retention; remove only
+                    # the oldest selected-instance copies, never a peer's.
+                    self.assertEqual([p for p in prior if p.exists()], prior[7 - keep:])
+                    self.assertEqual((self.config / "settings.json").read_text(), "current state\n")
+                    self.assert_no_stages()
+
+    def test_rotation_keeps_embedded_newlines_inside_each_path(self):
+        self.config = self.config.parent / "config\nselected"
+        self.config.mkdir()
+        (self.config / "settings.json").write_text("current state\n")
+        # Splitting find's output used this unrelated live directory as the
+        # first deletion target, rather than the complete snapshot pathname.
+        other = self.config.parent / "config"
+        other.mkdir()
+        (other / "settings.json").write_text("other live instance state\n")
+        prior = [self.old_snapshot(f"202610{day:02d}-154500") for day in range(1, 7)]
+        self.shell('backup_existing\n')
+        self.assertEqual((other / "settings.json").read_text(), "other live instance state\n")
+        self.assertEqual(len(self.completed()), 5)
+        self.assertEqual([p for p in prior if p.exists()], prior[2:])
+        self.assertEqual((self.config / "settings.json").read_text(), "current state\n")
+        self.assert_no_stages()
+
+    def test_rotation_skips_files_links_and_an_empty_inventory(self):
+        prefix = self.config.name + ".backup."
+        outside = self.root / "other instance"
+        outside.mkdir()
+        (outside / "settings.json").write_text("other live instance state\n")
+        link = self.config.parent / (prefix + "20261001-154500")
+        link.symlink_to(outside, target_is_directory=True)
+        broken = self.config.parent / (prefix + "20261002-154500")
+        broken.symlink_to(self.root / "absent")
+        regular = self.config.parent / (prefix + "20261003-154500")
+        regular.write_text("not a snapshot directory\n")
+        self.shell(r'''
+prune_config_backups "$(dirname "$CONFIG_DIR")" "$(basename "$CONFIG_DIR").backup."
+prune_config_backups "$FIXTURE/absent-parent" "absent.backup."
+''', CONFIG_BACKUP_KEEP_COUNT="0")
+        self.assertTrue(link.is_symlink())
+        self.assertTrue(broken.is_symlink())
+        self.assertEqual(regular.read_text(), "not a snapshot directory\n")
+        self.assertEqual((outside / "settings.json").read_text(), "other live instance state\n")
 
     def test_incomplete_copy_is_not_another_invocations_rotation_candidate(self):
         self.shell(r'''
