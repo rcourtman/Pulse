@@ -22899,6 +22899,33 @@ func TestContract_AgentCommandPayloadsRequireActionScope(t *testing.T) {
 	}
 }
 
+// The scoped action view is not a canonical result with its evidence removed.
+// Keep the explicit summary distinct so consumers cannot mistake withheld
+// digests or raw executor text for independently inspectable evidence.
+func TestContract_AgentScopedActionResultIsAnExplicitSummary(t *testing.T) {
+	record := agentDisclosureRecord(t, false)
+	payload, ok := projectAgentActionCompletedPayload(record)
+	if !ok {
+		t.Fatal("terminal action not projected")
+	}
+	restricted := redactAgentEventActionCompletedCommand(payload)
+	if restricted.ActionResultV2 != nil || restricted.ActionResultSummary == nil || !restricted.ActionResultSummary.DetailsRedacted {
+		t.Fatal("restricted canonical details must be withheld, not rewritten")
+	}
+	encoded, err := json.Marshal(restricted.ActionResultSummary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"digest", "summary", "reasonCode", "method", "subjectId", "refs", agentPrivateDetail} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Errorf("content-free summary retained %q: %s", forbidden, encoded)
+		}
+	}
+	if restricted.ActionResultSummary.Execution.Status != record.Result.ActionResultV2.Execution.Status || restricted.ActionResultSummary.Verification.EvidenceClass != record.Result.ActionResultV2.Verification.EvidenceClass {
+		t.Fatal("scope projection collapsed execution or evidence-class truth")
+	}
+}
+
 // TestContract_AgentFleetContextEndpointSurfacesStableShape pins the
 // agent-paradigm fleet view contract: the endpoint must return a
 // `resources` array (never null) so agents iterate without
@@ -23094,13 +23121,9 @@ func TestContract_AgentOperationsLoopStatusEndpointSurfacesStableShape(t *testin
 // poll /api/actions/{id} after every dispatch, defeating the
 // substrate's push-notification guarantee for dispatch certainty.
 func TestContract_ActionCompletedPayloadCarriesVerification(t *testing.T) {
-	source, err := os.ReadFile("agent_events.go")
-	if err != nil {
-		t.Fatalf("read agent_events.go: %v", err)
-	}
-	src := string(source)
-	if !strings.Contains(src, "Verification    *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
-		t.Error("AgentEventActionCompletedPayload must carry Verification as a *AgentResourceActionVerification — agents close the certainty loop on this field")
+	field, ok := reflect.TypeOf(AgentEventActionCompletedPayload{}).FieldByName("Verification")
+	if !ok || field.Type != reflect.TypeOf((*AgentResourceActionVerification)(nil)) || field.Tag.Get("json") != "verification,omitempty" {
+		t.Error("AgentEventActionCompletedPayload must carry optional pointer verification with its stable JSON name — agents close the certainty loop on this field")
 	}
 }
 
@@ -23138,8 +23161,9 @@ func TestContract_AgentResourceActionSummaryCarriesVerification(t *testing.T) {
 		t.Fatalf("read agent_resource_context.go: %v", err)
 	}
 	src := string(source)
-	if !strings.Contains(src, "Verification    *AgentResourceActionVerification `json:\"verification,omitempty\"`") {
-		t.Error("AgentResourceActionSummary must carry Verification so the bundle's recent-actions and the action.completed SSE payload speak the same vocabulary")
+	field, ok := reflect.TypeOf(AgentResourceActionSummary{}).FieldByName("Verification")
+	if !ok || field.Type != reflect.TypeOf((*AgentResourceActionVerification)(nil)) || field.Tag.Get("json") != "verification,omitempty" {
+		t.Error("AgentResourceActionSummary must carry the same optional pointer verification and JSON name as the action.completed SSE payload")
 	}
 	if !strings.Contains(src, "func projectAgentResourceVerification(v *unified.ActionVerificationResult)") {
 		t.Error("projectAgentResourceVerification must exist as the shared helper — both the SSE bridge and the bundle's projector route through it so the wire shape cannot drift between surfaces")
