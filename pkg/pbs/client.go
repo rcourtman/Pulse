@@ -1966,22 +1966,7 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 		}
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Namespace `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	// Match datastore discovery: missing/null data is unread, not an empty
-	// scope that can authorize removal of retained backup history.
-	if result.Data == nil {
-		return nil, fmt.Errorf("namespace list response contains no data array")
-	}
-
-	return result.Data, nil
+	return readBackupInventory[Namespace](resp)
 }
 
 // ListBackupGroups lists all backup groups in a datastore/namespace
@@ -2005,31 +1990,16 @@ func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespa
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Data []BackupGroup `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode backup groups: %w", err)
-	}
-	if result.Data == nil {
-		return nil, fmt.Errorf("backup group list response contains no data array")
+	groups, err := readBackupInventory[BackupGroup](resp)
+	if err != nil {
+		return nil, err
 	}
 
 	log.Debug().
 		Str("namespace", namespace).
-		Int("count", len(result.Data)).
+		Int("count", len(groups)).
 		Msg("PBS API: Backup groups found")
-	return result.Data, nil
+	return groups, nil
 }
 
 // ListBackupSnapshots lists all snapshots for a specific backup group
@@ -2050,24 +2020,9 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Data []BackupSnapshot `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode snapshots: %w", err)
-	}
-	if result.Data == nil {
-		return nil, fmt.Errorf("snapshot list response contains no data array")
+	snapshots, err := readBackupInventory[BackupSnapshot](resp)
+	if err != nil {
+		return nil, err
 	}
 
 	// The request selects one exact group. A foreign row or repeated native
@@ -2075,8 +2030,8 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 	// history or an authoritative empty group. Validate before callers sort,
 	// cap or cache rows; their existing malformed-read path retains old evidence
 	// without renewing it. Do not put provider payloads in the error.
-	seen := make(map[int64]struct{}, len(result.Data))
-	for i, snapshot := range result.Data {
+	seen := make(map[int64]struct{}, len(snapshots))
+	for i, snapshot := range snapshots {
 		if snapshot.BackupType != backupType || snapshot.BackupID != backupID {
 			return nil, fmt.Errorf("snapshot list response row %d does not match requested backup group", i)
 		}
@@ -2086,7 +2041,7 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 		seen[snapshot.BackupTime] = struct{}{}
 	}
 
-	return result.Data, nil
+	return snapshots, nil
 }
 
 // ListAllBackups fetches all backups from all namespaces concurrently
