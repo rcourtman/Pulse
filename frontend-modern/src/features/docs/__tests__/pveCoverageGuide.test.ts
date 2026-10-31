@@ -43,6 +43,9 @@ describe('local PVE Coverage comparison guidance', () => {
     const latest = COVERAGE_COLUMNS.find((column) => column.id === 'latest')!;
     expect(text).toContain(latest.label);
     for (const distinction of [
+      'Scope, Source, Reported outcome, History and Access',
+      'A successful inventory read is not a backup-job completion result',
+      'keep task and restore-point states separate',
       'not the protection policy',
       "does not refresh collection or change a backup's age",
       "does not recalculate the workload's posture",

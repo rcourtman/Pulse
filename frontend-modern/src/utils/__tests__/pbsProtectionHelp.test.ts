@@ -45,7 +45,9 @@ describe('PBS protection disagreement help', () => {
     );
     expect(steps).toHaveLength(3);
     expect(steps[0]).toContain('Proxmox → Backups → Coverage');
-    expect(steps[0]).toContain('Job, History and Access');
+    expect(steps[0]).toContain('Source, Reported outcome, History and Access');
+    expect(steps[0]).toContain('A successful inventory read is not a successful backup job');
+    expect(steps[0]).toContain('the outcome can also include retained-point evidence');
     expect(steps[0]).toContain('provider evidence is absent');
     expect(steps[0]).toContain('not the PBS host');
     expect(steps[1]).toContain(
@@ -60,10 +62,8 @@ describe('PBS protection disagreement help', () => {
     expect(steps[1]).toContain('guest snapshot is not a PBS backup');
     expect(steps[2]).toContain('protection explanation');
     expect(article().querySelector('pre')).toBeNull();
-    const coverage = read('frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx');
-    expect(coverage).toContain('Job {evidenceQualityLabel(provider.jobState)}');
-    expect(coverage).toContain('History {evidenceQualityLabel(provider.historyCompleteness)}');
-    expect(coverage).toContain('Access {evidenceQualityLabel(provider.permissions)}');
+    // Runtime consumer tests own its rendered labels. Keep this check on the
+    // rendered guide's meaning, not a source-code spelling or Markdown wrap.
   });
 
   it('distinguishes the available observations without claiming a PBS cause or verification failure', () => {
@@ -76,7 +76,9 @@ describe('PBS protection disagreement help', () => {
       'Verified with a workload still needing attention is a separate assessment disagreement',
     );
     expect(text()).toContain('retain its explanation and Provider evidence');
-    expect(text()).toContain("Job OK is not an individual point's verification result");
+    expect(text()).toContain(
+      "Reported outcome: Success can describe an inventory read, not a backup job or an individual point's verification result",
+    );
     expect(text()).toContain('without running Diagnostics or another verification');
   });
 
@@ -151,6 +153,8 @@ describe('PBS protection disagreement help', () => {
     expect(text()).toContain(
       'Do not share tokens, full API responses, HAR exports, or screenshots with secrets',
     );
-    expect(text()).toContain("one guest's protection explanation, PBS Job/History/Access values");
+    expect(text()).toContain(
+      "one guest's protection explanation, PBS Source/Reported outcome/History/Access values",
+    );
   });
 });

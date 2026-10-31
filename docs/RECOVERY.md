@@ -382,8 +382,10 @@ protected. Compare one existing archive with the same workload in Pulse:
    local storage: a PBS-backed storage target can also appear as a PVE file.
 3. Open **Coverage**, clear its posture filter and expand that same workload.
    Read the posture explanation and **Provider evidence**: provider,
-   **Scope**, **Job**, **History** and **Access**. Keep **All backup locations**
-   for a whole-workload comparison. Selecting a location limits the listed
+   **Scope**, **Source**, **Reported outcome**, **History** and **Access**.
+   A successful inventory read is not a backup-job completion result; keep task
+   and restore-point states separate. Keep **All backup locations** for a
+   whole-workload comparison. Selecting a location limits the listed
    artifacts and backup age, but does not recalculate the workload's posture.
    A visible archive and a green connection do not establish that the posture
    assessment received the same complete, correctly linked evidence. Read the

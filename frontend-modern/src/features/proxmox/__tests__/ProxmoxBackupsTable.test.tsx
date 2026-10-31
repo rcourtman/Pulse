@@ -3475,3 +3475,97 @@ describe('PBS inventory state column', () => {
     expect(countColumn.style.width).toBe('15.5%');
   });
 });
+
+describe('Coverage provider-outcome-meaning through parsed API reads', () => {
+  it.each([
+    ['proxmox-pbs', 'pbs-backup-enumeration', 'PBS backup inventory'],
+    ['proxmox-pve', 'pve-backup-enumeration', 'PVE backup inventory'],
+  ] as const)(
+    'keeps %s inventory outcomes distinct from actual tasks and restore points through polling',
+    async (provider, source, label) => {
+      vi.useFakeTimers({
+        now: BACKUP_IDENTITY_NOW,
+        toFake: ['Date', 'setInterval', 'clearInterval'],
+      });
+      try {
+        window.history.replaceState({}, '', '/proxmox/backups/coverage');
+        const guest = identityGuest('east-100', 'east', 'pve-1');
+        const assessment = protectionPosture(guest.id);
+        assessment.state = 'unprotected';
+        assessment.coverage = 'none';
+        assessment.freshness = 'unknown';
+        assessment.verification = 'unknown';
+        assessment.explanation =
+          'Pulse can see the full backup history, but found no successful, completed backup for this resource.';
+        assessment.providerStates = [
+          { ...assessment.providerStates[0], provider, source, scope: 'read-scope' },
+        ];
+        apiFetchMock.mockImplementation(async (url: string) =>
+          jsonResponse({
+            data:
+              url === '/api/backups/pbs'
+                ? {
+                    backups: [
+                      identityPBS({
+                        inProgress: true,
+                        writeActivityObserved: true,
+                        writeActive: true,
+                        verified: false,
+                      }),
+                    ],
+                  }
+                : {
+                    storageBackups: [],
+                    guestSnapshots: [],
+                    backupTasks: [identityTask()],
+                  },
+          }),
+        );
+        apiFetchJSONMock.mockImplementation(async () => ({
+          data: [structuredClone(assessment)],
+          policy: protectionPolicy,
+        }));
+        renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} workloads={[guest]} />);
+        const toggle = await screen.findByRole('button', { name: /Expand details for east-100/ });
+        fireEvent.click(toggle);
+        const panel = await screen.findByTestId('proxmox-coverage-detail');
+        await waitFor(() => expect(panel).toHaveTextContent(`Source ${label}`));
+        const task = within(panel).getByText('Latest task', { selector: 'th' }).closest('tbody')!;
+        expect(within(task).getByText('OK', { exact: true })).toBeVisible();
+        expect(panel).toHaveTextContent('Reported outcome Success');
+        expect(panel).not.toHaveTextContent('Job Success');
+        expect(within(panel).getByText('Running', { exact: true })).toBeVisible();
+        expect(within(panel).getByRole('img', { name: 'Unprotected' })).toBeInTheDocument();
+        expect(panel).toHaveTextContent('no successful, completed backup');
+
+        toggle.focus();
+        Object.assign(assessment.providerStates[0], {
+          jobState: 'failed',
+          historyCompleteness: 'unavailable',
+          permissions: 'denied',
+        });
+        await vi.advanceTimersByTimeAsync(30_000);
+        await waitFor(() => expect(panel).toHaveTextContent('Reported outcome Failed'));
+        expect(panel).toHaveTextContent('History Unavailable');
+        expect(panel).toHaveTextContent('Access Denied');
+        expect(panel).not.toHaveTextContent('Reported outcome Success');
+        expect(
+          within(
+            within(panel).getByText('Latest task', { selector: 'th' }).closest('tbody')!,
+          ).getByText('OK', { exact: true }),
+        ).toBeVisible();
+        expect(within(panel).getByText('Running', { exact: true })).toBeVisible();
+        expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+        expect(toggle).toHaveFocus();
+        // No new read, test-job or mutation is needed to explain the evidence.
+        expect(apiFetchMock).toHaveBeenCalledTimes(4);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+        expect(new Set(apiFetchMock.mock.calls.map(([url]) => url))).toEqual(
+          new Set(['/api/backups/pbs', '/api/backups/pve']),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+});
