@@ -30,20 +30,32 @@ describe('private vulnerability reporting guidance', () => {
     const rendered = article();
     const heading = rendered.querySelector('#reporting-a-vulnerability')!;
     const paragraphs: string[] = [];
-    for (let next = heading.nextElementSibling; next && next.tagName !== 'HR'; next = next.nextElementSibling) {
+    for (
+      let next = heading.nextElementSibling;
+      next && next.tagName !== 'HR';
+      next = next.nextElementSibling
+    ) {
       paragraphs.push(next.textContent ?? '');
     }
     const text = paragraphs.join(' ').replace(/\s+/g, ' ');
     expect(text).toContain('Do not open a public issue or discussion for these reports.');
     expect(text).toMatch(/affected Pulse and agent versions, if known/);
-    expect(text).toMatch(/do not send live credentials, private keys, full diagnostics or configuration exports/);
+    expect(text).toMatch(
+      /do not send live credentials, private keys, full diagnostics or configuration exports/,
+    );
     expect(text).toContain('Do not repeat a risky action just to make a report.');
     expect(text).toMatch(/Removing a public copy is not credential revocation/);
     expect(text).toContain('The security address is not a general support route.');
     expect(
-      rendered.querySelector('a[href="/docs/TROUBLESHOOTING#if-you-already-posted-private-information"]'),
+      rendered.querySelector(
+        'a[href="/docs/TROUBLESHOOTING#if-you-already-posted-private-information"]',
+      ),
     ).not.toBeNull();
-    expect(rendered.querySelector('a[href="https://github.com/rcourtman/Pulse/issues"]')).not.toBeNull();
-    expect(rendered.querySelector('a[href="https://github.com/rcourtman/Pulse/discussions"]')).not.toBeNull();
+    expect(
+      rendered.querySelector('a[href="https://github.com/rcourtman/Pulse/issues"]'),
+    ).not.toBeNull();
+    expect(
+      rendered.querySelector('a[href="https://github.com/rcourtman/Pulse/discussions"]'),
+    ).not.toBeNull();
   });
 });
