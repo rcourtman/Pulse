@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 
 import { RolesPanel } from '../RolesPanel';
 import { UserAssignmentsPanel } from '../UserAssignmentsPanel';
@@ -19,6 +19,16 @@ const deleteUserMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const loggerErrorMock = vi.fn();
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
@@ -255,6 +265,145 @@ describe('RBAC paywall settings panels', () => {
       'min-h-11',
       'sm:min-h-9',
     );
+  });
+
+  it('clears the previous user permissions during a new read and reports failure as unknown', async () => {
+    const pending = deferred<{ action: string; resource: string }[]>();
+    getUsersMock.mockResolvedValue([
+      { username: 'alice', roleIds: ['admin'] },
+      { username: 'bob', roleIds: [] },
+    ]);
+    getUserPermissionsMock
+      .mockResolvedValueOnce([{ action: 'write', resource: 'private-alice-resource' }])
+      .mockReturnValueOnce(pending.promise);
+    render(() => <UserAssignmentsPanel />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const aliceDialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
+    expect(await within(aliceDialog).findByText('private-alice-resource')).toBeInTheDocument();
+    fireEvent.click(within(aliceDialog).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage access for bob' }));
+    const bobDialog = await screen.findByRole('dialog', { name: 'Manage access: bob' });
+
+    expect(
+      within(bobDialog).getByRole('status', { name: 'Loading effective permissions' }),
+    ).toBeInTheDocument();
+    expect(within(bobDialog).queryByText('private-alice-resource')).not.toBeInTheDocument();
+    pending.reject(new Error('private-provider-detail'));
+    expect(await within(bobDialog).findByRole('alert')).toHaveTextContent('Access is unknown');
+    expect(bobDialog).not.toHaveTextContent('private-provider-detail');
+    expect(bobDialog).not.toHaveTextContent('No effective permissions');
+    expect(bobDialog).not.toHaveTextContent('private-alice-resource');
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+    expect(deleteUserMock).not.toHaveBeenCalled();
+  });
+
+  it('retries only the saved-permissions read and preserves unsaved role selections', async () => {
+    const pending = deferred<{ action: string; resource: string }[]>();
+    getRolesMock.mockResolvedValue([
+      { id: 'admin', name: 'Admin', description: 'Full access', permissions: [] },
+      { id: 'viewer', name: 'Viewer', description: 'Read only', permissions: [] },
+    ]);
+    getUserPermissionsMock
+      .mockRejectedValueOnce(new Error('feature not included in license: private detail'))
+      .mockReturnValueOnce(pending.promise);
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Access is unknown');
+    expect(dialog).not.toHaveTextContent('private detail');
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Admin/ }));
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Viewer/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Retry saved permissions' }));
+    expect(
+      within(dialog).getByRole('status', { name: 'Loading effective permissions' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Retry saved permissions' }),
+    ).not.toBeInTheDocument();
+    expect(getUserPermissionsMock).toHaveBeenCalledTimes(2);
+    expect(getUserPermissionsMock).toHaveBeenLastCalledWith('alice');
+    pending.resolve([{ action: 'read', resource: 'alerts' }]);
+    expect(await within(dialog).findByText('alerts')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('checkbox', { name: /Admin/ })).not.toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: /Viewer/ })).toBeChecked();
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+    expect(deleteUserMock).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(updateUserRolesMock).toHaveBeenCalledWith('alice', ['viewer']));
+    expect(updateUserRolesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('describes accepted empty permissions as saved state, not the result of unsaved changes', async () => {
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
+    expect(
+      await within(dialog).findByText("No permissions were returned for this user's saved roles."),
+    ).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Admin/ }));
+    expect(dialog).toHaveTextContent('Unsaved role selections are not included.');
+    expect(dialog).not.toHaveTextContent('This user will have no access.');
+    expect(dialog).not.toHaveTextContent('Effective Permissions Preview');
+  });
+
+  it.each(['success', 'failure'])(
+    'ignores an obsolete %s while another user permissions read is pending',
+    async (outcome) => {
+      const oldRead = deferred<{ action: string; resource: string }[]>();
+      const currentRead = deferred<{ action: string; resource: string }[]>();
+      getUsersMock.mockResolvedValue([
+        { username: 'alice', roleIds: ['admin'] },
+        { username: 'bob', roleIds: [] },
+      ]);
+      getUserPermissionsMock
+        .mockReturnValueOnce(oldRead.promise)
+        .mockReturnValueOnce(currentRead.promise);
+      render(() => <UserAssignmentsPanel />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+      fireEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Manage access for bob' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Manage access: bob' });
+      if (outcome === 'success')
+        oldRead.resolve([{ action: 'write', resource: 'private-alice-resource' }]);
+      else oldRead.reject(new Error('private old read failure'));
+      await oldRead.promise.catch(() => undefined);
+
+      expect(
+        within(dialog).getByRole('status', { name: 'Loading effective permissions' }),
+      ).toBeInTheDocument();
+      expect(dialog).not.toHaveTextContent('private-alice-resource');
+      expect(dialog).not.toHaveTextContent('No effective permissions');
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      currentRead.resolve([{ action: 'read', resource: 'bob-resource' }]);
+      expect(await within(dialog).findByText('bob-resource')).toBeInTheDocument();
+      expect(dialog).not.toHaveTextContent('private-alice-resource');
+      expect(loggerErrorMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not let an earlier dialog read overwrite a reopened dialog for the same principal', async () => {
+    const oldRead = deferred<{ action: string; resource: string }[]>();
+    getUserPermissionsMock
+      .mockReturnValueOnce(oldRead.promise)
+      .mockRejectedValueOnce(new Error('current read failed'));
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Manage access for alice' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Access is unknown');
+    oldRead.resolve([{ action: 'write', resource: 'obsolete-resource' }]);
+    await oldRead.promise;
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Access is unknown');
+    expect(dialog).not.toHaveTextContent('obsolete-resource');
+    expect(getUserPermissionsMock).toHaveBeenCalledTimes(2);
   });
 
   it('shows readable SSO identity details and confirms deprovisioning', async () => {
