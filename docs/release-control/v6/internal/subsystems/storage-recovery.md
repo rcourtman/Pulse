@@ -74,6 +74,18 @@ an unaffected completed sibling. Its opt-in
 frames feed the actual existing Backups consumer at desktop/narrow widths for
 interaction and native pixel proof. Fixtures perform only local GETs.
 
+### Unprotected does not mean an empty backup inventory
+
+When complete readable history supplies no qualifying success, the posture
+explanation says no successful, completed backup was found, not that no backup
+exists. Running, failed and uncertain artifacts remain inspectable evidence;
+they supply neither a successful-point time nor protection. Snapshot-only,
+partial/unavailable history and all state, freshness, verification and policy
+rules remain unchanged. `TestProtectionExplanationDoesNotEraseUnsuccessfulBackupEvidence`
+checks all non-success outcomes through the real point/observation builder.
+The ordinary PBS writer lifecycle checks the same explanation alongside live
+and durable artifact outcomes and feeds desktop/narrow Backups pixel proof.
+
 ### Coverage dates are inspectable without hover
 
 Open Coverage evidence retains each point’s exact reported date as wrapping

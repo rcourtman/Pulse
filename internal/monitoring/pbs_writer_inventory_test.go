@@ -130,6 +130,7 @@ func TestPBSWriterInventoryDoesNotInventTerminalFailure(t *testing.T) {
 						for _, p := range postures {
 							if p.SubjectResourceID == f.ids[0] && i != 5 {
 								require.NotEqual(t, recovery.ProtectionStateProtected, p.State, "incomplete artifact cannot claim protection")
+								require.Contains(t, p.Explanation, "no successful, completed backup", "incomplete evidence is not an absent artifact")
 							}
 						}
 						frames[label] = map[string]any{
@@ -142,7 +143,7 @@ func TestPBSWriterInventoryDoesNotInventTerminalFailure(t *testing.T) {
 					require.Zero(t, writes.Load())
 					if dir := os.Getenv("PULSE_PBS_WRITER_FRAMES"); dir != "" && invalid.name == "duplicate-data" && family == "syncjob" {
 						hashes := map[string]string{}
-						for _, file := range []string{"monitor_backups.go", "backup_guard.go", "../../pkg/pbs/client.go", "../../pkg/pbs/backup_inventory_response.go"} {
+						for _, file := range []string{"monitor_backups.go", "backup_guard.go", "../recovery/posture.go", "../../pkg/pbs/client.go", "../../pkg/pbs/backup_inventory_response.go"} {
 							content, err := os.ReadFile(file)
 							require.NoError(t, err)
 							hashes[file] = fmt.Sprintf("%x", sha256.Sum256(content))
