@@ -2568,6 +2568,7 @@ func TestRootInstallStartPulseFailsWhenUnitMissing(t *testing.T) {
 set -euo pipefail
 PULSE_WAS_ACTIVE="false"
 print_info() { echo "INFO: $*"; }
+print_warn() { echo "WARN: $*"; }
 print_error() { echo "ERROR: $*"; }
 print_success() { echo "SUCCESS: $*"; }
 safe_systemctl() { return 0; }
@@ -2575,7 +2576,8 @@ timeout() { shift; "$@"; }
 sleep() { :; }
 journalctl() { return 0; }
 ensure_pulse_running_after_update() { return 0; }
-` + extractRootInstallShellFunction(t, "start_pulse") + "\n"
+` + extractRootInstallShellFunction(t, "wait_for_service_active") + "\n" +
+		extractRootInstallShellFunction(t, "start_pulse") + "\n"
 
 	// Unit genuinely absent: no unit file and `systemctl cat` cannot find it.
 	// start_pulse must fail with a clear error instead of reporting success
@@ -3030,6 +3032,20 @@ func TestRootInstallDirectorySetupStopsOnFailures(t *testing.T) {
 		"test_success_preserves_existing_bytes_and_tightens_only_required_modes",
 		"test_fresh_environment_has_private_mode_and_explicit_mock_default",
 		"test_all_five_entry_paths_stop_on_directory_failure_even_in_or_list",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+}
+
+// Run the real startup/recovery producer through each main consumer without
+// touching a host service, binary or saved configuration. Conditional callers
+// must not mask failure or issue completion/marker writes over unknown liveness.
+func TestRootInstallStartupRequiresActiveReadback(t *testing.T) {
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_start_admission.py"), "ServerStartAdmission", []string{
+		"test_unconfirmed_start_fails_for_fresh_and_prior_active_installations",
+		"test_confirmed_active_and_delayed_start_consume_liveness_flag",
+		"test_retry_is_bounded_and_only_restores_prior_active_service",
+		"test_missing_unit_stops_before_enable_or_start",
+		"test_all_five_main_paths_stop_before_marker_or_completion_in_or_list",
+		"test_all_five_main_paths_complete_only_after_active_readback",
 	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
 }
 
