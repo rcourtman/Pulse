@@ -1733,6 +1733,26 @@ describe('backup-date-evidence connected inventory', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
+  it('[regression] keeps focus when a reported date moves the open point to another day group', async () => {
+    window.history.replaceState({}, '', '/?view=date');
+    supply('2026-10-04T11:59:00Z', true);
+    mount();
+    const toggle = await screen.findByRole('button', { name: /Expand details.*PBS snapshot/ });
+    await fireEvent.click(toggle);
+    toggle.focus();
+    const panel = screen.getByTestId('proxmox-recoverable-detail');
+    supply('not-a-date', true);
+    eventBus.emit('org_switched', 'reported-date-group-move');
+    await waitFor(() =>
+      expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(
+        'not-a-date',
+      ),
+    );
+    expect(within(panel).getByText('Created').closest('tr')).toHaveTextContent('Unknown');
+    expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(panel);
+    expect(toggle).toHaveFocus();
+  });
+
   it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
     '[regression] By date exposes the reported %s without granting it an age',
     async (date) => {

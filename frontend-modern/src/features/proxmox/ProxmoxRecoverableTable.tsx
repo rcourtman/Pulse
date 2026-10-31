@@ -92,22 +92,16 @@ function groupByDay(artifacts: readonly RecoverableArtifact[]): DayGroup[] {
 }
 
 // The drawer dot repeats the row's State badge: the same states, the same colours.
-const artifactStateIndicator = (artifact: RecoverableArtifact): StatusIndicator => ({
-  variant: artifact.running
-    ? 'info'
-    : artifact.failed
-      ? 'danger'
-      : artifact.sourceKind === 'snapshot'
-        ? 'info'
-        : artifact.verified === true
-          ? 'success'
-          : artifact.verified === false
-            ? 'warning'
-            : artifact.protected
-              ? 'info'
-              : 'muted',
-  label: artifactStateLabel(artifact),
-});
+const artifactStateIndicator = (artifact: RecoverableArtifact): StatusIndicator => {
+  const label = artifactStateLabel(artifact);
+  if (artifact.running) return { variant: 'info', label };
+  if (artifact.failed) return { variant: 'danger', label };
+  if (artifact.sourceKind === 'snapshot') return { variant: 'info', label };
+  if (artifact.verified === true) return { variant: 'success', label };
+  if (artifact.verified === false) return { variant: 'warning', label };
+  if (artifact.protected) return { variant: 'info', label };
+  return { variant: 'muted', label };
+};
 
 const artifactVerificationText = (artifact: RecoverableArtifact): string => {
   if (artifact.verified === true) return 'Verified';
@@ -275,6 +269,7 @@ export function ProxmoxRecoverableTable(props: {
   /** Register focus retention with each row/detail's own cleanup owner. */
   retainInspectionFocus?: (content: HTMLElement) => void;
 }) {
+  let table: HTMLDivElement | undefined;
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
     const width = props.layoutWidth?.() ?? observedWidth.width();
@@ -288,6 +283,15 @@ export function ProxmoxRecoverableTable(props: {
     visibleColumns().some((candidate) => candidate.id === column);
   const showDayGroups = () => props.groupByDay && props.sortKey() === 'created';
   const tableItems = createMemo<RecoverableTableItem[]>(() => {
+    // Moving a retained keyed row between date groups can blur its control in
+    // real browsers. Restore only owned, still-mounted focus lost by this move.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && table?.contains(active)) {
+      queueMicrotask(() => {
+        if (active.isConnected && document.activeElement === document.body)
+          active.focus({ preventScroll: true });
+      });
+    }
     if (!showDayGroups()) {
       return props.artifacts.map((item) => ({
         kind: 'artifact',
@@ -465,7 +469,10 @@ export function ProxmoxRecoverableTable(props: {
       }
     >
       <div
-        ref={observedWidth.setElement}
+        ref={(element) => {
+          table = element;
+          observedWidth.setElement(element);
+        }}
         data-proxmox-backups-table="recoverable"
         data-proxmox-backups-layout={layoutMode()}
       >

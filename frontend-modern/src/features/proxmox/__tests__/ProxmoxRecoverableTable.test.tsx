@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Accessor, JSX } from 'solid-js';
+import { createSignal, type Accessor, type JSX } from 'solid-js';
 
 import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
 import type { RecoverableArtifact } from '../proxmoxBackupRecoveryModel';
@@ -289,4 +289,61 @@ describe('restore-point disclosure identity', () => {
     expect(screen.queryByTestId('proxmox-recoverable-detail')).not.toBeInTheDocument();
     expect(toggle).toHaveFocus();
   });
+});
+
+describe('live date-group focus ownership', () => {
+  it.each(['owned', 'moved elsewhere', 'removed'] as const)(
+    'restores only retained focus after a row move: %s',
+    async (focus) => {
+      const second = {
+        ...artifact,
+        id: 'second',
+        nativeId: 'second',
+        createdMs: artifact.createdMs! - 86400000,
+      };
+      const unknown = {
+        ...artifact,
+        id: 'unknown',
+        nativeId: 'unknown',
+        createdAt: '',
+        createdMs: undefined,
+      };
+      const [points, setPoints] = createSignal([artifact, second, unknown]);
+      renderInRouter(() => (
+        <>
+          <button type="button">Outside inspection</button>
+          <ProxmoxRecoverableTable
+            artifacts={points()}
+            hasAnyArtifacts
+            emptyIcon={<span />}
+            emptyTitle=""
+            emptyDescription=""
+            sortKey={() => 'created'}
+            sortDirection={() => 'desc'}
+            onSort={() => {}}
+            sizeMaxBytes={0}
+            groupByDay
+            layoutWidth={() => 1200}
+          />
+        </>
+      ));
+      const toggle = screen.getByRole('button', { name: /Identifier: vm\/100\// });
+      await fireEvent.click(toggle);
+      toggle.focus();
+      setPoints(
+        focus === 'removed'
+          ? [second, unknown]
+          : [second, unknown, { ...artifact, createdAt: '', createdMs: undefined }],
+      );
+      const outside = screen.getByRole('button', { name: 'Outside inspection' });
+      if (focus === 'moved elsewhere') outside.focus();
+      await Promise.resolve();
+      if (focus === 'owned') expect(toggle).toHaveFocus();
+      else if (focus === 'moved elsewhere') expect(outside).toHaveFocus();
+      else {
+        expect(toggle).not.toBeInTheDocument();
+        expect(toggle).not.toHaveFocus();
+      }
+    },
+  );
 });
