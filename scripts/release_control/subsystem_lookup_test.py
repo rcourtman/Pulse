@@ -1,3 +1,4 @@
+from copy import deepcopy
 import os
 import subprocess
 import tempfile
@@ -8,6 +9,7 @@ from unittest.mock import patch
 from canonical_completion_guard import REPO_ROOT, infer_impacted_subsystems, required_contract_updates
 from repo_file_io import canonical_workspace_repos_root, strip_local_git_env
 from subsystem_lookup import lookup_paths, normalize_input_path, parse_args, render_pretty
+from subsystem_lookup import _load_lookup_evidence
 from subsystem_contracts import load_contract_index
 
 
@@ -96,7 +98,55 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
     raise AssertionError(f"reference {needle!r} not found in {contract_path}")
 
 
-class SubsystemLookupTest(unittest.TestCase):
+class SubsystemLookupSourceTest(unittest.TestCase):
+    """Exercise real source ingestion separately from static ownership cases."""
+
+    def test_public_lookup_loads_fresh_evidence_on_every_invocation(self) -> None:
+        with patch("subsystem_lookup._load_lookup_evidence", wraps=_load_lookup_evidence) as load:
+            first = lookup_paths(["README.md"])
+            second = lookup_paths(["README.md"])
+        self.assertEqual(load.call_count, 2)
+        self.assertEqual(first, second)
+
+    def test_invalid_live_registry_is_not_replaced_by_previous_evidence(self) -> None:
+        lookup_paths(["README.md"])
+        with patch("subsystem_lookup.load_subsystem_rules", side_effect=ValueError("invalid verification policy")):
+            with self.assertRaisesRegex(ValueError, "invalid verification policy"):
+                lookup_paths(["README.md"])
+
+    def test_lookup_evidence_reloads_every_source(self) -> None:
+        sources = [
+            {"rules": [{"id": "before"}], "index": {"before": {}},
+             "registry": {"shared_ownerships": [{"path": "before.go"}]}, "status": {"before": True}},
+            {"rules": [], "index": {}, "registry": {}, "status": {}},
+        ]
+        with patch("subsystem_lookup.load_subsystem_rules", side_effect=[item["rules"] for item in sources]) as rules, \
+             patch("subsystem_lookup.load_contract_index", side_effect=[item["index"] for item in sources]) as contracts, \
+             patch("subsystem_lookup.load_registry_payload", side_effect=[item["registry"] for item in sources]) as registry, \
+             patch("subsystem_lookup.load_status_payload", side_effect=[item["status"] for item in sources]) as status, \
+             patch("subsystem_lookup.audit_status_payload", side_effect=lambda value: value) as audit:
+            first, second = _load_lookup_evidence(), _load_lookup_evidence()
+        for reader in (rules, contracts, registry, status, audit):
+            self.assertEqual(reader.call_count, 2)
+        self.assertEqual(first.rules, sources[0]["rules"])
+        self.assertEqual(first.contract_index, sources[0]["index"])
+        self.assertEqual(first.shared_ownership_by_path, {"before.go": {"path": "before.go"}})
+        self.assertEqual(first.status_report, sources[0]["status"])
+        self.assertEqual(second.rules, [])
+        self.assertEqual(second.contract_index, {})
+        self.assertEqual(second.shared_ownership_by_path, {})
+        self.assertEqual(second.status_report, {})
+
+    def test_classification_does_not_mutate_its_evidence_fixture(self) -> None:
+        evidence = _load_lookup_evidence()
+        before = deepcopy(evidence)
+        with patch("subsystem_lookup._load_lookup_evidence", return_value=evidence):
+            for lean in (False, True):
+                result = lookup_paths([
+                    "internal/api/resourceapi/resources.go", "tests/example.spec.ts", "README.md",
+                ], lean=lean)
+                self.assertTrue(result["files"])
+        self.assertEqual(evidence, before)
 
     def test_lookup_reads_the_complete_contract_index_once(self) -> None:
         path = "internal/unifiedresources/views.go"
@@ -131,6 +181,27 @@ class SubsystemLookupTest(unittest.TestCase):
             {"heading": "## Shared Boundaries", "path": path, "line": 11, "heading_line": 9},
         ])
         self.assertEqual(dependent(removed), [])
+
+
+class SubsystemLookupTest(unittest.TestCase):
+    """Assert current ownership routes against one real, per-suite fixture.
+
+    These cases do not edit source: repeating full contract ingestion and the
+    status audit for each path obscures their classification purpose and adds
+    substantial I/O. The source tests above deliberately use the live loader.
+    Every assertion still exercises lookup_paths and its real rule/verification
+    logic; only the unchanged evidence input is shared and isolated per test.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.evidence = _load_lookup_evidence()
+
+    def setUp(self) -> None:
+        evidence = deepcopy(self.evidence)
+        loader = patch("subsystem_lookup._load_lookup_evidence", return_value=evidence)
+        loader.start()
+        self.addCleanup(loader.stop)
 
     def test_shared_index_preserves_every_current_owner_and_dependent_requirement(self) -> None:
         index = load_contract_index()
