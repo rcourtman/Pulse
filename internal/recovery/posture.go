@@ -613,7 +613,7 @@ func DeriveProtectionPostureAt(
 		if hasSnapshotsOnly {
 			posture.Explanation = "Only snapshots were found. A snapshot is not a separate backup, so it does not count."
 		} else {
-			posture.Explanation = "Pulse can see the full backup history and found no backup for this resource."
+			posture.Explanation = "Pulse can see the full backup history, but found no successful, completed backup for this resource."
 		}
 	default:
 		posture.State = ProtectionStateUnknown

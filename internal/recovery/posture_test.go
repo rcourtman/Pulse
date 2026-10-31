@@ -398,7 +398,7 @@ func TestBuildProtectionPostureDoesNotTreatSuccessfulTaskAsAvailableBackup(t *te
 	if got.LastSuccessfulPointAt != nil {
 		t.Fatalf("last successful point = %v, want nil for task-only evidence", got.LastSuccessfulPointAt)
 	}
-	if !strings.Contains(got.Explanation, "found no backup") {
+	if !strings.Contains(got.Explanation, "found no successful, completed backup") {
 		t.Fatalf("explanation = %q, want no qualifying backup", got.Explanation)
 	}
 }
@@ -694,6 +694,46 @@ func TestProtectionPostureFuturePointsRetainAccessBoundaries(t *testing.T) {
 			point.CompletedAt = &recent
 			if got := build([]RecoveryPoint{point}, []ProtectionProviderObservation{observation}); got.State != ProtectionStateProtected || got.Freshness != ProtectionFreshnessCurrent || got.Verification != ProtectionVerificationVerified {
 				t.Fatalf("corrected source date did not recover: %+v", got)
+			}
+		})
+	}
+}
+
+// A complete inventory with no successful backup need not be empty. Existing
+// running/failed/uncertain artifacts remain evidence without supplying a usable
+// completed backup, a success time or a protected state.
+func TestProtectionExplanationDoesNotEraseUnsuccessfulBackupEvidence(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
+	started := now.Add(-time.Hour)
+	for _, outcome := range []Outcome{OutcomeRunning, OutcomeFailed, OutcomeWarning, OutcomeUnknown} {
+		t.Run(string(outcome), func(t *testing.T) {
+			point := RecoveryPoint{
+				ID: "pbs-backup:observed", Provider: ProviderProxmoxPBS,
+				Kind: KindBackup, Mode: ModeLocal, Outcome: outcome,
+				StartedAt: &started, SubjectResourceID: "resource:vm-100", ProviderScope: "pbs-main",
+			}
+			envelope, err := NewRecoveryPointEvidence(point, "pbs-backup-inventory", now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			point.Evidence = envelope
+			observation, err := NewProtectionProviderObservation(ProviderProxmoxPBS,
+				"pbs-backup-enumeration", "pbs-main", OutcomeSuccess, ProtectionHistoryComplete,
+				operationaltrust.EvidencePermissionsSufficient, false, now, now, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := BuildProtectionPostureFromPointsAt(point.SubjectResourceID, []RecoveryPoint{point},
+				[]ProtectionProviderObservation{observation}, DefaultProtectionPosturePolicy, now)
+			if got.State != ProtectionStateUnprotected || got.Coverage != ProtectionCoverageNone || got.LastSuccessfulPointAt != nil {
+				t.Fatalf("non-successful point changed protection/success: %+v", got)
+			}
+			if len(got.ProviderStates) != 1 || len(got.EvidenceIDs) != 2 || len(got.ProviderStates[0].EvidenceIDs) != 2 {
+				t.Fatalf("observed backup evidence lost: %+v", got)
+			}
+			if !strings.Contains(got.Explanation, "no successful, completed backup") || strings.Contains(got.Explanation, "found no backup") {
+				t.Fatalf("retained %s artifact described as absent: %q", outcome, got.Explanation)
 			}
 		})
 	}

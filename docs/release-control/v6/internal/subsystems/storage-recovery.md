@@ -43,8 +43,12 @@ not original guest recovery, an established #3248 cause or release availability.
 
 ### Unread PBS writer inventories do not establish a terminal backup
 
-The running backup/sync task reader requires an explicit `data` array from a
-fully read response within the existing 8 MiB body bound. Missing/null arrays,
+The running backup/sync task reader shares the whole-response backup inventory
+admission above: an explicit `data` array in one unambiguous, fully read and
+successfully closed HTTP 200 response within the existing 8 MiB body bound.
+Duplicate envelope fields (including escaped spellings), case aliases of
+`data`/`errors`, invalid UTF-8 and other success statuses are unread; none can
+turn a discarded writer or error into an accepted empty set. Missing/null arrays,
 error-bearing envelopes, trailing JSON, unread/failed-close bodies and rows
 without a nonblank worker type return no writer set, even after an earlier
 family or page succeeded. Known non-writer types remain filtered; a missing
@@ -60,12 +64,27 @@ snapshot identity or borrowing a completion time. This is not guest liveness,
 a tested restore, an installed recovery or an established cause of #3248.
 
 `TestClient_ListRunningDataTasksRequiresReadableInventory`, the later-page and
-complete-response controls exercise the actual reader. Normal-suite
+`TestClient_ListRunningDataTasksRequiresUnambiguousResponse`, HTTP-status and
+complete-response controls exercise the actual reader, including both writer
+families and later-page ambiguity. Normal-suite
 `TestPBSWriterInventoryDoesNotInventTerminalFailure` connects VM/CT HTTP reads
 through polling, raw state, durable points and posture, including failed reads
-after prior no-writer evidence and an unaffected completed sibling. Its opt-in
+after prior no-writer evidence, contradictory envelopes/non-200 responses and
+an unaffected completed sibling. Its opt-in
 frames feed the actual existing Backups consumer at desktop/narrow widths for
 interaction and native pixel proof. Fixtures perform only local GETs.
+
+### Unprotected does not mean an empty backup inventory
+
+When complete readable history supplies no qualifying success, the posture
+explanation says no successful, completed backup was found, not that no backup
+exists. Running, failed and uncertain artifacts remain inspectable evidence;
+they supply neither a successful-point time nor protection. Snapshot-only,
+partial/unavailable history and all state, freshness, verification and policy
+rules remain unchanged. `TestProtectionExplanationDoesNotEraseUnsuccessfulBackupEvidence`
+checks all non-success outcomes through the real point/observation builder.
+The ordinary PBS writer lifecycle checks the same explanation alongside live
+and durable artifact outcomes and feeds desktop/narrow Backups pixel proof.
 
 ### Coverage dates are inspectable without hover
 

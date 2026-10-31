@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1164,6 +1165,89 @@ func TestBackupInventoryAcceptsCompleteEmptyResponse(t *testing.T) {
 				isNil, err := reader.read(client)
 				if err != nil || isNil {
 					t.Fatalf("complete empty read rejected: nil=%t err=%v", isNil, err)
+				}
+			})
+		}
+	}
+}
+
+// No-writer evidence must not depend on which duplicate/aliased field a
+// decoder picks. Reject the entire set, including earlier accepted pages or
+// families, rather than letting an ambiguous empty result end a backup.
+func TestClient_ListRunningDataTasksRequiresUnambiguousResponse(t *testing.T) {
+	oldLimit, oldMaxPages := pbsRunningTaskPageLimit, pbsRunningTaskMaxPages
+	pbsRunningTaskPageLimit, pbsRunningTaskMaxPages = 2, 2
+	t.Cleanup(func() {
+		pbsRunningTaskPageLimit, pbsRunningTaskMaxPages = oldLimit, oldMaxPages
+	})
+	for _, family := range []string{"backup", "syncjob"} {
+		for _, laterPage := range []bool{false, true} {
+			for name, body := range map[string]string{
+				"duplicate-data":     `{"data":null,"data":[]}`,
+				"discarded-writer":   `{"data":[{"worker_type":"backup","worker_id":"private-provider-detail"}],"data":[]}`,
+				"case-data":          `{"data":null,"DATA":[]}`,
+				"duplicate-errors":   `{"data":[],"errors":{"private":"private-provider-detail"},"errors":null}`,
+				"case-errors":        `{"data":[],"errors":{"private":"private-provider-detail"},"Errors":null}`,
+				"duplicate-metadata": `{"data":[],"total":1,"total":0}`,
+				"escaped-duplicate":  `{"data":null,"d\u0061ta":[]}`,
+				"invalid-utf8":       "{\"data\":[],\"metadata\":\"\xff\"}",
+			} {
+				t.Run(fmt.Sprintf("%s/later=%t/%s", family, laterPage, name), func(t *testing.T) {
+					reads := 0
+					client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+						reads++
+						q := r.URL.Query()
+						if r.Method != http.MethodGet || r.URL.Path != "/api2/json/nodes/localhost/tasks" || q.Get("running") != "true" || q.Get("limit") != "2" {
+							t.Errorf("writer query changed: %s %s", r.Method, r.URL)
+						}
+						if q.Get("typefilter") == family && (!laterPage || q.Get("start") == "2") {
+							_, _ = w.Write([]byte(body))
+							return
+						}
+						rows := []map[string]any{{"worker_type": q.Get("typefilter"), "worker_id": "archive:vm/100"}}
+						if q.Get("typefilter") == family && laterPage {
+							rows = append(rows, map[string]any{"worker_type": family, "worker_id": "archive:vm/101"})
+						}
+						_ = json.NewEncoder(w).Encode(map[string]any{"data": rows})
+					})
+					defer server.Close()
+					tasks, err := client.ListRunningDataTasks(context.Background())
+					if err == nil || tasks != nil {
+						t.Fatalf("ambiguous inventory accepted/partial writers returned: tasks=%v err=%v", tasks, err)
+					}
+					if strings.Contains(err.Error(), "private-provider-detail") {
+						t.Fatal("provider payload leaked into format diagnostic")
+					}
+					wantReads := 1
+					if family == "syncjob" {
+						wantReads++
+					}
+					if laterPage {
+						wantReads++
+					}
+					if reads != wantReads {
+						t.Fatalf("reads=%d want=%d; no ambiguous inventory retry", reads, wantReads)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestClient_ListRunningDataTasksRequiresHTTP200(t *testing.T) {
+	for _, family := range []string{"backup", "syncjob"} {
+		for _, status := range []int{http.StatusCreated, http.StatusAccepted, http.StatusNonAuthoritativeInfo, http.StatusNoContent, http.StatusPartialContent} {
+			t.Run(fmt.Sprintf("%s/%d", family, status), func(t *testing.T) {
+				client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Query().Get("typefilter") == family {
+						w.WriteHeader(status)
+					}
+					_, _ = w.Write([]byte(`{"data":[]}`))
+				})
+				defer server.Close()
+				tasks, err := client.ListRunningDataTasks(context.Background())
+				if err == nil || tasks != nil {
+					t.Fatalf("non-200 writer set admitted: tasks=%v err=%v", tasks, err)
 				}
 			})
 		}
