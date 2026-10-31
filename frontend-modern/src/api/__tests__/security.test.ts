@@ -87,12 +87,51 @@ describe('SecurityAPI', () => {
       expect(result).toEqual([]);
     });
 
-    it('returns empty array when tokens is malformed', async () => {
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ tokens: 'bad' } as any);
+    it.each([
+      null,
+      [],
+      {},
+      { tokens: 'bad' },
+      { tokens: {} },
+      { tokens: [null] },
+      { tokens: [{ id: 't1', scopes: 'monitoring:read' }] },
+      { tokens: [{ id: 't1', scopes: [null] }] },
+      { tokens: [{ id: '' }] },
+    ])('rejects an unreadable inventory instead of inventing absence (%j)', async (response) => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(response);
+      await expect(SecurityAPI.listTokens()).rejects.toThrow('Invalid API token inventory.');
+      expect(apiFetchJSON).toHaveBeenCalledTimes(1);
+    });
 
-      const result = await SecurityAPI.listTokens();
+    it('rejects a partial inventory instead of dropping its unreadable member', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        tokens: [
+          {
+            id: 't1',
+            name: 'Known',
+            prefix: 'pmp_',
+            suffix: '1234',
+            createdAt: '',
+            scopes: ['monitoring:read'],
+          },
+          null,
+        ],
+      });
+      await expect(SecurityAPI.listTokens()).rejects.toThrow('Invalid API token inventory.');
+    });
 
-      expect(result).toEqual([]);
+    it.each([undefined, null, [], ['*'], ['future:scope']])(
+      'preserves supported and legacy scopes (%j)',
+      async (scopes) => {
+        const token = { id: 't1', name: '', prefix: 'pmp_', suffix: '1234', createdAt: '', scopes };
+        vi.mocked(apiFetchJSON).mockResolvedValueOnce({ tokens: [token] });
+        await expect(SecurityAPI.listTokens()).resolves.toEqual([token]);
+      },
+    );
+
+    it('preserves an explicitly empty inventory', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ tokens: [] });
+      await expect(SecurityAPI.listTokens()).resolves.toEqual([]);
     });
   });
 
