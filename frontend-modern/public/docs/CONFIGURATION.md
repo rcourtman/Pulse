@@ -17,15 +17,15 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `sso.enc` | SAML/SSO provider config | 🔒 **Encrypted** |
 | `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
 | `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
-| `ai_findings.json` | AI Patrol findings | 📝 Standard |
-| `ai_patrol_runs.json` | AI Patrol run history | 📝 Standard |
+| `ai_findings.json` | AI Patrol findings, evidence and user notes | 🔒 **Sensitive** |
+| `ai_patrol_runs.json` | AI Patrol analysis and tool inputs/results | 🔒 **Sensitive** |
 | `ai_usage_history.json` | AI usage history | 📝 Standard |
-| `ai_chat_sessions.json` | Legacy AI chat sessions (UI sync) | 📝 Standard |
+| `ai_chat_sessions.json` | Legacy conversations, usernames and tool inputs/results | 🔒 **Sensitive** |
 | `license.enc` | Relay/Pro/legacy Pro+/Cloud license key | 🔒 **Encrypted** |
 | `report_schedules.json` | Scheduled report definitions, recipients, and last-run metadata | 🔒 **Sensitive** (encrypted when data-dir encryption is enabled) |
-| `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
+| `host_metadata.json` | Private host notes, URLs, tags and AI command overrides | 🔒 **Sensitive** |
 | `docker_metadata.json` | Docker metadata cache | 📝 Standard |
-| `guest_metadata.json` | Guest notes and metadata | 📝 Standard |
+| `guest_metadata.json` | Private guest notes, URLs and remembered identity | 🔒 **Sensitive** |
 | `agent_profiles.json` | Agent configuration profiles (Pro/legacy Pro+/Cloud) | 📝 Standard |
 | `agent_profile_assignments.json` | Agent profile assignments (Pro/legacy Pro+/Cloud) | 📝 Standard |
 | `profile-versions.json` | Agent profile version history (Pro/legacy Pro+/Cloud) | 📝 Standard |
@@ -42,6 +42,21 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `ai_remediations.json` | AI remediation suggestions | 📝 Standard |
 | `ai_incidents.json` | AI incident tracking | 📝 Standard |
 | `org.json` | Organization metadata (multi-tenant) | 📝 Standard |
+
+### Handle configuration and history privately
+
+**Standard does not mean safe to publish.** A `.json` filename is not a promise
+of anonymisation or encryption. Findings can retain evidence and user notes;
+Patrol history and legacy chat records can retain private infrastructure details,
+conversation text and tool inputs/results. Host and guest notes can contain
+private URLs and operator annotations too.
+
+Keep these files, their backups and decrypted or exported copies private.
+Encryption and file permissions do not redact a copy you open or share. For a
+public report, use only the relevant, locally reviewed and redacted excerpt;
+do not attach the configuration directory or whole history files. Follow the
+[safe reporting guidance](TROUBLESHOOTING.md#-getting-help). Do not delete history,
+reset keys or disable collection just to prepare a report.
 
 Guest metadata entries are keyed by the canonical guest ID format `instance:node:vmid` (for example, `pve1:node1:100`). Legacy dash-separated keys are migrated automatically.
 
