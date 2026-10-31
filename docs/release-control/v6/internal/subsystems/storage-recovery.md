@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Public-URL token checks share authentication ownership
+
+The pre-route public-URL authority check uses the existing locked token
+validator and detached snapshot. Normalisation and last-used metadata updates
+hold the same exclusive configuration ownership as ordinary authentication;
+subsequent scope checks never mutate the live record outside it. Both supported
+token headers retain the existing settings-write requirement. Expired, invalid,
+wrong-role and monitoring-only credentials gain no capture authority. Sessions,
+proxy/basic administration and URL/origin selection are unchanged.
+
+`TestPublicURLTokenCaptureUsesAuthenticationOwnership` covers concurrent capture
+and ordinary authentication, retained scope/identity and successful last-use
+updates; `TestPublicURLTokenCapturePreservesTokenRefusals` pins both headers and
+refused metadata. The real concurrent history HTTP test remains unchanged and
+must pass with the race detector; the observed race is not warmed away or
+suppressed. No new rendered state, token grant or runtime action is introduced.
+
+
 ### Execution history uses a typed read-only projection
 
 The recent-change read keeps kind-specific scalar status facts, not arbitrary
