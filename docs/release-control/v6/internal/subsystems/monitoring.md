@@ -135,9 +135,15 @@ reservation. While waiting, the status is unknown (`local image changed; registr
 refresh pending`), with no target digest or false update. It is not an affirmative
 clear: existing update-alert error handling preserves wanted incidents. Registry
 failures keep their existing 15-minute transient / one-hour rate-limit backoff,
-regardless of local churn. Ordinary hits extend neither TTL nor cooldown; expiry
-and explicit ForceCheck retain their normal meanings. Registry authentication,
-redaction, manifest validation and public report shapes are unchanged.
+regardless of local churn. Ordinary hits extend neither TTL nor cooldown.
+An explicit ForceCheck clears successes, errors and in-flight refresh
+reservations as one cache generation. A registry lookup admitted before that
+clear cannot refill the new generation or publish its superseded result. Its
+container update status is unknown for that cycle, preserving pending and active
+update incidents until fresh evidence arrives. The next admitted lookup asks
+the registry again. Same-generation ordering and ordinary expiry are unchanged.
+Registry authentication, redaction, manifest validation and public report shapes
+are unchanged.
 
 `image_replacement_test.go` carries real collection of both reported reference
 forms through ingestion, wanted-alert evaluation and scoped HTTP resource reads.

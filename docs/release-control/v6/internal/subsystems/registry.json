@@ -7109,6 +7109,7 @@
               "internal/dockeragent/docker_hub_reference_test.go",
               "internal/dockeragent/image_replacement_test.go",
               "internal/dockeragent/registry_credentials_test.go",
+              "internal/dockeragent/registry_force_check_generation_test.go",
               "internal/dockeragent/registry_image_change_test.go",
               "internal/dockeragent/registry_manifest_test.go",
               "internal/dockeragent/registry_response_validation_test.go"

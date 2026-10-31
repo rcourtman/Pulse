@@ -24,8 +24,11 @@ rolling replicas or rapid local churn from repeatedly refetching the same tag.
 Unseen mismatches waiting for that budget report unknown, not a false update
 or affirmative clear. Existing transient/rate-limit backoff, image matching,
 credential scope and action/enrolment boundaries stay intact. The monitoring
-contract and collector/registry replacement tests cover the comparison; no
-container recreate, command, restart or installed-recovery authority is added.
+contract owns the comparison and explicit ForceCheck generation boundary:
+pre-clear registry work cannot refill a cleared cache or report a superseded
+outcome. Collector/registry tests cover that boundary and unknown-status
+consumption. No container recreate, command, restart or installed-recovery
+authority is added.
 
 
 ### API-backed disk rates preserve native-writer authority
