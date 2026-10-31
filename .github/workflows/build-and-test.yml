@@ -509,10 +509,28 @@ jobs:
           fetch-depth: 2
 
       - name: Set up Go
+        id: go-setup
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
+
+      # setup-go's immutable module key can keep restoring objects from an old
+      # tree forever. Reuse the successful compile gate's current-source objects
+      # before falling back to the same runner/toolchain/module graph. Go still
+      # checks content identities; no cache result admits or replaces a test.
+      - name: Locate backend Go build cache
+        id: go-build-cache
+        run: echo "path=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore backend race build objects
+        id: race-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-build-cache.outputs.path }}
+          key: backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
 
       - name: Provide frontend test embed stub
         run: bash scripts/ensure_test_assets.sh
@@ -522,6 +540,17 @@ jobs:
           PULSE_GO_COMPILE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           PULSE_GO_COMPILE_HEAD: ${{ github.sha }}
         run: bash scripts/compile-go-tests.sh
+
+      # Save before dependent runners start, even when setup-go restored its
+      # older module-key cache. Only a successful real compilation gets here.
+      # Cache transport is optional; compilation and runtime are never optional.
+      - name: Save backend race build objects
+        if: steps.race-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-build-cache.outputs.path }}
+          key: ${{ steps.race-cache.outputs.cache-primary-key }}
 
   backend:
     name: Backend tests (${{ matrix.shard }})
@@ -568,6 +597,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        id: go-setup
         if: needs.changes.outputs.code == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -578,6 +608,25 @@ jobs:
       # not assert on real bundle content, so a stub file satisfies the embed
       # without the ~5 minute frontend build; the real bundle is built and
       # size-gated by the frontend job, and release artifacts always build it.
+      # setup-go's immutable module key can keep restoring objects from an old
+      # tree forever. Reuse the successful compile gate's current-source objects
+      # before falling back to the same runner/toolchain/module graph. Go still
+      # checks content identities; no cache result admits or replaces a test.
+      - name: Locate backend Go build cache
+        if: needs.changes.outputs.code == 'true'
+        id: go-build-cache
+        run: echo "path=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore backend race build objects
+        if: needs.changes.outputs.code == 'true'
+        id: race-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-build-cache.outputs.path }}
+          key: backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
+
       - name: Provide frontend embed stub
         if: needs.changes.outputs.code == 'true'
         run: |
@@ -681,11 +730,31 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        id: go-setup
         if: needs.changes.outputs.code == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
+
+      # setup-go's immutable module key can keep restoring objects from an old
+      # tree forever. Reuse the successful compile gate's current-source objects
+      # before falling back to the same runner/toolchain/module graph. Go still
+      # checks content identities; no cache result admits or replaces a test.
+      - name: Locate backend Go build cache
+        if: needs.changes.outputs.code == 'true'
+        id: go-build-cache
+        run: echo "path=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore backend race build objects
+        if: needs.changes.outputs.code == 'true'
+        id: race-cache
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.go-build-cache.outputs.path }}
+          key: backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
 
       - name: Provide frontend embed stub
         if: needs.changes.outputs.code == 'true'

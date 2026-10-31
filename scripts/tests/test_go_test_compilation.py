@@ -135,7 +135,11 @@ func TestStaleFixture(t *testing.T) { _ = api.Resource{Alerts: []api.ResourceAle
         ):
             self.assertIn(expected, compile_job)
         self.assertLess(compile_job.index("ensure_test_assets.sh"), compile_job.index("compile-go-tests.sh"))
-        self.assertNotIn("continue-on-error:", compile_job)
+        for step in re.split(r"(?m)^      - name: ", compile_job)[1:]:
+            if "continue-on-error:" in step:
+                self.assertTrue(step.startswith(("Restore backend race build objects\n",
+                                                 "Save backend race build objects\n")))
+                self.assertIn("uses: actions/cache/", step)
         self.assertIn("if: needs.changes.outputs.go_compile == 'true'", compile_job)
         self.assertIn("go test -race -vet=off -count=1 -exec /bin/true ./...", COMPILER.read_text())
         # Frontend work does not wait for the Go-only gate.

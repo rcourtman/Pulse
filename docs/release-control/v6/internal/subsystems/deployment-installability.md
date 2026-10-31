@@ -9092,6 +9092,33 @@ dependency audit.
 These proofs establish CI source admission, not hosted queue-time relief.
 
 
+### Source-aware backend race build cache (31 October 2026)
+
+The compile-only gate and both backend matrices restore Go build objects after
+setup-go's module cache. The primary key binds the source SHA, Ubuntu 24 runner
+OS/architecture, declared Go version and both module manifests. A fallback is
+limited to that same runner/toolchain/module graph; Go's own content identities
+still decide which objects are reusable. Only `go env GOCACHE` is shared, not
+source, credentials, module downloads or an application/test-binary artifact.
+
+The successful compile gate saves its source key before dependent jobs start.
+An existing setup-go module-key hit must not suppress this save: that immutable
+key can otherwise restore old objects on every source change. Backend runtime
+jobs are readers, not competing writers. GitHub's existing branch-scoped cache
+access remains unchanged; there is no cross-ref or credential override.
+
+Cache misses, evictions and transport failures degrade to normal compilation.
+Only the pinned restore/save actions may continue after a cache failure; all
+source/compile/runtime admissions, required names, race commands, inventory,
+vet, deadlines and frontend/native checks remain mandatory. The compiler still
+uses `-count=1 -exec /bin/true`: its cache is not a passing runtime result.
+`scripts/tests/test_backend_build_cache.py` checks the actual workflow keys,
+paths, producer/consumer order, optional-cache-only boundary and path command;
+`test_go_test_compilation.py` retains the executable fail-closed admission and
+no-runtime controls. Hosted cache transfer cost and overall throughput are
+post-landing observations, not established by these contract tests.
+
+
 ### Exhaustive native Unix installer process budgets (18 October 2026)
 
 `scripts/installtests/run_unix_contracts.py` belongs to deployment installability.
