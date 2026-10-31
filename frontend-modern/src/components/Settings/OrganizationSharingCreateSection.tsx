@@ -18,7 +18,10 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
   <>
     <Show when={props.state.canManageCurrentOrg()}>
       <div class="p-4 sm:p-6">
-        <div class="rounded-md border border-border p-4 space-y-3">
+        <fieldset
+          disabled={props.state.saving()}
+          class="rounded-md border border-border p-4 space-y-3"
+        >
           <h4 class="text-sm font-semibold text-base-content">Create Share</h4>
 
           <div class="grid gap-3 lg:grid-cols-2">
@@ -91,6 +94,12 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
             </div>
           </Show>
 
+          <Show when={props.state.quickPickUnavailable()}>
+            <p role="status" class="text-sm text-amber-700 dark:text-amber-300">
+              The selected resource is no longer available. Choose another resource or enter it
+              manually.
+            </p>
+          </Show>
           <Show
             when={
               props.state.unifiedResourceOptions().length === 0 || props.state.manualEntryExpanded()
@@ -162,11 +171,11 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
               {props.state.saving() ? 'Saving...' : 'Create Share'}
             </Button>
           </div>
-        </div>
+        </fieldset>
       </div>
     </Show>
 
-    <Show when={!props.state.canManageCurrentOrg()}>
+    <Show when={!props.state.canManageCurrentOrg() && !props.state.readOnly()}>
       <div class="p-4 sm:p-6">
         <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
           Admin or owner role required to create or remove organization shares.

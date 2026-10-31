@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "base_sha": "c3693ddd0eb4957476e1c7678104f78e2a8fc6eb",
+  "verified_at": "2026-10-31T19:30:15.163Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/orgs.ts",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/orgs.ts": "ecffe2e19003d75d01d7d926427bc0bfed24655b62b561bb698c72e75cbb72ee",
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "626cc1966a57082881e0aaec468684d92c070f9179aa370bf056ce25d4d7d5ea",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "2d2cd583fe36ee43ed57c5904001b04185a5292ded7049cc7e438fb4c378c56c",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "54304acd62d391eb8c713e5869ffa9e6791e7d4b0c8252f12e8c96bf8ef6ae21",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "423579376089ce984f8381a5fa51bfcac30bf9741801f83af279175e06820b61"
+  },
+  "routes": [
+    "Existing Organization Sharing settings: production panel, state owner, OrgsAPI/client, unified resource hook and real stylesheet with local synthetic HTTP/WS producers"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1050
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Selected sharing unavailable, never previous-org or false-empty sharing",
+    "Pending read-only reload",
+    "Accepted current sharing and accepted empty lists",
+    "Unconfirmed change requires read reconciliation",
+    "Read-only and non-manager sessions without change controls",
+    "Interrupted writes and obsolete reads cannot replace the current selection",
+    "Disappeared quick pick cannot turn into an implicit manual share"
+  ],
+  "interactions": [
+    "Keyboard/touch read retry, same-selection draft preservation and peer draft clearing",
+    "Explicit create/outgoing remove/incoming accept/accepted removal/pending decline through real grid rows",
+    "HTTP 403 mutation is not retried or redirected; reload is read-only",
+    "Switch org during pending read/write, user change, capability loss/return and explicit default scope",
+    "Real unified-resource snapshot removal shows the selected-resource warning and disables create"
+  ],
+  "browsers": [
+    {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "WebKit",
+      "version": "26.0"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "checks": 53,
+  "captures": 16,
+  "pixel_review": "All 16 captures opened with native view_image. Inline copy and controls are legible at 320px; existing grids retain horizontal scrolling. Toast overlay limitations are recorded separately.",
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER-SUMMARY.json",
+    "PIXEL-REVIEW.json",
+    "CURRENT.tar.xz",
+    "first-captures/browser-result.json",
+    "remaining-captures/browser-result.json"
+  ],
+  "limitations": "Safe fixtures, not a hosted private install, native SSO recovery, published release or customer acceptance. First fixture touch-context failure remains retained; only remaining proof was executed afterwards."
+}

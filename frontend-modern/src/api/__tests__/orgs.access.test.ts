@@ -10,6 +10,58 @@ const accessRequests: {
   method: string;
 }[] = [
   {
+    name: 'organization directory',
+    run: (options) => OrgsAPI.list(options),
+    path: '/api/orgs',
+    method: 'GET',
+  },
+  {
+    name: 'outgoing shares',
+    run: (options) => OrgsAPI.listShares('org/a', options),
+    path: '/api/orgs/org%2Fa/shares',
+    method: 'GET',
+  },
+  {
+    name: 'incoming shares',
+    run: (options) => OrgsAPI.listIncomingShares('org/a', options),
+    path: '/api/orgs/org%2Fa/shares/incoming',
+    method: 'GET',
+  },
+  {
+    name: 'create share',
+    run: (options) =>
+      OrgsAPI.createShare(
+        'org/a',
+        {
+          targetOrgId: 'org-b',
+          resourceType: 'vm',
+          resourceId: 'opaque::id',
+          accessRole: 'viewer',
+        },
+        options,
+      ),
+    path: '/api/orgs/org%2Fa/shares',
+    method: 'POST',
+  },
+  {
+    name: 'delete share',
+    run: (options) => OrgsAPI.deleteShare('org/a', 'share/b', options),
+    path: '/api/orgs/org%2Fa/shares/share%2Fb',
+    method: 'DELETE',
+  },
+  {
+    name: 'accept share',
+    run: (options) => OrgsAPI.acceptIncomingShare('org/a', 'share/b', options),
+    path: '/api/orgs/org%2Fa/shares/incoming/share%2Fb/accept',
+    method: 'POST',
+  },
+  {
+    name: 'decline share',
+    run: (options) => OrgsAPI.declineIncomingShare('org/a', 'share/b', options),
+    path: '/api/orgs/org%2Fa/shares/incoming/share%2Fb',
+    method: 'DELETE',
+  },
+  {
     name: 'organization',
     run: (options) => OrgsAPI.get('org/a', options),
     path: '/api/orgs/org%2Fa',
@@ -116,20 +168,23 @@ describe('Organization Access strict transport', () => {
     },
   );
 
-  it.each([400, 403, 429])(
-    'does not replay an access mutation or change selection after HTTP %i',
-    async (status) => {
-      mockFetch.mockResolvedValue(
-        new Response(JSON.stringify({ error: 'invalid_org' }), {
-          status,
-          headers: { 'X-CSRF-Token': 'new-csrf', 'Retry-After': '1' },
-        }),
+  describe.each(accessRequests.filter((request) => request.method !== 'GET'))(
+    '$name refusal',
+    ({ run }) => {
+      it.each([400, 403, 429])(
+        'does not replay or change selection after HTTP %i',
+        async (status) => {
+          mockFetch.mockResolvedValue(
+            new Response(JSON.stringify({ error: 'invalid_org' }), {
+              status,
+              headers: { 'X-CSRF-Token': 'new-csrf', 'Retry-After': '1' },
+            }),
+          );
+          await expect(run(options())).rejects.toThrow();
+          expect(mockFetch).toHaveBeenCalledTimes(1);
+          expect(getOrgID()).toBe('org-a');
+        },
       );
-      await expect(
-        OrgsAPI.inviteMember('org-a', { userId: 'new-user', role: 'viewer' }, options()),
-      ).rejects.toThrow();
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(getOrgID()).toBe('org-a');
     },
   );
 
