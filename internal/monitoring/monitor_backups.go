@@ -1918,13 +1918,6 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Process each datastore
 	for _, ds := range datastores {
-		if ctx.Err() != nil {
-			log.Warn().
-				Str("instance", instanceName).
-				Msg("PBS backup polling cancelled before completion")
-			return
-		}
-
 		namespacePaths := namespacePathsForDatastore(ds)
 
 		log.Info().
@@ -1952,16 +1945,23 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		groupsRequested := 0
 
 		for _, namespace := range namespacePaths {
-			if ctx.Err() != nil {
-				log.Warn().
-					Str("instance", instanceName).
-					Msg("PBS backup polling cancelled mid-datastore")
-				return
-			}
-
-			groups, err := client.ListBackupGroups(ctx, ds.Name, namespace)
 			namespaceKey := pbsBackupNamespaceKey{datastore: ds.Name, namespace: namespace}
+			if ctx.Err() != nil {
+				// Classify every unread namespace without starting an expired
+				// request. Earlier accepted namespaces remain independently useful.
+				if ctx.Err() != context.DeadlineExceeded {
+					return
+				}
+				datastoreNamespaceErrors++
+				transientNamespaces[namespaceKey] = struct{}{}
+				continue
+			}
+			groups, err := client.ListBackupGroups(ctx, ds.Name, namespace)
 			queriedNamespaces[namespaceKey] = struct{}{}
+			if ctx.Err() != nil {
+				// A late nil-error response is not an accepted empty listing.
+				err = ctx.Err()
+			}
 			if err != nil {
 				datastoreNamespaceErrors++
 				if !shouldReuseCachedPBSBackups(err) {
@@ -2071,8 +2071,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			// Stage successful read times until their matching rows are published.
 			// A later cancellation must not freshen the previously published rows
 			// when this poll's refreshed payload never reaches state.
-			fetchedAt := time.Now()
-			for _, key := range fetched.refreshed {
+			for key, fetchedAt := range fetched.refreshed {
 				observedGroups[key] = struct{}{}
 				refreshedGroups[key] = fetchedAt
 			}
@@ -2115,8 +2114,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		}
 	}
 
-	if ctx.Err() != nil {
-		// An interrupted enumeration cannot authoritatively replace history.
+	if ctx.Err() != nil && ctx.Err() != context.DeadlineExceeded {
+		// Explicit cancellation still withdraws the enumeration.
 		return
 	}
 
@@ -2144,6 +2143,57 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		Str("instance", instanceName).
 		Int("count", len(allBackups)).
 		Msg("PBS backups fetched")
+
+	// A manifestless snapshot is incomplete, but it is not necessarily still
+	// being written: failed backup and PBS-to-PBS sync tasks can leave that
+	// shape behind. Correlate incomplete artifacts with PBS's live task view
+	// before they feed guest "Backup Running" state. If task visibility is
+	// denied or transiently unavailable, keep the previous conservative
+	// inference rather than claiming that no write is active.
+	if hasIncompletePBSBackup(allBackups) {
+		// Write-activity evidence belongs to this poll, not to the snapshot
+		// cache. A failed snapshot refresh may have reused an incomplete
+		// artifact whose previous poll authoritatively found no writer. Clear
+		// that old observation before asking for the current task view so a
+		// task-query failure leaves visibility unknown instead of publishing a
+		// stale terminal-failure conclusion.
+		clearPBSWriteActivityObservation(allBackups)
+		var runningDataTasks []pbs.RunningDataTask
+		runningTasksErr := ctx.Err()
+		if runningTasksErr == nil {
+			runningDataTasks, runningTasksErr = client.ListRunningDataTasks(ctx)
+			if ctx.Err() != nil {
+				runningTasksErr = ctx.Err()
+			}
+		}
+		if runningTasksErr != nil {
+			log.Warn().Err(runningTasksErr).
+				Str("instance", instanceName).
+				Msg("Could not correlate incomplete PBS snapshots with running tasks")
+		} else {
+			applyPBSWriteActivity(allBackups, runningDataTasks)
+		}
+	}
+
+	if ctx.Err() != nil && ctx.Err() != context.DeadlineExceeded {
+		return
+	}
+	if ctx.Err() == context.DeadlineExceeded && datastoreErrors == 0 {
+		// The final live-writer read can spend the remaining budget too.
+		// Its unknown result cannot turn a partial collection into protection.
+		datastoreErrors = 1
+	}
+
+	publicationCtx := ctx
+	if ctx.Err() == context.DeadlineExceeded {
+		// Drop only the child budget, not its runtime/client owner value.
+		publicationCtx = context.WithoutCancel(ctx)
+	}
+	unlock, current := m.beginPBSBackupPublication(publicationCtx, instanceName)
+	if !current {
+		return
+	}
+	defer unlock()
 
 	// With no accepted group listing, a mixture of rejected and transiently
 	// unread namespaces does not establish that every datastore was denied.
@@ -2183,36 +2233,6 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			Int("errors", datastoreErrors).
 			Int("terminal_failures", datastoreTerminalFailures).
 			Msg("All PBS datastore queries failed; keeping previous backup list")
-		return
-	}
-
-	// A manifestless snapshot is incomplete, but it is not necessarily still
-	// being written: failed backup and PBS-to-PBS sync tasks can leave that
-	// shape behind. Correlate incomplete artifacts with PBS's live task view
-	// before they feed guest "Backup Running" state. If task visibility is
-	// denied or transiently unavailable, keep the previous conservative
-	// inference rather than claiming that no write is active.
-	if hasIncompletePBSBackup(allBackups) {
-		// Write-activity evidence belongs to this poll, not to the snapshot
-		// cache. A failed snapshot refresh may have reused an incomplete
-		// artifact whose previous poll authoritatively found no writer. Clear
-		// that old observation before asking for the current task view so a
-		// task-query failure leaves visibility unknown instead of publishing a
-		// stale terminal-failure conclusion.
-		clearPBSWriteActivityObservation(allBackups)
-		runningDataTasks, runningTasksErr := client.ListRunningDataTasks(ctx)
-		if runningTasksErr != nil {
-			log.Warn().Err(runningTasksErr).
-				Str("instance", instanceName).
-				Msg("Could not correlate incomplete PBS snapshots with running tasks")
-		} else {
-			applyPBSWriteActivity(allBackups, runningDataTasks)
-		}
-	}
-
-	if ctx.Err() != nil {
-		// Running-task correlation is the last HTTP read and can also be
-		// interrupted. Do not publish its incomplete payload or renew cache.
 		return
 	}
 
@@ -2280,7 +2300,11 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
 
-	m.checkBackupAlerts(context.Background())
+	if ctx.Err() == nil {
+		// Collection expiry is not a failed alert-store read or permission
+		// to clear an existing wanted alert. The next ordinary check remains.
+		m.checkBackupAlerts(ctx)
+	}
 
 	// Immediately broadcast the updated state so frontend sees new backups
 	m.broadcastStateUpdate()
@@ -2450,7 +2474,7 @@ type pbsBackupSnapshotFetchResult struct {
 	backups        []models.PBSBackup
 	errors         int
 	terminalErrors int
-	refreshed      []pbsBackupGroupKey
+	refreshed      map[pbsBackupGroupKey]time.Time
 }
 
 func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) pbsBackupSnapshotFetchResult {
@@ -2481,7 +2505,15 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 					Str("id", req.group.BackupID).
 					Msg("Refreshing PBS backup group")
 
-				snapshots, err := client.ListBackupSnapshots(ctx, req.datastore, req.namespace, req.group.BackupType, req.group.BackupID)
+				// Drain queued work as unread after expiry, without provider I/O.
+				var snapshots []pbs.BackupSnapshot
+				err := ctx.Err()
+				if err == nil {
+					snapshots, err = client.ListBackupSnapshots(ctx, req.datastore, req.namespace, req.group.BackupType, req.group.BackupID)
+					if ctx.Err() != nil {
+						err = ctx.Err()
+					}
+				}
 				if err != nil {
 					log.Error().
 						Err(err).
@@ -2503,17 +2535,14 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 					continue
 				}
 
+				fetchedAt := time.Now()
 				backups := convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
-				select {
-				case results <- pbsBackupSnapshotFetchResult{
+				results <- pbsBackupSnapshotFetchResult{
 					backups: backups,
-					refreshed: []pbsBackupGroupKey{{
+					refreshed: map[pbsBackupGroupKey]time.Time{{
 						datastore: req.datastore, namespace: req.namespace,
 						backupType: req.group.BackupType, backupID: req.group.BackupID,
-					}},
-				}:
-				case <-ctx.Done():
-					return
+					}: fetchedAt},
 				}
 			}
 		}()
@@ -2522,11 +2551,9 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 	go func() {
 		defer close(jobs)
 		for _, req := range requests {
-			select {
-			case jobs <- req:
-			case <-ctx.Done():
-				return
-			}
+			// Every planned group receives a result, including cached rows for
+			// unread groups; only successful, on-time reads are refreshed.
+			jobs <- req
 		}
 	}()
 
@@ -2535,12 +2562,14 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		close(results)
 	}()
 
-	var combined pbsBackupSnapshotFetchResult
+	combined := pbsBackupSnapshotFetchResult{refreshed: make(map[pbsBackupGroupKey]time.Time)}
 	for result := range results {
 		combined.backups = appendPBSBackupsWithinLimit(combined.backups, result.backups)
 		combined.errors += result.errors
 		combined.terminalErrors += result.terminalErrors
-		combined.refreshed = append(combined.refreshed, result.refreshed...)
+		for key, fetchedAt := range result.refreshed {
+			combined.refreshed[key] = fetchedAt
+		}
 	}
 
 	return combined

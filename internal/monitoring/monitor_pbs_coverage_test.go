@@ -846,3 +846,9 @@ func TestPBSNamespaceDiscoveryLegacyRootOnlyRemainsComplete(t *testing.T) {
 		}
 	}
 }
+
+// Exercise the real detached-discovery admission and its current binding,
+// rather than inferring lifecycle safety from a component observation.
+func TestPBSBudgetOwnerWithdrawsLatePublication(t *testing.T) {
+	exercisePBSBudgetOwnerWithdrawal(t)
+}

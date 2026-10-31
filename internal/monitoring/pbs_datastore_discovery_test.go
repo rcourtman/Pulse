@@ -159,7 +159,7 @@ func TestPBSDatastoreDiscoverySkippedScopeIsNotEmpty(t *testing.T) {
 				// live setter deliberately clears timestamps for a catch-up poll.
 				f.m.config.BackupPollingInterval = time.Hour
 			case "in flight":
-				f.m.pbsBackupPollers["pbs-main"] = true
+				f.m.pbsBackupPollers["pbs-main"] = &pbsBackupPoll{}
 			case "cancelled cycle":
 				cancelled, cancel := context.WithCancel(ctx)
 				cancel()

@@ -124,3 +124,9 @@ func TestPBSRetryableReadWithoutCacheDoesNotInventFiles(t *testing.T) {
 		}
 	}
 }
+
+// A canceled prior read cannot release a replacement's current claim or
+// erase the binding which survives an exhausted child collection budget.
+func TestPBSBudgetOldCompletionCannotReleaseNewClaim(t *testing.T) {
+	exercisePBSBudgetOldCompletion(t)
+}
