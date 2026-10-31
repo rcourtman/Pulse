@@ -136,18 +136,19 @@ type AgentEventApprovalPendingPayload struct {
 // Full audit detail (lifecycle events, preflight, verification
 // stdout) stays behind the existing /api/actions/{id} endpoint.
 type AgentEventActionCompletedPayload struct {
-	ActionID        string                           `json:"actionId"`
-	ResourceID      string                           `json:"resourceId,omitempty"`
-	CapabilityName  string                           `json:"capabilityName,omitempty"`
-	Command         string                           `json:"command,omitempty"`
-	CommandRedacted bool                             `json:"commandRedacted,omitempty"`
-	State           string                           `json:"state"`
-	Success         bool                             `json:"success"`
-	ErrorMessage    string                           `json:"errorMessage,omitempty"`
-	ActionResultV2  *unifiedresources.ActionResultV2 `json:"actionResultV2,omitempty"`
-	Verification    *AgentResourceActionVerification `json:"verification,omitempty"`
-	RequestedBy     string                           `json:"requestedBy,omitempty"`
-	CompletedAt     time.Time                        `json:"completedAt"`
+	ActionID            string                           `json:"actionId"`
+	ResourceID          string                           `json:"resourceId,omitempty"`
+	CapabilityName      string                           `json:"capabilityName,omitempty"`
+	Command             string                           `json:"command,omitempty"`
+	CommandRedacted     bool                             `json:"commandRedacted,omitempty"`
+	State               string                           `json:"state"`
+	Success             bool                             `json:"success"`
+	ErrorMessage        string                           `json:"errorMessage,omitempty"`
+	ActionResultV2      *unifiedresources.ActionResultV2 `json:"actionResultV2,omitempty"`
+	ActionResultSummary *AgentActionResultSummary        `json:"actionResultSummary,omitempty"`
+	Verification        *AgentResourceActionVerification `json:"verification,omitempty"`
+	RequestedBy         string                           `json:"requestedBy,omitempty"`
+	CompletedAt         time.Time                        `json:"completedAt"`
 }
 
 // AgentEventBroadcaster is a thread-safe pub/sub for AgentEvents. A

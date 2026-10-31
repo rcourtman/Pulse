@@ -18,6 +18,69 @@
 
 ## Purpose
 
+### Public-URL token checks share authentication ownership
+
+The pre-route public-URL authority check uses the existing locked token
+validator and detached snapshot. Normalisation and last-used metadata updates
+hold the same exclusive configuration ownership as ordinary authentication;
+subsequent scope checks never mutate the live record outside it. Both supported
+token headers retain the existing settings-write requirement. Expired, invalid,
+wrong-role and monitoring-only credentials gain no capture authority. Sessions,
+proxy/basic administration and URL/origin selection are unchanged.
+
+`TestPublicURLTokenCaptureUsesAuthenticationOwnership` covers concurrent capture
+and ordinary authentication, retained scope/identity and successful last-use
+updates; `TestPublicURLTokenCapturePreservesTokenRefusals` pins both headers and
+refused metadata. The real concurrent history HTTP test remains unchanged and
+must pass with the race detector; the observed race is not warmed away or
+suppressed. No new rendered state, token grant or runtime action is introduced.
+
+
+### Execution history metadata is typed, not trusted by its key name
+
+A monitoring-read recent-change response projects command and runbook history
+from kind-specific scalar facts only. Command caller details cannot borrow
+runbook metadata keys; nested metadata and arbitrary outcome strings are not
+safe because their keys look familiar. Runbook titles and stored reason/From/To
+text can contain execution details and stay behind the existing `ai:execute`
+boundary. Reasons are fixed status summaries derived only from admitted boolean
+success or the four incident outcomes; missing/malformed values do not invent a
+verdict. Every execution projection is explicitly marked redacted.
+
+This projection never changes canonical records or executor/session output.
+Normal-suite typed-fact, contract, authenticated concurrent HTTP and real MCP
+consumer tests cover the boundary and evidence preservation. No token scope,
+route, event kind, history source, stored retention or execution authority is
+added. This is not installed/private-authorizer recovery or release evidence.
+
+
+### Agent action details follow command-disclosure authority
+
+The existing agent event and resource-context reads require `monitoring:read`,
+but that scope does not disclose command/output detail. API tokens without
+`ai:execute` receive no full `actionResultV2`: arbitrary result summaries,
+reason strings, evidence identities/references and recovery detail can carry
+command or provider output even after credential-pattern redaction. Instead,
+`actionResultSummary` explicitly sets `detailsRedacted:true` and preserves only
+validated execution status, verification status/evidence class, compensation
+support/status and any nested compensation execution/verification axes. This
+is a read projection, not a canonical evidence envelope; no evidence is deleted,
+re-digested or invented, and a malformed canonical result remains inconclusive.
+
+Restricted legacy errors retain only an exact known refusal prefix (such as
+`plan_drift:`), never its arbitrary suffix or an unknown prefix. Verification
+notes follow the command redaction rule even when the command is absent.
+Session and existing `ai:execute` disclosure are unchanged. Per-request copies
+must preserve other subscribers' and stored evidence, auth and tenant boundaries.
+
+Ordinary-suite `agent_action_disclosure_test.go` checks both completion producers,
+pointer/value payloads, legacy/V2 records, scoped/session/wildcard callers,
+independent outcome axes, malformed digests, durable context HTTP reads and
+concurrent authenticated SSE subscribers. `action_disclosure_test.go` in the MCP
+adapter runs the real authenticated handlers through tools/call text/structured
+output and live JSON-RPC notifications. `TestContract_AgentScopedActionResultIsAnExplicitSummary`
+pins the distinction between withheld detail and canonical evidence.
+
 ### Unread token inventory is not a safe access posture
 
 API Access never claims no credentials or no full-access credentials from a

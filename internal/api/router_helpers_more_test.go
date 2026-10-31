@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestRouterGetMonitor_Defaults(t *testing.T) {
@@ -472,5 +475,115 @@ func TestStartPatrolForContext_RejectsMismatchedAIServiceOrg(t *testing.T) {
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
 	if ok := router.startPatrolForContext(ctx, "tenant-1"); ok {
 		t.Fatal("expected patrol start to fail when AI service org scope mismatches tenant org")
+	}
+}
+
+// Public URL detection runs before the route handler on every request. Its
+// token lookup must share authentication's metadata writer ownership, not
+// mutate a live record concurrently with auth readers or normalize its scopes
+// again after dropping the writer lock.
+func TestPublicURLTokenCaptureUsesAuthenticationOwnership(t *testing.T) {
+	t.Setenv("PULSE_AUTH_BYPASS", "false")
+	cases := []struct {
+		raw    string
+		scopes []string
+		want   bool
+	}{
+		{"capture-monitoring-fixture.12345678", []string{config.ScopeMonitoringRead}, false},
+		{"capture-settings-fixture.12345678", []string{config.ScopeSettingsWrite}, true},
+	}
+	cfg := &config.Config{}
+	for _, tc := range cases {
+		record, err := config.NewAPITokenRecord(tc.raw, "capture fixture", tc.scopes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.APITokens = append(cfg.APITokens, *record)
+	}
+	before := make([]config.APITokenRecord, len(cfg.APITokens))
+	for i := range cfg.APITokens {
+		before[i] = cfg.APITokens[i].Clone()
+	}
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, tc := range cases {
+		for _, header := range []string{"X-API-Token", "Authorization"} {
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				<-start
+				for i := 0; i < 32; i++ {
+					req := httptest.NewRequest(http.MethodGet, "http://localhost/api/agent/changes", nil)
+					value := tc.raw
+					if header == "Authorization" {
+						value = "Bearer " + value
+					}
+					req.Header.Set(header, value)
+					if got := canCapturePublicURL(cfg, req); got != tc.want {
+						t.Errorf("capture permission = %v, want %v", got, tc.want)
+					}
+				}
+			}()
+			go func() {
+				defer wg.Done()
+				<-start
+				for i := 0; i < 32; i++ {
+					req := httptest.NewRequest(http.MethodGet, "/api/agent/changes", nil)
+					req.Header.Set("Authorization", "Bearer "+tc.raw)
+					if !CheckAuth(cfg, httptest.NewRecorder(), req) {
+						t.Error("valid token lost authentication")
+					}
+				}
+			}()
+		}
+	}
+	close(start)
+	wg.Wait()
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	for i, record := range cfg.APITokens {
+		if record.ID != before[i].ID || record.Hash != before[i].Hash || !reflect.DeepEqual(record.Scopes, before[i].Scopes) {
+			t.Fatal("capture changed credential identity or scope")
+		}
+		if record.LastUsedAt == nil {
+			t.Fatal("successful validation lost last-used metadata")
+		}
+	}
+}
+
+func TestPublicURLTokenCapturePreservesTokenRefusals(t *testing.T) {
+	for _, kind := range []string{"expired", "invalid_role", "wrong_token"} {
+		t.Run(kind, func(t *testing.T) {
+			const raw = "capture-refusal-fixture.12345678"
+			record, err := config.NewAPITokenRecord(raw, "capture refusal", []string{config.ScopeSettingsWrite})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == "expired" {
+				expired := time.Now().Add(-time.Hour)
+				record.ExpiresAt = &expired
+			}
+			if kind == "invalid_role" {
+				record.Metadata = map[string]string{auth.RuntimeRoleMetadataKey: auth.RuntimeRoleMonitoringCollector}
+			}
+			cfg := &config.Config{APITokens: []config.APITokenRecord{*record}}
+			for _, header := range []string{"X-API-Token", "Authorization"} {
+				req := httptest.NewRequest(http.MethodGet, "http://localhost/api/agent/changes", nil)
+				value := raw
+				if kind == "wrong_token" {
+					value = "different-fixture-token.12345678"
+				}
+				if header == "Authorization" {
+					value = "Bearer " + value
+				}
+				req.Header.Set(header, value)
+				if canCapturePublicURL(cfg, req) {
+					t.Fatal("rejected credential gained URL capture authority")
+				}
+			}
+			if cfg.APITokens[0].LastUsedAt != nil || !reflect.DeepEqual(cfg.APITokens[0].Scopes, record.Scopes) {
+				t.Fatal("refused capture mutated token metadata")
+			}
+		})
 	}
 }

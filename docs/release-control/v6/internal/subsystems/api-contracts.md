@@ -21,6 +21,60 @@
 
 ## Purpose
 
+### Public-URL token checks share authentication ownership
+
+The pre-route public-URL authority check uses the existing locked token
+validator and detached snapshot. Normalisation and last-used metadata updates
+hold the same exclusive configuration ownership as ordinary authentication;
+subsequent scope checks never mutate the live record outside it. Both supported
+token headers retain the existing settings-write requirement. Expired, invalid,
+wrong-role and monitoring-only credentials gain no capture authority. Sessions,
+proxy/basic administration and URL/origin selection are unchanged.
+
+`TestPublicURLTokenCaptureUsesAuthenticationOwnership` covers concurrent capture
+and ordinary authentication, retained scope/identity and successful last-use
+updates; `TestPublicURLTokenCapturePreservesTokenRefusals` pins both headers and
+refused metadata. The real concurrent history HTTP test remains unchanged and
+must pass with the race detector; the observed race is not warmed away or
+suppressed. No new rendered state, token grant or runtime action is introduced.
+
+
+### Recent-change execution facts are a restricted projection
+
+Monitoring-read history uses kind-specific scalar facts and fixed reasons;
+runbook titles and arbitrary stored execution text/metadata stay undisclosed.
+The existing response envelope, scopes, filters and canonical history remain
+unchanged. The detailed recent-change contract below and normal-suite typed,
+HTTP, MCP and JSON snapshot tests own this disclosure boundary.
+
+
+### Agent action details follow command-disclosure authority
+
+The existing agent event and resource-context reads require `monitoring:read`,
+but that scope does not disclose command/output detail. API tokens without
+`ai:execute` receive no full `actionResultV2`: arbitrary result summaries,
+reason strings, evidence identities/references and recovery detail can carry
+command or provider output even after credential-pattern redaction. Instead,
+`actionResultSummary` explicitly sets `detailsRedacted:true` and preserves only
+validated execution status, verification status/evidence class, compensation
+support/status and any nested compensation execution/verification axes. This
+is a read projection, not a canonical evidence envelope; no evidence is deleted,
+re-digested or invented, and a malformed canonical result remains inconclusive.
+
+Restricted legacy errors retain only an exact known refusal prefix (such as
+`plan_drift:`), never its arbitrary suffix or an unknown prefix. Verification
+notes follow the command redaction rule even when the command is absent.
+Session and existing `ai:execute` disclosure are unchanged. Per-request copies
+must preserve other subscribers' and stored evidence, auth and tenant boundaries.
+
+Ordinary-suite `agent_action_disclosure_test.go` checks both completion producers,
+pointer/value payloads, legacy/V2 records, scoped/session/wildcard callers,
+independent outcome axes, malformed digests, durable context HTTP reads and
+concurrent authenticated SSE subscribers. `action_disclosure_test.go` in the MCP
+adapter runs the real authenticated handlers through tools/call text/structured
+output and live JSON-RPC notifications. `TestContract_AgentScopedActionResultIsAnExplicitSummary`
+pins the distinction between withheld detail and canonical evidence.
+
 ### Admit saved permissions before presenting user access
 
 `RBACAPI.getUserPermissions` admits the existing array response only when every
@@ -6856,10 +6910,24 @@ instead. Each change carries the canonical record plus the
 resource's current `resourceName` and `resourceType` when the
 registry still knows it, so history for a removed resource stays
 readable. For tokens without `ai:execute`, `command_executed` and
-`runbook_executed` changes keep only allowlisted metadata (alert
-identifier, success, outcome, automatic, runbook id, title), the
-command is cut from the reason, and `commandRedacted` is set, matching
-the resource-context and event-stream redaction rule. The shared
+`runbook_executed` changes keep only typed, kind-specific facts: a string
+alert identifier; a boolean success for commands; a string runbook id,
+boolean automatic flag and closed incident outcome (`resolved`, `partial`,
+`failed`, `unknown`) for runbooks. Runbook titles, messages, arbitrary caller
+details, nested values, unrecognised outcomes and execution From/To text are
+not monitoring metadata. Reasons are generated from those admitted facts,
+never by trimming stored execution text. Missing or malformed facts do not
+become success or failure. `commandRedacted` is always set on these projections,
+matching the resource-context and event-stream redaction boundary. Executor
+and session reads, canonical stored evidence, non-execution changes, filters,
+counts and tenant/authentication rules are unchanged.
+`TestAgentRecentChangesExecutionProjectionUsesTypedFacts`,
+`TestAgentRecentChangesHTTPPreservesAuthorityAndCanonicalEvidence` and
+`TestContract_AgentRecentChangesRunbookProjection` pin this boundary through
+canonical producers, stored legacy shapes, concurrent authenticated HTTP reads
+and the normal Go test commands. MCP's real `list_recent_changes` consumer must
+receive the same redacted text and structured result, without another read or
+wider scope. The shared
 projection layer forwards integral JSON numbers as integer query
 parameters so manifest integer filters such as `limit` reach the
 route; fractional or out-of-range numbers are dropped like objects.

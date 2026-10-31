@@ -66,18 +66,19 @@ type AgentResourceActionVerification struct {
 // only for session callers or API tokens with action execution scope;
 // monitoring-read tokens receive commandRedacted instead.
 type AgentResourceActionSummary struct {
-	ID              string                           `json:"id"`
-	CapabilityName  string                           `json:"capabilityName"`
-	Command         string                           `json:"command,omitempty"`
-	CommandRedacted bool                             `json:"commandRedacted,omitempty"`
-	State           string                           `json:"state"`
-	Success         bool                             `json:"success"`
-	ErrorMessage    string                           `json:"errorMessage,omitempty"`
-	ActionResultV2  *unified.ActionResultV2          `json:"actionResultV2,omitempty"`
-	Verification    *AgentResourceActionVerification `json:"verification,omitempty"`
-	RequestedBy     string                           `json:"requestedBy,omitempty"`
-	CreatedAt       time.Time                        `json:"createdAt"`
-	UpdatedAt       time.Time                        `json:"updatedAt"`
+	ID                  string                           `json:"id"`
+	CapabilityName      string                           `json:"capabilityName"`
+	Command             string                           `json:"command,omitempty"`
+	CommandRedacted     bool                             `json:"commandRedacted,omitempty"`
+	State               string                           `json:"state"`
+	Success             bool                             `json:"success"`
+	ErrorMessage        string                           `json:"errorMessage,omitempty"`
+	ActionResultV2      *unified.ActionResultV2          `json:"actionResultV2,omitempty"`
+	ActionResultSummary *AgentActionResultSummary        `json:"actionResultSummary,omitempty"`
+	Verification        *AgentResourceActionVerification `json:"verification,omitempty"`
+	RequestedBy         string                           `json:"requestedBy,omitempty"`
+	CreatedAt           time.Time                        `json:"createdAt"`
+	UpdatedAt           time.Time                        `json:"updatedAt"`
 }
 
 // AgentResourceApprovalSummary is the agent-consumable projection of
