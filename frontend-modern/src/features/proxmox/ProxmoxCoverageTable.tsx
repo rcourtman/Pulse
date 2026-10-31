@@ -57,6 +57,7 @@ import {
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
+  retainBackupTableFocus,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
   getBackupWorkloadNodeLabel,
@@ -547,31 +548,8 @@ export function ProxmoxCoverageTable(props: {
   // the sort order or refocus a removed row, another route, or a user choice.
   const renderedRows = createMemo<readonly WorkloadCoverageRow[]>((previous) => {
     const rows = props.rows;
-    if (
-      rows.length !== previous.length ||
-      rows.some((row, index) => row.key !== previous[index]?.key)
-    ) {
-      const element = coverageElement;
-      const focused = document.activeElement;
-      if (element && focused instanceof HTMLElement && element.contains(focused)) {
-        let redirected = false;
-        const cancel = (event: FocusEvent) => {
-          if (event.target !== focused) redirected = true;
-        };
-        document.addEventListener('focusin', cancel, true);
-        queueMicrotask(() => {
-          document.removeEventListener('focusin', cancel, true);
-          if (
-            !redirected &&
-            element.isConnected &&
-            focused.isConnected &&
-            element.contains(focused) &&
-            document.activeElement === document.body
-          ) {
-            focused.focus({ preventScroll: true });
-          }
-        });
-      }
+    if (previous.some((row, index) => row.key !== rows[index]?.key)) {
+      retainBackupTableFocus(coverageElement);
     }
     return rows;
   }, []);

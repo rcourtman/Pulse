@@ -1363,6 +1363,19 @@ describe('Coverage owned focus during live reordering', () => {
     expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
   });
 
+  it.each([false, true])(
+    'does not capture deliberate blur when retained rows do not move (append: %s)',
+    async (append) => {
+      const { setRows, makeRow } = mountReordering();
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      disclosure.focus();
+      setRows(['alpha', 'mike', 'zulu', ...(append ? ['new'] : [])].map(makeRow));
+      disclosure.blur();
+      await Promise.resolve();
+      expect(document.body).toHaveFocus();
+    },
+  );
+
   it('does not reclaim focus already outside Coverage', async () => {
     const { reorder } = mountReordering();
     const outside = screen.getByRole('textbox', { name: 'Outside Coverage' });

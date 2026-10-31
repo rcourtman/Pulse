@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup views share bounded owned-focus restoration
+
+Coverage posture sorting and By date regrouping use the same existing backups
+presentation helper for focus lost during a retained native DOM move. It restores
+only the same connected target still inside its table and cancels after any
+intervening focus choice, even if that choice is later blurred. By date's earlier
+restoration did not cancel that latter choice; its normal-suite date-group
+regression now covers it. Genuine retirement still uses the existing surface
+fallback. No sorting, date validity, collection, protection or access rule changes.
+This consolidates overlapping handling rather than widening bundle limits; normal
+Proxmox/shared suites and exact production bundle budgets verify the result.
+Desktop/narrow actual Backups proof includes both views and source-bound pixels.
+
 ### Coverage retains owned focus when live posture sorting moves a row
 
 An accepted posture or inventory frame can reorder the same logical workload.

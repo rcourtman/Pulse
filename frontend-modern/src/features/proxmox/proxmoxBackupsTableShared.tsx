@@ -34,6 +34,29 @@ import type {
 // the orchestrating ProxmoxBackupsTable so each sub-view can import only what
 // it renders.
 
+// A keyed DOM move can blur a retained row control without retiring its owner.
+// Both backup views share the same bounded restoration and no-steal rules.
+export function retainBackupTableFocus(table: HTMLElement | undefined): void {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !table?.contains(active)) return;
+  let redirected = false;
+  const cancel = () => {
+    redirected = true;
+  };
+  document.addEventListener('focusin', cancel, true);
+  queueMicrotask(() => {
+    document.removeEventListener('focusin', cancel, true);
+    if (
+      !redirected &&
+      active.isConnected &&
+      table.contains(active) &&
+      document.activeElement === document.body
+    ) {
+      active.focus({ preventScroll: true });
+    }
+  });
+}
+
 const PROXMOX_BACKUP_METADATA_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
 
 export const PROXMOX_BACKUP_COLUMN_LABELS = {

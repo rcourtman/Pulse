@@ -292,7 +292,7 @@ describe('restore-point disclosure identity', () => {
 });
 
 describe('live date-group focus ownership', () => {
-  it.each(['owned', 'moved elsewhere', 'removed'] as const)(
+  it.each(['owned', 'moved elsewhere', 'moved then blurred', 'removed'] as const)(
     'restores only retained focus after a row move: %s',
     async (focus) => {
       const second = {
@@ -336,10 +336,12 @@ describe('live date-group focus ownership', () => {
           : [second, unknown, { ...artifact, createdAt: '', createdMs: undefined }],
       );
       const outside = screen.getByRole('button', { name: 'Outside inspection' });
-      if (focus === 'moved elsewhere') outside.focus();
+      if (focus === 'moved elsewhere' || focus === 'moved then blurred') outside.focus();
+      if (focus === 'moved then blurred') outside.blur();
       await Promise.resolve();
       if (focus === 'owned') expect(toggle).toHaveFocus();
       else if (focus === 'moved elsewhere') expect(outside).toHaveFocus();
+      else if (focus === 'moved then blurred') expect(document.body).toHaveFocus();
       else {
         expect(toggle).not.toBeInTheDocument();
         expect(toggle).not.toHaveFocus();
