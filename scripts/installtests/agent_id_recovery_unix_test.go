@@ -32,6 +32,72 @@ func agentIDRecoveryCommand(ctx context.Context, name string, args ...string) *e
 	return cmd
 }
 
+type agentIDRecoveryObservation struct {
+	output, phases                      []byte
+	err, contextErr                     error
+	preparation, start, wait, execution time.Duration
+	started                             bool
+}
+
+// Keep fixture extraction and trace-file setup outside the execution budget.
+// Both can take time under the race detector without the recovery shell having
+// started. Once the command is ready, the same two seconds cover Bash, every
+// child, and output collection. The private phase stream never joins stdout.
+func observeAgentIDRecovery(t *testing.T, prepare func() string) agentIDRecoveryObservation {
+	t.Helper()
+	var observed agentIDRecoveryObservation
+	prepared := time.Now()
+	shell := prepare()
+	phasePath := filepath.Join(t.TempDir(), "recovery-phases")
+	phaseFile, err := os.OpenFile(phasePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phaseFile.Close()
+	// Only fixed phase names and an exit status are recorded. DEBUG follows
+	// functions/subshells so a helper stall differs from a legacy content read;
+	// it never records BASH_COMMAND, state contents, paths or credentials.
+	shell = `printf 'shell-entered\n' >&3
+trap 'rc=$?; printf "shell-exit %s\n" "$rc" >&3' EXIT
+set -T
+trap 'case "$BASH_COMMAND" in
+    read_agent_id_file_safely*) printf "recovery-call\n" >&3 ;;
+    collector_lifecycle_binary*) printf "helper-select\n" >&3 ;;
+    trusted_lifecycle_regular_file*) printf "trust-check\n" >&3 ;;
+    identity=\$*) printf "helper-read\n" >&3 ;;
+    identity_size=\$*) printf "size-read\n" >&3 ;;
+    IFS=\ read*) printf "content-read\n" >&3 ;;
+esac' DEBUG
+` + shell
+	observed.preparation = time.Since(prepared)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	execution := time.Now()
+	cmd := agentIDRecoveryCommand(ctx, "bash", "-c", shell)
+	cmd.ExtraFiles = []*os.File{phaseFile}
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	observed.err = cmd.Start()
+	observed.start = time.Since(execution)
+	if observed.err == nil {
+		observed.started = true
+		waiting := time.Now()
+		observed.err = cmd.Wait()
+		observed.wait = time.Since(waiting)
+	}
+	observed.execution = time.Since(execution)
+	observed.contextErr = ctx.Err()
+	observed.output = output.Bytes()
+	if err := phaseFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	observed.phases, err = os.ReadFile(phasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return observed
+}
+
 func TestInstallSHAgentIDRecoveryRejectsSymlinkFIFOAndOversizedState(t *testing.T) {
 	// The real-agent build and all unsafe-file probes own their paths and
 	// process groups; let Go overlap them with independent transport waits.
@@ -73,20 +139,35 @@ func TestInstallSHAgentIDRecoveryRejectsSymlinkFIFOAndOversizedState(t *testing.
 		t.Run(mode.name, func(t *testing.T) {
 			probe := func(t *testing.T, path, want string) {
 				t.Helper()
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				started := time.Now()
-				out, err := agentIDRecoveryCommand(ctx, "bash", "-c", agentIDRecoveryShell(t, mode.binary, root, path)).CombinedOutput()
-				elapsed := time.Since(started)
-				if ctx.Err() != nil || elapsed >= 2*time.Second {
-					t.Fatalf("recovery probe exceeded its deadline: elapsed=%s context=%v exit=%v output=%q", elapsed, ctx.Err(), err, out)
+				observed := observeAgentIDRecovery(t, func() string {
+					return agentIDRecoveryShell(t, mode.binary, root, path)
+				})
+				if observed.contextErr != nil || observed.execution >= 2*time.Second {
+					t.Fatalf("recovery probe exceeded its deadline: %+v output=%q phases=%q", observed, observed.output, observed.phases)
 				}
 				if want != "" {
-					if err != nil || string(out) != want+"\n" {
-						t.Fatalf("valid agent ID recovery failed: elapsed=%s exit=%v output=%q", elapsed, err, out)
+					if observed.err != nil || string(observed.output) != want+"\n" {
+						t.Fatalf("valid agent ID recovery failed: %+v output=%q phases=%q", observed, observed.output, observed.phases)
 					}
-				} else if err == nil || len(out) != 0 {
-					t.Fatalf("unsafe agent ID state was accepted or disclosed: elapsed=%s exit=%v output=%q", elapsed, err, out)
+				} else if observed.err == nil || len(observed.output) != 0 {
+					t.Fatalf("unsafe agent ID state was accepted or disclosed: %+v output=%q phases=%q", observed, observed.output, observed.phases)
+				}
+				if !observed.started || !bytes.Contains(observed.phases, []byte("shell-entered\n")) ||
+					!bytes.Contains(observed.phases, []byte("recovery-call\n")) ||
+					!bytes.Contains(observed.phases, []byte("shell-exit ")) {
+					t.Fatalf("recovery probe did not retain its shell outcome: %+v phases=%q", observed, observed.phases)
+				}
+				if (path == fifoPath || path == symlinkPath) && bytes.Contains(observed.phases, []byte("content-read\n")) {
+					t.Fatalf("unsafe file reached the legacy content reader: phases=%q", observed.phases)
+				}
+				if want != "" {
+					phase := "helper-read\n"
+					if mode.binary == "" {
+						phase = "content-read\n"
+					}
+					if !bytes.Contains(observed.phases, []byte(phase)) {
+						t.Fatalf("valid identity bypassed its expected reader: phases=%q", observed.phases)
+					}
 				}
 			}
 			for _, tc := range cases {
@@ -111,6 +192,63 @@ func TestInstallSHAgentIDRecoveryRejectsSymlinkFIFOAndOversizedState(t *testing.
 				})
 			}
 		})
+	}
+}
+
+func TestAgentIDRecoveryBudgetStartsAfterFixturePreparation(t *testing.T) {
+	observed := observeAgentIDRecovery(t, func() string {
+		// A deliberately slow fixture must not consume the shell's two seconds.
+		// The old caller started its context before extracting installer functions.
+		time.Sleep(2100 * time.Millisecond)
+		return "exit 1"
+	})
+	if observed.preparation < 2*time.Second || observed.contextErr != nil || observed.execution >= 2*time.Second ||
+		!observed.started || observed.err == nil || len(observed.output) != 0 ||
+		string(observed.phases) != "shell-entered\nshell-exit 1\n" {
+		t.Fatalf("fixture preparation consumed the execution budget or lost the result: %+v phases=%q", observed, observed.phases)
+	}
+}
+
+func TestAgentIDRecoveryReportsBlockedHelperAndStopsItsChild(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "agent-id")
+	childPath := filepath.Join(root, "child-pid")
+	if err := os.WriteFile(path, []byte("agent-safe-123\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	observed := observeAgentIDRecovery(t, func() string {
+		return `set -euo pipefail
+collector_lifecycle_binary() {
+    sleep 30 & child=$!
+    printf '%s\n' "$child" > "` + childPath + `"
+    wait
+}
+` + extractInstallShellFunction(t, "read_agent_id_file_safely") + `
+read_agent_id_file_safely "` + path + `"`
+	})
+	if !errors.Is(observed.contextErr, context.DeadlineExceeded) || !observed.started || observed.err == nil ||
+		len(observed.output) != 0 || !bytes.Contains(observed.phases, []byte("helper-select\n")) ||
+		bytes.Contains(observed.phases, []byte("content-read\n")) || bytes.Contains(observed.phases, []byte("shell-exit ")) {
+		t.Fatalf("blocked helper was not attributed and stopped: %+v phases=%q", observed, observed.phases)
+	}
+	child, err := os.ReadFile(childPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	childPID, err := strconv.Atoi(strings.TrimSpace(string(child)))
+	if err != nil || childPID <= 1 {
+		t.Fatalf("invalid child identity %q: %v", child, err)
+	}
+	defer syscall.Kill(childPID, syscall.SIGKILL)
+	deadline := time.Now().Add(time.Second)
+	for {
+		if errors.Is(syscall.Kill(childPID, 0), syscall.ESRCH) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("blocked helper descendant %d survived the process-group deadline", childPID)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
