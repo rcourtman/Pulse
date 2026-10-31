@@ -80,6 +80,8 @@ describe('useAppRuntimeState', () => {
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
   let websocketInitialDataReceived: boolean;
+  let onStoreAcquired: (() => void) | undefined;
+  const mountedRoots = new Set<() => void>();
 
   beforeEach(async () => {
     vi.resetModules();
@@ -159,17 +161,22 @@ describe('useAppRuntimeState', () => {
     websocketConnected = false;
     websocketReconnecting = false;
     websocketInitialDataReceived = false;
+    onStoreAcquired = undefined;
 
     vi.doMock('@/stores/websocket-global', () => ({
-      getGlobalWebSocketStore: () => ({
-        state: websocketState,
-        connected: () => websocketConnected,
-        reconnecting: () => websocketReconnecting,
-        initialDataReceived: () => websocketInitialDataReceived,
-        resourceSnapshotReceived: () => websocketInitialDataReceived,
-        reconnect: vi.fn(),
-        switchUrl: vi.fn(),
-      }),
+      getGlobalWebSocketStore: () => {
+        const store = {
+          state: websocketState,
+          connected: () => websocketConnected,
+          reconnecting: () => websocketReconnecting,
+          initialDataReceived: () => websocketInitialDataReceived,
+          resourceSnapshotReceived: () => websocketInitialDataReceived,
+          reconnect: vi.fn(),
+          switchUrl: vi.fn(),
+        };
+        onStoreAcquired?.();
+        return store;
+      },
     }));
 
     vi.doMock('@/utils/logger', () => ({
@@ -305,6 +312,10 @@ describe('useAppRuntimeState', () => {
   });
 
   afterEach(async () => {
+    // A failed assertion must not leave a root/interval alive in the next case.
+    for (const dispose of mountedRoots) dispose();
+    mountedRoots.clear();
+    onStoreAcquired = undefined;
     vi.clearAllMocks();
     window.localStorage.removeItem('org_id');
     window.localStorage.removeItem('just_logged_out');
@@ -318,7 +329,11 @@ describe('useAppRuntimeState', () => {
     let hookState: ReturnType<UseAppRuntimeStateModule['useAppRuntimeState']>;
 
     createRoot((d) => {
-      dispose = d;
+      dispose = () => {
+        d();
+        mountedRoots.delete(dispose);
+      };
+      mountedRoots.add(dispose);
       hookState = useAppRuntimeState();
     });
 
@@ -854,13 +869,17 @@ describe('useAppRuntimeState', () => {
       throw new Error(`Unhandled apiFetch URL: ${url}`);
     });
 
-    const { hookState, dispose } = mountHook();
-
-    await waitFor(() => {
-      expect(hookState.needsAuth()).toBe(false);
-      expect(hookState.reconnecting()).toBe(true);
+    // This hook-only fixture has no DOM transition to poll. Wait for its
+    // actual acquisition boundary, then check every retained-state contract.
+    // A bootstrap that never acquires the store still hits the normal deadline.
+    const acquired = new Promise<void>((resolve) => {
+      onStoreAcquired = resolve;
     });
+    const { hookState, dispose } = mountHook();
+    await acquired;
 
+    expect(hookState.needsAuth()).toBe(false);
+    expect(hookState.reconnecting()).toBe(true);
     expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
     expect(hookState.runtimeStateResolved()).toBe(true);
     expect(hookState.state().resources).toEqual([retainedResource]);

@@ -153,7 +153,7 @@ describe('Docs section navigation', () => {
   });
 
   it.each(['html fallback', 'read failure'])(
-    'retains a truthful missing-document state on %s without targeting the prior content',
+    'does not target prior content after %s while the next guide is unavailable',
     async (failure) => {
       renderGuide();
       await screen.findByRole('heading', { name: 'Existing section' });
@@ -165,9 +165,15 @@ describe('Docs section navigation', () => {
           : new Response('unavailable', { status: 503 }),
       );
       fireEvent.click(screen.getByRole('link', { name: 'Next guide' }));
-      await screen.findByText(
-        "That document is not part of this installation's shipped documentation set.",
-      );
+      if (failure === 'html fallback') {
+        await screen.findByText(
+          "That document is not part of this installation's shipped documentation set.",
+        );
+      } else {
+        // A 503 does not establish absence (#3102). This navigation regression
+        // checks stale-content focus, not the separate load-recovery copy.
+        await screen.findByRole('link', { name: 'Back to the documentation index' });
+      }
       flushFrames();
       expect(scrollIntoView).not.toHaveBeenCalled();
       expect(screen.queryByRole('heading', { name: 'Existing section' })).not.toBeInTheDocument();
