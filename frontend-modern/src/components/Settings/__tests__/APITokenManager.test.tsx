@@ -301,6 +301,169 @@ describe('APITokenManager', () => {
     window.history.pushState({}, '', '/');
   });
 
+  it('keeps the inventory unknown while loading, then admits a confirmed empty list', async () => {
+    let completeRead!: (tokens: APITokenRecord[]) => void;
+    listTokensMock.mockReturnValueOnce(
+      new Promise<APITokenRecord[]>((resolve) => {
+        completeRead = resolve;
+      }),
+    );
+    render(() => <APITokenManager canManage />);
+
+    expect(screen.getByRole('status', { name: 'Loading token inventory' })).toBeInTheDocument();
+    expect(screen.getAllByText('Loading…')).toHaveLength(3);
+    expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no wildcard credentials detected/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('No full access tokens in this inventory.')).not.toBeInTheDocument();
+
+    completeRead([]);
+    await screen.findByText(/No tokens yet/);
+    expect(screen.getAllByText('0')).toHaveLength(3);
+    expect(screen.getByText('No full access tokens in this inventory.')).toBeInTheDocument();
+    expect(listTokensMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([403, 500, undefined])('keeps a failed inventory read unknown (%s)', async (status) => {
+    listTokensMock.mockRejectedValueOnce(
+      Object.assign(new Error('private-proxy-body'), { status }),
+    );
+    mockResources = [
+      makeResource({
+        platformData: { agent: { agentId: 'agent-1', tokenId: 'unread-token' } },
+      }),
+    ];
+    render(() => <APITokenManager canManage />);
+
+    const notice = await screen.findByRole('alert');
+    expect(notice).toHaveTextContent('Unable to load API tokens.');
+    expect(notice).toHaveTextContent('Existing credentials have not been changed.');
+    expect(screen.getAllByText('Unknown')).toHaveLength(3);
+    expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no wildcard credentials detected/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('No full access tokens in this inventory.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/private-proxy-body/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create one' })).not.toBeInTheDocument();
+    expect(notificationErrorMock).toHaveBeenCalledWith('Unable to load API tokens.');
+    expect(listTokensMock).toHaveBeenCalledTimes(1);
+    expect(markAgentsTokenRevokedMock).not.toHaveBeenCalled();
+    expect(markDockerRuntimesTokenRevokedMock).not.toHaveBeenCalled();
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(updateTokenScopesMock).not.toHaveBeenCalled();
+    expect(renameTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('retries only the inventory read once at a time without losing token drafts', async () => {
+    let completeRetry!: (tokens: APITokenRecord[]) => void;
+    listTokensMock.mockRejectedValueOnce(new Error('unavailable'));
+    listTokensMock.mockReturnValueOnce(
+      new Promise<APITokenRecord[]>((resolve) => {
+        completeRetry = resolve;
+      }),
+    );
+    render(() => <APITokenManager canManage />);
+    const retry = await screen.findByRole('button', { name: 'Retry token inventory' });
+    fireEvent.input(screen.getByLabelText('Token name'), { target: { value: 'Unsent draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
+
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    expect(listTokensMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('status', { name: 'Loading token inventory' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Token name')).toHaveValue('Unsent draft');
+
+    completeRetry([
+      makeToken({ id: 'full-token', name: 'Full token', scopes: ['*'] }),
+      makeToken(),
+    ]);
+    await screen.findAllByText('Full token');
+    expect(screen.queryAllByText('Unknown')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Retry token inventory' })).not.toBeInTheDocument();
+    expect(screen.getByText(/1 full access token – consider/)).toBeInTheDocument();
+    expect(screen.getByText('Credentials visible to this account')).toBeInTheDocument();
+    expect(screen.getByLabelText('Token name')).toHaveValue('Unsent draft');
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(listTokensMock).toHaveBeenCalledTimes(2);
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(updateTokenScopesMock).not.toHaveBeenCalled();
+    expect(renameTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('lets a read-only account retry inventory without gaining token writes', async () => {
+    listTokensMock
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockResolvedValueOnce([makeToken()]);
+    render(() => <APITokenManager canManage={false} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry token inventory' }));
+    await screen.findAllByText('Runtime token');
+    for (const name of [
+      'New token',
+      'Generate new',
+      'Generate',
+      'Rename',
+      'Edit scopes',
+      'Revoke',
+    ]) {
+      for (const button of screen.getAllByRole('button', { name })) {
+        expect(button).toBeDisabled();
+      }
+    }
+    expect(listTokensMock).toHaveBeenCalledTimes(2);
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(updateTokenScopesMock).not.toHaveBeenCalled();
+    expect(renameTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps inventory recovery explicit across repeated failures before accepting empty', async () => {
+    listTokensMock
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockRejectedValueOnce(new Error('still unavailable'))
+      .mockResolvedValueOnce([]);
+    mockResources = [
+      makeResource({
+        platformData: { agent: { agentId: 'agent-1', tokenId: 'unread-token' } },
+      }),
+    ];
+    render(() => <APITokenManager canManage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry token inventory' }));
+    await screen.findByRole('button', { name: 'Retry token inventory' });
+    expect(listTokensMock).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByText('Unknown')).toHaveLength(3);
+    expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
+    expect(markAgentsTokenRevokedMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry token inventory' }));
+    await screen.findByText(/No tokens yet/);
+    expect(listTokensMock).toHaveBeenCalledTimes(3);
+    expect(screen.getAllByText('0')).toHaveLength(3);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(markAgentsTokenRevokedMock).toHaveBeenCalledWith('unread-token', ['agent-1']);
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(updateTokenScopesMock).not.toHaveBeenCalled();
+    expect(renameTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('does not call a partially known inventory complete after creating a token', async () => {
+    listTokensMock.mockRejectedValueOnce(new Error('unavailable'));
+    render(() => <APITokenManager canManage />);
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalledTimes(1));
+    expect(screen.getAllByText('Unknown')).toHaveLength(3);
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to load API tokens.');
+    expect(screen.queryByTestId('api-token-compact-list')).not.toBeInTheDocument();
+    expect(screen.queryByText('No full access tokens in this inventory.')).not.toBeInTheDocument();
+    expect(listTokensMock).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['', 'not-a-date'])(
     'does not invent Created for an unusable timestamp (%s)',
     async (createdAt) => {

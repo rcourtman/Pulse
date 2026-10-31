@@ -176,7 +176,7 @@ describe('API error-status guardrails', () => {
     );
   });
 
-  it('routes canonical collection normalization through responseUtils', () => {
+  it('shares tolerant collection normalization without inventing credential absence', () => {
     expect(aiSource).toContain('arrayOrEmpty<UnifiedFindingRecord>(response.findings)');
     expect(aiSource).toContain("objectArrayFieldOrEmpty<ApprovalRequest>(response, 'approvals')");
     expect(aiSource).not.toContain('response.approvals || []');
@@ -190,7 +190,10 @@ describe('API error-status guardrails', () => {
     expect(alertsSource).not.toContain('normalizeIncident(');
     expect(alertsSource).not.toContain('normalizeIncidents(');
 
-    expect(securitySource).toContain("objectArrayFieldOrEmpty<APITokenRecord>(response, 'tokens')");
+    // Credential absence can drive access posture and local revocation state.
+    // It must not use the tolerant empty-on-malformed collection helper.
+    // security.test.ts exercises complete admission and rejection at runtime.
+    expect(securitySource).not.toContain('objectArrayFieldOrEmpty');
     expect(securitySource).not.toContain('response.tokens ?? []');
 
     expect(notificationsSource).toContain('arrayOrEmpty<Webhook>(data)');

@@ -3,6 +3,7 @@ import { Card } from '@/components/shared/Card';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { SelectablePillButton } from '@/components/shared/SelectablePillButton';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -64,6 +65,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     isRenaming,
     isRevealActiveForCurrentToken,
     loading,
+    loadError,
+    loadTokens,
+    tokensLoaded,
     nameInput,
     newMonitoringKioskLink,
     newTokenRecord,
@@ -375,14 +379,18 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Total tokens
               </div>
-              <div class="mt-1 text-2xl font-semibold text-base-content">{totalTokens()}</div>
-              <p class="mt-1 text-xs text-muted">Stored credentials across all agents</p>
+              <div class="mt-1 text-2xl font-semibold text-base-content">
+                {tokensLoaded() ? totalTokens() : loading() ? 'Loading…' : 'Unknown'}
+              </div>
+              <p class="mt-1 text-xs text-muted">Credentials visible to this account</p>
             </div>
             <div class="rounded-md border border-border p-4 text-sm shadow-xs">
               <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
                 Scoped tokens
               </div>
-              <div class="mt-1 text-2xl font-semibold text-base-content">{scopedTokenCount()}</div>
+              <div class="mt-1 text-2xl font-semibold text-base-content">
+                {tokensLoaded() ? scopedTokenCount() : loading() ? 'Loading…' : 'Unknown'}
+              </div>
               <p class="mt-1 text-xs text-muted">Limited access tokens with defined scopes</p>
             </div>
             <div
@@ -400,21 +408,49 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   hasWildcardTokens() ? 'text-amber-800 dark:text-amber-100' : 'text-base-content'
                 }`}
               >
-                {wildcardCount()}
+                {tokensLoaded() ? wildcardCount() : loading() ? 'Loading…' : 'Unknown'}
               </div>
               <p
                 class={`mt-1 text-xs ${
                   hasWildcardTokens() ? 'text-amber-700 dark:text-amber-200' : 'text-muted'
                 }`}
               >
-                {hasWildcardTokens()
-                  ? 'Legacy wildcard tokens – rotate into scoped presets when possible.'
-                  : 'All tokens scoped – no wildcard credentials detected.'}
+                {!tokensLoaded()
+                  ? 'Token scopes have not been checked.'
+                  : hasWildcardTokens()
+                    ? 'Legacy wildcard tokens – rotate into scoped presets when possible.'
+                    : 'No full access tokens in this inventory.'}
               </p>
             </div>
           </div>
         </div>
       </Card>
+
+      <Show when={loading()}>
+        <Card
+          padding="md"
+          class="flex items-center gap-2"
+          role="status"
+          aria-label="Loading token inventory"
+        >
+          <LoadingSpinner size="md" tone="info" />
+          <span class="text-sm text-muted">Loading token inventory…</span>
+        </Card>
+      </Show>
+
+      <Show when={!loading() && loadError()}>
+        {(message) => (
+          <InlineNotice
+            role="alert"
+            tone="danger"
+            actionLabel="Retry token inventory"
+            actionOnClick={() => void loadTokens()}
+          >
+            <p>{message()}</p>
+            <p>Existing credentials have not been changed. Retry to check their scopes.</p>
+          </InlineNotice>
+        )}
+      </Show>
 
       <Show when={props.refreshing}>
         <Card
@@ -487,23 +523,25 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </Show>
 
       <Show
-        when={!loading() && totalTokens() > 0}
+        when={tokensLoaded() && totalTokens() > 0}
         fallback={
-          <Card
-            tone="muted"
-            padding="md"
-            class="border border-dashed border-border text-sm text-muted"
-          >
-            No tokens yet.{' '}
-            <button
-              onClick={focusCreateSection}
-              disabled={!canManage()}
-              class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+          <Show when={tokensLoaded()}>
+            <Card
+              tone="muted"
+              padding="md"
+              class="border border-dashed border-border text-sm text-muted"
             >
-              Create one
-            </button>{' '}
-            to authenticate agents and integrations.
-          </Card>
+              No tokens yet.{' '}
+              <button
+                onClick={focusCreateSection}
+                disabled={!canManage()}
+                class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+              >
+                Create one
+              </button>{' '}
+              to authenticate agents and integrations.
+            </Card>
+          </Show>
         }
       >
         <Card padding="none" tone="card" class="overflow-hidden">
@@ -771,7 +809,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         </div>
       </Card>
 
-      <Show when={!loading() && hasWildcardTokens()}>
+      <Show when={tokensLoaded() && hasWildcardTokens()}>
         <Card
           tone="warning"
           padding="sm"

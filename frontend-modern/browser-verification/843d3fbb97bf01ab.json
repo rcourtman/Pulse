@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "base_sha": "bd82018429b359df102f3b01f8ecb95d8ac28578",
+  "verified_at": "2026-10-31T08:25:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/security.ts",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/security.ts": "7db8d4af70831dc516474c72b5e1a6f34c0d90f8d5fe3a3c638989510ef291ca",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "5afe9d5331644686a89abfbfe60a8f740363191c0c5963e754e6b386b53302ff",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "ae7448979176f5322fe3713d94013eeed7f6e9f3dfcf04783d7f39aa9f73d70c"
+  },
+  "routes": [
+    "/settings/security/api"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1100
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "The real production API Access consumer receives pending, denied403, failed500, malformed200, populated and explicitly empty local HTTP responses through SecurityAPI.listTokens.",
+    "Loading and unknown counts are nonnumeric; only an accepted empty list shows zero/no tokens. Populated scoped and wildcard records retain correct posture.",
+    "Persistent fixed-text read feedback survives transient-notification dismissal. Read-only accounts can retry but cannot acquire write controls."
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard and narrow touch WebKit exercise explicit read retry, preserved unsent token name/scope preset and subsequent populated recovery.",
+    "Four inventory GETs per normal journey; one for each empty context and two per read-only context. No mutation requests, unexpected endpoints or page errors.",
+    "All14 source-bound original final screenshots were opened through native view_image and inspected at desktop and320px, including wrapped unknown/error text and contained retry controls."
+  ],
+  "evidence": {
+    "source": "bd82018429b359df102f3b01f8ecb95d8ac28578",
+    "source_proof_receipt": "source-n6zzy0xk",
+    "playwright": "1.56.1",
+    "pixel_capture_sha256": {
+      "desktop-loading.png": "b0c52430c3bd4ceb83d813be9fc3d5cd335fb2c2228fe9d32ee3962909d46ad1",
+      "desktop-denied-summary.png": "c4f795b523ce25f1e9cb5b12b37b07a98076c5148711c81ef1cb6e49c12bbdd6",
+      "desktop-denied.png": "71e5d79830374b98c2b576b964cdc3ef20dc4f74770782c7be5f5a0ca6b76d39",
+      "desktop-malformed.png": "e2d9cb47569737d60bceffee37fe3fffcd9711f92c51e9d688cd017918840d39",
+      "desktop-populated.png": "524e06dbca1716232b76bc371806701af85091268399e4fe5defe2e1d210715b",
+      "desktop-empty.png": "becdd519a76052b50383f390ec40c39e014e9f1032aad63a2de6b7b09598d879",
+      "desktop-read-only.png": "0628876581f82fd9fd52b2f02cce7fec461cc44e8f8135e1cf103c77d781992e",
+      "narrow-loading.png": "4d3a84a86749d985dc41613a84e1cd74c369952991facac76ad92a4d9227e575",
+      "narrow-denied-summary.png": "7a61f250d11265e5f4c88ade8376c0024339bb67e1dafa000e8427955c5cdfde",
+      "narrow-denied.png": "d2424c0cab12a3edc254e4632f2c73baa0ae785a5d941b53e85616cb24a14f20",
+      "narrow-malformed.png": "a78954548004f919f7fe3d34e174a884f816d5bc13fcec6291ae053b90ea0277",
+      "narrow-populated.png": "17142faa16727b6865580863cfc6b1c122f07fc488ae83d4c811ed24924e7a05",
+      "narrow-empty.png": "a26d8747405f36a62cfd1094d2fdae815034f3fb1bbc5face0ad4e3931abce31",
+      "narrow-read-only.png": "ccfd9e5f143a8b45167f42fa1b6fa1b58805c120672562f4cf4f0f797c0f7d5c"
+    },
+    "retained": "Web outcome RECEIPTS.md, BROWSER.tar.xz, CAPTURES.tar.xz and PIXEL-REVIEW.json retain exact fixtures, results, asset binding and native pixel observations.",
+    "installed_engine_versions": {
+      "playwright": "1.56.1",
+      "engines": {
+        "chromium": "141.0.7390.37",
+        "webkit": "26.0"
+      },
+      "purpose": "Installed engine-version observation only; no application or HTTP requests, screenshots or journey replay."
+    },
+    "project_playwright_lock_version": "1.56.1"
+  }
+}
