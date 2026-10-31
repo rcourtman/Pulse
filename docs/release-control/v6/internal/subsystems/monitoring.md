@@ -17,6 +17,32 @@
 
 ## Purpose
 
+### Accepted PBS inventory survives its collection budget, not its owner
+
+The existing five-minute PBS backup budget bounds provider reads, not acceptance
+of earlier successful namespace/snapshot listings. Expiry classifies remaining
+scopes as unread without starting queued HTTP requests. Accepted snapshot rows
+and their actual read times publish together; failed/queued reads preserve live
+cache only, never renew durable point evidence. Incomplete enumeration remains
+partial/unavailable and cannot reconcile durable absence or assert protection.
+Explicit cancellation still withdraws the complete enumeration.
+
+A background scan captures its runtime and client at admission. Runtime/client
+replacement cancels that owner, invalidates its cadence claim, and fences local
+publication; old completion cannot release a replacement worker. Same-name client
+replacement discards old snapshot read times, requiring independent refresh.
+The core cycle's own context still does not cancel detached backup work. A spent
+budget never starts an already-expired backup-alert read. Ordinary cadence,
+five workers, retention bounds, auth, guest operations and policy are unchanged.
+
+The normal monitoring suite includes `pbs_backup_budget_test.go` through
+`TestPBSBudgetPublishesAcceptedListings`, and `pbs_backup_lifecycle_test.go`.
+They check VM/CT, datastore/namespace/queued-snapshot/live-task expiry, cold live
+state, accepted emptiness, nonrenewal and ordinary recovery, plus actual async
+admission, cancellation, runtime/client replacement and old-worker completion.
+Source-bound desktop/narrow Backups proof consumes produced partial/recovery
+frames. This is truthful collection, not original frozen-guest recovery.
+
 ### Docker image replacements invalidate older tag comparisons
 
 Successful tag/platform results are cached for six hours. If an unseen local

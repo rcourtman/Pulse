@@ -186,9 +186,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				continue
 			}
 
-			m.mu.Lock()
-			m.pbsClients[pbsInst.Name] = client
-			m.mu.Unlock()
+			m.replacePBSClient(pbsInst.Name, client)
 
 			log.Info().
 				Str("instance", pbsInst.Name).

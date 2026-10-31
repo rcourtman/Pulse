@@ -558,43 +558,37 @@ func (m *Monitor) pollPBSBackupsAsync(instanceName string, client *pbs.Client, i
 	}
 
 	datastoreSnapshot := append([]models.PBSDatastore(nil), datastores...)
-	m.mu.Lock()
-	if m.pbsBackupPollers[instanceName] {
-		m.mu.Unlock()
+	for i := range datastoreSnapshot {
+		datastoreSnapshot[i].Namespaces = append([]models.PBSNamespace(nil), datastores[i].Namespaces...)
+	}
+	namespaceErrorSnapshot := make(map[string]error, len(namespaceErrors))
+	for name, err := range namespaceErrors {
+		namespaceErrorSnapshot[name] = err
+	}
+	owner := m.beginPBSBackupPoll(instanceName, client, lastPoll, newLast)
+	if owner == nil {
 		log.Debug().Str("instance", instanceName).Msg("PBS backup polling already in progress")
 		return
 	}
-	if m.pbsBackupPollers == nil {
-		m.pbsBackupPollers = make(map[string]bool)
-	}
-	if m.lastPBSBackupPoll == nil {
-		m.lastPBSBackupPoll = make(map[string]time.Time)
-	}
-	m.pbsBackupPollers[instanceName] = true
-	m.lastPBSBackupPoll[instanceName] = newLast
-	m.mu.Unlock()
 
 	go func() {
 		defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", instanceName))
-		defer func() {
-			m.mu.Lock()
-			delete(m.pbsBackupPollers, instanceName)
-			m.lastPBSBackupPoll[instanceName] = time.Now()
-			m.mu.Unlock()
-		}()
+		defer m.finishPBSBackupPoll(instanceName, owner)
 
 		// The main polling loop cancels its per-cycle context after returning.
 		// Backup work keeps the existing independent, runtime-scoped deadline.
-		parentCtx := m.getRuntimeContext()
-		if parentCtx == nil {
-			parentCtx = context.Background()
-		}
+		parentCtx := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)
 		backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
 		defer cancel()
 		if backupCtx.Err() != nil {
 			return
 		}
 		if discoveryErr != nil {
+			unlock, current := m.beginPBSBackupPublication(backupCtx, instanceName)
+			if !current {
+				return
+			}
+			defer unlock()
 			// One unreadable discovery scope, not a guessed datastore count.
 			// Only actual authentication/authorization status establishes denial.
 			denied := 0
@@ -610,7 +604,7 @@ func (m *Monitor) pollPBSBackupsAsync(instanceName string, client *pbs.Client, i
 		} else {
 			// The explicit empty list is authoritative and reconciles only this
 			// connection; the ordinary poller also drops its live rows/cache.
-			m.pollPBSBackups(backupCtx, instanceName, client, datastoreSnapshot, namespaceErrors)
+			m.pollPBSBackups(backupCtx, instanceName, client, datastoreSnapshot, namespaceErrorSnapshot)
 		}
 		log.Info().Str("instance", instanceName).Dur("duration", time.Since(now)).Msg("Completed background PBS backup polling")
 	}()

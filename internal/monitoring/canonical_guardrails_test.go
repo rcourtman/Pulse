@@ -1361,7 +1361,6 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
 			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
 			"m.checkBackupAlerts(ctx)",
-			"m.checkBackupAlerts(context.Background())",
 		},
 		"recovery_rollups.go": {
 			"m.alertManager.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, m.backupInventoryScopeForAlerts())",
@@ -1393,6 +1392,10 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			}
 		}
 	}
+	// Inventory-readiness scope still owns orphan detection. The old spelling
+	// check also required an unbounded PBS alert read; exercise its actual
+	// expiry/ordinary-recovery behaviour instead of preserving that choice.
+	exercisePBSBudgetExpiredAlertEvaluation(t)
 }
 
 func TestStoragePollingUsesCanonicalPoolMetadataForZFSAttachment(t *testing.T) {
@@ -2599,7 +2602,12 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			"parentCtx := m.getRuntimeContext()",
 		},
 		"monitor_pbs_pmg.go": {
-			"parentCtx := m.getRuntimeContext()",
+			"owner := m.beginPBSBackupPoll(instanceName, client, lastPoll, newLast)",
+			"parentCtx := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)",
+		},
+		"pbs_backup_poll.go": {
+			"parent := m.runtimeCtx",
+			"ctx, cancel := context.WithCancel(parent)",
 		},
 		"../config/config.go": {
 			"func LoadWithoutLoggingInit() (*Config, error) {",
@@ -2619,6 +2627,12 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			}
 		}
 	}
+
+	// PBS captures its runtime with the client and admission claim, rather
+	// than reading it again after starting the goroutine. Check the inherited
+	// context itself as well as the entry point so this remains a safety guard,
+	// not a requirement to restore an obsolete implementation spelling.
+	exercisePBSBackupRuntimeContext(t)
 }
 
 func TestUnifiedStorageMetricsFallbackToResourceIDWhenResolverTargetMissing(t *testing.T) {
