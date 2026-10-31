@@ -491,6 +491,40 @@ The telemetry implementation is in [`internal/telemetry/telemetry.go`](../intern
 
 Pulse can make outbound connections when you enable specific features:
 
-- **AI providers**: when AI features are configured, Pulse sends only the context required for your request to the provider you chose. This can include active Patrol objective briefs and their optional operator context when they apply to a Patrol run. Retained objective text and observer artifacts are encrypted at rest in the local organization data directory; objective text is not included in Pulse usage telemetry. A provider may return a model-authored observer proposal for an uncovered objective; Pulse encrypts that artifact with the retained objective, excludes it from public objective reads and later prompt seeds, and does not include its content in usage telemetry or audit messages. Saving an objective by itself does not call a model. Local providers stay on your network; non-local hosted providers receive provider-bound context directly from your Pulse instance. AI prompts from self-managed installs do not transit Pulse infrastructure. Before non-local model requests leave the instance, governed resource details use the same resource-policy redaction shown in Data Handling: local-only resource details are omitted from detailed prompt sections or replaced with policy-safe summaries, and known restricted resource identifiers are redacted where they appear in provider-bound context. See `docs/AI.md`.
+- **AI providers**: when AI features run, Pulse sends provider-bound monitoring
+  and investigation context to the configured endpoint. **BYOK is not local-only
+  processing.** See [AI provider data](#ai-provider-data) and the
+  [AI privacy guide](AI.md#privacy).
 - **Relay / Pulse Mobile**: when Pulse Mobile connections are on, Pulse connects to the configured relay endpoint so paired Pulse Mobile devices can reach this instance and receive push notifications. Relay does not provide remote access to the web UI. See Settings → Pulse Mobile. Pulse Mobile is being retired on 31 March 2027.
 - **Update checks**: Pulse can check for new releases/updates (for example via GitHub release metadata) depending on your deployment and configuration.
+
+### AI provider data
+
+A hosted model can receive resource names and addresses, monitoring state,
+relationships, notes, findings and tool results used in a run. Non-local hosted
+providers receive this context directly from your self-managed Pulse instance;
+AI prompts do not transit Pulse infrastructure. BYOK supplies your credentials,
+not a local-processing or provider-retention guarantee. Review your provider's
+retention and training policies. For local processing, verify that the chosen
+endpoint runs within your trusted network and does not forward requests elsewhere.
+
+Before non-local model requests leave the instance, Pulse applies secret
+filtering and resource-policy handling. Local-only resource details are omitted
+from detailed prompt sections or replaced with policy-safe summaries, and known
+restricted resource identifiers are redacted in provider-bound context.
+**Internal and Sensitive resources can still be shared with a hosted model.**
+These safeguards do not make every free-form note or tool result anonymous.
+
+Context can include active Patrol objective briefs and their optional operator
+context when they apply to a run. Retained objective text and observer artifacts
+are encrypted at rest in the local organisation data directory; objective text
+is not included in Pulse usage telemetry. A provider may return a model-authored
+observer proposal for an uncovered objective; Pulse encrypts that artifact with
+the retained objective, excludes it from public objective reads and later prompt
+seeds, and does not include its content in usage telemetry or audit messages.
+Saving an objective by itself does not call a model.
+
+Turning off **Outbound usage telemetry** does not stop AI provider requests or
+delete locally retained AI history. Local inference also does not disable the
+other outbound connections above. See [AI privacy](AI.md#privacy), including the
+separate data flow of external MCP clients, before enabling model-backed work.
