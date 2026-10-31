@@ -4112,6 +4112,11 @@ deploy_agent_scripts() {
         fi
     fi
     if ! mv -T -n -- "$stage/next" "$live" || [[ -e "$stage/next" || -L "$stage/next" ]]; then
+        if [[ ! -e "$stage/previous" && ! -L "$stage/previous" && ( -e "$live" || -L "$live" ) ]]; then
+            rm -rf -- "$stage"
+            print_error "Unexpected agent script destination; publication is incomplete. Reconcile the destination before recovery."
+            return 2
+        fi
         if [[ -d "$stage/previous" ]] &&
            { ! mv -T -n -- "$stage/previous" "$live" || [[ -e "$stage/previous" || -L "$stage/previous" ]]; }; then
             print_error "Agent script publication and restore are incomplete; previous scripts retained at $stage/previous. Reconcile the destination before recovery."

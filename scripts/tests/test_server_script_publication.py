@@ -319,6 +319,13 @@ class ServerScriptPublication(unittest.TestCase):
                     self.assertFalse(e["restarted"])
                     self.assertIn("Pulse has not been restarted", e["result"].stderr)
                     self.assertNotIn("completion", e["events"])
+        for flow in ("archive", "source"):
+            with self.subTest(flow=flow, fault="conflict", existing=False):
+                e = self.exercise("conflict", flow, existing=False)
+                self.assertNotEqual(e["result"].returncode, 0)
+                self.assertFalse(e["restarted"])
+                self.assertEqual(e["contents"], {"foreign": b"foreign"})
+                self.assertIn("Pulse has not been restarted", e["result"].stderr)
 
     def test_every_main_consumer_stops_before_markers_or_completion(self):
         for flow in ("main-pinned", "main-update", "main-reinstall", "main-fresh", "main-source"):
