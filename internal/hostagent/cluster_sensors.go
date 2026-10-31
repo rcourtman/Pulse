@@ -223,6 +223,10 @@ func (a *Agent) collectPeerSensors(ctx context.Context, peer clusterPeer, sshKey
 		return agentshost.Sensors{}, nil
 	}
 
-	// Convert to flat sensor format using the shared helper
-	return convertTemperatureDataToSensors(tempData), nil
+	// Convert to flat sensor format using the shared helper. Peer readings
+	// only feed node temperature, so the native inventory, which belongs to
+	// each host's own agent report, is not repeated for every peer.
+	result := convertTemperatureDataToSensors(tempData)
+	result.Native = nil
+	return result, nil
 }

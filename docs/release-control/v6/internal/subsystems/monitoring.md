@@ -228,6 +228,50 @@ complete report from the real parser/agent path. The inferred #3565 sensor
 fixture is not an original JSON export or installed-host recovery. Consuming
 proof must use the complete emitted report, not a selected-value subset.
 
+### Native sensor inventory keeps one identity per input
+
+The shared Linux agent parser also reports `sensors.native`: every `tempN_input`
+and `fanN_input` of every chip, keyed `<chip>/<channel>` from the full
+lm-sensors chip name (bus address included) and the canonical channel (`tempN`
+or `fanN`, no leading zeros), with the chip's original feature label, kind,
+unit, unconverted value and an `ok`/`invalid` status. Two chips of one type and
+labels that differ only by case keep separate entries, which the legacy
+`TemperatureCelsius`, `FanRPM` and `Additional` maps cannot do. The key is a
+host-scoped source key, not a physical-device identity: a moved PCI address,
+re-enumerated USB/I²C chip or renumbered channel can change or reuse it, so
+persisted preferences need their own device-binding and migration rules.
+`sensors.NativeSensorStatus` owns plausibility: `ok` needs a finite value, from
+-55 to 150 °C inclusive or at least 0 RPM. Out-of-band values stay listed as
+`invalid`, a non-finite value is omitted, and a stopped fan's 0 RPM is a
+reading. The inventory is sorted by chip, kind and channel, deduplicated by ID
+and bounded at 256 entries; a chip whose inputs leave the legacy maps empty
+still reports its inventory. Ingest keeps an entry only when its ID is exactly
+`<chip>/<channel>` for a canonical channel of the reported kind, derives the
+unit from the kind, recomputes the status with the same policy, keeps the first
+entry of a repeated ID and applies the same 256 bound. A chip with inventory
+only still skips power collection, as before. The legacy maps keep
+their keys, filters and consumers. Cluster peer collection omits the
+inventory, which belongs to each host's own report.
+
+This is the identity foundation for #3565. Nothing reads the inventory yet: it
+adds no alert, threshold, History series, sensor preference, CPU-source choice
+or UI. An absent field (older agent, failed collection), an empty inventory
+and a truncated one are not distinguished, and the 256 bound drops the last
+chips in name order, so no consumer may read a missing entry as a removed
+sensor until the report carries completeness state. When one chip's
+`sensors -j` object repeats a feature label, only the last feature object of
+that label survives decoding. Child alert IDs and
+metric names are lower-cased today, so consumers need a collision-free
+encoding of the ID before using it as a key. `internal/sensors/native.go` owns
+the inventory; `parser_units_test.go`,
+`TestAgentMixedSensorUnitsReachReportWithoutFalseTemperatures`,
+`TestAgentReportsNativeInventoryWithoutLegacyReadings`,
+`TestCollectPeerSensors_OmitsNativeInventory` and
+`TestApplyHostReportPreservesNativeSensorInventory` cover parsing, the agent's
+complete `Sensors` result, peer omission and ingest through the frontend and
+read-state projections. The fixtures are inferred lm-sensors JSON, not exports
+from an installed host.
+
 ### Background backup scans belong to their configured connection
 
 PVE tasks, storage backups and guest snapshots share one in-flight owner per

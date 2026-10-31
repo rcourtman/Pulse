@@ -105,6 +105,42 @@ func TestResourceFromHostProjectsXCPNGPoolIdentity(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostPreservesNativeSensorInventory(t *testing.T) {
+	battery, unattached := 34.2, -127.0
+	host := models.Host{
+		ID:       "host-macbook",
+		Hostname: "macbook-pve",
+		Status:   "online",
+		LastSeen: time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC),
+		Sensors: models.HostSensorSummary{
+			Native: []models.HostNativeSensor{
+				{ID: "applesmc-isa-0300/temp1", Chip: "applesmc-isa-0300", Adapter: "ISA adapter", Channel: "temp1", Label: "TB0T",
+					Kind: "temperature", Unit: "celsius", Value: &battery, Status: "ok"},
+				{ID: "applesmc-isa-0300/temp4", Chip: "applesmc-isa-0300", Adapter: "ISA adapter", Channel: "temp4", Label: "TG1D",
+					Kind: "temperature", Unit: "celsius", Value: &unattached, Status: "invalid"},
+			},
+		},
+	}
+
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	agents := rr.ListByType(ResourceTypeAgent)
+	if len(agents) != 1 || agents[0].Agent == nil || agents[0].Agent.Sensors == nil {
+		t.Fatalf("expected one agent resource with sensors, got %+v", agents)
+	}
+	native := agents[0].Agent.Sensors.Native
+	if len(native) != 2 || native[0].ID != "applesmc-isa-0300/temp1" || native[0].Label != "TB0T" || native[0].Value == nil || *native[0].Value != battery ||
+		native[1].Status != "invalid" || native[1].Value == nil || *native[1].Value != unattached {
+		t.Fatalf("registry native inventory = %+v, want TB0T then the invalid TG1D", native)
+	}
+
+	*host.Sensors.Native[0].Value = 99
+	again := rr.ListByType(ResourceTypeAgent)[0].Agent.Sensors.Native[0]
+	if again.Value == nil || *again.Value != 34.2 {
+		t.Fatalf("registry inventory value = %v, want 34.2 independent of the source host", again.Value)
+	}
+}
+
 func TestResourceFromHostPreservesCustomSensorMeta(t *testing.T) {
 	value := 12.5
 	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)

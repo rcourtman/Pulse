@@ -2,6 +2,8 @@ package host
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -181,6 +183,39 @@ func TestCustomSensorMetricJSONRoundTrip(t *testing.T) {
 		decoded.Kind != CustomSensorKindTimestamp || decoded.Value == nil ||
 		*decoded.Value != value || decoded.EventAt == nil || !decoded.EventAt.Equal(eventAt) {
 		t.Fatalf("custom sensor metric did not round trip: %+v", decoded)
+	}
+}
+
+func TestNativeSensorJSONRoundTrip(t *testing.T) {
+	value := 34.2
+	original := Sensors{Native: []NativeSensor{
+		{ID: "applesmc-isa-0300/temp1", Chip: "applesmc-isa-0300", Adapter: "ISA adapter", Channel: "temp1", Label: "TB0T",
+			Kind: NativeSensorKindTemperature, Unit: NativeSensorUnitCelsius, Value: &value, Status: NativeSensorStatusOK},
+		{ID: "applesmc-isa-0300/temp9", Chip: "applesmc-isa-0300", Channel: "temp9", Label: "Probe",
+			Kind: NativeSensorKindTemperature, Unit: NativeSensorUnitCelsius, Status: NativeSensorStatusInvalid},
+	}}
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal native sensors: %v", err)
+	}
+	if !strings.Contains(string(data), `"native":[{"id":"applesmc-isa-0300/temp1","chip":"applesmc-isa-0300","adapter":"ISA adapter","channel":"temp1","label":"TB0T","kind":"temperature","unit":"celsius","value":34.2,"status":"ok"}`) {
+		t.Fatalf("native sensor wire format changed: %s", data)
+	}
+	var decoded Sensors
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal native sensors: %v", err)
+	}
+	if !reflect.DeepEqual(decoded, original) {
+		t.Fatalf("native sensors did not round trip: %+v", decoded)
+	}
+
+	// A report from an agent that predates the inventory has no native field.
+	var legacy Sensors
+	if err := json.Unmarshal([]byte(`{"additional":{"applesmc_tb0t":34.2}}`), &legacy); err != nil {
+		t.Fatalf("unmarshal legacy sensors: %v", err)
+	}
+	if legacy.Native != nil || legacy.Additional["applesmc_tb0t"] != 34.2 {
+		t.Fatalf("legacy sensors = %+v, want no inventory and the additional reading", legacy)
 	}
 }
 

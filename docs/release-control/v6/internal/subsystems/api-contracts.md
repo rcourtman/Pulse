@@ -6302,6 +6302,20 @@ Backend API payloads and `frontend-modern/src/types/api.ts` must preserve that
 optional map without making it a required compatibility field, and clients must
 keep it as descriptive host telemetry rather than a temperature metric,
 resource identity, alert metric, or storage/recovery signal.
+Host sensor summaries may also carry the native temperature and fan inventory
+in `native`: `id` (`<chip>/<channel>`), `chip`, optional `adapter`, `channel`,
+`label`, `kind` (`temperature`/`fan`), `unit` (`celsius`/`rpm`), optional
+`value` and `status` (`ok`/`invalid`). The models-backed frontend host
+summary always emits `native` as a possibly empty array, beside `custom` and
+`gpu`; the unified-resource and agent payloads omit it when empty. No
+frontend code reads it yet, so `frontend-modern/src/types/api.ts` gains its
+optional `native` type with the first consumer.
+`id` is the host-scoped sensor source key; `label` is display text and is not
+unique. Clients must not chart, alert on or headline an `invalid` entry, and
+must not read an absent or empty `native` array, or an entry missing from a
+non-empty one, as a host without sensors or a removed sensor: older agents
+omit it, failed collection sends nothing and the inventory is bounded at 256
+entries, so a truncated list can drop an entry that still exists.
 Host sensor SMART rows (`smart[]`) also carry the optional per-field
 `collection` status (`PhysicalDiskCollectionStatus`). Backend API payloads and
 `frontend-modern/src/types/api.ts` (`HostDiskSMART.collection`) must preserve it

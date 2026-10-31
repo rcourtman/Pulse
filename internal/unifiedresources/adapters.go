@@ -261,7 +261,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	storageAssessments := make([]storagehealth.Assessment, 0, len(host.RAID)+1)
 
 	// Populate sensors
-	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.PowerWatts) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.Custom) > 0 || len(host.Sensors.GPU) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
+	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.PowerWatts) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.Custom) > 0 || len(host.Sensors.Native) > 0 || len(host.Sensors.GPU) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
 		sensorMeta := &HostSensorMeta{}
 		if len(host.Sensors.TemperatureCelsius) > 0 {
 			sensorMeta.TemperatureCelsius = make(map[string]float64, len(host.Sensors.TemperatureCelsius))
@@ -304,6 +304,22 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 					Error:        metric.Error,
 					AlertOnError: metric.AlertOnError,
 					Stale:        metric.Stale,
+				}
+			}
+		}
+		if len(host.Sensors.Native) > 0 {
+			sensorMeta.Native = make([]HostNativeSensor, len(host.Sensors.Native))
+			for i, sensor := range host.Sensors.Native {
+				sensorMeta.Native[i] = HostNativeSensor{
+					ID:      sensor.ID,
+					Chip:    sensor.Chip,
+					Adapter: sensor.Adapter,
+					Channel: sensor.Channel,
+					Label:   sensor.Label,
+					Kind:    sensor.Kind,
+					Unit:    sensor.Unit,
+					Value:   cloneFloat64Ptr(sensor.Value),
+					Status:  sensor.Status,
 				}
 			}
 		}

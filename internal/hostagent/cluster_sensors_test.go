@@ -576,3 +576,26 @@ func TestClusterNodeSensorsType(t *testing.T) {
 		t.Error("expected cpu_package temperature")
 	}
 }
+
+func TestCollectPeerSensors_OmitsNativeInventory(t *testing.T) {
+	a := &Agent{
+		logger: zerolog.Nop(),
+		collector: &mockCollector{
+			commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+				return `{"coretemp-isa-0000":{"Package id 0":{"temp1_input":52}},"nct6798-isa-0290":{"SYSTIN":{"temp1_input":33},"CPU Fan":{"fan1_input":900}}}`, nil
+			},
+			sensorsParseFn: sensors.Parse,
+		},
+	}
+
+	result, err := a.collectPeerSensors(context.Background(), clusterPeer{Name: "peer1", IP: "10.0.0.2"}, "/root/.ssh/id_rsa")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.TemperatureCelsius["cpu_package"] != 52 {
+		t.Fatalf("peer cpu_package = %v, want 52", result.TemperatureCelsius["cpu_package"])
+	}
+	if result.Native != nil {
+		t.Fatalf("peer report carried a native inventory of %d sensors; it belongs to each host's own agent", len(result.Native))
+	}
+}

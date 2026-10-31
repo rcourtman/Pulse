@@ -869,6 +869,7 @@ func cloneHostSensorMeta(in *HostSensorMeta) *HostSensorMeta {
 	out.PowerWatts = cloneStringFloat64Map(in.PowerWatts)
 	out.Additional = cloneStringFloat64Map(in.Additional)
 	out.Custom = cloneHostCustomSensors(in.Custom)
+	out.Native = cloneHostNativeSensors(in.Native)
 	out.GPU = cloneHostGPUSensors(in.GPU)
 	out.ThermalState = cloneHostThermalState(in.ThermalState)
 	out.SMART = cloneHostSMARTMetaSlice(in.SMART)
@@ -884,6 +885,18 @@ func cloneHostCustomSensors(in []HostCustomSensorMetric) []HostCustomSensorMetri
 		out[i] = metric
 		out[i].Value = cloneFloat64Ptr(metric.Value)
 		out[i].EventAt = cloneTimePtr(metric.EventAt)
+	}
+	return out
+}
+
+func cloneHostNativeSensors(in []HostNativeSensor) []HostNativeSensor {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]HostNativeSensor, len(in))
+	for i, sensor := range in {
+		out[i] = sensor
+		out[i].Value = cloneFloat64Ptr(sensor.Value)
 	}
 	return out
 }

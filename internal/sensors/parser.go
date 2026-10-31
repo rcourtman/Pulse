@@ -20,6 +20,7 @@ type TemperatureData struct {
 	GPU        map[string]float64 // GPU temperatures (e.g., "amdgpu-pci-0400": 55.0)
 	Fans       map[string]float64 // Fan speeds in RPM (e.g., "cpu_fan": 1200)
 	Other      map[string]float64 // Other temperatures (DDR5, mobo, etc.)
+	Native     []NativeSensor     // Every temperature and fan input, by stable chip/channel ID
 	Available  bool               // Whether any temperature data was found
 }
 
@@ -74,7 +75,10 @@ func Parse(jsonStr string) (*TemperatureData, error) {
 
 		// Parse all fans and other temperatures from every chip
 		parseFansAndOther(chipName, chipMap, data)
+
+		data.Native = append(data.Native, collectNativeSensors(chipName, chipMap)...)
 	}
+	data.Native = sortAndBoundNativeSensors(data.Native)
 
 	// If we got CPU temps, calculate max from cores if package not available
 	if data.CPUPackage == 0 && len(data.Cores) > 0 {
