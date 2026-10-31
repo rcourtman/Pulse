@@ -219,6 +219,20 @@ sys.exit(int(os.environ.get('TEST_EXIT','0')))
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_main_workflow_keeps_frozen_classifier_recipe_compatible(self):
+        # Patch preparations copy main's workflow/controls, not scripts/tests.
+        # v6.6.0's test_ci_browser_proof_only.py uses this older extraction;
+        # main's safer YAML reader alone cannot repair that frozen consumer.
+        block = job('changes')
+        steps = re.split(r'(?m)^      - name: ', block)[1:]
+        selected = next(part for part in steps if part.startswith('Classify changed files\n'))
+        frozen_command = '\n'.join(line[10:] for line in
+                                   selected.split('        run: |\n', 1)[1].splitlines())
+        actual_command = next(step['run'] for step in yaml.safe_load(WORKFLOW.read_text())
+                              ['jobs']['changes']['steps']
+                              if step.get('name') == 'Classify changed files')
+        self.assertEqual(frozen_command.strip(), actual_command.strip())
+
     def test_worker_contracts_gate_changed_area_admission_before_compilation(self):
         jobs = yaml.safe_load(WORKFLOW.read_text())['jobs']
         changes = jobs['changes']

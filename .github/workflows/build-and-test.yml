@@ -176,11 +176,11 @@ jobs:
           fi
           echo "frontend_deps=$frontend_deps" >> "$GITHUB_OUTPUT"
 
-      # A deterministic worker-contract failure previously surfaced only after
-      # race compilation and the backend fan-out. Run the same controls before
-      # releasing that work; retain the per-worker and complete smoke checks.
-      # Keep this entrypoint inside the controls copied to stable patches.
       - name: Validate backend worker contracts before compilation
+        # A deterministic worker-contract failure previously surfaced only
+        # after race compilation and fan-out. Retain the worker/smoke checks.
+        # Keep the entrypoint in the controls copied to stable patches and
+        # this comment in its own step, away from frozen classifier scalars.
         if: steps.filter.outputs.code == 'true'
         timeout-minutes: 1
         run: python3 scripts/release_control/run_go_package_slice_test.py
