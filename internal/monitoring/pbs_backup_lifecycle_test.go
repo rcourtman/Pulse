@@ -19,6 +19,54 @@ func waitPBSBudget(t *testing.T, ch <-chan struct{}, phase string) {
 	}
 }
 
+func exercisePBSBackupRuntimeContext(t *testing.T) {
+	t.Run("PBS inherits the canonical runtime", func(t *testing.T) {
+		type runtimeKey struct{}
+		value := new(int)
+		parent, cancel := context.WithTimeout(context.WithValue(context.Background(), runtimeKey{}, value), time.Minute)
+		defer cancel()
+		m := &Monitor{}
+		client := &pbs.Client{}
+		m.replacePBSClient("reader", client)
+		m.setRuntimeContext(parent, nil)
+		owner := m.beginPBSBackupPoll("reader", client, time.Time{}, time.Now())
+		if owner == nil {
+			t.Fatal("live runtime did not admit its PBS worker")
+		}
+		defer m.finishPBSBackupPoll("reader", owner)
+		if owner.ctx.Value(runtimeKey{}) != value {
+			t.Error("PBS worker does not inherit the runtime's context values")
+		}
+		deadline, ok := owner.ctx.Deadline()
+		want, _ := parent.Deadline()
+		if !ok || !deadline.Equal(want) {
+			t.Error("PBS worker does not inherit the runtime's deadline")
+		}
+		cancel()
+		if owner.ctx.Err() != context.Canceled {
+			t.Error("runtime cancellation did not reach its PBS worker")
+		}
+		if m.pbsBackupPollers["reader"] != owner {
+			t.Error("runtime cancellation released the claim before the worker exited")
+		}
+	})
+	t.Run("an ended runtime cannot admit PBS work", func(t *testing.T) {
+		parent, cancel := context.WithCancel(context.Background())
+		m := &Monitor{}
+		client := &pbs.Client{}
+		m.replacePBSClient("reader", client)
+		m.setRuntimeContext(parent, nil)
+		cancel()
+		if owner := m.beginPBSBackupPoll("reader", client, time.Time{}, time.Now()); owner != nil {
+			m.finishPBSBackupPoll("reader", owner)
+			t.Fatal("ended runtime admitted a PBS worker")
+		}
+		if len(m.pbsBackupPollers) != 0 || len(m.lastPBSBackupPoll) != 0 {
+			t.Error("rejected admission left a worker or postponed the next scan")
+		}
+	})
+}
+
 func exercisePBSBudgetOwnerWithdrawal(t *testing.T) {
 	for _, transition := range []string{"runtime cancellation", "runtime replacement", "client replacement", "client retirement"} {
 		t.Run(transition, func(t *testing.T) {

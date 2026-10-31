@@ -2602,7 +2602,12 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			"parentCtx := m.getRuntimeContext()",
 		},
 		"monitor_pbs_pmg.go": {
-			"parentCtx := m.getRuntimeContext()",
+			"owner := m.beginPBSBackupPoll(instanceName, client, lastPoll, newLast)",
+			"parentCtx := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)",
+		},
+		"pbs_backup_poll.go": {
+			"parent := m.runtimeCtx",
+			"ctx, cancel := context.WithCancel(parent)",
 		},
 		"../config/config.go": {
 			"func LoadWithoutLoggingInit() (*Config, error) {",
@@ -2622,6 +2627,12 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			}
 		}
 	}
+
+	// PBS captures its runtime with the client and admission claim, rather
+	// than reading it again after starting the goroutine. Check the inherited
+	// context itself as well as the entry point so this remains a safety guard,
+	// not a requirement to restore an obsolete implementation spelling.
+	exercisePBSBackupRuntimeContext(t)
 }
 
 func TestUnifiedStorageMetricsFallbackToResourceIDWhenResolverTargetMissing(t *testing.T) {
