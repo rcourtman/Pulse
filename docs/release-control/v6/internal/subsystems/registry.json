@@ -7017,6 +7017,21 @@
             ]
           },
           {
+            "id": "metric-window-runtime",
+            "label": "rolling alert writer identity, durable windows and bounded source resolution",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/metric_window_provider.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/metric_window_cache_bounds_test.go",
+              "internal/monitoring/metric_window_provider_test.go",
+              "internal/monitoring/metric_window_target_keys_test.go"
+            ]
+          },
+          {
             "id": "monitoring-runtime",
             "label": "monitoring runtime proof",
             "match_prefixes": [

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -50,13 +51,22 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 	m.mu.RUnlock()
 	resourceType := strings.TrimSpace(request.ResourceType)
 	resourceID := strings.TrimSpace(request.ResourceID)
-	if target := m.MetricsTargetForResource(request.ResourceID); target != nil {
+	memoryID, storeType, storeID := resourceID, resourceType, resourceID
+	// Legacy host alerts name agent:<source ID>, while durable host history
+	// is written under the bare source ID. This remains the subject's own
+	// series when a merged canonical owner prefers a different source.
+	if strings.EqualFold(resourceType, "agent") {
+		storeID = strings.TrimPrefix(resourceID, "agent:")
+	}
+	if target := m.metricWindowTarget(request.ResourceID, request.ResourceType); target != nil {
 		if strings.TrimSpace(target.ResourceType) != "" {
 			resourceType = strings.TrimSpace(target.ResourceType)
 		}
 		if strings.TrimSpace(target.ResourceID) != "" {
 			resourceID = strings.TrimSpace(target.ResourceID)
 		}
+		memoryID, storeType = metricWindowHistoryKeys(resourceType, resourceID)
+		storeID = resourceID
 	}
 	if resourceType == "" || resourceID == "" {
 		return nil, fmt.Errorf("metric target unavailable for %q", request.ResourceID)
@@ -67,9 +77,9 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 	if duration <= 0 {
 		return nil, fmt.Errorf("invalid metric window")
 	}
-	points := m.inMemoryMetricWindow(history, resourceType, resourceID, metric, duration)
+	points := m.inMemoryMetricWindow(history, resourceType, memoryID, metric, duration)
 	if metricWindowCoverage(points) < duration*8/10 {
-		stored := m.persistentMetricWindow(history, resourceType, resourceID, metric, request.Start, request.End)
+		stored := m.persistentMetricWindow(history, storeType, storeID, metric, request.Start, request.End)
 		// Append the fresh in-memory tail last so it remains authoritative when
 		// SQLite contains an older value at the same timestamp.
 		points = mergeMetricWindowPoints(stored, points, request.Start, request.End)
@@ -80,6 +90,59 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 		result = append(result, alerts.MetricWindowPoint{Timestamp: point.Timestamp, Value: point.Value})
 	}
 	return result, nil
+}
+
+// metricWindowTarget resolves the metrics target for an alert subject. Some
+// evaluators name their subject by alert reference or source ID rather than
+// registry ID (agent:<host>, docker:<host>/<container>, a PVE guest or node
+// ID); those bind to their canonical resource through the registry's
+// alert-reference resolution. A binding is used only when its target has the
+// subject's own type. A canonical resource can merge sources (a PVE node with
+// its host agent, a VM with the agent inside it), and its preferred target
+// would then read another source's series than the one being evaluated. A
+// component reference names part of another resource, so it is refused too.
+// A refused or unresolved subject keeps the request's own coordinates.
+func (m *Monitor) metricWindowTarget(resourceID, resourceType string) *unifiedresources.MetricsTarget {
+	if target := m.MetricsTargetForResource(resourceID); target != nil {
+		return target
+	}
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+	resolver, ok := store.(unifiedresources.AlertResourceReferenceResolver)
+	if !ok {
+		return nil
+	}
+	reference, claimed := resolver.ResolveAlertResourceReference(resourceID)
+	canonicalID := strings.TrimSpace(reference.ResourceID)
+	if !claimed || reference.Component || canonicalID == "" || canonicalID == strings.TrimSpace(resourceID) {
+		return nil
+	}
+	target := m.MetricsTargetForResource(canonicalID)
+	if target == nil || !strings.EqualFold(strings.TrimSpace(target.ResourceType), strings.TrimSpace(resourceType)) {
+		return nil
+	}
+	return target
+}
+
+// metricWindowHistoryKeys maps a canonical metrics target onto the keys its
+// writers record. In-memory history prefixes host-agent and Docker series,
+// and the store keeps PVE system containers and Docker series under their
+// own families. Writer-boundary tests pin these monitoring-owned coordinates.
+// Chart API aliases have their own compatibility policy at the read boundary.
+func metricWindowHistoryKeys(resourceType, resourceID string) (memoryID, storeType string) {
+	switch strings.ToLower(resourceType) {
+	case "system-container":
+		return resourceID, "container"
+	case "agent":
+		return "agent:" + resourceID, "agent"
+	case "docker-host":
+		return "dockerHost:" + resourceID, "dockerHost"
+	case "app-container":
+		return "docker:" + resourceID, "dockerContainer"
+	default:
+		return resourceID, resourceType
+	}
 }
 
 func (m *Monitor) inMemoryMetricWindow(history *MetricsHistory, resourceType, resourceID, metric string, duration time.Duration) []MetricPoint {
@@ -121,7 +184,9 @@ func (m *Monitor) persistentMetricWindow(history *MetricsHistory, resourceType, 
 		for i, point := range stored {
 			converted[i] = MetricPoint{Timestamp: point.Timestamp, Value: point.Value}
 		}
-		if metricWindowCoverage(converted) > metricWindowCoverage(best) {
+		// A single observation has zero span, but still wins over no data.
+		// Readiness belongs to the alert evaluator, not this source selector.
+		if len(converted) > 0 && (len(best) == 0 || metricWindowCoverage(converted) > metricWindowCoverage(best)) {
 			best = converted
 		}
 	}

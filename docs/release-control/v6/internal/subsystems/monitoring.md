@@ -3932,6 +3932,36 @@ lifecycle decisions. Missing target, query failure, shallow history, or gapped
 history must remain unknown at the alerts boundary rather than being replaced
 by a synthetic healthy value.
 
+An alert subject named by alert reference or source ID rather than registry
+ID (`agent:<host>`, `docker:<host>/<container>`, a PVE guest or node ID) binds
+to its canonical resource through the registry's alert-reference resolution
+before the target lookup. The binding is used only when the resolved target
+has the subject's own type: a merged resource (a PVE node with its host agent,
+a VM with the agent inside it) prefers another source's target, and reading it
+would evaluate one source's current value against another source's history.
+Component, conflicting, unresolved and self bindings keep the subject's own
+series. Legacy `agent:<id>` subjects keep that in-memory key and use the bare
+source ID for durable history even when a merged owner prefers VM history.
+A resolved target reads the keys its writers own: the `agent:`,
+`dockerHost:` and `docker:` in-memory prefixes, and the `container`,
+`dockerHost` and `dockerContainer` store families. Writer-boundary tests pin
+these monitoring-owned coordinates. The chart API separately normalizes its
+read aliases and historical compatibility families. A valid single durable
+observation is returned even though its time coverage is zero; it remains
+shallow evidence at the alert boundary. Reading the target's bare type and ID
+left every Docker container CPU window empty under the factory five-minute CPU
+rule, so container CPU alerts could never become ready.
+`internal/monitoring/metric_window_target_keys_test.go` records history
+through the Docker, host-agent and PVE writers and the real registry, reads
+each window with the identity its alert evaluator sends (live tail, and SQLite
+after the tail is lost), pins the refused binding shapes, and drives
+`TestFactoryCPUWindowFiresAndRecoversForDockerContainer` from no history to an
+active rolling-average CPU alert, through an unknown window that keeps the
+incident, to recovery, retaining the factory grace and incident identity.
+Merged-source and single-observation regressions also cover loss of the live
+tail. The node alert-pass benchmark measures the source-resolution cost on
+already-readable live windows without relaxing their readiness policy.
+
 Monitoring ingest keeps mock mode hermetic. The unified read path already
 substitutes the mock snapshot wholesale, so anything that runs after that
 substitution has to be suppressed explicitly rather than assumed hidden. Server
