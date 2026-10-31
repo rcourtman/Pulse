@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "ec889172d463e6678a0d6c33bb686f62e71c9482",
+  "verified_at": "2026-10-31T01:06:09.195254Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "3955d3e000c27f0e1a0cb52555c5604e8769ffebd23e77f7f2f279808f871c9e"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Production/embed app built from the verified parent consumes safe raw PVE/PBS inventory: two namesake guests and six points with tied dates within each of the three source kinds. Not native backup execution or original installed recovery.",
+    "Chromium 141.0.7390.37 and WebKit 26.0, Playwright 1.56.1. Desktop Details and folded phone evidence keep complete point identifiers and metadata, including full long archive volumes and literal markup-like text.",
+    "Unknown workload posture, five completed points and one failed entry remain independent of identity/size inspection. Snapshot and provider verification states do not turn into guest recovery claims.",
+    "All ten desktop/320px captures were opened with the native image tool and inspected. Full target fields wrap within the viewport above navigation; no horizontal overflow or injected image is observed."
+  ],
+  "interactions": [
+    "Keyboard disclosure at desktop and native touch disclosure at 320px open the real Coverage row. Each same-age point has a distinct complete identifier without hover.",
+    "One ordinary poll per source per viewport updates archive/snapshot metadata and PBS file counts and changes known PBS size to Unknown size. Same panel, evidence rows and disclosure focus survive; only two normal inventory requests occur.",
+    "Normal close restores disclosure focus. Opening the west namesake does not borrow the east point evidence. Both browser journeys pass with no unexpected request, mutation or page error."
+  ]
+}
