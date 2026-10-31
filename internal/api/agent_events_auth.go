@@ -15,6 +15,30 @@ func (r *Router) handleAgentEvents(w http.ResponseWriter, req *http.Request) {
 // Session/proxy authentication is unchanged. The callback runs on the stream
 // goroutine; it never writes an HTTP auth error after streaming has begun.
 func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bool {
+	revalidate := monitoringTokenSnapshotRevalidator(cfg, req)
+	if revalidate == nil {
+		return nil
+	}
+	admittedContext := req.Context()
+	return func() bool {
+		current, ok := revalidate()
+		if !ok {
+			return false
+		}
+		// Replace over the admitted context, never the previous refresh. Only
+		// the SSE goroutine owns this request and its disclosure snapshot.
+		refreshed := req.WithContext(admittedContext)
+		attachAPITokenRecord(refreshed, current)
+		*req = *refreshed
+		return true
+	}
+}
+
+// monitoringTokenSnapshotRevalidator is shared by long-lived monitoring reads.
+// It returns detached current authority without mutating the admitted request;
+// WebSocket writes outlive the HTTP handler and must not race its middleware.
+// A nil callback preserves existing session/proxy authentication behaviour.
+func monitoringTokenSnapshotRevalidator(cfg *config.Config, req *http.Request) func() (*config.APITokenRecord, bool) {
 	admitted := getAPITokenRecordFromRequest(req)
 	if admitted == nil {
 		return nil
@@ -24,11 +48,10 @@ func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bo
 	source, tenantInventory := req.Context().Value(tenantTokenSourceContextKey).(tenantTokenSource)
 	tenantInventory = tenantInventory && source.orgID != "" && source.orgID != "default"
 	checker := NewAuthorizationChecker(nil)
-	admittedContext := req.Context()
 
-	return func() bool {
+	return func() (*config.APITokenRecord, bool) {
 		if !provided || raw == "" {
-			return false
+			return nil, false
 		}
 		config.Mu.RLock()
 		defer config.Mu.RUnlock()
@@ -37,7 +60,7 @@ func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bo
 		if tenantInventory {
 			live = tenantTokenConfigForRequest(req)
 			if live == nil {
-				return false
+				return nil, false
 			}
 		}
 		// Reuse authentication's exclusive metadata ownership and detached
@@ -45,20 +68,12 @@ func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bo
 		// when its current owner disappears or revokes the credential.
 		current, ok := validateAPITokenLocked(live, raw)
 		if !ok || (tenantInventory && tenantTokenConfigForRequest(req) != live) {
-			return false
+			return nil, false
 		}
 		if current.ID != admitted.ID || apiTokenAuthenticatedUser(current) != apiTokenAuthenticatedUser(admitted) ||
 			!current.HasScope(config.ScopeMonitoringRead) || !checker.CheckAccess(current, "", orgID).Allowed {
-			return false
+			return nil, false
 		}
-		// In particular, withdrawing ai:execute must redact the very next
-		// action/approval frame, even though monitoring:read still permits it.
-		// Replace from the admitted context, not the previous refresh: wrapping
-		// req.Context() here would retain every earlier token snapshot for the
-		// lifetime of the stream. Keep its cancellation and other values intact.
-		refreshed := req.WithContext(admittedContext)
-		attachAPITokenRecord(refreshed, current)
-		*req = *refreshed
-		return true
+		return current, true
 	}
 }

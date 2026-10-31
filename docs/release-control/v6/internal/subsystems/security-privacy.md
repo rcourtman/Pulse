@@ -18,6 +18,34 @@
 
 ## Purpose
 
+### Dashboard sockets do not retain withdrawn token authority
+
+The existing `/ws` route keeps its initial authentication, monitoring-read,
+organization, origin and licensing gates. For API tokens, its single writer
+revalidates the admitted identity/principal against the current owning token
+inventory before every outgoing data frame, including each queued flush, and
+before the existing 30-second idle ping. Revocation, expiry, read-scope removal,
+changed identity/principal or lost organization authority ends the connection
+with code 1008 and fixed reason `Monitoring access ended`; it sends no queued
+product data or HTTP error after that refusal. An already admitted frame can
+still be in flight during a concurrent withdrawal. New requests authenticate
+normally; a legitimate replacement identity may reconnect.
+
+The shared validator returns detached authority without changing the original
+HTTP request after its handler returns. Tenant removal cannot fall back to a
+stale or global inventory. Session/proxy behaviour, wanted monitoring reads
+after execute-scope removal, other subscribers and canonical data are unchanged.
+The existing frontend policy-close path returns to sign-in rather than silently
+retrying withdrawn credentials. No route, token grant or event/history source
+is added, and source/browser proof is not installed recovery or publication.
+
+`websocket_auth_test.go` exercises all three existing token transports, current
+tenant ownership and immutable requests. The contract's real persisted HTTP
+DELETE ends an already-open registered socket. `hub_test.go` exercises queued
+flush refusal and the actual idle ping, without a shortened production timer.
+The agent SSE lifecycle suite retains its bounded disclosure refresh contract.
+
+
 ### Token withdrawal applies to existing agent streams
 
 A successful stream connection does not retain permanent API-token authority.
