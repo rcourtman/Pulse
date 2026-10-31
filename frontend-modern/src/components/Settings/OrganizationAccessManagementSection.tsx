@@ -23,6 +23,7 @@ export const OrganizationAccessManagementSection: Component<
             <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
               <input
                 type="text"
+                aria-label="Invite user ID"
                 value={props.state.inviteUserID()}
                 onInput={(event) => props.state.setInviteUserID(event.currentTarget.value)}
                 placeholder="username"
@@ -62,7 +63,7 @@ export const OrganizationAccessManagementSection: Component<
 
         <Show when={!props.state.canManageCurrentOrg()}>
           <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
-            {getOrganizationAccessManageRequiredMessage()}
+            {getOrganizationAccessManageRequiredMessage(props.state.readOnly())}
           </div>
         </Show>
       </>

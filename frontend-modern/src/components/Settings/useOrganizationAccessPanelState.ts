@@ -1,7 +1,9 @@
-import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import {
   OrgsAPI,
   type Organization,
+  type OrganizationAccessRequestOptions,
   type OrganizationInvitation,
   type OrganizationMember,
   type OrganizationRole,
@@ -10,7 +12,10 @@ import {
 import { eventBus } from '@/stores/events';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
-import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesOrganizationSurfaces,
+  presentationPolicyIsReadOnly,
+} from '@/stores/sessionPresentationPolicy';
 import { getOrgID } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { normalizeOrgScope } from '@/utils/orgScope';
@@ -33,6 +38,7 @@ import {
   getOrganizationOwnerRoleLockedMessage,
   getOrganizationRemoveMemberErrorMessage,
   getOrganizationSettingsLoadErrorMessage,
+  ORGANIZATION_ACCESS_UNCONFIRMED_CHANGE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
 import { canManageOrg, normalizeRole } from '@/utils/orgUtils';
 
@@ -42,6 +48,7 @@ interface OrganizationAccessPanelProps {
 
 export function useOrganizationAccessPanelState(props: OrganizationAccessPanelProps) {
   const [loading, setLoading] = createSignal(true);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [org, setOrg] = createSignal<Organization | null>(null);
   const [members, setMembers] = createSignal<OrganizationMember[]>([]);
@@ -51,218 +58,310 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
   const [inviteRole, setInviteRole] = createSignal<OrganizationRole>('viewer');
 
   const activeOrgId = () => normalizeOrgScope(getOrgID());
-  const canManageCurrentOrg = createMemo(() => canManageOrg(org(), props.currentUser));
+  const [selectedOrgID, setSelectedOrgID] = createSignal(activeOrgId());
+  const [selectedUser, setSelectedUser] = createSignal(props.currentUser);
+  let generation = 0;
+  let disposed = false;
+  let readController: AbortController | undefined;
+  let mutationController: AbortController | undefined;
+  const surfaceEnabled = () =>
+    isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
+  const selectionIsCurrent = () =>
+    !disposed &&
+    surfaceEnabled() &&
+    selectedOrgID() === activeOrgId() &&
+    selectedUser() === props.currentUser;
+  const hasCurrentAccess = () =>
+    selectionIsCurrent() && !loading() && !loadError() && org()?.id === activeOrgId();
+  const canManageCurrentOrg = createMemo(
+    () =>
+      hasCurrentAccess() &&
+      !presentationPolicyIsReadOnly() &&
+      canManageOrg(org(), props.currentUser),
+  );
+  const canChangeAccess = () =>
+    hasCurrentAccess() && !!props.currentUser && !presentationPolicyIsReadOnly() && !saving();
+
+  // PulseDataGrid wraps the accepted row in a Solid store proxy. Compare its
+  // underlying object, not the proxy, without admitting an older read's row.
+  const isCurrentMember = (member: OrganizationMember) => members().includes(unwrap(member));
+
+  const clearAccess = () => {
+    setOrg(null);
+    setMembers([]);
+    setPendingInvitations([]);
+    setMyInvitations([]);
+  };
+
+  const invalidateRequests = () => {
+    generation += 1;
+    readController?.abort();
+    readController = undefined;
+    mutationController?.abort();
+    mutationController = undefined;
+    setSaving(false);
+  };
 
   const loadOrganizationAccess = async () => {
-    setLoading(true);
+    if (disposed) return;
+    invalidateRequests();
+    const orgId = activeOrgId();
+    const user = props.currentUser;
+    const request = generation;
+    const isCurrent = () => request === generation && selectionIsCurrent();
+    batch(() => {
+      if (selectedOrgID() !== orgId || selectedUser() !== user) {
+        setInviteUserID('');
+        setInviteRole('viewer');
+      }
+      setSelectedOrgID(orgId);
+      setSelectedUser(user);
+      clearAccess();
+      setLoadError(null);
+      setLoading(surfaceEnabled());
+    });
+    if (!surfaceEnabled()) return;
+
+    const controller = new AbortController();
+    readController = controller;
+    const options: OrganizationAccessRequestOptions = {
+      expectedOrgID: orgId,
+      signal: controller.signal,
+      retry: false,
+    };
     try {
-      const orgId = activeOrgId();
-      const orgData = await OrgsAPI.get(orgId);
-      const manageable = canManageOrg(orgData, props.currentUser);
+      const orgData = await OrgsAPI.get(orgId, options);
+      if (!isCurrent()) return;
+      if (!orgData || orgData.id !== orgId) {
+        throw new Error('Organization access returned a different selection');
+      }
+      const manageable = canManageOrg(orgData, user);
       const [memberData, invitationData, myInvitationData] = await Promise.all([
-        OrgsAPI.listMembers(orgId),
-        manageable ? OrgsAPI.listPendingInvitations(orgId) : Promise.resolve([]),
-        OrgsAPI.listMyInvitations(),
+        OrgsAPI.listMembers(orgId, options),
+        manageable ? OrgsAPI.listPendingInvitations(orgId, options) : Promise.resolve([]),
+        OrgsAPI.listMyInvitations(options),
       ]);
-      setOrg(orgData);
-      setMembers(memberData);
-      setPendingInvitations(invitationData);
-      setMyInvitations(myInvitationData);
+      if (!isCurrent()) return;
+      if (
+        !Array.isArray(memberData) ||
+        !Array.isArray(invitationData) ||
+        !Array.isArray(myInvitationData)
+      ) {
+        throw new Error('Organization access returned invalid lists');
+      }
+      batch(() => {
+        setOrg(orgData);
+        setMembers(memberData);
+        setPendingInvitations(invitationData);
+        setMyInvitations(myInvitationData);
+      });
     } catch (error) {
+      if (!isCurrent()) return;
       logger.error('Failed to load organization access data', error);
       const message = error instanceof Error ? error.message : '';
-      notificationStore.error(getOrganizationSettingsLoadErrorMessage(message, 'access'));
+      setLoadError(getOrganizationSettingsLoadErrorMessage(message, 'access'));
     } finally {
-      setLoading(false);
+      if (!disposed && request === generation) {
+        // Also cancel sibling reads when only one Promise.all member failed.
+        controller.abort();
+        readController = undefined;
+        setLoading(false);
+        if (!selectionIsCurrent()) void loadOrganizationAccess();
+      }
+    }
+  };
+
+  const changeAccess = async <T>(
+    change: (options: OrganizationAccessRequestOptions) => Promise<T>,
+    successMessage: (result: T) => string,
+    errorMessage: (message?: string) => string,
+    afterSuccess?: () => void,
+  ) => {
+    if (!canChangeAccess()) return;
+    const request = generation;
+    const controller = new AbortController();
+    mutationController = controller;
+    setSaving(true);
+    const isCurrent = () => request === generation && selectionIsCurrent();
+    try {
+      const result = await change({
+        expectedOrgID: selectedOrgID(),
+        signal: controller.signal,
+        retry: false,
+      });
+      if (!isCurrent()) return;
+      notificationStore.success(successMessage(result));
+      afterSuccess?.();
+      mutationController = undefined;
+      setSaving(false);
+      // Refresh the accepted snapshot for every mutation, and notify the other
+      // organization surfaces. Our existing subscription owns the single read.
+      eventBus.emit('organizations_changed');
+    } catch (error) {
+      if (!isCurrent()) return;
+      logger.error('Failed to change organization access', error);
+      notificationStore.error(errorMessage(error instanceof Error ? error.message : undefined));
+      // A failed response does not establish whether the server applied the
+      // change. Require a read, never automatically repeat a write.
+      batch(() => {
+        clearAccess();
+        setLoadError(ORGANIZATION_ACCESS_UNCONFIRMED_CHANGE_MESSAGE);
+      });
+    } finally {
+      if (mutationController === controller) {
+        mutationController = undefined;
+        setSaving(false);
+        if (!disposed && !selectionIsCurrent()) void loadOrganizationAccess();
+      }
     }
   };
 
   const updateRole = async (member: OrganizationMember, role: OrganizationRole) => {
-    const currentOrg = org();
-    if (!currentOrg) return;
-    const currentRole = normalizeRole(member.role);
-    if (currentRole === role) return;
-
-    if (member.userId === currentOrg.ownerUserId && role !== 'owner') {
+    if (!canChangeAccess() || !canManageCurrentOrg() || !isCurrentMember(member)) return;
+    const currentOrg = org()!;
+    if (normalizeRole(member.role) === role) return;
+    if (
+      (member.userId === currentOrg.ownerUserId && role !== 'owner') ||
+      (role === 'owner' && props.currentUser !== currentOrg.ownerUserId)
+    ) {
       notificationStore.error(getOrganizationOwnerRoleLockedMessage());
       return;
     }
-
-    setSaving(true);
-    try {
-      await OrgsAPI.updateMemberRole(currentOrg.id, { userId: member.userId, role });
-      notificationStore.success(getOrganizationAccessRoleUpdatedMessage(member.userId, role));
-      await loadOrganizationAccess();
-    } catch (error) {
-      logger.error('Failed to update member role', error);
-      notificationStore.error(
-        getOrganizationMemberRoleUpdateErrorMessage(
-          error instanceof Error ? error.message : undefined,
-        ),
-      );
-    } finally {
-      setSaving(false);
-    }
+    await changeAccess(
+      (options) =>
+        OrgsAPI.updateMemberRole(currentOrg.id, { userId: member.userId, role }, options),
+      () => getOrganizationAccessRoleUpdatedMessage(member.userId, role),
+      getOrganizationMemberRoleUpdateErrorMessage,
+    );
   };
 
   const inviteMember = async () => {
-    const currentOrg = org();
-    if (!currentOrg) return;
-
-    const userId = inviteUserID().trim();
+    if (!canChangeAccess() || !canManageCurrentOrg()) return;
+    const currentOrg = org()!;
+    const draft = inviteUserID();
+    const userId = draft.trim();
+    const role = inviteRole();
     if (!userId) {
       notificationStore.error(getOrganizationMemberUserIdRequiredMessage());
       return;
     }
-
-    setSaving(true);
-    try {
-      const role = inviteRole();
-      if (role === 'owner' && !members().some((member) => member.userId === userId)) {
+    if (role === 'owner') {
+      if (props.currentUser !== currentOrg.ownerUserId) return;
+      if (!members().some((member) => member.userId === userId)) {
         notificationStore.error(getOrganizationAccessOwnerTransferMemberRequiredMessage());
         return;
       }
-
-      const result = await OrgsAPI.inviteMember(currentOrg.id, { userId, role });
-      if (result.kind === 'invitation') {
-        notificationStore.success(
-          getOrganizationAccessInvitationSentMessage(userId, result.invitation.role),
-        );
-      } else {
-        notificationStore.success(getOrganizationAccessMemberAddedMessage(userId, role));
-      }
-      setInviteUserID('');
-      setInviteRole('viewer');
-      await loadOrganizationAccess();
-    } catch (error) {
-      logger.error('Failed to add organization member', error);
-      notificationStore.error(
-        getOrganizationAddMemberErrorMessage(error instanceof Error ? error.message : undefined),
-      );
-    } finally {
-      setSaving(false);
     }
+    await changeAccess(
+      (options) => OrgsAPI.inviteMember(currentOrg.id, { userId, role }, options),
+      (result) =>
+        result.kind === 'invitation'
+          ? getOrganizationAccessInvitationSentMessage(userId, result.invitation.role)
+          : getOrganizationAccessMemberAddedMessage(userId, role),
+      getOrganizationAddMemberErrorMessage,
+      () => {
+        if (inviteUserID() === draft && inviteRole() === role) {
+          setInviteUserID('');
+          setInviteRole('viewer');
+        }
+      },
+    );
   };
 
   const acceptInvitation = async (orgId: string) => {
-    setSaving(true);
-    try {
-      await OrgsAPI.acceptMyInvitation(orgId);
-      notificationStore.success(
-        getOrganizationAccessInvitationAcceptedMessage(props.currentUser || 'user'),
-      );
-      eventBus.emit('organizations_changed');
-      await loadOrganizationAccess();
-    } catch (error) {
-      logger.error('Failed to accept organization invitation', error);
-      notificationStore.error(
-        getOrganizationInvitationActionErrorMessage(
-          error instanceof Error ? error.message : undefined,
-        ),
-      );
-    } finally {
-      setSaving(false);
-    }
+    if (!canChangeAccess() || !myInvitations().some((invitation) => invitation.orgId === orgId))
+      return;
+    await changeAccess(
+      (options) => OrgsAPI.acceptMyInvitation(orgId, options),
+      () => getOrganizationAccessInvitationAcceptedMessage(props.currentUser!),
+      getOrganizationInvitationActionErrorMessage,
+    );
   };
 
   const declineInvitation = async (orgId: string) => {
-    setSaving(true);
-    try {
-      await OrgsAPI.declineMyInvitation(orgId);
-      notificationStore.success(getOrganizationAccessInvitationDeclinedMessage(orgId));
-      eventBus.emit('organizations_changed');
-      await loadOrganizationAccess();
-    } catch (error) {
-      logger.error('Failed to decline organization invitation', error);
-      notificationStore.error(
-        getOrganizationInvitationActionErrorMessage(
-          error instanceof Error ? error.message : undefined,
-        ),
-      );
-    } finally {
-      setSaving(false);
-    }
+    if (!canChangeAccess() || !myInvitations().some((invitation) => invitation.orgId === orgId))
+      return;
+    await changeAccess(
+      (options) => OrgsAPI.declineMyInvitation(orgId, options),
+      () => getOrganizationAccessInvitationDeclinedMessage(orgId),
+      getOrganizationInvitationActionErrorMessage,
+    );
   };
 
   const revokeInvitation = async (userId: string) => {
-    const currentOrg = org();
-    if (!currentOrg) return;
-
-    setSaving(true);
-    try {
-      await OrgsAPI.revokeInvitation(currentOrg.id, userId);
-      notificationStore.success(getOrganizationAccessInvitationRevokedMessage(userId));
-      eventBus.emit('organizations_changed');
-      await loadOrganizationAccess();
-    } catch (error) {
-      logger.error('Failed to revoke organization invitation', error);
-      notificationStore.error(
-        getOrganizationInvitationActionErrorMessage(
-          error instanceof Error ? error.message : undefined,
-        ),
-      );
-    } finally {
-      setSaving(false);
-    }
+    if (
+      !canChangeAccess() ||
+      !canManageCurrentOrg() ||
+      !pendingInvitations().some((invitation) => invitation.userId === userId)
+    )
+      return;
+    const orgId = org()!.id;
+    await changeAccess(
+      (options) => OrgsAPI.revokeInvitation(orgId, userId, options),
+      () => getOrganizationAccessInvitationRevokedMessage(userId),
+      getOrganizationInvitationActionErrorMessage,
+    );
   };
 
   const removeMember = async (member: OrganizationMember) => {
-    const currentOrg = org();
-    if (!currentOrg) return;
-    const organizationName = currentOrg.displayName || currentOrg.id;
-    if (!confirm(getOrganizationMemberRemoveConfirmMessage(member.userId, organizationName))) {
+    if (!canChangeAccess() || !canManageCurrentOrg() || !isCurrentMember(member)) return;
+    const currentOrg = org()!;
+    if (member.userId === currentOrg.ownerUserId) return;
+    if (
+      !confirm(
+        getOrganizationMemberRemoveConfirmMessage(
+          member.userId,
+          currentOrg.displayName || currentOrg.id,
+        ),
+      )
+    )
       return;
-    }
-
-    setSaving(true);
-    try {
-      await OrgsAPI.removeMember(currentOrg.id, member.userId);
-      notificationStore.success(getOrganizationAccessMemberRemovedMessage(member.userId));
-      await loadOrganizationAccess();
-    } catch (error) {
-      logger.error('Failed to remove organization member', error);
-      notificationStore.error(
-        getOrganizationRemoveMemberErrorMessage(error instanceof Error ? error.message : undefined),
-      );
-    } finally {
-      setSaving(false);
-    }
+    // A confirmation can outlive the snapshot that supplied its member.
+    if (org() !== currentOrg || !isCurrentMember(member) || !canManageCurrentOrg()) return;
+    await changeAccess(
+      (options) => OrgsAPI.removeMember(currentOrg.id, member.userId, options),
+      () => getOrganizationAccessMemberRemovedMessage(member.userId),
+      getOrganizationRemoveMemberErrorMessage,
+    );
   };
 
-  onMount(() => {
-    if (!isMultiTenantEnabled() || presentationPolicyHidesOrganizationSurfaces()) {
-      setLoading(false);
-      return;
-    }
-    void loadOrganizationAccess();
-
-    const unsubscribe = eventBus.on('org_switched', () => {
+  const unsubscribeOrg = eventBus.on('org_switched', () => void loadOrganizationAccess());
+  const unsubscribeChanged = eventBus.on(
+    'organizations_changed',
+    () => void loadOrganizationAccess(),
+  );
+  createEffect(
+    on([surfaceEnabled, () => props.currentUser, presentationPolicyIsReadOnly], () => {
       void loadOrganizationAccess();
-    });
-    const unsubscribeOrganizationsChanged = eventBus.on('organizations_changed', () => {
-      void loadOrganizationAccess();
-    });
-    onCleanup(() => {
-      unsubscribe();
-      unsubscribeOrganizationsChanged();
-    });
+    }),
+  );
+  onCleanup(() => {
+    disposed = true;
+    invalidateRequests();
+    unsubscribeOrg();
+    unsubscribeChanged();
   });
 
   return {
     acceptInvitation,
     canManageCurrentOrg,
+    canChangeAccess,
     declineInvitation,
     inviteMember,
     inviteRole,
     inviteUserID,
     loading,
+    loadError,
+    loadOrganizationAccess,
     members,
     myInvitations,
     org,
     pendingInvitations,
+    readOnly: presentationPolicyIsReadOnly,
     removeMember,
     revokeInvitation,
     saving,
+    selectedOrgID,
     setInviteRole,
     setInviteUserID,
     updateRole,

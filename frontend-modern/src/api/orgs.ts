@@ -61,6 +61,15 @@ export interface IncomingOrganizationShare extends OrganizationShare {
   sourceOrgName: string;
 }
 
+// Organization Access can bind an explicit read or change to the selection
+// that produced it, including the pre-dispatch CSRF wait. Other callers keep
+// their existing transport behaviour unless they opt in.
+export interface OrganizationAccessRequestOptions {
+  expectedOrgID: string;
+  signal: AbortSignal;
+  retry: false;
+}
+
 export const OrgsAPI = {
   list: () =>
     apiFetchJSON<Organization[]>('/api/orgs', {
@@ -76,10 +85,11 @@ export const OrgsAPI = {
       skipOrgContext: true,
     }),
 
-  get: (id: string) =>
+  get: (id: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<Organization>(`/api/orgs/${encodeURIComponent(id)}`, {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
   update: (id: string, payload: { displayName: string }) =>
@@ -97,74 +107,91 @@ export const OrgsAPI = {
       skipOrgContext: true,
     }),
 
-  listMembers: (id: string) =>
+  listMembers: (id: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<OrganizationMember[]>(`/api/orgs/${encodeURIComponent(id)}/members`, {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  listPendingInvitations: (id: string) =>
+  listPendingInvitations: (id: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<OrganizationInvitation[]>(`/api/orgs/${encodeURIComponent(id)}/invitations`, {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  listMyInvitations: () =>
+  listMyInvitations: (options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<UserOrganizationInvitation[]>('/api/org-invitations', {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  inviteMember: (id: string, payload: { userId: string; role: OrganizationRole }) =>
+  inviteMember: (
+    id: string,
+    payload: { userId: string; role: OrganizationRole },
+    options?: OrganizationAccessRequestOptions,
+  ) =>
     apiFetchJSON<OrganizationAccessMutationResult>(`/api/orgs/${encodeURIComponent(id)}/members`, {
       method: 'POST',
       body: JSON.stringify(payload),
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  acceptMyInvitation: (id: string) =>
+  acceptMyInvitation: (id: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<OrganizationAccessMutationResult>(
       `/api/org-invitations/${encodeURIComponent(id)}/accept`,
       {
         method: 'POST',
         preferSessionAuth: true,
         skipOrgContext: true,
+        ...options,
       },
     ),
 
-  declineMyInvitation: (id: string) =>
+  declineMyInvitation: (id: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<void>(`/api/org-invitations/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  updateMemberRole: (id: string, payload: { userId: string; role: OrganizationRole }) =>
+  updateMemberRole: (
+    id: string,
+    payload: { userId: string; role: OrganizationRole },
+    options?: OrganizationAccessRequestOptions,
+  ) =>
     apiFetchJSON<OrganizationAccessMutationResult>(`/api/orgs/${encodeURIComponent(id)}/members`, {
       method: 'POST',
       body: JSON.stringify(payload),
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  revokeInvitation: (id: string, userId: string) =>
+  revokeInvitation: (id: string, userId: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<void>(
       `/api/orgs/${encodeURIComponent(id)}/invitations/${encodeURIComponent(userId)}`,
       {
         method: 'DELETE',
         preferSessionAuth: true,
         skipOrgContext: true,
+        ...options,
       },
     ),
 
-  removeMember: (id: string, userId: string) =>
+  removeMember: (id: string, userId: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<void>(
       `/api/orgs/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
       {
         method: 'DELETE',
         preferSessionAuth: true,
         skipOrgContext: true,
+        ...options,
       },
     ),
 
