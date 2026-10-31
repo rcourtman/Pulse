@@ -18,6 +18,24 @@
 
 ## Purpose
 
+### Execution history metadata is typed, not trusted by its key name
+
+A monitoring-read recent-change response projects command and runbook history
+from kind-specific scalar facts only. Command caller details cannot borrow
+runbook metadata keys; nested metadata and arbitrary outcome strings are not
+safe because their keys look familiar. Runbook titles and stored reason/From/To
+text can contain execution details and stay behind the existing `ai:execute`
+boundary. Reasons are fixed status summaries derived only from admitted boolean
+success or the four incident outcomes; missing/malformed values do not invent a
+verdict. Every execution projection is explicitly marked redacted.
+
+This projection never changes canonical records or executor/session output.
+Normal-suite typed-fact, contract, authenticated concurrent HTTP and real MCP
+consumer tests cover the boundary and evidence preservation. No token scope,
+route, event kind, history source, stored retention or execution authority is
+added. This is not installed/private-authorizer recovery or release evidence.
+
+
 ### Agent action details follow command-disclosure authority
 
 The existing agent event and resource-context reads require `monitoring:read`,

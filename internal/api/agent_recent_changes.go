@@ -37,19 +37,6 @@ type AgentRecentChanges struct {
 	GeneratedAt time.Time           `json:"generatedAt"`
 }
 
-// agentRecentChangeSafeMetadata is the metadata a monitoring-read token keeps
-// on command and runbook changes. Everything else on those records (command
-// text, output excerpts, runbook messages and caller-supplied details) can
-// carry command payloads and is dropped unless the token has ai:execute.
-var agentRecentChangeSafeMetadata = map[string]bool{
-	unified.MetadataAlertIdentifier: true,
-	unified.MetadataSuccess:         true,
-	unified.MetadataOutcome:         true,
-	unified.MetadataAutomatic:       true,
-	unified.MetadataRunbookID:       true,
-	"title":                         true,
-}
-
 // HandleRecentChanges serves `GET /api/agent/changes`: what Pulse observed
 // changing across the fleet, newest first, read from the existing resource
 // change store. It records nothing, so it adds no disk writes.
@@ -172,29 +159,52 @@ func parseAgentRecentChangesQuery(r *http.Request, now time.Time) (agentRecentCh
 	return query, ""
 }
 
+// redactAgentRecentChangeCommand projects execution history, not arbitrary
+// stored metadata. A familiar key does not make its value safe: command details
+// can supply runbook keys, nested objects, or free text under any key.
 func redactAgentRecentChangeCommand(entry AgentRecentChange) AgentRecentChange {
 	switch entry.Kind {
 	case unified.ChangeCommandExecuted, unified.ChangeRunbookExecuted:
 	default:
 		return entry
 	}
-	safe := make(map[string]any, len(entry.Metadata))
-	redacted := false
-	for key, value := range entry.Metadata {
-		if agentRecentChangeSafeMetadata[key] {
-			safe[key] = value
-			continue
-		}
-		redacted = true
+
+	safe := make(map[string]any)
+	if id, ok := entry.Metadata[unified.MetadataAlertIdentifier].(string); ok {
+		safe[unified.MetadataAlertIdentifier] = id
 	}
-	entry.Metadata = safe
 	if entry.Kind == unified.ChangeCommandExecuted {
-		// The stored reason embeds the command ("Command succeeded: <cmd>").
-		if prefix, _, found := strings.Cut(entry.Reason, ":"); found {
-			entry.Reason = prefix
+		entry.Reason = "Command executed"
+		if success, ok := entry.Metadata[unified.MetadataSuccess].(bool); ok {
+			safe[unified.MetadataSuccess] = success
+			entry.Reason = "Command failed"
+			if success {
+				entry.Reason = "Command succeeded"
+			}
 		}
-		redacted = true
+	} else {
+		entry.Reason = "Runbook executed"
+		if id, ok := entry.Metadata[unified.MetadataRunbookID].(string); ok {
+			safe[unified.MetadataRunbookID] = id
+		}
+		if automatic, ok := entry.Metadata[unified.MetadataAutomatic].(bool); ok {
+			safe[unified.MetadataAutomatic] = automatic
+		}
+		// These are the incident memory's closed outcome values. Unknown or
+		// malformed stored values stay undisclosed, never a guessed success.
+		if outcome, ok := entry.Metadata[unified.MetadataOutcome].(string); ok {
+			switch outcome {
+			case "resolved", "partial", "failed", "unknown":
+				safe[unified.MetadataOutcome] = outcome
+				entry.Reason += " (" + outcome + ")"
+			}
+		}
 	}
-	entry.CommandRedacted = redacted
+	// The canonical builders do not use From/To for execution records. Do
+	// not expose free-text legacy values or derive a reason from stored text.
+	entry.From = ""
+	entry.To = ""
+	entry.Metadata = safe
+	entry.CommandRedacted = true
 	return entry
 }

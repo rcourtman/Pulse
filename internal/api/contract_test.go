@@ -28805,3 +28805,15 @@ func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 		t.Fatal("timed out waiting for the stream")
 	}
 }
+
+// Runbook titles and reasons are execution-authored text, not safe monitoring
+// metadata. The history envelope and typed outcome remain useful without them.
+func TestContract_AgentRecentChangesRunbookProjection(t *testing.T) {
+	change := unifiedresources.BuildRunbookExecutionChange("vm:101", "alert-1", "operator", "rb-1", "fixture-private-title", "partial", false, "fixture-private-output", nil)
+	projected := redactAgentRecentChangeCommand(AgentRecentChange{ResourceChange: *change})
+	got, err := json.Marshal(map[string]any{"reason": projected.Reason, "metadata": projected.Metadata, "commandRedacted": projected.CommandRedacted})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertJSONSnapshot(t, got, `{"reason":"Runbook executed (partial)","metadata":{"alert_identifier":"alert-1","runbook_id":"rb-1","outcome":"partial","automatic":false},"commandRedacted":true}`)
+}

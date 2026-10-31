@@ -21,6 +21,15 @@
 
 ## Purpose
 
+### Recent-change execution facts are a restricted projection
+
+Monitoring-read history uses kind-specific scalar facts and fixed reasons;
+runbook titles and arbitrary stored execution text/metadata stay undisclosed.
+The existing response envelope, scopes, filters and canonical history remain
+unchanged. The detailed recent-change contract below and normal-suite typed,
+HTTP, MCP and JSON snapshot tests own this disclosure boundary.
+
+
 ### Agent action details follow command-disclosure authority
 
 The existing agent event and resource-context reads require `monitoring:read`,
@@ -6883,10 +6892,24 @@ instead. Each change carries the canonical record plus the
 resource's current `resourceName` and `resourceType` when the
 registry still knows it, so history for a removed resource stays
 readable. For tokens without `ai:execute`, `command_executed` and
-`runbook_executed` changes keep only allowlisted metadata (alert
-identifier, success, outcome, automatic, runbook id, title), the
-command is cut from the reason, and `commandRedacted` is set, matching
-the resource-context and event-stream redaction rule. The shared
+`runbook_executed` changes keep only typed, kind-specific facts: a string
+alert identifier; a boolean success for commands; a string runbook id,
+boolean automatic flag and closed incident outcome (`resolved`, `partial`,
+`failed`, `unknown`) for runbooks. Runbook titles, messages, arbitrary caller
+details, nested values, unrecognised outcomes and execution From/To text are
+not monitoring metadata. Reasons are generated from those admitted facts,
+never by trimming stored execution text. Missing or malformed facts do not
+become success or failure. `commandRedacted` is always set on these projections,
+matching the resource-context and event-stream redaction boundary. Executor
+and session reads, canonical stored evidence, non-execution changes, filters,
+counts and tenant/authentication rules are unchanged.
+`TestAgentRecentChangesExecutionProjectionUsesTypedFacts`,
+`TestAgentRecentChangesHTTPPreservesAuthorityAndCanonicalEvidence` and
+`TestContract_AgentRecentChangesRunbookProjection` pin this boundary through
+canonical producers, stored legacy shapes, concurrent authenticated HTTP reads
+and the normal Go test commands. MCP's real `list_recent_changes` consumer must
+receive the same redacted text and structured result, without another read or
+wider scope. The shared
 projection layer forwards integral JSON numbers as integer query
 parameters so manifest integer filters such as `limit` reach the
 route; fractional or out-of-range numbers are dropped like objects.

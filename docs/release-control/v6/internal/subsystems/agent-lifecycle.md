@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Execution history uses a typed read-only projection
+
+The recent-change read keeps kind-specific scalar status facts, not arbitrary
+caller metadata that happens to use a familiar key. Runbook titles, stored
+reason/From/To text and nested values can contain execution details and are
+redacted for monitoring-read callers. Fixed reasons derive only from admitted
+boolean command success or the closed incident outcomes; missing or malformed
+facts do not establish success or failure. Every execution-history projection
+is explicitly marked redacted. Executor/session reads and canonical evidence
+are unchanged; this adds no enrollment, token scope or action authority.
+
+Normal-suite typed-fact, authenticated concurrent HTTP, contract and real MCP
+consumer regressions cover content visibility and unchanged stored evidence.
+
+
 ### Scoped agent outcome reads do not disclose execution detail
 
 The agent event/resource-context projections preserve validated execution,
