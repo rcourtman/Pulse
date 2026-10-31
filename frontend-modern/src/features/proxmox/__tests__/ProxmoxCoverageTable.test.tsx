@@ -615,15 +615,15 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
     expect(location).not.toHaveClass('truncate');
     expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveClass(
-      'whitespace-normal',
+      'whitespace-pre-line',
       'wrap-anywhere',
     );
     // An age/source pair is not the point's identity. The open evidence keeps
     // the full identifier and metadata readable rather than only on hover.
-    expect(panel.querySelector('[data-coverage-evidence-detail] > :first-child')).toHaveTextContent(
+    expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
       'Identifier: pbs-1',
     );
-    expect(panel.querySelector('[data-coverage-evidence-detail] > :last-child')).toHaveTextContent(
+    expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
       'Metadata: vm/100/2026-07-18T23:00:00Z',
     );
     // The source label wraps in the drawer too; a long snapshot name is not cut.

@@ -121,19 +121,17 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       ];
       for (const [id, metadata] of expected) {
         const row = rows.find((candidate) =>
-          candidate
-            .querySelector('[data-coverage-evidence-detail] > :first-child')
-            ?.textContent?.includes(id),
+          candidate.querySelector('[data-coverage-evidence-detail]')?.textContent?.includes(id),
         )!;
         expect(row).toBeDefined();
-        expect(
-          row.querySelector('[data-coverage-evidence-detail] > :first-child'),
-        ).toHaveTextContent(`Identifier: ${id}`);
-        expect(
-          row.querySelector('[data-coverage-evidence-detail] > :last-child'),
-        ).toHaveTextContent(`Metadata: ${metadata}`);
+        expect(row.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
+          `Identifier: ${id}`,
+        );
+        expect(row.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
+          `Metadata: ${metadata}`,
+        );
         expect(row.querySelector('[data-coverage-evidence-detail]')).toHaveClass(
-          'whitespace-normal',
+          'whitespace-pre-line',
           'wrap-anywhere',
         );
         expect(row.querySelector('[data-coverage-evidence-detail]')).not.toHaveClass('truncate');

@@ -468,13 +468,12 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
 // a hidden Details column or hover-only volume cannot identify it on a phone.
 function coverageRestorePointDetails(artifact: RecoverableArtifact) {
   return (
-    <div
-      class="block whitespace-normal text-muted leading-snug wrap-anywhere"
+    <span
+      class="block whitespace-pre-line text-muted leading-snug wrap-anywhere"
       data-coverage-evidence-detail
     >
-      <span class="block">Identifier: {artifact.nativeId}</span>
-      <span class="mt-1 block">Metadata: {artifact.detailTitle || artifact.detail}</span>
-    </div>
+      {`Identifier: ${artifact.nativeId}\nMetadata: ${artifact.detailTitle || artifact.detail}`}
+    </span>
   );
 }
 
