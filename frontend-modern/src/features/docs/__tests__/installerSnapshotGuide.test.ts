@@ -32,15 +32,30 @@ describe('installer configuration snapshot guidance', () => {
       '/etc/pulse.backup.<timestamp>…/',
       '/opt/pulse/config-backups/pulse.backup.<timestamp>…/',
     ]);
-    const installer = read('install.sh');
-    expect(installer).toContain('backup_parent="$(dirname "$CONFIG_DIR")"');
-    expect(installer).toContain('backup_parent="$INSTALL_DIR/config-backups"');
-    expect(installer).toContain('local keep="${CONFIG_BACKUP_KEEP_COUNT:-5}"');
-    expect(installer).toContain('cp -a -- "$CONFIG_DIR/."');
     expect(copy).toContain('normally retains five completed copies');
     expect(copy).toContain('Custom service names');
     expect(copy).toContain('Update History does not list or restore these installer copies');
     expect(copy).toContain('An in-app backup_path is not the location of an installer copy');
+  });
+
+  it('binds the documented locations to the byte-preserving installer snapshot producer', () => {
+    const installer = read('install.sh');
+    const backup = installer.split('\nbackup_existing() {\n')[1]?.split('\n}\n')[0];
+    expect(backup).toBeDefined();
+    // Command substitution normally strips trailing newlines. Both the
+    // parent and basename must preserve them before selecting the namespace;
+    // the old bare dirname assignment would reintroduce the deletion fault.
+    for (const assignment of [
+      `backup_parent=$(dirname -- "$CONFIG_DIR" && printf '.')`,
+      "backup_parent=\"${backup_parent%$'\\n.'}\"",
+      `config_name=$(basename -- "$CONFIG_DIR" && printf '.')`,
+      "config_name=\"${config_name%$'\\n.'}\"",
+      'backup_parent="$INSTALL_DIR/config-backups"',
+      'cp -a -- "$CONFIG_DIR/."',
+    ]) {
+      expect(backup).toContain(assignment);
+    }
+    expect(installer).toContain('local keep="${CONFIG_BACKUP_KEEP_COUNT:-5}"');
   });
 
   it('does not turn a rotating file copy into complete, consistent or automatic recovery', () => {
