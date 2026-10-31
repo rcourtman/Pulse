@@ -203,7 +203,7 @@ describe('OrganizationAccessPanel', () => {
           ),
         );
       } else {
-        fireEvent.click(screen.getByRole('button', { name: 'Remove', exact: true }));
+        fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
         await waitFor(() =>
           expect(removeMemberMock).toHaveBeenCalledWith(
             'org-a',
@@ -230,7 +230,7 @@ describe('Organization Access selection safety', () => {
     eventBusEmitMock('org_switched');
     await waitFor(() => expect(loggerErrorMock).toHaveBeenCalled());
     expect(screen.queryByText('user-2')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Invite', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Invite' })).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('org-b');
     expect(screen.getByRole('button', { name: 'Reload access' })).toBeInTheDocument();
   });
@@ -626,8 +626,8 @@ describe('Organization Access change safety', () => {
     setReadOnly(true);
     renderPanel();
     await screen.findByText('Organization access is read-only for this session.');
-    expect(screen.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Decline', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled();
     expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).not.toBeInTheDocument();
     expect(
       screen.queryByText('Admin or owner role required to manage organization access.'),
