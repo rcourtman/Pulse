@@ -47,9 +47,9 @@ describe('installer configuration snapshot guidance', () => {
     // the old bare dirname assignment would reintroduce the deletion fault.
     for (const assignment of [
       `backup_parent=$(dirname -- "$CONFIG_DIR" && printf '.')`,
-      "backup_parent=\"${backup_parent%$'\\n.'}\"",
+      'backup_parent="${backup_parent%$\'\\n.\'}"',
       `config_name=$(basename -- "$CONFIG_DIR" && printf '.')`,
-      "config_name=\"${config_name%$'\\n.'}\"",
+      'config_name="${config_name%$\'\\n.\'}"',
       'backup_parent="$INSTALL_DIR/config-backups"',
       'cp -a -- "$CONFIG_DIR/."',
     ]) {
