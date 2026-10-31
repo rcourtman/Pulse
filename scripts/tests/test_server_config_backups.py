@@ -286,6 +286,80 @@ test -z "$LAST_CONFIG_BACKUP_DIR"
         self.assertEqual((self.config / "settings.json").read_text(), "current state\n")
         self.assert_no_stages()
 
+    def test_snapshot_namespace_preserves_trailing_newlines_in_name_and_parent(self):
+        for component in ("name", "parent", "both"):
+            for newlines in ("\n", "\n\n"):
+                for keep in (0, 1, 5):
+                    with self.subTest(component=component, newlines=len(newlines), keep=keep):
+                        namespace = self.root / f"case-{component}-{len(newlines)}-{keep}"
+                        parent = namespace / ("parent" + (newlines if component != "name" else ""))
+                        name = "config" + (newlines if component != "parent" else "")
+                        self.config = parent / name
+                        self.config.mkdir(parents=True)
+                        (self.config / "settings.json").write_text("selected live state\n")
+                        prior = [self.old_snapshot(f"202610{day:02d}-154500") for day in range(1, 7)]
+                        # This is the distinct namespace the old command
+                        # substitutions selected by stripping pathname bytes.
+                        peer = namespace / "parent" / "config"
+                        peer.mkdir(parents=True)
+                        (peer / "settings.json").write_text("peer live state\n")
+                        peers = []
+                        for day in range(1, 7):
+                            path = peer.parent / f"config.backup.202610{day:02d}-154500"
+                            path.mkdir()
+                            (path / "settings.json").write_text("peer recovery state\n")
+                            peers.append(path)
+                        self.shell(r'''
+backup_existing
+printf '%s' "$LAST_CONFIG_BACKUP_DIR" > "$FIXTURE/latest"
+''', CONFIG_BACKUP_KEEP_COUNT=str(keep))
+                        latest = Path((self.root / "latest").read_text())
+                        self.assertEqual(latest.parent, parent)
+                        self.assertTrue(latest.name.startswith(name + ".backup."))
+                        for path in peers:
+                            self.assertEqual((path / "settings.json").read_text(), "peer recovery state\n")
+                        self.assertEqual((peer / "settings.json").read_text(), "peer live state\n")
+                        self.assertEqual((self.config / "settings.json").read_text(), "selected live state\n")
+                        self.assertEqual(len(self.completed()), keep)
+                        self.assertEqual([p for p in prior if p.exists()], prior[7 - keep:])
+                        if keep:
+                            self.assertEqual((latest / "settings.json").read_text(), "selected live state\n")
+                        else:
+                            self.assertFalse(latest.exists())
+                        self.assert_no_stages()
+
+    def test_relative_option_shaped_name_and_trailing_slashes_keep_their_namespace(self):
+        self.config = self.root / "-n"
+        self.config.mkdir()
+        (self.config / "settings.json").write_text("selected live state\n")
+        self.shell(r'''
+CONFIG_DIR='-n///'
+backup_existing
+test -f "$LAST_CONFIG_BACKUP_DIR/settings.json"
+''')
+        self.assertEqual(len(self.completed()), 1)
+        self.assertEqual((self.completed()[0] / "settings.json").read_text(), "selected live state\n")
+        self.assert_no_stages()
+
+    def test_path_resolution_failure_stops_before_copy_or_rotation(self):
+        old = self.old_snapshot()
+        for utility in ("dirname", "basename"):
+            with self.subTest(utility=utility):
+                result = self.shell(r'''
+case "$UTILITY" in
+    dirname) dirname() { printf 'partial\n'; return 23; } ;;
+    basename) basename() { printf 'partial\n'; return 23; } ;;
+esac
+mktemp() { echo unexpected-allocation > "$FIXTURE/unexpected"; return 90; }
+if backup_existing; then exit 91; fi
+test -z "$LAST_CONFIG_BACKUP_DIR"
+''', UTILITY=utility)
+                self.assertIn("Could not resolve configuration backup", result.stderr)
+                self.assertFalse((self.root / "unexpected").exists())
+                self.assert_prior(old)
+                self.assertEqual(self.completed(), [old])
+                self.assert_no_stages()
+
     def test_rotation_skips_files_links_and_an_empty_inventory(self):
         prefix = self.config.name + ".backup."
         outside = self.root / "other instance"
