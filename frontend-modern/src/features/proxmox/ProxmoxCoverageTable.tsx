@@ -466,18 +466,14 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
 // Several points can share a reader, location and rounded age. Preserve the
 // point's own identifier and full metadata in the open evidence at every width;
 // a hidden Details column or hover-only volume cannot identify it on a phone.
-function CoverageRestorePointDetails(props: { artifact: RecoverableArtifact }) {
+function coverageRestorePointDetails(artifact: RecoverableArtifact) {
   return (
     <div
       class="block whitespace-normal text-muted leading-snug wrap-anywhere"
       data-coverage-evidence-detail
     >
-      <span class="block" data-coverage-evidence-identifier>
-        Identifier: {props.artifact.nativeId}
-      </span>
-      <span class="mt-1 block" data-coverage-evidence-metadata>
-        Metadata: {props.artifact.detailTitle || props.artifact.detail}
-      </span>
+      <span class="block">Identifier: {artifact.nativeId}</span>
+      <span class="mt-1 block">Metadata: {artifact.detailTitle || artifact.detail}</span>
     </div>
   );
 }
@@ -1065,7 +1061,7 @@ export function ProxmoxCoverageTable(props: {
                                                 )
                                               }
                                             >
-                                              <CoverageRestorePointDetails artifact={artifact} />
+                                              {coverageRestorePointDetails(artifact)}
                                             </Show>
                                           </TableCell>
                                           <Show
@@ -1128,7 +1124,7 @@ export function ProxmoxCoverageTable(props: {
                                             <TableCell
                                               class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                             >
-                                              <CoverageRestorePointDetails artifact={artifact} />
+                                              {coverageRestorePointDetails(artifact)}
                                             </TableCell>
                                           </Show>
                                         </TableRow>
