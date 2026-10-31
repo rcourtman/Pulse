@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "8ea8b57201b24fc5b55781bfe32f70cbe2612bf9",
+  "verified_at": "2026-10-31T20:48:51.097Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "2ea697afd92375b78422c6565dfb609e5ac9e8262df52e09cabbd89b32e89cde"
+  },
+  "routes": [
+    "Existing Organization Sharing settings; actual producer/state, panel, OrgsAPI/client, resource consumer and stylesheet with synthetic local HTTP and WebSocket store inputs."
+  ],
+  "states": [
+    "Removed destination remains blank and invalid across repeated accepted reads and organizations_changed events",
+    "Read pending and failed states have no write controls; recovery preserves the resource but not implicit destination consent",
+    "Old destination returning does not re-enable sharing",
+    "Only an explicit current destination enables one share; cross-org draft clearing and initial defaults remain intact"
+  ],
+  "interactions": [
+    "Repeated event/read reconciliation, including a held read and a failed-read keyboard/touch retry",
+    "Clear and then explicitly select Gamma, reconcile, activate Create Share using keyboard on desktop and touch at 320px",
+    "Observe zero writes before reselection, then exactly one scoped viewer share to org-c for vm-100, with no replay",
+    "Switch to Beta after the explicit destination disappears again; prior resource draft is cleared"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1050
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "browsers": [
+    {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "WebKit",
+      "version": "26.0"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "checks": 50,
+  "captures": 10,
+  "pixel_review": "All ten current repair captures opened with native view_image. Invalid blank destination, required message and disabled create are readable at both viewports. Explicit Gamma and enabled create are clear; pending and error states conceal write controls. Existing narrow grids scroll horizontally within the panel; no page overflow.",
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER-SUMMARY.json",
+    "PIXEL-REVIEW.json",
+    "CURRENT.tar.xz",
+    "CAPTURES.tar.xz"
+  ],
+  "limitations": "Safe fixtures, not customer recovery or a private installed service. Initial fixture had no seeded resources; the partial desktop run completed 18 successful checks and five captures then timed out assuming a Quick Pick after switching scope. The remaining-only continuation adds 32 checks/five narrow captures and desktop scope reset without replaying completed desktop proof; both cleanup results are retained."
+}

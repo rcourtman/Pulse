@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "e0a1fc5f16d01ae002269ca533914185d306b9ac",
+  "verified_at": "2026-10-31T19:37:09.409Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "06e4e885f74867396cce4fcf1fb96e16c25c78fad681961587610618d09fce59"
+  },
+  "routes": [
+    "Existing Organization Sharing settings, production state/panel/API client/unified resources/styles with synthetic local HTTP/WS producers"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1050
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Selected sharing unavailable and pending reload, not prior-org rows or false empty",
+    "Accepted current sharing and accepted empty lists",
+    "Unconfirmed write requires read reconciliation",
+    "Read-only and non-manager sessions without changes",
+    "Interrupted writes/obsolete reads cannot replace current context or draft",
+    "Unavailable quick pick is inert",
+    "A removed destination requires explicit reselection, never an invisible retained value or automatic replacement"
+  ],
+  "interactions": [
+    "Read-only keyboard/touch reload, same-selection draft preservation and cross-selection clearing",
+    "All four existing share actions via real grid rows, including accepted incoming removal",
+    "Refused writes are not retried; late reads/writes cannot cross organization or principal",
+    "Capability loss/return and explicit default scope",
+    "Resource disappearance disables creation; destination disappearance clears the target; only an explicit new target permits the next share"
+  ],
+  "browsers": [
+    {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "WebKit",
+      "version": "26.0"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "checks": 58,
+  "captures": 18,
+  "pixel_review": "All 18 final captures opened with native view_image, desktop and 320px. Inline notices/destination reselection are readable; existing grids scroll horizontally. Toast-overlap limitations retained in detailed pixels.",
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER-SUMMARY.json",
+    "PIXEL-REVIEW.json",
+    "CURRENT.tar.xz",
+    "final-captures/browser-result.json",
+    "final-remaining/browser-result.json"
+  ],
+  "limitations": "Safe fixtures, not published customer relief or original private/native recovery. The partial manual-helper timing failure remains retained; only missing proof continued afterwards."
+}

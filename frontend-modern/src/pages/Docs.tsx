@@ -84,6 +84,16 @@ export default function Docs() {
     const href = anchor?.getAttribute('href');
     if (!href) return;
     event.preventDefault();
+    // Re-activating the current fragment changes neither reactive dependency
+    // above. Restore its focus as well as its scroll position explicitly.
+    if (
+      article &&
+      location.hash &&
+      href === `${location.pathname}${location.search}${location.hash}`
+    ) {
+      scrollToDocFragment(article, location.hash);
+      return;
+    }
     navigate(href);
   };
 

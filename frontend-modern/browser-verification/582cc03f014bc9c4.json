@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "442ec68c841297a092e22c65af822cbf4be6e15f",
+  "verified_at": "2026-10-31T20:56:58.327Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/pages/Docs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/pages/Docs.tsx": "b20884635d67ccbcc5f3fc7358eba4db00cd085beab2faac6a1914960c70fd79"
+  },
+  "routes": [
+    "Existing Docs route with actual Router, Docs, Markdown renderer, styles and shipped TROUBLESHOOTING/INSTALL Markdown"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Current fragment reactivated after scrolling away: requested heading is visible and focused",
+    "Direct async fragment and changed-fragment navigation still focus the requested heading",
+    "Held cross-document read hides prior article, then focuses only the resolved destination",
+    "Unknown document HTML fallback retains the explicit not-shipped error"
+  ],
+  "interactions": [
+    "Twice reactivate an actual shipped self-fragment link using desktop keyboard or narrow touch; observe focus/scroll and no Markdown refetch",
+    "Navigate to another fragment, then a shipped cross-document link whose local read is deliberately held and resolved",
+    "Open a synthetic missing route to exercise the real HTML-fallback rejection without API or external access"
+  ],
+  "browsers": [
+    {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "WebKit",
+      "version": "26.0"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "checks": 33,
+  "captures": 8,
+  "pixel_review": "All eight captures opened with native view_image. Requested version/install headings and text are legible, with desktop focus outlines; 320px text wraps without page overflow. Loading and not-shipped text remain readable and prior articles are absent.",
+  "evidence": [
+    "RECEIPTS.md",
+    "DOCS-RETURN.json",
+    "BROWSER-SUMMARY.json",
+    "PIXEL-REVIEW.json",
+    "CURRENT.tar.xz",
+    "CAPTURES.tar.xz"
+  ],
+  "limitations": "Safe local docs fixtures, no published-runtime acceptance or original Back/reload work. A partial desktop run passes six checks/one capture then encounters a duplicate fixture locator; the remaining-only continuation completes 27 checks/seven captures, retaining the original observations and both cleanups. The parent shipped-link observation scrolls successfully but loses heading focus; the original PI off-screen observation is not reproduced here."
+}
