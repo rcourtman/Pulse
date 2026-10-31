@@ -4219,31 +4219,43 @@ setup_directories() {
     print_info "Setting up directories..."
 
     # Create directories (only if they don't exist)
-    mkdir -p "$CONFIG_DIR"
-    mkdir -p "$INSTALL_DIR"
+    if ! mkdir -p -- "$CONFIG_DIR" || ! mkdir -p -- "$INSTALL_DIR"; then
+        print_error "Could not create Pulse directories; directory setup is incomplete"
+        return 1
+    fi
 
     # Set permissions (preserve existing files)
     # Use chown without -R on CONFIG_DIR to avoid changing existing file permissions
-    chown pulse:pulse "$CONFIG_DIR"
-    chown_install_dir_for_pulse
-    chmod 700 "$CONFIG_DIR"
+    # main can itself be called in an OR-list, where Bash disables errexit
+    # throughout its callees. Every required operation must propagate failure
+    # explicitly before service setup/start or a completion message is allowed.
+    if ! chown pulse:pulse "$CONFIG_DIR" || ! chown_install_dir_for_pulse || ! chmod 700 "$CONFIG_DIR"; then
+        print_error "Could not set Pulse directory ownership or permissions; directory setup is incomplete"
+        return 1
+    fi
 
     # Ensure critical config files retain proper permissions if they exist
     for config_file in "$CONFIG_DIR"/alerts.json "$CONFIG_DIR"/system.json "$CONFIG_DIR"/*.enc "$CONFIG_DIR"/*.json; do
         if [[ -f "$config_file" ]]; then
-            chown pulse:pulse "$config_file"
+            if ! chown pulse:pulse "$config_file"; then
+                print_error "Could not set ownership of $config_file; directory setup is incomplete"
+                return 1
+            fi
         fi
     done
 
     for config_dir in "$CONFIG_DIR"/alerts "$CONFIG_DIR"/notifications "$CONFIG_DIR"/audit; do
         if [[ -d "$config_dir" ]]; then
-            chown -R pulse:pulse "$config_dir"
+            if ! chown -R pulse:pulse "$config_dir"; then
+                print_error "Could not set ownership of $config_dir; directory setup is incomplete"
+                return 1
+            fi
         fi
     done
 
     # Create .env file with mock mode explicitly disabled (unless it already exists)
     if [[ ! -f "$CONFIG_DIR/.env" ]]; then
-        cat > "$CONFIG_DIR/.env" << 'EOF'
+        if ! cat > "$CONFIG_DIR/.env" << 'EOF'
 # Pulse Environment Configuration
 # This file is loaded by systemd when starting Pulse
 
@@ -4258,16 +4270,25 @@ PULSE_MOCK_MODE=false
 #PULSE_MOCK_RANDOM_METRICS=true
 #PULSE_MOCK_STOPPED_PERCENT=6
 EOF
+        then
+            print_error "Could not write Pulse environment configuration; directory setup is incomplete"
+            return 1
+        fi
     fi
     if [[ -f "$CONFIG_DIR/.env" ]]; then
-        chown pulse:pulse "$CONFIG_DIR/.env"
-        chmod 600 "$CONFIG_DIR/.env"
+        if ! chown pulse:pulse "$CONFIG_DIR/.env" || ! chmod 600 "$CONFIG_DIR/.env"; then
+            print_error "Could not protect Pulse environment configuration; directory setup is incomplete"
+            return 1
+        fi
     fi
 
     if [[ -f "$CONFIG_DIR/.encryption.key" ]]; then
-        chown pulse:pulse "$CONFIG_DIR/.encryption.key"
-        chmod 600 "$CONFIG_DIR/.encryption.key"
+        if ! chown pulse:pulse "$CONFIG_DIR/.encryption.key" || ! chmod 600 "$CONFIG_DIR/.encryption.key"; then
+            print_error "Could not protect the Pulse encryption key; directory setup is incomplete"
+            return 1
+        fi
     fi
+    return 0
 }
 
 setup_update_command() {
@@ -5329,7 +5350,7 @@ main() {
         # If building from source was requested, skip the update prompt
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
             create_user
-            setup_directories
+            setup_directories || return 1
 
             if ! build_from_source "$SOURCE_BRANCH"; then
                 exit 1
@@ -5381,7 +5402,7 @@ main() {
             # unit file deleted, #1663) reaches this update path; recreate
             # the environment the steps below assume instead of crashing on
             # a missing config dir or reporting success over a missing unit.
-            setup_directories
+            setup_directories || return 1
             setup_update_command
             ensure_systemd_service_installed || return 1
 
@@ -5586,7 +5607,7 @@ main() {
                 # Same repair as the --version path: a half-removed
                 # installation (#1663) must get its config dir and unit
                 # file back before auto-update setup and start.
-                setup_directories
+                setup_directories || return 1
                 setup_update_command
                 ensure_systemd_service_installed || return 1
 
@@ -5615,7 +5636,7 @@ main() {
                 backup_existing || return 1
                 create_user
                 download_pulse
-                setup_directories
+                setup_directories || return 1
                 setup_update_command
                 install_systemd_service || return 1
                 
@@ -5724,7 +5745,7 @@ main() {
         
         install_dependencies
         create_user
-        setup_directories
+        setup_directories || return 1
         download_pulse
         setup_update_command
         install_systemd_service || return 1

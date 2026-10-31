@@ -16,6 +16,26 @@
 
 ## Purpose
 
+### Directory setup failure cannot become installation success
+
+The server installer's five source, pinned, menu-update, reinstall and fresh
+entry paths require successful directory setup before the next build/helper,
+unit, timer, service-start or completion step. Creating either directory,
+setting directory/configuration ownership, creating the default environment,
+and protecting `.env` or `.encryption.key` must each propagate a failed command
+explicitly. This also applies when a caller puts `main` or `setup_directories`
+in an OR-list and Bash therefore disables `errexit` in its callees.
+
+Failure reports incomplete directory setup and does not claim rollback or an
+unchanged whole installation: an update may already have replaced its binary,
+and earlier successful ownership/mode changes remain. Existing configuration,
+keys and recovery snapshots are not deleted to repair admission. Successful
+setup retains existing contents, configured paths and current ownership/mode
+policy. The registered `TestRootInstallDirectorySetupStopsOnFailures` executes
+all operations with private text files and inert ownership/lifecycle doubles,
+including every failure boundary and all five callers. It is source-bound
+failure/preservation proof, not native signed upgrade or original recovery.
+
 ### Configuration snapshot rotation stays in its literal instance namespace
 
 The installer's configuration snapshot rotation treats the configured basename
