@@ -755,7 +755,20 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
             actual = state.split(marker, 1)[1].split("\n  };", 1)[0]
             actual = " ".join(re.sub(r"//[^\n]*", "", actual).split())
             self.assertEqual(actual, body, name)
-        self.assertIn("if (disposed || isPaused()) return;", state)
+        # Connection state must still track an open stream while the display
+        # is paused, but a disposed panel must not accept even that update.
+        # Check the receive prelude in its actual callback, not an obsolete
+        # combined-guard substring elsewhere in the file (or in a comment).
+        marker = "source.onmessage = (event) => {"
+        self.assertEqual(state.count(marker), 1)
+        message = state.split(marker, 1)[1].split("\n    };", 1)[0]
+        message = " ".join(re.sub(r"//[^\n]*", "", message).split())
+        prelude, receive, _ = message.partition("pendingLogs[pendingNext] = event.data;")
+        self.assertTrue(receive, "expected the actual bounded receive buffer")
+        self.assertEqual(
+            prelude.strip(),
+            "if (disposed) return; setConnectionState('streaming'); if (isPaused()) return;",
+        )
 
     def test_log_pause_cannot_substitute_for_the_backup_server_stop(self):
         guide = " ".join(DOC.read_text().split("### Pause Pulse", 1)[0].split())
@@ -796,15 +809,25 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
         ):
             marker = f"const {name} = () => {{"
             mutated = state.replace(marker, marker + "\n    " + operation)
-            with self.subTest(control=name), self.assertRaises(AssertionError):
-                self.assert_display_only_controls(mutated)
+            with self.subTest(control=name):
+                self.assertNotEqual(state, mutated, "negative control must change the source")
+                with self.assertRaises(AssertionError):
+                    self.assert_display_only_controls(mutated)
         for before, after in (
             ("const clearLogs = () => {\n    resetPending();", "const clearLogs = () => {"),
-            ("if (disposed || isPaused()) return;", "if (disposed) return;"),
+            ("      if (isPaused()) return;", ""),
+            ("      if (disposed) return;\n      setConnectionState", "      setConnectionState"),
+            ("setConnectionState('streaming');\n      if (isPaused()) return;",
+             "if (isPaused()) return;\n      setConnectionState('streaming');"),
+            ("setConnectionState('streaming');\n      if (isPaused()) return;",
+             "if (isPaused()) return;"),
             ("if (!isPaused()) flushPendingLogs();", "flushPendingLogs();"),
         ):
-            with self.subTest(missing=before), self.assertRaises(AssertionError):
-                self.assert_display_only_controls(state.replace(before, after))
+            with self.subTest(missing=before):
+                mutated = state.replace(before, after)
+                self.assertNotEqual(state, mutated, "negative control must change the source")
+                with self.assertRaises(AssertionError):
+                    self.assert_display_only_controls(mutated)
 
     def test_bundle_scope_matches_the_real_export_not_the_visible_lines(self):
         self.contains(self.log_help(), "complete configured log file", "retained server log buffer",
