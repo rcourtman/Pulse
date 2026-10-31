@@ -8713,9 +8713,10 @@ func TestInstallSHLegacyAgentIDRecoveryAccountsForEveryByte(t *testing.T) {
 			if err := os.WriteFile(path, tc.body, 0600); err != nil {
 				t.Fatal(err)
 			}
+			shell := agentIDRecoveryShell(t, "", root, path)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, "bash", "-c", agentIDRecoveryShell(t, "", root, path))
+			cmd := exec.CommandContext(ctx, "bash", "-c", shell)
 			cmd.WaitDelay = time.Second
 			out, err := cmd.CombinedOutput()
 			if ctx.Err() != nil {

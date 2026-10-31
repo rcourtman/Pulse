@@ -7776,6 +7776,22 @@ state must use the single-open, no-follow, nonblocking, bounded lifecycle
 reader and reject FIFOs, devices, symlinks, and oversized content. Safe-profile
 rollback snapshots and restores the root lifecycle artifacts, while successful
 migration removes their stale collector-state copies.
+
+The unsafe-identity installer probe prepares extracted shell functions before
+starting its unchanged two-second execution deadline. That deadline still
+covers process startup, the recovery shell and all children, and output
+collection; a timed-out or over-budget result still fails. Preparation,
+process-start and wait times are separate observations. A private descriptor
+records only fixed shell/helper/trust/content-read phase names and the shell's
+exit status, never command text or state contents, so an empty-output timeout
+does not become an unsupported claim that a FIFO read blocked. These are
+confined fixture observations, not historical incident or installed recovery.
+`TestAgentIDRecoveryBudgetStartsAfterFixturePreparation` supplies a preparation
+longer than that deadline; `TestAgentIDRecoveryReportsBlockedHelperAndStopsItsChild`
+requires a real blocked helper child to be killed at the same deadline and
+its last phase to be retained. The existing valid, corrupt, symlink, FIFO and
+descriptor-versus-legacy controls remain gating.
+
 For stdin installs, the saved installer source must come through the
 root-trusted lifecycle binary's system-CA/custom-CA/exact-fingerprint transport
 with proxies and redirects disabled, then pass the embedded-key SSH signature
