@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,6 +38,22 @@ type agentIDRecoveryObservation struct {
 	err, contextErr                     error
 	preparation, start, wait, execution time.Duration
 	started                             bool
+}
+
+func (o agentIDRecoveryObservation) String() string {
+	// fmt does not invoke Error on unexported struct fields. Format the errors
+	// explicitly so a failure retains its actual context/exit, not an address.
+	return fmt.Sprintf("preparation=%s execution=%s start=%s wait=%s started=%t context=%v exit=%v",
+		o.preparation, o.execution, o.start, o.wait, o.started, o.contextErr, o.err)
+}
+
+func TestAgentIDRecoveryObservationRetainsContextAndExit(t *testing.T) {
+	observed := agentIDRecoveryObservation{contextErr: context.DeadlineExceeded, err: os.ErrNotExist}
+	description := fmt.Sprintf("%+v", observed)
+	if !strings.Contains(description, "context=context deadline exceeded") ||
+		!strings.Contains(description, "exit="+os.ErrNotExist.Error()) {
+		t.Fatalf("recovery errors lost their actual diagnostic: %s", description)
+	}
 }
 
 // Keep fixture extraction and trace-file setup outside the execution budget.
