@@ -257,7 +257,7 @@ def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
     }
     status_report = audit_status_payload(load_status_payload())
     impacted = infer_impacted_subsystems(normalized)
-    contract_updates = required_contract_updates(normalized, impacted)
+    contract_updates = required_contract_updates(normalized, impacted, contract_index=contract_index)
     path_entries: list[dict[str, Any]] = []
     unowned: list[str] = []
 

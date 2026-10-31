@@ -5,9 +5,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from canonical_completion_guard import REPO_ROOT
+from canonical_completion_guard import REPO_ROOT, infer_impacted_subsystems, required_contract_updates
 from repo_file_io import canonical_workspace_repos_root, strip_local_git_env
 from subsystem_lookup import lookup_paths, normalize_input_path, parse_args, render_pretty
+from subsystem_contracts import load_contract_index
 
 
 PATROL_PAGE_AND_STATE_EXACT_FILES = [
@@ -96,6 +97,59 @@ def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> d
 
 
 class SubsystemLookupTest(unittest.TestCase):
+
+    def test_lookup_reads_the_complete_contract_index_once(self) -> None:
+        path = "internal/unifiedresources/views.go"
+        with patch("subsystem_lookup.load_contract_index", wraps=load_contract_index) as load:
+            with patch("canonical_completion_guard.load_contract_index", side_effect=AssertionError("duplicate read")):
+                result = lookup_paths([path])
+        self.assertEqual(load.call_count, 1)
+        self.assertTrue(result["required_contract_updates"])
+        self.assertTrue(any(item["reason"] == "dependent-reference" for item in result["required_contract_updates"]))
+
+    def test_lookup_rereads_changed_and_removed_contracts_on_each_call(self) -> None:
+        path = "internal/unifiedresources/views.go"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            contracts = root / "contracts"
+            contracts.mkdir()
+            contract = contracts / "dependent.md"
+            text = '# Example\n\n## Contract Metadata\n\n```json\n{"subsystem_id":"example"}\n```\n\n## Shared Boundaries\n\n1. `PATH`\n'
+            contract.write_text(text.replace("PATH", "internal/not-touched.go"), encoding="utf-8")
+            with patch("subsystem_contracts.REPO_ROOT", root), patch("subsystem_contracts.CONTRACTS_DIR", contracts):
+                before = lookup_paths([path])
+                contract.write_text(text.replace("PATH", path), encoding="utf-8")
+                changed = lookup_paths([path])
+                contract.unlink()
+                removed = lookup_paths([path])
+        def dependent(result):
+            return [item for item in result["required_contract_updates"] if item["contract"] == "contracts/dependent.md"]
+        self.assertEqual(dependent(before), [])
+        self.assertEqual(len(dependent(changed)), 1)
+        self.assertEqual(dependent(changed)[0]["touched_runtime_files"], [path])
+        self.assertEqual(dependent(changed)[0]["matched_reference_details"], [
+            {"heading": "## Shared Boundaries", "path": path, "line": 11, "heading_line": 9},
+        ])
+        self.assertEqual(dependent(removed), [])
+
+    def test_shared_index_preserves_every_current_owner_and_dependent_requirement(self) -> None:
+        index = load_contract_index()
+        paths = sorted({str(ref["path"]) for entry in index.values() for ref in entry["path_references"]})
+        impacted = infer_impacted_subsystems(paths)
+        expected = required_contract_updates(paths, impacted)
+        with patch("canonical_completion_guard.load_contract_index", side_effect=AssertionError("duplicate read")):
+            self.assertEqual(required_contract_updates(paths, impacted, contract_index=index), expected)
+
+    def test_standalone_guards_keep_their_selected_contract_source(self) -> None:
+        for options in ({}, {"use_staged_contract_index": True}, {"revision": "example-commit"}):
+            with self.subTest(options=options):
+                with patch("canonical_completion_guard.load_contract_index", return_value={}) as load:
+                    self.assertEqual(required_contract_updates([], {}, **options), {})
+                load.assert_called_once_with(staged=options.get("use_staged_contract_index", False), revision=options.get("revision"))
+        for options in ({"use_staged_contract_index": True}, {"revision": "example-commit"}):
+            with self.subTest(options=options):
+                with self.assertRaisesRegex(ValueError, "working-tree lookup"):
+                    required_contract_updates([], {}, contract_index={}, **options)
 
     def test_replication_inventory_uses_complete_wire_and_consumer_proof(self):
         paths = [
