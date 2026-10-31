@@ -14,6 +14,9 @@ establish safe recovery.
 - **Not sure which version is affected:** distinguish the
   [running server, reported agent and update target](TROUBLESHOOTING.md#find-the-running-server-and-agent-versions).
   A helper's selected release or an agent's target is not its running version.
+- **Dashboard is stuck on “Connecting to Pulse” or stops updating:** distinguish
+  [server liveness from dashboard delivery](#health-is-green-but-the-dashboard-is-stalled).
+  Green health is not proof that current readings reached your browser.
 - **Cannot sign in:** use [local password recovery](TROUBLESHOOTING.md#i-forgot-my-password)
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
@@ -275,6 +278,36 @@ certificate-validation error. Keep the original time and redacted error;
 do not replace credentials or disable TLS verification on a refusal alone.
 For a page that opens but has missing readings, use the
 [missing-data checks](FAQ.md#no-data-showing) instead of resetting the connection.
+
+### Health is green but the dashboard is stalled
+
+A public [`/api/health` response](API.md#system-health) checks limited server
+liveness, not end-to-end readiness. HTTP `200`, `"status": "healthy"` or a
+container's **healthy** badge can coexist with “Connecting to Pulse”, no initial
+state or stale readings. They do not verify sign-in, recent platform polling,
+dashboard-state delivery or notification delivery.
+
+Use observations from the original failure, not a new diagnostic run:
+
+| Existing observation | What it establishes — and what it does not |
+| --- | --- |
+| Pulse's page does not open | Check the [installation and service distinction](INSTALL.md#installation-did-not-reach-a-usable-server) and [connection path](#connection-refused). A healthy response from another address, proxy or earlier time does not establish this page's availability. |
+| Sign-in succeeds and the page stays on “Connecting to Pulse” | Authentication worked for that attempt; the dashboard still did not become usable. A successful `/ws` upgrade or welcome message opens the transport, but does not establish receipt of initial state. It does not identify a lock owner or prove a proxy, browser-cache or credential fault. |
+| The dashboard opens but readings stop advancing | Compare the affected resource's last visible observation with the original incident time. An open connection does not prove that collection or delivery continues; a current value, a retained value and stored History are separate evidence. Follow the [missing-data checks](FAQ.md#no-data-showing) for the affected source. |
+
+Keep the failure time and timezone, running server version and exact displayed
+message when already available. If you already have browser network evidence,
+retain only the relevant request path, status and timing or redacted error.
+Keep cookies, headers, query values, WebSocket frames, full responses and network
+exports private; do not use **Copy as cURL**. An unavailable observation is
+unknown, not success or an empty infrastructure list.
+
+Do not restart, reinstall, clear browser storage, sign out, bypass the proxy,
+disable TLS or run Diagnostics just to demonstrate recovery. Do not send
+repeated state requests, induce a freeze or take a process-terminating dump to
+recreate the incident. Preserve existing configuration, credentials and logs;
+[report the evidence already available](#-getting-help). A later recovery does
+not explain the earlier failure, and this guidance is not a runtime fix.
 
 ### Proxmox or PBS certificate validation failed
 
