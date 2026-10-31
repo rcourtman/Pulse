@@ -861,7 +861,7 @@ or a measured fleet performance improvement.
 13. `frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx` shared with `frontend-primitives`: the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 14. `frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts` shared with `frontend-primitives`: the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
-18. `frontend-modern/src/stores/websocket-global.ts` shared with `unified-resources`: the process-wide realtime store owner is both a unified-resource state boundary and a fleet-scale connection and reconciliation hot path.
+18. `frontend-modern/src/stores/websocket-global.ts` shared with `alerts`, `unified-resources`: the process-wide realtime store owns alert acknowledgement request lifetime, unified-resource state and fleet-scale connection and reconciliation.
 19. `frontend-modern/src/stores/websocket.ts` shared with `alerts`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
 16. `frontend-modern/src/useAppRuntimeState.ts` shared with `cloud-paid`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
     Security-status SSO display labels are part of the existing authenticated
@@ -996,7 +996,11 @@ acknowledgement write that overlaps a recovery discards its response and
 fetches once more. These projection baselines are
 socket-owned: an oversized
 frame invalidates resources, connected infrastructure, and active alerts
-together, while REST recovery hydrates display state only. A later keyed delta
+together, while REST recovery hydrates display state only. The store also
+owns acknowledgement request lifetimes across overview remounts. Scope changes
+end both request ownership and optimistic confirmation guards; a same-scope
+reconnect retains them. `websocket.alertAcknowledgementRequests.test.ts` and
+`websocket-global.noopLifetime.test.ts` pin that boundary. A later keyed delta
 without a socket baseline requests the throttled recovery path instead of
 patching an independently built REST array or silently retaining a stale
 projection. Workload table rows derived from canonical

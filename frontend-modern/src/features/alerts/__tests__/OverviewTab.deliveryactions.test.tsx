@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
+import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import type { Alert } from '@/types/api';
 import type { NotificationHealth } from '@/api/notifications';
 
@@ -92,6 +93,7 @@ function defaultProps() {
     overrides: [] as never[],
     activeAlerts: {} as Record<string, Alert>,
     updateAlert: vi.fn(),
+    acknowledgementRequests: createAlertAcknowledgementRequests(),
     showQuickTip: () => false,
     dismissQuickTip: vi.fn(),
     showAcknowledged: () => true,

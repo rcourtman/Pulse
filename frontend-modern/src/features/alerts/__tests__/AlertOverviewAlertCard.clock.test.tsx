@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
+import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 import { METRIC_ALERT_STATUS_STALE_MS } from '../metricAlertPresentation';
@@ -72,6 +73,7 @@ function renderOverview() {
       overrides={[]}
       activeAlerts={activeAlerts()}
       updateAlert={vi.fn()}
+      acknowledgementRequests={createAlertAcknowledgementRequests()}
       showQuickTip={() => false}
       dismissQuickTip={vi.fn()}
       showAcknowledged={() => true}

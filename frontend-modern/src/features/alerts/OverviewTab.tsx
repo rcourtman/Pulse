@@ -2,6 +2,7 @@ import { AlertQueueActionFeedback } from './AlertQueueActionFeedback';
 import { createSignal, onCleanup, createEffect, onMount, Show } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
+import type { AlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import type { Alert } from '@/types/api';
 
 import { AlertDeliveryHealthCard } from './AlertDeliveryHealthCard';
@@ -17,6 +18,7 @@ export function OverviewTab(props: {
   overrides: Override[];
   activeAlerts: Record<string, Alert>;
   updateAlert: (alertIdentifier: string, updates: Partial<Alert>) => void;
+  acknowledgementRequests: AlertAcknowledgementRequests;
   showQuickTip: () => boolean;
   dismissQuickTip: () => void;
   showAcknowledged: () => boolean;
@@ -31,6 +33,7 @@ export function OverviewTab(props: {
     overrides: () => props.overrides,
     showAcknowledged: props.showAcknowledged,
     updateAlert: props.updateAlert,
+    acknowledgementRequests: props.acknowledgementRequests,
   });
   const timelineState = useAlertIncidentTimelineState();
   // A destination that stopped delivering is invisible by nature: the failure

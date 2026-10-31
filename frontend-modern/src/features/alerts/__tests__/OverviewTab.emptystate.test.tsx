@@ -26,6 +26,7 @@ vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
 }));
 
 import { OverviewTab } from '../OverviewTab';
+import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 
 function defaultProps(overrides: Record<string, unknown> = {}) {
@@ -33,6 +34,7 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
     overrides: [] as never[],
     activeAlerts: {} as Record<string, never>,
     updateAlert: vi.fn(),
+    acknowledgementRequests: createAlertAcknowledgementRequests(),
     showQuickTip: () => false,
     dismissQuickTip: vi.fn(),
     showAcknowledged: () => false,

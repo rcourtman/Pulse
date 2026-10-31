@@ -11,6 +11,7 @@ import type { Resource, ResourceCapability } from '@/types/resource';
 import { createDefaultResourcePolicy } from '@/types/resource';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
+import { createAlertAcknowledgementRequests } from './alertAcknowledgementRequests';
 import { notificationStore } from './notifications';
 import { eventBus } from './events';
 import { ALERTS_DETECTION_EVENT, isAlertsDetectionEnabled } from '@/utils/alertsActivation';
@@ -364,6 +365,10 @@ export function createWebSocketStore(url: string) {
   // Track alerts with pending acknowledgment changes to prevent race conditions
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
   const pendingAckTimeouts = new Map<string, number>();
+  // Which acknowledgement request carries each alert. It lives and ends with
+  // this store's alert scope, so a remounted overview keeps it and an
+  // organization switch or shutdown drops it.
+  const alertAcknowledgementRequests = createAlertAcknowledgementRequests();
 
   let alertsEnabled = isAlertsDetectionEnabled();
   let lastActiveAlertsPayload: Record<string, Alert> = {};
@@ -381,6 +386,15 @@ export function createWebSocketStore(url: string) {
   const clearPendingAck = (alertIdentifier: string) => {
     pendingAckChanges.delete(alertIdentifier);
     clearPendingAckTimeout(alertIdentifier);
+  };
+
+  // Request ownership and server-confirmation guards belong to the same alert
+  // scope. Reused identifiers in the next scope must not inherit either one.
+  const resetAlertAcknowledgements = () => {
+    pendingAckTimeouts.forEach((timeout) => window.clearTimeout(timeout));
+    pendingAckTimeouts.clear();
+    pendingAckChanges.clear();
+    alertAcknowledgementRequests.reset();
   };
 
   const applyActiveAlerts = (alertsMap: Record<string, Alert>) => {
@@ -1049,9 +1063,7 @@ export function createWebSocketStore(url: string) {
     clearReconnectTimeout();
     clearReconnectDelayTimeout();
     clearHeartbeatInterval();
-    pendingAckTimeouts.forEach((timeout) => window.clearTimeout(timeout));
-    pendingAckTimeouts.clear();
-    pendingAckChanges.clear();
+    resetAlertAcknowledgements();
     activeAlertsRecoveryRequestId += 1;
     activeAlertsRecoveryInFlight = null;
     if (activeAlertsColdHydrationTimeout) {
@@ -1787,8 +1799,7 @@ export function createWebSocketStore(url: string) {
     window.clearTimeout(reconnectDelayTimeout);
     window.clearTimeout(reconnectTimeout);
     window.clearInterval(heartbeatInterval);
-    pendingAckTimeouts.forEach((t) => window.clearTimeout(t));
-    pendingAckTimeouts.clear();
+    resetAlertAcknowledgements();
     activeAlertsRecoveryRequestId += 1;
     activeAlertsRecoveryInFlight = null;
     if (activeAlertsColdHydrationTimeout) {
@@ -1935,6 +1946,7 @@ export function createWebSocketStore(url: string) {
         setState(reconcile(createInitialState()));
         setActiveAlerts(reconcile({}));
         setRecentlyResolved(reconcile({}));
+        resetAlertAcknowledgements();
       });
 
       clearReconnectTimeout();
@@ -1948,6 +1960,7 @@ export function createWebSocketStore(url: string) {
       markTokenRevoked('dockerRuntimes', tokenId, agentIds),
     markAgentsTokenRevoked: (tokenId: string, agentIds: string[]) =>
       markTokenRevoked('agents', tokenId, agentIds),
+    alertAcknowledgementRequests,
     removeAlerts: (predicate: (alert: Alert) => boolean) => {
       const keysToRemove: string[] = [];
       Object.entries(activeAlerts).forEach(([alertIdentifier, alert]) => {

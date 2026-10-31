@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
+import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import type { Alert } from '@/types/api';
 
 const mockGetIncidentTimeline = vi.fn();
@@ -50,6 +51,7 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
       },
     } as Record<string, Alert>,
     updateAlert: vi.fn(),
+    acknowledgementRequests: createAlertAcknowledgementRequests(),
     showQuickTip: () => false,
     dismissQuickTip: vi.fn(),
     showAcknowledged: () => false,

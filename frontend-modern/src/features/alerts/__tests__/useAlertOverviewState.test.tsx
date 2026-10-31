@@ -4,6 +4,7 @@ import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertsAPI } from '@/api/alerts';
+import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import { notificationStore } from '@/stores/notifications';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
@@ -78,6 +79,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
     expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledOnce();
@@ -107,6 +109,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
     await Promise.resolve();
@@ -126,6 +129,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
     expect(AlertsAPI.getDeliveryDiagnoses).toHaveBeenCalledOnce();
@@ -148,6 +152,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
     cleanup();
@@ -189,6 +194,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged,
         updateAlert,
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
 
@@ -257,6 +263,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
 
@@ -278,6 +285,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
 
@@ -318,6 +326,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
 
@@ -365,6 +374,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
 
@@ -390,6 +400,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
 
@@ -409,6 +420,7 @@ describe('useAlertOverviewState', () => {
         overrides: () => [],
         showAcknowledged: () => true,
         updateAlert: vi.fn(),
+        acknowledgementRequests: createAlertAcknowledgementRequests(),
       }),
     );
 

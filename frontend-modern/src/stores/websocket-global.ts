@@ -1,3 +1,4 @@
+import { createAlertAcknowledgementRequests } from './alertAcknowledgementRequests';
 import { createWebSocketStore, type ActiveAlertsHydrationStatus } from './websocket';
 import { createSignal, createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -28,6 +29,9 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     changedIds: ReadonlySet<string> | null;
     changedKeys: import('@/utils/resourceStateAdapters').ResourceChangedKeys | null;
   }>({ version: 0, changedIds: null, changedKeys: null });
+  // The no-op app's request owner lives as long as this store; shutdown ends
+  // it, as the real store's shutdown does.
+  const alertAcknowledgementRequests = createAlertAcknowledgementRequests();
   const [state] = createStore<State>({
     connectedInfrastructure: [],
     metrics: [],
@@ -69,28 +73,30 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     resourceChange,
     changedResourceIdsSince: () => null,
     changedResourceMetaSince: () => null,
-    shutdown: () => {},
+    shutdown: () => alertAcknowledgementRequests.reset(),
     refreshActiveAlerts: async () => false,
     reconnect: () => {},
     switchUrl: () => {},
     markDockerRuntimesTokenRevoked: () => {},
     markAgentsTokenRevoked: () => {},
+    alertAcknowledgementRequests,
     removeAlerts: () => {},
     updateAlert: () => {},
   };
 };
 
+// Ends this window's app store: it shuts down, and the next caller gets a new
+// one. The page does this on unload; a test that used the shared store does it
+// when it finishes, so nothing it left pending reaches the next test.
+export function shutdownGlobalWebSocketStore() {
+  window.__pulseWsStore?.shutdown();
+  delete window.__pulseWsStore;
+}
+
 const bindGlobalShutdownHandler = () => {
   if (window.__pulseWsShutdownBound) return;
 
-  window.addEventListener(
-    'beforeunload',
-    () => {
-      window.__pulseWsStore?.shutdown();
-      delete window.__pulseWsStore;
-    },
-    { once: true },
-  );
+  window.addEventListener('beforeunload', shutdownGlobalWebSocketStore, { once: true });
   window.__pulseWsShutdownBound = true;
 };
 

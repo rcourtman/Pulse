@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
+import type { AlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import type { Alert, AlertDeliveryDiagnosis } from '@/types/api';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { Override } from './types';
@@ -32,6 +33,7 @@ export interface UseAlertOverviewStateProps {
   overrides: Accessor<Override[]>;
   showAcknowledged: Accessor<boolean>;
   updateAlert: (alertIdentifier: string, updates: Partial<Alert>) => void;
+  acknowledgementRequests: AlertAcknowledgementRequests;
 }
 
 export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
@@ -47,6 +49,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
   } = useAlertAcknowledgementState({
     alerts: activeAlerts,
     updateAlert: props.updateAlert,
+    acknowledgementRequests: props.acknowledgementRequests,
     allowRestore: true,
   });
   const {
