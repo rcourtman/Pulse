@@ -170,6 +170,17 @@ Stable.
         self.assertTrue(contract_reference_matches_path("internal/example/runtime.go", "internal/example/runtime.go"))
         self.assertFalse(contract_reference_matches_path("internal/example/runtime.go", "internal/example/other.go"))
 
+    def test_explicit_empty_reference_index_does_not_read_ambient_contracts(self) -> None:
+        with patch("subsystem_contracts.load_contract_index", side_effect=AssertionError("ambient read")):
+            self.assertEqual(referenced_contracts_for_path("go.mod", {}), [])
+
+    def test_omitted_reference_index_still_reads_fresh_contracts(self) -> None:
+        entry = {"subsystem_id": "example", "path_references": [{"path": "go.mod"}]}
+        with patch("subsystem_contracts.load_contract_index", side_effect=[{"example": entry}, {}]) as load:
+            self.assertEqual(len(referenced_contracts_for_path("go.mod")), 1)
+            self.assertEqual(referenced_contracts_for_path("go.mod"), [])
+            self.assertEqual(load.call_count, 2)
+
     def test_referenced_contracts_for_path_returns_matching_subsystem(self) -> None:
         contract_index = load_contract_index(
             {

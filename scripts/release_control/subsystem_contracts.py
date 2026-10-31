@@ -264,7 +264,9 @@ def referenced_contracts_for_path(
     path: str,
     contract_index: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    contracts_by_subsystem = contract_index or load_contract_index()
+    # An explicitly empty source snapshot is still authoritative: do not
+    # replace it with ambient working-tree contracts.
+    contracts_by_subsystem = contract_index if contract_index is not None else load_contract_index()
     matches: list[dict[str, Any]] = []
     for contract in contracts_by_subsystem.values():
         referenced_paths = [

@@ -364,14 +364,21 @@ def required_contract_updates(
     *,
     use_staged_contract_index: bool = False,
     revision: str | None = None,
+    contract_index: Dict[str, dict] | None = None,
 ) -> Dict[str, dict]:
+    # A working-tree lookup already reads the complete index for its per-file
+    # references. Reuse that invocation's snapshot, not a process-wide cache.
+    # Commit/index guards must continue to read their own selected source.
+    if contract_index is not None and (use_staged_contract_index or revision is not None):
+        raise ValueError("a supplied contract index is only valid for a working-tree lookup")
     impacted_subsystems = (
         impacted
         if impacted is not None
         else infer_impacted_subsystems(staged_files, revision=revision)
     )
     required: Dict[str, dict] = {}
-    contract_index = load_contract_index(staged=use_staged_contract_index, revision=revision)
+    if contract_index is None:
+        contract_index = load_contract_index(staged=use_staged_contract_index, revision=revision)
 
     for subsystem_id, data in impacted_subsystems.items():
         # Contract update requirement triggers on non-cycle-artifact touches
