@@ -30,8 +30,11 @@ intervening focus choice, even if that choice is later blurred. By date's earlie
 restoration did not cancel that latter choice; its normal-suite date-group
 regression now covers it. Genuine retirement still uses the existing surface
 fallback. No sorting, date validity, collection, protection or access rule changes.
-This consolidates overlapping handling rather than widening bundle limits; normal
-Proxmox/shared suites and exact production bundle budgets verify the result.
+The consolidation reduces overlapping handling. Its exact build still exceeds
+the August Proxmox reference budget by 0.07 KiB; the final candidate declares a
+bounded 256-byte Proxmox reference allowance (80,595 → 80,851), not a measured
+baseline reset. The 15% threshold, every other chunk and total limits remain
+unchanged. Normal Proxmox/shared suites and exact production checks verify it.
 Desktop/narrow actual Backups proof includes both views and source-bound pixels.
 
 ### Coverage retains owned focus when live posture sorting moves a row
