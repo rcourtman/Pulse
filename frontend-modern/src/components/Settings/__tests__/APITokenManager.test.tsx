@@ -410,7 +410,7 @@ describe('APITokenManager', () => {
       'Edit scopes',
       'Revoke',
     ]) {
-      for (const button of screen.getAllByRole('button', { name, exact: true })) {
+      for (const button of screen.getAllByRole('button', { name })) {
         expect(button).toBeDisabled();
       }
     }
