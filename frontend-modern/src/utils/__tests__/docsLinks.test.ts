@@ -83,8 +83,15 @@ describe('docsLinks', () => {
     expect(readFileSync(path.join(frontendRoot, 'public/docs/TROUBLESHOOTING.md'), 'utf8')).toBe(
       source,
     );
+    // Full-guide heading/navigation coverage lives in troubleshootingEntryGuide.
+    // This FAQ regression checks the actual destination section, not an unrelated
+    // sample elsewhere in the ever-growing troubleshooting guide.
+    const heading = '### Memory use keeps growing';
+    const sections = source.split(`${heading}\n`);
+    expect(sections).toHaveLength(2);
+    const memorySection = sections[1].split('\n### ')[0];
     const guide = document.createElement('article');
-    guide.innerHTML = renderDocMarkdown(source, 'TROUBLESHOOTING');
+    guide.innerHTML = renderDocMarkdown(`${heading}\n${memorySection}`, 'TROUBLESHOOTING');
     expect(guide.querySelector('#memory-use-keeps-growing')?.textContent).toBe(
       'Memory use keeps growing',
     );

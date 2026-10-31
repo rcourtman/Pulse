@@ -4,10 +4,17 @@ import { describe, expect, it } from 'vitest';
 import { renderDocMarkdown } from '../docMarkdown';
 
 const read = (file: string) => readFileSync(path.resolve(process.cwd(), '..', file), 'utf8');
+const renderedGuides = new Map<string, HTMLElement>();
 const article = (name: string) => {
-  const result = document.createElement('article');
-  result.innerHTML = renderDocMarkdown(read(`docs/${name}.md`), name);
-  return result;
+  // These committed guide inputs are immutable for the test run. Parse each
+  // once; clone it so a later assertion cannot mutate another test's fixture.
+  let rendered = renderedGuides.get(name);
+  if (!rendered) {
+    rendered = document.createElement('article');
+    rendered.innerHTML = renderDocMarkdown(read(`docs/${name}.md`), name);
+    renderedGuides.set(name, rendered);
+  }
+  return rendered.cloneNode(true) as HTMLElement;
 };
 const anchor = 'installation-did-not-reach-a-usable-server';
 const section = () => {
