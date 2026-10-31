@@ -47,6 +47,7 @@ PATH_SUFFIXES = (
     ".yaml",
     ".yml",
 )
+NUMBERED_LIST_PREFIX = re.compile(r"[1-9][0-9]?\. ")
 
 
 def git_env() -> dict[str, str]:
@@ -130,15 +131,19 @@ def section_body(lines: list[str], heading: str) -> list[str]:
 
 
 def section_list_items(body_lines: list[str]) -> list[tuple[int, str]]:
+    """Keep the existing 1..99 markers, content and source-line offsets.
+
+    Contracts contain long non-list sections too. Match the prefix once per
+    line rather than constructing and testing all 99 possible markers.
+    """
     items: list[tuple[int, str]] = []
     for index, line in enumerate(body_lines):
         stripped = line.strip()
         if not stripped:
             continue
-        for marker in [f"{n}." for n in range(1, 100)]:
-            if stripped.startswith(marker + " "):
-                items.append((index, stripped[len(marker) + 1 :]))
-                break
+        marker = NUMBERED_LIST_PREFIX.match(stripped)
+        if marker:
+            items.append((index, stripped[marker.end() :]))
     return items
 
 
