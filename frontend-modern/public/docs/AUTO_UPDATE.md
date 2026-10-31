@@ -262,6 +262,51 @@ can omit SQLite sidecar files. Keep these backups private, not in an issue or
 diagnostic attachment. See [configuration paths](CONFIGURATION.md) and
 [audit storage and safe recovery](AUDIT_LOGGING.md#storage).
 
+### Installer configuration snapshots
+
+The Linux installer and its updater helper make a different copy from the
+in-app `backup-<timestamp>` snapshot above. **A configuration snapshot is not a
+full-state backup, and Update History does not list or restore these installer
+copies.** Check which updater ran and its original logs before choosing a copy.
+Do not rerun an update or reinstall just to create or locate one.
+
+The installer copies its effective `PULSE_CONFIG_DIR` (default `/etc/pulse`).
+For the default paths, look privately in these locations:
+
+| When the installer took the copy | Configuration snapshot location |
+| --- | --- |
+| The configuration directory's parent was writable | `/etc/pulse.backup.<timestamp>…/` |
+| The parent was read-only, as in the hardened updater service | `/opt/pulse/config-backups/pulse.backup.<timestamp>…/` |
+
+Custom service names and `PULSE_CONFIG_DIR` or `PULSE_INSTALL_DIR` overrides
+change these paths. The timestamp suffix also varies by installer version;
+use the effective paths and existing logs, not a guessed name. An in-app
+`backup_path` is not the location of an installer copy.
+
+The copy includes hidden entries and preserves symbolic links, **not the
+contents of targets outside the copied tree**. A separately located runtime
+data directory, metrics or audit store, or organisation directory is therefore
+not automatically included. Nor does this configuration copy include the
+server executable, service units or update helpers stored elsewhere. Retain
+matching encryption and signing keys with the stores they protect; a copied
+key without its data, or encrypted data without its key, is not recovery.
+
+This is a file copy, not a consistent filesystem snapshot: Pulse may still be
+writing while it is made. A database file's presence does not establish a
+consistent database backup. Keep the copies private; they can contain secrets,
+sessions and monitoring data, even if their names say only “configuration”.
+
+The installer normally retains five completed copies for that configuration
+name, ordered by their timestamped names, not by verified restore readiness.
+An update that aborts before replacing files can remove the copy it just made.
+Later runs can rotate older copies away, so these are not a durable archive.
+An absent copy does not prove that the update completed or that data was lost.
+Preserve the current state and original evidence; do not delete another
+instance's snapshots, change retention or reset keys to make recovery fit.
+Use the [stopped-service recovery procedure](#manual-rollback) and
+[full-state recovery guidance](MIGRATION.md#full-state-recovery) to assess a
+matching, consistent backup before restoring anything.
+
 ### Manual Rollback
 
 If Pulse cannot start, work inside the Pulse host or LXC, not on the Proxmox host
