@@ -3483,7 +3483,10 @@ describe('Coverage provider-outcome-meaning through parsed API reads', () => {
   ] as const)(
     'keeps %s inventory outcomes distinct from actual tasks and restore points through polling',
     async (provider, source, label) => {
-      vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date', 'setInterval', 'clearInterval'] });
+      vi.useFakeTimers({
+        now: BACKUP_IDENTITY_NOW,
+        toFake: ['Date', 'setInterval', 'clearInterval'],
+      });
       try {
         window.history.replaceState({}, '', '/proxmox/backups/coverage');
         const guest = identityGuest('east-100', 'east', 'pve-1');
@@ -3547,10 +3550,9 @@ describe('Coverage provider-outcome-meaning through parsed API reads', () => {
         expect(panel).toHaveTextContent('Access Denied');
         expect(panel).not.toHaveTextContent('Reported outcome Success');
         expect(
-          within(within(panel).getByText('Latest task', { selector: 'th' }).closest('tbody')!).getByText(
-            'OK',
-            { exact: true },
-          ),
+          within(
+            within(panel).getByText('Latest task', { selector: 'th' }).closest('tbody')!,
+          ).getByText('OK', { exact: true }),
         ).toBeVisible();
         expect(within(panel).getByText('Running', { exact: true })).toBeVisible();
         expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
