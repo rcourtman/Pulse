@@ -219,6 +219,71 @@ sys.exit(int(os.environ.get('TEST_EXIT','0')))
 
 
 class WorkflowTest(unittest.TestCase):
+    def test_main_workflow_keeps_frozen_classifier_recipe_compatible(self):
+        # Patch preparations copy main's workflow/controls, not scripts/tests.
+        # v6.6.0's test_ci_browser_proof_only.py uses this older extraction;
+        # main's safer YAML reader alone cannot repair that frozen consumer.
+        block = job('changes')
+        steps = re.split(r'(?m)^      - name: ', block)[1:]
+        selected = next(part for part in steps if part.startswith('Classify changed files\n'))
+        frozen_command = '\n'.join(line[10:] for line in
+                                   selected.split('        run: |\n', 1)[1].splitlines())
+        actual_command = next(step['run'] for step in yaml.safe_load(WORKFLOW.read_text())
+                              ['jobs']['changes']['steps']
+                              if step.get('name') == 'Classify changed files')
+        self.assertEqual(frozen_command.strip(), actual_command.strip())
+
+    def test_worker_contracts_gate_changed_area_admission_before_compilation(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text())['jobs']
+        changes = jobs['changes']
+        self.assertNotIn('continue-on-error', changes)
+        steps = changes['steps']
+        name = 'Validate backend worker contracts before compilation'
+        gates = [step for step in steps if step.get('name') == name]
+        self.assertEqual(gates, [{
+            'name': name,
+            'if': "steps.filter.outputs.code == 'true'",
+            'timeout-minutes': 1,
+            'run': 'python3 scripts/release_control/run_go_package_slice_test.py',
+        }])
+        self.assertLess(next(i for i, step in enumerate(steps) if step.get('id') == 'filter'),
+                        steps.index(gates[0]))
+        # The gate holds only application admission. Secret scanning stays
+        # independent, while compile and runtime keep their existing checks.
+        self.assertNotIn('needs', jobs['secret-scan'])
+        self.assertEqual(jobs['test-compile']['needs'], 'changes')
+        self.assertEqual(jobs['test-compile']['if'],
+                         "needs.changes.outputs.go_compile == 'true'")
+        for worker in ('backend', 'backend-api'):
+            self.assertEqual(jobs[worker]['needs'], ['changes', 'test-compile'])
+            self.assertIn("needs.changes.result == 'success'", jobs[worker]['if'])
+
+    def test_actual_precompile_control_command_stops_on_failure_before_next_work(self):
+        changes = yaml.safe_load(WORKFLOW.read_text())['jobs']['changes']
+        command = next(step['run'] for step in changes['steps']
+                       if step.get('name') == 'Validate backend worker contracts before compilation')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            control = root / 'scripts/release_control/run_go_package_slice_test.py'
+            control.parent.mkdir(parents=True)
+            # Exercise the workflow's literal shell command without recursively
+            # running this suite. These are exit adapters, not Go runtime proof.
+            control.write_text('import os\nfrom pathlib import Path\n'
+                               'Path("control-ran").write_text("observed")\n'
+                               'raise SystemExit(int(os.environ["CONTROL_EXIT"]))\n')
+            for exit_code in (0, 1, 7):
+                with self.subTest(exit_code=exit_code):
+                    following = root / 'following-work'
+                    following.unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ['bash', '-e', '-o', 'pipefail', '-c',
+                         command + '\nprintf "started" > following-work\n'],
+                        cwd=root, env={**os.environ, 'CONTROL_EXIT': str(exit_code)},
+                        capture_output=True, text=True, timeout=5)
+                    self.assertEqual(result.returncode, exit_code, result.stdout + result.stderr)
+                    self.assertEqual((root / 'control-ran').read_text(), 'observed')
+                    self.assertEqual(following.exists(), exit_code == 0)
+
     def test_same_two_required_workers_cover_both_sliced_packages(self):
         block = job('backend')
         for expected in (

@@ -11,6 +11,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/ci_browser_proof_only.py"
@@ -35,13 +37,47 @@ def job_block(workflow, name):
 
 
 def step_script(block, name):
-    step = re.split(r"(?m)^      - name: ", block)[1:]
-    selected = next(part for part in step if part.startswith(name + "\n"))
-    return "\n".join(line[10:] for line in selected.split("        run: |\n", 1)[1].splitlines())
+    # Execute only the actual YAML scalar. Comments between steps belong to
+    # neither command; stripping ten columns can turn them into shell code.
+    steps = yaml.safe_load(block)['steps']
+    selected = [step for step in steps if step.get('name') == name]
+    if len(selected) != 1 or not isinstance(selected[0].get('run'), str) or not selected[0]['run'].strip():
+        raise AssertionError(f'expected one nonempty command for step {name}')
+    return selected[0]['run']
 
 
 def interpolate(script, expressions):
     return re.sub(r"\$\{\{\s*(.*?)\s*\}\}", lambda m: expressions[m[1]], script)
+
+
+class StepScriptTest(unittest.TestCase):
+    def test_command_scalar_excludes_adjacent_yaml_comments_and_steps(self):
+        block = '''
+    steps:
+      - name: "Selected command"
+        run: |
+          # This comment really is inside the shell command.
+          printf '%s\\n' 'actual command'
+
+      # A deterministic control failure must not turn this into shell code.
+      - name: Other command
+        run: exit 19
+'''
+        self.assertEqual(step_script(block, 'Selected command'),
+                         "# This comment really is inside the shell command.\n"
+                         "printf '%s\\n' 'actual command'\n")
+        self.assertEqual(step_script(block, 'Other command'), 'exit 19')
+
+    def test_missing_duplicate_action_or_empty_command_cannot_supply_a_recipe(self):
+        for steps in (
+            '- name: Other\n  run: exit 0',
+            '- name: Selected\n  run: exit 0\n- name: Selected\n  run: exit 0',
+            '- name: Selected\n  uses: owner/action@' + 'a' * 40,
+            '- name: Selected\n  run: ""',
+        ):
+            with self.subTest(steps=steps), self.assertRaises(AssertionError):
+                step_script('steps:\n' + '\n'.join('  ' + line for line in steps.splitlines()),
+                            'Selected')
 
 
 class ReceiptScopeTest(unittest.TestCase):
