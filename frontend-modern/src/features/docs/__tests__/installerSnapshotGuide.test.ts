@@ -22,11 +22,12 @@ const section = () => {
   }
   return result;
 };
-const text = () => section().textContent!.replace(/\s+/g, ' ');
 
 describe('installer configuration snapshot guidance', () => {
   it('keeps the two default locations literal and distinct from in-app snapshots', () => {
-    const rows = [...section().querySelectorAll('tbody tr')];
+    const rendered = section();
+    const copy = rendered.textContent!.replace(/\s+/g, ' ');
+    const rows = [...rendered.querySelectorAll('tbody tr')];
     expect(rows.map((row) => row.querySelectorAll('td')[1].textContent)).toEqual([
       '/etc/pulse.backup.<timestamp>…/',
       '/opt/pulse/config-backups/pulse.backup.<timestamp>…/',
@@ -36,13 +37,15 @@ describe('installer configuration snapshot guidance', () => {
     expect(installer).toContain('backup_parent="$INSTALL_DIR/config-backups"');
     expect(installer).toContain('local keep="${CONFIG_BACKUP_KEEP_COUNT:-5}"');
     expect(installer).toContain('cp -a -- "$CONFIG_DIR/."');
-    expect(text()).toContain('normally retains five completed copies');
-    expect(text()).toContain('Custom service names');
-    expect(text()).toContain('Update History does not list or restore these installer copies');
-    expect(text()).toContain('An in-app backup_path is not the location of an installer copy');
+    expect(copy).toContain('normally retains five completed copies');
+    expect(copy).toContain('Custom service names');
+    expect(copy).toContain('Update History does not list or restore these installer copies');
+    expect(copy).toContain('An in-app backup_path is not the location of an installer copy');
   });
 
   it('does not turn a rotating file copy into complete, consistent or automatic recovery', () => {
+    const rendered = section();
+    const copy = rendered.textContent!.replace(/\s+/g, ' ');
     for (const distinction of [
       'not a full-state backup',
       'not the contents of targets outside the copied tree',
@@ -56,9 +59,9 @@ describe('installer configuration snapshot guidance', () => {
       'do not delete another instance',
       'reset keys to make recovery fit',
     ]) {
-      expect(text()).toContain(distinction);
+      expect(copy).toContain(distinction);
     }
-    expect(section().querySelector('pre')).toBeNull();
+    expect(rendered.querySelector('pre')).toBeNull();
   });
 
   it('reaches real shipped recovery sections from the existing installation guide', () => {
