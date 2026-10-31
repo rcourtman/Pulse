@@ -20,7 +20,9 @@ describe('AI provider privacy guidance', () => {
     expect(notice!.querySelector('a')?.getAttribute('href')).toBe('#privacy');
     const patrol = rendered.querySelector('#pulse-patrol');
     expect(patrol).not.toBeNull();
-    expect(notice!.compareDocumentPosition(patrol!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      notice!.compareDocumentPosition(patrol!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('keeps model traffic, policy handling and usage telemetry distinct in both guides', () => {
@@ -66,9 +68,13 @@ describe('AI provider privacy guidance', () => {
     expect(rendered.querySelector('a[href="/docs/PRIVACY#ai-provider-data"]')).not.toBeNull();
     expect(article('PRIVACY').querySelector('#ai-provider-data')).not.toBeNull();
     expect(
-      rendered.querySelector('a[href="/docs/CONFIGURATION#handle-configuration-and-history-privately"]'),
+      rendered.querySelector(
+        'a[href="/docs/CONFIGURATION#handle-configuration-and-history-privately"]',
+      ),
     ).not.toBeNull();
-    expect(article('CONFIGURATION').querySelector('#handle-configuration-and-history-privately')).not.toBeNull();
+    expect(
+      article('CONFIGURATION').querySelector('#handle-configuration-and-history-privately'),
+    ).not.toBeNull();
     expect(copy).toContain('locally reviewed and redacted excerpt');
   });
 
