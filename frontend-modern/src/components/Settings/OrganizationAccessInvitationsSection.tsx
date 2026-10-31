@@ -39,7 +39,7 @@ export const OrganizationAccessInvitationsSection: Component<
                     variant="primary"
                     size="mdCompact"
                     onClick={() => void props.state.acceptInvitation(invitation.orgId)}
-                    disabled={props.state.saving()}
+                    disabled={!props.state.canChangeAccess()}
                   >
                     Accept
                   </Button>
@@ -47,7 +47,7 @@ export const OrganizationAccessInvitationsSection: Component<
                     variant="dangerOutline"
                     size="mdCompact"
                     onClick={() => void props.state.declineInvitation(invitation.orgId)}
-                    disabled={props.state.saving()}
+                    disabled={!props.state.canChangeAccess()}
                   >
                     Decline
                   </Button>
@@ -82,7 +82,7 @@ export const OrganizationAccessInvitationsSection: Component<
                     variant="dangerOutline"
                     size="mdCompact"
                     onClick={() => void props.state.revokeInvitation(invitation.userId)}
-                    disabled={props.state.saving()}
+                    disabled={!props.state.canChangeAccess()}
                   >
                     Revoke
                   </Button>

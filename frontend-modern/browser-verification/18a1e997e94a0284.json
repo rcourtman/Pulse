@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "base_sha": "b0923554fcc531166f1e5c3500c7a1b94cf06931",
+  "verified_at": "2026-10-31T17:41:47.863Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/orgs.ts",
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/orgs.ts": "57345a09f2fe818ec50ad435ede99ff823f075e0c77896d091306e9b56126c7e",
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx": "0a8b5c32e45272b7c00616fd4d86fd8c008531eb8d0e372e79a7ac3c621b49b2",
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "94ef2a2924d3f6608985afff5a364af92008ec239a51cfb03c9b45b2598478aa",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx": "8c6a2bc014cefbe68aecdf0afcd725f16be520bf9fa9d01f0ed385ed83d6bc0c",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "aeeddfa26d44270f048896b61ccbd58945957755b3d53f9e73c52e9067d69f6b",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "f1a8a7a0c80786c0c873fc40de7b761b4bc9d5e432efe9cdf62b7dd4db47ddf5"
+  },
+  "routes": [
+    "Existing Organization Access settings: production panel, state, API client and stylesheet served in an isolated HTTP fixture"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1050
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Selected organization unavailable, not empty",
+    "Pending read-only reload",
+    "Successful selected-org read and cleared peer draft",
+    "Unconfirmed mutation requires read reconciliation",
+    "Accepted empty membership",
+    "Read-only session with disabled invitation controls",
+    "Late prior-org read ignored",
+    "Interrupted mutation cannot affect a different selection"
+  ],
+  "interactions": [
+    "Switch organization during failed and delayed reads; retry only the selected read",
+    "Deliberately invite a member, change their role, revoke an invitation and confirm member removal on the current organization",
+    "As a viewer, accept and decline only the loaded personal invitation without member-management controls",
+    "Refuse a POST with 403: no transport replay; reload preserves the draft before a deliberate second change",
+    "Switch while POST is pending: no mutation replay, stale toast, new-draft loss or stale selection replacement",
+    "Lose and restore the existing multi-tenant capability; fresh selected read, no old save replay",
+    "Select default explicitly, retaining exact default read identity"
+  ],
+  "browsers": [
+    {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "WebKit",
+      "version": "26.0"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "checks": 74,
+  "captures": 16,
+  "pixel_review": "All 16 final captures opened with native view_image. Error/reconciliation copy and reload controls remain readable at 320px; current-org identity, retained drafts and disabled read-only controls are visible. The existing member grid scrolls horizontally on narrow screens; interactions reached its actions.",
+  "evidence": [
+    "RECEIPTS.md",
+    "BROWSER-SUMMARY.json",
+    "PIXEL-REVIEW.json",
+    "CURRENT.tar.xz",
+    "final-captures/browser-result.json"
+  ],
+  "limitations": "Safe synthetic HTTP fixtures, not a private hosted installation, native SSO recovery, published release or customer acceptance. The initial proxy-identity regression and unsuccessful fixture attempts remain retained separately."
+}

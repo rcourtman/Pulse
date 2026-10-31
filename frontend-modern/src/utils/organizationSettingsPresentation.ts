@@ -4,6 +4,13 @@ import { formatOrgDate } from '@/utils/orgUtils';
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE =
   'Organization settings are not available on this server.';
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS = 'p-4 text-sm text-slate-500';
+export const ORGANIZATION_ACCESS_UNCONFIRMED_CHANGE_MESSAGE =
+  'The last access change could not be confirmed. Reload saved access before making another change.';
+export const ORGANIZATION_ACCESS_RELOAD_LABEL = 'Reload access';
+export const ORGANIZATION_ACCESS_UNAVAILABLE_TITLE = 'Organization access unavailable';
+export function getOrganizationAccessReloadMessage(orgId: string): string {
+  return `Reload checks saved members and invitations for ${orgId}. It does not repeat an access change.`;
+}
 
 export type OrganizationSettingsLoadContext =
   'access' | 'overview' | 'sharing' | 'billing' | 'billing-admin';
@@ -73,7 +80,8 @@ export function getOrganizationAccessOwnerTransferMemberRequiredMessage(): strin
   return 'Ownership can only be transferred to an existing member.';
 }
 
-export function getOrganizationAccessManageRequiredMessage(): string {
+export function getOrganizationAccessManageRequiredMessage(readOnly = false): string {
+  if (readOnly) return 'Organization access is read-only for this session.';
   return 'Admin or owner role required to manage organization access.';
 }
 
