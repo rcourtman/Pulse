@@ -28879,7 +28879,9 @@ func TestContractSupportBundleCredentialBoundary(t *testing.T) {
 	monitorToken := newTokenRecord(t, "synthetic-bundle-monitor-token.12345678", []string{config.ScopeMonitoringRead}, nil)
 	cfg.APITokens = append(cfg.APITokens, monitorToken)
 	tenantToken := newTokenRecord(t, "synthetic-bundle-tenant-token.12345678", []string{config.ScopeSettingsRead}, nil)
-	tenantToken.OrgID = "tenant-only"
+	// Keep the selected default organisation valid so this case reaches the
+	// existing instance-admin gate, not an absent-org 400 in tenant admission.
+	tenantToken.OrgIDs = []string{"default", "tenant-only"}
 	cfg.APITokens = append(cfg.APITokens, tenantToken)
 	config.Mu.Unlock()
 
