@@ -22,7 +22,8 @@ export const SystemLogsPanel: Component = () => {
   const displayHelpId = createUniqueId();
   const bundleHelpId = createUniqueId();
 
-  const streamPresentation = () => getSystemLogStreamPresentation(state.isPaused());
+  const streamPresentation = () =>
+    getSystemLogStreamPresentation(state.isPaused(), state.connectionState());
 
   return (
     <div class="space-y-6">
@@ -117,9 +118,9 @@ export const SystemLogsPanel: Component = () => {
             )}
           </div>
 
-          <div class="text-xs text-muted flex justify-between px-1 pt-4">
+          <div class="text-xs text-muted flex flex-wrap gap-2 justify-between px-1 pt-4">
             <span>{getSystemLogBufferSummary(state.logs().length, state.maxLogs)}</span>
-            <span class="flex items-center gap-2">
+            <span role="status" class="flex items-center gap-2">
               <div class={`w-2 h-2 rounded-full ${streamPresentation().indicatorClass}`}></div>
               {streamPresentation().label}
             </span>

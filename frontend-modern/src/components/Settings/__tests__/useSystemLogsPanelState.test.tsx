@@ -12,6 +12,9 @@ vi.mock('@/utils/logger', () => ({ logger: { debug: vi.fn(), error: vi.fn() } })
 
 class FixtureEventSource {
   static instances: FixtureEventSource[] = [];
+  static CLOSED = 2;
+  readyState = 0;
+  onopen: (() => void) | null = null;
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   onerror: (() => void) | null = null;
   close = vi.fn();
@@ -96,6 +99,37 @@ afterEach(() => {
 });
 
 describe('live system log rendering', () => {
+  it('reports native connection state independently of display pause, and recovers without clearing accepted lines', async () => {
+    const { state, stream, view } = await mount();
+    expect(state.connectionState()).toBe('connecting');
+    stream.onopen?.();
+    expect(state.connectionState()).toBe('streaming');
+    stream.send('accepted before disconnect');
+    flushFrame();
+    state.togglePaused();
+    stream.readyState = 0;
+    stream.onerror?.();
+    expect(state.connectionState()).toBe('reconnecting');
+    expect(state.isPaused()).toBe(true);
+    expect(state.logs()).toEqual(['accepted before disconnect']);
+    stream.readyState = 2;
+    stream.onerror?.();
+    expect(state.connectionState()).toBe('disconnected');
+    expect(stream.close).not.toHaveBeenCalled();
+    stream.readyState = 1;
+    stream.onopen?.();
+    expect(state.connectionState()).toBe('streaming');
+    stream.send('not collected while paused');
+    flushFrame();
+    expect(state.logs()).toEqual(['accepted before disconnect']);
+    view.unmount();
+    stream.onerror?.();
+    stream.onopen?.();
+    expect(state.connectionState()).toBe('streaming');
+    expect(stream.close).toHaveBeenCalledTimes(1);
+    expect(mocks.api.mock.calls).toEqual([['/api/logs/level']]);
+  });
+
   it('publishes and scrolls once per frame, after the accepted rows render', async () => {
     const { state, stream, measure, scroll, publish, container } = await mount();
     stream.send('first');

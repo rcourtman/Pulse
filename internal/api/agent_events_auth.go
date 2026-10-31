@@ -39,6 +39,13 @@ func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bo
 // WebSocket writes outlive the HTTP handler and must not race its middleware.
 // A nil callback preserves existing session/proxy authentication behaviour.
 func monitoringTokenSnapshotRevalidator(cfg *config.Config, req *http.Request) func() (*config.APITokenRecord, bool) {
+	return tokenStreamSnapshotRevalidator(cfg, req, config.ScopeMonitoringRead)
+}
+
+// tokenStreamSnapshotRevalidator preserves the stream's admitted credential,
+// principal and organization while checking its current operation-specific
+// scope. Callers must retain any additional route policy (e.g. instance admin).
+func tokenStreamSnapshotRevalidator(cfg *config.Config, req *http.Request, scope string) func() (*config.APITokenRecord, bool) {
 	admitted := getAPITokenRecordFromRequest(req)
 	if admitted == nil {
 		return nil
@@ -71,7 +78,7 @@ func monitoringTokenSnapshotRevalidator(cfg *config.Config, req *http.Request) f
 			return nil, false
 		}
 		if current.ID != admitted.ID || apiTokenAuthenticatedUser(current) != apiTokenAuthenticatedUser(admitted) ||
-			!current.HasScope(config.ScopeMonitoringRead) || !checker.CheckAccess(current, "", orgID).Allowed {
+			!current.HasScope(scope) || !checker.CheckAccess(current, "", orgID).Allowed {
 			return nil, false
 		}
 		return current, true

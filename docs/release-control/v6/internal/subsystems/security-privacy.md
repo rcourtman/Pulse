@@ -3940,3 +3940,23 @@ already read from the chart route. `normalizeMetricsHistoryResourceType` now
 also accepts the registry's Kubernetes target kinds (`pod`, `k8s-cluster`,
 `k8s-node`, `k8s-deployment`) as the `k8s` store type; that widens which
 spellings reach the same store type, not who may read it.
+
+### System Logs retains its existing route authority throughout a token stream
+
+`GET /api/logs/stream` keeps the instance-admin and `settings:read` gates, its
+existing SSE log-line format and session/proxy admission. A token reader must
+also retain its admitted credential, principal, selected organization and
+instance-wide authority before every replayed or live line. Revocation, expiry,
+scope withdrawal, rebinding or a disallowed runtime role ends only that reader;
+an idle token reader is rechecked every 15 seconds without emitting a log or
+heartbeat. Already admitted response bytes cannot be retracted. Independent
+readers and server logging continue. The existing current-inventory snapshot
+validator is shared with monitoring streams, with the required scope explicit.
+
+The existing System Logs panel reports native connection state, not a green
+Streaming indication after EOF or a denied reconnect. Display pause is still
+local and does not hide a connection failure; no failure cause or recovery is
+inferred. Tests: `internal/api/log_stream_auth_test.go`,
+`frontend-modern/src/components/Settings/__tests__/useSystemLogsPanelState.test.tsx`,
+`frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.safety.test.tsx`
+and `frontend-modern/src/utils/__tests__/systemLogsPresentation.test.ts`.
