@@ -256,18 +256,31 @@ func (b *AgentEventBroadcaster) SubscriberCount() int {
 
 // HandleAgentEvents serves `GET /api/agent/events` — the SSE stream
 // agents subscribe to for real-time notifications. The connection
-// stays open until the client disconnects or the request context
-// cancels. Heartbeats fire every 15s so an agent holding an idle
-// connection can confirm the stream is alive.
+// stays open until the client disconnects, the request context
+// cancels, or the authenticated route withdraws access. Heartbeats fire every
+// 15s so an agent holding an idle connection can confirm the stream is alive.
 //
 // SSE chosen over WebSocket because it's simpler (one-way, no
 // frame-handling), works through every HTTP proxy without
 // special-casing, and matches the existing deploy_handlers pattern.
 // Agents that need bidirectional comms can call the REST endpoints
 // in the capabilities manifest in parallel.
+// The router uses handleAgentEvents with live token revalidation; this raw
+// broadcaster handler does not own authentication.
 func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http.Request) {
+	b.handleAgentEvents(w, r, nil)
+}
+
+// handleAgentEvents checks the route's live token authority before admitting
+// each frame. A closed stream carries no new event kind or error payload: a
+// reconnect must pass the normal authentication and scope checks again.
+func (b *AgentEventBroadcaster) handleAgentEvents(w http.ResponseWriter, r *http.Request, revalidate func() bool) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if revalidate != nil && !revalidate() {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
 	}
 	flusher, ok := w.(http.Flusher)
@@ -311,9 +324,15 @@ func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http
 			if !event.visibleToOrg(orgID) {
 				continue
 			}
+			if revalidate != nil && !revalidate() {
+				return
+			}
 			writeAgentSSEEvent(w, redactAgentEventCommandsForRequest(event, r))
 			flusher.Flush()
 		case <-heartbeat.C:
+			if revalidate != nil && !revalidate() {
+				return
+			}
 			writeAgentSSEEvent(w, b.stampEvent(AgentEvent{Kind: AgentEventHeartbeat}))
 			flusher.Flush()
 		}

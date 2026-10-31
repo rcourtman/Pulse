@@ -160,7 +160,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	if r.agentEventBroadcaster != nil {
 		r.mux.HandleFunc("/api/agent/events", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 			agentcapabilities.EventSubscriptionCapabilityName,
-			r.agentEventBroadcaster.HandleAgentEvents,
+			r.handleAgentEvents,
 		))))
 	}
 	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireAnyScope([]string{config.ScopeActionsPlan, config.ScopeAIExecute}, requireActionCapability(r.config, r.authorizer, auth.ActionPlan, r.withExternalAgentCapabilityActivity(
