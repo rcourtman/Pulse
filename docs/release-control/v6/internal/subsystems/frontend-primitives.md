@@ -10988,3 +10988,43 @@ missing jobs do not establish that none are configured. Neither raw provider
 body nor JSON parser details enter the rendered error. This is a failed read,
 not an empty-state or a new error surface; full retry, normal status filters,
 phone columns and disclosure interactions retain their existing owners.
+
+
+### By date retains literal restore-point date evidence
+
+The existing Proxmox By date record exposes the provider's exact reported date
+beside its formatted Created interpretation. Offsets and subsecond precision
+remain literal wrapping text for PBS snapshots, PVE backup files and guest
+snapshots, including malformed and future values; missing values say Not
+reported. Unknown Created values remain unknown. The existing By date notice
+continues to explain unavailable/future dates and their exclusion from activity
+and day filters; no duplicate per-point warning is added. Raw dates are not an
+inferred completion time, freshness, protection or restore assertion.
+
+The same open point updates its raw date and interpretation on ordinary
+inventory polling without borrowing another point's date or losing owned focus.
+Normal-suite `recoverableIdentityAccess.test.tsx` covers all three sources,
+precise/malformed/future/missing/literal-markup dates, desktop/narrow widths and
+in-place replacement/withdrawal. Registered `ProxmoxBackupsTable.test.tsx`
+protects unknown-date evidence through the parsed inventory consumer and
+`ProxmoxRecoverableTable.test.tsx` protects direct presentation. Browser proof
+must exercise the actual By date consumer at desktop and narrow widths and
+inspect wrapping, uncertainty, keyboard/touch disclosure and live replacement.
+No parser, association, ordering, count, filter, posture, API, permission or
+provider-operation contract changes. This is inspection, not guest recovery.
+
+
+Polling can move an existing By date point between calendar groups, including
+into Unknown date. Before the keyed list changes, the table captures only focus
+it owns. After the move it restores that same connected control only if focus
+fell to the document body; it never steals focus moved elsewhere or resurrects
+a removed point. The open record, strict dates and existing withdrawal fallback
+remain unchanged. Direct normal-suite tests cover owned/external/removed focus;
+the parsed Backups consumer covers an open point moving into Unknown date.
+Actual Chromium and WebKit browser proof must cover that day-group move.
+
+The Proxmox gzip baseline increases by 256 bytes (80339 to 80595, 0.32%) for
+literal date evidence and the browser-reproduced focus repair. The 15% threshold,
+all other per-chunk baselines, total JS/CSS and preload/SRI checks stay unchanged.
+This is a narrowly declared intentional UI/accessibility cost, not suppression
+of the retained failed budget runs or permission to omit browser verification.

@@ -81,6 +81,102 @@ afterEach(() => {
 });
 
 describe('restore-point identity without hover', () => {
+  it.each([320, 720, 1200])(
+    'keeps each source’s exact reported date and uncertainty inspectable at %ipx',
+    async (width) => {
+      api.width = width;
+      const exact = '2026-10-04T12:15:34.123456789+02:00';
+      const literal = '<img src=x onerror=alert(1)>';
+      const dates = [exact, '2026-09-31T10:00:00Z', '2099-10-04T10:00:00Z', '', literal];
+      mount({
+        guests: workloads().slice(0, 1),
+        pve: () => ({
+          ...emptyPVE,
+          storageBackups: dates.map((time, index) =>
+            identityArchive({ id: `file-${index}`, instance: scopes[0], time }),
+          ),
+          guestSnapshots: dates.map((time, index) =>
+            identitySnapshot({ id: `snapshot-${index}`, instance: scopes[0], time }),
+          ),
+        }),
+        pbs: () =>
+          dates.map((backupTime, index) => identityPBS({ id: `pbs-${index}`, backupTime })),
+      });
+      const points = await rows();
+      expect(points).toHaveLength(15);
+      for (const kind of ['pbs', 'file', 'snapshot']) {
+        for (const [index, date] of dates.entries()) {
+          const button = screen.getByRole('button', {
+            name: new RegExp(`Identifier: ${kind}-${index}$`),
+          });
+          await fireEvent.click(button);
+          const panel = screen.getByTestId('proxmox-recoverable-detail');
+          const reported = within(panel).getByText('Reported date').closest('tr')!;
+          expect(reported).toHaveTextContent(date || 'Not reported');
+          expect(reported.querySelector('td:last-child span')).not.toHaveClass('truncate');
+          const created = within(panel).getByText('Created').closest('tr')!;
+          if (index === 0) {
+            expect(created).toHaveTextContent('2026');
+          } else {
+            expect(created).toHaveTextContent('Unknown');
+            const notice = screen.getByText(
+              /Backup entries with unavailable or future dates remain listed/,
+            );
+            expect(notice).toHaveTextContent('Their ages are unknown.');
+            expect(notice).toHaveTextContent('excluded from the activity chart and day filters');
+          }
+          expect(panel.querySelector('img')).toBeNull();
+        }
+      }
+      expect(screen.getAllByTestId('proxmox-recoverable-detail')).toHaveLength(1);
+      expect(api.fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([320, 1200])(
+    'updates the open reported date and its interpretation without replacing the record at %ipx',
+    async (width) => {
+      api.width = width;
+      vi.useFakeTimers({
+        now: BACKUP_IDENTITY_NOW,
+        toFake: ['Date', 'setInterval', 'clearInterval'],
+      });
+      let date = '2026-09-31T10:00:00Z';
+      mount({
+        guests: workloads().slice(0, 1),
+        pve: () => emptyPVE,
+        pbs: () => [identityPBS({ backupTime: date })],
+      });
+      const [point] = await rows();
+      const toggle = within(point).getByRole('button', { name: /Expand details/ });
+      await fireEvent.click(toggle);
+      toggle.focus();
+      const panel = screen.getByTestId('proxmox-recoverable-detail');
+      expect(
+        screen.getByText(/Backup entries with unavailable or future dates remain listed/),
+      ).toBeVisible();
+      for (const next of ['2026-10-04T12:15:34.123456789+02:00', '']) {
+        date = next;
+        await vi.advanceTimersByTimeAsync(30_000);
+        await waitFor(() =>
+          expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(
+            next || 'Not reported',
+          ),
+        );
+        expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(panel);
+        expect(toggle).toHaveFocus();
+        const notice = screen.queryByText(
+          /Backup entries with unavailable or future dates remain listed/,
+        );
+        if (next) expect(notice).toBeNull();
+        else expect(notice).toBeVisible();
+      }
+      expect(api.fetch).toHaveBeenCalledTimes(6);
+      expect(panel).not.toHaveTextContent('2026-09-31');
+      expect(panel).not.toHaveTextContent('.123456789');
+    },
+  );
+
   it.each([320, 479, 480, 719, 720, 1200])(
     'keeps namesake workload and reader scope distinct at %ipx',
     async (width) => {

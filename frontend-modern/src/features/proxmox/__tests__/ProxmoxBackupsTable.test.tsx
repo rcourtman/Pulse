@@ -1733,6 +1733,47 @@ describe('backup-date-evidence connected inventory', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
+  it('[regression] keeps focus when a reported date moves the open point to another day group', async () => {
+    vi.useFakeTimers({ now, toFake: ['Date', 'setInterval', 'clearInterval'] });
+    window.history.replaceState({}, '', '/?view=date');
+    supply('2026-10-04T11:59:00Z', true);
+    mount();
+    const toggle = await screen.findByRole('button', { name: /Expand details.*PBS snapshot/ });
+    await fireEvent.click(toggle);
+    toggle.focus();
+    const panel = screen.getByTestId('proxmox-recoverable-detail');
+    supply('not-a-date', true);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() =>
+      expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(
+        'not-a-date',
+      ),
+    );
+    expect(within(panel).getByText('Created').closest('tr')).toHaveTextContent('Unknown');
+    expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(panel);
+    expect(toggle).toHaveFocus();
+  });
+
+  it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
+    '[regression] By date exposes the reported %s without granting it an age',
+    async (date) => {
+      window.history.replaceState({}, '', '/?view=date');
+      supply(date);
+      mount();
+      const toggle = await screen.findByRole('button', { name: /Expand details.*Identifier:/ });
+      await fireEvent.click(toggle);
+      const panel = screen.getByTestId('proxmox-recoverable-detail');
+      expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(date);
+      expect(within(panel).getByText('Created').closest('tr')).toHaveTextContent('Unknown');
+      const notice = screen.getByText(
+        /Backup entries with unavailable or future dates remain listed/,
+      );
+      expect(notice).toHaveTextContent('Their ages are unknown.');
+      expect(notice).toHaveTextContent('excluded from the activity chart and day filters');
+      expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it.each(['not-a-date', '0001-01-01T00:00:00Z', '2026-10-04T12:00:01Z'])(
     '[regression] Coverage preserves %s uncertainty instead of absence or healthy age',
     async (date) => {
