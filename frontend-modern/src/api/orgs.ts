@@ -61,7 +61,7 @@ export interface IncomingOrganizationShare extends OrganizationShare {
   sourceOrgName: string;
 }
 
-// Organization Access can bind an explicit read or change to the selection
+// Organization panels can bind an explicit read or change to the selection
 // that produced it, including the pre-dispatch CSRF wait. Other callers keep
 // their existing transport behaviour unless they opt in.
 export interface OrganizationAccessRequestOptions {
@@ -71,10 +71,11 @@ export interface OrganizationAccessRequestOptions {
 }
 
 export const OrgsAPI = {
-  list: () =>
+  list: (options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<Organization[]>('/api/orgs', {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
   create: (payload: { id: string; displayName: string }) =>
@@ -195,38 +196,42 @@ export const OrgsAPI = {
       },
     ),
 
-  listShares: (id: string) =>
+  listShares: (id: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<OrganizationShare[]>(`/api/orgs/${encodeURIComponent(id)}/shares`, {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  listIncomingShares: (id: string) =>
+  listIncomingShares: (id: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<IncomingOrganizationShare[]>(
       `/api/orgs/${encodeURIComponent(id)}/shares/incoming`,
       {
         preferSessionAuth: true,
         skipOrgContext: true,
+        ...options,
       },
     ),
 
-  acceptIncomingShare: (id: string, shareId: string) =>
+  acceptIncomingShare: (id: string, shareId: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<OrganizationShare>(
       `/api/orgs/${encodeURIComponent(id)}/shares/incoming/${encodeURIComponent(shareId)}/accept`,
       {
         method: 'POST',
         preferSessionAuth: true,
         skipOrgContext: true,
+        ...options,
       },
     ),
 
-  declineIncomingShare: (id: string, shareId: string) =>
+  declineIncomingShare: (id: string, shareId: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<void>(
       `/api/orgs/${encodeURIComponent(id)}/shares/incoming/${encodeURIComponent(shareId)}`,
       {
         method: 'DELETE',
         preferSessionAuth: true,
         skipOrgContext: true,
+        ...options,
       },
     ),
 
@@ -239,21 +244,24 @@ export const OrgsAPI = {
       resourceName?: string;
       accessRole: Exclude<OrganizationRole, 'owner'> | 'viewer';
     },
+    options?: OrganizationAccessRequestOptions,
   ) =>
     apiFetchJSON<OrganizationShare>(`/api/orgs/${encodeURIComponent(id)}/shares`, {
       method: 'POST',
       body: JSON.stringify(payload),
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  deleteShare: (id: string, shareId: string) =>
+  deleteShare: (id: string, shareId: string, options?: OrganizationAccessRequestOptions) =>
     apiFetchJSON<void>(
       `/api/orgs/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}`,
       {
         method: 'DELETE',
         preferSessionAuth: true,
         skipOrgContext: true,
+        ...options,
       },
     ),
 };

@@ -105,7 +105,8 @@
       "baselineGzip": 5321
     },
     "OrganizationSharingPanel": {
-      "baselineGzip": 5194
+      "baselineGzip": 5706,
+      "$comment": "31 Oct 2026: 512-byte reference allowance for selected-organization admission and no-replay sharing safety; the 15% threshold and total budgets are unchanged."
     },
     "RelaySettingsPanel": {
       "baselineGzip": 5156

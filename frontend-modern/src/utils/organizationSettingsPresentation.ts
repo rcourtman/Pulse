@@ -12,6 +12,14 @@ export function getOrganizationAccessReloadMessage(orgId: string): string {
   return `Reload checks saved members and invitations for ${orgId}. It does not repeat an access change.`;
 }
 
+export const ORGANIZATION_SHARING_UNCONFIRMED_CHANGE_MESSAGE =
+  'The last sharing change could not be confirmed. Reload saved sharing before making another change.';
+export const ORGANIZATION_SHARING_RELOAD_LABEL = 'Reload sharing';
+export const ORGANIZATION_SHARING_UNAVAILABLE_TITLE = 'Organization sharing unavailable';
+export function getOrganizationSharingReloadMessage(orgId: string): string {
+  return `Reload checks saved incoming and outgoing shares for ${orgId}. It does not repeat a sharing change.`;
+}
+
 export type OrganizationSettingsLoadContext =
   'access' | 'overview' | 'sharing' | 'billing' | 'billing-admin';
 
