@@ -160,7 +160,7 @@ func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "symlinked fixture root", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
+	for _, scenario := range []string{"real tools", "symlinked fixture root", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			if scenario == "symlinked fixture root" {
@@ -191,7 +191,7 @@ esac
 			if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
 			}
-			tools := []string{"bash", "stat", "chmod", "chown", "mv", "ln", "readlink", "tar", "awk"}
+			tools := []string{"bash", "stat", "chmod", "chown", "cp", "mv", "ln", "readlink", "tar", "awk"}
 			installed := make(map[string]string)
 			for _, name := range tools {
 				leaf, toolPrefix := name, prefix
@@ -231,7 +231,7 @@ esac
 			// Native macOS defaults must not be the fallback for Linux-only
 			// archive extraction, canonicalization or atomic replacement. Real
 			// GNU tools must win even when the native names are unsuitable.
-			for _, name := range []string{"mv", "readlink", "tar", "awk"} {
+			for _, name := range []string{"cp", "mv", "readlink", "tar", "awk"} {
 				if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf 'native BSD utility reached\\n' >&2\nexit 64\n"), 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -278,7 +278,7 @@ esac
 			}
 			entries, err := os.ReadDir(fixtureBin)
 			if err != nil || len(entries) != len(tools) {
-				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/mv/ln/readlink/tar/awk")
+				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/cp/mv/ln/readlink/tar/awk")
 			}
 			for _, name := range tools {
 				if target, err := os.Readlink(filepath.Join(fixtureBin, name)); err != nil || target != installed[name] {
@@ -294,7 +294,7 @@ esac
 set -eu
 test "$*" = "scripts/installtests/run_unix_contracts.py --phase $EXPECTED_PHASE" || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
-for tool in stat chmod chown mv ln readlink tar awk; do
+for tool in stat chmod chown cp mv ln readlink tar awk; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
 done
 # The expected readlink result must use a physical root too. A temporary
@@ -308,7 +308,14 @@ tar -czf "$PROBE_ROOT/source.tgz" -C "$PROBE_ROOT" source
 mkdir -p "$PROBE_ROOT/extracted"
 tar --no-same-owner --no-overwrite-dir -xzf "$PROBE_ROOT/source.tgz" -C "$PROBE_ROOT/extracted"
 cmp "$PROBE_ROOT/source" "$PROBE_ROOT/extracted/source"
-cp "$PROBE_ROOT/extracted/source" "$PROBE_ROOT/staged"
+# The server's bundle publisher replaces a staged symlink without changing
+# its target. BSD cp cannot execute this production flag. Verify bytes and
+# link identity too, not just that the selected tool reports GNU provenance.
+printf 'unrelated target\n' > "$PROBE_ROOT/copy-target"
+ln -s -- "$PROBE_ROOT/copy-target" "$PROBE_ROOT/staged"
+cp --remove-destination -- "$PROBE_ROOT/extracted/source" "$PROBE_ROOT/staged"
+test ! -L "$PROBE_ROOT/staged"
+test "$(cat "$PROBE_ROOT/copy-target")" = 'unrelated target'
 mv -T "$PROBE_ROOT/staged" "$PROBE_ROOT/published"
 cmp "$PROBE_ROOT/source" "$PROBE_ROOT/published"
 test ! -e "$PROBE_ROOT/staged"

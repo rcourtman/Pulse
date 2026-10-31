@@ -1489,6 +1489,7 @@ func TestRootInstallDeployAgentScriptsDeploysSignatureSidecars(t *testing.T) {
 		set -euo pipefail
 		print_warn() { :; }
 		print_success() { :; }
+		print_error() { printf '%s\n' "$*" >&2; }
 		chown() { :; }
 		INSTALL_DIR="` + installDir + `"
 ` + extractRootInstallShellFunction(t, "deploy_agent_scripts") + `
