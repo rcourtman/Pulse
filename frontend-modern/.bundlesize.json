@@ -20,7 +20,8 @@
       "baselineGzip": 92219
     },
     "Proxmox": {
-      "baselineGzip": 80595
+      "baselineGzip": 80851,
+      "$comment": "31 Oct 2026: 256-byte reference allowance for retained-focus and no-steal safety repair; the 15% threshold is unchanged."
     },
     "AIIntelligence": {
       "baselineGzip": 73662

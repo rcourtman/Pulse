@@ -57,6 +57,7 @@ import {
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
+  retainBackupTableFocus,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
   getBackupWorkloadNodeLabel,
@@ -540,6 +541,18 @@ export function ProxmoxCoverageTable(props: {
       () => setEvidenceLimit(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE),
     ),
   );
+  let coverageElement: HTMLDivElement | undefined;
+  // Keyed rendering retains the same row nodes, but moving those nodes in the
+  // native DOM can still blur a disclosure or detail link to BODY. Capture only
+  // this table's owned focus before the sorted list reconciles. Never replace
+  // the sort order or refocus a removed row, another route, or a user choice.
+  const renderedRows = createMemo<readonly WorkloadCoverageRow[]>((previous) => {
+    const rows = props.rows;
+    if (previous.some((row, index) => row.key !== rows[index]?.key)) {
+      retainBackupTableFocus(coverageElement);
+    }
+    return rows;
+  }, []);
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
     const width = props.layoutWidth?.() ?? observedWidth.width();
@@ -579,7 +592,10 @@ export function ProxmoxCoverageTable(props: {
       }
     >
       <div
-        ref={observedWidth.setElement}
+        ref={(element) => {
+          coverageElement = element;
+          observedWidth.setElement(element);
+        }}
         data-proxmox-backups-table="coverage"
         data-proxmox-backups-layout={layoutMode()}
       >
@@ -659,7 +675,7 @@ export function ProxmoxCoverageTable(props: {
           body={
             <>
               <PlatformWindowedRows
-                items={() => props.rows}
+                items={renderedRows}
                 keyExtractor={(row) => row.key}
                 colSpan={columnCount()}
                 estimatedRowHeight={44}

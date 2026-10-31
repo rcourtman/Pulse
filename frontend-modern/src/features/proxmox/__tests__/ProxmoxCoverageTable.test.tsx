@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSignal, type Accessor, type JSX } from 'solid-js';
+import { createSignal, Show, type Accessor, type JSX } from 'solid-js';
 
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
 import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
@@ -1269,4 +1269,150 @@ describe('unknown duration in possible-latest task details', () => {
     expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent('Task order');
     expect(model.coverageRows[0].posture).toBe('unknown');
   });
+});
+
+describe('Coverage owned focus during live reordering', () => {
+  function mountReordering(width = 1200, type: 'vm' | 'ct' = 'vm') {
+    const makeRow = (key: string): WorkloadCoverageRow => ({
+      ...structuredClone(row),
+      key,
+      workload: {
+        ...row.workload,
+        key,
+        resourceId: key,
+        type,
+        typeLabel: type === 'vm' ? 'VM' : 'LXC',
+        name: key,
+        label: key,
+      },
+    });
+    const initial = [makeRow('alpha'), makeRow('mike'), makeRow('zulu')];
+    const [rows, setRows] = createSignal(initial);
+    const [mounted, setMounted] = createSignal(true);
+    const [expanded, setExpanded] = createSignal<string | null>('alpha');
+    const rendered = renderInRouter(() => (
+      <>
+        <input aria-label="Outside Coverage" />
+        <Show when={mounted()}>
+          <ProxmoxCoverageTable
+            rows={rows()}
+            hasAnyRows
+            emptyIcon={<span />}
+            emptyTitle="No guests"
+            emptyDescription="No guests"
+            sortKey={() => 'posture'}
+            sortDirection={() => 'asc'}
+            onSort={() => {}}
+            expandedKey={expanded()}
+            onToggleExpand={(key) => setExpanded(expanded() === key ? null : key)}
+            layoutWidth={() => width}
+            showTaskColumn={false}
+          />
+        </Show>
+      </>
+    ));
+    // A live posture change moves this same logical workload to the other end
+    // of the sorted list. The table must not change that order to keep focus.
+    const reorder = () => setRows(['zulu', 'mike', 'alpha'].map(makeRow));
+    return { ...rendered, reorder, setRows, setMounted, makeRow };
+  }
+
+  it.each([
+    [1200, 'vm'],
+    [1200, 'ct'],
+    [320, 'vm'],
+    [320, 'ct'],
+  ] as const)(
+    'keeps the same %s px %s disclosure focused after row movement',
+    async (width, type) => {
+      const { container, reorder } = mountReordering(width, type);
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      const panel = screen.getByTestId('proxmox-coverage-detail');
+      const focus = vi.spyOn(disclosure, 'focus');
+      disclosure.focus();
+      focus.mockClear();
+      reorder();
+      await Promise.resolve();
+      expect(
+        [...container.querySelectorAll('[data-proxmox-backup-row="coverage"]')].map((element) =>
+          element.querySelector('button')?.getAttribute('aria-label'),
+        ),
+      ).toEqual([
+        expect.stringContaining('zulu'),
+        expect.stringContaining('mike'),
+        expect.stringContaining('alpha'),
+      ]);
+      expect(screen.getByRole('button', { name: /Collapse details for alpha/ })).toBe(disclosure);
+      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      expect(disclosure).toHaveFocus();
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      fireEvent.keyDown(disclosure, { key: 'Enter' });
+      expect(screen.queryByTestId('proxmox-coverage-detail')).not.toBeInTheDocument();
+      expect(disclosure).toHaveFocus();
+    },
+  );
+
+  it('keeps a connected detail link focused rather than falling back to its disclosure', async () => {
+    const { reorder } = mountReordering();
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const link = within(panel).getAllByRole('link')[0]!;
+    link.focus();
+    reorder();
+    await Promise.resolve();
+    expect(link).toHaveFocus();
+    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+  });
+
+  it.each([false, true])(
+    'does not capture deliberate blur when retained rows do not move (append: %s)',
+    async (append) => {
+      const { setRows, makeRow } = mountReordering();
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      disclosure.focus();
+      setRows(['alpha', 'mike', 'zulu', ...(append ? ['new'] : [])].map(makeRow));
+      disclosure.blur();
+      await Promise.resolve();
+      expect(document.body).toHaveFocus();
+    },
+  );
+
+  it('does not reclaim focus already outside Coverage', async () => {
+    const { reorder } = mountReordering();
+    const outside = screen.getByRole('textbox', { name: 'Outside Coverage' });
+    outside.focus();
+    reorder();
+    await Promise.resolve();
+    expect(outside).toHaveFocus();
+  });
+
+  it.each([false, true])(
+    'does not override an intervening focus choice (then blur: %s)',
+    async (blur) => {
+      const { reorder } = mountReordering();
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      disclosure.focus();
+      reorder();
+      const outside = screen.getByRole('textbox', { name: 'Outside Coverage' });
+      outside.focus();
+      if (blur) outside.blur();
+      await Promise.resolve();
+      expect(document.activeElement).toBe(blur ? document.body : outside);
+    },
+  );
+
+  it.each(['remove', 'depart'] as const)(
+    'does not refocus a retired element after %s',
+    async (kind) => {
+      const { reorder, setRows, setMounted, makeRow } = mountReordering();
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      disclosure.focus();
+      reorder();
+      if (kind === 'depart') setMounted(false);
+      else setRows([makeRow('zulu')]);
+      const focus = vi.spyOn(disclosure, 'focus');
+      await Promise.resolve();
+      expect(disclosure).not.toBeInTheDocument();
+      expect(focus).not.toHaveBeenCalled();
+    },
+  );
 });

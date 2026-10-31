@@ -21,6 +21,43 @@
 
 ## Purpose
 
+### Backup views share bounded owned-focus restoration
+
+Coverage posture sorting and By date regrouping use the same existing backups
+presentation helper for focus lost during a retained native DOM move. It restores
+only the same connected target still inside its table and cancels after any
+intervening focus choice, even if that choice is later blurred. By date's earlier
+restoration did not cancel that latter choice; its normal-suite date-group
+regression now covers it. Genuine retirement still uses the existing surface
+fallback. No sorting, date validity, collection, protection or access rule changes.
+The consolidation reduces overlapping handling. Its exact build still exceeds
+the August Proxmox reference budget by 0.07 KiB; the final candidate declares a
+bounded 256-byte Proxmox reference allowance (80,595 → 80,851), not a measured
+baseline reset. The 15% threshold, every other chunk and total limits remain
+unchanged. Normal Proxmox/shared suites and exact production checks verify it.
+Desktop/narrow actual Backups proof includes both views and source-bound pixels.
+
+### Coverage retains owned focus when live posture sorting moves a row
+
+An accepted posture or inventory frame can reorder the same logical workload.
+Keyed row/component retention alone does not retain native focus when DOM nodes
+move. Coverage captures a focus target owned by its table before reconciliation
+and restores that same element without scrolling only if the completed move
+leaves BODY focused and the element and table remain connected. An intervening
+focus choice cancels restoration, even if that choice is subsequently blurred.
+External search/header focus is not reclaimed; removed or departed elements are
+not resurrected. Existing retirement fallbacks still own genuinely removed
+inspection content. Sorting, window budgets, row identity, drawer state,
+posture meanings, read cadence, policy and mutation permissions do not change.
+
+Normal-suite `ProxmoxCoverageTable.test.tsx` covers reordered VM/LXC disclosures
+at wide/narrow widths, retained detail links, external/intervening focus and
+retired/departed targets. Production Backups desktop Chromium and 320px WebKit
+proof binds actual poll-driven quality changes to unchanged same-node controls,
+contrasts the parent native focus loss and checks keyboard/touch use, sorting,
+filter retirement and no focus theft. This is inspection usability, not evidence
+of original workload recovery or a guest/provider operation.
+
 ### Coverage provider outcomes are not backup job results
 
 Provider evidence identifies the source of each scoped assessment: PBS/PVE

@@ -20,6 +20,37 @@
 
 ## Purpose
 
+### Backup views share bounded owned-focus restoration
+
+Coverage posture sorting and By date regrouping use the same existing backups
+presentation helper for focus lost during a retained native DOM move. It restores
+only the same connected target still inside its table and cancels after any
+intervening focus choice, even if that choice is later blurred. By date's earlier
+restoration did not cancel that latter choice; its normal-suite date-group
+regression now covers it. Genuine retirement still uses the existing surface
+fallback. No sorting, date validity, collection, protection or access rule changes.
+The consolidation reduces overlapping handling. Its exact build still exceeds
+the August Proxmox reference budget by 0.07 KiB; the final candidate declares a
+bounded 256-byte Proxmox reference allowance (80,595 → 80,851), not a measured
+baseline reset. The 15% threshold, every other chunk and total limits remain
+unchanged. Normal Proxmox/shared suites and exact production checks verify it.
+Desktop/narrow actual Backups proof includes both views and source-bound pixels.
+
+### Coverage owns focus across native keyed-row movement
+
+Stable keyed row components alone do not preserve native browser focus when a
+posture update changes the sorted DOM order. The existing Coverage consumer
+captures only a target inside its own table before reconciliation and restores
+the same connected target without scrolling if native movement leaves BODY
+focused. Any intervening focus choice cancels that restoration, including a
+choice later blurred to BODY. Removed rows and departed tables are not refocused;
+external search/header controls and existing retirement fallbacks keep ownership.
+This does not change the shared renderer, sort order, row budgets, read cadence,
+posture meaning or access. `ProxmoxCoverageTable.test.tsx` exercises wide/narrow
+VM/LXC moves, same-node detail/disclosure continuity and no-steal/retirement
+controls. Actual Backups desktop/narrow pixels and interactions check poll-driven
+movement against a source-bound parent control.
+
 ### Coverage keeps provider provenance separate from task state
 
 The existing Coverage drawer uses the shared wrapping detail-section pattern

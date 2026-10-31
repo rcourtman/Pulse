@@ -41,6 +41,7 @@ import {
   ProxmoxBackupWorkloadTypeBadge,
   RowMetricBar,
   SortableHead,
+  retainBackupTableFocus,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
   getBackupWorkloadNodeLabel,
@@ -285,13 +286,7 @@ export function ProxmoxRecoverableTable(props: {
   const tableItems = createMemo<RecoverableTableItem[]>(() => {
     // Moving a retained keyed row between date groups can blur its control in
     // real browsers. Restore only owned, still-mounted focus lost by this move.
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && table?.contains(active)) {
-      queueMicrotask(() => {
-        if (active.isConnected && document.activeElement === document.body)
-          active.focus({ preventScroll: true });
-      });
-    }
+    retainBackupTableFocus(table);
     if (!showDayGroups()) {
       return props.artifacts.map((item) => ({
         kind: 'artifact',
