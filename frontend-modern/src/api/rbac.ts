@@ -29,6 +29,25 @@ export const RBACAPI = {
   deleteUser: (username: string) =>
     apiFetchJSON(`/api/admin/users/${encodeURIComponent(username)}`, { method: 'DELETE' }),
 
-  getUserPermissions: (username: string) =>
-    apiFetchJSON<Permission[]>(`/api/admin/users/${encodeURIComponent(username)}/permissions`),
+  getUserPermissions: async (username: string): Promise<Permission[]> => {
+    const permissions = await apiFetchJSON<unknown>(
+      `/api/admin/users/${encodeURIComponent(username)}/permissions`,
+    );
+    if (
+      !Array.isArray(permissions) ||
+      !permissions.every(
+        (permission) =>
+          permission !== null &&
+          typeof permission === 'object' &&
+          !Array.isArray(permission) &&
+          typeof permission.action === 'string' &&
+          permission.action.trim().length > 0 &&
+          typeof permission.resource === 'string' &&
+          permission.resource.trim().length > 0,
+      )
+    ) {
+      throw new Error('Invalid saved permissions response.');
+    }
+    return permissions;
+  },
 };

@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "base_sha": "0ac8c5463fddb6101828441aa99ef084bb397a43",
+  "verified_at": "2026-10-31T09:45:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/rbac.ts",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/rbac.ts": "995f501c7566a6930442e46abb2e9dddcfdb1a9af5850678c5651cd7a91dc8b3",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "4042df527b37efa20492ab1f1be7bb398c0bfc658f3732eb055cd2ee7bc8375b",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "21cd95782c04a8f61b50f81212175cb4578afa0772c170fc6d03b68e54f09b64",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "d8ef3b90d86a836dd9a3a7c2bb35e5d03521105645c09876d7b081d44eebe9c7"
+  },
+  "routes": [
+    "/settings/security-users"
+  ],
+  "viewports": [
+    {
+      "width": 1600,
+      "height": 1100
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "The production User Access route consumes the real RBACAPI permission read through safe HTTP fixtures for two exact encoded principals; pending, 403, 500, malformed, accepted-empty and populated results remain distinct.",
+    "Unknown reads show persistent fixed-text feedback and explicit read-only retry, not a stale badge, partial permission list or no-access prediction. Saved-state copy distinguishes unsaved role selections.",
+    "Obsolete cross-user and same-principal reopened reads do not replace the current dialog or finish its loading. The existing no-RBAC gate makes no permission read."
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard and narrow touch WebKit open and cancel both users, change unsaved role selections and retry the current GET; drafts survive retry and cancellation discards them without any write.",
+    "Coverage composes seven completed desktop capture states from a first attempt with a fixture-ordering timeout, then a supplement for the remaining desktop same-principal/gate checks and all first-time narrow states. The first failed attempt is retained, not called a complete pass.",
+    "All 16 original captures were opened using native view_image and inspected. The 320 px notice, retry, long permission badge, caveat and footer remain within the modal. Across attempts: 21 permission GETs, zero mutations, unexpected endpoints and page errors."
+  ],
+  "evidence": {
+    "source": "0ac8c5463fddb6101828441aa99ef084bb397a43",
+    "source_proof": "source-inm7f0i2",
+    "frontend_tests_passed": 23837,
+    "frontend_tests_skipped": 3,
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "pixel_capture_sha256": {
+      "desktop-alice-saved.png": "3869327e3e605acb08f92384bac73bee277a1c5c457fb780831c4a81f9a0f8e5",
+      "desktop-bob-loading.png": "ad5a8588802d36ddf7d5d1a55257f8262ae93504b35e50d4fe903d633deb3c16",
+      "desktop-bob-denied.png": "76b7a3d701663f3e7e8f606aedfe86be2cc2bddef3a88dba2165c366d3160865",
+      "desktop-bob-malformed.png": "c104f09555c88e78f12db9c9aa02b312fe45aed2d8a6a9c0bb53c1a86f5c410e",
+      "desktop-bob-recovered.png": "c1524dfc433a493bc6d0e8f6900431b65b4df45b573c6047e11f1b175edc30ca",
+      "desktop-bob-empty.png": "61007b2af28fbca0687a8733e86c408617156a9fcae73fae472fee0d8eae2497",
+      "desktop-race-pending.png": "3f620ded650cf89af65d8636a4d6af9fcb663c1eeb29d161f21ac3faa1416b2e",
+      "desktop-reopened-unknown.png": "cfd62f7d245a54cdf4073cd3c3330f7c5aebc3cf3dbe8e5a169f6edbf75183f4",
+      "narrow-alice-saved.png": "6a0c61d7c3b81388cfa905994fdcb73479750aa9f057b5f10a04fc3e3d13a087",
+      "narrow-bob-loading.png": "2757ce2baf3e9ccacc79f7993e4fc64b6adc2a6674363a0899c51e50ab316d2e",
+      "narrow-bob-denied.png": "10038cba191a78a25052ade57b37ad41207df600ba438db35fd4db73751021e0",
+      "narrow-bob-malformed.png": "47dee774c559bda93d10690d24f91b51cc7aafa6c757dca67f3afeac6ebce800",
+      "narrow-bob-recovered.png": "e545cf400c20d39da7c87cd6afa5846ac8882fbf4ac6ec7e711908ce2b6e11d9",
+      "narrow-bob-empty.png": "a00115b734524de3268e6286bd6a69616c24c2267fa8e3e3b61b5f19efeb602a",
+      "narrow-race-pending.png": "2757ce2baf3e9ccacc79f7993e4fc64b6adc2a6674363a0899c51e50ab316d2e",
+      "narrow-reopened-unknown.png": "2ac514f69f65b2897e249fd2c025b0825709888aa0c115891fc86b32e37e1a45"
+    },
+    "retained": "Web outcome RECEIPTS.md, BROWSER-SUMMARY.json, PIXEL-REVIEW.json, CURRENT.tar.xz and CAPTURES.tar.xz retain both original drivers/results, the first timeout and all source-bound captures.",
+    "fixture_correction": "Release the held earlier same-URL response before waiting for the reopened dialog read; no product source, transport policy or authority changed."
+  }
+}

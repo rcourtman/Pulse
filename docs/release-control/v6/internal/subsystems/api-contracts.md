@@ -21,6 +21,23 @@
 
 ## Purpose
 
+### Admit saved permissions before presenting user access
+
+`RBACAPI.getUserPermissions` admits the existing array response only when every
+member has nonempty string `action` and `resource` fields. Empty arrays are
+valid; null, missing, malformed or partially unreadable responses reject as a
+whole rather than inventing absence or a smaller permission set. Wildcards and
+future nonempty strings remain intact. Stable principals stay URL-encoded
+without substituting display names. The backend already distinguishes storage
+failure from a healthy empty array, and no endpoint or authority changes.
+
+`rbac.test.ts` checks response admission, complete rejection and encoded
+principals. User Access keeps loading/failed reads distinct from an accepted
+saved snapshot, binds results to the current dialog request, preserves role
+drafts across explicit read-only retry and does not call any mutation as part
+of retry. `RBACPaywallPanels.test.tsx` and desktop/narrow consuming browser
+proof cover that state and identity boundary.
+
 ### Token inventory must be read before absence is presented
 
 The API Access consumer distinguishes loading, failed and accepted token

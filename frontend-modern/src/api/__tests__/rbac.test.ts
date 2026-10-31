@@ -148,8 +148,16 @@ describe('RBACAPI', () => {
   });
 
   describe('getUserPermissions', () => {
+    it('preserves a refused read rather than converting it to an empty permission set', async () => {
+      const denial = Object.assign(new Error('private refusal detail'), { status: 403 });
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(denial);
+
+      await expect(RBACAPI.getUserPermissions('alice')).rejects.toBe(denial);
+      expect(apiFetchJSON).toHaveBeenCalledTimes(1);
+    });
+
     it('fetches user permissions', async () => {
-      const mockPermissions = [{ name: 'read:alerts' }];
+      const mockPermissions = [{ action: 'read', resource: 'alerts' }];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockPermissions);
 
       const result = await RBACAPI.getUserPermissions('user-1');
@@ -157,5 +165,52 @@ describe('RBACAPI', () => {
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/users/user-1/permissions');
       expect(result).toEqual(mockPermissions);
     });
+
+    it('preserves empty results, wildcards and future permission strings', async () => {
+      vi.mocked(apiFetchJSON)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { action: '*', resource: '*' },
+          { action: 'future:read', resource: 'future/resource' },
+        ]);
+
+      expect(await RBACAPI.getUserPermissions('alice')).toEqual([]);
+      expect(await RBACAPI.getUserPermissions('sso:oidc:example:subject/1')).toEqual([
+        { action: '*', resource: '*' },
+        { action: 'future:read', resource: 'future/resource' },
+      ]);
+      expect(apiFetchJSON).toHaveBeenLastCalledWith(
+        '/api/admin/users/sso%3Aoidc%3Aexample%3Asubject%2F1/permissions',
+      );
+    });
+
+    it.each([
+      { payload: null },
+      { payload: undefined },
+      { payload: {} },
+      { payload: { permissions: [] } },
+      { payload: 'unread' },
+      { payload: [null] },
+      { payload: [[]] },
+      { payload: [{ action: 'read' }] },
+      { payload: [{ action: '', resource: 'alerts' }] },
+      { payload: [{ action: 'read', resource: '  ' }] },
+      { payload: [{ action: true, resource: 'alerts' }] },
+      {
+        payload: [
+          { action: 'read', resource: 'alerts' },
+          { action: 'read', resource: 7 },
+        ],
+      },
+    ])(
+      'rejects an unread permission result rather than inventing access: $payload',
+      async ({ payload }) => {
+        vi.mocked(apiFetchJSON).mockResolvedValueOnce(payload);
+
+        await expect(RBACAPI.getUserPermissions('alice')).rejects.toThrow(
+          'Invalid saved permissions response.',
+        );
+      },
+    );
   });
 });

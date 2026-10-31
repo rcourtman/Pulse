@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { RBACAPI } from '@/api/rbac';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
@@ -19,8 +19,10 @@ export function useUserAssignmentsPanelState() {
   const [showModal, setShowModal] = createSignal(false);
   const [editingUser, setEditingUser] = createSignal<UserRoleAssignment | null>(null);
   const [saving, setSaving] = createSignal(false);
-  const [userPermissions, setUserPermissions] = createSignal<Permission[]>([]);
+  const [userPermissions, setUserPermissions] = createSignal<Permission[] | null>(null);
   const [loadingPermissions, setLoadingPermissions] = createSignal(false);
+  const [permissionsError, setPermissionsError] = createSignal<string | null>(null);
+  let permissionsRequest = 0;
   const [formRoleIds, setFormRoleIds] = createSignal<string[]>([]);
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [deletingUser, setDeletingUser] = createSignal(false);
@@ -68,10 +70,12 @@ export function useUserAssignmentsPanelState() {
 
   createEffect(() => {
     if (!featureGate.licenseReady()) {
+      closeModal();
       setLoading(true);
       return;
     }
     if (!featureGate.rbacEnabled()) {
+      closeModal();
       setAssignments([]);
       setRoles([]);
       setLoadError(null);
@@ -95,35 +99,49 @@ export function useUserAssignmentsPanelState() {
     );
   });
 
-  const loadUserPermissions = async (username: string) => {
-    if (!featureGate.rbacEnabled()) {
-      setUserPermissions([]);
-      return;
-    }
+  const loadUserPermissions = async () => {
+    const username = editingUser()?.username;
+    if (!username || !showModal() || !featureGate.rbacEnabled() || loadingPermissions()) return;
+
+    const request = ++permissionsRequest;
+    const isCurrentRead = () =>
+      request === permissionsRequest &&
+      showModal() &&
+      editingUser()?.username === username &&
+      featureGate.rbacEnabled();
+    setUserPermissions(null);
+    setPermissionsError(null);
     setLoadingPermissions(true);
     try {
       const permissions = await RBACAPI.getUserPermissions(username);
-      setUserPermissions(permissions || []);
+      if (isCurrentRead()) setUserPermissions(permissions);
     } catch (err) {
-      if (err instanceof Error && /feature not included in license/i.test(err.message)) {
-        setUserPermissions([]);
-        return;
-      }
+      if (!isCurrentRead()) return;
+      setPermissionsError('Saved permissions could not be loaded. Access is unknown.');
       logger.error('Failed to load user permissions', err);
     } finally {
-      setLoadingPermissions(false);
+      if (isCurrentRead()) setLoadingPermissions(false);
     }
   };
 
   const closeModal = () => {
+    permissionsRequest += 1;
+    setUserPermissions(null);
+    setPermissionsError(null);
+    setLoadingPermissions(false);
     setShowModal(false);
   };
 
+  onCleanup(() => {
+    permissionsRequest += 1;
+  });
+
   const openManageAccess = async (assignment: UserRoleAssignment) => {
+    closeModal();
     setEditingUser(assignment);
     setFormRoleIds([...assignment.roleIds]);
     setShowModal(true);
-    await loadUserPermissions(assignment.username);
+    await loadUserPermissions();
   };
 
   const openDeleteUser = (assignment: UserRoleAssignment) => {
@@ -198,8 +216,10 @@ export function useUserAssignmentsPanelState() {
     loadData,
     loadError,
     loadingPermissions,
+    loadUserPermissions,
     openManageAccess,
     openDeleteUser,
+    permissionsError,
     roles,
     saving,
     searchQuery,

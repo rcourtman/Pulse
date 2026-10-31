@@ -200,11 +200,13 @@ export const UserAssignmentsPanel: Component = () => {
         formRoleIds={state.formRoleIds()}
         isOpen={state.showModal()}
         loadingPermissions={state.loadingPermissions()}
+        permissionsError={state.permissionsError()}
         roles={state.roles()}
         saving={state.saving()}
         userPermissions={state.userPermissions()}
         onClose={state.closeModal}
         onSave={state.handleSaveAssignments}
+        onRetryPermissions={() => void state.loadUserPermissions()}
         onToggleRole={state.toggleRole}
       />
 

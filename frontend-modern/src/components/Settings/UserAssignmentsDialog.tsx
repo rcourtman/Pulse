@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Shield from 'lucide-solid/icons/shield';
@@ -12,11 +13,13 @@ interface UserAssignmentsDialogProps {
   formRoleIds: string[];
   isOpen: boolean;
   loadingPermissions: boolean;
+  permissionsError: string | null;
   roles: Role[];
   saving: boolean;
-  userPermissions: Permission[];
+  userPermissions: Permission[] | null;
   onClose: () => void;
   onSave: () => void;
+  onRetryPermissions: () => void;
   onToggleRole: (roleId: string) => void;
 }
 
@@ -98,32 +101,56 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             <div class="flex items-center justify-between">
               <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
                 <BadgeCheck class="w-4 h-4 text-blue-500" />
-                Effective Permissions Preview
+                Saved permissions
               </h4>
               <Show when={props.loadingPermissions}>
                 <LoadingSpinner size="md" tone="info" label="Loading effective permissions" />
               </Show>
             </div>
             <div class="bg-surface-hover rounded-md p-4 border border-border-subtle">
-              <Show when={!props.loadingPermissions && props.userPermissions.length === 0}>
-                <p class="text-xs text-muted italic text-center py-2">
-                  No effective permissions. This user will have no access.
-                </p>
+              <Show when={!props.loadingPermissions && props.permissionsError}>
+                {(message) => (
+                  <InlineNotice
+                    tone="warning"
+                    role="alert"
+                    aria-live="polite"
+                    actionLabel="Retry saved permissions"
+                    actionOnClick={props.onRetryPermissions}
+                  >
+                    {message()}
+                  </InlineNotice>
+                )}
               </Show>
-              <div class="flex flex-wrap gap-2">
-                <For each={props.userPermissions}>
-                  {(permission) => (
-                    <span class="inline-flex items-center rounded-md bg-surface px-2.5 py-1 text-xs font-semibold text-base-content border border-border shadow-xs">
-                      <span class="text-blue-600 dark:text-blue-400">{permission.action}</span>
-                      <span class="mx-1 text-slate-400">:</span>
-                      <span class="text-blue-600 dark:text-blue-400">{permission.resource}</span>
-                    </span>
-                  )}
-                </For>
-              </div>
-              <p class="mt-4 text-[10px] text-muted uppercase tracking-widest font-bold">
-                Note: Permissions are recalculated on save. This preview shows current server-side
-                state.
+              <Show
+                when={!props.loadingPermissions && !props.permissionsError && props.userPermissions}
+              >
+                {(permissions) => (
+                  <>
+                    <Show when={permissions().length === 0}>
+                      <p class="text-xs text-muted italic text-center py-2">
+                        No permissions were returned for this user's saved roles.
+                      </p>
+                    </Show>
+                    <div class="flex flex-wrap gap-2">
+                      <For each={permissions()}>
+                        {(permission) => (
+                          <span class="inline-flex max-w-full flex-wrap items-center break-all rounded-md bg-surface px-2.5 py-1 text-xs font-semibold text-base-content border border-border shadow-xs">
+                            <span class="text-blue-600 dark:text-blue-400">
+                              {permission.action}
+                            </span>
+                            <span class="mx-1 text-slate-400">:</span>
+                            <span class="text-blue-600 dark:text-blue-400">
+                              {permission.resource}
+                            </span>
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </>
+                )}
+              </Show>
+              <p class="mt-4 text-xs text-muted">
+                This read checks saved roles only. Unsaved role selections are not included.
               </p>
             </div>
           </div>
