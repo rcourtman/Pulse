@@ -69,7 +69,8 @@ must not add other URLs, disable TLS verification or change these transfers.
 Both downloads and the signature check must succeed before the installer runs.
 A verified signature proves authenticity, not successful installation or recovery.
 If the installer itself fails or its outcome is uncertain, inspect the existing
-service/container and [recovery instructions](RECOVERY.md) before another attempt.
+service/container using [startup checks](#installation-did-not-reach-a-usable-server)
+and the [recovery instructions](RECOVERY.md) before another attempt.
 
 ### Proxmox VE (LXC installer)
 If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the official installer which creates and configures a lightweight LXC container.
@@ -263,6 +264,59 @@ shortcut.
 </details>
 
 ---
+
+## Installation did not reach a usable server
+
+An installer banner, a zero exit status or a verified download is not proof of
+a usable Pulse server. Keep the original result and time; do not rerun the
+installer, restart the host or repeat first-time setup just to obtain evidence.
+
+For **systemd or Proxmox LXC server installs**, separate these observations:
+
+1. **Container or host state.** A running LXC does not establish that Pulse is
+   running inside it. If the LXC is stopped or its state is uncertain, retain
+   that fact; do not boot it merely to run the check below. A whole-container
+   stop is different from a stopped Pulse service.
+2. **Pulse service state.** In the affected server's existing shell or console
+   (inside the Pulse LXC, not on its Proxmox host), this bounded read shows only
+   selected service-state properties, not environment values or log content:
+
+   ```bash
+   timeout -k 1 5 \
+     systemctl show \
+     pulse.service --no-pager \
+     --property=LoadState \
+     --property=ActiveState \
+     --property=SubState \
+     --property=Result
+   ```
+
+   Use the actual server unit name recorded by your installation if it differs;
+   do not substitute `pulse-agent.service`. `LoadState=not-found` can mean a
+   wrong unit name or incomplete service installation. An error, timeout or
+   missing property is an **unavailable read**, not evidence of an inactive or
+   healthy service. `ActiveState=active` describes this observation only; it
+   does not establish application readiness or explain an earlier stop.
+3. **Web access.** Open the existing Pulse address in your browser. A reachable
+   login/setup page, successful sign-in and current monitoring are separate
+   observations; an active service alone does not establish them. Do not remove
+   authentication or change firewall/TLS settings merely to make a check pass.
+
+For **Docker, Compose or Kubernetes**, inspect the existing deployment's state
+and image reference in its manager instead; the systemd command above is not a
+container-health check. Do not recreate containers, remove volumes or change
+images just to diagnose startup.
+
+Keep configuration, encryption keys, persistent data and rollback copies intact.
+If the service cannot be confirmed running, use the existing
+[bounded local log reader](TROUBLESHOOTING.md#inspect-notification-logs) where
+safe, then the [state-preserving recovery guidance](RECOVERY.md). Keep full
+journals and service/environment dumps private. A report can use the original
+error, relevant state properties, attempted version and recovery already
+performed; unknowns are valid, and another install attempt is not required.
+Continue below only for a genuinely new installation with a reachable setup
+page; an existing installation's login belongs to
+[login recovery](TROUBLESHOOTING.md#i-forgot-my-password), not new setup.
 
 ## 🔐 First-Time Setup
 

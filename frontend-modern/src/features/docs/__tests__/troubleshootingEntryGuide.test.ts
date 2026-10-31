@@ -10,6 +10,7 @@ const source = readFileSync(path.join(shippedDocs, 'TROUBLESHOOTING.md'), 'utf8'
 const renderedGuides = new Map<string, HTMLElement>();
 const entryGuideNames = [
   'TROUBLESHOOTING',
+  'INSTALL',
   'VM_DISK_MONITORING',
   'AUTO_UPDATE',
   'DOCKER',
@@ -95,6 +96,10 @@ describe('troubleshooting workflow entry', () => {
           '/docs/TROUBLESHOOTING#i-forgot-my-password',
           '/docs/TROUBLESHOOTING#cannot-login--401-unauthorized',
         ],
+      ],
+      [
+        'Server installation finished but Pulse is unavailable:',
+        ['/docs/INSTALL#installation-did-not-reach-a-usable-server'],
       ],
       [
         'Update failed or its result is uncertain:',
