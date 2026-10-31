@@ -52,6 +52,7 @@ vi.mock('@/api/onboarding', () => ({
 }));
 
 vi.mock('@/utils/apiClient', () => ({
+  getOrgID: () => null,
   apiFetchJSON: (...args: unknown[]) => apiFetchJSONMock(...args),
 }));
 

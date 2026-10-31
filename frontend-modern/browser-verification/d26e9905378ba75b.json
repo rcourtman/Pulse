@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "9932036ca2a61d2e93fe6941c660f9d4c63fd3c0",
+  "verified_at": "2026-10-31T16:03:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "6e2453e780dda4cdda1b143a3f23da140e52c5c03302ebf142d0ebb9a95b9771",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts": "4aa521570094227ff9f34d9b679dbce9e1b6f46253f6e3792516fbdde8e1bf36",
+    "frontend-modern/src/utils/auditWebhookPresentation.ts": "ea008fea62306863e0d0ac44d0582402be465395348c3168b800205826575a97"
+  },
+  "routes": [
+    "Existing Audit Webhooks settings panel, exercised via a safe /proof/index.html consumer fixture using the real Router, panel, API client, capability store, Toast and CSS"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000,
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 1000,
+      "browser": "WebKit 26.0",
+      "touch": true
+    }
+  ],
+  "states": [
+    "Cold service refusal is unknown, never known-empty; draft remains editable but Add and Enter cannot replace unread destinations",
+    "Pending explicit retry retains the draft without a duplicate read or mutation",
+    "Refused explicit save retains the loaded destination and draft without false success",
+    "Failed same-selection revalidation preserves labelled last-loaded destinations and disables add and removal",
+    "Separate successful read and deliberate save preserve loaded destinations and clear only the submitted draft",
+    "Accepted urls:null is known-empty; settled label and controls are readable at both widths",
+    "Invalid-organisation response does not trigger automatic default fallback; deliberate default selection remains usable",
+    "Capability refresh interrupts a pending save without assuming server cancellation or success; a read must reconcile the selection before another replacement",
+    "Read-only retry does not grant mutation capability"
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and read retry; narrow touch Add and retry; repeated Enter during pending reads dispatches no mutation",
+    "Organisation switches clear peer rows/drafts, re-read the new selection and retain existing authority gates",
+    "Final-source proof contains 64 completed interaction checks across two attempts: seven desktop journeys completed before a fixture assertion counted an exiting old toast; the remaining-only supplement passes desktop interruption/read-only and all narrow journeys",
+    "Nine deliberate fixture POSTs across retained attempts, including interrupted responses, all retain selected loaded destinations; no automatic mutation replay",
+    "All eighteen final-source captures were opened with native view_image; notice text, loading, retained drafts, settled known-empty, success/warning, read-only and phone layouts inspected",
+    "Playwright 1.56.1 matches the integration lock; all 361 installed frontend lock versions and the complete copied frontend content were verified. Safe fixture proof is not an authenticated installed-service or receiver acceptance result"
+  ]
+}
