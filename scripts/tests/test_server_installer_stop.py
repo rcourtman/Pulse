@@ -313,7 +313,7 @@ class ServerInstallerStopTest(unittest.TestCase):
                 self.assertNotIn("SCRIPTS", observation["calls"])
                 if state == "active":
                     if fault == "rename":
-                        self.assertIn("Previous Pulse binary is running again; the update failed", result.stdout)
+                        self.assertIn("Pulse service is running again; the update failed", result.stdout)
                     else:
                         self.assertIn("could not be confirmed running", result.stderr)
                 self.assertEqual(observation["stage_paths"], [])

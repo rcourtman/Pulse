@@ -1509,6 +1509,26 @@ func TestRootInstallDeployAgentScriptsDeploysSignatureSidecars(t *testing.T) {
 	}
 }
 
+// Script bytes and their detached signatures publish as one directory bundle.
+// Real archive/source producers and all main consumers use confined files and
+// manager/build doubles; no host service or published payload is exercised.
+func TestRootInstallAgentScriptPublicationPreservesPreviousBundle(t *testing.T) {
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_script_publication.py"), "ServerScriptPublication", []string{
+		"test_preparation_failures_preserve_the_complete_old_bundle",
+		"test_failed_or_skipped_publication_restores_old_bundle",
+		"test_failed_restore_retains_original_bundle_and_names_its_location",
+		"test_symlinked_script_is_replaced_without_writing_its_target",
+		"test_symlinked_bundle_directory_is_not_replaced",
+		"test_success_publishes_scripts_and_both_sidecars_preserving_other_files",
+		"test_unsigned_source_scripts_do_not_inherit_stale_release_sidecars",
+		"test_archive_and_source_consumers_fail_and_only_recover_prior_active_service",
+		"test_recovery_message_does_not_claim_previous_binary",
+		"test_uncertain_bundle_restore_does_not_restart_the_server",
+		"test_every_main_consumer_stops_before_markers_or_completion",
+		"test_archive_source_and_main_consumers_complete_with_a_whole_bundle",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+}
+
 // Regression test for the corrupted ExecCondition: setup_auto_updates used to
 // render the pulse-update.service unit through an unquoted heredoc containing
 // `$${PULSE_SERVICE_NAME}`, which bash expanded to the installer's PID. The

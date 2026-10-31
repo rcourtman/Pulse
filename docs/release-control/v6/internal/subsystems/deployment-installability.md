@@ -16,6 +16,48 @@
 
 ## Purpose
 
+### Served agent installers publish as a complete script bundle
+
+The archive and source server installers share one script-publication path.
+Copying a supplied script or detached signature, setting its required mode or
+ownership, reserving the old bundle and publishing the new one must propagate
+failure explicitly, including through conditional callers that disable Bash
+`errexit`. None can issue a script-deployed or whole-install completion message
+over that failure. These checks do not replace release signature admission.
+
+Prepare scripts and their supplied `.sig`/`.sshsig` files in a private enclosure
+on the install filesystem before changing the served directory. Preserve other
+local files and absent script families. An overwritten file's symlink must not
+redirect the staged write. Newly supplied unsigned source/legacy scripts must
+not inherit old release sidecars; this does not make them signed releases.
+A symlinked or non-directory destination is left unchanged and needs manual
+reconciliation, rather than an automatic restart with unknown served content.
+
+Once the consumer has confirmed the server stopped, publish by same-filesystem
+directory renames with non-overwrite and source-disappearance checks. A failed
+or skipped publication restores the captured previous bundle when possible.
+If reservation/restore becomes uncertain, retain the previous bundle under its
+private stage, report its exact recovery location and do not restart Pulse.
+Do not overwrite an unexpected destination to force restoration. This is not
+a concurrent-writer or power-loss transaction guarantee: there is a short gap
+between the two directory renames while the server is stopped.
+
+Ordinary preparation failures and successful bundle restoration can use only
+the existing prior-active recovery-start path. The binary at the replacement
+destination has already changed; starting the existing unit is not a binary
+rollback or proof of its running executable's identity. Recovery messages
+must not claim that the previous binary was restored;
+messages report only the observed service liveness. Configuration, keys
+and identity are not restored or deleted, and the install still returns failure.
+Native recovery, sustained health, full-runtime rollback and historical stopped
+updates remain separate.
+
+`TestRootInstallAgentScriptPublicationPreservesPreviousBundle` registers the
+ordinary private-file failure/success controls, both real archive/source
+consumers and all five CLI completion paths. Ownership, service, signature,
+transport and source-build inputs in these controls are confined doubles, not
+published-artifact, native-service or customer-acceptance evidence.
+
 ### Completion requires confirmed server startup
 
 All five server installer entry paths require successful `start_pulse` before
