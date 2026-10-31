@@ -1734,6 +1734,7 @@ describe('backup-date-evidence connected inventory', () => {
     ));
 
   it('[regression] keeps focus when a reported date moves the open point to another day group', async () => {
+    vi.useFakeTimers({ now, toFake: ['Date', 'setInterval', 'clearInterval'] });
     window.history.replaceState({}, '', '/?view=date');
     supply('2026-10-04T11:59:00Z', true);
     mount();
@@ -1742,7 +1743,7 @@ describe('backup-date-evidence connected inventory', () => {
     toggle.focus();
     const panel = screen.getByTestId('proxmox-recoverable-detail');
     supply('not-a-date', true);
-    eventBus.emit('org_switched', 'reported-date-group-move');
+    await vi.advanceTimersByTimeAsync(30_000);
     await waitFor(() =>
       expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(
         'not-a-date',
