@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 
 import { RolesPanel } from '../RolesPanel';
 import { UserAssignmentsPanel } from '../UserAssignmentsPanel';
@@ -404,6 +405,36 @@ describe('RBAC paywall settings panels', () => {
     expect(within(dialog).getByRole('alert')).toHaveTextContent('Access is unknown');
     expect(dialog).not.toHaveTextContent('obsolete-resource');
     expect(getUserPermissionsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('discards pending permission reads when the RBAC capability is lost', async () => {
+    const [enabled, setEnabled] = createSignal(true);
+    const pending = deferred<{ action: string; resource: string }[]>();
+    hasFeatureMock.mockImplementation(() => enabled());
+    getUserPermissionsMock.mockReturnValueOnce(pending.promise);
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    expect(await screen.findByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
+
+    setEnabled(false);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Centralized Access Control')).toBeInTheDocument();
+    pending.resolve([{ action: 'write', resource: 'obsolete-resource' }]);
+    await pending.promise;
+    expect(screen.queryByText('obsolete-resource')).not.toBeInTheDocument();
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores a permission read failure after the panel is disposed', async () => {
+    const pending = deferred<{ action: string; resource: string }[]>();
+    getUserPermissionsMock.mockReturnValueOnce(pending.promise);
+    const view = render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    view.unmount();
+    pending.reject(new Error('obsolete private failure'));
+    await pending.promise.catch(() => undefined);
+    expect(loggerErrorMock).not.toHaveBeenCalled();
+    expect(notificationErrorMock).not.toHaveBeenCalled();
   });
 
   it('shows readable SSO identity details and confirms deprovisioning', async () => {

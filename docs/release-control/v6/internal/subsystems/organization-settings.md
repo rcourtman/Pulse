@@ -15,6 +15,27 @@
 
 ## Purpose
 
+### Saved permissions belong to one open user-access dialog
+
+User Access displays only an admitted saved-permissions read for the principal
+currently being managed. Opening or closing a dialog invalidates earlier reads,
+including earlier reads for the same principal; an obsolete success, failure or
+completion cannot replace data or finish loading in a newer dialog. Disposal
+and loss of the existing RBAC capability invalidate the pending read too.
+Pending or failed reads never retain another user's permission badges or
+claim that the selected user has no access. A persistent, fixed-text failure
+notice offers an explicit read-only retry that preserves unsaved role selections
+and permits at most one current read. It never retries a role update or removal.
+
+The saved-permissions section is not a simulation of unsaved role choices.
+Only an accepted empty response describes empty saved permissions; it does not
+predict access after save. Normal-suite `RBACPaywallPanels.test.tsx` covers
+cross-user and same-user reopen races, loading and failure, explicit retry,
+draft preservation, accepted empty results and unchanged exact-principal writes.
+Desktop and narrow browser proof exercises the real User Access route and API
+client with safe HTTP fixtures. Backend authorization and the existing RBAC
+gate remain the authority; a successful read grants no write capability.
+
 A member test announces and reveals its result beside that exact member rather
 than leaving feedback in the off-screen global footer. The normal primary
 Test connection result stays in the footer; both remain endpoint-qualified

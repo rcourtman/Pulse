@@ -148,6 +148,14 @@ describe('RBACAPI', () => {
   });
 
   describe('getUserPermissions', () => {
+    it('preserves a refused read rather than converting it to an empty permission set', async () => {
+      const denial = Object.assign(new Error('private refusal detail'), { status: 403 });
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(denial);
+
+      await expect(RBACAPI.getUserPermissions('alice')).rejects.toBe(denial);
+      expect(apiFetchJSON).toHaveBeenCalledTimes(1);
+    });
+
     it('fetches user permissions', async () => {
       const mockPermissions = [{ action: 'read', resource: 'alerts' }];
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockPermissions);
