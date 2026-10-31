@@ -47,6 +47,11 @@ describe('installation startup guidance', () => {
     const rendered = section();
     const code = rendered.querySelectorAll('pre code');
     expect(code).toHaveLength(1);
+    // Keep this read fully visible at 320px, including in WebKit where a
+    // non-focusable code block cannot be scrolled with an external keyboard.
+    for (const line of code[0].textContent!.trim().split('\n')) {
+      expect(line.length).toBeLessThanOrEqual(32);
+    }
     expect(
       code[0]
         .textContent!.replace(/\\\n\s*/g, ' ')

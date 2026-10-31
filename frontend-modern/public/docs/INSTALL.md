@@ -282,8 +282,13 @@ For **systemd or Proxmox LXC server installs**, separate these observations:
    selected service-state properties, not environment values or log content:
 
    ```bash
-   timeout -k 1 5 systemctl show pulse.service --no-pager \
-     --property=LoadState --property=ActiveState --property=SubState --property=Result
+   timeout -k 1 5 \
+     systemctl show \
+     pulse.service --no-pager \
+     --property=LoadState \
+     --property=ActiveState \
+     --property=SubState \
+     --property=Result
    ```
 
    Use the actual server unit name recorded by your installation if it differs;
