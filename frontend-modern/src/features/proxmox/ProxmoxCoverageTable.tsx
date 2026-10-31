@@ -464,12 +464,12 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
   ]);
 
 // Several points can share a reader, location and rounded age. Preserve the
-// point's own identifier and full metadata in the open evidence at every width;
-// a hidden Details column or hover-only volume cannot identify it on a phone.
+// point's identifier, reported date and metadata in the open evidence at every
+// width. Raw dates remain inspectable even when they cannot establish an age.
 function coverageRestorePointDetails(artifact: RecoverableArtifact) {
   return (
     <div class="whitespace-pre-line wrap-anywhere" data-coverage-evidence-detail>
-      {`Identifier: ${artifact.nativeId}\nMetadata: ${artifact.detailTitle || artifact.detail}`}
+      {`Identifier: ${artifact.nativeId}\nReported date: ${artifact.createdAt || 'Not reported'}\nMetadata: ${artifact.detailTitle || artifact.detail}`}
     </div>
   );
 }
@@ -1044,9 +1044,10 @@ export function ProxmoxCoverageTable(props: {
                                                 data-coverage-evidence-size
                                               >
                                                 Size:{' '}
-                                                {artifact.size && artifact.size > 0
-                                                  ? formatPlatformTableBytesValue(artifact.size)
-                                                  : 'Unknown size'}
+                                                {formatPlatformTableBytesValue(
+                                                  artifact.size,
+                                                  'Unknown size',
+                                                )}
                                               </span>
                                             </Show>
                                             <Show
@@ -1093,10 +1094,9 @@ export function ProxmoxCoverageTable(props: {
                                             <TableCell
                                               class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
                                             >
-                                              {artifact.size && artifact.size > 0 ? (
-                                                formatPlatformTableBytesValue(artifact.size)
-                                              ) : (
-                                                <span class="text-muted">Unknown size</span>
+                                              {formatPlatformTableBytesValue(
+                                                artifact.size,
+                                                'Unknown size',
                                               )}
                                             </TableCell>
                                           </Show>

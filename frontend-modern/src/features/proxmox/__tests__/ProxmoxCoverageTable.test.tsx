@@ -624,6 +624,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
       'Identifier: pbs-1',
     );
     expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
+      'Reported date: 2026-07-18T23:00:00Z',
+    );
+    expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
       'Metadata: vm/100/2026-07-18T23:00:00Z',
     );
     // The source label wraps in the drawer too; a long snapshot name is not cut.

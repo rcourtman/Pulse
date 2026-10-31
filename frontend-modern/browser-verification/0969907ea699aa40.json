@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "614c4d914028317e651731afc79b47912d5e902d",
+  "verified_at": "2026-10-31T02:08:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "0939ee5d0f5294d5c9fcc3ecf7c501cd6ef1351745428a216e4f743694c6cd49"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Six parsed PBS/PVE/snapshot points including fractional seconds and timezone offsets; reported exact dates remain visible without hover.",
+    "Missing date says Not reported; malformed, future and literal markup-like raw dates remain visible beside Unknown age.",
+    "Same-point polling replaces its reported timestamp and size without inventing a workload posture or borrowing namesake evidence."
+  ],
+  "interactions": [
+    "Keyboard disclosure and close on desktop; native touch disclosure at 320px.",
+    "One ordinary poll per viewport updates the same panel and keyed rows and retains disclosure focus, with only two inventory GETs.",
+    "Close returns focus; the west namesake has no east point dates.",
+    "All twelve desktop/phone screenshots opened with native view_image and visually inspected."
+  ],
+  "evidence": {
+    "source_proof_receipt": "source-3heshv1t",
+    "source": "614c4d914028317e651731afc79b47912d5e902d",
+    "playwright": "1.56.1",
+    "pixel_capture_sha256": {
+      "captures/desktop-exact-pbs-date.png": "93cda3d426c3379b909e37251f741a6d7aba5649b4bd57a57fe8486c7cb7844b",
+      "captures/desktop-invalid-pbs-date.png": "736d010826a47afeb60b2e78300ac1755cd4b7ac49122b507fb7e419a7e30df8",
+      "captures/desktop-future-archive-date.png": "7767aeb3bd34c56a2f17814a2a2488ccaf9a0c95dd8ab2e9ec3b0ee583f00c4d",
+      "captures/desktop-missing-snapshot-date.png": "dc28ccaf0b5528a8a12849c075ea192cb9597e7123af1b6d285ab081c6351add",
+      "captures/desktop-literal-snapshot-date.png": "aafffc55afc5ad8ceb77ffec908bc5ee6812ce960a30d3baf6379e4e4a65ba64",
+      "captures/desktop-updated-pbs-date.png": "1830f641580469cd9cb26bff47fdde942a1e1fb5b25252b0ce82c6dce54b4562",
+      "captures/narrow-exact-pbs-date.png": "9260bf9acfd70e2b7292584936ddf9631113a70050a7f5d54f05154c52d7bb78",
+      "captures/narrow-invalid-pbs-date.png": "d24636e41bd6ecd80ce99ea541006332a6d1ded95b8fc83f3be93810bc6ae1f6",
+      "captures/narrow-future-archive-date.png": "68f156b5c6f23aea4c5e83c4a985d7a12f3f63ca55833fcd5fdc69ab6e101733",
+      "captures/narrow-missing-snapshot-date.png": "afd8754d774e9471745602a97d5387ec37fb7febc1c6e5a38d0023a195fa5418",
+      "captures/narrow-literal-snapshot-date.png": "c7b6bc3ba4cb2e44c20f4f1432a8bc2e8983ff53a509cb0d1bb82639d5196bef",
+      "captures/narrow-updated-pbs-date.png": "c58c83ee58d992df0df3325dd344964cd373b0f1f111694e9dbbab4b3fba3248"
+    },
+    "output_receipts": "RECEIPTS.md, BROWSER-BINDING.json, BROWSER-SUMMARY.json and PIXEL-REVIEW.json in the retained Web outcome dossier."
+  }
+}
