@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Alerts } from '@/pages/Alerts';
+import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 
@@ -14,8 +15,10 @@ const locationState = vi.hoisted(() => ({
   search: '',
   query: {},
 }));
+// The store's request owner, one per test, as the app keeps one per store.
+const storeFixture = vi.hoisted(() => ({ alertAcknowledgementRequests: undefined as unknown }));
 const overviewTabSpy = vi.hoisted(() =>
-  vi.fn((props: { alertsDisabled: () => boolean }) => (
+  vi.fn((props: { alertsDisabled: () => boolean; acknowledgementRequests?: unknown }) => (
     <div data-testid="overview-tab">{props.alertsDisabled() ? 'disabled' : 'enabled'}</div>
   )),
 );
@@ -41,6 +44,7 @@ vi.mock('@/contexts/appRuntime', () => ({
     refreshActiveAlerts: vi.fn(async () => undefined),
     updateAlert: vi.fn(),
     removeAlerts: vi.fn(),
+    alertAcknowledgementRequests: storeFixture.alertAcknowledgementRequests,
   }),
 }));
 
@@ -118,9 +122,19 @@ describe('Alerts read-only presentation', () => {
     locationState.pathname = '/alerts';
     locationState.hash = '';
     locationState.search = '';
+    storeFixture.alertAcknowledgementRequests = createAlertAcknowledgementRequests();
   });
 
   afterEach(() => cleanup());
+
+  it('hands the store acknowledgement requests to the overview', async () => {
+    render(() => <Alerts />);
+
+    expect(await screen.findByTestId('overview-tab')).toBeInTheDocument();
+    expect(overviewTabSpy.mock.calls.at(-1)?.[0].acknowledgementRequests).toBe(
+      storeFixture.alertAcknowledgementRequests,
+    );
+  });
 
   it('keeps alert history narrowing URL-owned with no saved-views affordance', () => {
     // Saved views stored the page's URL query string in localStorage. Bookmarks

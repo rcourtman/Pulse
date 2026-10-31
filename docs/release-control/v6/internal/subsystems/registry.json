@@ -429,8 +429,9 @@
     },
     {
       "path": "frontend-modern/src/stores/websocket-global.ts",
-      "rationale": "the process-wide realtime store owner is both a unified-resource state boundary and a fleet-scale connection and reconciliation hot path",
+      "rationale": "the process-wide realtime store owns alert acknowledgement request lifetime, unified-resource state and fleet-scale connection and reconciliation",
       "subsystems": [
+        "alerts",
         "performance-and-scalability",
         "unified-resources"
       ]
@@ -2387,7 +2388,9 @@
       ],
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx",
+        "frontend-modern/src/stores/alertAcknowledgementRequests.ts",
         "frontend-modern/src/stores/alertsActivation.ts",
+        "frontend-modern/src/stores/websocket-global.ts",
         "frontend-modern/src/stores/websocket.ts",
         "frontend-modern/src/types/alerts.ts",
         "frontend-modern/src/utils/alertActivationPresentation.ts",
@@ -2426,6 +2429,8 @@
             "label": "alert detection and notification state proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/stores/alertAcknowledgementRequests.ts",
+              "frontend-modern/src/stores/websocket-global.ts",
               "frontend-modern/src/stores/websocket.ts",
               "frontend-modern/src/utils/alerts.ts",
               "frontend-modern/src/utils/alertsActivation.ts"
@@ -2433,8 +2438,11 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/stores/__tests__/alertAcknowledgementRequests.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket-global.noopLifetime.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-resilience.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket.alertAcknowledgementRequests.test.ts",
               "frontend-modern/src/utils/__tests__/alerts.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.branchcov0712c.test.ts",
               "frontend-modern/src/utils/__tests__/alertsActivation.test.ts"
@@ -2531,10 +2539,12 @@
               "frontend-modern/src/features/alerts/__tests__/AlertOverviewAlertCard.system-scope.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts",
               "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
+              "frontend-modern/src/features/alerts/__tests__/OverviewTab.acknowledgementbusy.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/ThresholdsTab.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/useAlertAcknowledgementState.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/useAlertDestinationsState.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/useAlertOverridesState.test.tsx",
@@ -7759,7 +7769,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/stores/__tests__/websocket-global.noopLifetime.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket.alertAcknowledgementRequests.test.ts",
               "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts",
               "internal/mock/alert_incidents_test.go",
               "internal/mock/generator_test.go",
@@ -8859,7 +8871,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/stores/__tests__/websocket-global.noopLifetime.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
+              "frontend-modern/src/stores/__tests__/websocket.alertAcknowledgementRequests.test.ts",
               "internal/ai/tools/filesystem_evidence_test.go",
               "internal/monitoring/docker_filesystem_evidence_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",

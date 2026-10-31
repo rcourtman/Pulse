@@ -1142,6 +1142,8 @@ default construction path still restores.
 82. `internal/alerts/active_state_bootstrap.go`
 83. `internal/alerts/eventlog/active_state.go`
 84. `frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx`
+85. `frontend-modern/src/stores/alertAcknowledgementRequests.ts`
+86. `frontend-modern/src/stores/websocket-global.ts`
 
 ## Shared Boundaries
 
@@ -1202,7 +1204,8 @@ Regression proof lives in `internal/alerts/telemetry_quality_test.go` and the
 HTTP-to-manager lifecycle in `internal/monitoring/monitor_pbs_coverage_test.go`.
 
 
-1. `frontend-modern/src/stores/websocket.ts` shared with `performance-and-scalability`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
+1. `frontend-modern/src/stores/websocket-global.ts` shared with `performance-and-scalability`, `unified-resources`: the process-wide realtime store owns alert acknowledgement request lifetime, unified-resource state and fleet-scale connection and reconciliation.
+2. `frontend-modern/src/stores/websocket.ts` shared with `performance-and-scalability`: the connection-owned realtime store is both the canonical alert truth boundary and the fleet-scale resource reconciliation hot path.
    That shared store normalizes slimmed broadcast resources at ingestion —
    expanding `capabilitiesRef` through the state `capabilityCatalog` and
    synthesizing the default policy posture for resources published without one
@@ -1210,8 +1213,8 @@ HTTP-to-manager lifecycle in `internal/monitoring/monitor_pbs_coverage_test.go`.
    display. Alert override and threshold identity matching must consult
    `canonicalIdentity.supersededIds` alongside aliases, because broadcast
    aliases no longer duplicate superseded canonical ids.
-2. `internal/operationaltrust/contracts.go` shared with `notifications`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
-3. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+3. `internal/operationaltrust/contracts.go` shared with `notifications`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
+4. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 Alert multiline field presentation is shared with frontend-primitives:
 notification, timeline, threshold ignored-prefix, and resource threshold note
 editors must compose the shared `FormTextarea` primitive for label/id/help
@@ -3706,6 +3709,35 @@ derived alert read-model and Last 24 Hours stat refresh for
 shared acknowledgement owner instead of keeping its own alert mutation fork.
 Future overview action behavior should extend that shared acknowledgement hook
 instead of putting acknowledge mutations back into render shells.
+Global and group acknowledgement read the bulk endpoint's per-alert results
+through one path, so a group action reports the alerts it could not
+acknowledge with the same count notice as the global action, beside the
+success count of a partial result. Request ownership is app-wide: the alert
+store creates `frontend-modern/src/stores/alertAcknowledgementRequests.ts`,
+which gives each alert to at most one unsettled card, restore, group or
+global request. Later card, group and global actions leave an owned alert to
+that request, which reports its outcome. A card shows every alert an
+unsettled request carries as processing, a global request's included, and
+keeps the 1.5-second hold only after a card or group request settles, so a
+failed group or global request can be retried at once. The cards' processing
+state and the global button's progress derive from the owner: a remounted
+overview shows a request its predecessor sent, and an older request's hold
+cannot mark an alert idle while a newer request carries it. The owner resets
+with the store's alert scope (the organization switch through `switchUrl`,
+shutdown and store cleanup). Its pending acknowledgement confirmation guards
+and their 15-second timers end at that same boundary, so a settled local change
+cannot suppress another scope's alert with a reused identifier or emit a stale
+resync notice there. A same-scope reconnect retains both the request owner and
+confirmation guards. A response from an ended scope writes nothing
+to the store and shows nothing, since both belong to the next scope, whose
+alerts can share its identifiers; a rejection is still logged. Within one
+scope a response still reports once after the overview unmounts. The jsdom
+no-op store keeps its own owner, reset by its `shutdown`, and
+`shutdownGlobalWebSocketStore` ends that shared app for a test as page unload
+ends it for the app. `alertAcknowledgementRequests.test.ts`,
+`websocket.alertAcknowledgementRequests.test.ts`,
+`websocket-global.noopLifetime.test.ts`, `useAlertAcknowledgementState.test.tsx`
+and `OverviewTab.acknowledgementbusy.test.tsx` pin these paths.
 Overview ages and bands read the shared clock. `AlertOverviewAlertCard.tsx`
 passes its own `useRelativeTimeNow` reading as `now` to
 `formatAlertOverviewStartedAgo` and `getMetricAlertPresentation`, and the Last

@@ -55,6 +55,7 @@ export function Alerts() {
     refreshActiveAlerts,
     updateAlert,
     removeAlerts,
+    alertAcknowledgementRequests,
   } = useWebSocket();
   const { get: getResource, resources: allResources, byType, children } = useResources();
   const navigate = useNavigate();
@@ -425,6 +426,7 @@ export function Alerts() {
                   overrides={overviewOverrides()}
                   activeAlerts={activeAlerts}
                   updateAlert={updateAlert}
+                  acknowledgementRequests={alertAcknowledgementRequests}
                   showQuickTip={showQuickTip}
                   dismissQuickTip={dismissQuickTip}
                   showAcknowledged={showAcknowledged}

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import type { ComponentProps } from 'solid-js';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
+import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
 import type { Alert } from '@/types/api';
 
 vi.mock('@solidjs/router', () => ({
@@ -52,11 +54,14 @@ function systemAlert(): Alert {
   } as unknown as Alert;
 }
 
-function defaultProps(overrides: Record<string, unknown> = {}) {
+function defaultProps(
+  overrides: Partial<ComponentProps<typeof OverviewTab>> = {},
+): ComponentProps<typeof OverviewTab> {
   return {
     overrides: [] as never[],
     activeAlerts: {} as Record<string, Alert>,
     updateAlert: vi.fn(),
+    acknowledgementRequests: createAlertAcknowledgementRequests(),
     showQuickTip: () => false,
     dismissQuickTip: vi.fn(),
     showAcknowledged: () => true,
@@ -78,9 +83,7 @@ describe('OverviewTab system-scoped alerts', () => {
 
   it('renders a resource-less system alert without inventing a resource', () => {
     const alert = systemAlert();
-    render(
-      () => OverviewTab(defaultProps({ activeAlerts: { [alert.id]: alert } }) as never) as never,
-    );
+    render(() => <OverviewTab {...defaultProps({ activeAlerts: { [alert.id]: alert } })} />);
 
     // Named as Pulse itself rather than a monitored resource.
     expect(screen.getByText('Pulse')).toBeTruthy();
@@ -94,9 +97,9 @@ describe('OverviewTab system-scoped alerts', () => {
 
   it('does not render a node line for an alert with no node', () => {
     const alert = systemAlert();
-    const { container } = render(
-      () => OverviewTab(defaultProps({ activeAlerts: { [alert.id]: alert } }) as never) as never,
-    );
+    const { container } = render(() => (
+      <OverviewTab {...defaultProps({ activeAlerts: { [alert.id]: alert } })} />
+    ));
 
     // Resource alerts render an "on <node>" line. A system alert has no node,
     // so that affordance must be skipped rather than rendered empty.

@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "base_sha": "fa3a83c4f3fbe8d184dd8c7403e3174daa49d586",
+  "verified_at": "2026-10-31T20:58:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/stores/alertAcknowledgementRequests.ts",
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "8dec020fea359130f646a85abe35c734656242daa420f31d8dcaf7c370a54237",
+    "frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts": "a2300cbec94cba1b0ca719d508e0788e9609c6a52ac9a8d8a39a93507b2f3dac",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "f618429aa4e69e2f357e59c5c35fbd42a96e19ff3166f43a37de21fd8dea1198",
+    "frontend-modern/src/pages/Alerts.tsx": "a2c66936d9f881b23bd133abe7affdee9a62d638fa68eb1a8cca5bac6c20e43c",
+    "frontend-modern/src/stores/alertAcknowledgementRequests.ts": "62eec58b08aa7cac9465896b80c1011fdc01fab0e04c3fefea1fb6fc21193b39",
+    "frontend-modern/src/stores/websocket-global.ts": "4950e4d28999adbd3c0ec1f5274c390af123fe4d3f4c4f3455be08b374b2b179",
+    "frontend-modern/src/stores/websocket.ts": "42564e6855b4eb431c89f5a933ec2a9d40754bd9ddf04c8bd7480ff851ca64a7"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "default",
+    "card hover",
+    "card keyboard focus",
+    "global pending",
+    "pending remount",
+    "completed after unmount",
+    "acknowledged hidden",
+    "group partial feedback",
+    "overlapping ownership",
+    "group rejected",
+    "group retried",
+    "global rejected",
+    "global retried",
+    "old scope outcomes silent",
+    "new scope completed",
+    "settled ack scope switch",
+    "settled restore scope switch",
+    "same scope reconnect",
+    "group expanded",
+    "timeline loading",
+    "timeline error",
+    "timeline terminal",
+    "snooze dialog",
+    "monitoring menu"
+  ],
+  "interactions": [
+    "Built production OverviewTab, hooks, ToastContainer and real WebSocket store with private controlled API/socket fixtures. Completion observation delegates unchanged to the actual request owner.",
+    "Hover and keyboard-focus card action; Enter starts global acknowledgement; included cards and global action stay disabled, and repeated activation sends no duplicate request.",
+    "Unmount and remount the overview while pending; finish after unmount, show the result once and retain shared busy state.",
+    "Partial group success reports both counts; retry sends only failed unowned alerts; an older settled hold cannot release a newer group request; an unrelated card remains usable.",
+    "Overlapping card, group and global actions exclude alerts already owned by another request; group/global rejection preserves alerts and allows retry.",
+    "Actual store.switchUrl with reused identifiers: old card success, group partial failure and global rejection neither mutate nor notify the new scope or release its new bulk request.",
+    "Settled acknowledge and restore guards end on scope switch; wait beyond the old 15-second confirmation deadline without a stale error.",
+    "Actual same-scope reconnect receives a uniquely marked stale socket frame and retains both confirmation guards and outstanding request ownership.",
+    "Toggle acknowledged visibility to the empty state and back; reload from confirmed synthetic server truth.",
+    "Enter expands related alerts; More/Less opens and closes adjacent actions; timeline loading, error, Retry and exact terminal unavailable state are visible.",
+    "Snooze dialog fully animates, fits the viewport and dismisses by Escape/Cancel with focus return. Monitoring menu opens by ArrowDown, fits the viewport and dismisses by Escape/outside click with focus return.",
+    "Pixel review of all 72 captures using contact sheets plus full-size controls, feedback, timeline and overlays; horizontal overflow assertions pass at all three widths."
+  ]
+}

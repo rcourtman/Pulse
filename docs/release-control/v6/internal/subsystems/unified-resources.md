@@ -2562,7 +2562,13 @@ the expansion's Network details.
 13. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `storage-recovery`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
 14. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `performance-and-scalability`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
-16. `frontend-modern/src/stores/websocket-global.ts` shared with `performance-and-scalability`: the process-wide realtime store owner is both a unified-resource state boundary and a fleet-scale connection and reconciliation hot path.
+16. `frontend-modern/src/stores/websocket-global.ts` shared with `alerts`, `performance-and-scalability`: the process-wide realtime store owns alert acknowledgement request lifetime, unified-resource state and fleet-scale connection and reconciliation.
+    Alert request ownership follows this store's scope across route remounts.
+    A scope switch ends request ownership and confirmation guards before
+    accepting that scope's alerts. Same-scope reconnects retain them. The real
+    store and global no-op lifetime tests pin this shared boundary through
+    `websocket.alertAcknowledgementRequests.test.ts` and
+    `websocket-global.noopLifetime.test.ts`.
 17. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
