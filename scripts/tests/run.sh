@@ -18,6 +18,7 @@ when specified. Documentation and smoke CI balance their complete discovered
 inventories across four and two isolated, sorted shards respectively, using
 measured suite durations. Hints never define coverage or change test deadlines;
 new suites receive a default scheduling weight.
+Failed runs finish with the selected suite names and their observed exit codes.
 EOF
 }
 
@@ -72,25 +73,27 @@ run_tests() {
   local total=0
   local passed=0
   local failed=0
+  local status index
+  local -a failed_suites=() failed_exits=()
 
   for test in "${tests[@]}"; do
     ((total += 1))
     local display="${test#${ROOT_DIR}/}"
     printf '==> %s\n' "${display}"
+    status=0
     if [[ "${test}" == *.py ]]; then
-      if (cd "${ROOT_DIR}" && python3 "${test}"); then
-        echo "PASS"
-        ((passed += 1))
-      else
-        echo "FAIL"
-        ((failed += 1))
-      fi
-    elif (cd "${ROOT_DIR}" && "${test}"); then
+      (cd "${ROOT_DIR}" && python3 "${test}") || status=$?
+    else
+      (cd "${ROOT_DIR}" && "${test}") || status=$?
+    fi
+    if (( status == 0 )); then
       echo "PASS"
       ((passed += 1))
     else
-      echo "FAIL"
+      printf 'FAIL (exit %d)\n' "${status}"
       ((failed += 1))
+      failed_suites+=("${display}")
+      failed_exits+=("${status}")
     fi
     echo
   done
@@ -98,6 +101,10 @@ run_tests() {
   echo "Summary: ${passed}/${total} passed"
   if (( failed > 0 )); then
     echo "Failures: ${failed}"
+    echo "Failed suites:"
+    for ((index = 0; index < failed; index++)); do
+      printf '  %s (exit %d)\n' "${failed_suites[index]}" "${failed_exits[index]}"
+    done
     return 1
   fi
   return 0
