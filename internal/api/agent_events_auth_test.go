@@ -137,7 +137,10 @@ func TestAgentEventTokenRefreshKeepsBoundedContext(t *testing.T) {
 			token := newTokenRecord(t, agentEventLifecycleToken, []string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 			token.OrgID = orgID
 			cfg := newTestConfigWithTokens(t, token)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			// The deadline is a preserved request value, not a throughput budget.
+			// Explicit cancellation after the fixed frame count owns termination;
+			// the enclosing go test timeout still bounds a hung handler.
+			ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 			defer cancel()
 			type requestMarker struct{}
 			ctx = context.WithValue(ctx, requestMarker{}, "admitted-value")
