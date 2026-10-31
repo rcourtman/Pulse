@@ -140,29 +140,19 @@ func TestLogHandlers_HandleDownloadBundle(t *testing.T) {
 		t.Fatalf("unmarshal system-info: %v", err)
 	}
 
-	if payload.Config.AuthPass != "[REDACTED]" {
-		t.Fatalf("expected AuthPass redacted, got %q", payload.Config.AuthPass)
-	}
-	if payload.Config.APIToken != "[REDACTED]" {
-		t.Fatalf("expected APIToken redacted, got %q", payload.Config.APIToken)
-	}
-	if payload.Config.ProxyAuthSecret != "[REDACTED]" {
-		t.Fatalf("expected ProxyAuthSecret redacted, got %q", payload.Config.ProxyAuthSecret)
-	}
-	if payload.Config.PVEInstances[0].Password != "[REDACTED]" {
-		t.Fatalf("expected PVE password redacted, got %q", payload.Config.PVEInstances[0].Password)
-	}
-
-	var redactedEnv bool
-	for _, env := range payload.Env {
-		if strings.HasPrefix(env, "TEST_SECRET=") {
-			redactedEnv = strings.Contains(env, "[REDACTED]")
-			break
+	// Configuration/environment are an allowlisted diagnostic summary, not a
+	// redacted full configuration backup. Unknown environment is absent.
+	for _, forbidden := range []string{"super-secret", "password", "proxy-secret", "pve-pass", "pve-token", "pbs-pass", "pbs-token", "pmg-pass", "pmg-token"} {
+		if strings.Contains(string(systemInfo), forbidden) {
+			t.Fatalf("system-info disclosed a synthetic credential")
 		}
 	}
-	if !redactedEnv {
-		t.Fatalf("expected TEST_SECRET to be redacted, got env: %#v", payload.Env)
+	for _, env := range payload.Env {
+		if strings.HasPrefix(env, "TEST_SECRET=") {
+			t.Fatal("unknown environment must not be copied")
+		}
 	}
+
 }
 
 func TestLogHandlers_HandleSetLevelAndGetLevel(t *testing.T) {

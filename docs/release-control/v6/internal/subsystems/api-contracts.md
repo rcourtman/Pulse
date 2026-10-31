@@ -13358,3 +13358,33 @@ manager/files on rejection, supported results, existing denials and both
 fallbacks. `TestContractRBACIntegrityQueryAdmission` exercises the registered
 router and unchanged authentication/licence gates. No frontend consumes this
 admin-only check; this changes no rendered state, recovery token or sign-in.
+
+
+### Support bundles use an explicit diagnostic allowlist
+
+`GET /api/logs/download` retains instance administration plus `settings:read`,
+the ZIP attachment and the configured log-file/retained-buffer fallback. Logs
+are unchanged private evidence, not anonymised or safe to publish. The existing
+System Logs warning and display-only pause/clear behaviour remain applicable.
+
+`system-info.json` is a diagnostic summary, not a configuration backup: only
+selected scalar polling, retention, logging, transport and feature settings,
+connection counts/order, credential-presence/TLS flags and monitored surfaces
+are copied. No Config object, free-form endpoint/name/path or credential is
+serialized. Enumerated strings accept only fixed values; unknown values are
+redacted. New configuration fields are excluded by default. A detached snapshot
+uses configuration ownership shared by log-level updates; export never rewrites
+live credentials, connections or logs. Runtime metadata uses the injected build
+version (explicitly unknown when missing), current Go runtime and OS, not a
+hardcoded legacy version.
+
+Environment export includes only `GOMAXPROCS`, `GOGC` and `GOMEMLIMIT`, with
+bounded numeric/unit/off grammars. Other names and values are absent, including
+credential-bearing proxy URLs and DSNs; invalid allowlisted values are redacted.
+No name-based secret heuristic or claim of complete log scrubbing remains.
+`TestContractSupportBundleCredentialBoundary` exercises the real authenticated
+HTTP route, both token headers, independent administration, unchanged denials,
+synthetic credentials and preserved live data. `log_bundle_test.go` covers
+value grammars, detached projections, log fallbacks, runtime identity and race
+ownership. Consuming browser evidence exercises the unchanged download control
+with the exact synthetic native ZIP; it is not installed/customer recovery.

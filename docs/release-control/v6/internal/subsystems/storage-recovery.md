@@ -9179,3 +9179,16 @@ literal date evidence and the browser-reproduced focus repair. The 15% threshold
 all other per-chunk baselines, total JS/CSS and preload/SRI checks stay unchanged.
 This is a narrowly declared intentional UI/accessibility cost, not suppression
 of the retained failed budget runs or permission to omit browser verification.
+
+
+### Diagnostic log downloads do not export recovery credentials
+
+The existing administrative log-bundle route retains its auth/scope gates and
+raw log-file/buffer evidence. Its system-info member now uses the API contract's
+explicit diagnostic allowlist rather than a full Config/environment copy. No
+endpoint/name/path, arbitrary environment or credential is included in that
+summary; logs still require private manual review. Connection and polling
+settings remain live and unchanged. This is not a backup, credential recovery,
+agent/guest probe or installed recovery. The normal HTTP contract
+`TestContractSupportBundleCredentialBoundary` and `log_bundle_test.go` cover the
+summary, scope denials, state preservation and configured-file/buffer fallbacks.

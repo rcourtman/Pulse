@@ -835,11 +835,13 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
                       "Keep the archive private", "manually reviewed, redacted excerpts",
                       "not a guarantee that all content is safe to publish")
         handler = (ROOT / "internal/api/log_handlers.go").read_text().split("func (h *LogHandlers) HandleDownloadBundle", 1)[1].split("type SetLogLevelRequest", 1)[0]
-        for source in ('os.Open(h.config.LogFile)', 'zipWriter.Create("pulse.log")',
+        for source in ('os.Open(logFile)', 'zipWriter.Create("pulse.log")',
                        'io.Copy(wr, f)', 'zipWriter.Create("pulse-tail.log")',
                        'logging.GetBroadcaster().GetHistory()', 'zipWriter.Create("system-info.json")',
-                       'h.config.DeepCopy()', 'os.Environ()'):
+                       'newSupportBundleConfig(h.config)', 'supportBundleEnvironment(os.Environ())'):
             self.assertIn(source, handler)
+        self.assertNotIn("h.config.DeepCopy()", handler)
+        self.assertNotIn("*config.Config", handler)
         state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
         self.assertIn("window.location.href = '/api/logs/download'", state)
         trouble = " ".join((ROOT / "docs/TROUBLESHOOTING.md").read_text().split("### Collect diagnostics safely\n", 1)[1].split("### Inspect Notification Logs", 1)[0].split())
