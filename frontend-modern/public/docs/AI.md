@@ -879,7 +879,7 @@ happens at the configured endpoint. With a hosted model, context travels directl
 from a self-managed Pulse instance to that provider, not through Pulse
 infrastructure.
 
-- **Model context is not anonymous telemetry.** It can include resource names
+- **Model context differs from usage telemetry.** It can include resource names
   and addresses, monitoring state, relationships, operator notes and objectives,
   prior findings and tool results used in the run. Review the chosen provider's
   retention and training policies before enabling scheduled Patrol or an

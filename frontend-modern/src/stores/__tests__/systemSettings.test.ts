@@ -110,6 +110,7 @@ describe('systemSettings store', () => {
       path.join(frontendRoot, 'public', 'docs', 'PRIVACY.md'),
       'utf8',
     );
+    const privacyText = privacyDoc.replace(/\s+/g, ' ');
 
     expect(privacyDoc).not.toContain('secure remote web access');
     expect(privacyDoc).toContain('Relay does not provide remote access to the web UI');
@@ -124,8 +125,8 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('uses request IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
     expect(privacyDoc).toContain('active Patrol objective briefs');
-    expect(privacyDoc).toContain('encrypted at rest in the local organization data directory');
-    expect(privacyDoc).toContain('objective text is not included in Pulse usage telemetry');
+    expect(privacyText).toMatch(/encrypted at rest in the local organi[sz]ation data directory/);
+    expect(privacyText).toContain('objective text is not included in Pulse usage telemetry');
     expect(privacyDoc).toContain('Pulse Intelligence Patrol control completed operations loop 30d');
     expect(privacyDoc).toContain(
       'Pulse Intelligence Patrol control paid resolved operations loop 30d',
@@ -169,13 +170,19 @@ describe('systemSettings store', () => {
 
   it('documents self-hosted AI provider transport and resource-policy redaction in the privacy doc', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
+    const privacyText = privacyDoc.replace(/\s+/g, ' ');
 
-    expect(privacyDoc).toContain(
-      'AI prompts from self-managed installs do not transit Pulse infrastructure',
+    expect(privacyText).toContain(
+      'providers receive this context directly from your self-managed Pulse instance',
     );
-    expect(privacyDoc).toContain(
-      'governed resource details use the same resource-policy redaction',
+    expect(privacyText).toContain('AI prompts do not transit Pulse infrastructure');
+    expect(privacyText).toContain('Pulse applies secret filtering and resource-policy handling');
+    expect(privacyText).toContain('known restricted resource identifiers are redacted');
+    expect(privacyText).toContain(
+      'Internal and Sensitive resources can still be shared with a hosted model',
     );
-    expect(privacyDoc).toContain('Local providers stay on your network');
+    expect(privacyText).toContain(
+      'verify that the chosen endpoint runs within your trusted network and does not forward requests elsewhere',
+    );
   });
 });
