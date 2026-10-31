@@ -1093,14 +1093,11 @@ export function ProxmoxCoverageTable(props: {
                                             <TableCell
                                               class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
                                             >
-                                              <Show
-                                                when={artifact.size && artifact.size > 0}
-                                                fallback={
-                                                  <span class="text-muted">Unknown size</span>
-                                                }
-                                              >
-                                                {formatPlatformTableBytesValue(artifact.size)}
-                                              </Show>
+                                              {artifact.size && artifact.size > 0 ? (
+                                                formatPlatformTableBytesValue(artifact.size)
+                                              ) : (
+                                                <span class="text-muted">Unknown size</span>
+                                              )}
                                             </TableCell>
                                           </Show>
                                           <TableCell

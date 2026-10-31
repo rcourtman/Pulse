@@ -29,7 +29,7 @@ let updated: boolean;
 function inventories() {
   return {
     backups: [
-      identityPBS({ id: 'same-time-pbs-a', namespace: 'east' }),
+      identityPBS({ id: 'same-time-pbs-a', namespace: 'east', size: updated ? 0 : 2048 }),
       identityPBS({
         id: 'same-time-pbs-b',
         namespace: 'east',
@@ -163,6 +163,10 @@ describe('Coverage restore-point identity through parsed inventory', () => {
     expect(panel).not.toHaveTextContent('second snapshot');
     expect(panel).toHaveTextContent(`updated ${literal}`);
     expect(panel).toHaveTextContent('2 PBS files');
+    const pbsRow = evidenceRows(panel).find((row) =>
+      row.textContent?.includes('Identifier: same-time-pbs-a'),
+    )!;
+    expect(pbsRow).toHaveTextContent('Unknown size');
     expect(panel.querySelector('img')).toBeNull();
     expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
     expect(evidenceRows(panel)).toEqual(before);
