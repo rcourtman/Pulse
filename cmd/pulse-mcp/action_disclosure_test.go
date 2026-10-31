@@ -79,7 +79,7 @@ func TestServer_ActionDisclosureThroughRealAgentHandlers(t *testing.T) {
 			}
 			record := unified.ActionAuditRecord{
 				ID: "mcp-action", CreatedAt: now, UpdatedAt: now, State: unified.ActionStateFailed,
-				Request: unified.ActionRequest{ResourceID: "vm:101", CapabilityName: "restart", Params: map[string]any{"command": "printf " + privateDetail}},
+				Request: unified.ActionRequest{ResourceID: "vm:101", CapabilityName: "restart", RequestedBy: "fixture-operator", Params: map[string]any{"command": "printf " + privateDetail}},
 				Result:  &unified.ExecutionResult{ErrorMessage: "plan_drift: " + privateDetail, ActionResultV2: &truth},
 			}
 			if err := store.RecordActionAudit(record); err != nil {
