@@ -23,7 +23,6 @@ describe('private vulnerability reporting guidance', () => {
     // Opening the contact must not prefill credentials or diagnostic material.
     expect(contact?.getAttribute('href')).not.toContain('?');
     expect(rendered.querySelectorAll('a[href^="mailto:"]')).toHaveLength(1);
-    expect(rendered.querySelector('a[href="#reporting-a-vulnerability"]')).not.toBeNull();
   });
 
   it('separates sensitive reports from public support without requesting unsafe evidence', () => {

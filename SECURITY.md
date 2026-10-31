@@ -161,7 +161,6 @@ incident, defer live checks and follow [backup safety](docs/VM_DISK_MONITORING.m
 
 **Documentation:** [Critical security notice for container deployments](#critical-security-notice-for-container-deployments)
 **Issues:** <https://github.com/rcourtman/pulse/issues>
-**Private disclosures:** [Reporting a vulnerability](#reporting-a-vulnerability)
 
 ---
 
