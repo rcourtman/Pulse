@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Shard artifacts expose bounded source identities, never assertion payloads."""
 
+import copy
 import hashlib
 import json
 import os
@@ -10,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -280,10 +283,65 @@ class APIFailureIndexTest(unittest.TestCase):
         self.assertIn('path: ${{ runner.temp }}/internal-api-test-seconds/', job)
         self.assertIn('name: internal-api-test-seconds-${{ matrix.index }}', job)
         self.assertIn('set -euo pipefail', job)
-        self.assertNotIn('continue-on-error:', job)
+        parsed_job = yaml.safe_load(workflow)['jobs']['backend-api']
+        self.assert_api_validation_remains_fatal(parsed_job)
         self.assertIn('printf \'%s\\n\' "$selected" > "$timings/api-${API_SHARD_INDEX}.selected"', job)
         self.assertIn('package=$(go list ./internal/api)', job)
         self.assertIn('"$timings/api-${API_SHARD_INDEX}.selected" "$package"', job)
+
+    def assert_api_validation_remains_fatal(self, job):
+        # Optional object transport is not a validation result. Keep job,
+        # compile admission, runtime pipeline and sidecar upload failures fatal;
+        # allow only the exact pinned, read-only cache restore, not its name.
+        self.assertNotIn('continue-on-error', job)
+        prefix = ("backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-"
+                  "${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-")
+        optional_restore = {
+            'name': 'Restore backend race build objects',
+            'if': "needs.changes.outputs.code == 'true'",
+            'id': 'race-cache',
+            'continue-on-error': True,
+            'uses': 'actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
+            'with': {'path': '${{ steps.go-build-cache.outputs.path }}',
+                     'key': prefix + '${{ github.sha }}', 'restore-keys': prefix},
+        }
+        optional_steps = [step for step in job['steps'] if 'continue-on-error' in step]
+        self.assertLessEqual(len(optional_steps), 1)
+        for step in optional_steps:
+            self.assertEqual(step, optional_restore)
+
+    def test_optional_cache_cannot_make_validation_or_sidecar_failure_nonfatal(self):
+        job = yaml.safe_load((ROOT / '.github/workflows/build-and-test.yml').read_text())['jobs']['backend-api']
+        self.assert_api_validation_remains_fatal(job)
+        no_cache = copy.deepcopy(job)
+        no_cache['steps'] = [step for step in no_cache['steps'] if step.get('id') != 'race-cache']
+        self.assert_api_validation_remains_fatal(no_cache)
+        for name in ('Require compiled backend tests',
+                     'Go unit tests (internal/api shard ${{ matrix.index }})',
+                     'Upload internal/api test timings'):
+            with self.subTest(masked_step=name):
+                changed = copy.deepcopy(job)
+                step = next(step for step in changed['steps'] if step['name'] == name)
+                step['continue-on-error'] = True
+                with self.assertRaises(AssertionError):
+                    self.assert_api_validation_remains_fatal(changed)
+        changed = copy.deepcopy(job)
+        changed['continue-on-error'] = True
+        with self.assertRaises(AssertionError):
+            self.assert_api_validation_remains_fatal(changed)
+        # A lookalike cache step must not smuggle arbitrary execution, artifact
+        # transport, paths or conditions through the narrowly optional boundary.
+        for field, value in (
+                ('uses', 'actions/cache/restore@main'),
+                ('uses', 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'),
+                ('run', 'exit 0'), ('if', 'always()'),
+                ('with', {'path': '${{ github.workspace }}'})):
+            with self.subTest(cache_drift=(field, value)):
+                changed = copy.deepcopy(job)
+                step = next(step for step in changed['steps'] if step.get('id') == 'race-cache')
+                step[field] = value
+                with self.assertRaises(AssertionError):
+                    self.assert_api_validation_remains_fatal(changed)
 
     def test_selected_pass_and_explicit_skip_complete_coverage(self):
         stream = (event('run', 'TestGood') + event('pass', 'TestGood', elapsed=0.2) +
