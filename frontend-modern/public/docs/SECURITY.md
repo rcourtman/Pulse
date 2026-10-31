@@ -9,6 +9,28 @@ For a high-level overview of the system design and data flow, please refer to
 
 ---
 
+## Reporting a vulnerability
+
+Email <security@pulserelay.pro> for suspected vulnerabilities or sensitive
+security details. **Do not open a public issue or discussion for these reports.**
+
+Start with a short description of the problem, its impact and the affected
+Pulse and agent versions, if known. Use existing, locally reviewed evidence;
+do not send live credentials, private keys, full diagnostics or configuration
+exports. Do not repeat a risky action just to make a report.
+
+If private information has already been posted, follow the
+[containment steps](docs/TROUBLESHOOTING.md#if-you-already-posted-private-information).
+Removing a public copy is not credential revocation or proof that every copy
+is gone. Do not repost the original sensitive material.
+
+For ordinary bugs and usage questions, use the
+[public issue tracker](https://github.com/rcourtman/Pulse/issues) or
+[Discussions](https://github.com/rcourtman/Pulse/discussions), with secrets and
+identifying details removed. The security address is not a general support route.
+
+---
+
 ## Critical Security Notice for Container Deployments
 
 ### Container SSH Key Handling
@@ -139,7 +161,6 @@ incident, defer live checks and follow [backup safety](docs/VM_DISK_MONITORING.m
 
 **Documentation:** [Critical security notice for container deployments](#critical-security-notice-for-container-deployments)
 **Issues:** <https://github.com/rcourtman/pulse/issues>
-**Private disclosures:** <security@pulserelay.pro>
 
 ---
 
