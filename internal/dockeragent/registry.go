@@ -94,6 +94,10 @@ func (r *RegistryChecker) pruneLocalImages(active map[string]struct{}) {
 type digestCache struct {
 	entries map[string]cacheEntry
 	mu      sync.RWMutex
+	// generation counts ForceCheck clears. A lookup reads it with its cache
+	// decision and stores its outcome only if no clear happened since, so a
+	// lookup begun before a manual check cannot refill the cleared cache.
+	generation uint64
 }
 
 type cacheEntry struct {
@@ -240,6 +244,7 @@ func (r *RegistryChecker) ForceCheck() {
 	r.cache.mu.Lock()
 	defer r.cache.mu.Unlock()
 	r.cache.entries = make(map[string]cacheEntry)
+	r.cache.generation++
 }
 
 // proBrokerRegistry is the entitled Pulse Pro registry. Digest checks against
@@ -291,7 +296,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, goos, variant)
 	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking update (internal)")
 
-	cached, refresh := r.cachedForLocalImage(cacheKey, currentDigest)
+	cached, refresh, generation := r.cachedForLocalImage(cacheKey, currentDigest)
 	if cached != nil && !refresh {
 		r.logger.Debug().Str("image", image).Msg("cache hit for update check")
 		if cached.err != "" {
@@ -316,7 +321,9 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	latestDigest, headDigest, err := r.fetchDigest(ctx, registry, repository, tag, arch, goos, variant)
 	if err != nil {
 		// Cache the error to avoid hammering the registry
-		r.cacheError(cacheKey, err.Error())
+		if !r.cacheErrorInGeneration(generation, cacheKey, err.Error()) {
+			return r.clearedDuringLookup(image)
+		}
 
 		r.logger.Debug().
 			Str("image", image).
@@ -346,7 +353,9 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	// Cache the successful result
-	r.cacheImageDigestResult(cacheKey, publicLatestDigest, comparisonDigests, currentDigest, cached)
+	if !r.cacheImageDigestResult(generation, cacheKey, publicLatestDigest, comparisonDigests, currentDigest, cached) {
+		return r.clearedDuringLookup(image)
+	}
 
 	updateAvailable := r.digestsDiffer(currentDigest, comparisonDigests)
 
@@ -891,35 +900,49 @@ func (r *RegistryChecker) getCached(key string) *cacheEntry {
 // image disagrees with registry evidence collected for an older image. A cache
 // hit alone must never assert that an unseen replacement has a pending update.
 // The reservation and cooldown are shared by all containers on this tag/platform.
-func (r *RegistryChecker) cachedForLocalImage(key, current string) (*cacheEntry, bool) {
+// It also returns the cache generation, read under the same lock as any
+// reservation, so a reservation lives in that generation's map and ForceCheck
+// drops it with that map rather than leaving it stuck in the new one.
+func (r *RegistryChecker) cachedForLocalImage(key, current string) (*cacheEntry, bool, uint64) {
 	r.cache.mu.Lock()
 	defer r.cache.mu.Unlock()
 
+	generation := r.cache.generation
 	now := time.Now()
 	entry, ok := r.cache.entries[key]
 	if !ok || now.After(entry.expiresAt) {
-		return nil, false
+		return nil, false, generation
 	}
 	// Local churn must not bypass registry error/rate-limit backoff. A local
 	// digest matching either registry layer already proves it is current.
 	if entry.err != "" {
-		return &entry, false
+		return &entry, false, generation
 	}
 	if !r.digestsDiffer(current, entry.comparisonDigests) ||
 		!r.digestsDiffer(current, entry.observedLocalDigests) {
 		entry.observedLocalDigests = mergeObservedLocalDigests(current, entry.observedLocalDigests)
 		r.cache.entries[key] = entry // Do not slide expiry or the refresh budget.
-		return &entry, false
+		return &entry, false, generation
 	}
 	if entry.refreshing || now.Before(entry.refreshAfter) {
 		// Unknown is not an affirmative clear. Existing alert consumers retain
 		// wanted incidents on errors, and the UI does not offer a false update.
-		return &cacheEntry{err: imageChangeRefreshPending}, false
+		return &cacheEntry{err: imageChangeRefreshPending}, false, generation
 	}
 	entry.refreshing = true
 	entry.refreshAfter = now.Add(localImageRefreshInterval)
 	r.cache.entries[key] = entry
-	return &entry, true
+	return &entry, true, generation
+}
+
+// clearedDuringLookup reports a lookup whose cache generation ForceCheck
+// cleared while the registry request ran. Its answer or error predates the
+// manual check, so it is neither cached nor reported: nil leaves the
+// container's update status unknown for this cycle, and the next check, after
+// the clear, asks the registry again.
+func (r *RegistryChecker) clearedDuringLookup(image string) *ImageUpdateResult {
+	r.logger.Debug().Str("image", image).Msg("Registry cache was cleared during this lookup; discarding its result")
+	return nil
 }
 
 // Keep recent local digest identities, not container IDs. Reordering Docker's
@@ -948,7 +971,9 @@ func mergeObservedLocalDigests(current, previous string) string {
 	return strings.Join(digests, ",")
 }
 
-func (r *RegistryChecker) cacheImageDigestResult(key, latestDigest, comparisonDigests, current string, previous *cacheEntry) {
+// cacheImageDigestResult stores a lookup's answer unless ForceCheck has cleared
+// the cache since generation, and reports whether it did.
+func (r *RegistryChecker) cacheImageDigestResult(generation uint64, key, latestDigest, comparisonDigests, current string, previous *cacheEntry) bool {
 	entry := cacheEntry{
 		latestDigest:         latestDigest,
 		comparisonDigests:    comparisonDigests,
@@ -961,7 +986,11 @@ func (r *RegistryChecker) cacheImageDigestResult(key, latestDigest, comparisonDi
 	}
 	r.cache.mu.Lock()
 	defer r.cache.mu.Unlock()
+	if r.cache.generation != generation {
+		return false
+	}
 	r.cache.entries[key] = entry
+	return true
 }
 
 func (r *RegistryChecker) cacheDigest(key, digest string) {
@@ -983,12 +1012,28 @@ func (r *RegistryChecker) cacheError(key, errMsg string) {
 	r.cache.mu.Lock()
 	defer r.cache.mu.Unlock()
 
+	r.cache.entries[key] = cacheErrorEntry(errMsg)
+}
+
+// cacheErrorInGeneration stores a lookup's error unless ForceCheck has cleared
+// the cache since generation, and reports whether it did.
+func (r *RegistryChecker) cacheErrorInGeneration(generation uint64, key, errMsg string) bool {
+	r.cache.mu.Lock()
+	defer r.cache.mu.Unlock()
+	if r.cache.generation != generation {
+		return false
+	}
+	r.cache.entries[key] = cacheErrorEntry(errMsg)
+	return true
+}
+
+func cacheErrorEntry(errMsg string) cacheEntry {
 	ttl := errorCacheTTL
 	if strings.Contains(strings.ToLower(errMsg), "rate limit") {
 		ttl = rateLimitCacheTTL
 	}
 
-	r.cache.entries[key] = cacheEntry{
+	return cacheEntry{
 		err:       errMsg,
 		expiresAt: time.Now().Add(ttl),
 	}
