@@ -12,12 +12,61 @@ from subsystem_contracts import (
     load_contract_index,
     parse_contract_text,
     referenced_contracts_for_path,
+    section_list_items,
     tracked_contract_paths,
     tracked_contract_files,
 )
 
 
+def legacy_section_list_items(body_lines: list[str]) -> list[tuple[int, str]]:
+    """Pre-optimisation parser, retained only as a differential test oracle."""
+    items = []
+    for index, line in enumerate(body_lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for marker in [f"{n}." for n in range(1, 100)]:
+            if stripped.startswith(marker + " "):
+                items.append((index, stripped[len(marker) + 1 :]))
+                break
+    return items
+
+
 class SubsystemContractsTest(unittest.TestCase):
+    def test_numbered_items_preserve_marker_bounds_content_and_line_offsets(self) -> None:
+        self.assertEqual(section_list_items([
+            "", "  1. `internal/example.go`  ", "2.  two spaces",
+            "\t99. `last.go`\t", "100. not a recognised marker", "0. zero",
+            "01. leading zero", "1.\ttab separator", "١. non-ASCII digit",
+            "1.\u00a0non-ASCII separator", "- bullet", "## Heading",
+            "  9. embedded\nnewline  ", "3. ", "10. \tcontent",
+        ]), [
+            (1, "`internal/example.go`"), (2, " two spaces"), (3, "`last.go`"),
+            (12, "embedded\nnewline"), (14, "\tcontent"),
+        ])
+
+    def test_numbered_items_match_legacy_parser_for_valid_and_lookalike_prefixes(self) -> None:
+        markers = [str(number) for number in range(-1, 102)] + [
+            "01", "001", "1.0", "1e1", "١", "９", "+1", "9" * 200,
+        ]
+        lines = [
+            f"{indent}{marker}.{separator}{content}  "
+            for marker in markers
+            for indent in ("", "\t")
+            for separator in (" ", "  ", "\t", "\u00a0", "")
+            for content in ("`internal/example.go`", "", "first\nsecond")
+        ]
+        self.assertEqual(section_list_items(lines), legacy_section_list_items(lines))
+
+    def test_current_contract_index_is_identical_to_legacy_parser(self) -> None:
+        # Compare every actual contract, metadata field and reference offset;
+        # no snapshot, test selection or source/index/revision read is cached.
+        actual = load_contract_index()
+        with patch("subsystem_contracts.section_list_items", legacy_section_list_items):
+            expected = load_contract_index()
+        self.assertTrue(actual)
+        self.assertEqual(actual, expected)
+
     def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
         # Scrub the full hook environment: with only GIT_INDEX_FILE removed, a
         # pre-commit run from a linked worktree exports an absolute GIT_DIR and
