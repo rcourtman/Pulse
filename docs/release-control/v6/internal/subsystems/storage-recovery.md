@@ -21,6 +21,32 @@
 
 ## Purpose
 
+### Unread PBS writer inventories do not establish a terminal backup
+
+The running backup/sync task reader requires an explicit `data` array from a
+fully read response within the existing 8 MiB body bound. Missing/null arrays,
+error-bearing envelopes, trailing JSON, unread/failed-close bodies and rows
+without a nonblank worker type return no writer set, even after an earlier
+family or page succeeded. Known non-writer types remain filtered; a missing
+backup worker ID retains its conservative instance-wide match. Existing type
+aliases, query filters, page bounds, permissions and polling budgets stay intact.
+
+A failed writer read leaves this poll's write activity unobserved. An incomplete
+snapshot remains non-successful and may still be running; the absence of task
+evidence does not establish a terminal failure. An ordinary complete empty read
+can still establish no writer, and subsequent unread data withdraws that fact.
+Matched live tasks and completed manifests recover normally, without changing
+snapshot identity or borrowing a completion time. This is not guest liveness,
+a tested restore, an installed recovery or an established cause of #3248.
+
+`TestClient_ListRunningDataTasksRequiresReadableInventory`, the later-page and
+complete-response controls exercise the actual reader. Normal-suite
+`TestPBSWriterInventoryDoesNotInventTerminalFailure` connects VM/CT HTTP reads
+through polling, raw state, durable points and posture, including failed reads
+after prior no-writer evidence and an unaffected completed sibling. Its opt-in
+frames feed the actual existing Backups consumer at desktop/narrow widths for
+interaction and native pixel proof. Fixtures perform only local GETs.
+
 ### Coverage dates are inspectable without hover
 
 Open Coverage evidence retains each point’s exact reported date as wrapping
