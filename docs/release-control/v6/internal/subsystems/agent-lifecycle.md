@@ -15,6 +15,55 @@
 
 ## Purpose
 
+### Public-URL token checks share authentication ownership
+
+The pre-route public-URL authority check uses the existing locked token
+validator and detached snapshot. Normalisation and last-used metadata updates
+hold the same exclusive configuration ownership as ordinary authentication;
+subsequent scope checks never mutate the live record outside it. Both supported
+token headers retain the existing settings-write requirement. Expired, invalid,
+wrong-role and monitoring-only credentials gain no capture authority. Sessions,
+proxy/basic administration and URL/origin selection are unchanged.
+
+`TestPublicURLTokenCaptureUsesAuthenticationOwnership` covers concurrent capture
+and ordinary authentication, retained scope/identity and successful last-use
+updates; `TestPublicURLTokenCapturePreservesTokenRefusals` pins both headers and
+refused metadata. The real concurrent history HTTP test remains unchanged and
+must pass with the race detector; the observed race is not warmed away or
+suppressed. No new rendered state, token grant or runtime action is introduced.
+
+
+### Execution history uses a typed read-only projection
+
+The recent-change read keeps kind-specific scalar status facts, not arbitrary
+caller metadata that happens to use a familiar key. Runbook titles, stored
+reason/From/To text and nested values can contain execution details and are
+redacted for monitoring-read callers. Fixed reasons derive only from admitted
+boolean command success or the closed incident outcomes; missing or malformed
+facts do not establish success or failure. Every execution-history projection
+is explicitly marked redacted. Executor/session reads and canonical evidence
+are unchanged; this adds no enrollment, token scope or action authority.
+
+Normal-suite typed-fact, authenticated concurrent HTTP, contract and real MCP
+consumer regressions cover content visibility and unchanged stored evidence.
+
+
+### Scoped agent outcome reads do not disclose execution detail
+
+The agent event/resource-context projections preserve validated execution,
+verification/evidence-class and compensation axes in an explicitly redacted
+`actionResultSummary` for tokens without `ai:execute`. Full canonical evidence,
+free-form result/error text and verification notes are withheld rather than
+rewritten into new evidence. Known refusal prefixes remain branchable; session
+and existing command-capable reads remain unchanged. No stored evidence, agent
+command admission, recovery action or recovery-data identity changes.
+
+The ordinary API disclosure/contract tests check legacy and V2 producers,
+malformed-digest fallback, stored-evidence preservation and scoped concurrent
+streams. The MCP consumer test checks real authenticated tools/call and live
+notification readback. A content-free outcome is not independent recovery proof
+or permission to replay any stopped operation.
+
 ### Image comparison refresh is not container lifecycle authority
 
 Docker/Podman collection can refresh stale registry evidence after a changed

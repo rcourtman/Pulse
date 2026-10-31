@@ -4978,17 +4978,23 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		}
 	}
 
-	// API Tokens: Require settings:write scope
-	if cfg.HasAPITokens() {
-		if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
-			if record, ok := cfg.ValidateAPIToken(token); ok && record.HasScope(config.ScopeSettingsWrite) {
-				return true
-			}
+	// API Tokens: Require settings:write scope. This pre-route check runs
+	// concurrently with authentication. Metadata normalization and LastUsedAt
+	// need the same exclusive ownership; scope checks use a detached snapshot.
+	tokenAllowsCapture := func(token string) bool {
+		config.Mu.RLock()
+		defer config.Mu.RUnlock()
+		record, ok := validateAPITokenLocked(cfg, token)
+		return ok && record.HasScope(config.ScopeSettingsWrite)
+	}
+	if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
+		if tokenAllowsCapture(token) {
+			return true
 		}
-		if authHeader := strings.TrimSpace(req.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-			if record, ok := cfg.ValidateAPIToken(strings.TrimSpace(authHeader[7:])); ok && record.HasScope(config.ScopeSettingsWrite) {
-				return true
-			}
+	}
+	if authHeader := strings.TrimSpace(req.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		if tokenAllowsCapture(strings.TrimSpace(authHeader[7:])) {
+			return true
 		}
 	}
 
