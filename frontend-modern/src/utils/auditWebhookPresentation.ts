@@ -73,6 +73,16 @@ export function getAuditWebhookLoadingState() {
   } as const;
 }
 
+export function getAuditWebhookReadErrorCopy(hasLoadedConfiguration: boolean) {
+  return {
+    title: 'Audit webhook configuration could not be loaded.',
+    body: hasLoadedConfiguration
+      ? 'Last loaded destinations are shown below. Load the configuration before making changes.'
+      : 'Existing destinations are unknown. Load the configuration before making changes.',
+    retryLabel: 'Retry loading',
+  } as const;
+}
+
 export function getAuditWebhookInvalidUrlMessage(): string {
   return 'Please enter a valid URL';
 }
