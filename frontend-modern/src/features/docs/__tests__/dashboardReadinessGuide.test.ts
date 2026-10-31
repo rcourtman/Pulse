@@ -71,6 +71,17 @@ describe('dashboard readiness guidance', () => {
     expect(rendered.querySelector('a[href="#connection-refused"]')).not.toBeNull();
   });
 
+  it('keeps failed proxy upgrades separate from accepted transport without state', () => {
+    const proxy = section('REVERSE_PROXY', 'Other Issues');
+    expect(proxy.querySelector(`a[href="/docs/TROUBLESHOOTING#${anchor}"]`)).not.toBeNull();
+    expect(text(proxy)).toMatch(/already-observed upgrade failed.*Upgrade.*Connection/);
+    expect(text(proxy)).toMatch(/HTTP 101 or welcome message without subsequent state is a different failure/);
+    expect(text(proxy)).toMatch(/changing those headers is not an established remedy/);
+    expect(text(proxy)).toMatch(/Keep authentication, TLS and origin checks enabled/);
+    expect(text(proxy)).toMatch(/do not expose the backend to test a bypass/);
+    expect(read('frontend-modern/public/docs/REVERSE_PROXY.md')).toBe(guide('REVERSE_PROXY'));
+  });
+
   it('uses existing evidence without extra probes, reset advice or credential-bearing exports', () => {
     const rendered = stalled();
     const copy = text(rendered);
