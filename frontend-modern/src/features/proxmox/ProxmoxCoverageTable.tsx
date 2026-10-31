@@ -46,6 +46,7 @@ import {
   getWorkloadRecoveryPostureLabel,
   type WorkloadCoverageRow,
   type CoverageTask,
+  type RecoverableArtifact,
 } from './proxmoxBackupRecoveryModel';
 import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
 import { formatDurationFromSeconds, type CoverageSortKey } from './proxmoxBackupsTableModel';
@@ -461,6 +462,27 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
       ),
     },
   ]);
+
+// Several points can share a reader, location and rounded age. Preserve the
+// point's own identifier and full metadata in the open evidence at every width;
+// a hidden Details column or hover-only volume cannot identify it on a phone.
+function CoverageRestorePointDetails(props: { artifact: RecoverableArtifact }) {
+  return (
+    <div
+      class="block whitespace-normal text-muted leading-snug wrap-anywhere"
+      data-coverage-evidence-detail
+    >
+      <span class="block" data-coverage-evidence-identifier>
+        Identifier: {props.artifact.nativeId}
+      </span>
+      <Show when={props.artifact.detailTitle || props.artifact.detail}>
+        <span class="mt-1 block" data-coverage-evidence-metadata>
+          Metadata: {props.artifact.detailTitle || props.artifact.detail}
+        </span>
+      </Show>
+    </div>
+  );
+}
 
 // "Workload coverage" table: one row per workload answering "does this have a
 // backup?" across PBS snapshots / PVE backup files / guest snapshots, each
@@ -1037,6 +1059,18 @@ export function ProxmoxCoverageTable(props: {
                                                   : 'Unknown size'}
                                               </span>
                                             </Show>
+                                            <Show
+                                              when={
+                                                !isCoverageEvidenceColumnVisible(
+                                                  layoutMode(),
+                                                  'details',
+                                                )
+                                              }
+                                            >
+                                              <div class="mt-1">
+                                                <CoverageRestorePointDetails artifact={artifact} />
+                                              </div>
+                                            </Show>
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(
@@ -1098,13 +1132,7 @@ export function ProxmoxCoverageTable(props: {
                                             <TableCell
                                               class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                             >
-                                              <span
-                                                class="block whitespace-normal wrap-anywhere"
-                                                title={artifact.detailTitle}
-                                                data-coverage-evidence-detail
-                                              >
-                                                {artifact.detail || '—'}
-                                              </span>
+                                              <CoverageRestorePointDetails artifact={artifact} />
                                             </TableCell>
                                           </Show>
                                         </TableRow>
