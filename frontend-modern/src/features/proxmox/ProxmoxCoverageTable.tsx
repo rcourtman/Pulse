@@ -540,6 +540,41 @@ export function ProxmoxCoverageTable(props: {
       () => setEvidenceLimit(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE),
     ),
   );
+  let coverageElement: HTMLDivElement | undefined;
+  // Keyed rendering retains the same row nodes, but moving those nodes in the
+  // native DOM can still blur a disclosure or detail link to BODY. Capture only
+  // this table's owned focus before the sorted list reconciles. Never replace
+  // the sort order or refocus a removed row, another route, or a user choice.
+  const renderedRows = createMemo<readonly WorkloadCoverageRow[]>((previous) => {
+    const rows = props.rows;
+    if (
+      rows.length !== previous.length ||
+      rows.some((row, index) => row.key !== previous[index]?.key)
+    ) {
+      const element = coverageElement;
+      const focused = document.activeElement;
+      if (element && focused instanceof HTMLElement && element.contains(focused)) {
+        let redirected = false;
+        const cancel = (event: FocusEvent) => {
+          if (event.target !== focused) redirected = true;
+        };
+        document.addEventListener('focusin', cancel, true);
+        queueMicrotask(() => {
+          document.removeEventListener('focusin', cancel, true);
+          if (
+            !redirected &&
+            element.isConnected &&
+            focused.isConnected &&
+            element.contains(focused) &&
+            document.activeElement === document.body
+          ) {
+            focused.focus({ preventScroll: true });
+          }
+        });
+      }
+    }
+    return rows;
+  }, []);
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
     const width = props.layoutWidth?.() ?? observedWidth.width();
@@ -579,7 +614,10 @@ export function ProxmoxCoverageTable(props: {
       }
     >
       <div
-        ref={observedWidth.setElement}
+        ref={(element) => {
+          coverageElement = element;
+          observedWidth.setElement(element);
+        }}
         data-proxmox-backups-table="coverage"
         data-proxmox-backups-layout={layoutMode()}
       >
@@ -659,7 +697,7 @@ export function ProxmoxCoverageTable(props: {
           body={
             <>
               <PlatformWindowedRows
-                items={() => props.rows}
+                items={renderedRows}
                 keyExtractor={(row) => row.key}
                 colSpan={columnCount()}
                 estimatedRowHeight={44}

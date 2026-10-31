@@ -1271,7 +1271,6 @@ describe('unknown duration in possible-latest task details', () => {
   });
 });
 
-
 describe('Coverage owned focus during live reordering', () => {
   function mountReordering(width = 1200, type: 'vm' | 'ct' = 'vm') {
     const makeRow = (key: string): WorkloadCoverageRow => ({
@@ -1280,6 +1279,7 @@ describe('Coverage owned focus during live reordering', () => {
       workload: {
         ...row.workload,
         key,
+        resourceId: key,
         type,
         typeLabel: type === 'vm' ? 'VM' : 'LXC',
         name: key,
@@ -1322,30 +1322,35 @@ describe('Coverage owned focus during live reordering', () => {
     [1200, 'ct'],
     [320, 'vm'],
     [320, 'ct'],
-  ] as const)('keeps the same %s px %s disclosure focused after row movement', async (width, type) => {
-    const { container, reorder } = mountReordering(width, type);
-    const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
-    const panel = screen.getByTestId('proxmox-coverage-detail');
-    const focus = vi.spyOn(disclosure, 'focus');
-    disclosure.focus();
-    focus.mockClear();
-    reorder();
-    await Promise.resolve();
-    expect([...container.querySelectorAll('[data-proxmox-backup-row="coverage"]')].map(
-      (element) => element.querySelector('button')?.getAttribute('aria-label'),
-    )).toEqual([
-      expect.stringContaining('zulu'),
-      expect.stringContaining('mike'),
-      expect.stringContaining('alpha'),
-    ]);
-    expect(screen.getByRole('button', { name: /Collapse details for alpha/ })).toBe(disclosure);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
-    expect(disclosure).toHaveFocus();
-    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
-    fireEvent.keyDown(disclosure, { key: 'Enter' });
-    expect(screen.queryByTestId('proxmox-coverage-detail')).not.toBeInTheDocument();
-    expect(disclosure).toHaveFocus();
-  });
+  ] as const)(
+    'keeps the same %s px %s disclosure focused after row movement',
+    async (width, type) => {
+      const { container, reorder } = mountReordering(width, type);
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      const panel = screen.getByTestId('proxmox-coverage-detail');
+      const focus = vi.spyOn(disclosure, 'focus');
+      disclosure.focus();
+      focus.mockClear();
+      reorder();
+      await Promise.resolve();
+      expect(
+        [...container.querySelectorAll('[data-proxmox-backup-row="coverage"]')].map((element) =>
+          element.querySelector('button')?.getAttribute('aria-label'),
+        ),
+      ).toEqual([
+        expect.stringContaining('zulu'),
+        expect.stringContaining('mike'),
+        expect.stringContaining('alpha'),
+      ]);
+      expect(screen.getByRole('button', { name: /Collapse details for alpha/ })).toBe(disclosure);
+      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      expect(disclosure).toHaveFocus();
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      fireEvent.keyDown(disclosure, { key: 'Enter' });
+      expect(screen.queryByTestId('proxmox-coverage-detail')).not.toBeInTheDocument();
+      expect(disclosure).toHaveFocus();
+    },
+  );
 
   it('keeps a connected detail link focused rather than falling back to its disclosure', async () => {
     const { reorder } = mountReordering();
@@ -1367,28 +1372,34 @@ describe('Coverage owned focus during live reordering', () => {
     expect(outside).toHaveFocus();
   });
 
-  it.each([false, true])('does not override an intervening focus choice (then blur: %s)', async (blur) => {
-    const { reorder } = mountReordering();
-    const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
-    disclosure.focus();
-    reorder();
-    const outside = screen.getByRole('textbox', { name: 'Outside Coverage' });
-    outside.focus();
-    if (blur) outside.blur();
-    await Promise.resolve();
-    expect(document.activeElement).toBe(blur ? document.body : outside);
-  });
+  it.each([false, true])(
+    'does not override an intervening focus choice (then blur: %s)',
+    async (blur) => {
+      const { reorder } = mountReordering();
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      disclosure.focus();
+      reorder();
+      const outside = screen.getByRole('textbox', { name: 'Outside Coverage' });
+      outside.focus();
+      if (blur) outside.blur();
+      await Promise.resolve();
+      expect(document.activeElement).toBe(blur ? document.body : outside);
+    },
+  );
 
-  it.each(['remove', 'depart'] as const)('does not refocus a retired element after %s', async (kind) => {
-    const { reorder, setRows, setMounted, makeRow } = mountReordering();
-    const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
-    disclosure.focus();
-    reorder();
-    if (kind === 'depart') setMounted(false);
-    else setRows([makeRow('zulu')]);
-    const focus = vi.spyOn(disclosure, 'focus');
-    await Promise.resolve();
-    expect(disclosure).not.toBeInTheDocument();
-    expect(focus).not.toHaveBeenCalled();
-  });
+  it.each(['remove', 'depart'] as const)(
+    'does not refocus a retired element after %s',
+    async (kind) => {
+      const { reorder, setRows, setMounted, makeRow } = mountReordering();
+      const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
+      disclosure.focus();
+      reorder();
+      if (kind === 'depart') setMounted(false);
+      else setRows([makeRow('zulu')]);
+      const focus = vi.spyOn(disclosure, 'focus');
+      await Promise.resolve();
+      expect(disclosure).not.toBeInTheDocument();
+      expect(focus).not.toHaveBeenCalled();
+    },
+  );
 });

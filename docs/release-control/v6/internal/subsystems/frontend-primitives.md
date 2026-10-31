@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Coverage owns focus across native keyed-row movement
+
+Stable keyed row components alone do not preserve native browser focus when a
+posture update changes the sorted DOM order. The existing Coverage consumer
+captures only a target inside its own table before reconciliation and restores
+the same connected target without scrolling if native movement leaves BODY
+focused. Any intervening focus choice cancels that restoration, including a
+choice later blurred to BODY. Removed rows and departed tables are not refocused;
+external search/header controls and existing retirement fallbacks keep ownership.
+This does not change the shared renderer, sort order, row budgets, read cadence,
+posture meaning or access. `ProxmoxCoverageTable.test.tsx` exercises wide/narrow
+VM/LXC moves, same-node detail/disclosure continuity and no-steal/retirement
+controls. Actual Backups desktop/narrow pixels and interactions check poll-driven
+movement against a source-bound parent control.
+
 ### Coverage keeps provider provenance separate from task state
 
 The existing Coverage drawer uses the shared wrapping detail-section pattern

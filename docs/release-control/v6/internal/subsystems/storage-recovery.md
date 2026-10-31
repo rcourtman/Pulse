@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Coverage retains owned focus when live posture sorting moves a row
+
+An accepted posture or inventory frame can reorder the same logical workload.
+Keyed row/component retention alone does not retain native focus when DOM nodes
+move. Coverage captures a focus target owned by its table before reconciliation
+and restores that same element without scrolling only if the completed move
+leaves BODY focused and the element and table remain connected. An intervening
+focus choice cancels restoration, even if that choice is subsequently blurred.
+External search/header focus is not reclaimed; removed or departed elements are
+not resurrected. Existing retirement fallbacks still own genuinely removed
+inspection content. Sorting, window budgets, row identity, drawer state,
+posture meanings, read cadence, policy and mutation permissions do not change.
+
+Normal-suite `ProxmoxCoverageTable.test.tsx` covers reordered VM/LXC disclosures
+at wide/narrow widths, retained detail links, external/intervening focus and
+retired/departed targets. Production Backups desktop Chromium and 320px WebKit
+proof binds actual poll-driven quality changes to unchanged same-node controls,
+contrasts the parent native focus loss and checks keyboard/touch use, sorting,
+filter retirement and no focus theft. This is inspection usability, not evidence
+of original workload recovery or a guest/provider operation.
+
 ### Coverage provider outcomes are not backup job results
 
 Provider evidence identifies the source of each scoped assessment: PBS/PVE
