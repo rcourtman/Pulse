@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { getSettingsNavItem } from '@/components/Settings/settingsNavCatalog';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import { DIAGNOSTICS_PANEL_COPY } from '@/utils/diagnosticsPresentation';
@@ -10,6 +10,15 @@ const read = (name: string) =>
   readFileSync(resolve(process.cwd(), '../docs', `${name}.md`), 'utf8');
 const article = createGuideFixture(read);
 const text = (element: Element) => element.textContent!.replace(/\s+/g, ' ').trim();
+
+// Prepare each complete shipped guide in its own bounded setup hook. Cold
+// Markdown/sanitizer work is fixture construction, not a navigation assertion;
+// keep the normal test deadlines and isolated, source-checked DOM clones.
+for (const name of ['TROUBLESHOOTING', 'CONFIGURATION']) {
+  beforeAll(() => {
+    article(name);
+  });
+}
 
 function collectionSection() {
   const guide = article('TROUBLESHOOTING');

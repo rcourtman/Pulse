@@ -17,6 +17,26 @@
 
 ## Purpose
 
+### PBS backup listings require the whole response
+
+Namespace, group and snapshot reads accept one unambiguous JSON envelope only
+from a fully read and successfully closed HTTP 200 body within the existing
+8 MiB bound. Trailing values/garbage, invalid UTF-8, duplicate envelope fields,
+case aliases of `data`/`errors`, and non-null error envelopes are unread, not
+accepted empty inventory or fresh protection evidence. Unique future metadata
+and explicit empty arrays remain valid; the older-PBS namespace 404 fallback is
+unchanged. Diagnostics contain no provider payload. No retry, auth, poll budget,
+identity, guest operation or retention policy changes.
+
+Normal client suites cover body/close/bound failures and envelope controls.
+`TestPBSWholeInventoryResponseRetainsEvidence` exercises VM/CT cold/warm HTTP
+collection through live state, cache times, durable points and posture: unread
+scopes retain old evidence without renewing it, readable siblings advance, and
+ordinary complete/empty reads recover and reconcile absence.
+`TestPBSWholeInventoryConsumerLifecycle` feeds those actual poll results to
+source-bound desktop/narrow Backups inspection. This is truthful collection,
+not original guest recovery, an established #3248 cause or release availability.
+
 ### Unread PBS writer inventories do not establish a terminal backup
 
 The running backup/sync task reader requires an explicit `data` array from a
