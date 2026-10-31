@@ -3004,6 +3004,19 @@ func TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots(t *test
 	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
 }
 
+// The real directory admission and all five main entry paths run only against
+// private text files and inert chown/lifecycle doubles. In particular, an OR-list
+// must not turn an incomplete permission repair into successful installation.
+func TestRootInstallDirectorySetupStopsOnFailures(t *testing.T) {
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_directory_setup.py"), "DirectorySetup", []string{
+		"test_every_permission_and_directory_failure_stops_in_conditional_call",
+		"test_new_environment_write_failure_stops_before_ownership_or_completion",
+		"test_success_preserves_existing_bytes_and_tightens_only_required_modes",
+		"test_fresh_environment_has_private_mode_and_explicit_mock_default",
+		"test_all_five_entry_paths_stop_on_directory_failure_even_in_or_list",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+}
+
 // Run the emitted helper and real SSH verifier. Curl exits are modelled, so
 // these controls prove deadline arguments and safe failure, not a live outage.
 func TestRootManualUpdateDownloadDeadlines(t *testing.T) {
