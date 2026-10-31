@@ -985,9 +985,15 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             # The current guide uses the safe host-install surface and
             # instance-served manual route, not the old alternate page label.
             # Retain each safety distinction in that actual migration section.
-            migration = " ".join(content.split("Preferred option (no SSH keys, no proxy wiring):", 1)[1]
-                                 .split("Legacy sensor proxy (removed):", 1)[0].split())
+            # Locate the section by its heading, not an editable introduction.
+            # Keep checks scoped to migration: matching advice elsewhere in the
+            # guide must not hide a missing boundary in these instructions.
+            heading = "#### Migration Path (Production)\n"
+            self.assertIn(heading, content)
+            migration = " ".join(content.split(heading, 1)[1]
+                                 .split("\n#### ", 1)[0].split())
             for boundary in (
+                "Settings → Infrastructure → Install on a host",
                 "separately revealed credential out of the copied command",
                 "silent prompt on that host", "private token-file route",
                 "agent installer served by your Pulse instance",
@@ -1010,6 +1016,19 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                         self.assertNotEqual(changed, content)
                         with self.assertRaises(AssertionError):
                             check(changed)
+                    with self.subTest(moved_outside_migration=boundary):
+                        # The same advice at the end of the guide is not a
+                        # substitute for safe instructions at the point of use.
+                        with self.assertRaises(AssertionError):
+                            check(changed + "\n" + boundary)
+                with self.subTest(missing_migration_heading=True):
+                    with self.assertRaises(AssertionError):
+                        check(content.replace("#### Migration Path (Production)\n", "", 1))
+                with self.subTest(reworded_introduction=True):
+                    check(content.replace(
+                        "For a planned migration, not as a prerequisite for diagnosing an outage:",
+                        "When planning a migration:",
+                    ))
 
     def test_summarize_rows_uses_latest_install_state_and_splits_release_validation(self) -> None:
         now = datetime.now(timezone.utc).replace(microsecond=0)

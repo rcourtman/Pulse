@@ -11,10 +11,20 @@ For a high-level overview of the system design and data flow, please refer to
 
 ## Critical Security Notice for Container Deployments
 
-### Container SSH Key Policy (BREAKING CHANGE)
+### Container SSH Key Handling
 
-**Effective immediately, SSH-based temperature monitoring is blocked in
-containerized Pulse deployments.**
+**Keep host SSH private keys out of Pulse containers. A warning is not a
+block.** The setup flow blocks automatic SSH-key generation in containers
+unless the development override is active. The temperature collector has a
+different boundary: **an existing usable key can still be used for legacy SSH
+collection**, with a security warning. It does not revoke the key or prevent
+outbound SSH.
+
+Do not enable `PULSE_DEV_ALLOW_CONTAINER_SSH` or mount a host key to recover a
+missing reading. That development-only setting is not needed for the legacy
+collector to attempt SSH; it does not make container-held keys safe. A missing
+warning is not proof that a container has no key. Use the
+[private deployment review](#auditing-your-deployment) below.
 
 #### Why This Change?
 
@@ -33,15 +43,22 @@ risk in production environments:
 
 #### Affected Deployments
 
-✅ **Not affected** – Pulse installed directly on a VM or bare-metal host (no
-containers), or homelab environments where you explicitly accept the risk.
+Docker and LXC installations can be affected when a configured key is available
+inside the container, including through a persistent mount. Container detection
+uses `PULSE_DOCKER=true` or the runtime's container checks; it is not an audit of
+every file or mount. Homelab use does not remove the risk.
 
-❌ **Blocked** – Pulse running in Docker containers, LXC containers, or any
-environment where `PULSE_DOCKER=true`/`/.dockerenv` is detected.
+VM and bare-metal installations are outside the container key-generation
+restriction, not outside the need to protect and restrict their SSH keys.
 
 #### Migration Path (Production)
 
-Preferred option (no SSH keys, no proxy wiring):
+Prefer an existing host-local agent for temperatures, without SSH keys or proxy
+wiring. API-only monitoring without temperature data is also a valid choice;
+do not widen access merely to fill a reading. Check the affected host's agent
+version, last report and existing sensor data before changing its setup.
+
+For a planned migration, not as a prerequisite for diagnosing an outage:
 
 1. Install or upgrade the unified agent (`pulse-agent`) on each Proxmox host with Proxmox integration enabled.
    - Use **Settings → Infrastructure → Install on a host**. Keep the separately
@@ -74,7 +91,9 @@ whole SSH directory. Deleting a container file does not erase an old image
 layer or backup. Revoking the public key on every target host is the essential
 step; replace affected images and protect or retire old backups separately.
 
-#### Security Boundary
+#### Preferred Collection Layout
+
+This is a deployment choice, not a guarantee enforced by container detection:
 
 ```text
 ┌─────────────────────────────────────┐
@@ -89,16 +108,17 @@ step; replace affected images and protect or retire old backups separately.
 │            │                         │
 │  ┌─────────▼─────────────────────┐  │
 │  │  Pulse (Docker/LXC container) │  │
-│  │  · No SSH keys                │  │
-│  │  · No host root privileges    │  │
+│  │  · No host SSH keys           │  │
+│  │  · API + agent reports        │  │
 │  └───────────────────────────────┘  │
 └─────────────────────────────────────┘
 ```
 
 #### Homelab Exception
 
-If you fully understand the risk and are **not** containerized (VM/bare-metal
-install), the legacy SSH flow still works. Use a dedicated monitoring user,
+For an existing **non-containerized** VM or bare-metal installation, the legacy
+SSH flow still works. This is not an exception that makes container-held keys
+safe. Use a dedicated monitoring user,
 restrict the key to the Pulse sensor wrapper with
 `command="/usr/local/sbin/pulse-sensors"` and `from="<pulse-ip>"`, and
 rotate keys regularly.
