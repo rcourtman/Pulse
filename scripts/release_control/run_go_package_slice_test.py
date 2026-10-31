@@ -1,5 +1,6 @@
 """Exercise the actual sliced Go runner, recorder and required-check verdict."""
 
+import copy
 import importlib.util
 import json
 import os
@@ -10,6 +11,8 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -228,9 +231,65 @@ class WorkflowTest(unittest.TestCase):
             'name: backend-slices-${{ matrix.shard }}',
         ):
             self.assertIn(expected, block)
-        self.assertNotIn('continue-on-error', block)
+        self.assert_backend_validation_remains_fatal(
+            yaml.safe_load(WORKFLOW.read_text())['jobs']['backend'])
         self.assertNotIn('  backend-slow:', WORKFLOW.read_text())
         self.assertNotIn('  backend-packages:', WORKFLOW.read_text())
+
+    def assert_backend_validation_remains_fatal(self, job):
+        # Object transport may miss or fail without changing validation. Only
+        # the complete pinned, read-only restore can be optional: not the job,
+        # admission, source-listed task queue or its coverage upload.
+        self.assertNotIn('continue-on-error', job)
+        prefix = ("backend-race-objects-v1-${{ runner.os }}-${{ runner.arch }}-ubuntu24-"
+                  "${{ steps.go-setup.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-")
+        optional_restore = {
+            'name': 'Restore backend race build objects',
+            'if': "needs.changes.outputs.code == 'true'",
+            'id': 'race-cache',
+            'continue-on-error': True,
+            'uses': 'actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
+            'with': {'path': '${{ steps.go-build-cache.outputs.path }}',
+                     'key': prefix + '${{ github.sha }}', 'restore-keys': prefix},
+        }
+        optional_steps = [step for step in job['steps'] if 'continue-on-error' in step]
+        self.assertLessEqual(len(optional_steps), 1)
+        for step in optional_steps:
+            self.assertEqual(step, optional_restore)
+
+    def test_optional_cache_cannot_mask_admission_tests_or_coverage(self):
+        job = yaml.safe_load(WORKFLOW.read_text())['jobs']['backend']
+        self.assert_backend_validation_remains_fatal(job)
+        no_cache = copy.deepcopy(job)
+        no_cache['steps'] = [step for step in no_cache['steps'] if step.get('id') != 'race-cache']
+        self.assert_backend_validation_remains_fatal(no_cache)
+        for name in ('Require compiled backend tests',
+                     'Go unit tests (shard ${{ matrix.shard }})',
+                     'Retain source-listed backend coverage'):
+            with self.subTest(masked_step=name):
+                changed = copy.deepcopy(job)
+                next(step for step in changed['steps'] if step['name'] == name)['continue-on-error'] = True
+                with self.assertRaises(AssertionError):
+                    self.assert_backend_validation_remains_fatal(changed)
+        changed = copy.deepcopy(job)
+        changed['continue-on-error'] = True
+        with self.assertRaises(AssertionError):
+            self.assert_backend_validation_remains_fatal(changed)
+        for field, value in (
+                ('uses', 'actions/cache/restore@main'),
+                ('uses', 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'),
+                ('run', 'exit 0'), ('if', 'always()'),
+                ('with', {'path': '${{ github.workspace }}'})):
+            with self.subTest(cache_drift=(field, value)):
+                changed = copy.deepcopy(job)
+                next(step for step in changed['steps'] if step.get('id') == 'race-cache')[field] = value
+                with self.assertRaises(AssertionError):
+                    self.assert_backend_validation_remains_fatal(changed)
+        changed = copy.deepcopy(job)
+        changed['steps'].append(copy.deepcopy(next(
+            step for step in job['steps'] if step.get('id') == 'race-cache')))
+        with self.assertRaises(AssertionError):
+            self.assert_backend_validation_remains_fatal(changed)
 
     def test_actual_worker_recipe_waits_for_both_slices_and_ordinary_failures(self):
         fixture = ExecutedRunnerTest()
