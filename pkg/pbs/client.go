@@ -1210,20 +1210,31 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 			if err != nil {
 				return nil, err
 			}
-			var result struct {
-				Data []map[string]interface{} `json:"data"`
-			}
-			decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+			body, readErr := readResponseBodyLimited(resp.Body)
 			closeErr := resp.Body.Close()
-			if decodeErr != nil {
-				return nil, fmt.Errorf("failed to decode running PBS %s tasks: %w", requestedType, decodeErr)
+			if readErr != nil {
+				return nil, fmt.Errorf("failed to read running PBS %s tasks: %w", requestedType, readErr)
 			}
 			if closeErr != nil {
 				return nil, fmt.Errorf("failed to close running PBS %s task response: %w", requestedType, closeErr)
 			}
+			var result struct {
+				Data   []map[string]interface{} `json:"data"`
+				Errors json.RawMessage          `json:"errors"`
+			}
+			if json.Unmarshal(body, &result) != nil || result.Data == nil ||
+				(len(result.Errors) > 0 && !bytes.Equal(bytes.TrimSpace(result.Errors), []byte("null"))) {
+				// Only an explicit, fully read inventory can establish no writer.
+				// Keep provider bodies out of diagnostics and do not return a
+				// partial writer set if a later family/page is unreadable.
+				return nil, fmt.Errorf("invalid running PBS %s task inventory", requestedType)
+			}
 
 			for _, raw := range result.Data {
 				workerType := strings.ToLower(stringJobField(raw, "worker-type", "worker_type", "type"))
+				if workerType == "" {
+					return nil, fmt.Errorf("running PBS %s task inventory contains no worker type", requestedType)
+				}
 				if workerType != requestedType {
 					continue
 				}

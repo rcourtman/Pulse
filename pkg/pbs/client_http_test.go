@@ -145,6 +145,111 @@ func TestClient_ListRunningDataTasksRejectsTruncatedWriterSet(t *testing.T) {
 	}
 }
 
+func TestClient_ListRunningDataTasksRequiresReadableInventory(t *testing.T) {
+	for _, family := range []string{"backup", "syncjob"} {
+		for _, body := range []string{
+			`null`, `{}`, `{"data":null}`, `{"data":{}}`, `{"data":false}`, `{"data":`,
+			`{"data":[null]}`, `{"data":[{}]}`, `{"data":[{"worker_type":null}]}`,
+			`{"data":[{"worker_type":123}]}`, `{"data":[{"worker_type":" "}]}`,
+			`{"data":[],"errors":{"private":"provider detail"}}`, `{"data":[]} {"data":[]}`,
+		} {
+			t.Run(family+"/"+body, func(t *testing.T) {
+				reads := 0
+				client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+					reads++
+					if r.Method != http.MethodGet || r.URL.Query().Get("running") != "true" {
+						t.Errorf("unexpected writer read: %s %s", r.Method, r.URL)
+					}
+					if r.URL.Query().Get("typefilter") == family {
+						_, _ = w.Write([]byte(body))
+					} else {
+						_, _ = w.Write([]byte(`{"data":[{"worker_type":"backup","worker_id":"archive:vm/100"}]}`))
+					}
+				})
+				defer server.Close()
+				tasks, err := client.ListRunningDataTasks(context.Background())
+				if err == nil || tasks != nil {
+					t.Fatalf("unread inventory accepted or returned partial writers: tasks=%v err=%v", tasks, err)
+				}
+				if strings.Contains(err.Error(), "provider detail") {
+					t.Fatal("provider body leaked into format diagnostic")
+				}
+				wantReads := 1
+				if family == "syncjob" {
+					wantReads = 2
+				}
+				if reads != wantReads {
+					t.Fatalf("reads=%d want=%d; invalid inventories must not retry", reads, wantReads)
+				}
+			})
+		}
+	}
+	for _, body := range []string{`{"data":[]}`, `{"data":[],"errors":null,"total":0}`} {
+		t.Run("explicit-empty/"+body, func(t *testing.T) {
+			client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) })
+			defer server.Close()
+			tasks, err := client.ListRunningDataTasks(context.Background())
+			if err != nil || len(tasks) != 0 {
+				t.Fatalf("explicit no-writer inventory rejected: tasks=%v err=%v", tasks, err)
+			}
+		})
+	}
+}
+
+func TestClient_ListRunningDataTasksRejectsUnreadLaterPage(t *testing.T) {
+	client, server := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("start") != "" {
+			_, _ = w.Write([]byte(`{"data":null}`))
+			return
+		}
+		rows := make([]map[string]string, pbsRunningTaskPageLimit)
+		for i := range rows {
+			rows[i] = map[string]string{"worker_type": "backup", "worker_id": "archive:vm/100"}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": rows})
+	})
+	defer server.Close()
+	tasks, err := client.ListRunningDataTasks(context.Background())
+	if err == nil || tasks != nil {
+		t.Fatalf("unread later page accepted as complete writers: tasks=%v err=%v", tasks, err)
+	}
+}
+
+type runningTasksBody struct {
+	io.Reader
+	closeErr error
+	closed   bool
+}
+
+func (b *runningTasksBody) Close() error { b.closed = true; return b.closeErr }
+
+func TestClient_ListRunningDataTasksRequiresCompleteResponse(t *testing.T) {
+	for _, failure := range []string{"read", "close", "size"} {
+		t.Run(failure, func(t *testing.T) {
+			body := &runningTasksBody{Reader: strings.NewReader(`{"data":[]}`)}
+			switch failure {
+			case "read":
+				body.Reader = io.MultiReader(body.Reader, &failReader{})
+			case "close":
+				body.closeErr = errors.New("fixture close failure")
+			case "size":
+				body.Reader = io.MultiReader(body.Reader, strings.NewReader(strings.Repeat(" ", int(maxResponseBodyBytes))))
+			}
+			client, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.httpClient.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: body}, nil
+			})
+			tasks, err := client.ListRunningDataTasks(context.Background())
+			if err == nil || tasks != nil || !body.closed {
+				t.Fatalf("incomplete response accepted/unclosed: tasks=%v err=%v closed=%t", tasks, err, body.closed)
+			}
+		})
+	}
+}
+
 func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
