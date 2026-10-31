@@ -16,6 +16,16 @@ var errInvalidBackupInventoryResponse = errors.New("invalid PBS backup inventory
 // unambiguous envelope from a fully read, bounded response, never a JSON prefix.
 // Keep provider payloads out of format diagnostics (including reported errors).
 func readBackupInventory[T any](resp *http.Response) ([]T, error) {
+	body, err := readBackupInventoryBody(resp)
+	if err != nil {
+		return nil, err
+	}
+	return decodeBackupInventory[T](body)
+}
+
+// Datastore discovery needs the same transport admission, but retains its
+// existing HTML/HTTPS guidance and payload-free byte-count diagnostics.
+func readBackupInventoryBody(resp *http.Response) ([]byte, error) {
 	body, readErr := readResponseBodyLimited(resp.Body)
 	closeErr := resp.Body.Close()
 	if readErr != nil || closeErr != nil {
@@ -24,6 +34,10 @@ func readBackupInventory[T any](resp *http.Response) ([]T, error) {
 	if resp.StatusCode != http.StatusOK || !utf8.Valid(body) {
 		return nil, errInvalidBackupInventoryResponse
 	}
+	return body, nil
+}
+
+func decodeBackupInventory[T any](body []byte) ([]T, error) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	start, err := decoder.Token()
 	if err != nil || start != json.Delim('{') {
