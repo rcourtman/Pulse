@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "05e23a7aec1fe5f13438997b473385eae075924c",
+  "verified_at": "2026-10-31T14:49:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "d4131a8c0c48fdfff11af0b329cd5c6f1fdc896151cd8c83babb6cf90634dd04",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "8b1ad00ed60d97835f621b5354d8a8e4341c717ceb601146d9b81fc1dfae145b",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "800ae8ffbdc1e9f095d581cda77eece7ba1a04846ce718a89eb00bdb720bd15d"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "VM and LXC Coverage quality transitions keep the same connected disclosure and expanded panel focused; four parent observations end on BODY, while all four repaired observations retain their control. Native traces expose focus loss during retained keyed-fragment DOM movement even when final list order is unchanged.",
+    "A separately labelled peer-attention posture change reverses the sorted order without changing policy or collecting new data. Some parent moves retain focus, so no assertion requires every reorder to blur.",
+    "By date corrected-date regrouping keeps the same disclosure and panel, with readable restore-state and original-recovery qualifiers. Existing sources, clocks, posture and identity semantics remain separate from focus restoration."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch disclosure activation; polling through complete, original quality-only and explicit peer-reversal states; close/reopen via keyboard; retained detail-link focus.",
+    "External search focus and deliberate external blur remain outside the restored row; sort headers retain focus; filtering retires the target without late reclaim. Both By date VM/LXC journeys retain focus through regrouping and leave external search focused.",
+    "All seven retained original captures were opened with native view_image at original detail: six final-source Coverage/By date images and one narrow parent loss control. Desktop blue focus rings are visible; narrow captures show the focused hit area without claiming a blue ring. Text and long literal source/date/identifier values remain readable with no document overflow."
+  ],
+  "evidence": {
+    "source": "05e23a7aec1fe5f13438997b473385eae075924c",
+    "source_proof": "source-l7il8c3x",
+    "validated_runtime_source": "085e1260e6eca0acffa828f9c85493aee89b50c2",
+    "source_summary": "Previously completed 1809 affected tests/80 files and whole format/types/lint/headers/duplication pass on identical runtime; exact candidate production/embed, consumer and all bundle/preload checks pass with the declared +256-byte Proxmox reference allowance. No source proof was repeated on resumption. This is not a full frontend-suite pass; prior token broad failures remain adverse.",
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "composition": "The initial resumed diagnostic exited 1 because its separate peer reversal did not lose parent focus. Its completed desktop VM parent trace is retained, not replayed. Remaining-only supplement exits 0 and executes seven cases; all four repaired cases pass. Aggregate 192 API GETs = 12 retained + 180 new; zero mutations or unexpected/page/console errors. Earlier probe failures and busy admission are preserved, not cleared.",
+    "fixture_scope": "Retained Core synthetic frames plus explicit earlier OK task, quality supplements, peer attention and date correction; no original stopped guest/provider operation or native recovery.",
+    "capture_sha256": {
+      "desktop-vm-current-retained-focus.png": "65e4d35feb6afc00969e8d9d10f33f079121b157b3527695f2bfe90342d433a6",
+      "desktop-vm-current-by-date-retained-focus.png": "08c2d88c6162b055d88def47bd96a743b2124c01fc2ab9e7d214b27a68667827",
+      "desktop-ct-current-retained-focus.png": "358d706b4e621360745ef87de58d82fe5cce723502aa7e4dca1e91c7417c98cb",
+      "narrow-vm-parent-original-quality-loss.png": "e96902eef761c7aaa61b2ffb425ef72a852f541a9c872c6861c27e2e3bc61bf4",
+      "narrow-vm-current-retained-focus.png": "8245b65554e6447cc1e5830d51aa9d935ab8688b9a7f17c79bf22c60f3219cbe",
+      "narrow-vm-current-by-date-retained-focus.png": "98069b9ed90886267d6e949fb2ac115999dacb7d46d1b210812ae6c05e282915",
+      "narrow-ct-current-retained-focus.png": "aa53307770f75917ef41ad9cac3c78ede2653bda26c70fb64846f1ebdd9e847a"
+    },
+    "retained": "Web outcome RECEIPTS.md, BROWSER-SUMMARY.json, PIXEL-REVIEW.json and CURRENT.tar.xz bind scripts, raw observations, source/asset hashes, previous failed assumption and completed supplements. PRIOR.tar.xz retains completed source proof."
+  }
+}
