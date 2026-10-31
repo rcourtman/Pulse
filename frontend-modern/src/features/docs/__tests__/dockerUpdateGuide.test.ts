@@ -53,10 +53,10 @@ describe('shipped monitored-container update guide', () => {
       'utf8',
     );
     expect(registry).toMatch(/defaultCacheTTL\s*=\s*6\s*\*\s*time.Hour/);
-    // Local replacements now go through the shared refresh selector. Keep
-    // checking the reusable-cache branch, not the superseded getCached call.
+    // Cache admission records the ForceCheck generation alongside the shared
+    // refresh decision. Cache hits still reuse the digest with a current clock.
     const cacheHit = registry.match(
-      /cached, refresh := r\.cachedForLocalImage\(cacheKey, currentDigest\)\s+if cached != nil && !refresh \{([\s\S]*?)\n\t\}/,
+      /cached, refresh, generation := r\.cachedForLocalImage\(cacheKey, currentDigest\)\s+if cached != nil && !refresh \{([\s\S]*?)\n\t\}/,
     )?.[1];
     expect(cacheHit, 'missing reusable registry-cache branch').toBeDefined();
     expect(cacheHit).toMatch(/LatestDigest:\s+cached.latestDigest/);
