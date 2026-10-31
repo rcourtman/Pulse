@@ -18,6 +18,9 @@ establish safe recovery.
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
   or repeat first-time setup.
+- **Server installation finished but Pulse is unavailable:** distinguish
+  [container state, Pulse service state and web access](INSTALL.md#installation-did-not-reach-a-usable-server).
+  Preserve the existing installation; a success banner is not readiness.
 - **Update failed or its result is uncertain:** start with
   [Pulse server update checks](AUTO_UPDATE.md#update-failed). An update of a
   monitored container is a different job; use
