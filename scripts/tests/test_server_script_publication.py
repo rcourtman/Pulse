@@ -237,6 +237,7 @@ class ServerScriptPublication(unittest.TestCase):
             events = (f / "events").read_text().splitlines() if (f / "events").exists() else []
             return dict(result=result, original=original, contents=contents, modes=modes,
                         stages=list(install.glob(".pulse-scripts-*")), retained=retained,
+                        installed_binary=(install / "bin/pulse").read_bytes(),
                         events=events, restarted=(f / "restarted").exists())
 
     def test_preparation_failures_preserve_the_complete_old_bundle(self):
@@ -325,6 +326,17 @@ class ServerScriptPublication(unittest.TestCase):
                         self.assertNotIn("completion", e["events"])
                         self.assertNotIn("Version verified:", e["result"].stdout)
                         self.assertNotIn("Successfully built and installed", e["result"].stdout)
+
+    def test_recovery_message_does_not_claim_previous_binary(self):
+        for flow in ("archive", "source"):
+            with self.subTest(flow=flow):
+                e = self.exercise("copy", flow)
+                self.assertNotEqual(e["result"].returncode, 0)
+                self.assertEqual(e["contents"], e["original"])
+                self.assertEqual(e["installed_binary"], b"#!/bin/sh\necho 'Pulse v6.6.0'\n")
+                self.assertTrue(e["restarted"])
+                self.assertIn("Pulse service is running again; the update failed", e["result"].stdout)
+                self.assertNotIn("Previous Pulse binary", e["result"].stdout)
 
     def test_uncertain_bundle_restore_does_not_restart_the_server(self):
         for flow in ("archive", "source"):

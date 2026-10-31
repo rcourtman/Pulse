@@ -1522,6 +1522,7 @@ func TestRootInstallAgentScriptPublicationPreservesPreviousBundle(t *testing.T) 
 		"test_success_publishes_scripts_and_both_sidecars_preserving_other_files",
 		"test_unsigned_source_scripts_do_not_inherit_stale_release_sidecars",
 		"test_archive_and_source_consumers_fail_and_only_recover_prior_active_service",
+		"test_recovery_message_does_not_claim_previous_binary",
 		"test_uncertain_bundle_restore_does_not_restart_the_server",
 		"test_every_main_consumer_stops_before_markers_or_completion",
 		"test_archive_source_and_main_consumers_complete_with_a_whole_bundle",

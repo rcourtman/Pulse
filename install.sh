@@ -830,9 +830,9 @@ recover_pulse_after_failed_replacement() {
     [[ "$PULSE_WAS_ACTIVE" == "true" ]] || return 0
     if safe_systemctl start "$service_name" && wait_for_service_active "$service_name" 20; then
         PULSE_WAS_ACTIVE="false"
-        print_info "Previous Pulse binary is running again; the update failed"
+        print_info "Pulse service is running again; the update failed"
     else
-        print_error "The update failed and the previous Pulse service could not be confirmed running. Check systemctl status $service_name before retrying."
+        print_error "The update failed and the Pulse service could not be confirmed running. Check systemctl status $service_name before retrying."
         return 1
     fi
 }

@@ -45,7 +45,9 @@ between the two directory renames while the server is stopped.
 Ordinary preparation failures and successful bundle restoration can use only
 the existing prior-active recovery-start path. The binary at the replacement
 destination has already changed; starting the existing unit is not a binary
-rollback or proof of its running executable's identity. Configuration, keys
+rollback or proof of its running executable's identity. Recovery messages
+must not claim that the previous binary was restored;
+messages report only the observed service liveness. Configuration, keys
 and identity are not restored or deleted, and the install still returns failure.
 Native recovery, sustained health, full-runtime rollback and historical stopped
 updates remain separate.
