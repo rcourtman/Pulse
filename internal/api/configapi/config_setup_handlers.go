@@ -2416,7 +2416,7 @@ func (h *ConfigHandlers) getOrGenerateSSHKeys() SSHKeyPair {
 
 	if isContainer && !devModeAllowSSH {
 		log.Error().Msg("SECURITY BLOCK: SSH key generation disabled in containerized deployments")
-		log.Error().Msg("Temperature monitoring via SSH is disabled in containerized deployments")
+		log.Error().Msg("This setup refusal does not disable legacy SSH collection with an existing key")
 		log.Error().Msg("See: " + "/docs/SECURITY.md#critical-security-notice-for-container-deployments")
 		log.Error().Msg("To test SSH keys in dev/lab only: PULSE_DEV_ALLOW_CONTAINER_SSH=true (NEVER in production!)")
 		return SSHKeyPair{}

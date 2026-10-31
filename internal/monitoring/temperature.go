@@ -263,7 +263,7 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 	// Extract hostname/IP from the host URL (might be https://hostname:8006)
 	host := extractHostname(nodeHost)
 
-	// SECURITY: Block SSH fallback when running in containers (unless dev mode)
+	// SECURITY: Warn about legacy SSH collection in containers; this is not a block.
 	// Container compromise = SSH key compromise = root access to infrastructure
 	devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
 	isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
@@ -303,7 +303,7 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		return &models.Temperature{Available: false}, nil
 	}
 
-	// Direct SSH (legacy method for non-containerized deployments).
+	// Direct SSH (legacy method, including containers with an existing usable key).
 	// New setup scripts restrict the key to /usr/local/sbin/pulse-sensors, which emits
 	// the canonical {sensors, smart} payload. Older keys ignore the requested command
 	// and still force sensors -j, so keep the parser backward-compatible.
