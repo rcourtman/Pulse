@@ -16,6 +16,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -47,8 +48,9 @@ def recipes() -> dict[str, str]:
     return {"docker" if "# Docker:" in block else "systemd": block for block in blocks}
 
 
-READER = '''#!/usr/bin/env python3
-import json, os, pathlib, signal, subprocess, sys, time
+# These command doubles use only stdlib; keep fixture startup independent of
+# PATH, Python environment and site packages without changing copied recipes.
+READER = f'#!{sys.executable} -IS\n' + '''import json, os, pathlib, signal, subprocess, sys, time
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 root = pathlib.Path(os.environ['RECIPE_FIXTURE'])
@@ -278,6 +280,29 @@ class PerformanceTroubleshootingDocsTest(unittest.TestCase):
             result = subprocess.run(["bash", "-n"], input=copied, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("timeout --signal=KILL 80s bash", copied)
+
+    def test_fixture_readers_use_selected_isolated_no_site_python(self):
+        # Exercise the actual reader body and copied recipe with hostile startup
+        # inputs. Flag assertions run inside the reader, not in a text scan.
+        checked_reader = READER.replace(
+            "\n", "\nimport sys\n"
+            f"assert sys.executable == {sys.executable!r}\n"
+            "assert sys.flags.isolated and sys.flags.no_site\n", 1)
+        with tempfile.TemporaryDirectory() as temporary:
+            startup = Path(temporary)
+            (startup / "python3").write_text("#!/bin/sh\nexit 29\n", encoding="utf-8")
+            (startup / "python3").chmod(0o700)
+            (startup / "sitecustomize.py").write_text("raise SystemExit(29)\n", encoding="utf-8")
+            environment = dict(PATH=f"{startup}{os.pathsep}{os.environ['PATH']}",
+                               PYTHONPATH=str(startup), PYTHONHOME=str(startup / "missing-home"))
+            with mock.patch(f"{__name__}.READER", checked_reader), \
+                    mock.patch.dict(os.environ, environment):
+                for deployment in ("systemd", "docker"):
+                    with self.subTest(deployment=deployment):
+                        result, calls = self.exercise(deployment)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertTrue(calls)
+                        self.assertIn("2026-10-03T00:00:00Z", result.stdout)
 
     def test_systemd_samples_only_valid_write_counters_and_stable_identity(self):
         result, calls = self.exercise("systemd")
