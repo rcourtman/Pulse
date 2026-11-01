@@ -7,7 +7,7 @@ import {
   onMount,
   runWithOwner,
 } from 'solid-js';
-import { getGlobalWebSocketStore } from '@/stores/websocket-global';
+import { getGlobalWebSocketStore, shutdownGlobalWebSocketStore } from '@/stores/websocket-global';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import {
@@ -812,48 +812,101 @@ export const useAppRuntimeState = () => {
     window.location.reload();
   };
 
+  const [isLoggingOut, setIsLoggingOut] = createSignal(false);
+  let logoutController: AbortController | undefined;
+  let logoutDisposed = false;
+  onCleanup(() => {
+    logoutDisposed = true;
+    logoutController?.abort();
+  });
+
   const handleLogout = async () => {
-    const proxyAuth = proxyAuthInfo();
-    if (proxyAuth?.logoutURL) {
-      window.location.href = proxyAuth.logoutURL;
-      return;
-    }
-
-    try {
-      const { apiFetch: runtimeApiFetch, clearAuth } = await import('@/utils/apiClient');
-      const response = await runtimeApiFetch('/api/logout', {
-        method: 'POST',
+    if (logoutDisposed || isLoggingOut()) return;
+    setIsLoggingOut(true);
+    const destination = proxyAuthInfo()?.logoutURL || '/';
+    const controller = new AbortController();
+    logoutController = controller;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      controller.signal.addEventListener('abort', () => reject(new Error('Sign-out aborted')), {
+        once: true,
       });
+    });
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
 
-      if (!response.ok) {
-        logger.error('Logout failed', { status: response.status });
-      }
-      clearAuth();
-    } catch (error) {
-      logger.error('Logout error', error);
-    }
-
-    const keysToRemove = [
-      STORAGE_KEYS.AUTH,
-      STORAGE_KEYS.GUEST_METADATA,
-      STORAGE_KEYS.DOCKER_METADATA,
-      STORAGE_KEYS.DOCKER_METADATA + '_hosts',
-    ];
-    keysToRemove.forEach((key) => localStorage.removeItem(key));
-    sessionStorage.clear();
     try {
-      sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'suppressed');
-    } catch (_err) {
-      // Storage may be unavailable; the demo login page then simply signs in again.
-    }
-    localStorage.setItem('just_logged_out', 'true');
-    aiAvailabilityStore.setEnabled(false);
+      const { apiFetch: runtimeApiFetch, clearAuth } = await Promise.race([
+        import('@/utils/apiClient'),
+        aborted,
+      ]);
+      const response = await Promise.race([
+        runtimeApiFetch('/api/logout', {
+          method: 'POST',
+          // Keep normal credentials and CSRF, including token-only browsers.
+          // The endpoint ends only the cookie session; it does not revoke tokens.
+          skipOrgContext: true,
+          // Also stops a late CSRF preparation from dispatching after abort.
+          retry: false,
+          redirect: 'error',
+          signal: controller.signal,
+        }),
+        aborted,
+      ]);
+      const acknowledgement = response.ok ? await Promise.race([response.json(), aborted]) : null;
+      if (acknowledgement?.success !== true) {
+        throw new Error('Pulse did not acknowledge sign-out');
+      }
+      controller.signal.throwIfAborted();
 
-    if (wsStore()) {
+      // One blocked storage operation must not prevent the remaining cleanup.
+      let cleanupFailed = false;
+      const clean = (operation: () => void) => {
+        try {
+          operation();
+        } catch {
+          cleanupFailed = true;
+        }
+      };
+      clean(clearAuth);
+      for (const key of [
+        STORAGE_KEYS.AUTH,
+        STORAGE_KEYS.GUEST_METADATA,
+        STORAGE_KEYS.DOCKER_METADATA,
+        STORAGE_KEYS.DOCKER_METADATA + '_hosts',
+      ]) {
+        clean(() => localStorage.removeItem(key));
+      }
+      clean(() => sessionStorage.clear());
+      clean(() => sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'suppressed'));
+      clean(() => localStorage.setItem('just_logged_out', 'true'));
+      aiAvailabilityStore.setEnabled(false);
+      clean(shutdownGlobalWebSocketStore);
       setWsStore(null);
-    }
+      setNeedsAuth(true);
 
-    window.location.href = '/';
+      if (cleanupFailed) {
+        showToast(
+          'error',
+          'Browser cleanup incomplete',
+          'Pulse ended this session, but could not finish browser cleanup. Close this tab. Your proxy or identity-provider session may still be active.',
+        );
+        return;
+      }
+      // Provider logout is still required for upstream sessions. Navigate only
+      // after Pulse has acknowledged local withdrawal and browser cleanup.
+      window.location.href = destination;
+    } catch {
+      if (!logoutDisposed) {
+        showToast(
+          'error',
+          'Sign-out not confirmed',
+          'Your session may still be active. Check your connection and try Sign out again.',
+        );
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      logoutController = undefined;
+      if (!logoutDisposed) setIsLoggingOut(false);
+    }
   };
 
   const enhancedStore = () => wsStore();
@@ -884,6 +937,7 @@ export const useAppRuntimeState = () => {
     handleOrgSwitch,
     handleLogin,
     handleLogout,
+    isLoggingOut,
     enhancedStore,
   };
 };

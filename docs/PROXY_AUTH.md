@@ -128,14 +128,17 @@ Proxy authentication is checked on each request. If the authenticating proxy
 still supplies a valid identity, Pulse can admit that user again without a
 local password prompt.
 
-- **With `PROXY_AUTH_LOGOUT_URL`:** Pulse's **Sign out** action sends the browser
-  directly to that URL, instead of calling Pulse's local `/api/logout` endpoint.
+- **With `PROXY_AUTH_LOGOUT_URL`:** Pulse's **Sign out** action first calls
+  Pulse's local `/api/logout` endpoint. Only after Pulse confirms success and
+  clears this browser's saved authentication does it send
+  the browser to that URL. A refused request, lost response or browser-cleanup
+  error is shown instead of a redirect; it does not confirm withdrawn access.
   The destination must perform the required logout in your existing proxy/IdP
   integration; simply opening a login page or returning to Pulse does not end
   either upstream session. Some integrations have separate proxy and IdP
   sessions, so an active IdP session can sign the user straight back in.
-- **Without that URL:** Pulse uses its local logout endpoint and leaves the
-  proxy/IdP sessions alone. Ending one Pulse browser session does not revoke
+- **Without that URL:** Pulse uses the same confirmed local logout and browser
+  cleanup, returns to its login page and leaves the proxy/IdP sessions alone. Ending one Pulse browser session does not revoke
   other browser sessions, API tokens or the shared proxy secret.
 
 Use the logout route documented for your installed authenticating proxy and its

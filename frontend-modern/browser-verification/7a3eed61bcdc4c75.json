@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "8f8e0e51cb6cdec59d6afc5f2bd6921ab182a7c3",
+  "verified_at": "2026-11-01T14:10:37.785656Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/useAppRuntimeState.ts",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "39d55142e276e09734b71dbc23c491537c58e617564561fbebeb96a3c8ca8372",
+    "frontend-modern/src/AppLayout.tsx": "2ecaa33bef35f788451dc129a25b7e723b5ede5266f57dae52e42243316a21f6",
+    "frontend-modern/src/useAppRuntimeState.ts": "0ad84ed0c62d99cf67c895dbda8ea11d1af4cfed9282895cbf344a4587f62503",
+    "frontend-modern/src/utils/apiClient.ts": "69d285b038917fa9701c89579bf6b911ecc14c887770ed8787891bb8b50ce267"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/docs/PROXY_AUTH#sign-out-and-session-boundaries"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Completed 28 semantic scenarios across retained source-bound stages using the actual production App/runtime/API client/AppLayout/current realtime shutdown and CSS. HTTP/session/provider services are synthetic. No live IdP, installed administrator recovery or all-cache erasure claim.",
+    "Runtime source 46e3943d6f: source-5k5eo7a8 client/guest 0, 229 registered tests, types/eslint/format/production/embed assets/bundle controls; complete independently hash-matched output and stopped guest. Current containing source 8f8e0e51cb: source-irpemkqk client/guest 0, production/embed/bundle controls and all 18 authentication-doc tests. All 2557 build inputs match; only PROXY_AUTH.md changed from runtime proof, and all 122 JS/CSS output assets are identical.",
+    "Ten selected current product captures were natively inspected at desktop/light and narrow dark/touch WebKit. Both current Docs captures were opened at original detail. Six adverse capture events and two superseded Docs captures are separately inspected/retained.",
+    "All seven runtime scripts retain their actual client exit 1: invalid fixture version schema, invalid one-use-marker persistence assumption, obsolete-route assumption, exact-one-wire-request assumption, two reseed-capable storage-fixture assertions, and the final blanket zero-pageerror assertion. Completed cases were retained and remaining cases exercised; no green runtime-script exit is claimed.",
+    "The final runtime phone stage completed 75 controls, then rejected an expected WebKit enforcement event from deliberate redirect:error on local logout 302. Same-case warning, saved credential, no login/provider navigation and deliberate retry pass. Raw event/failure remain, with no unexpected application boundary exception after fixture correction. Current Docs browser exits 0 with eight checks/two captures and no page/console errors."
+  ],
+  "interactions": [
+    "Local, same-origin proxy and external SSO paths wait for acknowledged local session withdrawal before credential cleanup/provider navigation. Cookie, token, CSRF and default-org transport are observed; the configured external destination receives no Pulse cookie. Local startup consumes the one-use marker and shows the real Login.",
+    "401/403/503, HTML, malformed body, refused redirect and lost response retain saved credentials and truthful uncertainty; only deliberate retry continues. Single application invocation is verified; destroyed-response Chromium observes seven server POST arrivals from one fetch, not exactly-once transport.",
+    "Real CSRF preparation and JSON body stalls time out; late preparation cannot dispatch the aborted old POST. Storage failure still removes the actual global store and closes its realtime connection without relying on navigation, and presents a truthful local-session/provider warning.",
+    "The actual Docs consumer reads the current local-first guide and its bounds at both widths. This evidence does not rerun any original stopped Back/reload/admin/workload/IdP or fulfilled Core session-reader proofs."
+  ],
+  "evidence": {
+    "runtime_source_proof": "source-5k5eo7a8",
+    "native_api_source_proof": "source-8ios9rk6 on 8953faefc7; all Go/module inputs unchanged",
+    "current_docs_source_proof": "source-irpemkqk",
+    "semantic_scenarios": 28,
+    "selected_current_native_pixel_inspections": 10,
+    "lane_records": [
+      "RECEIPTS.md",
+      "CURRENT-SOURCE.tar.xz",
+      "RUNTIME-SOURCE.tar.xz",
+      "INTERMEDIATE-SOURCE.tar.xz",
+      "CURRENT-BROWSER.tar.xz",
+      "ADVERSE-BROWSER.tar.xz",
+      "CURRENT-DOSSIER.tar.xz"
+    ]
+  }
+}

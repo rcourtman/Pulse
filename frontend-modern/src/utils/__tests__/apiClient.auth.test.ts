@@ -28,4 +28,39 @@ describe('apiClient auth storage integrity', () => {
     expect(window.sessionStorage.getItem('pulse_api_token')).toBe('legacy-token');
     expect(window.sessionStorage.getItem('pulse_auth')).toBeNull();
   });
+  it('returns a rejected logout without clearing the credential or disguising it as a login redirect', async () => {
+    const { apiFetch, getApiToken, setApiToken, setOrgID } = await import('@/utils/apiClient');
+    setApiToken('synthetic-independent-api-token');
+    setOrgID('synthetic-org');
+    document.cookie = 'pulse_csrf=synthetic-csrf; path=/';
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const response = await apiFetch('/api/logout', {
+        method: 'POST',
+        retry: false,
+        skipOrgContext: true,
+        redirect: 'error',
+      });
+      expect(response.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/logout',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          redirect: 'error',
+          headers: expect.objectContaining({
+            'X-API-Token': 'synthetic-independent-api-token',
+            'X-CSRF-Token': 'synthetic-csrf',
+            'X-Pulse-Org-ID': 'default',
+          }),
+        }),
+      );
+      expect(getApiToken()).toBe('synthetic-independent-api-token');
+    } finally {
+      vi.unstubAllGlobals();
+      document.cookie = 'pulse_csrf=; Max-Age=0; path=/';
+    }
+  });
 });

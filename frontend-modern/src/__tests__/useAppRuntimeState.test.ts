@@ -66,6 +66,7 @@ describe('useAppRuntimeState', () => {
   let hasStoredAuthSessionMock: ReturnType<typeof vi.fn>;
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let clearAuthMock: ReturnType<typeof vi.fn>;
+  let shutdownGlobalWebSocketStoreMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiAvailabilitySetEnabledMock: ReturnType<typeof vi.fn>;
   let aiAvailabilityRefreshMock: ReturnType<typeof vi.fn>;
@@ -148,6 +149,7 @@ describe('useAppRuntimeState', () => {
       window.sessionStorage.removeItem('pulse_auth_user');
       window.localStorage.removeItem('org_id');
     });
+    shutdownGlobalWebSocketStoreMock = vi.fn();
     showToastMock = vi.fn();
     aiAvailabilitySetEnabledMock = vi.fn();
     aiAvailabilityRefreshMock = vi.fn().mockResolvedValue(undefined);
@@ -164,6 +166,7 @@ describe('useAppRuntimeState', () => {
     onStoreAcquired = undefined;
 
     vi.doMock('@/stores/websocket-global', () => ({
+      shutdownGlobalWebSocketStore: shutdownGlobalWebSocketStoreMock,
       getGlobalWebSocketStore: () => {
         const store = {
           state: websocketState,
@@ -193,6 +196,7 @@ describe('useAppRuntimeState', () => {
     }));
 
     vi.doMock('@/utils/localStorage', () => ({
+      SESSION_STORAGE_KEYS: { DEMO_AUTO_LOGIN: 'pulse_demo_auto_login' },
       STORAGE_KEYS: {
         AUTH: 'auth',
         AUTH_USER: 'pulse_auth_user',
@@ -316,9 +320,14 @@ describe('useAppRuntimeState', () => {
     for (const dispose of mountedRoots) dispose();
     mountedRoots.clear();
     onStoreAcquired = undefined;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     window.localStorage.removeItem('org_id');
     window.localStorage.removeItem('just_logged_out');
+    for (const key of ['auth', 'guest_metadata', 'docker_metadata', 'docker_metadata_hosts']) {
+      window.localStorage.removeItem(key);
+    }
     const policyModule = await import('@/stores/sessionPresentationPolicy');
     policyModule.syncSessionPresentationPolicy(null);
     vi.resetModules();
@@ -632,7 +641,7 @@ describe('useAppRuntimeState', () => {
             ssoEnabled: true,
             ssoSessionUsername: principal,
             ssoSessionDisplayName: 'alice@example.com',
-            ssoLogoutURL: '/api/oidc/test-oidc/logout',
+            ssoLogoutURL: 'https://idp.example.test/logout',
           }),
           { status: 200 },
         );
@@ -657,7 +666,7 @@ describe('useAppRuntimeState', () => {
     await waitFor(() => {
       expect(hookState.proxyAuthInfo()).toEqual({
         username: 'alice@example.com',
-        logoutURL: '/api/oidc/test-oidc/logout',
+        logoutURL: 'https://idp.example.test/logout',
       });
       expect(hookState.platformAdmission()).not.toBeNull();
     });
@@ -730,6 +739,240 @@ describe('useAppRuntimeState', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
     dispose();
+  });
+
+  const mountLogout = async (mode: 'local' | 'proxy' | 'sso' = 'proxy') => {
+    const fallback = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            ...(mode === 'proxy'
+              ? {
+                  hasProxyAuth: true,
+                  proxyAuthUsername: 'synthetic-proxy',
+                  proxyAuthLogoutURL: '/#proxy-logout',
+                }
+              : mode === 'sso'
+                ? {
+                    ssoEnabled: true,
+                    ssoSessionUsername: 'synthetic-sso',
+                    ssoLogoutURL: '/#sso-logout',
+                  }
+                : {}),
+          }),
+          { status: 200 },
+        );
+      }
+      return fallback(url);
+    });
+    const mounted = mountHook();
+    await waitFor(() => expect(mounted.hookState.isLoading()).toBe(false));
+    expect(mounted.hookState.needsAuth()).toBe(false);
+    return mounted;
+  };
+
+  it.each(['local', 'proxy', 'sso'] as const)(
+    'logout acknowledges the local session before %s navigation and cleanup',
+    async (mode) => {
+      const { hookState } = await mountLogout(mode);
+      for (const key of ['auth', 'guest_metadata', 'docker_metadata', 'docker_metadata_hosts']) {
+        localStorage.setItem(key, 'synthetic-cache');
+      }
+      sessionStorage.setItem('auth', 'synthetic-browser-token');
+      sessionStorage.setItem('pulse_auth_user', 'synthetic-user');
+      let finish!: (value: Response) => void;
+      const fallback = apiFetchMock.getMockImplementation()!;
+      apiFetchMock.mockImplementation((url: string) =>
+        url === '/api/logout'
+          ? new Promise<Response>((resolve) => {
+              finish = resolve;
+            })
+          : fallback(url),
+      );
+      const pending = hookState.handleLogout();
+      await waitFor(() => expect(finish).toBeDefined());
+      expect(hookState.isLoggingOut()).toBe(true);
+      expect(clearAuthMock).not.toHaveBeenCalled();
+      expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
+      expect(localStorage.getItem('auth')).toBe('synthetic-cache');
+      expect(window.location.hash).toBe('');
+      await hookState.handleLogout();
+      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/logout')).toHaveLength(1);
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/logout',
+        expect.objectContaining({
+          method: 'POST',
+          retry: false,
+          skipOrgContext: true,
+          redirect: 'error',
+          signal: expect.any(AbortSignal),
+        }),
+      );
+      finish(new Response('{"success":true}', { status: 200 }));
+      await pending;
+      expect(clearAuthMock).toHaveBeenCalledOnce();
+      expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
+      for (const key of ['auth', 'guest_metadata', 'docker_metadata', 'docker_metadata_hosts']) {
+        expect(localStorage.getItem(key)).toBeNull();
+      }
+      expect(sessionStorage.getItem('auth')).toBeNull();
+      expect(sessionStorage.getItem('pulse_auth_user')).toBeNull();
+      expect(sessionStorage.getItem('pulse_demo_auto_login')).toBe('suppressed');
+      expect(localStorage.getItem('just_logged_out')).toBe('true');
+      expect(hookState.enhancedStore()).toBeNull();
+      expect(hookState.needsAuth()).toBe(true);
+      expect(aiAvailabilitySetEnabledMock).toHaveBeenLastCalledWith(false);
+      expect(hookState.isLoggingOut()).toBe(false);
+      expect(showToastMock).not.toHaveBeenCalled();
+      if (mode !== 'local') expect(window.location.hash).toBe(`#${mode}-logout`);
+    },
+  );
+
+  it.each(['401', '403', '503', 'network', 'html', 'null', 'false', 'redirect'])(
+    'logout keeps uncertain %s visible without clearing or redirecting, and permits deliberate retry',
+    async (failure) => {
+      const { hookState } = await mountLogout();
+      sessionStorage.setItem('auth', 'saved-browser-credential');
+      const fallback = apiFetchMock.getMockImplementation()!;
+      let attempts = 0;
+      apiFetchMock.mockImplementation(async (url: string) => {
+        if (url !== '/api/logout') return fallback(url);
+        attempts++;
+        if (attempts > 1) return new Response('{"success":true}');
+        if (failure === 'network') throw new TypeError('Synthetic lost response');
+        if (/^\d+$/.test(failure)) return new Response('refused', { status: Number(failure) });
+        const bodies: Record<string, string> = {
+          html: '<html>proxy login</html>',
+          null: 'null',
+          false: '{"success":false}',
+          redirect: '',
+        };
+        return new Response(bodies[failure], { status: failure === 'redirect' ? 302 : 200 });
+      });
+      await hookState.handleLogout();
+      expect(attempts).toBe(1);
+      expect(hookState.isLoggingOut()).toBe(false);
+      expect(hookState.needsAuth()).toBe(false);
+      expect(clearAuthMock).not.toHaveBeenCalled();
+      expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
+      expect(sessionStorage.getItem('auth')).toBe('saved-browser-credential');
+      expect(localStorage.getItem('just_logged_out')).toBeNull();
+      expect(window.location.hash).toBe('');
+      expect(showToastMock).toHaveBeenCalledWith(
+        'error',
+        'Sign-out not confirmed',
+        expect.stringContaining('may still be active'),
+      );
+      await hookState.handleLogout();
+      expect(attempts).toBe(2);
+      expect(clearAuthMock).toHaveBeenCalledOnce();
+      expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
+      expect(window.location.hash).toBe('#proxy-logout');
+    },
+  );
+
+  it.each(['transport', 'body'])(
+    'logout bounds an unanswered %s even when it ignores abort',
+    async (phase) => {
+      const { hookState } = await mountLogout();
+      const fallback = apiFetchMock.getMockImplementation()!;
+      apiFetchMock.mockImplementation((url: string) => {
+        if (url !== '/api/logout') return fallback(url);
+        if (phase === 'body') return Promise.resolve(new Response(new ReadableStream()));
+        return new Promise<Response>(() => {});
+      });
+      vi.useFakeTimers();
+      const pending = hookState.handleLogout();
+      await flushAsync();
+      await vi.advanceTimersByTimeAsync(15_000);
+      await pending;
+      expect(clearAuthMock).not.toHaveBeenCalled();
+      expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
+      expect(hookState.isLoggingOut()).toBe(false);
+      expect(window.location.hash).toBe('');
+      expect(showToastMock).toHaveBeenCalledWith(
+        'error',
+        'Sign-out not confirmed',
+        expect.any(String),
+      );
+    },
+  );
+
+  it('logout cannot clear or navigate a disposed runtime after its response arrives', async () => {
+    const { hookState, dispose } = await mountLogout();
+    const fallback = apiFetchMock.getMockImplementation()!;
+    let finish!: (value: Response) => void;
+    apiFetchMock.mockImplementation((url: string) =>
+      url === '/api/logout'
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : fallback(url),
+    );
+    const pending = hookState.handleLogout();
+    await waitFor(() => expect(finish).toBeDefined());
+    dispose();
+    finish(new Response('{"success":true}'));
+    await pending;
+    expect(clearAuthMock).not.toHaveBeenCalled();
+    expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
+    expect(showToastMock).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe('');
+  });
+
+  it('logout attempts remaining browser cleanup when one storage operation fails, without hiding the gap', async () => {
+    const { hookState } = await mountLogout();
+    localStorage.setItem('docker_metadata', 'synthetic-cache');
+    const remove = localStorage.removeItem.bind(localStorage);
+    vi.spyOn(localStorage, 'removeItem').mockImplementation((key: string) => {
+      if (key === 'guest_metadata')
+        throw new DOMException('Synthetic storage refusal', 'SecurityError');
+      remove(key);
+    });
+    const fallback = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string) =>
+      url === '/api/logout' ? new Response('{"success":true}') : fallback(url),
+    );
+    await hookState.handleLogout();
+    expect(clearAuthMock).toHaveBeenCalledOnce();
+    expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
+    expect(localStorage.getItem('docker_metadata')).toBeNull();
+    expect(hookState.needsAuth()).toBe(true);
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(window.location.hash).toBe('');
+    expect(showToastMock).toHaveBeenCalledWith(
+      'error',
+      'Browser cleanup incomplete',
+      expect.stringContaining('proxy or identity-provider session may still be active'),
+    );
+  });
+
+  it.each(['auth', 'socket'])('logout keeps %s cleanup failure explicit', async (failure) => {
+    const { hookState } = await mountLogout();
+    sessionStorage.setItem('auth', 'synthetic-browser-credential');
+    const fail = () => {
+      throw new Error('Synthetic cleanup failure');
+    };
+    if (failure === 'auth') clearAuthMock.mockImplementation(fail);
+    else shutdownGlobalWebSocketStoreMock.mockImplementation(fail);
+    const fallback = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string) =>
+      url === '/api/logout' ? new Response('{"success":true}') : fallback(url),
+    );
+    await hookState.handleLogout();
+    expect(clearAuthMock).toHaveBeenCalledOnce();
+    expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem('auth')).toBeNull();
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(hookState.needsAuth()).toBe(true);
+    expect(window.location.hash).toBe('');
+    expect(showToastMock).toHaveBeenCalledWith(
+      'error',
+      'Browser cleanup incomplete',
+      expect.stringContaining('could not finish browser cleanup'),
+    );
   });
 
   it('does not start the proxy-auth runtime when protected state rejects the session', async () => {

@@ -3935,3 +3935,39 @@ Chat)"), not as a Pro capability, so no paid entitlement changes. Paid Patrol
 capabilities stay as they were: Patrol modes, investigations, governed fixes,
 and history live on the Patrol and Actions surfaces, and alert Investigate now
 starts a targeted Patrol run instead of opening a chat.
+
+### Sign-out confirms local withdrawal before provider navigation
+
+The existing app runtime starts one bounded, cookie/CSRF-bearing application
+request to POST `/api/logout` before clearing saved authentication and the
+existing legacy metadata keys, stopping
+its runtime and following any configured proxy/SSO destination. The canonical
+global WebSocket shutdown ends this tab's current connection/request owner
+even if storage cleanup fails or provider navigation never occurs; clearing
+the local accessor alone is not teardown. Auth-clear and shutdown errors still
+allow the remaining cleanup and leave an explicit close-tab warning. It requires the
+endpoint's successful JSON acknowledgement; rejection, a redirect, malformed
+reply, lost response or timeout stays visibly uncertain and allows deliberate
+retry. This disables application/API-client retries, not native transport
+retransmission: it is not an exactly-once wire guarantee. The existing endpoint
+withdraws only the addressed cookie session. The API client must not turn a logout 401 into a success-looking login
+redirect. Token-only browsers keep the normal authenticated transport; this
+ends only the cookie session, not independent API tokens or other sessions.
+Provider navigation still owns upstream sign-out. A browser cleanup failure
+remains explicit, does not skip remaining cleanup and does not redirect.
+
+The actual Layout control is busy/disabled during withdrawal. Disposing its
+runtime aborts pending transport and prevents late cleanup/navigation. No new
+route, polling, grant, provider protocol, server invalidation rule or recovery
+operation is introduced. Registered runtime, API-client auth and AppLayout
+tests cover order, uncertainty, transport, duplicate attempts, retry, timeout,
+disposal and storage failure. Desktop/narrow browser proof exercises the actual
+consumer with synthetic independent sessions and inspected pixels; it is not
+live IdP or original administrator recovery. The proxy guide and shipped mirror
+must describe the same sequence without claiming upstream revocation.
+
+The current Workloads metadata owner also has organisation-scoped persistent
+and module caches plus deferred persistence. This bounded redirect repair does
+not establish their erasure or original administrator recovery. Session-binding
+that existing owner is the next retained Web step; help must not describe
+credential cleanup as erasing every copy of already-held monitoring data.
