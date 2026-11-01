@@ -6247,9 +6247,12 @@ successful, nonempty, syntactically valid Bash response before executing any
 of it. A failed or truncated transfer, an empty response, or a trailing syntax
 error must not execute an otherwise valid prefix. The local installer route,
 literal argument forwarding, explicit TLS opt-out and installer exit status
-remain intact; temporary download files are removed on ordinary completion or
-failure. This is transfer/syntax admission, not a replacement for the canonical
-installer's artifact signature checks or proof of installed recovery.
+remain intact. Remote execution keeps the stdin identity so the canonical
+installer still verifies its signed offline-removal copy rather than trusting
+the temporary transport file as a local installer. Temporary download files
+are removed on ordinary completion or failure. This is transfer/syntax
+admission, not a replacement for the canonical installer's artifact signature
+checks or proof of installed recovery.
 That same update-runtime boundary now also owns bounded rollback retention and
 disk-space fail-closed behavior for self-hosted app updates. `internal/updates/`
 must prune stale retained rollback snapshots, clear history references when an

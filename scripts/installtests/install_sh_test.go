@@ -70,7 +70,8 @@ func containerAgentWrapperCommand(t *testing.T, arguments ...string) (*exec.Cmd,
 	cmd.Env = append(os.Environ(), "TMPDIR="+temporaryDir,
 		"CURL_HOME="+root, "NO_PROXY=*", "no_proxy=*",
 		"WRAPPER_MARKER="+filepath.Join(root, "executed"),
-		"WRAPPER_ARGS="+filepath.Join(root, "arguments"))
+		"WRAPPER_ARGS="+filepath.Join(root, "arguments"),
+		"WRAPPER_SOURCE="+filepath.Join(root, "source-identity"))
 	return cmd, root
 }
 
@@ -122,7 +123,7 @@ func TestContainerAgentCompatibilityWrapperRejectsIncompleteDownloadBeforeExecut
 }
 
 func TestContainerAgentCompatibilityWrapperPreservesRemoteArgumentsAndExit(t *testing.T) {
-	const body = "printf touched > \"$WRAPPER_MARKER\"\nprintf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\nexit 37\n"
+	const body = "printf touched > \"$WRAPPER_MARKER\"\nprintf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\nprintf '%s' \"$0\" > \"$WRAPPER_SOURCE\"\nexit 37\n"
 	for _, uninstall := range []bool{false, true} {
 		t.Run(fmt.Sprintf("uninstall=%t", uninstall), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -146,6 +147,13 @@ func TestContainerAgentCompatibilityWrapperPreservesRemoteArgumentsAndExit(t *te
 			actual, err := os.ReadFile(filepath.Join(root, "arguments"))
 			if err != nil || string(actual) != strings.Join(expected, "\x00")+"\x00" {
 				t.Fatalf("installer arguments changed: %q (%v)", actual, err)
+			}
+			// save_connection_info in the canonical installer requires a signed
+			// lifecycle download when $0 is bash. A temporary pathname would
+			// instead be trusted and persisted as a local installer source.
+			identity, err := os.ReadFile(filepath.Join(root, "source-identity"))
+			if err != nil || string(identity) != "bash" {
+				t.Fatalf("remote installer lost stdin/signature identity: %q (%v)", identity, err)
 			}
 			assertContainerWrapperDownloadRemoved(t, root)
 		})

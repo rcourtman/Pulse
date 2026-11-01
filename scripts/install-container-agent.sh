@@ -143,5 +143,7 @@ if [[ ! -s "$download_file" ]] || ! bash -n -- "$download_file" >/dev/null 2>&1;
   exit 1
 fi
 
-# Do not exec: the wrapper still owns cleanup and preserves the installer's exit.
-bash -- "$download_file" "${forward_args[@]}"
+# Keep the stdin identity: the canonical installer must still obtain and verify
+# its signed offline-removal copy, not trust this temporary transport file as a
+# locally supplied installer. Do not exec; the wrapper still owns cleanup.
+bash -s -- "${forward_args[@]}" < "$download_file"
