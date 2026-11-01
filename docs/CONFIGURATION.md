@@ -1187,6 +1187,27 @@ only the scopes it needs, with a name that identifies its use. Tokens are shown
 once; later rows show hints and metadata, not a recoverable secret. Store the
 secret privately before dismissing it.
 
+### Save a newly created token
+
+In **API token ready**, save the token privately before choosing **Close** or
+**Dismiss**. **Copied!** confirms a clipboard write, not a saved credential or
+a working agent or integration. Use the intended consumer's private token-file
+or managed configuration, then check its authenticated result.
+
+**Closing the dialog does not revoke the token or clear your clipboard.** A
+copy already requested can finish after the dialog closes. Once that copy has
+finished and the token is stored safely, clear clipboard copies through your
+normal local controls, including clipboard history or synchronised copies where
+applicable. Pulse cannot remove those copies for you. Never paste the token into
+a command, screenshot or report to check it.
+
+If you closed the reveal without saving the secret, its inventory hint cannot
+recover it. Check the named record in **API Access**, then follow
+[replacement and revocation](#replace-or-revoke-a-token) if a replacement is
+needed. Do not leave an unused token active, widen its scopes or reinstall an
+agent to recover a lost secret. Closing the dialog is not a failed creation;
+check the inventory before creating another token.
+
 ### Replace or revoke a token
 
 Revoking a token stops consumers still using it from authenticating. For a
