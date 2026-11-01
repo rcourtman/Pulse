@@ -2,6 +2,7 @@
 """Execute narrow CI admission and the workflows' actual verdict paths."""
 
 import importlib.util
+import fnmatch
 import os
 from pathlib import Path
 import re
@@ -226,6 +227,10 @@ class CompletionScopeTest(unittest.TestCase):
             config = workflow[True][event] or {}
             self.assertNotIn("paths", config)
             self.assertNotIn("paths-ignore", config)
+            if event != "workflow_dispatch":
+                for branch in ("main", "release/v6.4", "release/v6.6.1-rc.1"):
+                    self.assertTrue(any(fnmatch.fnmatchcase(branch, pattern)
+                                        for pattern in config["branches"]))
         job = workflow["jobs"]["governance"]
         self.assertNotIn("if", job)
         self.assertNotIn("continue-on-error", job)
@@ -320,7 +325,7 @@ class GitTreeScopeTest(unittest.TestCase):
         quoted = self.commit()
         self.assertEqual(self.scope(renamed, quoted), "false")
 
-    def classify(self, base, head):
+    def classify(self, base, head, target_branch="main"):
         script = step_script(job_block(BUILD.read_text(), "changes"), "Classify changed files")
         script = interpolate(script, {
             "github.event_name": "pull_request", "github.event.pull_request.base.sha": base,
@@ -332,7 +337,8 @@ class GitTreeScopeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as output_dir:
             output = Path(output_dir) / "outputs"
             result = subprocess.run(["bash", "-c", script], cwd=self.repo, capture_output=True,
-                                    text=True, timeout=10, env={**os.environ, "GITHUB_OUTPUT": str(output)})
+                                    text=True, timeout=10, env={**os.environ, "GITHUB_OUTPUT": str(output),
+                                                               "GOVERNANCE_TARGET_BRANCH": target_branch})
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             return dict(line.split("=", 1) for line in output.read_text().splitlines())
 
@@ -373,12 +379,21 @@ class GitTreeScopeTest(unittest.TestCase):
                 (self.repo / path.decode()).unlink()
                 deleted = self.commit()
                 self.assertEqual(self.classify(head, deleted)["code"], "false")
-        self.assertEqual(self.classify(deleted, deleted)["code"], "false")  # ordinary empty diff
+        self.assertEqual(self.classify(deleted, deleted)["code"], "true")  # conservative ordinary fallback
         empty = subprocess.run(
             ["python3", str(ROOT / "scripts/ci_completion_only.py"), "--base", deleted, "--head", deleted],
             cwd=self.repo, capture_output=True, text=True, check=True, timeout=10,
         )
         self.assertEqual(empty.stdout.strip(), "false")
+
+    def test_completion_exception_requires_a_governance_covered_target_branch(self):
+        self.write("scripts/release_control/canonical_completion_guard.py", "# helper fixture\n")
+        helper = self.commit()
+        for branch, code in (("main", "false"), ("release/v6.4", "false"),
+                             ("release/v6.6.1-rc.1", "false"), ("pulse/v6-release", "true"),
+                             ("", "true"), ("main-extra", "true"), ("other/main", "true")):
+            with self.subTest(branch=branch):
+                self.assertEqual(self.classify(self.base, helper, branch)["code"], code)
 
     def test_completion_mixed_whole_range_and_missing_base_keep_runtime(self):
         self.write("internal/api/fixture.go", "package fixture\nvar Changed = true\n")
@@ -626,6 +641,10 @@ class WorkflowScopeTest(unittest.TestCase):
         self.assertIn("PROOF_ONLY: ${{ needs.scope.outputs.proof_only }}", verdict)
         self.assertNotIn("${{ needs.scope.outputs.proof_only }}", step_script(verdict, "Check E2E results"))
         build = BUILD.read_text()
+        classifier = yaml.safe_load(job_block(build, "changes"))["steps"]
+        classifier = next(step for step in classifier if step.get("id") == "filter")
+        self.assertEqual(classifier["env"]["GOVERNANCE_TARGET_BRANCH"],
+                         "${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}")
         self.assertIn("python3 scripts/tests/test_ci_browser_proof_only.py", job_block(build, "changes"))
         self.assertNotIn("if:", job_block(build, "secret-scan"))
         governance = (ROOT / ".github/workflows/canonical-governance.yml").read_text()

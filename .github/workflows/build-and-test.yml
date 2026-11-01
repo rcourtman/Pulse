@@ -92,6 +92,8 @@ jobs:
 
       - name: Classify changed files
         id: filter
+        env:
+          GOVERNANCE_TARGET_BRANCH: ${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -137,7 +139,9 @@ jobs:
           # that required workflow and secret scan; do not spend application
           # runners on an isolated helper change. Mixed/unavailable diffs and
           # edits to this admission still require the ordinary runtime checks.
-          if [ "$(python3 scripts/ci_completion_only.py --base "$base" --head "${{ github.sha }}")" = true ]; then
+          # Legacy branches without Canonical Governance cannot use this path.
+          if [[ "$GOVERNANCE_TARGET_BRANCH" == main || "$GOVERNANCE_TARGET_BRANCH" == release/v* ]] &&
+             [ "$(python3 scripts/ci_completion_only.py --base "$base" --head "${{ github.sha }}")" = true ]; then
             echo "Completion-helper-only tree diff; Canonical Governance owns verification, application runtime checks are not applicable."
             echo "code=false" >> "$GITHUB_OUTPUT"
             echo "frontend_deps=false" >> "$GITHUB_OUTPUT"
