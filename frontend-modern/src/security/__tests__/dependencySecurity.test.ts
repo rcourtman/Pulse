@@ -150,12 +150,27 @@ describe('frontend dependency security floors', () => {
 
   it('keeps every js-yaml copy above the empty-merge CPU exhaustion floor', () => {
     // GHSA-2883-xcg3-v3hh: our override keeps every transitive copy on patched 4.x.
+    // ESLint's flat-config graph no longer needs the legacy YAML consumer.
+    // Removing that dependency is safe; any copy that returns still needs the fix.
     expect(manifest.overrides['js-yaml']).toBe('^4.3.2');
     const versions = lockedVersions('js-yaml');
-    expect(versions).not.toHaveLength(0);
     for (const version of versions) {
       expect(version).not.toContain('-');
       expect(atLeast(version, [4, 3, 2]), `js-yaml ${version} is vulnerable`).toBe(true);
+    }
+  });
+
+  it('keeps modern glob consumers above the minimatch amplification floor', () => {
+    // GHSA-g3hv-75wg-m249 affects every minimatch release before 11.0.1.
+    // Scope the override to modern v10 edges, not callable/default v3 consumers.
+    expect(manifest.overrides['minimatch@^10.0.0']).toBe('11.0.1');
+    expect(manifest.overrides.minimatch).toBeUndefined();
+    expect(lockedVersions('@eslint/eslintrc')).toEqual([]);
+    const versions = lockedVersions('minimatch');
+    expect(versions).not.toHaveLength(0);
+    for (const version of versions) {
+      expect(version).not.toContain('-');
+      expect(atLeast(version, [11, 0, 1]), `minimatch ${version} is vulnerable`).toBe(true);
     }
   });
 
