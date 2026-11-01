@@ -434,7 +434,7 @@ func TestIdentitylessControllerMembersReadTheirWritersHistory(t *testing.T) {
 
 	hosts := []models.Host{standalone, linked}
 	for _, host := range hosts {
-		m.writeHostPhysicalDiskIOMetrics(host, now.Add(-30*time.Second))
+		m.writeHostPhysicalDiskIOMetrics(host, now.Add(-30*time.Second), counterSampleTime{})
 	}
 	for _, host := range hosts {
 		for i := range host.DiskIO {
@@ -442,7 +442,7 @@ func TestIdentitylessControllerMembersReadTheirWritersHistory(t *testing.T) {
 			host.DiskIO[i].WriteBytes += 1 << 20
 			host.DiskIO[i].IOTime += 1000
 		}
-		m.writeHostPhysicalDiskIOMetrics(host, now)
+		m.writeHostPhysicalDiskIOMetrics(host, now, counterSampleTime{})
 		m.writeHostSMARTMetrics(host, now)
 	}
 	m.writeSMARTMetrics(pveMember, now)
@@ -638,13 +638,13 @@ func TestAgentDiskHistoryFollowsTheSerialItsUnraidRowReports(t *testing.T) {
 	for _, device := range []string{"sdb", "sdc", "sdd", "sde", "sdf"} {
 		host.DiskIO = append(host.DiskIO, models.DiskIO{Device: device, ReadBytes: 1 << 20, WriteBytes: 1 << 20, IOTime: 100})
 	}
-	m.writeHostPhysicalDiskIOMetrics(host, now.Add(-30*time.Second))
+	m.writeHostPhysicalDiskIOMetrics(host, now.Add(-30*time.Second), counterSampleTime{})
 	for i := range host.DiskIO {
 		host.DiskIO[i].ReadBytes += 1 << 20
 		host.DiskIO[i].WriteBytes += 1 << 20
 		host.DiskIO[i].IOTime += 1000
 	}
-	m.writeHostPhysicalDiskIOMetrics(host, now)
+	m.writeHostPhysicalDiskIOMetrics(host, now, counterSampleTime{})
 	m.writeHostSMARTMetrics(host, now)
 	store.Flush()
 

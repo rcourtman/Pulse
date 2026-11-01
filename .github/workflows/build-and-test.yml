@@ -290,6 +290,9 @@ jobs:
           node --test scripts/tests/check-frontend-serialization.test.mjs
           node scripts/check-frontend-serialization.mjs
 
+      - name: Validate frontend unit evidence reporter
+        run: node --test scripts/tests/frontend-unit-receipts.test.mjs
+
       - name: Install frontend dependencies
         working-directory: frontend-modern
         # The explicit bounded audit below owns the advisory verdict. Avoid
@@ -564,7 +567,23 @@ jobs:
       # filter can silently leave part of the suite behind.
       - name: Frontend unit tests
         working-directory: frontend-modern
-        run: npm run test -- --shard=${{ matrix.shard }}/4
+        env:
+          PULSE_UNIT_RECEIPT: ${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json
+          PULSE_UNIT_SOURCE_SHA: ${{ github.sha }}
+        run: >-
+          npm run test -- --shard=${{ matrix.shard }}/4
+          --reporter=default --reporter=./scripts/ci-unit-receipts.mjs
+
+      # Flush after each module, not only at run end. A partial receipt names
+      # what remains unobserved; it cannot turn cancellation into passing proof.
+      - name: Retain frontend unit observations
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json
+          if-no-files-found: warn
+          retention-days: 7
 
   # Preserve the required check name; a failed/cancelled/skipped shard or a
   # failed audit/build/runtime check must never produce a green Frontend.

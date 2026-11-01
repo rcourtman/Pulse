@@ -13,7 +13,7 @@ import (
 )
 
 func TestReportDownloadMediaPoliciesStaySeparate(t *testing.T) {
-	for _, policy := range []responseMediaPolicy{responseMediaJSON, responseMediaZIP, responseMediaReport, responseMediaPolicy(255)} {
+	for _, policy := range []responseMediaPolicy{responseMediaJSON, responseMediaZIP, responseMediaReport, responseMediaAudit, responseMediaPolicy(255)} {
 		for _, provided := range []string{"", "application/json", "application/zip", "application/pdf", "text/csv", "text/csv; charset=utf-8", "text/csv; charset=windows-1252", "text/html", "image/svg+xml", "application/json; invalid"} {
 			t.Run(fmt.Sprint(policy)+"/"+provided, func(t *testing.T) {
 				base := httptest.NewRecorder()
@@ -35,6 +35,13 @@ func TestReportDownloadMediaPoliciesStaySeparate(t *testing.T) {
 				case responseMediaZIP:
 					if provided == "application/zip" {
 						want = provided
+					}
+				case responseMediaAudit:
+					switch {
+					case provided == "application/json":
+						want = provided
+					case strings.HasPrefix(provided, "text/csv"):
+						want = "text/csv; charset=utf-8"
 					}
 				case responseMediaReport:
 					switch {
@@ -58,6 +65,10 @@ func TestReportDownloadMediaPoliciesStaySeparate(t *testing.T) {
 }
 
 func TestReportDownloadCurrentAuthorityAndPrefix(t *testing.T) {
+	responseCurrentAuthorityAndPrefix(t, config.ScopeSettingsRead, responseMediaReport)
+}
+
+func responseCurrentAuthorityAndPrefix(t *testing.T, scope string, media responseMediaPolicy) {
 	for _, transport := range []string{"header", "bearer", "session"} {
 		changes := []string{"revoked", "expired", "scope", "org", "identity", "principal", "unrelated_scope"}
 		if transport == "session" {
@@ -70,7 +81,7 @@ func TestReportDownloadCurrentAuthorityAndPrefix(t *testing.T) {
 					name = change + "/after_prefix"
 				}
 				t.Run(transport+"/"+name, func(t *testing.T) {
-					cfg := newTestConfigWithTokens(t, newTokenRecord(t, logStreamToken, []string{config.ScopeSettingsRead, config.ScopeAIExecute}, nil))
+					cfg := newTestConfigWithTokens(t, newTokenRecord(t, logStreamToken, []string{scope, config.ScopeAIExecute}, nil))
 					const session = "synthetic-report-prefix-session"
 					if transport == "session" {
 						InitSessionStore(t.TempDir())
@@ -88,7 +99,7 @@ func TestReportDownloadCurrentAuthorityAndPrefix(t *testing.T) {
 					}
 					base := httptest.NewRecorder()
 					var late http.ResponseWriter
-					guard := retainResponseAuthority(cfg, config.ScopeSettingsRead, false, responseMediaReport, func(w http.ResponseWriter, r *http.Request) {
+					guard := retainResponseAuthority(cfg, scope, false, media, func(w http.ResponseWriter, r *http.Request) {
 						late = w
 						w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 						w.Header().Set("Content-Disposition", "attachment; filename=synthetic.csv")
@@ -116,7 +127,7 @@ func TestReportDownloadCurrentAuthorityAndPrefix(t *testing.T) {
 							case "principal":
 								cfg.APITokens[0].Metadata = map[string]string{apiTokenMetadataOwnerUserID: "different-owner"}
 							case "unrelated_scope":
-								cfg.APITokens[0].Scopes = []string{config.ScopeSettingsRead}
+								cfg.APITokens[0].Scopes = []string{scope}
 							}
 							config.Mu.Unlock()
 						}
@@ -162,13 +173,17 @@ func TestReportDownloadCurrentAuthorityAndPrefix(t *testing.T) {
 }
 
 func TestReportDownloadKeepsOrganizationBoundAuthority(t *testing.T) {
-	record := newTokenRecord(t, logStreamToken, []string{config.ScopeSettingsRead}, nil)
+	responseKeepsOrganizationBoundAuthority(t, config.ScopeSettingsRead, responseMediaReport)
+}
+
+func responseKeepsOrganizationBoundAuthority(t *testing.T, scope string, media responseMediaPolicy) {
+	record := newTokenRecord(t, logStreamToken, []string{scope}, nil)
 	record.OrgID = "org-a"
 	cfg := newTestConfigWithTokens(t, record)
 	req := httptest.NewRequest(http.MethodGet, "/synthetic-report", nil).WithContext(orgScopeContext("org-a"))
 	req.Header.Set("X-API-Token", logStreamToken)
 	base := httptest.NewRecorder()
-	handler := retainResponseAuthority(cfg, config.ScopeSettingsRead, false, responseMediaReport, func(w http.ResponseWriter, r *http.Request) {
+	handler := retainResponseAuthority(cfg, scope, false, media, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
 		if _, err := w.Write([]byte("own-org,report\n")); err != nil {
 			t.Fatal(err)

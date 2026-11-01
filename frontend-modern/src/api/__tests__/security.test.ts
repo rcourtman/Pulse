@@ -12,6 +12,20 @@ describe('SecurityAPI', () => {
     vi.clearAllMocks();
   });
 
+  it('forwards the confirmed organisation and cancellation without replaying token operations', async () => {
+    const options = { signal: new AbortController().signal, expectedOrgID: 'chosen-org' };
+    vi.mocked(apiFetchJSON).mockResolvedValue({ tokens: [], record: {} });
+    await SecurityAPI.listTokens(options);
+    await SecurityAPI.createToken('Name', ['monitoring:read'], options);
+    await SecurityAPI.updateTokenScopes('token/1', ['settings:read'], options);
+    await SecurityAPI.renameToken('token/1', 'Renamed', options);
+    await SecurityAPI.deleteToken('token/1', options);
+    expect(apiFetchJSON).toHaveBeenCalledTimes(5);
+    for (const [, request] of vi.mocked(apiFetchJSON).mock.calls) {
+      expect(request).toEqual(expect.objectContaining({ ...options, retry: false }));
+    }
+  });
+
   describe('getStatus', () => {
     it('fetches security status', async () => {
       const mockStatus: SecurityStatus = {
@@ -76,7 +90,7 @@ describe('SecurityAPI', () => {
 
       const result = await SecurityAPI.listTokens();
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/tokens');
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/tokens', { retry: false });
       expect(result).toEqual(mockTokens);
     });
 
@@ -272,6 +286,7 @@ describe('SecurityAPI', () => {
       ]);
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/tokens/token%2F1', {
+        retry: false,
         method: 'PATCH',
         body: JSON.stringify({ scopes: ['monitoring:read', 'settings:read'] }),
       });
@@ -317,6 +332,7 @@ describe('SecurityAPI', () => {
       const result = await SecurityAPI.renameToken('token/1', 'PBS host');
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/tokens/token%2F1', {
+        retry: false,
         method: 'PATCH',
         body: JSON.stringify({ name: 'PBS host' }),
       });

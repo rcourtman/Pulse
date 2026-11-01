@@ -131,17 +131,41 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         steps = unit["steps"]
         self.assertEqual([step["name"] for step in steps], [
             "Checkout repository", "Set up Node.js", "Install frontend dependencies", "Frontend unit tests",
+            "Retain frontend unit observations",
         ])
-        for step in steps:
+        for step in steps[:-1]:
             self.assertNotIn("if", step)
             self.assertNotIn("continue-on-error", step)
             if step["name"] != "Frontend unit tests":
                 self.assertEqual(step, self.step(step["name"]))
-        self.assertEqual(steps[-1], {
+        self.assertEqual(steps[-2], {
             "name": "Frontend unit tests", "working-directory": "frontend-modern",
-            "run": "npm run test -- --shard=${{ matrix.shard }}/4",
+            "env": {
+                "PULSE_UNIT_RECEIPT": "${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json",
+                "PULSE_UNIT_SOURCE_SHA": "${{ github.sha }}",
+            },
+            "run": "npm run test -- --shard=${{ matrix.shard }}/4 "
+                   "--reporter=default --reporter=./scripts/ci-unit-receipts.mjs",
+        })
+        self.assertEqual(steps[-1], {
+            "name": "Retain frontend unit observations", "if": "always()",
+            "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+            "with": {
+                "name": "frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}",
+                "path": "${{ runner.temp }}/frontend-unit-${{ matrix.shard }}-${{ github.run_attempt }}.json",
+                "if-no-files-found": "warn", "retention-days": 7,
+            },
         })
         self.assertEqual(self.workflow["permissions"], {"contents": "read"})
+
+    def test_unit_reporter_controls_are_registered_and_run_before_dependency_work(self):
+        step = self.step("Validate frontend unit evidence reporter")
+        self.assertEqual(step["run"], "node --test scripts/tests/frontend-unit-receipts.test.mjs")
+        names = [step["name"] for step in self.steps]
+        self.assertLess(names.index(step["name"]), names.index("Install frontend dependencies"))
+        result = subprocess.run(["node", "--test", "scripts/tests/frontend-unit-receipts.test.mjs"],
+                                cwd=ROOT, text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_runtime_and_units_are_independent_required_siblings(self):
         runtime = self.jobs["frontend-checks"]

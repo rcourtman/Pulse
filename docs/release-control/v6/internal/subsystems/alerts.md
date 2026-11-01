@@ -1747,7 +1747,10 @@ stores no threshold and removes an override left with nothing else, and any stor
 a saved 0 included, shows as Custom with a revert action. Other rows keep an
 explicit Off over an Off inherited default, so it survives a later change to
 that default. The overrides projection carries each stored override's note
-for every resource type, so a reloaded editor keeps it. A row's delay action opens the alert intent editor on
+for every resource type, so a reloaded editor keeps it, and
+`useAlertOverridesState` re-projects when only a note changes, so a discarded
+note-only edit or a note removed on the server does not linger on the row and
+get saved back (`useAlertOverridesState.test.tsx`). A row's delay action opens the alert intent editor on
 `metric.temperature` (shared `getAlertResourcePreferredIntentSignal`), and
 the editor keeps a target that is not a listed resource, such as a machine
 sensor or disk, as its own option under the row's label instead of falling

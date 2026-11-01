@@ -95,7 +95,8 @@ func TestBuildReport(t *testing.T) {
 		},
 		metricsFn: func(ctx context.Context, diskExclude []string) (hostmetrics.Snapshot, error) {
 			return hostmetrics.Snapshot{
-				CPUUsagePercent: 50.0,
+				IOCountersCollectedAt: fixedTime.Add(-20 * time.Second),
+				CPUUsagePercent:       50.0,
 				Memory: agentshost.MemoryMetric{
 					TotalBytes: 1000,
 					UsedBytes:  500,
@@ -178,6 +179,11 @@ func TestBuildReport(t *testing.T) {
 		// Verify Timestamp
 		if !report.Timestamp.Equal(fixedTime) {
 			t.Errorf("Timestamp = %v, want %v", report.Timestamp, fixedTime)
+		}
+		// The real report builder must carry the metrics snapshot's read time,
+		// independently of the later end-of-collection timestamp.
+		if report.IOCountersCollectedAt == nil || !report.IOCountersCollectedAt.Equal(fixedTime.Add(-20*time.Second)) {
+			t.Fatalf("IOCountersCollectedAt = %v, want the earlier snapshot read", report.IOCountersCollectedAt)
 		}
 	})
 

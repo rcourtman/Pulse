@@ -33,6 +33,7 @@ var (
 	diskIOCounters = godisk.IOCountersWithContext
 	netInterfaces  = gonet.InterfacesWithContext
 	netIOCounters  = gonet.IOCountersWithContext
+	readZFSARCSize = readARCSize
 )
 
 // partitionsVisibleToAgent asks gopsutil to enumerate the mount namespace the
@@ -153,7 +154,14 @@ type Snapshot struct {
 	Disks           []agentshost.Disk
 	DiskIO          []agentshost.DiskIO
 	Network         []agentshost.NetworkInterface
+	// IOCountersCollectedAt is when the cumulative DiskIO and Network counters
+	// were read: stamped right after the network read, which follows the disk
+	// read with only the interface listing between them.
+	IOCountersCollectedAt time.Time
 }
+
+// ioCountersReadNow stamps IOCountersCollectedAt; tests replace it.
+var ioCountersReadNow = func() time.Time { return time.Now().UTC() }
 
 // Collector owns the CPU baseline for one reporting loop. Its zero value is
 // ready to use. Retain it across reports; do not copy it after first use.
@@ -236,7 +244,7 @@ func (c *Collector) CollectWithDiskFilters(ctx context.Context, diskExclude, dis
 	// ZFS ARC memory is reclaimable under pressure but is counted as "used" by
 	// both FreeBSD (wired memory) and Linux (not in MemAvailable, openzfs/zfs#10255).
 	// Subtract it from Used to reflect actual memory pressure. Refs: #1264/#1051
-	if arcSize, err := readARCSize(); err == nil && arcSize > 0 {
+	if arcSize, err := readZFSARCSize(); err == nil && arcSize > 0 {
 		if arcSize < usedBytes {
 			usedBytes -= arcSize
 		} else {
@@ -271,6 +279,7 @@ func (c *Collector) CollectWithDiskFilters(ctx context.Context, diskExclude, dis
 	snapshot.Disks = collectDisksWithIncludes(collectCtx, diskExclude, diskInclude)
 	snapshot.DiskIO = collectDiskIO(collectCtx, diskExclude)
 	snapshot.Network = collectNetwork(collectCtx)
+	snapshot.IOCountersCollectedAt = ioCountersReadNow()
 
 	return snapshot, nil
 }

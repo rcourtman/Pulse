@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "5cbcb053308675c0422b0bc52e8419e566e8a3f5",
+  "verified_at": "2026-11-01T17:10:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/useAlertOverridesState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/useAlertOverridesState.ts": "fc7e6f8ee5f3ec93a55347270c350b6bbf7034518ccf38e6bffd1975c8e4d1f3"
+  },
+  "routes": [
+    "/alerts/thresholds/systems"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Machine Sensors section expanded on a private mock stack built from this branch",
+    "TB0T sensor override saved with a 60 C limit and the note \"saved note\" (stored under the hex sensor ID)",
+    "unsaved note-only edit pending (\"discarded note\" shown on the row, Discard and Save Changes visible)",
+    "after Discard the row shows \"saved note\" and the reopened editor holds \"saved note\"",
+    "phone width: Machine Sensors lists TB0T with its 60 C limit and Revert action after reload"
+  ],
+  "interactions": [
+    "opened the TB0T row editor, set the limit and note, committed the row and clicked Save Changes",
+    "reopened the editor, changed only the note, committed the row, clicked Discard",
+    "reopened the editor and read the note field",
+    "reloaded at 375x812, expanded Machine Sensors and found the TB0T row"
+  ]
+}

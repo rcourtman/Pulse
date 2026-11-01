@@ -65,6 +65,11 @@ type Report struct {
 	Tags                []string                  `json:"tags,omitempty"`
 	Timestamp           time.Time                 `json:"timestamp"`
 	SequenceID          string                    `json:"sequenceId,omitempty"`
+	// IOCountersCollectedAt is when the agent read the cumulative DiskIO and
+	// Network counters, on the same clock as Timestamp. Timestamp is stamped
+	// after every optional collector, so only this bounds the counter read.
+	// Optional: older agents omit it.
+	IOCountersCollectedAt *time.Time `json:"ioCountersCollectedAt,omitempty"`
 }
 
 // LibvirtInventory is the bounded, read-only domain inventory collected from

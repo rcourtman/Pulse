@@ -963,6 +963,14 @@ carries the server's host readings and resource snapshot, and the model test
 pins the readings on every row while the flag is true only for a server's
 later datastore rows.
 
+`BackupServerRow.jobs` reads the PBS resource's existing `jobHealthEvidence`
+(the backend's per-job posture and reason) and binds each job to a datastore
+row only by its `store` field. It adds no resource field, identity or
+correlation: an Agent-merged server keeps the PBS service's evidence, and a
+store-less read failure marks the family unknown on every datastore rather
+than borrowing another row's result. `backupServerJobResults.test.tsx` and
+`proxmoxBackupServerJobs.test.ts` cover the mounted column and the model.
+
 ### Guest disk freshness presentation
 
 Existing workload disk evidence retains its source reason through the row,

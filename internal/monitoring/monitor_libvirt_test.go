@@ -24,7 +24,7 @@ func TestNormalizeAgentLibvirtInventoryDerivesCPUAndIORates(t *testing.T) {
 		DiskReadBytes:      3000,
 		DiskWriteBytes:     4000,
 	}}}
-	first := monitor.normalizeAgentLibvirtInventory(firstReport, "host-1", nil, t0)
+	first := monitor.normalizeAgentLibvirtInventory(firstReport, "host-1", nil, t0, counterSampleTime{})
 	if first == nil || len(first.Domains) != 1 {
 		t.Fatalf("first inventory = %+v", first)
 	}
@@ -49,7 +49,7 @@ func TestNormalizeAgentLibvirtInventoryDerivesCPUAndIORates(t *testing.T) {
 		DiskReadBytes:      6000,
 		DiskWriteBytes:     8000,
 	}}}
-	second := monitor.normalizeAgentLibvirtInventory(secondReport, "host-1", previous, t0.Add(10*time.Second))
+	second := monitor.normalizeAgentLibvirtInventory(secondReport, "host-1", previous, t0.Add(10*time.Second), counterSampleTime{})
 	if second == nil || len(second.Domains) != 1 {
 		t.Fatalf("second inventory = %+v", second)
 	}
@@ -76,7 +76,7 @@ func TestNormalizeAgentLibvirtInventoryBoundsAndDeduplicates(t *testing.T) {
 		{Name: "vm", State: "running"},
 		{Name: "bad\x00name", State: "running"},
 	}}
-	got := monitor.normalizeAgentLibvirtInventory(report, "host-1", nil, time.Now())
+	got := monitor.normalizeAgentLibvirtInventory(report, "host-1", nil, time.Now(), counterSampleTime{})
 	if got == nil || len(got.Domains) != 1 {
 		t.Fatalf("inventory = %+v, want one domain", got)
 	}
@@ -99,6 +99,7 @@ func TestNormalizeAgentLibvirtInventoryPreservesLastSuccessfulSampleOnFailure(t 
 		"host-1",
 		previous,
 		time.Now(),
+		counterSampleTime{},
 	)
 	if got == nil || len(got.Domains) != 1 || !got.CollectedAt.Equal(collectedAt) {
 		t.Fatalf("preserved inventory = %+v", got)

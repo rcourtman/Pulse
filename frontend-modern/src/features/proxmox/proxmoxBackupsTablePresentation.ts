@@ -19,6 +19,7 @@ export type BackupServerColumnId =
   | 'uptime'
   | 'datastore'
   | 'used'
+  | 'jobs'
   | 'backups'
   | 'dedup';
 
@@ -74,6 +75,7 @@ export const BACKUP_SERVER_COLUMNS: readonly BackupTableColumn<BackupServerColum
   { id: 'uptime', label: 'Uptime', kind: 'numeric-value' },
   { id: 'datastore', label: 'Datastore', kind: 'text' },
   { id: 'used', label: 'Used', kind: 'numeric-value' },
+  { id: 'jobs', label: 'Jobs', kind: 'text' },
   { id: 'backups', label: 'Backups', kind: 'numeric-value' },
   { id: 'dedup', label: 'Dedup', kind: 'numeric-value' },
 ];
@@ -85,12 +87,14 @@ const BACKUP_SERVER_VISIBLE: Record<
   // Reachability and datastore exhaustion are the two risks that can stop all
   // future backups. Host telemetry and space-efficiency context return only as
   // the table gains enough room to keep those headline answers readable. The
-  // phone projection keeps those two answers whole ("Healthy", "33.6%") and
-  // lets the backup count return with the first wider layout.
+  // phone projection keeps those two answers whole ("Healthy", "33.6%"); its
+  // job results live in the row's drawer. Job results (GC, prune, verify,
+  // sync) are the next answer, so they take the first wider layout ahead of
+  // the backup count, which Coverage and By date already answer per guest.
   compact: ['server', 'status', 'datastore', 'used'],
-  basic: ['server', 'status', 'datastore', 'used', 'backups'],
-  operational: ['server', 'status', 'cpu', 'memory', 'datastore', 'used', 'backups'],
-  expanded: ['server', 'status', 'cpu', 'memory', 'uptime', 'datastore', 'used', 'backups'],
+  basic: ['server', 'status', 'datastore', 'used', 'jobs'],
+  operational: ['server', 'status', 'cpu', 'memory', 'datastore', 'used', 'jobs', 'backups'],
+  expanded: ['server', 'status', 'cpu', 'memory', 'uptime', 'datastore', 'used', 'jobs', 'backups'],
   full: BACKUP_SERVER_COLUMNS.map((column) => column.id),
 };
 
@@ -98,47 +102,53 @@ const BACKUP_SERVER_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<BackupServerColumnId, number>>
 > = {
-  // Capacity must fit "Unavailable", not just a short percentage. Keep the
-  // shared 40% identity anchor; the compact status omits its redundant dot.
-  compact: { server: 40, status: 18, datastore: 17, used: 25 },
-  // Count must fit Loading and Unavailable, not just a short number. Keep
-  // reachability and the used/total pair; datastore names already disclose
-  // their full value on hover and in the existing detail. The 30% identity
-  // anchor below still owns the server column in this band.
-  basic: { server: 30, status: 13.6, datastore: 14, used: 26.9, backups: 15.5 },
+  // State must fit a job problem ("Sync failed", "Verify late") because the
+  // phone layout has no Jobs column, and capacity must fit "Unavailable".
+  // Datastore names truncate at either width; keep the shared 40% identity
+  // anchor. The compact status omits its redundant dot.
+  compact: { server: 40, status: 24, datastore: 13, used: 23 },
+  // Jobs must fit "Verify failed" and Count must fit Loading and
+  // Unavailable, not just short values. Keep reachability and the used/total
+  // pair; datastore names already disclose their full value on hover and in
+  // the existing detail. The 30% identity anchor below still owns the server
+  // column in this band.
+  basic: { server: 30, status: 13.6, datastore: 14, used: 26.9, jobs: 15.5 },
   operational: {
-    server: 20,
-    status: 12,
-    cpu: 10,
-    memory: 12,
-    datastore: 14,
-    used: 20,
-    backups: 12,
-  },
-  expanded: {
     server: 18,
     status: 11,
     cpu: 8,
     memory: 11,
-    uptime: 9,
-    datastore: 14.5,
+    datastore: 12,
+    used: 17,
+    jobs: 11,
+    backups: 12,
+  },
+  expanded: {
+    server: 17,
+    status: 10,
+    cpu: 7,
+    memory: 10,
+    uptime: 8,
+    datastore: 11,
     used: 18,
-    backups: 10.5,
+    jobs: 10,
+    backups: 9,
   },
   // Memory and Used carry a percentage plus a used/total pair, the longest
   // values in the row, so they take the slack from the one-word status and
   // version cells instead of truncating.
   full: {
-    server: 15,
-    status: 8,
-    version: 7,
-    cpu: 6,
-    memory: 13.5,
-    uptime: 7,
-    datastore: 13,
-    used: 15.5,
+    server: 14,
+    status: 7,
+    version: 6,
+    cpu: 5,
+    memory: 12.5,
+    uptime: 6,
+    datastore: 11,
+    used: 14.5,
+    jobs: 10,
     backups: 8,
-    dedup: 7,
+    dedup: 6,
   },
 };
 
