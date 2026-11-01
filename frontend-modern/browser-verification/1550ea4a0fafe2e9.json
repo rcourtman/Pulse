@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "1dc1e5ce12d122d64446a6b4a0be3b380b9336db",
+  "verified_at": "2026-11-01T09:56:27.771868Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/security.ts",
+    "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/security.ts": "5c3ee6a5ac9e76a3eb8eff9aceefeeff10709a1388a28066e049ba2a4dab7528",
+    "frontend-modern/src/components/Settings/APIAccessPanel.tsx": "60f94bd9d86de25eeecdd67c15716429cc5e3b91628ed921f94a1e0ab1893829",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "7f6c3f76ebb6c50b1687c9899e2d81557f6f23bdc7584669a19501292b1fea4e",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "9b74d61f9e74f50177da4ecf0e1cb6763cb2650160717b1c7dd1c98688ee0f59",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "e6bce0e56ac0b8e708326dd5dbc8eaa34a3b22b145727d11c5c7346127669027"
+  },
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1050
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Exact committed source 1dc1e5ce12d122d64446a6b4a0be3b380b9336db; source-p7vj7txh passes offline install, types, changed-file lint/format, 107 registered tests, production/embed asset build, bundle controls and safe consumer preview. All 148 compiled source inputs match.",
+    "Actual existing Settings registry, API Access panel, token transport and global reveal store render with production CSS in a safe compiled adapter. Backend responses, identities and credentials are synthetic; fleet/resource hooks are empty adapters. This is not full Settings-router, installed authorization, administrator or customer recovery.",
+    "Playwright 1.56.1 matches the integration lock. Desktop/light Chromium 141.0.7390.37 at 1680x1050 and narrow/dark touch WebKit 26.0 at 320x844. All 14 captures plus a supplementary actual-viewport scope-editor capture were opened with native view_image.",
+    "Inventory, pending rename, read-only, accepted reveal, failed read, scope edit and confirmed empty states are readable. The actual 320x844 scope footer is visible. The unchanged shared reveal header crowds its static Security badge and Close text on the phone; controls remain usable, and no presentation-perfection claim is made."
+  ],
+  "interactions": [
+    "40 assertions pass across both engines: withdrawn rename has no accepted callback/success, duplicate create is blocked, and late create cannot reopen a global credential after panel close.",
+    "Current create reveals once; unchanged primary-token metadata refresh preserves it. The actual Settings username producer withdraws the old credential on user change. Cleanup preserves a different issuer reveal.",
+    "Withdrawal while the actual client awaits CSRF preparation prevents token dispatch. A failed inventory remains Unknown and explicit retry performs only a read. Reads and all five deliberate/cancelled token-write attempts retain org-a and the ordinary synthetic token header.",
+    "Current scope editing sends only the deliberately selected monitoring:read/settings:read scopes. A subsequent confirmed revoke remains actionable through keyed desktop reconciliation and removes only token-1. Narrow cards perform the same sequence.",
+    "No horizontal page overflow, page errors, fixture response errors or pending fixture responses; contexts, browsers and server close. The supplementary viewport-only control confirms visible scope Save/Cancel controls without relying on full-page modal geometry."
+  ],
+  "evidence": {
+    "source_proof": "source-p7vj7txh",
+    "source_sha": "1dc1e5ce12d122d64446a6b4a0be3b380b9336db",
+    "browser_checks": 40,
+    "main_captures": 14,
+    "supplementary_viewport_captures": 1,
+    "lane_records": [
+      "RECEIPTS.md",
+      "PIXEL-REVIEW.json",
+      "CURRENT-PREVIEW-BINDING.json",
+      "BROWSER-RESULTS.json",
+      "CURRENT-DOSSIER.tar.xz",
+      "BROWSER-EVIDENCE.tar.xz"
+    ]
+  }
+}
