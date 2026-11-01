@@ -127,6 +127,13 @@ describe('OrganizationOverviewPanel', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Display Name')).toBeInTheDocument();
     });
+    const options = orgGetMock.mock.calls[0][1];
+    expect(options).toEqual({
+      expectedOrgID: 'org-a',
+      signal: expect.any(AbortSignal),
+      retry: false,
+    });
+    expect(listMembersMock).toHaveBeenCalledWith('org-a', options);
   });
 
   it('normalizes org scope through the shared helper', () => {
