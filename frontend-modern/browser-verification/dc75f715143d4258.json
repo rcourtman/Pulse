@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "0ab344f9600410340b1b0dfdd8af26303d1e89de",
+  "verified_at": "2026-11-01T18:45:39.802972Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "321fec4264d4e65a0d28a6e7e15319483f4d52aba8d493cc2fb31b9a8bbfdbb4",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "39dd0df1bc9a122de1a7442f0abe992a9ce4e35b54b05bec9e93f37225b69c95",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "06abe9ec38ccd20b855b818ab91ae0c6e2706ef01632a4b89a5405ce516aeec9"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Source 0ab344f960/source-xvcu9h2v: 259 selected registered tests in 11 files, full types, changed-file lint/format, production build/embed sync and bundle/preload/integrity controls; 2562 recorded frontend inputs match. Completed source proof is retained, not rerun on capacity resume. Not an all-suite or native IdP result.",
+    "Actual production App and Settings status/currentUsername producer, registry, SSO panel/hook, dialogs and API client consume safe synthetic HTTP responses. Backend/session/IdP authority is fixture data, not installed authentication or administrator recovery.",
+    "Playwright 1.56.1 matches the integration lock. Desktop light Chromium 141.0.7390.37 at 1280x900; narrow dark touch WebKit 26.0 at 390x844. Four captures at each size were opened with native view_image, with desktop inspection retained from the parked invocation and phone inspection completed on resume.",
+    "Selected editor labels, endpoint and footer actions are readable; SAML parsed fields/literal XML and Close remain usable. New org data is isolated and unknown-provider feedback/Retry is visible. Phone forms scroll vertically. Existing stacked success toasts can cover part of the bottom navigation; this is not general layout/notification acceptance."
+  ],
+  "interactions": [
+    "Current desktop completes 17 controls before its script fails at an ambiguous phone bootstrap selector; the separate corrected phone-only run exits 0 with 19 completed controls. A resumed zero-control h1 wait failure and earlier source/browser adverse stages remain retained, not aggregated green.",
+    "Pending inventory is Loading rather than empty; refused/malformed inventory remains unknown, with explicit permitted read-only retry and no replacement write or private error-body display.",
+    "Latest selected provider details win; an obsolete detail completion cannot replace a new dialog. Closing/replacing the editor releases obsolete tests, previews and drafts, while a current SAML preview remains usable.",
+    "The real Settings principal refresh withdraws the old dialog/secret draft. The newly authorised reader regains editing after its fresh inventory, with a blank new secret draft and no replay of the accepted create.",
+    "Pending save cannot be dismissed through Escape. Real org switching reads the new provider selection and cannot reopen an old detail dialog. Each profile applies only its two explicitly submitted creates; local cancellation does not undo server-applied writes.",
+    "Saved desktop and phone requests each retain ordinary synthetic session/token/CSRF and confirmed default-org transport for all four submitted create/test/preview operations. Zero application page errors; deliberate 403 console errors remain."
+  ],
+  "evidence": {
+    "source_sha": "0ab344f9600410340b1b0dfdd8af26303d1e89de",
+    "source_proof": "source-xvcu9h2v",
+    "desktop_completed_checks": 17,
+    "phone_completed_checks": 19,
+    "current_captures": 8,
+    "lane_records": [
+      "RECEIPTS.md",
+      "BROWSER-PROOF.json",
+      "PIXEL-REVIEW.json",
+      "RESUME-BINDING.json",
+      "PHONE-COMPLETION.tar.xz",
+      "BROWSER-DESKTOP.tar.xz",
+      "PHONE-BOOTSTRAP-FAILURE.tar.xz"
+    ]
+  }
+}

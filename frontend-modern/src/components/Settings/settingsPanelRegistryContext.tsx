@@ -60,6 +60,7 @@ export function buildSettingsPanelRegistryContext(
   const securitySsoPanel: Component = () => (
     <div class="space-y-6">
       <SSOProvidersPanel
+        currentUser={currentUser()}
         onConfigUpdated={params.loadSecurityStatus}
         canManage={settingsCapabilities()?.singleSignOnWrite === true}
       />
