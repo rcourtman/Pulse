@@ -128,18 +128,21 @@ def main() -> int:
     start = time.monotonic()
     admitted = tasks(packages, args.index, args.output, args.ordinary_command)
     planned = [name for name, _ in admitted]
-    results = {}
-    retain_results(args.output, args.index, planned, results, start)
+    observed = {}
+    retain_results(args.output, args.index, planned, observed, start)
     # Drain every admitted task even when a sibling fails. Collect in completion
     # order so a slow first task cannot hide already returned results. Retained
     # snapshots still use source order, including the final legacy tasks list.
     with ThreadPoolExecutor(max_workers=SLOTS) as pool:
         futures = {pool.submit(run_task, task): task[0] for task in admitted}
         for future in as_completed(futures):
-            results[futures[future]] = future.result()
-            retain_results(args.output, args.index, planned, results, start)
-    retain_results(args.output, args.index, planned, results, start, complete=True)
-    return 0 if all(result["exit"] == 0 for result in results.values()) else 1
+            observed[futures[future]] = future.result()
+            retain_results(args.output, args.index, planned, observed, start)
+    retain_results(args.output, args.index, planned, observed, start, complete=True)
+    # Keep the final ordered list and verdict recipe compatible with source
+    # contracts on the current stable when these main controls are copied.
+    results = [observed[name] for name in planned]
+    return 0 if all(result["exit"] == 0 for result in results) else 1
 
 
 if __name__ == "__main__":

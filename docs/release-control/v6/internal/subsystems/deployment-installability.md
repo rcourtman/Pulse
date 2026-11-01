@@ -1721,6 +1721,10 @@ separate observations. All children must still return zero for the check to pass
 `run_go_package_slice_test.py` drives the actual queue with a held first child,
 an early exit-nine child and a successful sibling, checking readable incomplete
 snapshots, source-ordered final results and an unchanged failing aggregate.
+Its interrupted-write control preserves the previous JSON snapshot, and a real
+missing-executable control completes result collection without claiming process
+execution or granting a passing check. The final ordered-list verdict remains
+compatible with the current stable's source-contract assertions.
 Documentation-only changes retain the original explicit
 runtime-inapplicable results and required check names.
 

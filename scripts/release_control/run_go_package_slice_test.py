@@ -535,6 +535,46 @@ sys.exit(0 if release.exists() else 13)
             self.assertEqual([task['exit'] for task in final['tasks']], [0, 9, 0])
             self.assertEqual(list(output.glob('.ordinary-packages-*')), [])
 
+    def test_a_failed_snapshot_write_preserves_the_previous_complete_json(self):
+        spec = importlib.util.spec_from_file_location('atomic_rest_shard', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            names = [runner.MODULE + 'internal/observed', runner.MODULE + 'internal/unobserved']
+            results = {names[0]: {'package': names[0], 'started': True, 'exit': 9, 'seconds': .01}}
+            shard.retain_results(output, 0, names, results, time.monotonic())
+            receipt = output / 'ordinary-packages.json'
+            previous = receipt.read_bytes()
+            def broken_write(value, stream, **kwargs):
+                stream.write('{"incomplete":')
+                raise OSError('test-only incomplete snapshot write')
+            with patch.object(shard.json, 'dump', side_effect=broken_write), self.assertRaises(OSError):
+                shard.retain_results(output, 0, names, results, time.monotonic())
+            self.assertEqual(receipt.read_bytes(), previous)
+            self.assertEqual(json.loads(previous)['tasks'][0]['exit'], 9)
+            self.assertEqual(list(output.glob('.ordinary-packages-*')), [])
+
+    def test_start_failure_is_incomplete_execution_not_an_observed_shell_exit(self):
+        spec = importlib.util.spec_from_file_location('start_rest_shard', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            names = [runner.MODULE + 'internal/not-started']
+            argv = [str(SHARD), '--index', '0', '--output', str(output),
+                    '--ordinary-command', shard.ORDINARY_COMMAND]
+            with patch.object(shard, 'ordinary_packages', return_value=names), \
+                    patch.object(shard, 'tasks', return_value=[(names[0], [str(output / 'absent-command')])]), \
+                    patch.object(sys, 'stdin', io.StringIO(names[0] + '\n')), \
+                    patch.object(sys, 'argv', argv), \
+                    contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(shard.main(), 1)
+            receipt = json.loads((output / 'ordinary-packages.json').read_text())
+            self.assertTrue(receipt['collection_complete'])
+            self.assertEqual(receipt['unobserved_packages'], [])
+            self.assertFalse(receipt['tasks'][0]['started'])
+            self.assertIsNone(receipt['tasks'][0]['exit'])
+            self.assertEqual(receipt['tasks'][0]['start_error_errno'], 2)
+
     def test_helpers_are_part_of_the_exact_main_controls_copied_to_patches(self):
         stable_patch = (ROOT / 'scripts/release_control/stable_patch.py').read_text()
         self.assertIn('"scripts/release_control"', stable_patch)
