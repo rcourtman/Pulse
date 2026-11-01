@@ -537,6 +537,7 @@ function App() {
                             needsAuth={runtime.needsAuth}
                             proxyAuthInfo={runtime.proxyAuthInfo}
                             handleLogout={runtime.handleLogout}
+                            isLoggingOut={runtime.isLoggingOut}
                             state={runtime.state}
                             platformVisibility={platformNavigationVisibility}
                             tokenScopes={() => runtime.securityStatus()?.tokenScopes}

@@ -732,7 +732,9 @@ class ApiClient {
       '/api/charts/infrastructure',
     ];
     const shouldSkipRedirect = skipRedirectUrls.some((path) => url.includes(path));
-    if (response.status === 401 && !skipAuth && !shouldSkipRedirect) {
+    // Sign-out owns its result: a rejected or lost withdrawal must remain
+    // visible, not become a login redirect that looks like successful logout.
+    if (response.status === 401 && !skipAuth && !shouldSkipRedirect && url !== '/api/logout') {
       logger.warn('Authentication expired - redirecting to login');
       // Clear auth and redirect to login
       if (typeof window !== 'undefined') {

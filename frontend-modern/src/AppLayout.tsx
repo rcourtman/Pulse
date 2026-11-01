@@ -143,6 +143,7 @@ export interface AppLayoutProps {
   needsAuth: () => boolean;
   proxyAuthInfo: () => { username?: string; logoutURL?: string } | null;
   handleLogout: () => void;
+  isLoggingOut?: () => boolean;
   state: () => State;
   platformVisibility?: () => PlatformNavigationVisibility;
   tokenScopes: () => string[] | undefined;
@@ -804,9 +805,11 @@ export function AppLayout(props: AppLayoutProps) {
               <button
                 type="button"
                 onClick={props.handleLogout}
+                disabled={props.isLoggingOut?.()}
+                aria-busy={props.isLoggingOut?.() || undefined}
                 class="group relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
-                title="Logout"
-                aria-label="Logout"
+                title={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
+                aria-label={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
               >
                 <svg
                   class="h-4 w-4 shrink-0"

@@ -80,6 +80,7 @@ const renderLayout = (
     detail: 'Backend and live data stream are connected.',
     tone: 'healthy',
   }),
+  loggingOut: Accessor<boolean> = () => false,
 ) => {
   window.history.replaceState({}, '', initialPath);
   const RouteStateProbe = () => {
@@ -109,6 +110,7 @@ const renderLayout = (
       needsAuth={() => false}
       proxyAuthInfo={() => null}
       handleLogout={() => {}}
+      isLoggingOut={loggingOut}
       state={() =>
         ({
           activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
@@ -651,4 +653,16 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     });
     expect(window.location.pathname).toBe('/settings/infrastructure');
   });
+  it('names and disables the actual sign-out control while withdrawal is pending, and restores retry', async () => {
+    const [loggingOut, setLoggingOut] = createSignal(false);
+    renderLayout([], '/settings/infrastructure', undefined, ['settings:read'], undefined, loggingOut);
+    expect(screen.getByRole('button', { name: 'Logout' })).not.toBeDisabled();
+    setLoggingOut(true);
+    const pending = screen.getByRole('button', { name: 'Signing out…' });
+    expect(pending).toBeDisabled();
+    expect(pending).toHaveAttribute('aria-busy', 'true');
+    setLoggingOut(false);
+    expect(screen.getByRole('button', { name: 'Logout' })).not.toBeDisabled();
+  });
+
 });

@@ -3935,3 +3935,26 @@ Chat)"), not as a Pro capability, so no paid entitlement changes. Paid Patrol
 capabilities stay as they were: Patrol modes, investigations, governed fixes,
 and history live on the Patrol and Actions surfaces, and alert Investigate now
 starts a targeted Patrol run instead of opening a chat.
+
+### Sign-out confirms local withdrawal before provider navigation
+
+The existing app runtime sends a single bounded, cookie/CSRF-bearing POST to
+`/api/logout` before clearing saved authentication and cached metadata, stopping
+its runtime and following any configured proxy/SSO destination. It requires the
+endpoint's successful JSON acknowledgement; rejection, a redirect, malformed
+reply, lost response or timeout stays visibly uncertain and allows deliberate
+retry. The API client must not turn a logout 401 into a success-looking login
+redirect. Token-only browsers keep the normal authenticated transport; this
+ends only the cookie session, not independent API tokens or other sessions.
+Provider navigation still owns upstream sign-out. A browser cleanup failure
+remains explicit, does not skip remaining cleanup and does not redirect.
+
+The actual Layout control is busy/disabled during withdrawal. Disposing its
+runtime aborts pending transport and prevents late cleanup/navigation. No new
+route, polling, grant, provider protocol, server invalidation rule or recovery
+operation is introduced. Registered runtime, API-client auth and AppLayout
+tests cover order, uncertainty, transport, duplicate attempts, retry, timeout,
+disposal and storage failure. Desktop/narrow browser proof exercises the actual
+consumer with synthetic independent sessions and inspected pixels; it is not
+live IdP or original administrator recovery. The proxy guide and shipped mirror
+must describe the same sequence without claiming upstream revocation.

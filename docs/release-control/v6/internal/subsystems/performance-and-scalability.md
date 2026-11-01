@@ -4654,3 +4654,26 @@ usage and `Dialog.test.tsx` owns modal isolation/focus. Browser proof exercises
 the consuming TrueNAS table with ordinary keyboard/phone taps, hover parity,
 updates and dismissal, and natively inspected desktop/narrow pixels. This repairs
 composition access, not the reporter's missing native ARC or I/O/History source.
+
+### Sign-out confirms local withdrawal before provider navigation
+
+The existing app runtime sends a single bounded, cookie/CSRF-bearing POST to
+`/api/logout` before clearing saved authentication and cached metadata, stopping
+its runtime and following any configured proxy/SSO destination. It requires the
+endpoint's successful JSON acknowledgement; rejection, a redirect, malformed
+reply, lost response or timeout stays visibly uncertain and allows deliberate
+retry. The API client must not turn a logout 401 into a success-looking login
+redirect. Token-only browsers keep the normal authenticated transport; this
+ends only the cookie session, not independent API tokens or other sessions.
+Provider navigation still owns upstream sign-out. A browser cleanup failure
+remains explicit, does not skip remaining cleanup and does not redirect.
+
+The actual Layout control is busy/disabled during withdrawal. Disposing its
+runtime aborts pending transport and prevents late cleanup/navigation. No new
+route, polling, grant, provider protocol, server invalidation rule or recovery
+operation is introduced. Registered runtime, API-client auth and AppLayout
+tests cover order, uncertainty, transport, duplicate attempts, retry, timeout,
+disposal and storage failure. Desktop/narrow browser proof exercises the actual
+consumer with synthetic independent sessions and inspected pixels; it is not
+live IdP or original administrator recovery. The proxy guide and shipped mirror
+must describe the same sequence without claiming upstream revocation.

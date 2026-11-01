@@ -127,7 +127,9 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         guide = " ".join(source.split("### Sign out and session boundaries\n", 1)[1]
                          .split("### Verify Headers", 1)[0].split())
         for boundary in (
-            "instead of calling Pulse's local `/api/logout` endpoint",
+            "first calls Pulse's local `/api/logout` endpoint",
+            "Only after Pulse confirms success",
+            "error is shown instead of a redirect",
             "leaves the proxy/IdP sessions alone",
             "other browser sessions, API tokens or the shared proxy secret",
             "active IdP session can sign the user straight back in",
