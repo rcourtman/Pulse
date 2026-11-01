@@ -20,6 +20,28 @@
 
 ## Purpose
 
+### Token reveals keep content and copy feedback with the admitted value
+
+The existing token reveal consumer scrolls within the bounded shared dialog,
+including short, narrow and enlarged-text viewports. The title/source and Close
+control use separate flow space; literal notes, labels, hints and token values
+wrap without hiding Copy or Dismiss. Shared dialog focus and dismissal ownership
+are unchanged.
+
+Replacing the reveal updates the actual value, record, hint, source and note
+together; the consumer never retains a snapshot from the previous reveal.
+Only one deliberate clipboard request runs per reveal at a time. Pending feedback
+is distinct from success; a result is reported only while its originating reveal
+is current and mounted, even when a later reveal has identical token bytes.
+Replacement/dismissal/unmount invalidate feedback and its reset timer, not an
+already-requested system clipboard write. Token generation, reveal admission,
+authorisation and API/storage/clipboard permissions are unchanged. Normal-suite
+`TokenRevealDialog.test.tsx` covers current success/failure/retry, pending dedupe,
+replacement, dismissal, unmount and timer isolation. Source-bound browser proof
+must exercise the real store/dialog/clipboard helper at desktop and narrow/short
+viewports, with native scroll, keyboard/touch, deferred results and inspected pixels.
+
+
 ### Backup views share bounded owned-focus restoration
 
 Coverage posture sorting and By date regrouping use the same existing backups

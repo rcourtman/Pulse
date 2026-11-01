@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "862390a0d2b83cfaf80eee59f9bd94f4d6846743",
+  "verified_at": "2026-11-01T11:43:12.456508Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/TokenRevealDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/TokenRevealDialog.tsx": "c227ca2e6aa3bdbc13509a8b971ea78ac84afc08afed33bbd40121319a199179"
+  },
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 568
+    },
+    {
+      "width": 844,
+      "height": 390
+    }
+  ],
+  "states": [
+    "Exact source 862390a0d2b83cfaf80eee59f9bd94f4d6846743; source-_3hya7qq records client/guest 0, complete independently hash-matched output and completed guest stop. Offline install, types, changed-file lint/format, 51 registered tests, production/frontend embed-asset build, bundle/preload-integrity controls and consuming preview passed. All 15 imported source inputs match.",
+    "Real token reveal store, TokenRevealDialog, shared Dialog focus/inert/scroll shell, clipboard helper and production CSS are compiled into a safe evidence-only adapter. Tokens, reveal actions, clipboard results and toast sink are synthetic. This is not whole-App HTTP/auth, IdP/admin/customer recovery or actual system-clipboard acceptance.",
+    "Playwright 1.56.1 matches the project integration client; Chromium desktop/light 1280x900, WebKit dark touch 320x568, WebKit light touch 844x390 and Chromium 320x568 with 200% root text. All sixteen final captures were opened with native view_image.",
+    "Ready/current-success, replacement/new-success and long scrolled content are readable in inspected pixels. Source and Close no longer overlap. At 200% text headings can wrap across words and the content requires vertical scrolling; focused Copy/Dismiss remain reachable. No single-viewport or cancellation-of-system-write claim."
+  ],
+  "interactions": [
+    "88 assertions across four cases: modal background inertness, native Tab/reverse-Tab wrapping, deliberate current copy, disabled/distinct pending state, exactly matching copied value, successful completion, failed-retry feedback and a deliberate retry.",
+    "While the old copy is pending, replace the reveal and begin a new copy: all displayed fields change together, old success cannot finish the new pending request, and only the new deliberate request confirms the new token. A same-token-byte replacement also rejects the former failure.",
+    "Close suppresses late feedback without reopening. Long content is actually scrolled by keyboard focus and Copy/touch interactions; focused Dismiss and Escape work, restore focus to the real trigger and release inertness/body scroll.",
+    "No page errors or failed assertions; eight expected clipboard-denial warnings remain recorded. All contexts, four browser instances and the local server close. Sixteen final native pixel inspections are retained separately from the failed parent and intermediate witnesses."
+  ],
+  "evidence": {
+    "source_proof": "source-_3hya7qq",
+    "source_sha": "862390a0d2b83cfaf80eee59f9bd94f4d6846743",
+    "browser_checks": 88,
+    "inspected_captures": 16,
+    "lane_records": [
+      "RECEIPTS.md",
+      "CURRENT-SOURCE.tar.xz",
+      "CURRENT-BROWSER.tar.xz",
+      "ADVERSE-SOURCE.tar.xz",
+      "ADVERSE-BROWSER.tar.xz"
+    ]
+  }
+}
