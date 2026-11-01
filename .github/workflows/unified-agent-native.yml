@@ -180,9 +180,10 @@ jobs:
         run: |
           set -euo pipefail
           brew install coreutils
+          # Drain version output so pipefail cannot turn early grep closure into SIGPIPE.
           gnu_timeout="$(brew --prefix coreutils)/bin/gtimeout"
           test -x "$gnu_timeout"
-          "$gnu_timeout" --version | grep -q 'GNU coreutils'
+          "$gnu_timeout" --version | grep -F 'GNU coreutils' > /dev/null
           timeout_bin="$(mktemp -d "$RUNNER_TEMP/pulse-guidance-tools.XXXXXX")"
           ln -s "$gnu_timeout" "$timeout_bin/timeout"
           printf '%s\n' "$timeout_bin" >> "$GITHUB_PATH"
@@ -192,7 +193,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout --version | grep -q 'GNU coreutils'
+          timeout --version | grep -F 'GNU coreutils' > /dev/null
 
       # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
       # Keep their Bash/GNU metadata, archive, checksum and rename semantics local to that step;
@@ -212,19 +213,19 @@ jobs:
           for tool in stat chmod chown cp mv ln readlink sha256sum; do
             executable="$coreutils_bin/g$tool"
             test -x "$executable"
-            "$executable" --version | grep -q 'GNU coreutils'
+            "$executable" --version | grep -F 'GNU coreutils' > /dev/null
             ln -s "$executable" "$fixture_bin/$tool"
           done
           gnu_tar="$(brew --prefix gnu-tar)/bin/gtar"
           test -x "$gnu_tar"
-          "$gnu_tar" --version | grep -q 'GNU tar'
+          "$gnu_tar" --version | grep -F 'GNU tar' > /dev/null
           ln -s "$gnu_tar" "$fixture_bin/tar"
           # The NAS boot filter rejects embedded NUL/control bytes with octal
           # ranges. Use the same binary-aware awk semantics as its Linux jobs,
           # not the native macOS parser, only within these server fixtures.
           gnu_awk="$(brew --prefix gawk)/bin/gawk"
           test -x "$gnu_awk"
-          "$gnu_awk" --version | grep -q 'GNU Awk'
+          "$gnu_awk" --version | grep -F 'GNU Awk' > /dev/null
           ln -s "$gnu_awk" "$fixture_bin/awk"
           printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
 

@@ -18,6 +18,28 @@
 
 ## Purpose
 
+### Configuration backups retain their admitted reader
+
+The existing configuration export POST keeps canonical transfer admission and
+requires no new grant. After that admission, its synchronous JSON result checks
+the current admitted API token or local session at each write, including after
+persistence and passphrase encryption. A withdrawn/expired/replaced credential,
+lost settings-read scope or token organisation/principal authority returns the
+fixed 401 before output; after an admitted prefix it only stops later writes.
+Encryption with the caller's chosen passphrase is not a substitute for authority.
+The public recovery route records the session actually admitted by its local
+policy, since it deliberately does not run the ordinary CheckAuth wrapper.
+
+No payload, passphrase rule, backup format, tenant boundary, Basic/proxy/no-auth
+recovery policy, import apply lifetime or independent work changes. Session
+admission cannot be borrowed from an ambient cookie when an explicit token was
+chosen. Normal-suite config-export lifetime/current-admission tests use actual
+DELETE/logout and the real exporter held after encryption through its existing
+audit dependency. Authorised synthetic backups restore in a separate temporary
+scope; withdrawal does not remove source connections or independent credentials.
+This is not installed/IdP recovery, exposure measurement or release evidence.
+
+
 ### Dashboard sockets do not retain withdrawn token authority
 
 The existing `/ws` route keeps its initial authentication, monitoring-read,
@@ -3995,3 +4017,36 @@ synthetic credentials and preserved live data. `log_bundle_test.go` covers
 value grammars, detached projections, log fallbacks, runtime identity and race
 ownership. Consuming browser evidence exercises the unchanged download control
 with the exact synthetic native ZIP; it is not installed/customer recovery.
+
+### Token values belong to the active API Access panel
+
+API Access binds token request completion to its organisation, authenticated
+username, current management permission and mounted lifetime. An obsolete
+create response cannot open the shared token-reveal dialog, change inventory,
+notify success or call its containing panel. Withdrawal/disposal clears the
+panel's retained raw token and kiosk link and dismisses only the exact reveal
+state it issued, never a newer reveal from another issuer. Editing dialogs and
+pending focus restoration do not survive that context boundary. Aborting is not
+server-side rollback: a dispatched change may have applied and must not replay.
+
+The primary-token hint is not an authenticated identity; the existing Settings
+username is passed through API Access instead. Token metadata visibility,
+least-privilege scope presets, deliberate wildcard selection and server-side
+scope/organisation containment remain unchanged. Registered
+`APITokenLifetimes.test.tsx` covers late successes/failures, authority/user/org
+cycles, single writes, obsolete rows and reveal ownership; native browser proof
+uses synthetic credentials and responses. No release or installed recovery is
+implied by source/component/browser proof.
+
+Authority and authenticated-user watchers compare their effective primitive
+values, not the containing security-status object's identity. An ordinary status
+refresh or primary-token hint change with the same user/permission must not
+withdraw a confirmed token or start another inventory read. The registered
+unchanged-principal status-refresh test pins this boundary.
+
+Accepted token rows retain their inventory-read generation across confirmed
+scope/name replacements. Keyed desktop-table reconciliation may retain the
+earlier raw object; that current-read object remains usable for the same live
+ID. A later full read, context withdrawal or deletion invalidates the old
+confirmation. The registered sequential scope-edit/revoke consumer regression
+and earlier-read rejection test cover both sides without ID-only admission.

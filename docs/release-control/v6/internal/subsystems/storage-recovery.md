@@ -1778,6 +1778,23 @@ follows the scroll position, so a later row is only ever mounted without its
 first row once that first row has scrolled out of view. Capacity evidence is
 unchanged: an offline server's later datastore still reads Unavailable.
 
+### Each PBS datastore says whether its jobs last succeeded (1 November 2026)
+
+The Backup server table answers "is my PBS OK?" with the datastore's
+housekeeping as well as its fill. Each datastore row shows the worst result of
+its GC, prune, verify and sync jobs in a few words ("Sync failed", "Verify
+late", "OK"), from `summarizeDatastoreJobs` in `proxmoxBackupServerJobs.ts`.
+The verdict is the backend's: it reads `JobHealthEvidence` posture and reason
+from `pbsJobHealthPosture` and never re-derives health from raw task status.
+Only jobs bound to that datastore and enabled count; backup jobs stay with
+Coverage, which already answers them per guest. The newest run of a repeated
+job id speaks for it. A family whose server-wide read failed (evidence with no
+store) leaves every datastore's result for that family unknown, never OK, and
+a datastore with no reported jobs shows a dash rather than OK. The row's drawer
+lists every job's result. The phone layout has no Jobs column, so a reachable
+server's failed or late job takes the State cell there; an unreachable server
+keeps its connection state, the larger problem.
+
 ### TrueNAS connection probes do not settle recovery inventory
 
 A successful settings probe reads system information only, on a separate client.

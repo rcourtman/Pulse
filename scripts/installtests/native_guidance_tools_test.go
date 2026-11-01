@@ -63,7 +63,7 @@ func TestNativeGuidanceToolsSupplyAndVerifyRealGNUTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatal("native Unix verification requires the real GNU timeout prerequisite")
 	}
-	for _, scenario := range []string{"real GNU tool", "install failure", "missing tool", "non-GNU tool"} {
+	for _, scenario := range []string{"real GNU tool", "streamed version output", "failed version producer", "install failure", "missing tool", "non-GNU tool"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			bin, prefix := filepath.Join(root, "bin"), filepath.Join(root, "coreutils with spaces")
@@ -92,6 +92,10 @@ esac
 				if err := os.Symlink(realTimeout, tool); err != nil {
 					t.Fatal(err)
 				}
+			case "streamed version output":
+				nativeVersionStreamTool(t, tool, realTimeout, 0)
+			case "failed version producer":
+				nativeVersionStreamTool(t, tool, realTimeout, 23)
 			case "non-GNU tool":
 				if err := os.WriteFile(tool, []byte("#!/bin/sh\nprintf 'BSD timeout\\n'\n"), 0700); err != nil {
 					t.Fatal(err)
@@ -112,9 +116,9 @@ esac
 			if ctx.Err() != nil {
 				t.Fatalf("prerequisite observation did not finish: %v", ctx.Err())
 			}
-			if scenario != "real GNU tool" {
+			if scenario != "real GNU tool" && scenario != "streamed version output" {
 				wantExit := 1
-				if scenario == "install failure" {
+				if scenario == "install failure" || scenario == "failed version producer" {
 					wantExit = 23
 				}
 				exit, ok := runErr.(*exec.ExitError)

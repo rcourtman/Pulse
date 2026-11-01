@@ -1448,6 +1448,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Tags:                append([]string(nil), runtimeConfig.tags...),
 		Timestamp:           a.collector.Now(),
 		SequenceID:          a.nextReportSequenceID(),
+		// The counters were read inside the metrics snapshot, before the
+		// optional collectors above; Timestamp only marks the report's end.
+		IOCountersCollectedAt: snapshotIOCountersCollectedAt(snapshot),
 	}
 
 	return report, nil

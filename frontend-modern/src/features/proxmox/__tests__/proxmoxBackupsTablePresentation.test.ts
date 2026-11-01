@@ -48,15 +48,15 @@ describe('Proxmox backups responsive table presentation', () => {
       'used',
     ]);
     expect(getBackupServerColumnWidthStyle('server', 'compact')).toEqual({ width: '40%' });
-    expect(getBackupServerColumnWidthStyle('status', 'compact')).toEqual({ width: '18%' });
-    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '25%' });
-    expect(getBackupServerColumnWidthStyle('datastore', 'compact')).toEqual({ width: '17%' });
+    expect(getBackupServerColumnWidthStyle('status', 'compact')).toEqual({ width: '24%' });
+    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '23%' });
+    expect(getBackupServerColumnWidthStyle('datastore', 'compact')).toEqual({ width: '13%' });
     expect(ids(getBackupServerColumns('basic'))).toEqual([
       'server',
       'status',
       'datastore',
       'used',
-      'backups',
+      'jobs',
     ]);
     expect(ids(getBackupServerColumns('operational'))).toEqual([
       'server',
@@ -65,15 +65,15 @@ describe('Proxmox backups responsive table presentation', () => {
       'memory',
       'datastore',
       'used',
+      'jobs',
       'backups',
     ]);
-    expect(ids(getBackupServerColumns('full'))).toHaveLength(10);
+    expect(ids(getBackupServerColumns('full'))).toHaveLength(11);
   });
 
   it.each([
-    ['basic', '15.5%'],
     ['operational', '12%'],
-    ['expanded', '10.5%'],
+    ['expanded', '9%'],
     ['full', '8%'],
   ] as const)(
     'reserves room for nonnumeric inventory states in %s count cells',
@@ -88,6 +88,21 @@ describe('Proxmox backups responsive table presentation', () => {
       expect(total).toBeCloseTo(100, 3);
     },
   );
+
+  it.each([
+    ['basic', '15.5%'],
+    ['operational', '11%'],
+    ['expanded', '10%'],
+    ['full', '10%'],
+  ] as const)('fits a worded job result such as "Verify failed" in %s', (layout, width) => {
+    expect(getBackupServerColumnWidthStyle('jobs', layout)).toEqual({ width });
+    const total = getBackupServerColumns(layout).reduce(
+      (sum, column) =>
+        sum + Number.parseFloat(getBackupServerColumnWidthStyle(column.id, layout).width as string),
+      0,
+    );
+    expect(total).toBeCloseTo(100, 3);
+  });
 
   it('prioritizes workload posture, restore freshness, and task failures in coverage', () => {
     const withTasks = { task: true };

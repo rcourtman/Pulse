@@ -1,12 +1,15 @@
 import {
+  batch,
   createEffect,
   createMemo,
   createResource,
   createSignal,
+  on,
   onCleanup,
   onMount,
 } from 'solid-js';
 import { fetchAgentCapabilitiesManifest } from '@/api/agentCapabilities';
+import { unwrap } from 'solid-js/store';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -17,7 +20,7 @@ import {
 } from '@/routing/resourceLinks';
 import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
-import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
+import { dismissTokenReveal, showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import {
@@ -29,6 +32,8 @@ import {
   getAPITokenUpdateErrorMessage,
 } from '@/utils/apiTokenPresentation';
 import { logger } from '@/utils/logger';
+import { eventBus } from '@/stores/events';
+import { getOrgID } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import {
   API_TOKEN_SCOPES_DOC_URL,
@@ -53,6 +58,7 @@ import {
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
+  currentUser?: string;
   onTokensChanged?: () => void;
   refreshing?: boolean;
   canManage?: boolean;
@@ -83,7 +89,85 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [selectedScopes, setSelectedScopes] = createSignal<string[]>([]);
   const [agentCapabilitiesManifest] = createResource(fetchAgentCapabilitiesManifest);
   const tokenRevealState = useTokenRevealState();
-  const canManage = () => props.canManage !== false;
+  const managementAllowed = createMemo(() => props.canManage !== false);
+  const authenticatedUser = createMemo(() => props.currentUser);
+  const currentOrg = () => getOrgID() || 'default';
+  const [selectedOrg, setSelectedOrg] = createSignal(currentOrg());
+  const [selectedUser, setSelectedUser] = createSignal(authenticatedUser());
+  const [contextVersion, setContextVersion] = createSignal(0);
+  const [isMutating, setIsMutating] = createSignal(false);
+  let disposed = false;
+  let readController: AbortController | undefined;
+  let mutationController: AbortController | undefined;
+  let ownedReveal: ReturnType<typeof tokenRevealState> = null;
+  let inventoryVersion = 0;
+  const recordBindings = new WeakMap<APITokenRecord, number>();
+  const rememberToken = (record: APITokenRecord) => {
+    recordBindings.set(unwrap(record), inventoryVersion);
+    return record;
+  };
+  const contextIsCurrent = () =>
+    !disposed && selectedOrg() === currentOrg() && selectedUser() === authenticatedUser();
+  const canManage = () => contextIsCurrent() && managementAllowed();
+  const isCurrentRecord = (record: APITokenRecord) =>
+    tokensLoaded() &&
+    recordBindings.get(unwrap(record)) === inventoryVersion &&
+    tokens().some((current) => current.id === record.id);
+
+  const clearTokenValue = () => {
+    // A different issuer may have replaced the global dialog. Never dismiss theirs.
+    if (ownedReveal && tokenRevealState() === ownedReveal) dismissTokenReveal();
+    ownedReveal = null;
+    setNewTokenValue(null);
+    setNewTokenRecord(null);
+  };
+
+  const invalidateRequests = () => {
+    inventoryVersion += 1;
+    setContextVersion((version) => version + 1);
+    readController?.abort();
+    readController = undefined;
+    mutationController?.abort();
+    mutationController = undefined;
+    batch(() => {
+      setIsMutating(false);
+      setIsGenerating(false);
+      setUpdatingTokenId(null);
+      setIsRenaming(false);
+      clearTokenValue();
+    });
+  };
+
+  const beginMutation = () => {
+    if (!canManage() || mutationController) return;
+    const controller = new AbortController();
+    const version = contextVersion();
+    const org = selectedOrg();
+    // A snapshot started before a write must not erase its accepted result or
+    // mark the newly issued credential revoked. Resume only this interrupted read.
+    const resumeRead = Boolean(readController);
+    readController?.abort();
+    readController = undefined;
+    mutationController = controller;
+    setIsMutating(true);
+    const isCurrent = () =>
+      mutationController === controller && version === contextVersion() && canManage();
+    return {
+      options: { signal: controller.signal, expectedOrgID: org },
+      isCurrent,
+      finish: () => {
+        if (mutationController !== controller) return;
+        mutationController = undefined;
+        batch(() => {
+          setIsMutating(false);
+          setIsGenerating(false);
+          setUpdatingTokenId(null);
+          setIsRenaming(false);
+        });
+        if (resumeRead && contextIsCurrent()) void loadTokens();
+      },
+    };
+  };
 
   const sortedTokens = createMemo(() => sortAPITokensByCreatedAt(tokens()));
   const totalTokens = createMemo(() => sortedTokens().length);
@@ -99,7 +183,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   );
   const hasScopeSelection = () => selectedScopes().length > 0;
   const isFullAccessSelected = () => selectedScopes().includes(API_TOKEN_WILDCARD_SCOPE);
-  const canGenerateToken = () => canManage() && hasScopeSelection() && !isGenerating();
+  const canGenerateToken = () => canManage() && hasScopeSelection() && !isMutating();
 
   let createSectionRef: HTMLDivElement | undefined;
   const [createHighlight, setCreateHighlight] = createSignal(false);
@@ -138,7 +222,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   };
 
   const focusCreateSection = () => {
-    if (!createSectionRef) return;
+    if (!canManage() || !createSectionRef) return;
     if (typeof createSectionRef.scrollIntoView === 'function') {
       createSectionRef.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -161,26 +245,72 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     if (routeFocusTimer) window.clearTimeout(routeFocusTimer);
   });
 
-  let tokenReadInFlight = false;
   const loadTokens = async () => {
-    if (tokenReadInFlight) return;
-    tokenReadInFlight = true;
+    if (!contextIsCurrent() || readController || mutationController) return;
+    const controller = new AbortController();
+    const version = contextVersion();
+    readController = controller;
+    const isCurrent = () =>
+      readController === controller && version === contextVersion() && contextIsCurrent();
     setLoading(true);
     setTokensLoaded(false);
     setLoadError(null);
     try {
-      const list = await SecurityAPI.listTokens();
+      const list = await SecurityAPI.listTokens({
+        signal: controller.signal,
+        expectedOrgID: selectedOrg(),
+      });
+      if (!isCurrent()) return;
+      // Keyed table reconciliation retains a row's raw object across confirmed
+      // edits. Bind accepted objects to this read, not the latest replacement's
+      // identity, while excluding every object from an earlier inventory read.
+      inventoryVersion += 1;
+      list.forEach(rememberToken);
       setTokens(list);
       setTokensLoaded(true);
     } catch (err) {
+      if (!isCurrent()) return;
       setLoadError(getAPITokensLoadErrorMessage());
       logger.error('Failed to load API tokens', err);
       notificationStore.error(getAPITokensLoadErrorMessage());
     } finally {
-      tokenReadInFlight = false;
-      setLoading(false);
+      if (isCurrent()) {
+        readController = undefined;
+        setLoading(false);
+      }
     }
   };
+
+  const resetContext = () => {
+    if (disposed) return;
+    const selectionChanged =
+      selectedOrg() !== currentOrg() || selectedUser() !== authenticatedUser();
+    invalidateRequests();
+    batch(() => {
+      setSelectedOrg(currentOrg());
+      setSelectedUser(authenticatedUser());
+      setTokens([]);
+      setTokensLoaded(false);
+      setLoadError(null);
+      if (selectionChanged) {
+        setNameInput('');
+        setSelectedScopes([]);
+      }
+    });
+    // Read-only accounts retain inventory recovery. Never replay an interrupted write.
+    void loadTokens();
+  };
+
+  // Settings refreshes replace the status object. Equal authority/principal
+  // values are not withdrawal: memo equality keeps a newly revealed token usable.
+  createEffect(on([managementAllowed, authenticatedUser], resetContext, { defer: true }));
+  const unsubscribeOrg = eventBus.on('org_switched', resetContext);
+  onCleanup(() => {
+    disposed = true;
+    invalidateRequests();
+    unsubscribeOrg();
+    setTokens([]);
+  });
 
   onMount(() => {
     setRequestedTokenPreset(readRequestedTokenPreset());
@@ -243,7 +373,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   });
 
   createEffect(() => {
-    if (!tokensLoaded()) return;
+    if (!tokensLoaded() || !contextIsCurrent()) return;
     const activeTokenIds = new Set(tokens().map((token) => token.id));
     const pendingRuntimesByToken = new Map<string, string[]>();
 
@@ -308,13 +438,21 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       notificationStore.error('Choose a scope preset or custom scope before generating a token.');
       return;
     }
+    const mutation = beginMutation();
+    if (!mutation) return;
     setIsGenerating(true);
     try {
       const trimmedName = nameInput().trim() || undefined;
       const scopeSelection = [...selectedScopes()].sort();
       const scopePayload = scopeSelection.length > 0 ? scopeSelection : undefined;
-      const { token, record } = await SecurityAPI.createToken(trimmedName, scopePayload);
+      const { token, record } = await SecurityAPI.createToken(
+        trimmedName,
+        scopePayload,
+        mutation.options,
+      );
+      if (!mutation.isCurrent()) return;
 
+      rememberToken(record);
       setTokens((previous) => [record, ...previous]);
       setNewTokenRecord(record);
       setNewTokenValue(token);
@@ -326,20 +464,24 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
         source: 'security',
         note: getAPITokenRevealSettingsNote(),
       });
+      ownedReveal = tokenRevealState();
       notificationStore.success(
         'New API token generated. Copy it below while it is still visible.',
       );
       props.onTokensChanged?.();
     } catch (err) {
+      if (!mutation.isCurrent()) return;
       logger.error('Failed to generate API token', err);
       notificationStore.error(getAPITokenGenerateErrorMessage(err));
     } finally {
-      setIsGenerating(false);
+      mutation.finish();
     }
   };
 
   const handleDelete = async (record: APITokenRecord) => {
-    if (!canManage()) return;
+    if (!isCurrentRecord(record)) return;
+    const mutation = beginMutation();
+    if (!mutation) return;
     const dockerUsage = dockerTokenUsage().get(record.id);
     const agentUsage = agentTokenUsage().get(record.id);
     const displayName = getAPITokenDialogName(record);
@@ -376,7 +518,8 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     }
 
     try {
-      await SecurityAPI.deleteToken(record.id);
+      await SecurityAPI.deleteToken(record.id, mutation.options);
+      if (!mutation.isCurrent()) return;
       setTokens((previous) => previous.filter((token) => token.id !== record.id));
       notificationStore.success(
         revokeMessage ? `Token revoked: ${revokeMessage}` : 'Token revoked',
@@ -392,21 +535,31 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
       const current = newTokenRecord();
       if (current && current.id === record.id) {
-        setNewTokenValue(null);
-        setNewTokenRecord(null);
+        clearTokenValue();
       }
     } catch (err) {
+      if (!mutation.isCurrent()) return;
       logger.error('Failed to revoke API token', err);
       notificationStore.error(getAPITokenRevokeErrorMessage());
+    } finally {
+      mutation.finish();
     }
   };
 
   const handleUpdateScopes = async (record: APITokenRecord, scopes: string[]) => {
-    if (!canManage() || scopes.length === 0 || updatingTokenId() !== null) return false;
+    if (scopes.length === 0 || !isCurrentRecord(record)) return false;
+    const mutation = beginMutation();
+    if (!mutation) return false;
 
     setUpdatingTokenId(record.id);
     try {
-      const updated = await SecurityAPI.updateTokenScopes(record.id, [...scopes].sort());
+      const updated = await SecurityAPI.updateTokenScopes(
+        record.id,
+        [...scopes].sort(),
+        mutation.options,
+      );
+      if (!mutation.isCurrent()) return false;
+      rememberToken(updated);
       setTokens((previous) => previous.map((token) => (token.id === updated.id ? updated : token)));
       if (newTokenRecord()?.id === updated.id) {
         setNewTokenRecord(updated);
@@ -415,36 +568,42 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       props.onTokensChanged?.();
       return true;
     } catch (err) {
+      if (!mutation.isCurrent()) return false;
       logger.error('Failed to update API token scopes', err);
       notificationStore.error(getAPITokenUpdateErrorMessage(err));
       return false;
     } finally {
-      setUpdatingTokenId(null);
+      mutation.finish();
     }
   };
 
   const handleRename = async (record: APITokenRecord, name: string): Promise<boolean> => {
-    if (!canManage() || isRenaming()) return false;
+    if (!canManage() || !isCurrentRecord(record) || isMutating()) return false;
     const trimmedName = name.trim();
     if (!trimmedName) {
       notificationStore.error('Enter a token name.');
       return false;
     }
 
+    const mutation = beginMutation();
+    if (!mutation) return false;
     setIsRenaming(true);
     try {
-      const updated = await SecurityAPI.renameToken(record.id, trimmedName);
+      const updated = await SecurityAPI.renameToken(record.id, trimmedName, mutation.options);
+      if (!mutation.isCurrent()) return false;
+      rememberToken(updated);
       setTokens((previous) => previous.map((token) => (token.id === updated.id ? updated : token)));
       setNewTokenRecord((current) => (current?.id === updated.id ? updated : current));
       notificationStore.success('Token renamed');
       props.onTokensChanged?.();
       return true;
     } catch (err) {
+      if (!mutation.isCurrent()) return false;
       logger.error('Failed to rename API token', err);
       notificationStore.error('Unable to rename the API token.');
       return false;
     } finally {
-      setIsRenaming(false);
+      mutation.finish();
     }
   };
 
@@ -456,22 +615,23 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const reopenTokenDialog = () => {
     const token = newTokenValue();
     const record = newTokenRecord();
-    if (!token || !record) return;
+    if (!canManage() || !token || !record) return;
     showTokenReveal({
       token,
       record,
       source: 'security',
       note: 'Copy this token now. Close the dialog once you have stored it safely.',
     });
+    ownedReveal = tokenRevealState();
   };
 
   const dismissNewToken = () => {
-    setNewTokenValue(null);
-    setNewTokenRecord(null);
+    clearTokenValue();
   };
 
   const newMonitoringKioskLink = createMemo(() => {
     if (
+      !canManage() ||
       !newTokenValue() ||
       newTokenRecord()?.scopes?.length !== 1 ||
       newTokenRecord()?.scopes?.[0] !== MONITORING_READ_SCOPE
@@ -483,8 +643,10 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   const copyNewMonitoringKioskLink = async () => {
     const link = newMonitoringKioskLink();
-    if (!link) return;
+    if (!canManage() || !link) return;
+    const version = contextVersion();
     await navigator.clipboard.writeText(link);
+    if (version !== contextVersion() || !canManage()) return;
     notificationStore.success('Link copied to clipboard');
   };
 
@@ -495,6 +657,8 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     applyFullAccessPreset,
     applyScopePreset,
     canManage,
+    contextVersion,
+    isMutating,
     clearScopes,
     copyNewMonitoringKioskLink,
     createHighlight,

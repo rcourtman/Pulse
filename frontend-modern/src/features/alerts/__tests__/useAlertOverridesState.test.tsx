@@ -222,6 +222,48 @@ describe('useAlertOverridesState', () => {
     expect(overviewOverrides()).toEqual([]);
   });
 
+  it('refreshes a projected override when only its note changes', async () => {
+    const [hasUnsavedChanges] = createSignal(false);
+    const [, setOverviewOverrides] = createSignal([]);
+    const resources = [
+      makeResource({
+        id: 'cluster-a:node-2:100',
+        name: 'db-01',
+        type: 'vm',
+        platformId: 'qemu/100',
+        proxmox: { vmid: 100, node: 'node-2', instance: 'cluster-a' },
+        platformData: { proxmox: { vmid: 100, node: 'node-2', instance: 'cluster-a' } },
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      useAlertOverridesState({
+        allResources: () => resources,
+        byType: (resourceType) => resources.filter((resource) => resource.type === resourceType),
+        children: () => [],
+        hasUnsavedChanges,
+        setOverviewOverrides,
+      }),
+    );
+
+    result.replaceRawOverridesConfig({
+      'guest:cluster-a:100': { cpu: { trigger: 95, clear: 90 }, note: 'saved note' } as any,
+    });
+    await waitFor(() => expect(result.overrides()[0]?.note).toBe('saved note'));
+
+    // A local edit changes only the note, then the config is discarded or reloaded.
+    result.setOverrides([{ ...result.overrides()[0], note: 'discarded note' }]);
+    result.replaceRawOverridesConfig({
+      'guest:cluster-a:100': { cpu: { trigger: 95, clear: 90 }, note: 'saved note' } as any,
+    });
+    await waitFor(() => expect(result.overrides()[0]?.note).toBe('saved note'));
+
+    result.replaceRawOverridesConfig({
+      'guest:cluster-a:100': { cpu: { trigger: 95, clear: 90 } } as any,
+    });
+    await waitFor(() => expect(result.overrides()[0]?.note).toBeUndefined());
+  });
+
   it('canonicalizes shared-storage overrides for the live thresholds surface', async () => {
     const [hasUnsavedChanges] = createSignal(false);
     const [overviewOverrides, setOverviewOverrides] = createSignal([]);

@@ -55,6 +55,16 @@ func collectMetricsWithDiskFilters(ctx context.Context, collector SystemCollecto
 	return collector.Metrics(ctx, exclude)
 }
 
+// snapshotIOCountersCollectedAt carries the snapshot's counter read time onto
+// the wire, absent when the collector did not stamp one.
+func snapshotIOCountersCollectedAt(snapshot hostmetrics.Snapshot) *time.Time {
+	if snapshot.IOCountersCollectedAt.IsZero() {
+		return nil
+	}
+	collectedAt := snapshot.IOCountersCollectedAt.UTC()
+	return &collectedAt
+}
+
 // NewDefaultCollector returns a SystemCollector that uses real OS calls.
 func NewDefaultCollector() SystemCollector {
 	return &defaultCollector{}

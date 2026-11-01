@@ -13547,3 +13547,34 @@ independent sessions. `TestContractSessionReadLogoutBoundary` asserts native
 HTTP/WS logout, private-line withholding and fresh denial, optionally exporting
 safe wire evidence for the existing browser consumers; the browser-only fixture
 is retained evidence, not product source.
+
+### API token panel requests retain their confirmed context
+
+The existing API Access token inventory and create, rename, scope-edit and revoke
+calls accept an abort signal and expected organisation. They use the ordinary
+credentials, retain backend permission/scope/owner checks, and do not automatically
+retry a refusal or switch a confirmation to the default organisation. CSRF
+preparation must finish without dispatching an aborted or differently scoped
+write. The Relay/mobile issuer and token detail API are unchanged.
+
+The consuming panel rejects results after disposal, an organisation/user change
+or management-authority change, including leave-and-return cycles. Only one write
+runs at once; an inventory read interrupted by a write resumes as a new read,
+never an old snapshot. An unreadable inventory remains unknown and read-only
+accounts retain explicit inventory recovery. These guarantees are exercised by
+`security.transport.test.ts`, `security.test.ts`, `APITokenLifetimes.test.tsx`
+and the registered API token panel tests; browser proof covers the actual API
+Access consumer with synthetic responses, not installed administrator recovery.
+
+Authority and authenticated-user watchers compare their effective primitive
+values, not the containing security-status object's identity. An ordinary status
+refresh or primary-token hint change with the same user/permission must not
+withdraw a confirmed token or start another inventory read. The registered
+unchanged-principal status-refresh test pins this boundary.
+
+Accepted token rows retain their inventory-read generation across confirmed
+scope/name replacements. Keyed desktop-table reconciliation may retain the
+earlier raw object; that current-read object remains usable for the same live
+ID. A later full read, context withdrawal or deletion invalidates the old
+confirmation. The registered sequential scope-edit/revoke consumer regression
+and earlier-read rejection test cover both sides without ID-only admission.

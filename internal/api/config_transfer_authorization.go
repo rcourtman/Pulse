@@ -115,6 +115,10 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 			if !ensureOrgAdminSession(r.config, w, req) {
 				return false
 			}
+			// Transfer is a public recovery route, so it does not pass through
+			// CheckAuth's session admission. Retain the session actually admitted
+			// here, not an ambient cookie discovered after the export has run.
+			attachSessionReadAdmission(req, cookie.Value, session)
 			return true
 		}
 	}

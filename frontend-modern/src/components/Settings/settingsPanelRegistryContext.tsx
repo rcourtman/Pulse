@@ -91,6 +91,7 @@ export function buildSettingsPanelRegistryContext(
       guestUsage: params.organizationGuestUsage(),
     }),
     getApiAccessPanelProps: () => ({
+      currentUser: currentUser(),
       currentTokenHint: params.securityStatus()?.apiTokenHint,
       onTokensChanged: () => {
         void params.loadSecurityStatus();

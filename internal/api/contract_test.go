@@ -495,7 +495,7 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		authorize string
 		handler   string
 	}{
-		{authorize: "authorizeConfigTransfer(w, req, configTransferExport)", handler: "HandleExportConfig(w, req)"},
+		{authorize: "authorizeConfigTransfer(w, req, configTransferExport)", handler: "retainTokenResponseAuthority(r.config, config.ScopeSettingsRead, false, r.configHandlers.HandleExportConfig)(w, req)"},
 		{authorize: "authorizeConfigTransfer(w, req, configTransferImport)", handler: "HandleImportConfig(w, req)"},
 	} {
 		authorizeAt := strings.Index(routes, sequence.authorize)
@@ -29138,4 +29138,11 @@ func TestContractSupportBundleStopsAfterAdmittedPrefix(t *testing.T) {
 // and license gates, independent readers and background work remain unchanged.
 func TestContractReportDownloadWithdrawal(t *testing.T) {
 	reportDownloadNativeWithdrawal(t)
+}
+
+// Audit evidence stays behind current admitted authority even when storage
+// returns after a persisted DELETE/logout. Existing admission, signed evidence
+// and independent readers remain unchanged.
+func TestContractAuditReadWithdrawal(t *testing.T) {
+	auditReadNativeWithdrawal(t)
 }
