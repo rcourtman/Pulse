@@ -7,13 +7,17 @@ import argparse
 import re
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
 
 
+@lru_cache(maxsize=64)
 def _yaml_key(name: str) -> str:
     """Return a pattern for equivalent plain, single-, or double-quoted keys."""
+    # Callers use this fixed vocabulary throughout per-line checks. Retain only
+    # bounded pattern strings, never workflow contents, parsed nodes or verdicts.
     escaped = re.escape(name)
     # YAML double-quoted scalars can spell any ASCII character through \x, \u,
     # or \U escapes. GitHub decodes those spellings before interpreting the
@@ -1580,7 +1584,12 @@ def _audit_secret_environments(path: Path, lines: list[str]) -> list[Finding]:
 
     reads_secrets = False
     for name, job in jobs.items():
-        start, text = texts.get(name, (0, yaml.safe_dump(job)))
+        # dict.get evaluates its default eagerly. Normal block jobs already
+        # have their source text; serialise only an unreadable job's fallback.
+        if name in texts:
+            start, text = texts[name]
+        else:
+            start, text = 0, yaml.safe_dump(job)
         names, dynamic = _node_secret_names(text, job)
         names.discard("GITHUB_TOKEN")
         inherits = isinstance(job, dict) and job.get("secrets") == "inherit"

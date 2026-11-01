@@ -1551,6 +1551,22 @@ before service operations. Neither this driver nor worker source tests install
 host policy. Production activation still requires independent review and the
 operational owner's acceptance of the native result and published-source path.
 
+### Workflow trust scanning reuses patterns, not decisions
+
+`scripts/check_workflow_trust.py` retains at most 64 escaped-key pattern strings
+for its fixed audit vocabulary. It still rereads and reparses every workflow
+on each audit; file contents, parsed documents and findings are never cached.
+Normal block jobs use their captured raw text alongside decoded YAML values
+for secret checks, without serialising an unused fallback. A job whose raw
+mapping cannot be read keeps both its shape rejection and its serialised
+fallback/decoded-secret checks. No permission, credential, runner, cache,
+action-pin, trigger or generated-code rule changes.
+
+`scripts/tests/test_workflow_trust.py` verifies bounded pattern reuse, changed
+content at the same path, raw/escaped decoded secrets without a fallback dump,
+and unreadable-job fallback rejection. The complete existing trust suite and
+whole-directory audit remain required through the discovered script smoke suite.
+
 ### Superseded pull request validation
 
 Build and Test and Core E2E cancel an older run for the same pull request when
