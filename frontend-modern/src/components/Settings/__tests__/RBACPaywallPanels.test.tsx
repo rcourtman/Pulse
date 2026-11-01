@@ -333,7 +333,17 @@ describe('RBAC paywall settings panels', () => {
     expect(deleteUserMock).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
-    await waitFor(() => expect(updateUserRolesMock).toHaveBeenCalledWith('alice', ['viewer']));
+    await waitFor(() =>
+      expect(updateUserRolesMock).toHaveBeenCalledWith(
+        'alice',
+        ['viewer'],
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
+      ),
+    );
     expect(updateUserRolesMock).toHaveBeenCalledTimes(1);
   });
 
@@ -461,7 +471,14 @@ describe('RBAC paywall settings panels', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove User Access' }));
     await waitFor(() => {
-      expect(deleteUserMock).toHaveBeenCalledWith('sso:oidc:okta:opaque_subject');
+      expect(deleteUserMock).toHaveBeenCalledWith(
+        'sso:oidc:okta:opaque_subject',
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
+      );
     });
     expect(notificationSuccessMock).toHaveBeenCalledWith('User access removed for Alice Example');
     await waitFor(() => {
@@ -534,7 +551,15 @@ describe('RBAC paywall settings panels', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => {
-      expect(updateUserRolesMock).toHaveBeenCalledWith('alice', ['admin']);
+      expect(updateUserRolesMock).toHaveBeenCalledWith(
+        'alice',
+        ['admin'],
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
+      );
     });
     expect(notificationErrorMock).toHaveBeenCalledWith('Failed to update user roles');
     expect(notificationSuccessMock).not.toHaveBeenCalled();

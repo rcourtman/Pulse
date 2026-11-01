@@ -11,6 +11,7 @@ import type { SecurityOverviewPanel as SecurityOverviewPanelType } from './Secur
 import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthPanel';
 import type { RelaySettingsPanel as RelaySettingsPanelType } from './RelaySettingsPanel';
 import type { AuditWebhookPanel as AuditWebhookPanelType } from './AuditWebhookPanel';
+import type { UserAssignmentsPanel as UserAssignmentsPanelType } from './UserAssignmentsPanel';
 import type { InfrastructureWorkspace as InfrastructureWorkspaceType } from './InfrastructureWorkspace';
 import type { SettingsTab } from './settingsNavigationModel';
 import { SETTINGS_PANEL_REGISTRY_LOADERS } from './settingsPanelRegistryLoaders';
@@ -44,6 +45,7 @@ export interface SettingsPanelRegistryContext {
   getSecurityAuthPanelProps: () => Parameters<typeof SecurityAuthPanelType>[0];
   getRelayPanelProps: () => Parameters<typeof RelaySettingsPanelType>[0];
   getAuditWebhookPanelProps: () => Parameters<typeof AuditWebhookPanelType>[0];
+  getUserAssignmentsPanelProps: () => Parameters<typeof UserAssignmentsPanelType>[0];
 }
 
 export const createSettingsPanelRegistry = (
@@ -138,6 +140,7 @@ export const createSettingsPanelRegistry = (
   },
   'security-users': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.UserAssignmentsPanel,
+    getProps: context.getUserAssignmentsPanelProps,
   },
   'security-audit': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.AuditLogPanel,

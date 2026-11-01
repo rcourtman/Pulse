@@ -522,3 +522,20 @@ settings page. The old `system-ai-assistant` tab id and
 `/settings/pulse-intelligence/assistant` path redirect there, so saved links
 keep working. Organization-scoped settings ownership, RBAC gating, and the
 settings shell's organization presentation rules are unchanged.
+
+### User Access reader lifetime
+
+The existing User Access directory, role choices, saved-permission read, drafts
+and removal confirmations belong to one mounted authenticated reader and
+organisation. `useUserAssignmentsPanelState.ts` withdraws them on principal,
+users-capability, RBAC-entitlement or organisation changes and disposal, aborts
+pending requests and rejects obsolete completions even after leaving and
+returning to the same context. The next admitted reader loads a fresh directory.
+A failed or malformed directory/role list is unknown, not an empty configuration;
+Retry is read-only. Only current inventory rows may open a confirmation, and
+only one confirmed assignment/removal write may run. No obsolete completion may
+announce success, close a new reader's editor or reload old accounts. Server
+authorisation, IdP deprovisioning and existing self-modification protection remain
+unchanged. Registered reader-lifetime, paywall-panel and RBAC transport tests
+cover these rules; synthetic desktop/narrow browser proof is not installed
+administrator or native IdP recovery.

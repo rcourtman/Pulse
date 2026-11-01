@@ -127,5 +127,9 @@ export function buildSettingsPanelRegistryContext(
     getAuditWebhookPanelProps: () => ({
       canManage: settingsCapabilities()?.auditWebhooksWrite === true,
     }),
+    getUserAssignmentsPanelProps: () => ({
+      currentUser: currentUser(),
+      canManage: settingsCapabilities()?.users === true,
+    }),
   };
 }

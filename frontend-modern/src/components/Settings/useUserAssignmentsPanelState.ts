@@ -1,5 +1,7 @@
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import { RBACAPI } from '@/api/rbac';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -11,7 +13,12 @@ import {
 } from '@/utils/rbacPresentation';
 import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 
-export function useUserAssignmentsPanelState() {
+export interface UserAssignmentsPanelProps {
+  currentUser?: string;
+  canManage?: boolean;
+}
+
+export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = {}) {
   const [assignments, setAssignments] = createSignal<UserRoleAssignment[]>([]);
   const [roles, setRoles] = createSignal<Role[]>([]);
   const [loading, setLoading] = createSignal(true);
@@ -22,67 +29,167 @@ export function useUserAssignmentsPanelState() {
   const [userPermissions, setUserPermissions] = createSignal<Permission[] | null>(null);
   const [loadingPermissions, setLoadingPermissions] = createSignal(false);
   const [permissionsError, setPermissionsError] = createSignal<string | null>(null);
-  let permissionsRequest = 0;
   const [formRoleIds, setFormRoleIds] = createSignal<string[]>([]);
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [deletingUser, setDeletingUser] = createSignal(false);
   const [userPendingDeletion, setUserPendingDeletion] = createSignal<UserRoleAssignment | null>(
     null,
   );
+  const [inventoryLoaded, setInventoryLoaded] = createSignal(false);
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',
     loading,
     paywallLocation: 'settings_user_assignments_panel',
   });
+  const accessAllowed = () => featureGate.rbacEnabled() && props.canManage !== false;
+  const currentOrg = () => getOrgID() || 'default';
+  let context = { org: currentOrg(), user: props.currentUser, allowed: accessAllowed() };
+  let disposed = false;
+  let contextVersion = 0;
+  let editorVersion = 0;
+  let readController: AbortController | undefined;
+  let permissionsController: AbortController | undefined;
+  let mutationController: AbortController | undefined;
+  const contextIsCurrent = () =>
+    !disposed &&
+    context.org === currentOrg() &&
+    context.user === props.currentUser &&
+    context.allowed === accessAllowed();
+  const canEdit = () =>
+    contextIsCurrent() &&
+    accessAllowed() &&
+    inventoryLoaded() &&
+    !loading() &&
+    !loadError() &&
+    !saving() &&
+    !deletingUser();
+  const isCurrentUser = (user: UserRoleAssignment) => assignments().includes(user);
+  const requestOptions = (controller: AbortController) => ({
+    signal: controller.signal,
+    expectedOrgID: context.org,
+    retry: false,
+  });
+
+  const clearEditor = () => {
+    editorVersion += 1;
+    permissionsController?.abort();
+    permissionsController = undefined;
+    batch(() => {
+      setUserPermissions(null);
+      setPermissionsError(null);
+      setLoadingPermissions(false);
+      setShowModal(false);
+      setEditingUser(null);
+      setFormRoleIds([]);
+    });
+  };
+  const closeModal = () => {
+    if (!saving()) clearEditor();
+  };
 
   const loadData = async () => {
-    if (!featureGate.rbacEnabled()) {
+    if (!contextIsCurrent() || !accessAllowed() || readController || mutationController) return;
+    const version = contextVersion;
+    const controller = new AbortController();
+    const isCurrentRead = () =>
+      contextIsCurrent() && version === contextVersion && readController === controller;
+    readController = controller;
+    batch(() => {
+      clearEditor();
+      setUserPendingDeletion(null);
       setAssignments([]);
       setRoles([]);
+      setInventoryLoaded(false);
+      setLoading(true);
       setLoadError(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setLoadError(null);
+    });
     try {
-      const [usersData, rolesData] = await Promise.all([RBACAPI.getUsers(), RBACAPI.getRoles()]);
-      setAssignments(usersData || []);
-      setRoles(rolesData || []);
-    } catch (err) {
-      if (err instanceof Error && /feature not included in license/i.test(err.message)) {
-        setAssignments([]);
-        setRoles([]);
-        setLoadError(null);
-        return;
-      }
-      setAssignments([]);
-      setRoles([]);
+      const [usersData, rolesData] = await Promise.all([
+        RBACAPI.getUsers(requestOptions(controller)),
+        RBACAPI.getRoles(requestOptions(controller)),
+      ]);
+      if (!isCurrentRead()) return;
+      const users = new Set<string>();
+      const roleIds = new Set<string>();
+      // A failed or malformed read is unknown, not an empty account directory.
+      if (
+        !Array.isArray(usersData) ||
+        !Array.isArray(rolesData) ||
+        usersData.some((user) => {
+          if (
+            !user ||
+            typeof user.username !== 'string' ||
+            !user.username.trim() ||
+            users.has(user.username) ||
+            !Array.isArray(user.roleIds) ||
+            user.roleIds.some((id) => typeof id !== 'string' || !id.trim())
+          )
+            return true;
+          users.add(user.username);
+          return false;
+        }) ||
+        rolesData.some((role) => {
+          if (
+            !role ||
+            typeof role.id !== 'string' ||
+            !role.id.trim() ||
+            roleIds.has(role.id) ||
+            typeof role.name !== 'string' ||
+            typeof role.description !== 'string'
+          )
+            return true;
+          roleIds.add(role.id);
+          return false;
+        })
+      )
+        throw new Error('Invalid user access inventory');
+      batch(() => {
+        setAssignments(usersData);
+        setRoles(rolesData);
+        setInventoryLoaded(true);
+      });
+    } catch {
+      if (!isCurrentRead()) return;
       setLoadError(getUserAssignmentsLoadErrorMessage());
-      logger.error('Failed to load user assignments', err);
+      logger.error('Failed to load user assignments');
       notificationStore.error(getUserAssignmentsLoadErrorMessage());
     } finally {
-      setLoading(false);
+      if (isCurrentRead()) {
+        readController = undefined;
+        setLoading(false);
+      }
     }
   };
 
-  createEffect(() => {
-    if (!featureGate.licenseReady()) {
-      closeModal();
-      setLoading(true);
-      return;
-    }
-    if (!featureGate.rbacEnabled()) {
-      closeModal();
+  const resetContext = () => {
+    contextVersion += 1;
+    readController?.abort();
+    mutationController?.abort();
+    readController = mutationController = undefined;
+    context = { org: currentOrg(), user: props.currentUser, allowed: accessAllowed() };
+    batch(() => {
+      clearEditor();
       setAssignments([]);
       setRoles([]);
+      setInventoryLoaded(false);
+      setSearchQuery('');
       setLoadError(null);
-      setLoading(false);
-      return;
-    }
-    void loadData();
+      setUserPendingDeletion(null);
+      setSaving(false);
+      setDeletingUser(false);
+      setLoading(!featureGate.licenseReady() || accessAllowed());
+    });
+    if (!disposed) void loadData();
+  };
+  createEffect(
+    on([featureGate.licenseReady, accessAllowed, () => props.currentUser], resetContext),
+  );
+  const unsubscribeOrg = eventBus.on('org_switched', resetContext);
+  onCleanup(() => {
+    disposed = true;
+    unsubscribeOrg();
+    resetContext();
   });
 
   const filteredAssignments = createMemo(() => {
@@ -100,108 +207,130 @@ export function useUserAssignmentsPanelState() {
   });
 
   const loadUserPermissions = async () => {
-    const username = editingUser()?.username;
-    if (!username || !showModal() || !featureGate.rbacEnabled() || loadingPermissions()) return;
-
-    const request = ++permissionsRequest;
+    const user = editingUser();
+    if (!user || !showModal() || !canEdit() || !isCurrentUser(user) || permissionsController)
+      return;
+    const version = contextVersion;
+    const editor = editorVersion;
+    const controller = new AbortController();
+    permissionsController = controller;
     const isCurrentRead = () =>
-      request === permissionsRequest &&
+      contextIsCurrent() &&
+      version === contextVersion &&
+      editor === editorVersion &&
+      permissionsController === controller &&
       showModal() &&
-      editingUser()?.username === username &&
-      featureGate.rbacEnabled();
-    setUserPermissions(null);
-    setPermissionsError(null);
-    setLoadingPermissions(true);
+      editingUser() === user;
+    batch(() => {
+      setUserPermissions(null);
+      setPermissionsError(null);
+      setLoadingPermissions(true);
+    });
     try {
-      const permissions = await RBACAPI.getUserPermissions(username);
+      const permissions = await RBACAPI.getUserPermissions(
+        user.username,
+        requestOptions(controller),
+      );
       if (isCurrentRead()) setUserPermissions(permissions);
-    } catch (err) {
+    } catch {
       if (!isCurrentRead()) return;
       setPermissionsError('Saved permissions could not be loaded. Access is unknown.');
-      logger.error('Failed to load user permissions', err);
+      logger.error('Failed to load user permissions');
     } finally {
-      if (isCurrentRead()) setLoadingPermissions(false);
+      if (isCurrentRead()) {
+        permissionsController = undefined;
+        setLoadingPermissions(false);
+      }
     }
   };
 
-  const closeModal = () => {
-    permissionsRequest += 1;
-    setUserPermissions(null);
-    setPermissionsError(null);
-    setLoadingPermissions(false);
-    setShowModal(false);
-  };
-
-  onCleanup(() => {
-    permissionsRequest += 1;
-  });
-
   const openManageAccess = async (assignment: UserRoleAssignment) => {
-    closeModal();
+    if (!canEdit() || !isCurrentUser(assignment)) return;
+    clearEditor();
+    setUserPendingDeletion(null);
     setEditingUser(assignment);
     setFormRoleIds([...assignment.roleIds]);
     setShowModal(true);
     await loadUserPermissions();
   };
-
   const openDeleteUser = (assignment: UserRoleAssignment) => {
+    if (!canEdit() || !isCurrentUser(assignment)) return;
+    clearEditor();
     setUserPendingDeletion(assignment);
   };
-
   const closeDeleteUser = () => {
     if (!deletingUser()) setUserPendingDeletion(null);
   };
 
+  const mutateUser = async (user: UserRoleAssignment, kind: 'save' | 'delete') => {
+    if (!canEdit() || !isCurrentUser(user) || mutationController) return;
+    const version = contextVersion;
+    const controller = new AbortController();
+    const isCurrentMutation = () =>
+      contextIsCurrent() && version === contextVersion && mutationController === controller;
+    mutationController = controller;
+    if (kind === 'save') setSaving(true);
+    else setDeletingUser(true);
+    let saved = false;
+    try {
+      if (kind === 'save') {
+        await RBACAPI.updateUserRoles(
+          user.username,
+          [...formRoleIds()],
+          requestOptions(controller),
+        );
+      } else {
+        await RBACAPI.deleteUser(user.username, requestOptions(controller));
+      }
+      if (!isCurrentMutation()) return;
+      saved = true;
+      notificationStore.success(
+        kind === 'save'
+          ? `Roles updated for ${user.username}`
+          : `User access removed for ${getUserIdentityDisplayName(user)}`,
+      );
+    } catch (err) {
+      if (!isCurrentMutation()) return;
+      logger.error(
+        kind === 'save' ? 'Failed to update user roles' : 'Failed to remove user access',
+      );
+      notificationStore.error(
+        kind === 'save'
+          ? getUserAssignmentsUpdateErrorMessage()
+          : getUserAssignmentsDeleteErrorMessage(err),
+      );
+    } finally {
+      if (isCurrentMutation()) {
+        mutationController = undefined;
+        setSaving(false);
+        setDeletingUser(false);
+        if (saved) await loadData();
+      }
+    }
+  };
   const handleDeleteUser = async () => {
     const user = userPendingDeletion();
-    if (!user) return;
-
-    setDeletingUser(true);
-    try {
-      await RBACAPI.deleteUser(user.username);
-      notificationStore.success(`User access removed for ${getUserIdentityDisplayName(user)}`);
-      if (editingUser()?.username === user.username) closeModal();
-      setUserPendingDeletion(null);
-      await loadData();
-    } catch (err) {
-      logger.error('Failed to remove user access', err);
-      notificationStore.error(getUserAssignmentsDeleteErrorMessage(err));
-    } finally {
-      setDeletingUser(false);
-    }
+    if (user) await mutateUser(user, 'delete');
   };
-
   const handleSaveAssignments = async () => {
     const user = editingUser();
-    if (!user) return;
-
-    setSaving(true);
-    try {
-      await RBACAPI.updateUserRoles(user.username, formRoleIds());
-      notificationStore.success(`Roles updated for ${user.username}`);
-      closeModal();
-      await loadData();
-    } catch (err) {
-      logger.error('Failed to update user roles', err);
-      notificationStore.error(getUserAssignmentsUpdateErrorMessage());
-    } finally {
-      setSaving(false);
-    }
+    if (showModal() && user) await mutateUser(user, 'save');
   };
-
   const toggleRole = (roleId: string) => {
+    if (!showModal() || !canEdit() || !roles().some((role) => role.id === roleId)) return;
     const currentRoleIds = formRoleIds();
-    if (currentRoleIds.includes(roleId)) {
-      setFormRoleIds(currentRoleIds.filter((id) => id !== roleId));
-      return;
-    }
-    setFormRoleIds([...currentRoleIds, roleId]);
+    setFormRoleIds(
+      currentRoleIds.includes(roleId)
+        ? currentRoleIds.filter((id) => id !== roleId)
+        : [...currentRoleIds, roleId],
+    );
   };
-
   const getRoleName = (roleId: string) =>
     roles().find((role) => role.id === roleId)?.name || roleId;
 
   return {
+    accessAllowed,
+    canEdit,
     closeDeleteUser,
     closeModal,
     deletingUser,
