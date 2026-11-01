@@ -156,12 +156,20 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         </Show>
 
         <Show when={!loading() && loadError()}>
-          <InlineNotice role="alert" tone="danger" layout="banner" actionLabel="Retry" actionOnClick={() => void loadProviders()}>
+          <InlineNotice
+            role="alert"
+            tone="danger"
+            layout="banner"
+            actionLabel="Retry"
+            actionOnClick={() => void loadProviders()}
+          >
             {getSSOProvidersLoadErrorMessage()} Configured providers are unknown.
           </InlineNotice>
         </Show>
         <Show when={loadingDetails()}>
-          <p role="status" class="text-sm text-muted">Loading provider details…</p>
+          <p role="status" class="text-sm text-muted">
+            Loading provider details…
+          </p>
         </Show>
         <Show when={!loading() && !loadError() && providers().length === 0}>
           <EmptyState
@@ -205,6 +213,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     <div class="flex items-center gap-2 self-end sm:self-auto">
                       <Toggle
                         checked={provider.enabled}
+                        ariaLabel={`${provider.enabled ? 'Disable' : 'Enable'} ${provider.name}`}
                         onChange={() => handleToggleEnabled(provider)}
                         disabled={!canEdit()}
                         containerClass="items-center"
@@ -307,7 +316,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </h3>
             </div>
 
-            <fieldset disabled={saving()} class="min-w-0 min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+            <fieldset
+              disabled={saving()}
+              class="min-w-0 min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"
+            >
               {/* Common fields */}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class={formField}>
@@ -395,7 +407,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         <Button
                           type="button"
                           onClick={testConnection}
-                          disabled={testing() || !canTest()}
+                          disabled={testing() || loadingPreview() || !canTest()}
                           variant="secondary"
                           size="mdCompact"
                           class="whitespace-nowrap"
@@ -512,7 +524,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         <Button
                           type="button"
                           onClick={testConnection}
-                          disabled={testing() || !canTest()}
+                          disabled={testing() || loadingPreview() || !canTest()}
                           variant="secondary"
                           size="mdCompact"
                           class="flex-1 whitespace-nowrap sm:flex-none"
@@ -524,7 +536,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           ref={metadataPreviewButton}
                           type="button"
                           onClick={fetchMetadataPreview}
-                          disabled={loadingPreview() || !form.samlIdpMetadataUrl.trim()}
+                          disabled={
+                            loadingPreview() || testing() || !form.samlIdpMetadataUrl.trim()
+                          }
                           variant="secondary"
                           size="mdCompact"
                           class="flex-1 gap-1 whitespace-nowrap sm:flex-none"

@@ -57,7 +57,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [publicUrl, setPublicUrl] = createSignal('');
   const [testing, setTesting] = createSignal(false);
   const [testResult, setTestResult] = createSignal<SSOProviderTestResult | null>(null);
-  const [showMetadataPreview, setShowMetadataPreview] = createSignal(false);
+  const [showMetadataPreview, setShowMetadataPreviewValue] = createSignal(false);
   const [metadataPreview, setMetadataPreview] = createSignal<MetadataPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = createSignal(false);
 
@@ -81,13 +81,18 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   let mutationController: AbortController | undefined;
 
   const contextIsCurrent = () =>
-    !disposed && selectedOrg === currentOrg() && selectedUser === authenticatedUser() &&
+    !disposed &&
+    selectedOrg === currentOrg() &&
+    selectedUser === authenticatedUser() &&
     selectedManagement === managementAllowed();
   const canManage = () => contextIsCurrent() && managementAllowed();
-  const canEdit = () => canManage() && providersLoaded() && !loading() && !loadError() && !mutating();
+  const canEdit = () =>
+    canManage() && providersLoaded() && !loading() && !loadError() && !mutating();
   const isCurrentProvider = (provider: SSOProvider) => providers().includes(provider);
   const requestOptions = (controller: AbortController) => ({
-    signal: controller.signal, expectedOrgID: selectedOrg, retry: false,
+    signal: controller.signal,
+    expectedOrgID: selectedOrg,
+    retry: false,
   });
 
   const clearPreviewAndTest = () => {
@@ -99,8 +104,12 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       setTestResult(null);
       setLoadingPreview(false);
       setMetadataPreview(null);
-      setShowMetadataPreview(false);
+      setShowMetadataPreviewValue(false);
     });
+  };
+  const setShowMetadataPreview = (open: boolean) => {
+    setShowMetadataPreviewValue(open);
+    if (!open) setMetadataPreview(null);
   };
   const clearEditor = () => {
     editorVersion += 1;
@@ -128,16 +137,23 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   };
   // A test/preview describes exactly the submitted draft, not later edits in
   // the same dialog. Closing/replacing that dialog also releases its payload.
-  createEffect(on(() => JSON.stringify(form), () => {
-    clearPreviewAndTest();
-    setEditorFeedback(null);
-  }, { defer: true }));
+  createEffect(
+    on(
+      () => JSON.stringify(form),
+      () => {
+        clearPreviewAndTest();
+        setEditorFeedback(null);
+      },
+      { defer: true },
+    ),
+  );
 
   const loadProviders = async () => {
     if (!contextIsCurrent() || readController) return;
     const version = contextVersion;
     const controller = new AbortController();
-    const isCurrent = () => contextIsCurrent() && version === contextVersion && readController === controller;
+    const isCurrent = () =>
+      contextIsCurrent() && version === contextVersion && readController === controller;
     readController = controller;
     setLoading(true);
     setLoadError(false);
@@ -151,13 +167,25 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       if (!isCurrent()) return;
       const ids = new Set<string>();
       // A missing or malformed list is unknown, not an empty configuration.
-      if (!data || !Array.isArray(data.providers) || data.providers.some((provider) => {
-        if (!provider || typeof provider.id !== 'string' || !provider.id.trim() ||
-            ids.has(provider.id) || typeof provider.name !== 'string' ||
-            !['oidc', 'saml'].includes(provider.type) || typeof provider.enabled !== 'boolean') return true;
-        ids.add(provider.id);
-        return false;
-      })) throw new Error('Invalid provider inventory');
+      if (
+        !data ||
+        !Array.isArray(data.providers) ||
+        data.providers.some((provider) => {
+          if (
+            !provider ||
+            typeof provider.id !== 'string' ||
+            !provider.id.trim() ||
+            ids.has(provider.id) ||
+            typeof provider.name !== 'string' ||
+            !['oidc', 'saml'].includes(provider.type) ||
+            typeof provider.enabled !== 'boolean'
+          )
+            return true;
+          ids.add(provider.id);
+          return false;
+        })
+      )
+        throw new Error('Invalid provider inventory');
       setProviders(data.providers);
       setProvidersLoaded(true);
       setPublicUrl(window.location.origin);
@@ -166,9 +194,12 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         const statusResponse = await apiFetch('/api/security/status', requestOptions(controller));
         if (statusResponse.ok) {
           const status = (await statusResponse.json()) as { publicUrl?: string };
-          if (isCurrent() && typeof status.publicUrl === 'string' && status.publicUrl) setPublicUrl(status.publicUrl);
+          if (isCurrent() && typeof status.publicUrl === 'string' && status.publicUrl)
+            setPublicUrl(status.publicUrl);
         }
-      } catch { /* Keep the current origin when optional status is unavailable. */ }
+      } catch {
+        /* Keep the current origin when optional status is unavailable. */
+      }
     } catch {
       if (!isCurrent()) return;
       setLoadError(true);
@@ -229,15 +260,23 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     const context = contextVersion;
     const controller = new AbortController();
     detailController = controller;
-    const isCurrent = () => canEdit() && version === editorVersion && context === contextVersion && detailController === controller;
+    const isCurrent = () =>
+      canEdit() &&
+      version === editorVersion &&
+      context === contextVersion &&
+      detailController === controller;
     setLoadingDetails(true);
     try {
-      const response = await apiFetch(`/api/security/sso/providers/${encodeURIComponent(provider.id)}`, requestOptions(controller));
+      const response = await apiFetch(
+        `/api/security/sso/providers/${encodeURIComponent(provider.id)}`,
+        requestOptions(controller),
+      );
       if (!isCurrent()) return;
       if (!response.ok) throw new Error('Provider details refused');
       const data = await response.json();
       if (!isCurrent()) return;
-      if (!data || data.id !== provider.id || data.type !== provider.type) throw new Error('Mismatched provider details');
+      if (!data || data.id !== provider.id || data.type !== provider.type)
+        throw new Error('Mismatched provider details');
       setForm(mapProviderDetailsToForm(data));
       setEditingProvider(provider);
       setShowModalValue(true);
@@ -261,7 +300,8 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     setMutating(true);
     return {
       options: requestOptions(controller),
-      isCurrent: () => contextIsCurrent() && context === contextVersion && mutationController === controller,
+      isCurrent: () =>
+        contextIsCurrent() && context === contextVersion && mutationController === controller,
       finish: () => {
         if (mutationController !== controller) return;
         mutationController = undefined;
@@ -283,9 +323,15 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     setSaving(true);
     try {
       const response = await apiFetch(
-        isEdit ? `/api/security/sso/providers/${encodeURIComponent(providerId!)}` : '/api/security/sso/providers',
-        { ...mutation.options, method: isEdit ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
+        isEdit
+          ? `/api/security/sso/providers/${encodeURIComponent(providerId!)}`
+          : '/api/security/sso/providers',
+        {
+          ...mutation.options,
+          method: isEdit ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
       );
       if (!mutation.isCurrent()) return;
       if (!response.ok) {
@@ -310,13 +356,21 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   };
 
   const handleDelete = async (providerId: string) => {
-    if (deleteConfirm() !== providerId || !providers().some((provider) => provider.id === providerId)) return;
+    if (
+      deleteConfirm() !== providerId ||
+      !providers().some((provider) => provider.id === providerId)
+    )
+      return;
     const mutation = beginMutation();
     if (!mutation) return;
     try {
-      const response = await apiFetch(`/api/security/sso/providers/${encodeURIComponent(providerId)}`, {
-        ...mutation.options, method: 'DELETE',
-      });
+      const response = await apiFetch(
+        `/api/security/sso/providers/${encodeURIComponent(providerId)}`,
+        {
+          ...mutation.options,
+          method: 'DELETE',
+        },
+      );
       if (!mutation.isCurrent()) return;
       if (!response.ok) throw new Error('Provider deletion refused');
       notificationStore.success(getSSOProviderDeleteSuccessMessage());
@@ -327,7 +381,9 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       if (!mutation.isCurrent()) return;
       logger.error('[SSOProvidersPanel] Failed to delete provider.');
       notificationStore.error(getSSOProviderDeleteErrorMessage());
-    } finally { mutation.finish(); }
+    } finally {
+      mutation.finish();
+    }
   };
 
   const handleToggleEnabled = async (provider: SSOProvider) => {
@@ -337,16 +393,28 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     clearEditor();
     try {
       // Only writable fields; omitted nested configuration and secret are preserved.
-      const response = await apiFetch(`/api/security/sso/providers/${encodeURIComponent(provider.id)}`, {
-        ...mutation.options, method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: provider.id, name: provider.name, type: provider.type, enabled: !provider.enabled,
-          displayName: provider.displayName, iconUrl: provider.iconUrl, priority: provider.priority,
-          allowedGroups: provider.allowedGroups ?? [], allowedDomains: provider.allowedDomains ?? [],
-          allowedEmails: provider.allowedEmails ?? [], groupsClaim: provider.groupsClaim,
-          groupRoleMappings: provider.groupRoleMappings,
-        }),
-      });
+      const response = await apiFetch(
+        `/api/security/sso/providers/${encodeURIComponent(provider.id)}`,
+        {
+          ...mutation.options,
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: provider.id,
+            name: provider.name,
+            type: provider.type,
+            enabled: !provider.enabled,
+            displayName: provider.displayName,
+            iconUrl: provider.iconUrl,
+            priority: provider.priority,
+            allowedGroups: provider.allowedGroups ?? [],
+            allowedDomains: provider.allowedDomains ?? [],
+            allowedEmails: provider.allowedEmails ?? [],
+            groupsClaim: provider.groupsClaim,
+            groupRoleMappings: provider.groupRoleMappings,
+          }),
+        },
+      );
       if (!mutation.isCurrent()) return;
       if (!response.ok) throw new Error('Provider update refused');
       notificationStore.success(getSSOProviderToggleSuccessMessage(!provider.enabled));
@@ -356,14 +424,17 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       if (!mutation.isCurrent()) return;
       logger.error('[SSOProvidersPanel] Failed to toggle provider.');
       notificationStore.error(getSSOProviderToggleErrorMessage());
-    } finally { mutation.finish(); }
+    } finally {
+      mutation.finish();
+    }
   };
 
   const copyToClipboard = async (text: string, label: string) => {
     if (!contextIsCurrent()) return;
     const context = contextVersion;
     const editor = editorVersion;
-    const isCurrent = () => contextIsCurrent() && context === contextVersion && editor === editorVersion;
+    const isCurrent = () =>
+      contextIsCurrent() && context === contextVersion && editor === editorVersion;
     try {
       await navigator.clipboard.writeText(text);
       if (!isCurrent()) return;
@@ -395,15 +466,25 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     const version = editorVersion;
     const context = contextVersion;
     const payload = JSON.stringify(buildProviderTestPayload(form));
-    const isCurrent = () => canEdit() && showModal() && version === editorVersion && context === contextVersion && testController === controller && payload === JSON.stringify(buildProviderTestPayload(form));
+    const isCurrent = () =>
+      canEdit() &&
+      showModal() &&
+      version === editorVersion &&
+      context === contextVersion &&
+      testController === controller &&
+      payload === JSON.stringify(buildProviderTestPayload(form));
     setEditorFeedback(null);
     setTesting(true);
     setTestResult(null);
     try {
       const response = await apiFetch('/api/security/sso/providers/test', {
-        ...requestOptions(controller), method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
+        ...requestOptions(controller),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
       });
       if (!isCurrent()) return;
+      if (!response.ok) throw new Error('Connection test refused');
       const result = (await response.json()) as SSOProviderTestResult;
       if (isCurrent()) setTestResult(result);
     } catch {
@@ -411,7 +492,10 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       logger.error('[SSOProvidersPanel] Test connection failed.');
       setTestResult({ success: false, message: getSSOConnectionTestErrorMessage() });
     } finally {
-      if (testController === controller) { testController = undefined; setTesting(false); }
+      if (testController === controller) {
+        testController = undefined;
+        setTesting(false);
+      }
     }
   };
 
@@ -432,7 +516,13 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     const version = editorVersion;
     const context = contextVersion;
     const payload = JSON.stringify(buildMetadataPreviewPayload(form));
-    const isCurrent = () => canEdit() && showModal() && version === editorVersion && context === contextVersion && previewController === controller && payload === JSON.stringify(buildMetadataPreviewPayload(form));
+    const isCurrent = () =>
+      canEdit() &&
+      showModal() &&
+      version === editorVersion &&
+      context === contextVersion &&
+      previewController === controller &&
+      payload === JSON.stringify(buildMetadataPreviewPayload(form));
     setLoadingPreview(true);
     setMetadataPreview(null);
 
@@ -462,7 +552,10 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       logger.error('[SSOProvidersPanel] Metadata preview failed.');
       setEditorFeedback({ tone: 'error', message: getSSOMetadataFetchErrorMessage() });
     } finally {
-      if (previewController === controller) { previewController = undefined; setLoadingPreview(false); }
+      if (previewController === controller) {
+        previewController = undefined;
+        setLoadingPreview(false);
+      }
     }
   };
 
