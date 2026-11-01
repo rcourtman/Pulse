@@ -4657,8 +4657,9 @@ composition access, not the reporter's missing native ARC or I/O/History source.
 
 ### Sign-out confirms local withdrawal before provider navigation
 
-The existing app runtime sends a single bounded, cookie/CSRF-bearing POST to
-`/api/logout` before clearing saved authentication and cached metadata, stopping
+The existing app runtime starts one bounded, cookie/CSRF-bearing application
+request to POST `/api/logout` before clearing saved authentication and the
+existing legacy metadata keys, stopping
 its runtime and following any configured proxy/SSO destination. The canonical
 global WebSocket shutdown ends this tab's current connection/request owner
 even if storage cleanup fails or provider navigation never occurs; clearing
@@ -4666,7 +4667,9 @@ the local accessor alone is not teardown. Auth-clear and shutdown errors still
 allow the remaining cleanup and leave an explicit close-tab warning. It requires the
 endpoint's successful JSON acknowledgement; rejection, a redirect, malformed
 reply, lost response or timeout stays visibly uncertain and allows deliberate
-retry. The API client must not turn a logout 401 into a success-looking login
+retry. This disables application/API-client retries, not native transport
+retransmission: it is not an exactly-once wire guarantee. The existing endpoint
+withdraws only the addressed cookie session. The API client must not turn a logout 401 into a success-looking login
 redirect. Token-only browsers keep the normal authenticated transport; this
 ends only the cookie session, not independent API tokens or other sessions.
 Provider navigation still owns upstream sign-out. A browser cleanup failure
@@ -4681,3 +4684,9 @@ disposal and storage failure. Desktop/narrow browser proof exercises the actual
 consumer with synthetic independent sessions and inspected pixels; it is not
 live IdP or original administrator recovery. The proxy guide and shipped mirror
 must describe the same sequence without claiming upstream revocation.
+
+The current Workloads metadata owner also has organisation-scoped persistent
+and module caches plus deferred persistence. This bounded redirect repair does
+not establish their erasure or original administrator recovery. Session-binding
+that existing owner is the next retained Web step; help must not describe
+credential cleanup as erasing every copy of already-held monitoring data.

@@ -130,7 +130,7 @@ local password prompt.
 
 - **With `PROXY_AUTH_LOGOUT_URL`:** Pulse's **Sign out** action first calls
   Pulse's local `/api/logout` endpoint. Only after Pulse confirms success and
-  clears this browser's saved authentication and cached metadata does it send
+  clears this browser's saved authentication does it send
   the browser to that URL. A refused request, lost response or browser-cleanup
   error is shown instead of a redirect; it does not confirm withdrawn access.
   The destination must perform the required logout in your existing proxy/IdP
