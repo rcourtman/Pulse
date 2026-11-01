@@ -153,6 +153,8 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	// the request organization's inventory and metrics store, and schedules
 	// live in that organization's config, so an org manager may use them in
 	// their own organization.
+	// Slow downloads retain the admitted token/session through output, including
+	// extension renderers. Withdrawal does not cancel schedules or other work.
 	r.mux.HandleFunc("/api/admin/reports/catalog", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureOrgAdminSession(r.config, w, req) {
 			return
@@ -163,19 +165,19 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGenerateReport))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, retainResponseAuthority(r.config, config.ScopeSettingsRead, false, responseMediaReport, reportingAdminEndpoints.HandleGenerateReport)))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/generate-multi", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleGenerateMultiReport))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, retainResponseAuthority(r.config, config.ScopeSettingsRead, false, responseMediaReport, reportingAdminEndpoints.HandleGenerateMultiReport)))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/reports/inventory/vms/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureOrgAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleExportVMInventory))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, retainResponseAuthority(r.config, config.ScopeSettingsRead, false, responseMediaReport, reportingAdminEndpoints.HandleExportVMInventory)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/admin/reports/schedules", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureOrgAdminSession(r.config, w, req) {
