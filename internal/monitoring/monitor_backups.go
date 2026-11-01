@@ -281,6 +281,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	sharedStorageSuccess := map[string]struct{}{}
 	unqueryableStorages := map[string]struct{}{}
 	skippedLocalStorages := map[pveLocalBackupStorage]struct{}{}
+	// Where unread reads were attempted, so the provider observation can name
+	// them. A denied entry with no storage is a rejected node storage list.
+	sharedUnreadReads := map[pveLocalBackupStorage]struct{}{}
+	deniedReads := map[pveLocalBackupStorage]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
 	// Build guest lookup map to find actual node for each VMID
@@ -376,6 +380,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if isPVEBackupPermissionError(err) {
 				hadPermissionError = true
 				permissionFailureCount++
+				deniedReads[pveLocalBackupStorage{node: node.Node}] = struct{}{}
 				m.recordPVEBackupAccessWarning(ctx, instanceName, fmt.Sprintf("/nodes/%s/storage", node.Node), err)
 			}
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
@@ -413,6 +418,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				} else {
 					unqueryableStorages[storage.Storage] = struct{}{}
 					storagePreserveNeeded[storage.Storage] = struct{}{}
+					sharedUnreadReads[pveLocalBackupStorage{node: node.Node, storage: storage.Storage}] = struct{}{}
 				}
 				continue
 			}
@@ -433,6 +439,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if isPVEBackupPermissionError(err) {
 					hadPermissionError = true
 					permissionFailureCount++
+					deniedReads[pveLocalBackupStorage{node: node.Node, storage: storage.Storage}] = struct{}{}
 					m.recordPVEBackupAccessWarning(ctx, instanceName, fmt.Sprintf("/nodes/%s/storage/%s/content", node.Node, storage.Storage), err)
 				} else {
 					log.Debug().Err(monErr).
@@ -444,6 +451,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					failedLocalStorages[pveLocalBackupStorage{node: storageNode, storage: storage.Storage}] = struct{}{}
 				} else {
 					storagePreserveNeeded[storage.Storage] = struct{}{}
+					sharedUnreadReads[pveLocalBackupStorage{node: node.Node, storage: storage.Storage}] = struct{}{}
 				}
 				contentFailures++
 				continue
@@ -659,6 +667,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		delete(confirmationPreserveNeeded, storageName)
 	}
 
+	unreadScopes := pveUnreadProtectionScopes(pveUnreadReads{
+		nodes:       unreadNodes,
+		local:       failedLocalStorages,
+		shared:      storagePreserveNeeded,
+		sharedReads: sharedUnreadReads,
+		denied:      deniedReads,
+	})
+
 	// Carry-forward serves the live inventory, not a new provider observation.
 	// Only rows actually returned this poll may renew point-level evidence.
 	observedBackups := allBackups
@@ -694,6 +710,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			ContentSuccesses:       contentSuccess,
 			ContentFailures:        contentFailures,
 			PermissionFailureCount: permissionFailureCount,
+			UnreadScopes:           unreadScopes,
 		},
 		protectionObservedAt,
 	)
@@ -1897,6 +1914,13 @@ type pbsBackupFetchRequest struct {
 }
 
 // pollPBSBackups fetches all backups from PBS datastores
+// pbsReadDenied reports an authorization rejection. Other terminal errors,
+// such as a namespace that no longer exists, are not missing permission.
+func pbsReadDenied(err error) bool {
+	status, ok := pbs.HTTPStatus(err)
+	return ok && (status == 401 || status == 403)
+}
+
 func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore, namespaceErrors map[string]error) {
 	log.Debug().Str("instance", instanceName).Msg("polling PBS backups")
 
@@ -1910,6 +1934,17 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	queriedNamespaces := make(map[pbsBackupNamespaceKey]struct{})
 	transientNamespaces := make(map[pbsBackupNamespaceKey]struct{})
 	transientDiscovery := make(map[string]struct{})
+	// Names what went unread for the provider observation; it never decides
+	// which points this poll confirmed.
+	var unreadScopes []recovery.ProtectionUnreadScope
+	unreadNamespace := func(datastore, namespace string, denied bool) {
+		unreadScopes = append(unreadScopes, recovery.ProtectionUnreadScope{
+			Kind:         recovery.ProtectionUnreadScopeNamespace,
+			Storage:      datastore,
+			Namespace:    namespace,
+			AccessDenied: denied,
+		})
+	}
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
 	datastoreErrors := 0              // Datastores with incomplete history
@@ -1940,6 +1975,11 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			} else {
 				transientDiscovery[ds.Name] = struct{}{}
 			}
+			unreadScopes = append(unreadScopes, recovery.ProtectionUnreadScope{
+				Kind:         recovery.ProtectionUnreadScopeDatastore,
+				Storage:      ds.Name,
+				AccessDenied: pbsReadDenied(err),
+			})
 		}
 		groupsReused := 0
 		groupsRequested := 0
@@ -1954,6 +1994,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				}
 				datastoreNamespaceErrors++
 				transientNamespaces[namespaceKey] = struct{}{}
+				unreadNamespace(ds.Name, namespace, false)
 				continue
 			}
 			groups, err := client.ListBackupGroups(ctx, ds.Name, namespace)
@@ -1969,6 +2010,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				} else {
 					transientNamespaces[namespaceKey] = struct{}{}
 				}
+				unreadNamespace(ds.Name, namespace, pbsReadDenied(err))
 				log.Error().
 					Err(err).
 					Str("instance", instanceName).
@@ -1994,6 +2036,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					// Skipped groups are not a complete inventory, even when
 					// every request we did make succeeded.
 					datastoreNamespaceErrors++
+					unreadNamespace(ds.Name, namespace, false)
 					break
 				}
 
@@ -2067,6 +2110,10 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			allBackups = appendPBSBackupsWithinLimit(allBackups, fetched.backups)
 			datastoreNamespaceErrors += fetched.errors
 			datastoreTerminalNamespaceErrors += fetched.terminalErrors
+			if fetched.errors > 0 {
+				// Snapshot failures carry no status here; do not call them denials.
+				unreadNamespace(ds.Name, namespace, false)
+			}
 
 			// Stage successful read times until their matching rows are published.
 			// A later cancellation must not freshen the previously published rows
@@ -2217,6 +2264,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			Err(protectionObservationErr).
 			Str("instance", instanceName).
 			Msg("Failed to build PBS protection provider observation")
+	} else {
+		protectionObservation = protectionObservation.WithUnreadScopes(unreadScopes)
 	}
 
 	// Decide whether to keep existing backups when all queries failed

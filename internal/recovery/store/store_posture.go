@@ -231,8 +231,8 @@ func (s *Store) UpsertProtectionProviderObservations(
 			id, provider, source, scope, job_state,
 			history_completeness, permissions, verification_expected,
 			observed_at_ms, ingested_at_ms, evidence_json,
-			created_at_ms, updated_at_ms
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			unread_scopes_json, created_at_ms, updated_at_ms
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			provider=excluded.provider,
 			source=excluded.source,
@@ -244,6 +244,7 @@ func (s *Store) UpsertProtectionProviderObservations(
 			observed_at_ms=excluded.observed_at_ms,
 			ingested_at_ms=excluded.ingested_at_ms,
 			evidence_json=excluded.evidence_json,
+			unread_scopes_json=excluded.unread_scopes_json,
 			updated_at_ms=excluded.updated_at_ms
 	`)
 	if err != nil {
@@ -264,6 +265,14 @@ func (s *Store) UpsertProtectionProviderObservations(
 		if err != nil {
 			return err
 		}
+		var unreadScopesJSON any
+		if scopes := recovery.NormalizeProtectionUnreadScopes(observation.UnreadScopes); len(scopes) > 0 {
+			encoded, err := json.Marshal(scopes)
+			if err != nil {
+				return err
+			}
+			unreadScopesJSON = string(encoded)
+		}
 		verificationExpected := 0
 		if observation.VerificationExpected {
 			verificationExpected = 1
@@ -281,6 +290,7 @@ func (s *Store) UpsertProtectionProviderObservations(
 			observation.ObservedAt.UTC().UnixMilli(),
 			observation.IngestedAt.UTC().UnixMilli(),
 			string(evidenceJSON),
+			unreadScopesJSON,
 			nowMs,
 			nowMs,
 		); err != nil {
@@ -470,7 +480,8 @@ func (s *Store) listLatestProtectionProviderObservations(
 			observation.scope, observation.job_state,
 			observation.history_completeness, observation.permissions,
 			observation.verification_expected, observation.observed_at_ms,
-			observation.ingested_at_ms, observation.evidence_json
+			observation.ingested_at_ms, observation.evidence_json,
+			observation.unread_scopes_json
 		FROM scopes
 		JOIN protection_provider_observations observation
 		  ON observation.id = (
@@ -496,6 +507,7 @@ func (s *Store) listLatestProtectionProviderObservations(
 			verificationExpected             int
 			observedAtMs, ingestedAtMs       int64
 			evidenceRaw                      string
+			unreadScopesRaw                  sql.NullString
 		)
 		if err := rows.Scan(
 			&observation.ID,
@@ -509,6 +521,7 @@ func (s *Store) listLatestProtectionProviderObservations(
 			&observedAtMs,
 			&ingestedAtMs,
 			&evidenceRaw,
+			&unreadScopesRaw,
 		); err != nil {
 			return nil, err
 		}
@@ -536,6 +549,12 @@ func (s *Store) listLatestProtectionProviderObservations(
 		observation.IngestedAt = observation.Evidence.IngestedAt.UTC()
 		if err := observation.Validate(); err != nil {
 			continue
+		}
+		// Unread scopes only explain a gap. An unreadable list must not drop
+		// the observation, whose completeness still qualifies its points.
+		var unreadScopes []recovery.ProtectionUnreadScope
+		if unmarshalJSON(unreadScopesRaw, &unreadScopes) == nil {
+			observation = observation.WithUnreadScopes(unreadScopes)
 		}
 		out = append(out, observation)
 	}

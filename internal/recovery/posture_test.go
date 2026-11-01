@@ -738,3 +738,116 @@ func TestProtectionExplanationDoesNotEraseUnsuccessfulBackupEvidence(t *testing.
 		})
 	}
 }
+
+// A partial provider collection supports exactly the points it re-read. A
+// retained point from an unread scope has no newer evidence and may have been
+// pruned since, so it cannot stand behind a protected claim.
+func TestBuildProtectionPosturePartialCollectionConfirmsOnlyReReadPoints(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	observedAt := now.Add(-time.Minute)
+	backupAt := now.Add(-3 * time.Hour)
+	verified := true
+	unread := []ProtectionUnreadScope{{Kind: ProtectionUnreadScopeStorage, Node: "delly", Storage: "pbs-energy-offsite"}}
+	for _, provider := range []Provider{ProviderProxmoxPVE, ProviderProxmoxPBS} {
+		for _, permissions := range []operationaltrust.EvidencePermissions{
+			operationaltrust.EvidencePermissionsUnknown,
+			operationaltrust.EvidencePermissionsPartial,
+		} {
+			t.Run(fmt.Sprintf("%s/%s", provider, permissions), func(t *testing.T) {
+				observation, err := NewProtectionProviderObservation(provider, "inventory", "source-a", OutcomeWarning, ProtectionHistoryPartial, permissions, true, observedAt, observedAt, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				observation = observation.WithUnreadScopes(unread)
+				withEvidence := func(collector string, ingestedAt time.Time) RecoveryPoint {
+					point := RecoveryPoint{ID: "backup", Provider: provider, ProviderScope: "source-a", Kind: KindBackup, Mode: ModeRemote, Outcome: OutcomeSuccess, CompletedAt: &backupAt, Verified: &verified, SubjectResourceID: "resource:vm-100"}
+					evidence, err := NewRecoveryPointEvidence(point, collector, ingestedAt)
+					if err != nil {
+						t.Fatal(err)
+					}
+					point.Evidence = evidence
+					return point
+				}
+				build := func(point RecoveryPoint) ProtectionPosture {
+					return BuildProtectionPostureFromPointsAt("resource:vm-100", []RecoveryPoint{point}, []ProtectionProviderObservation{observation}, DefaultProtectionPosturePolicy, now)
+				}
+
+				got := build(withEvidence("inventory", observedAt))
+				if got.State != ProtectionStateProtected || got.Coverage != ProtectionCoveragePartial || got.Verification != ProtectionVerificationVerified {
+					t.Fatalf("re-read point = %s/%s/%s, want protected/partial/verified", got.State, got.Coverage, got.Verification)
+				}
+				if !strings.Contains(got.Explanation, "Pulse could not read pbs-energy-offsite on delly, but that does not change this backup.") {
+					t.Errorf("explanation = %q", got.Explanation)
+				}
+				if len(got.ProviderStates) != 1 || !reflect.DeepEqual(got.ProviderStates[0].UnreadScopes, unread) {
+					t.Errorf("provider state unread scopes = %+v", got.ProviderStates)
+				}
+				if err := got.Validate(); err != nil {
+					t.Fatal(err)
+				}
+
+				for name, point := range map[string]RecoveryPoint{
+					"retained":  withEvidence("inventory", observedAt.Add(-time.Millisecond)),
+					"migration": withEvidence(recoveryPointMigrationCollector, now),
+					"legacy": func() RecoveryPoint {
+						p := withEvidence("inventory", observedAt)
+						p.Evidence = nil
+						return p
+					}(),
+				} {
+					got := build(point)
+					if got.State != ProtectionStateAttention || got.Coverage != ProtectionCoveragePartial {
+						t.Errorf("%s point = %s/%s, want attention/partial", name, got.State, got.Coverage)
+					}
+					if !strings.Contains(got.Explanation, "Pulse could not read pbs-energy-offsite on delly.") {
+						t.Errorf("%s explanation does not name the unread storage: %q", name, got.Explanation)
+					}
+				}
+			})
+		}
+	}
+}
+
+// Denied or unavailable history confirms nothing, even for a renewed point.
+func TestProtectionPostureUnavailableHistoryConfirmsNothing(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	recent := now.Add(-time.Hour)
+	for _, history := range []ProtectionHistoryCompleteness{ProtectionHistoryUnavailable, ProtectionHistoryUnknown} {
+		summary := protectionTestSummary(now, &recent)
+		summary.HistoryCompleteness = history
+		summary.Permissions = operationaltrust.EvidencePermissionsUnknown
+		summary.ConfirmedLastSuccessAt = &recent
+		summary.ConfirmedLastVerifiedAt = &recent
+		if got := DeriveProtectionPostureAt("resource:vm-100", []ProtectionProviderSummary{summary}, DefaultProtectionPosturePolicy, now); got.State != ProtectionStateUnknown {
+			t.Errorf("%s history = %s, want unknown", history, got.State)
+		}
+	}
+	summary := protectionTestSummary(now, &recent)
+	summary.HistoryCompleteness = ProtectionHistoryPartial
+	summary.Permissions = operationaltrust.EvidencePermissionsDenied
+	summary.ConfirmedLastSuccessAt = &recent
+	if got := DeriveProtectionPostureAt("resource:vm-100", []ProtectionProviderSummary{summary}, DefaultProtectionPosturePolicy, now); got.State == ProtectionStateProtected {
+		t.Errorf("denied access claimed protection: %+v", got)
+	}
+}
+
+func TestDescribeUnreadScopesNamesAtMostThree(t *testing.T) {
+	t.Parallel()
+	scopes := []ProtectionUnreadScope{
+		{Kind: ProtectionUnreadScopeNode, Node: "pve2"},
+		{Kind: ProtectionUnreadScopeStorage, Storage: "nfs"},
+		{Kind: ProtectionUnreadScopeNamespace, Storage: "archive"},
+		{Kind: ProtectionUnreadScopeNamespace, Storage: "archive", Namespace: "tenant"},
+		{Kind: ProtectionUnreadScopeDatastore, Storage: "archive"},
+		{Kind: "bogus", Storage: "ignored"},
+	}
+	want := "the namespace list of datastore archive, the root namespace of datastore archive, namespace tenant on datastore archive and 2 more"
+	if got := describeUnreadScopes(scopes); got != want {
+		t.Fatalf("describeUnreadScopes() = %q\nwant %q", got, want)
+	}
+	if got := describeUnreadScopes(scopes[:2]); got != "the storage list on node pve2 and nfs" {
+		t.Fatalf("two scopes = %q", got)
+	}
+}

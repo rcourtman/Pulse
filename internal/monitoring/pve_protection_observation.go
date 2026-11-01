@@ -16,6 +16,61 @@ type pveProtectionCollectionStats struct {
 	ContentSuccesses       int
 	ContentFailures        int
 	PermissionFailureCount int
+	UnreadScopes           []recovery.ProtectionUnreadScope
+}
+
+// pveUnreadReads is the unread part of one PVE backup enumeration.
+type pveUnreadReads struct {
+	nodes       map[string]struct{}                // nodes whose storage list was not read
+	local       map[pveLocalBackupStorage]struct{} // node-local storages not read
+	shared      map[string]struct{}                // shared storages no node read
+	sharedReads map[pveLocalBackupStorage]struct{} // nodes a shared read failed on
+	denied      map[pveLocalBackupStorage]struct{} // reads rejected by authorization
+}
+
+// pveUnreadProtectionScopes names what a PVE enumeration could not read. A
+// shared storage names its node only when exactly one node attempted it.
+func pveUnreadProtectionScopes(unread pveUnreadReads) []recovery.ProtectionUnreadScope {
+	var scopes []recovery.ProtectionUnreadScope
+	for node := range unread.nodes {
+		_, denied := unread.denied[pveLocalBackupStorage{node: node}]
+		scopes = append(scopes, recovery.ProtectionUnreadScope{
+			Kind:         recovery.ProtectionUnreadScopeNode,
+			Node:         node,
+			AccessDenied: denied,
+		})
+	}
+	for local := range unread.local {
+		_, denied := unread.denied[local]
+		scopes = append(scopes, recovery.ProtectionUnreadScope{
+			Kind:         recovery.ProtectionUnreadScopeStorage,
+			Node:         local.node,
+			Storage:      local.storage,
+			AccessDenied: denied,
+		})
+	}
+	for storage := range unread.shared {
+		scope := recovery.ProtectionUnreadScope{
+			Kind:    recovery.ProtectionUnreadScopeStorage,
+			Storage: storage,
+		}
+		attempts := 0
+		for read := range unread.sharedReads {
+			if read.storage != storage {
+				continue
+			}
+			attempts++
+			scope.Node = read.node
+			if _, denied := unread.denied[read]; denied {
+				scope.AccessDenied = true
+			}
+		}
+		if attempts != 1 {
+			scope.Node = ""
+		}
+		scopes = append(scopes, scope)
+	}
+	return recovery.NormalizeProtectionUnreadScopes(scopes)
 }
 
 func buildPVEProtectionProviderObservation(
@@ -89,7 +144,7 @@ func buildPVEProtectionProviderObservation(
 		}
 	}
 
-	return recovery.NewProtectionProviderObservation(
+	observation, err := recovery.NewProtectionProviderObservation(
 		recovery.ProviderProxmoxPVE,
 		"pve-backup-enumeration",
 		instanceName,
@@ -101,6 +156,10 @@ func buildPVEProtectionProviderObservation(
 		observedAt,
 		reason,
 	)
+	if err != nil {
+		return recovery.ProtectionProviderObservation{}, err
+	}
+	return observation.WithUnreadScopes(stats.UnreadScopes), nil
 }
 
 func isPVEBackupPermissionError(err error) bool {

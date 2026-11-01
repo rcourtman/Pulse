@@ -67,8 +67,12 @@ func TestPBSWholeInventoryResponseRetainsEvidence(t *testing.T) {
 									}
 									continue
 								}
-								if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown {
-									t.Errorf("unread response claimed protection or denied access: %+v", p)
+								if len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown || p.Coverage != recovery.ProtectionCoveragePartial {
+									t.Errorf("unread response claimed complete history or denied access: %+v", p)
+								}
+								// Only the root snapshot was re-read this poll.
+								if wantProtected := p.SubjectResourceID == f.ids[0]; (p.State == recovery.ProtectionStateProtected) != wantProtected {
+									t.Errorf("unread response protection does not follow what was read (protected=%t): %+v", wantProtected, p)
 								}
 							}
 						}
@@ -125,7 +129,10 @@ func TestPBSWholeInventoryConsumerLifecycle(t *testing.T) {
 				}
 				for _, p := range f.postures(t) {
 					if p.SubjectResourceID == f.ids[1] || p.SubjectResourceID == f.ids[0] {
-						if (phase == "observed" || phase == "recovered") != (p.State == recovery.ProtectionStateProtected) {
+						// Unread phases still re-read the root snapshot.
+						unread := phase == "unread-namespaces" || phase == "unread-groups" || phase == "unread-snapshots"
+						healthy := phase == "observed" || phase == "recovered" || (unread && p.SubjectResourceID == f.ids[0])
+						if healthy != (p.State == recovery.ProtectionStateProtected) {
 							t.Fatalf("phase %s posture=%+v", phase, p)
 						}
 					}

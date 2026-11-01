@@ -269,11 +269,16 @@ func TestPVELocalArchiveIdentityConsumerFrames(t *testing.T) {
 				t.Fatalf("phase=%s live=%d history=%d want%d", phase, len(rows.StorageBackups), len(points), want)
 			}
 			for _, p := range postures {
-				if (phase == "observed" || phase == "recovered" || phase == "one-removed") && p.State != recovery.ProtectionStateProtected {
+				// In the partial phase node-a's same-path archive is still
+				// re-read, so the guest stays protected with partial coverage.
+				if (phase == "observed" || phase == "recovered" || phase == "one-removed" || phase == "partial") && p.State != recovery.ProtectionStateProtected {
 					t.Fatalf("accepted completed archives lost posture: %+v", p)
 				}
-				if (phase == "partial" || phase == "empty") && p.State == recovery.ProtectionStateProtected {
-					t.Fatal("unread or absent archives claimed protection")
+				if (phase == "partial") != (p.Coverage == recovery.ProtectionCoveragePartial) {
+					t.Fatalf("phase=%s coverage does not reflect the unread disk: %+v", phase, p)
+				}
+				if phase == "empty" && p.State == recovery.ProtectionStateProtected {
+					t.Fatal("absent archives claimed protection")
 				}
 			}
 			frames[phase] = map[string]any{"pve": map[string]any{"data": rows}, "postures": map[string]any{"data": postures, "policy": recovery.DefaultProtectionPosturePolicy.Payload()}, "points": points}

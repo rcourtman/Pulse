@@ -90,6 +90,18 @@ export type ProtectionVerification = 'verified' | 'unverified' | 'stale' | 'unkn
 export type ProtectionCoverage = 'complete' | 'partial' | 'none' | 'unknown';
 export type ProtectionHistoryCompleteness = 'complete' | 'partial' | 'unavailable' | 'unknown';
 
+export type ProtectionUnreadScopeKind = 'node' | 'storage' | 'datastore' | 'namespace';
+
+// One part of a provider's backup history that its latest read could not
+// reach: a PVE node or storage, or a PBS datastore or namespace.
+export interface ProtectionUnreadScope {
+  kind: ProtectionUnreadScopeKind;
+  node?: string;
+  storage?: string;
+  namespace?: string;
+  accessDenied?: boolean;
+}
+
 export interface ProtectionProviderState {
   provider: RecoveryPlatform;
   source: string;
@@ -102,6 +114,7 @@ export interface ProtectionProviderState {
   lastVerifiedAt?: string | null;
   evidenceIds: string[];
   verificationExpected?: boolean;
+  unreadScopes?: ProtectionUnreadScope[];
 }
 
 export interface ProtectionPosture {

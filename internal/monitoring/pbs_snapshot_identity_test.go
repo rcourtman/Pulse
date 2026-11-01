@@ -85,8 +85,9 @@ func TestPBSConflictingSnapshotIdentityRetainsUnreadScope(t *testing.T) {
 							}
 						}
 						for _, p := range f.postures(t) {
-							if p.State == recovery.ProtectionStateProtected {
-								t.Errorf("invalid group advertised protected: %+v", p)
+							// The root sibling was read; the malformed tenant group was not.
+							if (p.State == recovery.ProtectionStateProtected) != (p.SubjectResourceID == f.ids[0]) {
+								t.Errorf("invalid group protection does not follow the read root: %+v", p)
 							}
 							for _, provider := range p.ProviderStates {
 								if provider.HistoryCompleteness != recovery.ProtectionHistoryPartial || provider.Permissions != operationaltrust.EvidencePermissionsUnknown {

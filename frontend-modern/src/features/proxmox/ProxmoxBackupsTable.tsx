@@ -80,6 +80,10 @@ import {
 } from './proxmoxBackupsTableShared';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
+import {
+  collectUnreadBackupSources,
+  describeUnreadBackupSources,
+} from './proxmoxBackupUnreadSources';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
 import { resolveBackupLocationFilter } from './proxmoxBackupLocation';
@@ -194,6 +198,13 @@ export const ProxmoxBackupsTable: Component<{
   const location = useLocation();
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
+  );
+  // One unreadable storage limits every guest's coverage on its connection;
+  // say which one once, where the operator can act on it.
+  const unreadBackupSourcesNotice = createMemo(() =>
+    describeUnreadBackupSources(
+      collectUnreadBackupSources(protectionPostures.postureByResourceID().values()),
+    ),
   );
 
   // Saved views persist the current route query, so every filter and the active
@@ -956,6 +967,14 @@ export const ProxmoxBackupsTable: Component<{
                 },
               ]}
             />
+
+            <Show when={unreadBackupSourcesNotice()}>
+              {(notice) => (
+                <div role="status" class={BACKUP_READ_NOTICE_CLASS} data-unread-backup-sources>
+                  {notice()}
+                </div>
+              )}
+            </Show>
 
             <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
               <Show

@@ -179,6 +179,36 @@ describe('useProtectionPostures transport', () => {
     },
   );
 
+  it('keeps the unread provider scopes the server names and rejects a malformed one', async () => {
+    const posture = protectionPosture('vm:1');
+    posture.coverage = 'partial';
+    posture.providerStates[0].historyCompleteness = 'partial';
+    posture.providerStates[0].unreadScopes = [
+      { kind: 'storage', node: 'delly', storage: 'pbs-energy-offsite' },
+    ];
+    apiFetchJSONMock.mockResolvedValue({ data: [posture], policy: protectionPolicy });
+    let dispose = () => {};
+    const hook = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return useProtectionPostures(() => ['vm:1']);
+    });
+    try {
+      await vi.waitFor(() => expect(hook.postures()).toHaveLength(1));
+      expect(hook.postureByResourceID().get('vm:1')?.providerStates[0].unreadScopes).toEqual([
+        { kind: 'storage', node: 'delly', storage: 'pbs-energy-offsite' },
+      ]);
+
+      const malformed = structuredClone(posture);
+      malformed.providerStates[0].unreadScopes = [{ kind: 'disk', storage: 'x' }] as never;
+      apiFetchJSONMock.mockResolvedValue({ data: [malformed], policy: protectionPolicy });
+      await hook.refetch();
+      expect(hook.response.error).toBeInstanceOf(ProtectionPostureFormatError);
+      expect(hook.postures()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not restore a failed cached assessment when Coverage remounts', async () => {
     apiFetchJSONMock.mockResolvedValue({
       data: [protectionPosture('vm:1')],

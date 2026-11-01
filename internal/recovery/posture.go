@@ -310,19 +310,27 @@ func BuildProtectionPostureFromPointsAt(
 		switch point.Kind {
 		case KindBackup:
 			agg.summary.BackupPointCount++
+			observation, observed := latestObservations[key]
+			confirmed := observed && pointConfirmedByObservation(point, observation)
 			if point.Outcome == OutcomeSuccess && !eventAt.IsZero() {
-				if agg.summary.LastSuccessAt == nil || eventAt.After(*agg.summary.LastSuccessAt) {
-					value := eventAt.UTC()
-					agg.summary.LastSuccessAt = &value
+				agg.summary.LastSuccessAt = latestProtectionTime(agg.summary.LastSuccessAt, &eventAt)
+				if confirmed {
+					agg.summary.ConfirmedLastSuccessAt = latestProtectionTime(
+						agg.summary.ConfirmedLastSuccessAt,
+						&eventAt,
+					)
 				}
 			}
 			if point.Outcome == OutcomeSuccess &&
 				point.Verified != nil &&
 				*point.Verified &&
 				!eventAt.IsZero() {
-				if agg.summary.LastVerifiedAt == nil || eventAt.After(*agg.summary.LastVerifiedAt) {
-					value := eventAt.UTC()
-					agg.summary.LastVerifiedAt = &value
+				agg.summary.LastVerifiedAt = latestProtectionTime(agg.summary.LastVerifiedAt, &eventAt)
+				if confirmed {
+					agg.summary.ConfirmedLastVerifiedAt = latestProtectionTime(
+						agg.summary.ConfirmedLastVerifiedAt,
+						&eventAt,
+					)
 				}
 			}
 		case KindSnapshot:
@@ -351,6 +359,7 @@ func BuildProtectionPostureFromPointsAt(
 		agg.summary.HistoryCompleteness = observation.HistoryCompleteness
 		agg.summary.Permissions = observation.Permissions
 		agg.summary.VerificationExpected = observation.VerificationExpected
+		agg.summary.UnreadScopes = cloneUnreadScopes(observation.UnreadScopes)
 		agg.summary.EvidenceIDs = append(agg.summary.EvidenceIDs, observation.Evidence.ID)
 		if !observation.ObservedAt.Before(agg.lastEventAt) &&
 			observation.JobState != OutcomeUnknown {
@@ -365,6 +374,31 @@ func BuildProtectionPostureFromPointsAt(
 		summaries = append(summaries, agg.summary)
 	}
 	return DeriveProtectionPostureAt(subjectResourceID, summaries, policy, now)
+}
+
+// recoveryPointMigrationCollector marks evidence the store backfilled for
+// legacy points. It was never produced by a provider read.
+const recoveryPointMigrationCollector = "recovery-point-migration"
+
+// pointConfirmedByObservation reports whether the provider collection behind
+// observation re-read this point. Collectors renew a point's evidence only for
+// rows a poll actually returned, stamped with that poll's observation time, so
+// evidence ingested no earlier than the observation proves the point still
+// existed on a scope that collection read. A point retained from an unread
+// scope keeps its older ingestion time and may have been pruned since.
+func pointConfirmedByObservation(
+	point RecoveryPoint,
+	observation ProtectionProviderObservation,
+) bool {
+	evidence := point.Evidence
+	if evidence == nil || evidence.IngestedAt.IsZero() {
+		return false
+	}
+	if strings.TrimSpace(evidence.Source.Collector) == recoveryPointMigrationCollector ||
+		strings.TrimSpace(evidence.Source.Provider) != strings.TrimSpace(string(observation.Provider)) {
+		return false
+	}
+	return !evidence.IngestedAt.Before(observation.ObservedAt)
 }
 
 func DeriveProtectionPostureAt(
@@ -404,6 +438,7 @@ func DeriveProtectionPostureAt(
 	hasSupportedQualifyingSuccess := false
 	hasInvalidatingFailure := false
 	hasSnapshotsOnly := false
+	var unreadScopes []ProtectionUnreadScope
 	verificationExpected := policy.RequireVerification
 	supportedVerificationExpected := policy.RequireVerification
 	var supportedLastSuccessAt *time.Time
@@ -442,6 +477,10 @@ func DeriveProtectionPostureAt(
 			LastVerifiedAt:       cloneProtectionTime(summary.LastVerifiedAt),
 			EvidenceIDs:          append([]string(nil), summary.EvidenceIDs...),
 			VerificationExpected: summary.VerificationExpected,
+		}
+		if summary.HistoryCompleteness != ProtectionHistoryComplete {
+			state.UnreadScopes = NormalizeProtectionUnreadScopes(summary.UnreadScopes)
+			unreadScopes = append(unreadScopes, state.UnreadScopes...)
 		}
 		posture.ProviderStates = append(posture.ProviderStates, state)
 		posture.RepositoryResourceIDs = append(
@@ -483,17 +522,15 @@ func DeriveProtectionPostureAt(
 		if summary.LastSuccessAt != nil {
 			hasQualifyingSuccess = true
 		}
-		if summary.LastSuccessAt != nil &&
-			summary.HistoryCompleteness == ProtectionHistoryComplete &&
-			summary.Permissions == operationaltrust.EvidencePermissionsSufficient {
+		if supportedSuccessAt, supportedVerifiedAt := supportedProtectionTimes(summary); supportedSuccessAt != nil {
 			hasSupportedQualifyingSuccess = true
 			supportedLastSuccessAt = latestProtectionTime(
 				supportedLastSuccessAt,
-				summary.LastSuccessAt,
+				supportedSuccessAt,
 			)
 			supportedLastVerifiedAt = latestProtectionTime(
 				supportedLastVerifiedAt,
-				summary.LastVerifiedAt,
+				supportedVerifiedAt,
 			)
 			if summary.VerificationExpected {
 				supportedVerificationExpected = true
@@ -571,15 +608,23 @@ func DeriveProtectionPostureAt(
 	case hasSupportedQualifyingSuccess &&
 		posture.Freshness == ProtectionFreshnessCurrent &&
 		!hasInvalidatingFailure &&
-		!hasPartial &&
 		(!stateVerificationExpected || posture.Verification == ProtectionVerificationVerified):
+		// A backup the latest collection read stays a backup when some other
+		// storage could not be read; coverage carries that gap.
 		posture.State = ProtectionStateProtected
-		if posture.Verification == ProtectionVerificationVerified {
+		switch {
+		case posture.Verification == ProtectionVerificationVerified:
 			posture.Explanation = "A recent backup is available and it was verified recently."
-		} else {
+		case hasPartial || hasUnknownBlock:
+			posture.Explanation = "A recent backup is available."
+		default:
 			posture.Explanation = "A recent backup is available, and Pulse can see the full backup history."
 		}
-		if hasUnknownBlock {
+		if names := describeUnreadScopes(unreadScopes); names != "" {
+			posture.Explanation += " Pulse could not read " + names + ", but that does not change this backup."
+		} else if hasPartial {
+			posture.Explanation += " Part of the backup history could not be read, but that does not change this backup."
+		} else if hasUnknownBlock {
 			posture.Explanation += " Another backup source could not be read, but that does not change this backup."
 		}
 	case hasSupportedQualifyingSuccess:
@@ -608,6 +653,9 @@ func DeriveProtectionPostureAt(
 		} else {
 			posture.Explanation = "Pulse can see only part of the backup history, so it cannot confirm a backup."
 		}
+		if names := describeUnreadScopes(unreadScopes); names != "" {
+			posture.Explanation += " Pulse could not read " + names + "."
+		}
 	case hasCompleteHistory:
 		posture.State = ProtectionStateUnprotected
 		if hasSnapshotsOnly {
@@ -621,6 +669,77 @@ func DeriveProtectionPostureAt(
 
 	operationaltrust.GetMetrics().ObserveProtectionEvaluation(string(posture.State))
 	return posture
+}
+
+// supportedProtectionTimes returns the success and verification times a
+// provider summary can stand behind. Complete history with sufficient access
+// supports every point. A partial collection supports only the points it
+// re-read; denied or unavailable history supports none.
+func supportedProtectionTimes(summary ProtectionProviderSummary) (*time.Time, *time.Time) {
+	switch {
+	case summary.LastSuccessAt != nil &&
+		summary.HistoryCompleteness == ProtectionHistoryComplete &&
+		summary.Permissions == operationaltrust.EvidencePermissionsSufficient:
+		return summary.LastSuccessAt, summary.LastVerifiedAt
+	case summary.ConfirmedLastSuccessAt != nil &&
+		summary.HistoryCompleteness == ProtectionHistoryPartial &&
+		(summary.Permissions == operationaltrust.EvidencePermissionsPartial ||
+			summary.Permissions == operationaltrust.EvidencePermissionsUnknown):
+		return summary.ConfirmedLastSuccessAt, summary.ConfirmedLastVerifiedAt
+	default:
+		return nil, nil
+	}
+}
+
+// describeUnreadScopes names unread provider scopes for an explanation, e.g.
+// "pbs-offsite on delly". It names at most three and counts the rest.
+func describeUnreadScopes(scopes []ProtectionUnreadScope) string {
+	scopes = NormalizeProtectionUnreadScopes(scopes)
+	if len(scopes) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		names = append(names, DescribeProtectionUnreadScope(scope))
+	}
+	const named = 3
+	if len(names) > named {
+		rest := len(names) - named
+		names = append(names[:named], fmt.Sprintf("%d more", rest))
+	}
+	if len(names) == 1 {
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+// DescribeProtectionUnreadScope renders one unread scope in operator terms.
+func DescribeProtectionUnreadScope(scope ProtectionUnreadScope) string {
+	switch scope.Kind {
+	case ProtectionUnreadScopeNode:
+		return "the storage list on node " + scope.Node
+	case ProtectionUnreadScopeStorage:
+		if scope.Node != "" {
+			return scope.Storage + " on " + scope.Node
+		}
+		return scope.Storage
+	case ProtectionUnreadScopeDatastore:
+		return "the namespace list of datastore " + scope.Storage
+	case ProtectionUnreadScopeNamespace:
+		if scope.Namespace == "" {
+			return "the root namespace of datastore " + scope.Storage
+		}
+		return "namespace " + scope.Namespace + " on datastore " + scope.Storage
+	default:
+		return ""
+	}
+}
+
+func cloneUnreadScopes(scopes []ProtectionUnreadScope) []ProtectionUnreadScope {
+	if len(scopes) == 0 {
+		return nil
+	}
+	return append([]ProtectionUnreadScope(nil), scopes...)
 }
 
 func recoveryPointObservedAt(point RecoveryPoint) time.Time {

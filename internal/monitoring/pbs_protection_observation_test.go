@@ -527,10 +527,15 @@ func TestPBSNamespaceDiscoveryFailureRetainsRecoveryHistory(t *testing.T) {
 						permissions = operationaltrust.EvidencePermissionsPartial
 					}
 					for _, p := range f.postures(t) {
-						if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 ||
+						if len(p.ProviderStates) != 1 || p.Coverage != recovery.ProtectionCoveragePartial ||
 							p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial ||
 							p.ProviderStates[0].Permissions != permissions || p.ProviderStates[0].JobState != recovery.OutcomeWarning {
-							t.Errorf("discovery failure presented as complete/healthy: %+v", p)
+							t.Errorf("discovery failure presented as complete history: %+v", p)
+						}
+						// The fresh root archive was read; the child guest's
+						// retained point was not.
+						if (p.State == recovery.ProtectionStateProtected) != (p.SubjectResourceID == f.ids[0]) {
+							t.Errorf("discovery failure protection does not follow the read root: %+v", p)
 						}
 					}
 					if f.childReads.Load() != reads {

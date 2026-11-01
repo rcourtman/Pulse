@@ -687,6 +687,9 @@ func (s *Store) initSchema() error {
 	if err := s.ensureColumn("recovery_points", "evidence_json", "TEXT"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("protection_provider_observations", "unread_scopes_json", "TEXT"); err != nil {
+		return err
+	}
 
 	// Migration: normalized index columns for efficient filtering/searching and consistent UI display.
 	for _, col := range []struct {

@@ -85,10 +85,16 @@ func TestPBSMissingInventoryArrayRetainsUnreadScope(t *testing.T) {
 									}
 									continue
 								}
-								if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 ||
+								if len(p.ProviderStates) != 1 ||
 									p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial ||
-									p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown {
-									t.Errorf("missing inventory invented complete protection or denied access: %+v", p)
+									p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown ||
+									p.Coverage != recovery.ProtectionCoveragePartial {
+									t.Errorf("missing inventory invented complete history or denied access: %+v", p)
+								}
+								// The retained tenant point was not re-read and may have
+								// been pruned since; the root snapshot was read this poll.
+								if wantProtected := p.SubjectResourceID == f.ids[0]; (p.State == recovery.ProtectionStateProtected) != wantProtected {
+									t.Errorf("protection does not follow what this poll read (protected=%t): %+v", wantProtected, p)
 								}
 							}
 						}
@@ -169,7 +175,10 @@ func TestPBSMissingInventoryArrayConsumerLifecycle(t *testing.T) {
 		}
 		postures := f.postures(t)
 		for _, p := range postures {
-			healthy := phase == "observed" || phase == "recovered"
+			// Incomplete phases still re-read the root snapshot; the retained
+			// tenant point does not count until a read confirms it again.
+			incomplete := phase == "missing-namespaces" || phase == "null-groups" || phase == "null-snapshots"
+			healthy := phase == "observed" || phase == "recovered" || (incomplete && p.SubjectResourceID == f.ids[0])
 			if healthy != (p.State == recovery.ProtectionStateProtected) {
 				t.Fatalf("phase %s posture=%+v", phase, p)
 			}

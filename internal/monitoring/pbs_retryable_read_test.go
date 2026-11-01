@@ -54,10 +54,14 @@ func TestPBSRetryableReadLifecycle(t *testing.T) {
 							}
 						}
 						for _, p := range f.postures(t) {
-							if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 ||
+							if len(p.ProviderStates) != 1 || p.Coverage != recovery.ProtectionCoveragePartial ||
 								p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown ||
 								p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial {
-								t.Errorf("temporary failure invented protection or denied access: %+v", p)
+								t.Errorf("temporary failure invented complete history or denied access: %+v", p)
+							}
+							// The readable root sibling advanced; the tenant did not.
+							if (p.State == recovery.ProtectionStateProtected) != (p.SubjectResourceID == f.ids[0]) {
+								t.Errorf("temporary failure protection does not follow the read sibling: %+v", p)
 							}
 						}
 					}

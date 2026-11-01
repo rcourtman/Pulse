@@ -401,10 +401,12 @@ func TestPVEStorageRunningArchiveOriginLifecycle(t *testing.T) {
 				if !last.Equal(f.client.at) || running != (phase != "completed") {
 					t.Fatalf("phase=%s guest completion/running=%s/%t", phase, last, running)
 				}
+				// Node-a's completed archive is re-read in every phase, so it keeps
+				// the guest protected; node-b's unread disk only limits coverage.
 				posture := postures[0]
 				if posture.LastSuccessfulPointAt == nil || !posture.LastSuccessfulPointAt.Equal(f.client.at) ||
-					(phase != "partial-read" && posture.State != recovery.ProtectionStateProtected) ||
-					(phase == "partial-read" && posture.State == recovery.ProtectionStateProtected) {
+					posture.State != recovery.ProtectionStateProtected ||
+					(phase == "partial-read") != (posture.Coverage == recovery.ProtectionCoveragePartial) {
 					t.Fatalf("phase=%s wrong scoped protection: %+v", phase, posture)
 				}
 				frames[phase] = map[string]any{"pve": map[string]any{"data": snap.PVEBackups}, "postures": map[string]any{"data": postures, "policy": recovery.DefaultProtectionPosturePolicy.Payload()}, "vms": snap.VMs, "containers": snap.Containers}

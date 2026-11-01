@@ -10877,6 +10877,17 @@ misrepresented. `ProxmoxCoverageTable.test.tsx` checks narrow/full projection
 and complete long location text; the parsed inventory regressions also retain
 reader identity and full repository context without adding reads or routes.
 
+### Unread backup storage is named once on the Backups page
+
+When the postures on the page carry unread provider scopes, the Backups page
+shows one amber status line under the health strip that names them (up to three,
+then a count) and says Pulse cannot confirm the backups stored there, with one action:
+check that the storage is reachable, or check the API token's permissions when
+every named read was rejected. It reuses the existing read-notice style, adds no
+request, and the connection name appears only when the gap spans several. The
+per-workload drawer keeps the server's explanation, which names the same scopes.
+`proxmoxBackupUnreadSources.test.ts` and `ProxmoxBackupsTable.test.tsx` cover it.
+
 ### Backup rows stay on one line (1 November 2026)
 
 Coverage and By date rows keep one line at every container width, phones

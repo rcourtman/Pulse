@@ -279,6 +279,36 @@ checks all non-success outcomes through the real point/observation builder.
 The ordinary PBS writer lifecycle checks the same explanation alongside live
 and durable artifact outcomes and feeds desktop/narrow Backups pixel proof.
 
+### One unread storage does not withdraw backups Pulse did read
+
+A partial PVE or PBS collection still confirms the points it re-read. Collectors
+renew a point's evidence only for rows a poll returned, stamped with that poll's
+observation time, so a point whose evidence was ingested no earlier than the
+latest observation for its provider scope supports protection under partial
+history with Partial or Unknown access. A point retained from an unread scope
+keeps its older evidence and may have been pruned since, so it never supports
+protection; neither does store-backfilled migration evidence, nor anything
+under denied, unavailable or unknown history. The posture is then Protected with
+partial coverage, and the cross-scope rule matches the unread-source rule: a
+supported current backup is not withdrawn because another source is partial.
+PBS snapshot-cache reuse within its 10-minute TTL counts as a read of that
+group, exactly as complete collections already treat it.
+
+Provider observations also record which scopes went unread (PVE node or
+storage, with its node when exactly one node attempted it; PBS datastore
+namespace discovery or namespace), persisted in
+`protection_provider_observations.unread_scopes_json`, capped at 32 and carried
+on each provider state as `unreadScopes`. The list explains the gap only;
+confirmation never depends on it. Explanations name up to three scopes, and the
+Backups page shows one notice line for the unread scopes across its postures.
+`TestPVEUnreadStorageLeavesReadBackupsProtected` drives the production shape
+(one enabled but unreachable PBS storage beside readable archives), a pruned
+archive retained by the partial poll, and the complete recovery.
+`TestBuildProtectionPosturePartialCollectionConfirmsOnlyReReadPoints`,
+`TestStoreProtectionPostureKeepsReReadPointsUnderPartialCollection` and
+`TestPBSMissingInventoryArrayRetainsUnreadScope` keep retained, legacy and
+migration points out of protection.
+
 ### Coverage dates are inspectable without hover
 
 Open Coverage evidence retains each point’s exact reported date as wrapping
