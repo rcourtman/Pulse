@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { eventBus } from '@/stores/events';
 import { useUserAssignmentsPanelState } from '../useUserAssignmentsPanelState';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
@@ -376,5 +377,19 @@ describe('User Access reader lifetime', () => {
     expect(state.loadError()).toBeNull();
     expect(state.canEdit()).toBe(true);
     expect(state.filteredAssignments()).toEqual([]);
+  });
+  it('accepts the current datagrid store proxy without admitting an earlier-read proxy by principal alone', async () => {
+    const { state } = mount();
+    await loaded(state);
+    const [row] = createStore(alice);
+    await state.openManageAccess(row);
+    expect(state.showModal()).toBe(true);
+    state.closeModal();
+    mocks.getUsers.mockResolvedValueOnce([{ ...alice }]);
+    await state.loadData();
+    await state.openManageAccess(row);
+    state.openDeleteUser(row);
+    expect(state.showModal()).toBe(false);
+    expect(state.userPendingDeletion()).toBeNull();
   });
 });

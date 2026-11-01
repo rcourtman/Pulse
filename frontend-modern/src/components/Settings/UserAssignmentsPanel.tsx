@@ -38,7 +38,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             placeholder="Search users..."
             value={state.searchQuery()}
             onChange={state.setSearchQuery}
-            disabled={!state.canEdit()}
+            disabled={!state.accessAllowed() || Boolean(state.loadError())}
             class="min-w-60"
             inputClass="min-h-10 sm:min-h-9 py-2.5"
           />

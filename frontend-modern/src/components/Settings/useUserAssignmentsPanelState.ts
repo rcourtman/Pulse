@@ -1,4 +1,5 @@
 import { batch, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { RBACAPI } from '@/api/rbac';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
@@ -64,7 +65,8 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     !loadError() &&
     !saving() &&
     !deletingUser();
-  const isCurrentUser = (user: UserRoleAssignment) => assignments().includes(user);
+  const isCurrentUser = (user: UserRoleAssignment) =>
+    assignments().some((current) => unwrap(current) === unwrap(user));
   const requestOptions = (controller: AbortController) => ({
     signal: controller.signal,
     expectedOrgID: context.org,

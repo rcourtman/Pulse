@@ -323,7 +323,14 @@ describe('RBAC paywall settings panels', () => {
       within(dialog).queryByRole('button', { name: 'Retry saved permissions' }),
     ).not.toBeInTheDocument();
     expect(getUserPermissionsMock).toHaveBeenCalledTimes(2);
-    expect(getUserPermissionsMock).toHaveBeenLastCalledWith('alice');
+    expect(getUserPermissionsMock).toHaveBeenLastCalledWith(
+      'alice',
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     pending.resolve([{ action: 'read', resource: 'alerts' }]);
     expect(await within(dialog).findByText('alerts')).toBeInTheDocument();
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
