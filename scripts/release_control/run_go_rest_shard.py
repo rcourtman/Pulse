@@ -10,12 +10,13 @@ the source-derived ordinary package inventory.
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -69,12 +70,38 @@ def run_task(task: tuple[str, list[str]]) -> dict:
             env["pkgs"] = name
             env["GOFLAGS"] = env.get("GOFLAGS", "") + " -p=1"
         result = subprocess.run(command, cwd=ROOT, env=env)
-        code = result.returncode
+        observation = {"started": True, "exit": result.returncode}
     except OSError as error:
         print(f"Could not start backend package {name}: {error}", file=sys.stderr)
-        code = 127
-    return {"package": name, "exit": code,
+        # No process exit was observed. In particular, do not manufacture the
+        # shell's command-not-found exit for a process that never started.
+        observation = {"started": False, "exit": None, "start_error_errno": error.errno}
+    return {"package": name, **observation,
             "seconds": round(time.monotonic() - start, 3)}
+
+
+def retain_results(output: Path, index: int, planned: list[str], results: dict,
+                   start: float, *, complete: bool = False) -> None:
+    # Record only returned observations, in the original source order. A
+    # planned/unobserved task is not evidence of execution or current liveness.
+    receipt = {"schema_version": 1, "index": index, "slots": SLOTS,
+               "planned_packages": planned, "collection_complete": complete,
+               "unobserved_packages": [name for name in planned if name not in results],
+               "tasks": [results[name] for name in planned if name in results],
+               "seconds": round(time.monotonic() - start, 3)}
+    # Readers and the existing always-run artifact upload must see either the
+    # previous complete JSON snapshot or this one, never a truncated overwrite.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output,
+                                         prefix=".ordinary-packages-", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(receipt, stream, indent=2)
+            stream.write("\n")
+        temporary.replace(output / "ordinary-packages.json")
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -99,14 +126,20 @@ def main() -> int:
     args.output.mkdir(parents=True, exist_ok=True)
     print("Ordinary packages in this shard:\n" + "\n".join(packages), flush=True)
     start = time.monotonic()
-    # Drain every admitted task even when a sibling fails. Executor.map retains
-    # source scheduling order in the receipt, not concurrent completion order.
+    admitted = tasks(packages, args.index, args.output, args.ordinary_command)
+    planned = [name for name, _ in admitted]
+    results = {}
+    retain_results(args.output, args.index, planned, results, start)
+    # Drain every admitted task even when a sibling fails. Collect in completion
+    # order so a slow first task cannot hide already returned results. Retained
+    # snapshots still use source order, including the final legacy tasks list.
     with ThreadPoolExecutor(max_workers=SLOTS) as pool:
-        results = list(pool.map(run_task, tasks(packages, args.index, args.output, args.ordinary_command)))
-    receipt = {"index": args.index, "slots": SLOTS, "tasks": results,
-               "seconds": round(time.monotonic() - start, 3)}
-    (args.output / "ordinary-packages.json").write_text(json.dumps(receipt, indent=2) + "\n")
-    return 0 if all(result["exit"] == 0 for result in results) else 1
+        futures = {pool.submit(run_task, task): task[0] for task in admitted}
+        for future in as_completed(futures):
+            results[futures[future]] = future.result()
+            retain_results(args.output, args.index, planned, results, start)
+    retain_results(args.output, args.index, planned, results, start, complete=True)
+    return 0 if all(result["exit"] == 0 for result in results.values()) else 1
 
 
 if __name__ == "__main__":

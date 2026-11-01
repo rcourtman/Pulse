@@ -1,14 +1,19 @@
 """Exercise the actual sliced Go runner, recorder and required-check verdict."""
 
 import copy
+import contextlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -460,7 +465,75 @@ class WorkflowTest(unittest.TestCase):
             with patch.object(shard.subprocess, 'run', return_value=subprocess.CompletedProcess([],0,'\n'.join(inventory),'')):
                 with self.assertRaises(ValueError): shard.ordinary_packages(0)
         with patch.object(shard.subprocess,'run',side_effect=OSError('start failed')):
-            self.assertEqual(shard.run_task(('internal/a',['not-a-command']))['exit'],127)
+            observation = shard.run_task(('internal/a',['not-a-command']))
+            self.assertIsNone(observation['exit'])
+            self.assertFalse(observation['started'])
+            self.assertIn('start_error_errno', observation)
+
+    def test_completed_children_are_retained_before_a_slow_first_child_returns(self):
+        spec = importlib.util.spec_from_file_location('progress_rest_shard', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output, started, release = root / 'output', root / 'started', root / 'release'
+            names = [runner.MODULE + 'internal/' + name for name in ('held', 'failed', 'passed')]
+            held = '''from pathlib import Path
+import sys,time
+started,release=map(Path,sys.argv[1:])
+started.write_text('started')
+deadline=time.monotonic()+10
+while not release.exists() and time.monotonic()<deadline: time.sleep(.01)
+sys.exit(0 if release.exists() else 13)
+'''
+            admitted = [(names[0], [sys.executable, '-I', '-S', '-c', held, str(started), str(release)]),
+                        (names[1], [sys.executable, '-I', '-S', '-c', 'raise SystemExit(9)']),
+                        (names[2], [sys.executable, '-I', '-S', '-c', 'raise SystemExit(0)'])]
+            terminal, errors = [], []
+            def execute():
+                try:
+                    terminal.append(shard.main())
+                except BaseException as error:
+                    errors.append(error)
+            argv = [str(SHARD), '--index', '0', '--output', str(output),
+                    '--ordinary-command', shard.ORDINARY_COMMAND]
+            with patch.object(shard, 'ordinary_packages', return_value=names), \
+                    patch.object(shard, 'tasks', return_value=admitted), \
+                    patch.object(sys, 'stdin', io.StringIO('\n'.join(names) + '\n')), \
+                    patch.object(sys, 'argv', argv), contextlib.redirect_stdout(io.StringIO()):
+                worker = threading.Thread(target=execute)
+                worker.start()
+                before = None
+                try:
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline:
+                        receipt = output / 'ordinary-packages.json'
+                        if receipt.exists():
+                            # A partial JSON write is a failure, not a poll to
+                            # retry until a favourable snapshot appears.
+                            before = json.loads(receipt.read_text())
+                            if len(before['tasks']) == 2 and started.exists():
+                                break
+                        time.sleep(.01)
+                    self.assertIsNotNone(before, 'no result retained while the first child waited')
+                    self.assertEqual(before['planned_packages'], names)
+                    self.assertFalse(before['collection_complete'])
+                    self.assertEqual(before['unobserved_packages'], names[:1])
+                    self.assertEqual([task['package'] for task in before['tasks']], names[1:])
+                    self.assertEqual([task['exit'] for task in before['tasks']], [9, 0])
+                    self.assertTrue(all(task['started'] for task in before['tasks']))
+                    self.assertEqual(terminal, [], 'partial results became an aggregate verdict')
+                finally:
+                    release.write_text('release')
+                    worker.join(timeout=12)
+                self.assertFalse(worker.is_alive(), 'owned test scheduler did not finish')
+            self.assertEqual(errors, [])
+            self.assertEqual(terminal, [1], 'later successful work hid a failed child')
+            final = json.loads((output / 'ordinary-packages.json').read_text())
+            self.assertTrue(final['collection_complete'])
+            self.assertEqual(final['unobserved_packages'], [])
+            self.assertEqual([task['package'] for task in final['tasks']], names)
+            self.assertEqual([task['exit'] for task in final['tasks']], [0, 9, 0])
+            self.assertEqual(list(output.glob('.ordinary-packages-*')), [])
 
     def test_helpers_are_part_of_the_exact_main_controls_copied_to_patches(self):
         stable_patch = (ROOT / 'scripts/release_control/stable_patch.py').read_text()
