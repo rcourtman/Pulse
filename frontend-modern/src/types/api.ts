@@ -584,9 +584,29 @@ export interface HostSensorSummary {
   powerWatts?: Record<string, number>;
   additional?: Record<string, number>;
   custom?: HostCustomSensorMetric[];
+  native?: HostNativeSensor[];
   gpu?: HostGPUSensor[];
   thermalState?: HostThermalState;
   smart?: HostDiskSMART[]; // S.M.A.R.T. disk data
+}
+
+/**
+ * One lm-sensors temperature or fan input from the host agent's inventory.
+ * `id` is the host-scoped "<chip>/<channel>" source key (e.g.
+ * "applesmc-isa-0300/temp1"), not a physical-device identity; `label` is the
+ * chip's original feature name and is not unique. `invalid` marks an
+ * implausible reading, and `value` is absent when the chip gave no number.
+ */
+export interface HostNativeSensor {
+  id: string;
+  chip: string;
+  adapter?: string;
+  channel: string;
+  label: string;
+  kind: 'temperature' | 'fan';
+  unit: 'celsius' | 'rpm';
+  value?: number;
+  status: 'ok' | 'invalid';
 }
 
 export interface HostCustomSensorMetric {

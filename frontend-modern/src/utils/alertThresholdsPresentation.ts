@@ -22,6 +22,9 @@ export const AGENT_THRESHOLDS_FILTER_EMPTY_STATE = 'No machines match the curren
 export const AGENT_DISKS_EMPTY_STATE =
   'No machine disks found. Machines with mounted filesystems will appear here.';
 export const AGENT_DISKS_FILTER_EMPTY_STATE = 'No machine disks match the current filters.';
+export const AGENT_SENSORS_EMPTY_STATE =
+  'No machine sensors found. Linux machines with lm-sensors temperature inputs will appear here.';
+export const AGENT_SENSORS_FILTER_EMPTY_STATE = 'No machine sensors match the current filters.';
 export const CONTAINER_RUNTIMES_FILTER_EMPTY_STATE =
   'No container runtimes match the current filters.';
 export const CONTAINERS_FILTER_EMPTY_STATE = 'No containers match the current filters.';
@@ -91,6 +94,7 @@ export const ALERT_THRESHOLDS_SECTION_TITLE_STORAGE = 'Storage Devices';
 export const ALERT_THRESHOLDS_SECTION_TITLE_PMG = 'Mail Gateway Thresholds';
 export const ALERT_THRESHOLDS_SECTION_TITLE_AGENTS = 'Machines';
 export const ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS = 'Machine Disks';
+export const ALERT_THRESHOLDS_SECTION_TITLE_AGENT_SENSORS = 'Machine Sensors';
 export const ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_HOSTS = 'Container Runtimes';
 export const ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_CONTAINERS = 'Containers';
 
@@ -202,6 +206,7 @@ export function getAlertThresholdsSectionTitles() {
     pmg: ALERT_THRESHOLDS_SECTION_TITLE_PMG,
     agents: ALERT_THRESHOLDS_SECTION_TITLE_AGENTS,
     agentDisks: ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS,
+    agentSensors: ALERT_THRESHOLDS_SECTION_TITLE_AGENT_SENSORS,
     dockerHosts: ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_HOSTS,
     dockerContainers: ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_CONTAINERS,
   } as const;

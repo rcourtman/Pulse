@@ -112,6 +112,116 @@ describe('useThresholdsOverrideMutations', () => {
     expect(cancelEdit).toHaveBeenCalledTimes(1);
   });
 
+  it('saves a machine sensor limit and drops the override when it is switched Off', () => {
+    const overrideSignal = createSignal<any[]>([]);
+    const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
+    const [editingThresholds, setEditingThresholds] = createSignal<
+      Record<string, number | undefined>
+    >({ temperature: 45 });
+    const [editingNote] = createSignal('');
+    const [bulkEditIds] = createSignal<string[]>([]);
+    const cancelEdit = vi.fn();
+    const sensorId = 'agent:host-1/sensor:6170706c65736d632d6973612d303330302f74656d7031';
+    const [sensorRow, setSensorRow] = createSignal<TableResource>({
+      id: sensorId,
+      name: 'TB0T',
+      type: 'agentSensor',
+      resourceType: 'Machine Sensor',
+      node: 'macbook-pve',
+      instance: 'applesmc-isa-0300',
+      defaults: { temperature: 0 },
+      presentationDefaults: true,
+      thresholds: {},
+    });
+
+    const { result } = renderHook(() =>
+      useThresholdsOverrideMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [],
+          agentDisksWithOverrides: () => [],
+          agentSensorsWithOverrides: () => [sensorRow()],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          pmgServersWithOverrides: () => [],
+          storageWithOverrides: () => [],
+        },
+        editingThresholds,
+        editingNote,
+        bulkEditIds,
+        cancelEdit,
+      }),
+    );
+
+    result.saveEdit(sensorId);
+
+    expect(overrideSignal[0]()).toEqual([
+      expect.objectContaining({
+        id: sensorId,
+        type: 'agentSensor',
+        thresholds: { temperature: 45 },
+      }),
+    ]);
+    expect(rawOverridesConfig()).toEqual({
+      [sensorId]: { temperature: { trigger: 45, clear: 40 } },
+    });
+
+    setSensorRow((row) => ({ ...row, hasOverride: true, thresholds: { temperature: 45 } }));
+    setEditingThresholds({ temperature: -1 });
+    result.saveEdit(sensorId);
+
+    expect(overrideSignal[0]()).toEqual([]);
+    expect(rawOverridesConfig()).toEqual({});
+  });
+
+  it('keeps an explicit Off over an Off inherited default on ordinary rows', () => {
+    const overrideSignal = createSignal<any[]>([]);
+    const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
+    const [editingThresholds] = createSignal<Record<string, number | undefined>>({ cpu: -1 });
+    const [editingNote] = createSignal('');
+    const [bulkEditIds] = createSignal<string[]>([]);
+    const machine: TableResource = {
+      id: 'host-1',
+      name: 'pve',
+      type: 'agent',
+      resourceType: 'System',
+      defaults: { cpu: 0 },
+      thresholds: {},
+    };
+
+    const { result } = renderHook(() =>
+      useThresholdsOverrideMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [machine],
+          agentDisksWithOverrides: () => [],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          pmgServersWithOverrides: () => [],
+          storageWithOverrides: () => [],
+        },
+        editingThresholds,
+        editingNote,
+        bulkEditIds,
+        cancelEdit: vi.fn(),
+      }),
+    );
+
+    result.saveEdit('host-1');
+
+    // The default may be switched back on later; the machine's Off must stay.
+    expect(overrideSignal[0]()).toEqual([
+      expect.objectContaining({ id: 'host-1', thresholds: { cpu: -1 } }),
+    ]);
+    expect(Object.keys(rawOverridesConfig())).toEqual(['host-1']);
+  });
+
   it('bulk-saves guest filesystem thresholds under the stable override identity', () => {
     const overrideSignal = createSignal<any[]>([]);
     const { props, rawOverridesConfig } = buildTableProps(overrideSignal);

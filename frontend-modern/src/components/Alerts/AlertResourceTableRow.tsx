@@ -26,8 +26,10 @@ import {
   getAlertResourceColumnKind,
   getAlertResourceLabel,
   getAlertResourceInitialEditMetric,
+  getAlertResourceIntentTargetLabel,
   getAlertResourceMetricBounds,
   getAlertResourceMetricDisplayValue,
+  getAlertResourcePreferredIntentSignal,
   getAlertResourceRelaxedTriggerSummary,
   isAlertResourceMetricOff,
   isAlertResourceMetricOverridden,
@@ -68,7 +70,11 @@ interface AlertResourceTableRowProps {
   onSetOfflineState?: (resourceId: string, state: OfflineState) => void;
   onToggleBackup?: (resourceId: string, forceState?: boolean) => void;
   onToggleSnapshot?: (resourceId: string, forceState?: boolean) => void;
-  onConfigureResourceIntent?: (resourceId: string, signal: AlertIntentSignal) => void;
+  onConfigureResourceIntent?: (
+    resourceId: string,
+    signal: AlertIntentSignal,
+    label?: string,
+  ) => void;
   globalDisableFlag?: () => boolean;
   globalDisableOfflineFlag?: () => boolean;
   editingNote: () => string;
@@ -102,17 +108,8 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
           props.editingThresholds(),
           isEditing(),
         );
-  const preferredIntentSignal = (): AlertIntentSignal => {
-    for (const metric of ['cpu', 'memory', 'disk'] as const) {
-      if (
-        props.columns.some((column) => normalizeAlertResourceMetricKey(column) === metric) &&
-        alertResourceSupportsMetric(props.resource.type, metric)
-      ) {
-        return `metric.${metric}`;
-      }
-    }
-    return 'state.offline';
-  };
+  const preferredIntentSignal = (): AlertIntentSignal =>
+    getAlertResourcePreferredIntentSignal(props.columns, props.resource.type);
 
   const getThresholds = (): AlertResourceThresholdMap => thresholds();
 
@@ -649,6 +646,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                         props.onConfigureResourceIntent?.(
                           props.resource.id,
                           preferredIntentSignal(),
+                          getAlertResourceIntentTargetLabel(props.resource),
                         )
                       }
                       label={`Configure alert delay for ${resourceLabel()}`}

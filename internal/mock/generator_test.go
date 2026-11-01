@@ -1690,3 +1690,97 @@ func TestGenerateDockerContainerUpdateStatusLocalImageShape(t *testing.T) {
 		t.Fatal("generator never produced the local image state")
 	}
 }
+
+// The mock native inventory must look like an ingested agent report: ids are
+// "<chip>/<channel>", sorted and unique, status matches the reading, and only
+// some machines are Intel Macs with applesmc sensors (an invalid one among
+// them) so the Thresholds sensor section has realistic rows to show.
+func TestMockHostNativeSensorsMatchIngestedInventoryShape(t *testing.T) {
+	now := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	appleSMCHosts := 0
+	for i := 1; i <= 40; i++ {
+		hostID := fmt.Sprintf("host-linux-%d", i)
+		sensors := mockHostNativeSensors(hostID, now)
+		if len(sensors) == 0 {
+			t.Fatalf("%s: empty native inventory", hostID)
+		}
+		seen := make(map[string]bool, len(sensors))
+		hasAppleSMC := false
+		for idx, sensor := range sensors {
+			if sensor.ID != sensor.Chip+"/"+sensor.Channel {
+				t.Fatalf("%s: id %q is not chip/channel", hostID, sensor.ID)
+			}
+			if seen[sensor.ID] {
+				t.Fatalf("%s: duplicate id %q", hostID, sensor.ID)
+			}
+			seen[sensor.ID] = true
+			if idx > 0 && sensors[idx-1].ID >= sensor.ID {
+				t.Fatalf("%s: inventory not sorted at %q", hostID, sensor.ID)
+			}
+			if sensor.Value == nil {
+				t.Fatalf("%s: %s has no value", hostID, sensor.ID)
+			}
+			switch sensor.Kind {
+			case "temperature":
+				valid := *sensor.Value >= -55 && *sensor.Value <= 150
+				if valid != (sensor.Status == "ok") {
+					t.Fatalf("%s: %s reads %v with status %q", hostID, sensor.ID, *sensor.Value, sensor.Status)
+				}
+				if sensor.Unit != "celsius" {
+					t.Fatalf("%s: %s unit %q", hostID, sensor.ID, sensor.Unit)
+				}
+			case "fan":
+				if sensor.Unit != "rpm" || sensor.Status != "ok" {
+					t.Fatalf("%s: fan %s unit %q status %q", hostID, sensor.ID, sensor.Unit, sensor.Status)
+				}
+			default:
+				t.Fatalf("%s: %s kind %q", hostID, sensor.ID, sensor.Kind)
+			}
+			if strings.HasPrefix(sensor.Chip, "applesmc-") {
+				hasAppleSMC = true
+			}
+		}
+		if hasAppleSMC {
+			appleSMCHosts++
+			if !seen["applesmc-isa-0300/temp1"] || !seen["applesmc-isa-0300/temp2"] {
+				t.Fatalf("%s: applesmc inventory missing TB0T or the invalid TB1T", hostID)
+			}
+		}
+		if again := mockHostNativeSensors(hostID, now); len(again) != len(sensors) {
+			t.Fatalf("%s: inventory size changed between calls: %d then %d", hostID, len(sensors), len(again))
+		}
+	}
+	if appleSMCHosts == 0 || appleSMCHosts == 40 {
+		t.Fatalf("applesmc hosts = %d of 40, want some but not all", appleSMCHosts)
+	}
+}
+
+// The ordinary host update refreshes a native inventory with its CPU sensors,
+// and leaves hosts without one alone.
+func TestUpdateHostsRefreshesNativeSensorInventory(t *testing.T) {
+	start := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	later := start.Add(37 * time.Minute)
+	data := &models.StateSnapshot{Hosts: []models.Host{
+		{ID: "host-linux-1", Status: "online", Sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{"cpu_package": 40},
+			Native:             mockHostNativeSensors("host-linux-1", start),
+		}},
+		{ID: "host-windows-1", Status: "online"},
+	}}
+
+	updateHosts(data, MockConfig{RandomMetrics: true}, later)
+
+	want := mockHostNativeSensors("host-linux-1", later)
+	got := data.Hosts[0].Sensors.Native
+	if len(got) != len(want) {
+		t.Fatalf("native inventory has %d entries, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].ID != want[i].ID || *got[i].Value != *want[i].Value || got[i].Status != want[i].Status {
+			t.Fatalf("entry %d = %s %v %s, want %s %v %s", i, got[i].ID, *got[i].Value, got[i].Status, want[i].ID, *want[i].Value, want[i].Status)
+		}
+	}
+	if data.Hosts[1].Sensors.Native != nil {
+		t.Fatalf("host without an inventory gained one: %+v", data.Hosts[1].Sensors.Native)
+	}
+}

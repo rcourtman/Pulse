@@ -1,5 +1,6 @@
 import type { Accessor } from 'solid-js';
 
+import { alertResourceThresholdsEquivalent } from '@/components/Alerts/alertResourceTableModel';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type {
   Override,
@@ -23,6 +24,7 @@ interface ThresholdsOverrideMutationResources {
   nodesWithOverrides: Accessor<TableResource[]>;
   agentsWithOverrides: Accessor<TableResource[]>;
   agentDisksWithOverrides: Accessor<TableResource[]>;
+  agentSensorsWithOverrides?: Accessor<TableResource[]>;
   guestDisksWithOverrides?: Accessor<TableResource[]>;
   dockerHostsWithOverrides: Accessor<TableResource[]>;
   guestsFlat: Accessor<TableResource[]>;
@@ -69,6 +71,7 @@ export function useThresholdsOverrideMutations({
     ...resources.nodesWithOverrides(),
     ...resources.agentsWithOverrides(),
     ...resources.agentDisksWithOverrides(),
+    ...optionalResources(resources.agentSensorsWithOverrides),
     ...optionalResources(resources.guestDisksWithOverrides),
     ...resources.dockerHostsWithOverrides(),
     ...resources.pbsServersWithOverrides(),
@@ -94,6 +97,19 @@ export function useThresholdsOverrideMutations({
   const allThresholdResources = () => [...proxmoxResources(), ...guestLikeResources()];
   const findThresholdResource = (resourceId: string) =>
     allThresholdResources().find((entry) => entry.id === resourceId);
+
+  // An edited value that equals the row's default stores nothing. Where the
+  // defaults are presentation-only (machine sensors, which have no default),
+  // any Off value equals the Off default; elsewhere an explicit Off stays an
+  // override, so it survives a later change to the inherited default.
+  const matchesDefault = (
+    resource: TableResource,
+    value: number | undefined,
+    defaultValue: number | undefined,
+  ) =>
+    resource.presentationDefaults
+      ? alertResourceThresholdsEquivalent(value, defaultValue)
+      : value === defaultValue;
 
   const removeOverride = (resourceId: string) => {
     const resource = findThresholdResource(resourceId);
@@ -121,7 +137,7 @@ export function useThresholdsOverrideMutations({
       if (key === 'backup' || key === 'snapshot') return;
       const editedValue = editedThresholdMap[key];
       const defaultValue = defaultThresholds[key];
-      if (editedValue !== undefined && editedValue !== defaultValue) {
+      if (editedValue !== undefined && !matchesDefault(resource, editedValue, defaultValue)) {
         overrideThresholds[key] = editedValue;
       }
     });
@@ -246,7 +262,7 @@ export function useThresholdsOverrideMutations({
         if (key === 'backup' || key === 'snapshot') return;
         if (thresholds[key] !== undefined) {
           const value = thresholds[key];
-          if (value === defaultThresholds[key]) {
+          if (matchesDefault(resource, value, defaultThresholds[key])) {
             delete newThresholds[key];
           } else {
             newThresholds[key] = value as number;

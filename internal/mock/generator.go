@@ -3777,6 +3777,9 @@ func generateHosts(config MockConfig) []models.Host {
 				}
 			}
 		}
+		if profile.Platform == "linux" {
+			sensors.Native = mockHostNativeSensors(hostID, now)
+		}
 
 		status := "online"
 		if rand.Float64() < 0.04 {
@@ -4188,6 +4191,90 @@ func syncMockKubernetesNodeHosts(data *models.StateSnapshot) {
 			host.Sensors.TemperatureCelsius["cpu_package"] = SampleMetric("agent", host.ID, "temperature", time.Now())
 		}
 	}
+}
+
+// mockNativeSensorSpec is one lm-sensors input of a mock machine. offset
+// shifts the shared temperature series so sensors on one host differ, and
+// invalid marks the implausible reading some chips report (-127 °C).
+type mockNativeSensorSpec struct {
+	chip    string
+	adapter string
+	channel string
+	label   string
+	offset  float64
+	invalid bool
+}
+
+var (
+	mockNativeIntelSensors = []mockNativeSensorSpec{
+		{chip: "coretemp-isa-0000", adapter: "ISA adapter", channel: "temp1", label: "Package id 0"},
+		{chip: "coretemp-isa-0000", adapter: "ISA adapter", channel: "temp2", label: "Core 0", offset: -2},
+		{chip: "coretemp-isa-0000", adapter: "ISA adapter", channel: "temp3", label: "Core 1", offset: -3},
+	}
+	mockNativeNVMeSensors = []mockNativeSensorSpec{
+		{chip: "nvme-pci-0100", adapter: "PCI adapter", channel: "temp1", label: "Composite", offset: -8},
+		{chip: "nvme-pci-0200", adapter: "PCI adapter", channel: "temp1", label: "Composite", offset: -6},
+	}
+	// An Intel Mac running Linux exposes its SMC sensors through applesmc,
+	// including the battery (TB0T) and a probe that reads -127 °C.
+	mockNativeAppleSMCSensors = []mockNativeSensorSpec{
+		{chip: "applesmc-isa-0300", adapter: "ISA adapter", channel: "temp1", label: "TB0T", offset: -20},
+		{chip: "applesmc-isa-0300", adapter: "ISA adapter", channel: "temp2", label: "TB1T", invalid: true},
+		{chip: "applesmc-isa-0300", adapter: "ISA adapter", channel: "temp3", label: "TC0P", offset: -4},
+		{chip: "applesmc-isa-0300", adapter: "ISA adapter", channel: "temp4", label: "Th1H", offset: -9},
+	}
+)
+
+// mockHostNativeSensors returns a Linux mock machine's native sensor
+// inventory. Every machine has CPU core sensors and two NVMe drives whose
+// labels repeat across chips; about one machine in four is an Intel Mac whose
+// SMC sensors, an invalid one among them, are listed too. A fan input shows
+// the inventory is not temperature-only.
+func mockHostNativeSensors(hostID string, now time.Time) []models.HostNativeSensor {
+	specs := append([]mockNativeSensorSpec{}, mockNativeIntelSensors...)
+	specs = append(specs, mockNativeNVMeSensors...)
+	appleSMC := mockStableHash64(hostID, "native-sensors-applesmc")%4 == 0
+	if appleSMC {
+		specs = append(specs, mockNativeAppleSMCSensors...)
+	}
+	base := SampleMetric("agent", hostID, "temperature", now)
+	sensors := make([]models.HostNativeSensor, 0, len(specs)+1)
+	for _, spec := range specs {
+		value := base + spec.offset
+		status := "ok"
+		if spec.invalid {
+			value = -127
+			status = "invalid"
+		}
+		value = math.Round(value*10) / 10
+		sensors = append(sensors, models.HostNativeSensor{
+			ID:      spec.chip + "/" + spec.channel,
+			Chip:    spec.chip,
+			Adapter: spec.adapter,
+			Channel: spec.channel,
+			Label:   spec.label,
+			Kind:    "temperature",
+			Unit:    "celsius",
+			Value:   &value,
+			Status:  status,
+		})
+	}
+	if appleSMC {
+		rpm := float64(1800 + mockStableHash64(hostID, "native-sensors-fan")%400)
+		sensors = append(sensors, models.HostNativeSensor{
+			ID:      "applesmc-isa-0300/fan1",
+			Chip:    "applesmc-isa-0300",
+			Adapter: "ISA adapter",
+			Channel: "fan1",
+			Label:   "Left side",
+			Kind:    "fan",
+			Unit:    "rpm",
+			Value:   &rpm,
+			Status:  "ok",
+		})
+	}
+	sort.Slice(sensors, func(i, j int) bool { return sensors[i].ID < sensors[j].ID })
+	return sensors
 }
 
 func ensureMockFixtureHostIORates(data *models.StateSnapshot) {
@@ -7211,6 +7298,9 @@ func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 		}
 
 		refreshMockHostCPUSensors(host, now)
+		if len(host.Sensors.Native) > 0 {
+			host.Sensors.Native = mockHostNativeSensors(host.ID, now)
+		}
 
 		if len(host.LoadAverage) == 3 {
 			for j := range host.LoadAverage {

@@ -30,6 +30,7 @@ const DEFAULT_COLLAPSED: CollapsedSectionsState = {
   pmg: true,
   agents: true,
   agentDisks: true,
+  agentSensors: true,
   dockerHosts: true,
   dockerContainers: true,
   kubernetesClusters: true,

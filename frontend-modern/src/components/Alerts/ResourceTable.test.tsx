@@ -2369,7 +2369,7 @@ describe('ResourceTable', () => {
 
       fireEvent.click(screen.getByLabelText('Configure alert delay for Database VM'));
 
-      expect(onConfigureResourceIntent).toHaveBeenCalledWith('vm-1', 'metric.cpu');
+      expect(onConfigureResourceIntent).toHaveBeenCalledWith('vm-1', 'metric.cpu', 'Database VM');
     });
 
     it('falls back to the offline signal when the row has no supported metric', () => {
@@ -2383,7 +2383,38 @@ describe('ResourceTable', () => {
 
       fireEvent.click(screen.getByLabelText('Configure alert delay for Docker Host'));
 
-      expect(onConfigureResourceIntent).toHaveBeenCalledWith('docker-host-1', 'state.offline');
+      expect(onConfigureResourceIntent).toHaveBeenCalledWith(
+        'docker-host-1',
+        'state.offline',
+        'Docker Host',
+      );
+    });
+
+    it('opens a machine sensor on its temperature signal, named with its machine', () => {
+      const onConfigureResourceIntent = vi.fn();
+      const props = makeProps({
+        resources: [
+          makeResource({
+            id: 'agent:host-1/sensor:6162',
+            name: 'TB0T',
+            type: 'agentSensor',
+            node: 'macbook-pve',
+            thresholds: {},
+            defaults: { temperature: 0 },
+          }),
+        ],
+        columns: ['Temp °C'],
+        onConfigureResourceIntent,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByLabelText('Configure alert delay for TB0T'));
+
+      expect(onConfigureResourceIntent).toHaveBeenCalledWith(
+        'agent:host-1/sensor:6162',
+        'metric.temperature',
+        'TB0T · macbook-pve',
+      );
     });
 
     it('shows delay toggle button when showDelayColumn and onMetricDelayChange are provided', () => {

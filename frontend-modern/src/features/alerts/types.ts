@@ -92,6 +92,7 @@ export type OverrideType =
   | 'guestDisk'
   | 'agent'
   | 'agentDisk'
+  | 'agentSensor'
   | 'storage'
   | 'pbs'
   | 'pmg'
@@ -122,6 +123,7 @@ export interface Override {
   disabled?: boolean; // Completely disable alerts for this guest/storage
   disableConnectivity?: boolean; // For nodes/agents - disable offline/connectivity alerts
   poweredOffSeverity?: 'warning' | 'critical';
+  note?: string; // Operator's note on the override
   backup?: BackupAlertConfig;
   snapshot?: SnapshotAlertConfig;
   thresholds: {

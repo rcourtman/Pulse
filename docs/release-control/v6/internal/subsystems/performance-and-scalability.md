@@ -452,6 +452,14 @@ reading takes one `SampleMetric` and rebuilds its core list (copied, never
 mutated in place), and each agent host rewrites its CPU keys from the sample
 it already took. No new timer, pass or fixture-wide scan is added.
 
+Mock Linux agent hosts rebuild their native sensor inventory (at most ten
+entries) in that same per-host update in `updateHosts`, from one more
+`SampleMetric` and a stable hash, only when the host already has one. That is constant work per
+host per tick; it adds no timer, pass or fixture-wide scan, and the Thresholds
+sensor rows are derived in the existing host-data memo, which parses
+configured sensor IDs once into a per-host map, so composition is linear in
+reported plus configured sensors.
+
 ### Unavailable filesystem values share the existing disk model
 
 The filesystem list and guest Overview use the same nullable measured-byte ratio

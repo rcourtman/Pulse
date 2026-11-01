@@ -253,9 +253,10 @@ only still skips power collection, as before. The legacy maps keep
 their keys, filters and consumers. Cluster peer collection omits the
 inventory, which belongs to each host's own report.
 
-This is the identity foundation for #3565. Nothing reads the inventory yet: it
-adds no alert, threshold, History series, sensor preference, CPU-source choice
-or UI. An absent field (older agent, failed collection), an empty inventory
+This is the identity foundation for #3565. The alert engine reads it only for
+temperature inputs with their own threshold, and Alerts → Thresholds lists it
+in a Machine Sensors section to set that threshold (see the alerts contract);
+it adds no History series, sensor preference, CPU-source choice or other UI. An absent field (older agent, failed collection), an empty inventory
 and a truncated one are not distinguished, and the 256 bound drops the last
 chips in name order, so no consumer may read a missing entry as a removed
 sensor until the report carries completeness state. When one chip's
@@ -271,6 +272,19 @@ the inventory; `parser_units_test.go`,
 complete `Sensors` result, peer omission and ingest through the frontend and
 read-state projections. The fixtures are inferred lm-sensors JSON, not exports
 from an installed host.
+
+Mock Linux agent hosts carry a native inventory from `mockHostNativeSensors`
+in `internal/mock/generator.go`: CPU core and two NVMe sensors whose labels
+repeat across chips on every host, plus, on about one host in four (a stable
+hash of the host ID), an Intel Mac's applesmc sensors with the battery
+(`TB0T`), an implausible -127 °C reading that stays listed as `invalid`, and
+a fan input. Values follow the host's existing temperature sample with fixed
+offsets and refresh with the host's CPU sensors in the ordinary host update
+(`updateHosts`, when random metrics are on), so mock mode exercises
+the Thresholds sensor section and native sensor alerts with the same ID,
+sort, status and kind rules as ingest.
+`TestMockHostNativeSensorsMatchIngestedInventoryShape` and
+`TestUpdateHostsRefreshesNativeSensorInventory` pin the shape and refresh.
 
 ### Background backup scans belong to their configured connection
 

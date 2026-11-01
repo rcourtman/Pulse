@@ -96,6 +96,61 @@ describe('AlertIntentPolicyPanel', () => {
     expect(screen.getByLabelText('Signal')).toHaveValue('metric.memory');
   });
 
+  it('keeps a row-selected machine sensor that the resource list does not hold', async () => {
+    const sensorId = 'agent:host-1/sensor:6170706c65736d632d6973612d303330302f74656d7031';
+    render(() => (
+      <AlertIntentPolicyPanel
+        resources={[resource]}
+        selectionTarget={{
+          resourceId: sensorId,
+          signal: 'metric.temperature',
+          label: 'TB0T · macbook-pve',
+          requestId: 1,
+        }}
+      />
+    ));
+
+    expect(await screen.findByRole('button', { name: 'Hide policies' })).toBeInTheDocument();
+    const select = screen.getByLabelText('Resource');
+    expect(select).toHaveValue(sensorId);
+    expect(screen.getByRole('option', { name: 'TB0T · macbook-pve' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Signal')).toHaveValue('metric.temperature');
+    expect(screen.getByRole('button', { name: 'Preview current policy' })).toBeDisabled();
+
+    fireEvent.input(await screen.findByLabelText(/^Grace override \(seconds\)/), {
+      target: { value: '600' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save override' }));
+
+    await waitFor(() => expect(AlertIntentPoliciesAPI.update).toHaveBeenCalledTimes(1));
+    const saved = vi.mocked(AlertIntentPoliciesAPI.update).mock.calls[0][0];
+    expect(saved.resources?.[sensorId]?.['metric.temperature']).toEqual({ graceSeconds: 600 });
+  });
+
+  it('does not replay a row handoff when the resource list changes', async () => {
+    const sensorId = 'agent:host-1/sensor:6162';
+    const [resources, setResources] = createSignal<Resource[]>([resource]);
+    render(() => (
+      <AlertIntentPolicyPanel
+        resources={resources()}
+        selectionTarget={{
+          resourceId: sensorId,
+          signal: 'metric.temperature',
+          label: 'TB0T · macbook-pve',
+          requestId: 1,
+        }}
+      />
+    ));
+
+    const select = await screen.findByLabelText('Resource');
+    fireEvent.change(select, { target: { value: resource.id } });
+    fireEvent.change(screen.getByLabelText('Signal'), { target: { value: 'metric.cpu' } });
+    setResources([resource, { ...resource, id: 'vm-other', name: 'other', displayName: 'other' }]);
+
+    await waitFor(() => expect(screen.getByLabelText('Resource')).toHaveValue(resource.id));
+    expect(screen.getByLabelText('Signal')).toHaveValue('metric.cpu');
+  });
+
   it('saves field-level resource overrides without disabling inherited policy', async () => {
     render(() => <AlertIntentPolicyPanel resources={[resource]} />);
 

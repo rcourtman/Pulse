@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onMount, untrack } from 'solid-js';
 
 import {
   AlertIntentPoliciesAPI,
@@ -27,6 +27,7 @@ const SIGNALS: ReadonlyArray<{ value: AlertIntentSignal; label: string }> = [
   { value: 'metric.cpu', label: 'CPU threshold' },
   { value: 'metric.memory', label: 'Memory threshold' },
   { value: 'metric.disk', label: 'Disk threshold' },
+  { value: 'metric.temperature', label: 'Temperature threshold' },
 ];
 
 const MAX_GRACE_SECONDS = 30 * 24 * 60 * 60;
@@ -63,7 +64,14 @@ const ruleFor = (
 export interface AlertIntentPolicySelectionTarget {
   resourceId: string;
   signal: AlertIntentSignal;
+  /** Names a target the resource list does not hold, such as a machine sensor. */
+  label?: string;
   requestId: number;
+}
+
+interface AlertIntentResourceOption {
+  id: string;
+  label: string;
 }
 
 export function AlertIntentPolicyPanel(props: {
@@ -93,6 +101,20 @@ export function AlertIntentPolicyPanel(props: {
         ),
       ),
   );
+  // A row can target a child alert resource (a machine disk or sensor) that
+  // is not itself a listed resource. It joins the options under the row's own
+  // label rather than the selection falling back to an unrelated resource.
+  const [targetOption, setTargetOption] = createSignal<AlertIntentResourceOption | null>(null);
+  const resourceOptions = createMemo<AlertIntentResourceOption[]>(() => {
+    const listed = sortedResources().map((resource) => ({
+      id: resource.id,
+      label: `${getPreferredInfrastructureDisplayName(resource)} · ${resource.type}`,
+    }));
+    const target = targetOption();
+    return target && !listed.some((option) => option.id === target.id)
+      ? [target, ...listed]
+      : listed;
+  });
   const [resourceId, setResourceId] = createSignal('');
   const [signal, setSignal] = createSignal<AlertIntentSignal>('state.offline');
   const [overrideGrace, setOverrideGrace] = createSignal('');
@@ -130,8 +152,8 @@ export function AlertIntentPolicyPanel(props: {
       setBackupAware(offline.backupOffline?.enabled ?? false);
       setBackupPostGrace(String(offline.backupOffline?.postGraceSeconds ?? 60));
       setBackupMaxDeferral(String(offline.backupOffline?.maxDeferralSeconds ?? 3600));
-      if (!resourceId() && sortedResources().length > 0) {
-        setResourceId(sortedResources()[0].id);
+      if (!resourceId() && resourceOptions().length > 0) {
+        setResourceId(resourceOptions()[0].id);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Failed to load alert intent policies.');
@@ -143,14 +165,14 @@ export function AlertIntentPolicyPanel(props: {
   onMount(() => void load());
 
   createEffect(() => {
-    const resources = sortedResources();
+    const options = resourceOptions();
     const selected = resourceId();
-    if (resources.length === 0) {
+    if (options.length === 0) {
       if (selected) setResourceId('');
       return;
     }
-    if (!resources.some((resource) => resource.id === selected)) {
-      setResourceId(resources[0].id);
+    if (!options.some((option) => option.id === selected)) {
+      setResourceId(options[0].id);
     }
   });
 
@@ -158,6 +180,14 @@ export function AlertIntentPolicyPanel(props: {
     const target = props.selectionTarget;
     if (!target) return;
     const requestId = target.requestId;
+    // Untracked: a later inventory change must not replay this handoff over
+    // a selection the operator has changed since.
+    const listed = untrack(() =>
+      sortedResources().some((resource) => resource.id === target.resourceId),
+    );
+    setTargetOption(
+      listed ? null : { id: target.resourceId, label: target.label?.trim() || target.resourceId },
+    );
     setResourceId(target.resourceId);
     setSignal(target.signal);
     setExpanded(true);
@@ -509,12 +539,8 @@ export function AlertIntentPolicyPanel(props: {
                 onChange={(event) => setResourceId(event.currentTarget.value)}
                 fieldClass="lg:col-span-2"
               >
-                <For each={sortedResources()}>
-                  {(resource) => (
-                    <option value={resource.id}>
-                      {getPreferredInfrastructureDisplayName(resource)} · {resource.type}
-                    </option>
-                  )}
+                <For each={resourceOptions()}>
+                  {(option) => <option value={option.id}>{option.label}</option>}
                 </For>
               </FormSelect>
               <FormSelect
@@ -616,7 +642,12 @@ export function AlertIntentPolicyPanel(props: {
               <Button
                 variant="secondary"
                 isLoading={previewing()}
-                disabled={!resourceId() || previewing()}
+                disabled={!selectedResource() || previewing()}
+                title={
+                  selectedResource()
+                    ? undefined
+                    : 'Preview is available for listed resources, not machine disks or sensors.'
+                }
                 onClick={() => void runPreview()}
               >
                 Preview current policy

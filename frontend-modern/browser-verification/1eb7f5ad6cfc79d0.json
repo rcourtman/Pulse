@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "base_sha": "faffec9441a10140bff1e9b8cc82a545155e4994",
+  "verified_at": "2026-11-01T11:12:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx",
+    "frontend-modern/src/components/Alerts/Thresholds/hooks/useCollapsedSections.ts",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentSensorsSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts",
+    "frontend-modern/src/features/alerts/AlertIntentPolicyPanel.tsx",
+    "frontend-modern/src/features/alerts/agentSensorIdentity.ts",
+    "frontend-modern/src/features/alerts/alertOverridesModel.ts",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts",
+    "frontend-modern/src/features/alerts/thresholds/types.ts",
+    "frontend-modern/src/features/alerts/types.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/alertThresholdsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "26d9121cf18a62da503fbf45fed24190072565ee00e0f9421a88db3e43faa2ab",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "82db0d7076c0452cdbafccee3bb3897d4bd49968199415d8b8feec8cfca06e99",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx": "c55572fe61c417cc5be639559c7d10eb0bf53e3941905d47dc992cb54f5d84df",
+    "frontend-modern/src/components/Alerts/Thresholds/hooks/useCollapsedSections.ts": "fe702e7fd6a25512b42be2b6dac833cda884de006d80dc3305fd9b9c395d05ea",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentSensorsSection.tsx": "14b6c8449f8c9bbe5667c694111a7d96b3a13afe5563449823ee6fde439c3945",
+    "frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx": "9086f095a9fc8f086bc2603acdf0e7ef8988769ba8456e81a26a4ec64948b54d",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "c4cb57d1a935c48a7ff9569dca0db73f5ca8dbb198fda9686173b189a436b876",
+    "frontend-modern/src/features/alerts/AlertIntentPolicyPanel.tsx": "442a8a7b0146aef22c77eb25de722299b7d842967a761641232bccc3a2fcd4b8",
+    "frontend-modern/src/features/alerts/agentSensorIdentity.ts": "be2138170040c3437a082ac9d6540ffd8470b9f0de12b290670f7116ce51787c",
+    "frontend-modern/src/features/alerts/alertOverridesModel.ts": "bc1d4f7db9e11eba3499876a7a454d54a7bd6b9d3efe70f9f6c7844d2f5191ac",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "7dff533a9061298e696730e73a9f01861fc059d07a163ce61dd839dff62f0994",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts": "8eaf13cb4acf3042836f9f23595c63d4888f9572e445eef47b6269bb8e0f958d",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts": "1d70f2fa4b54c463ff04015cb912617f99075ed705b4cb618b517370be800516",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts": "677e6268fafbc87e8953cb26e7d2d38dbee848f1aa3cea4045d5f56582388367",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts": "f3b70db9ba7d82e782a8937d860d7d4c999436e99badad462dcee43873c7769b",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts": "3234b55df9b465d3dbb64501e00a2d95897d026e018bf77ca4d7b08bb50a9708",
+    "frontend-modern/src/features/alerts/thresholds/types.ts": "94ad016ffb13bbc502558d8a53b47786975511250c22388f6f762cc068fa6852",
+    "frontend-modern/src/features/alerts/types.ts": "33d85b25ad07a723894314d4e17808c69b106544d15d1a6372274d267c86ba25",
+    "frontend-modern/src/types/api.ts": "44ac592b94964945639fa62ade84314ca71f9914dcc8765d95242a19be1aa67c",
+    "frontend-modern/src/utils/alertThresholdsPresentation.ts": "5317a78f48b29eae211d3f4ed515f633666c017afe0481e593fcd4ef4ec49fe7"
+  },
+  "routes": [
+    "/alerts/thresholds/systems",
+    "/alerts/thresholds/proxmox",
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Machines tab collapsed: Machine Sensors group after Machine Disks with count 23 and the line \"Off until a sensor has its own limit\"",
+    "Machine Sensors expanded on a private mock stack: rows grouped per machine, each one line with label, current reading and chip; every unconfigured sensor reads Off; no Global Defaults row and no Alerts column",
+    "Intel Mac mock host (Meridian-731) lists TB0T, TC0P and Th1H; the invalid TB1T and the fan input are not listed",
+    "Two NVMe drives labelled Composite on different chips read as two rows told apart by chip in the subtitle",
+    "TB0T with a saved 15\u00b0C limit: Custom badge and revert action; limit and its note survive a page reload and reappear in the reopened editor",
+    "Backend raised Meridian-731 (TB0T) temperature warning at 18.6\u00b0C against the 15\u00b0C limit; Alerts Overview shows it with alert and clear levels",
+    "TB0T switched Off with the note cleared: row reads Off with no Custom badge, the saved config has no sensor override and the backend resolved the alert",
+    "Delay editor opened from the TB0T row (desktop and phone) selects \"TB0T \u00b7 Meridian-731\" and Temperature threshold with preview disabled; a saved grace shows Remove override",
+    "Phone width: sensor cards show name, reading and chip, the limit and edit, delay and revert actions"
+  ],
+  "interactions": [
+    "Collapse all, then expand Machine Sensors",
+    "Edit TB0T: switch the limit On, type 15, commit by clicking away, Save Changes; captured request stores agent:host-linux-4/sensor:<hex of applesmc-isa-0300/temp1> with trigger 15 and clear 10",
+    "Edit TB0T again: add the note \"Battery: alert early\", save; captured request carries the note; reload and reopen the editor to find it",
+    "Edit TB0T: clear the note, switch the limit Off, save; captured request has no sensor override",
+    "Open the TB0T delay action, enter a 600 second grace and Save override; backend intent policy holds metric.temperature graceSeconds 600 for the sensor ID",
+    "Open the TB0T delay action from the phone card",
+    "Open Alerts Overview and find the TB0T alert card",
+    "Switch between 1366x900 and 375x812 viewports"
+  ]
+}

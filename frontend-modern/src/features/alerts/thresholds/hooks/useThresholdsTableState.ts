@@ -9,6 +9,8 @@ import { logger } from '@/utils/logger';
 import {
   AGENT_DISKS_EMPTY_STATE,
   AGENT_DISKS_FILTER_EMPTY_STATE,
+  AGENT_SENSORS_EMPTY_STATE,
+  AGENT_SENSORS_FILTER_EMPTY_STATE,
   AGENT_THRESHOLDS_FILTER_EMPTY_STATE,
   getAlertThresholdsHelpBanner,
   getAlertThresholdsGuestFilterPresentation,
@@ -56,6 +58,7 @@ const HELP_BANNER_KEY = 'pulse-thresholds-help-dismissed';
 interface ThresholdsSummaryItem {
   key:
     | 'agentDisks'
+    | 'agentSensors'
     | 'agents'
     | 'backups'
     | 'dockerContainers'
@@ -276,6 +279,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     agentsWithOverrides: rawAgentsWithOverrides,
     agentDisksWithOverrides: rawAgentDisksWithOverrides,
     agentDisksGroupedByAgent: rawAgentDisksGroupedByAgent,
+    agentSensorsWithOverrides: rawAgentSensorsWithOverrides = () => [],
+    agentSensorsGroupedByAgent: rawAgentSensorsGroupedByAgent = () => ({}),
     agentGroupHeaderMeta,
     dockerHostsWithOverrides: rawDockerHostsWithOverrides,
     dockerContainersGroupedByHost: rawDockerContainersGroupedByHost,
@@ -341,6 +346,12 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const agentDisksWithOverrides = createMemo(() => filterResources(rawAgentDisksWithOverrides()));
   const agentDisksGroupedByAgent = createMemo(() =>
     filterGroupedResources(rawAgentDisksGroupedByAgent()),
+  );
+  const agentSensorsWithOverrides = createMemo(() =>
+    filterResources(rawAgentSensorsWithOverrides()),
+  );
+  const agentSensorsGroupedByAgent = createMemo(() =>
+    filterGroupedResources(rawAgentSensorsGroupedByAgent()),
   );
   const dockerHostsWithOverrides = createMemo(() => filterResources(rawDockerHostsWithOverrides()));
   const dockerContainersGroupedByHost = createMemo(() =>
@@ -547,6 +558,13 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           total: agentDisksWithOverrides().length,
         },
         {
+          key: 'agentSensors',
+          label: 'Machine Sensors',
+          overrides: countOverrides(rawAgentSensorsWithOverrides()),
+          tab: 'systems',
+          total: agentSensorsWithOverrides().length,
+        },
+        {
           key: 'storage',
           label: 'Storage',
           overrides: countOverrides(rawStorageWithOverrides()),
@@ -741,6 +759,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       nodesWithOverrides,
       agentsWithOverrides,
       agentDisksWithOverrides,
+      agentSensorsWithOverrides,
       guestDisksWithOverrides,
       dockerHostsWithOverrides,
       guestsFlat,
@@ -775,6 +794,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
         nodesWithOverrides,
         agentsWithOverrides,
         agentDisksWithOverrides,
+        agentSensorsWithOverrides,
         guestDisksWithOverrides,
         dockerHostsWithOverrides,
         guestsFlat,
@@ -881,6 +901,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     agentDisksGroupedByAgent,
     agentGroupHeaderMeta,
     agentDisksWithOverrides,
+    agentSensorsGroupedByAgent,
+    agentSensorsWithOverrides,
     agentsWithOverrides,
     alertsEnabled,
     backupDefaultsRecord,
@@ -997,6 +1019,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     setSearchTerm,
     AGENT_DISKS_EMPTY_STATE,
     AGENT_DISKS_FILTER_EMPTY_STATE,
+    AGENT_SENSORS_EMPTY_STATE,
+    AGENT_SENSORS_FILTER_EMPTY_STATE,
     AGENT_THRESHOLDS_FILTER_EMPTY_STATE,
     getAlertThresholdsHelpBanner,
     getAlertThresholdsHelpDismissLabel,
