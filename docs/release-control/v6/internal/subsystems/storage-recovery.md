@@ -5014,9 +5014,11 @@ authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
 
 ### Backup health states a verdict and groups exceptions by reason (1 November 2026)
 
-The Backups health strip opens with one sentence, "47 of 49 protected" (or
-"All 49 protected"), then one line per cause for everything that is not:
-"No successful backup 2", "Not verified recently 723". The cause is the
+The Backups health card states "47 / 49 protected" in its header strip, then
+one row per cause for everything that is not, each with a count pill and a bar
+for its share of rated targets ("No successful backup 2", "Not verified
+recently 723"), and a Protected row last, matching the platform overview
+tables rather than prose. The cause is the
 protection posture's server-owned `reason`, set in `DeriveProtectionPostureAt`
 beside the explanation it summarizes, so the page groups workloads without
 parsing sentences or re-deriving the posture rules. Each reason belongs to
