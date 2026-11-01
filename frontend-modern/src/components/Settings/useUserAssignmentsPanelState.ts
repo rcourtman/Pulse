@@ -292,9 +292,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
       saved = true;
     } catch (err) {
       if (!isCurrentMutation()) return;
-      logger.error(
-        kind === 'save' ? 'Failed to update user roles' : 'Failed to remove user access',
-      );
       setActionError(
         kind === 'save'
           ? getUserAssignmentsUpdateErrorMessage()
