@@ -21,6 +21,15 @@
 
 ## Purpose
 
+### Slow Assistant JSON refusal preserves recovery state
+
+Current token authority is also retained at the synchronous Assistant execute
+and Kubernetes result writers. Lost access returns a generic 401 before any
+final response is committed, not an empty successful recovery result. Refusal
+does not delete evidence, reset recovery state, widen grants or cancel a recovery
+job. Native JSON independent-reader and persisted-token-delete regressions cover
+the disclosure boundary without replaying a recovery workload or changing data.
+
 ### Assistant reader withdrawal is not a recovery mutation
 
 The shared API stream guard also covers Assistant results, not recovery-state
