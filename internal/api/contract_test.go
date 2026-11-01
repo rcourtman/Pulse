@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -29028,6 +29029,105 @@ func TestContract_AssistantJSONMediaBoundary(t *testing.T) {
 		for _, transport := range []string{"header", "session"} {
 			t.Run(kind+"/"+transport, func(t *testing.T) {
 				assistantJSONMediaReply(t, kind, transport)
+			})
+		}
+	}
+}
+
+// Force many compressed writes using repeatable, incompressible synthetic log
+// data. Withdrawal occurs in the first admitted transport write, so that write
+// may finish, but no later ZIP bytes or appended authentication error may pass.
+func TestContractSupportBundleStopsAfterAdmittedPrefix(t *testing.T) {
+	changes := []string{"revoked", "expired", "scope", "org", "multi_org", "identity", "principal", "role", "unrelated_scope"}
+	for _, transport := range []string{"header", "bearer", "session"} {
+		cases := changes
+		if transport == "session" {
+			cases = []string{"invalidated", "expired", "principal", "replaced", "recovery"}
+		}
+		for _, change := range cases {
+			t.Run(transport+"/"+change, func(t *testing.T) {
+				cfg := newTestConfigWithTokens(t, newTokenRecord(t, logStreamToken, []string{config.ScopeSettingsRead, config.ScopeAIExecute}, nil))
+				const session = "synthetic-bundle-prefix-session"
+				if transport == "session" {
+					InitSessionStore(t.TempDir())
+					GetSessionStore().CreateSession(session, time.Hour, "fixture", "127.0.0.1", "operator")
+					t.Cleanup(func() { GetSessionStore().DeleteSession(session) })
+				}
+				data := make([]byte, 256*1024)
+				_, _ = rand.New(rand.NewSource(17)).Read(data)
+				cfg.LogFile = filepath.Join(t.TempDir(), "synthetic.log")
+				if err := os.WriteFile(cfg.LogFile, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+				req := httptest.NewRequest(http.MethodGet, "/api/logs/download", nil)
+				switch transport {
+				case "bearer":
+					req.Header.Set("Authorization", "Bearer "+logStreamToken)
+				case "session":
+					req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+				default:
+					req.Header.Set("X-API-Token", logStreamToken)
+				}
+				base := &logStreamMutationWriter{ResponseRecorder: httptest.NewRecorder()}
+				writes, prefix := 0, 0
+				base.afterWrite = func(_ string) {
+					writes++
+					if writes != 1 {
+						return
+					}
+					prefix = base.Body.Len()
+					if transport == "session" {
+						mutateReadSession(session, change)
+						return
+					}
+					config.Mu.Lock()
+					defer config.Mu.Unlock()
+					switch change {
+					case "revoked":
+						cfg.RemoveAPIToken(cfg.APITokens[0].ID)
+					case "expired":
+						past := time.Now().Add(-time.Second)
+						cfg.APITokens[0].ExpiresAt = &past
+					case "scope":
+						cfg.APITokens[0].Scopes = []string{config.ScopeMonitoringRead}
+					case "org":
+						cfg.APITokens[0].OrgID = "tenant-only"
+					case "multi_org":
+						cfg.APITokens[0].OrgIDs = []string{"default", "tenant-only"}
+					case "identity":
+						cfg.APITokens[0].ID = "different-credential"
+					case "principal":
+						cfg.APITokens[0].Metadata = map[string]string{apiTokenMetadataOwnerUserID: "different-owner"}
+					case "role":
+						cfg.APITokens[0].Metadata = map[string]string{authpkg.RuntimeRoleMetadataKey: authpkg.RuntimeRoleActionRunner}
+					case "unrelated_scope":
+						cfg.APITokens[0].Scopes = []string{config.ScopeSettingsRead}
+					}
+				}
+				h := NewLogHandlers(cfg, nil)
+				// Token extraction and session admission are real. The full Router/native
+				// suite separately covers the registered route and its persisted controls.
+				AuthContextMiddleware(cfg, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if !CheckAuth(cfg, w, r) {
+						t.Fatal("synthetic admission failed")
+					}
+					h.HandleDownloadBundle(w, r)
+				})).ServeHTTP(base, req)
+				if base.Code != http.StatusOK || base.Header().Get("Content-Type") != "application/zip" || base.Header().Get("X-Content-Type-Options") != "nosniff" {
+					t.Fatalf("admitted archive headers changed: %d %v", base.Code, base.Header())
+				}
+				if change == "unrelated_scope" {
+					if writes < 2 || !bytes.Equal(readSupportBundle(t, base.Body.Bytes())["pulse.log"], data) {
+						t.Fatal("removing unrelated execute scope broke settings download")
+					}
+					return
+				}
+				if prefix == 0 || writes != 1 || base.Body.Len() != prefix {
+					t.Fatalf("ZIP output continued after withdrawal: writes=%d prefix=%d total=%d", writes, prefix, base.Body.Len())
+				}
+				if bytes.Contains(base.Body.Bytes(), []byte("Authentication required")) {
+					t.Fatal("authentication error appended to admitted ZIP")
+				}
 			})
 		}
 	}
