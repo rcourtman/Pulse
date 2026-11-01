@@ -51,6 +51,7 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationSharingPanelProps().currentUser).toBe('org-owner');
     expect(context.getOrganizationAccessPanelProps().currentUser).toBe('org-owner');
     expect(context.getOrganizationOverviewPanelProps().currentUser).toBe('org-owner');
+    expect(context.getApiAccessPanelProps().currentUser).toBe('org-owner');
   });
 
   it('does not replace an explicitly empty principal with the configured admin', () => {
@@ -61,6 +62,7 @@ describe('buildSettingsPanelRegistryContext', () => {
       } as SecurityStatus),
     );
     expect(context.getOrganizationSharingPanelProps().currentUser).toBe('');
+    expect(context.getApiAccessPanelProps().currentUser).toBe('');
   });
 
   it('passes the effective current user into organization panels', () => {
@@ -144,5 +146,6 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationOverviewPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getOrganizationAccessPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getOrganizationSharingPanelProps()).toMatchObject({ currentUser: undefined });
+    expect(context.getApiAccessPanelProps()).toMatchObject({ currentUser: undefined });
   });
 });

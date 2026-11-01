@@ -267,8 +267,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   const resetContext = () => {
     if (disposed) return;
-    const selectionChanged =
-      selectedOrg() !== currentOrg() || selectedUser() !== props.currentUser;
+    const selectionChanged = selectedOrg() !== currentOrg() || selectedUser() !== props.currentUser;
     invalidateRequests();
     batch(() => {
       setSelectedOrg(currentOrg());
@@ -285,9 +284,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     void loadTokens();
   };
 
-  createEffect(
-    on(() => [props.canManage, props.currentUser], resetContext, { defer: true }),
-  );
+  createEffect(on(() => [props.canManage, props.currentUser], resetContext, { defer: true }));
   const unsubscribeOrg = eventBus.on('org_switched', resetContext);
   onCleanup(() => {
     disposed = true;
@@ -429,7 +426,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       const trimmedName = nameInput().trim() || undefined;
       const scopeSelection = [...selectedScopes()].sort();
       const scopePayload = scopeSelection.length > 0 ? scopeSelection : undefined;
-      const { token, record } = await SecurityAPI.createToken(trimmedName, scopePayload, mutation.options);
+      const { token, record } = await SecurityAPI.createToken(
+        trimmedName,
+        scopePayload,
+        mutation.options,
+      );
       if (!mutation.isCurrent()) return;
 
       setTokens((previous) => [record, ...previous]);
@@ -532,7 +533,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
     setUpdatingTokenId(record.id);
     try {
-      const updated = await SecurityAPI.updateTokenScopes(record.id, [...scopes].sort(), mutation.options);
+      const updated = await SecurityAPI.updateTokenScopes(
+        record.id,
+        [...scopes].sort(),
+        mutation.options,
+      );
       if (!mutation.isCurrent()) return false;
       setTokens((previous) => previous.map((token) => (token.id === updated.id ? updated : token)));
       if (newTokenRecord()?.id === updated.id) {

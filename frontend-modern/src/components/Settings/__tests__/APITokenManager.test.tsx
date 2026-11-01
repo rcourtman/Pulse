@@ -519,10 +519,11 @@ describe('APITokenManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
-      expect(createTokenMock).toHaveBeenCalledWith('Container automation', [
-        DOCKER_MANAGE_SCOPE,
-        DOCKER_REPORT_SCOPE,
-      ], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(createTokenMock).toHaveBeenCalledWith(
+        'Container automation',
+        [DOCKER_MANAGE_SCOPE, DOCKER_REPORT_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
 
     expect(showTokenRevealMock).toHaveBeenCalledWith(
@@ -568,10 +569,11 @@ describe('APITokenManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
-      expect(createTokenMock).toHaveBeenCalledWith('Replacement agent token', [
-        AGENT_CONFIG_READ_SCOPE,
-        AGENT_REPORT_SCOPE,
-      ], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(createTokenMock).toHaveBeenCalledWith(
+        'Replacement agent token',
+        [AGENT_CONFIG_READ_SCOPE, AGENT_REPORT_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
   });
 
@@ -662,13 +664,17 @@ describe('APITokenManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
-      expect(createTokenMock).toHaveBeenCalledWith('OpenCode Pulse', [
-        AI_EXECUTE_SCOPE,
-        MONITORING_READ_SCOPE,
-        MONITORING_WRITE_SCOPE,
-        SETTINGS_READ_SCOPE,
-        SETTINGS_WRITE_SCOPE,
-      ], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(createTokenMock).toHaveBeenCalledWith(
+        'OpenCode Pulse',
+        [
+          AI_EXECUTE_SCOPE,
+          MONITORING_READ_SCOPE,
+          MONITORING_WRITE_SCOPE,
+          SETTINGS_READ_SCOPE,
+          SETTINGS_WRITE_SCOPE,
+        ],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
 
     expect(showTokenRevealMock).toHaveBeenCalledWith(
@@ -715,13 +721,17 @@ describe('APITokenManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
-      expect(createTokenMock).toHaveBeenCalledWith('Patrol external agent', [
-        AI_EXECUTE_SCOPE,
-        MONITORING_READ_SCOPE,
-        MONITORING_WRITE_SCOPE,
-        SETTINGS_READ_SCOPE,
-        SETTINGS_WRITE_SCOPE,
-      ], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(createTokenMock).toHaveBeenCalledWith(
+        'Patrol external agent',
+        [
+          AI_EXECUTE_SCOPE,
+          MONITORING_READ_SCOPE,
+          MONITORING_WRITE_SCOPE,
+          SETTINGS_READ_SCOPE,
+          SETTINGS_WRITE_SCOPE,
+        ],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
   });
 
@@ -763,7 +773,11 @@ describe('APITokenManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
-      expect(createTokenMock).toHaveBeenCalledWith('Audit export', [AUDIT_READ_SCOPE], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(createTokenMock).toHaveBeenCalledWith(
+        'Audit export',
+        [AUDIT_READ_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
   });
 
@@ -825,7 +839,10 @@ describe('APITokenManager', () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(deleteTokenMock).toHaveBeenCalledWith('token-runtime', expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(deleteTokenMock).toHaveBeenCalledWith(
+        'token-runtime',
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
 
     expect(markDockerRuntimesTokenRevokedMock).toHaveBeenCalledWith('token-runtime', [
@@ -912,7 +929,11 @@ describe('APITokenManager', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save scopes' }));
 
     await waitFor(() => {
-      expect(updateTokenScopesMock).toHaveBeenCalledWith('token-edit', [MONITORING_READ_SCOPE], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(updateTokenScopesMock).toHaveBeenCalledWith(
+        'token-edit',
+        [MONITORING_READ_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
     expect(deleteTokenMock).not.toHaveBeenCalled();
     expect(createTokenMock).not.toHaveBeenCalled();
@@ -996,9 +1017,11 @@ describe('APITokenManager', () => {
     fireEvent.click(save);
 
     await waitFor(() => {
-      expect(updateTokenScopesMock).toHaveBeenCalledWith('token-edit-failure', [
-        MONITORING_READ_SCOPE,
-      ], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(updateTokenScopesMock).toHaveBeenCalledWith(
+        'token-edit-failure',
+        [MONITORING_READ_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
     expect(notificationErrorMock).toHaveBeenCalledWith('Unable to update API token scopes.');
     expect(screen.getByRole('dialog', { name: 'Edit API token scopes' })).toBeInTheDocument();
@@ -1068,7 +1091,11 @@ describe('APITokenManager', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(renameTokenMock).toHaveBeenCalledWith('token-pbs', 'PBS 01 telemetry', expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(renameTokenMock).toHaveBeenCalledWith(
+        'token-pbs',
+        'PBS 01 telemetry',
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
       expect(screen.getAllByText('PBS 01 telemetry').length).toBeGreaterThan(0);
       expect(document.activeElement).toHaveTextContent('Rename');
     });
@@ -1099,7 +1126,11 @@ describe('APITokenManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
-      expect(createTokenMock).toHaveBeenCalledWith('Blocked token', ['monitoring:read'], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(createTokenMock).toHaveBeenCalledWith(
+        'Blocked token',
+        ['monitoring:read'],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
 
     expect(notificationErrorMock).toHaveBeenCalledWith(
@@ -1130,7 +1161,11 @@ describe('APITokenManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
-      expect(createTokenMock).toHaveBeenCalledWith('Needs settings scope', [DOCKER_REPORT_SCOPE], expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }));
+      expect(createTokenMock).toHaveBeenCalledWith(
+        'Needs settings scope',
+        [DOCKER_REPORT_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
     });
 
     expect(notificationErrorMock).toHaveBeenCalledWith(
