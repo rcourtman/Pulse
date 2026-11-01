@@ -160,7 +160,7 @@ func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "symlinked fixture root", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
+	for _, scenario := range []string{"real tools", "symlinked fixture root", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing sha256sum", "non-GNU sha256sum", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			if scenario == "symlinked fixture root" {
@@ -191,7 +191,7 @@ esac
 			if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
 			}
-			tools := []string{"bash", "stat", "chmod", "chown", "cp", "mv", "ln", "readlink", "tar", "awk"}
+			tools := []string{"bash", "stat", "chmod", "chown", "cp", "mv", "ln", "readlink", "sha256sum", "tar", "awk"}
 			installed := make(map[string]string)
 			for _, name := range tools {
 				leaf, toolPrefix := name, prefix
@@ -231,7 +231,7 @@ esac
 			// Native macOS defaults must not be the fallback for Linux-only
 			// archive extraction, canonicalization or atomic replacement. Real
 			// GNU tools must win even when the native names are unsuitable.
-			for _, name := range []string{"cp", "mv", "readlink", "tar", "awk"} {
+			for _, name := range []string{"cp", "mv", "readlink", "sha256sum", "tar", "awk"} {
 				if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf 'native BSD utility reached\\n' >&2\nexit 64\n"), 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -278,7 +278,7 @@ esac
 			}
 			entries, err := os.ReadDir(fixtureBin)
 			if err != nil || len(entries) != len(tools) {
-				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/cp/mv/ln/readlink/tar/awk")
+				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/cp/mv/ln/readlink/sha256sum/tar/awk")
 			}
 			for _, name := range tools {
 				if target, err := os.Readlink(filepath.Join(fixtureBin, name)); err != nil || target != installed[name] {
@@ -288,13 +288,24 @@ esac
 			if data, err := os.ReadFile(calls); err != nil || string(data) != "install bash gnu-tar gawk\n--prefix bash\n--prefix coreutils\n--prefix gnu-tar\n--prefix gawk\n" {
 				t.Fatal("fixture supply changed its fixed package/resource selection")
 			}
+			if scenario == "real tools" {
+				// Execute the consuming Linux CI shells, not just --version.
+				// The unusable native sha256sum remains behind the staged tools.
+				cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendEmbedTransfer", "-v")
+				cmd.Env = append(env, "PATH="+fixtureBin+":"+bin+":"+os.Getenv("PATH"))
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("staged GNU tools did not execute frontend transfer controls: %v\n%s", err, output)
+				}
+				t.Logf("staged-tool frontend transfer controls:\n%s", output)
+			}
 			// Exercise the actual workflow step's local PATH boundary, replacing
 			// only Python's containing suite to avoid recursively starting Go.
 			probe := `#!/bin/sh
 set -eu
 test "$*" = "scripts/installtests/run_unix_contracts.py --phase $EXPECTED_PHASE" || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
-for tool in stat chmod chown cp mv ln readlink tar awk; do
+for tool in stat chmod chown cp mv ln readlink sha256sum tar awk; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
 done
 # The expected readlink result must use a physical root too. A temporary
@@ -303,6 +314,14 @@ done
 PROBE_ROOT="$(cd "$PROBE_ROOT" && pwd -P)"
 # Exercise the actual Linux-only flags with real executables and file bytes.
 # Neither a filename check nor a --version double can establish these semantics.
+printf 'archive bytes\n' > "$PROBE_ROOT/source"
+# Linux CI checks the complete packet with GNU-only long options. Native
+# macOS sha256sum is not a substitute, and corruption must remain terminal.
+sha256sum "$PROBE_ROOT/source" > "$PROBE_ROOT/source.sha256"
+sha256sum --check --strict "$PROBE_ROOT/source.sha256"
+printf 'changed bytes\n' >> "$PROBE_ROOT/source"
+if sha256sum --check --strict "$PROBE_ROOT/source.sha256"; then exit 96; fi
+if printf 'not a checksum\n' | sha256sum --check --strict; then exit 97; fi
 printf 'archive bytes\n' > "$PROBE_ROOT/source"
 tar -czf "$PROBE_ROOT/source.tgz" -C "$PROBE_ROOT" source
 mkdir -p "$PROBE_ROOT/extracted"
