@@ -29132,3 +29132,10 @@ func TestContractSupportBundleStopsAfterAdmittedPrefix(t *testing.T) {
 		}
 	}
 }
+
+// Report downloads, including supported endpoint decorators, must not disclose
+// results after persisted credential withdrawal. Existing org-admin/settings
+// and license gates, independent readers and background work remain unchanged.
+func TestContractReportDownloadWithdrawal(t *testing.T) {
+	reportDownloadNativeWithdrawal(t)
+}

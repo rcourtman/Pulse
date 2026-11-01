@@ -15,13 +15,23 @@ import (
 // handler waits for a provider. Keep the original work/context lifetime, but
 // recheck authority at disclosure, including headers and error responses.
 func retainTokenResponseAuthority(cfg *config.Config, scope string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
-	return retainResponseAuthority(cfg, scope, instanceAdmin, false, next)
+	return retainResponseAuthority(cfg, scope, instanceAdmin, responseMediaJSON, next)
 }
 
-// retainResponseAuthority also serves the existing private diagnostic download.
-// The caller selects JSON or ZIP, never arbitrary executable media. Authority,
-// closure and plain-text refusals stay shared with synchronous Assistant results.
-func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin bool, zipDownload bool, next http.HandlerFunc) http.HandlerFunc {
+// responseMediaPolicy is a closed transport choice. Adding report downloads
+// must not let a report renderer widen Assistant results or diagnostic ZIPs.
+type responseMediaPolicy uint8
+
+const (
+	responseMediaJSON responseMediaPolicy = iota
+	responseMediaZIP
+	responseMediaReport
+)
+
+// retainResponseAuthority serves slow synchronous results and private downloads.
+// It preserves the route's existing gates and work lifetime; the media policy
+// selects only that transport's data formats, never arbitrary executable media.
+func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin bool, media responseMediaPolicy, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scope)
 		sessionAllowed := sessionReadRevalidator(r)
@@ -41,7 +51,7 @@ func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin boo
 			http.Error(w, "Authentication required", http.StatusUnauthorized)
 			return
 		}
-		writer := &tokenResponseWriter{writer: w, header: w.Header().Clone(), allowed: allowed, zipDownload: zipDownload}
+		writer := &tokenResponseWriter{writer: w, header: w.Header().Clone(), allowed: allowed, media: media}
 		defer writer.close()
 		next(writer, r)
 		// A bodyless handler must not implicitly return 200 after withdrawal.
@@ -54,13 +64,13 @@ func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin boo
 // write produces a generic 401, not false-success/empty JSON; after any admitted
 // response bytes, denial only stops further output, never appends an auth error.
 type tokenResponseWriter struct {
-	writer      http.ResponseWriter
-	header      http.Header
-	allowed     func() bool
-	zipDownload bool
-	mu          sync.Mutex
-	started     bool
-	closed      bool
+	writer  http.ResponseWriter
+	header  http.Header
+	allowed func() bool
+	media   responseMediaPolicy
+	mu      sync.Mutex
+	started bool
+	closed  bool
 }
 
 func (w *tokenResponseWriter) Header() http.Header { return w.header }
@@ -97,15 +107,29 @@ func (w *tokenResponseWriter) commitLocked(status int) {
 		// types must not allow HTTP sniffing or an extension to render HTML.
 		// Leave payload bytes alone: HTML-escaping JSON would corrupt data.
 		mediaType, _, err := mime.ParseMediaType(w.header.Get("Content-Type"))
-		expectedType := "application/json"
-		if w.zipDownload {
-			expectedType = "application/zip"
+		pinnedType := "text/plain; charset=utf-8"
+		if err == nil {
+			switch w.media {
+			case responseMediaJSON:
+				if mediaType == "application/json" {
+					pinnedType = mediaType
+				}
+			case responseMediaZIP:
+				if mediaType == "application/zip" {
+					pinnedType = mediaType
+				}
+			case responseMediaReport:
+				// Existing PDF/CSV attachments and structured API errors.
+				// CSV is UTF-8; never forward renderer-supplied parameters.
+				switch mediaType {
+				case "application/pdf", "application/json":
+					pinnedType = mediaType
+				case "text/csv":
+					pinnedType = "text/csv; charset=utf-8"
+				}
+			}
 		}
-		if err == nil && mediaType == expectedType {
-			header.Set("Content-Type", expectedType)
-		} else {
-			header.Set("Content-Type", "text/plain; charset=utf-8")
-		}
+		header.Set("Content-Type", pinnedType)
 		header.Set("X-Content-Type-Options", "nosniff")
 		w.writer.WriteHeader(status)
 		// Informational headers do not commit the final response.

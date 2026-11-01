@@ -110,7 +110,7 @@ func (h *LogHandlers) HandleDownloadBundle(w http.ResponseWriter, r *http.Reques
 	// Raw logs are private even though the system summary is allowlisted.
 	// Recheck the admitted token/session at each actual ZIP transport write,
 	// without buffering the archive or withdrawing other readers/work.
-	retainResponseAuthority(h.config, config.ScopeSettingsRead, true, true, h.writeDownloadBundle)(w, r)
+	retainResponseAuthority(h.config, config.ScopeSettingsRead, true, responseMediaZIP, h.writeDownloadBundle)(w, r)
 }
 
 func (h *LogHandlers) writeDownloadBundle(w http.ResponseWriter, r *http.Request) {
