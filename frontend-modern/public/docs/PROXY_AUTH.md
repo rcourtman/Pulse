@@ -56,7 +56,7 @@ change needs recreation/redeployment; a restart alone does not apply it. Follow
 | `PROXY_AUTH_ROLE_HEADER` | Header containing user groups/roles. | - |
 | `PROXY_AUTH_ROLE_SEPARATOR` | Separator for multiple roles in the header. | `\|` |
 | `PROXY_AUTH_ADMIN_ROLE` | Role name that grants admin access. | `admin` |
-| `PROXY_AUTH_LOGOUT_URL` | URL to redirect to after logout. | - |
+| `PROXY_AUTH_LOGOUT_URL` | Browser destination for **Sign out**; use your authenticating proxy's documented logout route. A redirect alone does not prove session revocation. | - |
 
 Setting `PROXY_AUTH_ROLE_HEADER` turns on role gating. From then on admin access fails closed unless the role header is present and contains the admin role — `PROXY_AUTH_ADMIN_ROLE` if you set it, otherwise the `admin` default. A missing or blank role header still authenticates the user, but the user is treated as non-admin.
 
@@ -120,7 +120,45 @@ fall back to all-users-admin access.
 | :--- | :--- |
 | **401 Unauthorized** | Verify `X-Proxy-Secret` matches `PROXY_AUTH_SECRET`. Check if headers are being stripped by intermediate proxies. |
 | **Not Admin** | Check the role header actually reaches Pulse and contains the admin role **exactly** — matching is case-sensitive and compares whole roles, so `Admins` and `authentik Admins` do not match the `admin` default. Set `PROXY_AUTH_ADMIN_ROLE` to your IdP's admin group name. Pulse logs a warning at startup when it falls back to the default. |
-| **Logout Fails** | Ensure `PROXY_AUTH_LOGOUT_URL` is set to your IdP's logout endpoint. |
+| **Sign out returns to the same user** | Distinguish the [browser redirect, proxy session and IdP session](#sign-out-and-session-boundaries); a configured URL is not proof that access ended. |
+
+### Sign out and session boundaries
+
+Proxy authentication is checked on each request. If the authenticating proxy
+still supplies a valid identity, Pulse can admit that user again without a
+local password prompt.
+
+- **With `PROXY_AUTH_LOGOUT_URL`:** Pulse's **Sign out** action sends the browser
+  directly to that URL, instead of calling Pulse's local `/api/logout` endpoint.
+  The destination must perform the required logout in your existing proxy/IdP
+  integration; simply opening a login page or returning to Pulse does not end
+  either upstream session. Some integrations have separate proxy and IdP
+  sessions, so an active IdP session can sign the user straight back in.
+- **Without that URL:** Pulse uses its local logout endpoint and leaves the
+  proxy/IdP sessions alone. Ending one Pulse browser session does not revoke
+  other browser sessions, API tokens or the shared proxy secret.
+
+Use the logout route documented for your installed authenticating proxy and its
+application, not an assumed generic IdP URL. Keep any return destination fixed
+and trusted. The logout URL is exposed to the browser and can appear in startup
+logs: never put a token, password, session cookie or shared secret in it.
+Preserve role gating, the private backend and an independent administrator
+recovery path; do not disable authentication to repair sign-out behaviour.
+
+Check the result through the normal authenticated browser path using a suitable
+test account, not your only administrator session. On the next ordinary visit
+to a protected Pulse view, distinguish a proxy challenge from automatic IdP
+sign-in or continued access as the same user. A redirect, a public `/api/health`
+response or an unavailable page is not proof of withdrawn access. A logout
+error or lost response leaves the result uncertain; clearing browser storage
+does not establish server-side revocation.
+
+For urgent access withdrawal, use the existing proxy/IdP administrator controls
+for the affected account and sessions; handle any exposed Pulse API token or
+proxy secret separately. Do not repeatedly sign out or change permissions just
+to obtain evidence. A report needs only the Pulse version, which sign-out path
+was used and the observed challenge, automatic sign-in or error. Keep provider
+URLs, identity details, cookies and full browser/network exports private.
 
 ### Verify Headers
 First use a normal signed-in browser through your proxy. Check that the intended
