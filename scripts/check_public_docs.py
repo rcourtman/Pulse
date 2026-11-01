@@ -31,6 +31,7 @@ CURRENT_PRODUCT_DOCS = (
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 HTML_ASSET = re.compile(r"(?:src|href)=[\"']([^\"']+)[\"']")
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
+FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 MISLEADING_PUBLIC_CLAIMS = {
     r"dead-man checks can notify when an expected external signal stops arriving": (
@@ -68,8 +69,41 @@ def heading_slug(value: str) -> str:
     return re.sub(r"\s", "-", value).strip("-")
 
 
+def outside_fenced_code(text: str) -> str:
+    """Exclude fenced examples from heading and navigation-link checks.
+
+    A shell comment is not a heading, and a Markdown example is not a live
+    link. Respect the fence's character and minimum length, including an
+    unclosed fence; blank lines keep adjacent prose from being joined.
+    """
+
+    content: list[str] = []
+    closing: re.Pattern[str] | None = None
+    for line in text.splitlines(keepends=True):
+        value = line.rstrip("\r\n")
+        if closing is not None:
+            if closing.fullmatch(value):
+                closing = None
+            content.append("\n")
+            continue
+
+        opening = FENCE_OPEN.fullmatch(value)
+        if opening is not None:
+            fence, info = opening.groups()
+            # Backticks in a backtick fence's info string make it ordinary
+            # text, not the start of a code block.
+            if fence[0] != "`" or "`" not in info:
+                closing = re.compile(
+                    r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}[ \t]*"
+                )
+                content.append("\n")
+                continue
+        content.append(line)
+    return "".join(content)
+
+
 def anchors_for(path: Path) -> set[str]:
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = outside_fenced_code(path.read_text(encoding="utf-8", errors="replace"))
     anchors: set[str] = set()
     counts: dict[str, int] = {}
     for heading in HEADING.findall(text):
@@ -87,7 +121,7 @@ def check_links(files: list[Path]) -> list[str]:
     anchor_cache: dict[Path, set[str]] = {}
 
     for source in files:
-        text = source.read_text(encoding="utf-8", errors="replace")
+        text = outside_fenced_code(source.read_text(encoding="utf-8", errors="replace"))
         targets = [match.group(1) for match in MARKDOWN_LINK.finditer(text)]
         targets.extend(match.group(1) for match in HTML_ASSET.finditer(text))
 

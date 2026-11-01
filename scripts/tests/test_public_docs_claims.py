@@ -155,6 +155,76 @@ class PublicDocsLinksTest(unittest.TestCase):
         self.assertEqual(errors, ["source.md: missing local target missing.md#one"])
         scan.assert_not_called()
 
+    def test_code_comments_do_not_create_recovery_destinations_or_shift_suffixes(self) -> None:
+        self.document(
+            "guide.md", "# Recovery\n```sh\n# Recovery\n# Reset lockout\n```\n# Recovery\n",
+        )
+        source = self.document(
+            "source.md", "[first](guide.md#recovery) [second](guide.md#recovery-1) "
+            "[phantom](guide.md#recovery-2) [comment](guide.md#reset-lockout)\n",
+        )
+
+        self.assertEqual(public_docs.check_links([source]), [
+            "source.md: missing anchor #recovery-2 in guide.md",
+            "source.md: missing anchor #reset-lockout in guide.md",
+        ])
+
+    def test_fenced_markdown_and_html_examples_are_not_live_links(self) -> None:
+        source = self.document(
+            "source.md", "# Present\n```markdown\n[example](absent.md#one)\n"
+            '<a href="also-absent.md#two">example</a>\n```\n'
+            "~~~html\n<img src='absent.png'>\n~~~\n"
+            "[real](#present) [broken](#missing)\n",
+        )
+
+        self.assertEqual(public_docs.check_links([source]), [
+            "source.md: missing anchor #missing in source.md",
+        ])
+
+    def test_closing_fence_needs_matching_character_and_enough_markers(self) -> None:
+        for opening, short, wrong, closing in [
+            ("````sh", "```", "~~~~", "`````"),
+            ("~~~~sh", "~~~", "````", "~~~~~"),
+        ]:
+            with self.subTest(opening=opening):
+                guide = self.document(
+                    "guide.md", f"{opening}\n# Hidden\n{short}\n# Still hidden\n"
+                    f"{wrong}\n# Also hidden\n{closing}\n# Visible\n",
+                )
+                self.assertEqual(public_docs.anchors_for(guide), {"visible"})
+
+    def test_closing_fence_cannot_carry_an_info_string(self) -> None:
+        guide = self.document(
+            "guide.md", "```sh\n# Hidden\n```not-a-close\n# Still hidden\n```\n# Visible\n",
+        )
+        self.assertEqual(public_docs.anchors_for(guide), {"visible"})
+
+    def test_fences_allow_up_to_three_spaces_and_trailing_closing_whitespace(self) -> None:
+        for indent in range(4):
+            with self.subTest(indent=indent):
+                guide = self.document(
+                    "guide.md", f"{' ' * indent}~~~sh\n# Hidden\n"
+                    f"{' ' * indent}~~~ \t\n# Visible\n",
+                )
+                self.assertEqual(public_docs.anchors_for(guide), {"visible"})
+
+    def test_unclosed_fences_hide_examples_through_the_end_of_the_file(self) -> None:
+        source = self.document(
+            "source.md", "# Present\n```sh\n# Not a heading\n[example](absent.md)\n",
+        )
+        self.assertEqual(public_docs.anchors_for(source), {"present"})
+        self.assertEqual(public_docs.check_links([source]), [])
+
+    def test_backticks_in_backtick_info_do_not_open_a_fence(self) -> None:
+        guide = self.document("guide.md", "```not`a-fence\n# Visible\n")
+        self.assertEqual(public_docs.anchors_for(guide), {"visible"})
+
+    def test_closed_example_does_not_join_prose_into_an_accidental_link(self) -> None:
+        source = self.document(
+            "source.md", "[example]\n```markdown\nanything\n```\n(absent.md)\n",
+        )
+        self.assertEqual(public_docs.check_links([source]), [])
+
 
 if __name__ == "__main__":
     unittest.main()
