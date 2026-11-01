@@ -19,7 +19,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 )
 
-const assistantPrivateResult = "synthetic-private-assistant-result"
+// Use ordinary prose: chat intentionally withholds long unspaced provider
+// fragments as possible compacted tool-call preludes. Do not weaken that guard.
+const assistantPrivateResult = "The synthetic private assistant result is ready."
 const assistantControlToken = "assistant-control-token.12345678"
 
 // Only text from a local fake Ollama, never model tools, agents or commands.
@@ -82,7 +84,7 @@ func newAssistantStreamFixture(t *testing.T, kind string, scopes []string, write
 		}
 		var gate *assistantProviderGate
 		for _, message := range request.Messages {
-			if message.Role != "user" {
+			if message.Role != "user" || strings.HasPrefix(message.Content, "Title this Pulse Assistant session.") {
 				continue
 			}
 			if strings.Contains(message.Content, "stream-fixture-primary") {
