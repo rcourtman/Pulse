@@ -113,6 +113,25 @@ describe('TokenRevealDialog', () => {
     );
   });
 
+  it('keeps long source, record and guidance strings as wrapping literal text', async () => {
+    render(() => <TokenRevealDialog />);
+    showTokenReveal({
+      token: 'synthetic-<script>not-executable</script>',
+      record: { ...mockRecord, name: '<img src=x onerror=alert(1)>' + 'a'.repeat(160) },
+      source: 'unfamiliar-source-' + 'b'.repeat(120),
+      note: '<b>Literal operator guidance</b>',
+    });
+    expect(
+      await screen.findByText('synthetic-<script>not-executable</script>'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('<b>Literal operator guidance</b>')).toBeInTheDocument();
+    expect(screen.getByText('<img src=x onerror=alert(1)>' + 'a'.repeat(160))).toBeInTheDocument();
+    const badge = screen.getByText(/Unfamiliar Source/);
+    expect(badge).not.toHaveClass('whitespace-nowrap');
+    expect(badge).toHaveClass('whitespace-normal');
+    expect(screen.getByRole('dialog').querySelector('script, img')).toBeNull();
+  });
+
   it('copies the current value once and reports pending and settled outcomes', async () => {
     const settle = deferredCopy();
     render(() => <TokenRevealDialog />);

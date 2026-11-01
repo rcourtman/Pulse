@@ -97,7 +97,7 @@ export const TokenRevealDialog: Component = () => {
             <div class="w-full min-h-0 overflow-y-auto overscroll-contain">
               <Card padding="lg" class="shadow-xs relative">
                 <div class="flex items-start gap-3">
-                  <div class="shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300 p-2">
+                  <div class="hidden sm:block shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300 p-2">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path
                         stroke-linecap="round"
@@ -109,11 +109,16 @@ export const TokenRevealDialog: Component = () => {
                   </div>
                   <div class="min-w-0 space-y-2 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
-                      <h2 class="text-lg font-semibold text-base-content">API token ready</h2>
+                      <h2 class="text-lg font-semibold text-base-content [overflow-wrap:anywhere]">
+                        API token ready
+                      </h2>
                       <Show when={sourceLabel}>
                         <span
                           class={`max-w-full [overflow-wrap:anywhere] ${
-                            sourceBadge?.classes ||
+                            sourceBadge?.classes.replace(
+                              'whitespace-nowrap',
+                              'whitespace-normal',
+                            ) ||
                             'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium bg-surface-alt text-base-content'
                           }`}
                         >
