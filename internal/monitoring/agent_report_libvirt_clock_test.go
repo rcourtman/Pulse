@@ -311,8 +311,10 @@ func TestApplyHostReportLegacyLibvirtRatesStayOnReceiptTime(t *testing.T) {
 	report := func(slot int) agentshost.Report {
 		return agent.libvirtHostReport("", 0, slot, agent.collectedAt(slot), agent.libvirtCollectedAt(slot), agent.libvirtDomain(slot, 0))
 	}
-	applyCounterClockHost(t, m, report(1))
+	// Start the clock before the first report so wall spans both receipt
+	// stamps; starting after it let a slow first apply exceed the second's.
 	sentAt := time.Now()
+	applyCounterClockHost(t, m, report(1))
 	domain := libvirtClockDomain(t, "legacy", applyCounterClockHost(t, m, report(2)))
 	wall := time.Since(sentAt).Seconds()
 	if !domain.CPUUsageValid || !domain.IORatesValid {
