@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "03aac234347a5cd26bb88b7063bc22e8f712730a",
+  "verified_at": "2026-11-01T15:42:41.500078Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts": "d788491136efa758ff1b196d911788a29657fe3473be07b241f1e3b0078ca41c",
+    "frontend-modern/src/useAppRuntimeState.ts": "4c18ee30d8a726bd443136f6ac0ae1361419db8c91db371a30ecb9a0462fb93b"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/overview#metadata-withdrawn"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual production App, Proxmox Workloads owner, saved-link editor and Login, using their real API client and CSS with synthetic loopback GET/PUT/logout/session fixtures. No live IdP, installed administrator/workload recovery or all-copy-erasure claim.",
+    "Six browser contexts: desktop/light Chromium 141.0.7390.37 and dark touch 390px WebKit 26.0, each covering acknowledged cleanup, blocked scoped-key cleanup and denied fresh metadata. Playwright 1.56.1 matches the integration lock. All 67 semantic controls pass; all ten captures were opened with native view_image at original detail.",
+    "Prepared offline source o57bwazg on this parent passes full types, changed-file format/eslint and 242/243 tests; the unchanged retained-state bootstrap test times out at its 5s test deadline. No full-suite pass is claimed. Source 9y23sp8b passes production/embed build, unchanged bundle/preload/integrity controls and the complete runtime file (65/65), but its isolated cold beforeEach times out at 10s; overall exit remains 1. Exact raw outputs, failures and stopped guests remain retained.",
+    "All 2559 build inputs match this committed source. Browser client exits 0 with no page errors; four console 403 messages are the explicit denied-read controls, not hidden or claimed absent."
+  ],
+  "interactions": [
+    "Pending and forbidden authenticated metadata reads cannot render an old flat/org-keyed disk URL. The actual editor receives the completed permitted value; one real metadata PUT per success case updates the fixture, and reopening the editor shows the confirmed saved value with no unsaved changes.",
+    "Acknowledged sign-out disposes the Workloads consumer even when the document stays at its same-path fragment or a scoped cache deletion throws. Releasing obsolete metadata reads and draining held idle callbacks cannot recreate cleared storage; no new metadata disk writes occur.",
+    "Legacy flat and all dot-prefixed org keys are removed on success, only the synthetically blocked key remains on partial cleanup, unrelated preferences survive, and server metadata is retained. The partial cleanup warning remains legible at both widths. Late owner/ABA-org/independent-owner cases also have registered component tests; they are not a claim of original cross-user exposure."
+  ],
+  "evidence": {
+    "browser_checks": 67,
+    "native_pixel_inspections": 10,
+    "source_proofs": [
+      "source-o57bwazg",
+      "source-9y23sp8b",
+      "source-uive2lqt"
+    ],
+    "lane_records": [
+      "RECEIPTS.md",
+      "SOURCE.tar.xz",
+      "BROWSER.tar.xz",
+      "PIXELS.json",
+      "BUILD-COMPOSITION.json"
+    ]
+  }
+}
