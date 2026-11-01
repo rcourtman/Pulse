@@ -1,17 +1,8 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-  onMount,
-  type Accessor,
-} from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, onMount, type Accessor } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { getOrgID } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
-import { STORAGE_KEYS } from '@/utils/localStorage';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
@@ -20,225 +11,39 @@ import {
 import { eventBus } from '@/stores/events';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
-type IdleCallbackHandle = number;
-type IdleCallback = (deadline?: { didTimeout: boolean; timeRemaining: () => number }) => void;
-type IdleCapableWindow = Window & {
-  requestIdleCallback?: (
-    callback: IdleCallback,
-    options?: { timeout: number },
-  ) => IdleCallbackHandle;
-  cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
-};
-
-let cachedGuestMetadata: GuestMetadataRecord | null = null;
-let cachedGuestMetadataStorageKey: string | null = null;
-let lastPersistedGuestMetadataJSON: string | null = null;
-let lastPersistedGuestMetadataStorageKey: string | null = null;
-let pendingPersistMetadata: GuestMetadataRecord | null = null;
-let pendingPersistStorageKey: string | null = null;
-let persistHandle: number | null = null;
-let persistHandleType: 'idle' | 'timeout' | null = null;
-
-const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
-
-const guestMetadataStorageKeyForOrg = (orgScope: string): string =>
-  `${STORAGE_KEYS.GUEST_METADATA}.${encodeURIComponent(orgScope)}`;
-
+// Saved metadata belongs to the server. Keep only this mounted owner's copy:
+// an org-only disk/module cache can outlive the credential that read it, and
+// delayed persistence can recreate it after sign-out removed it.
 const isStableAppContainerMetadataId = (guestId: string): boolean =>
   guestId.trim().startsWith('app-container:') && guestId.includes(':name:');
 
-const readGuestMetadataCache = (storageKey: string): GuestMetadataRecord => {
-  if (cachedGuestMetadata && cachedGuestMetadataStorageKey === storageKey) {
-    return cachedGuestMetadata;
-  }
-
-  if (typeof window === 'undefined') {
-    cachedGuestMetadata = {};
-    cachedGuestMetadataStorageKey = storageKey;
-    return cachedGuestMetadata;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) {
-      cachedGuestMetadata = {};
-      cachedGuestMetadataStorageKey = storageKey;
-      lastPersistedGuestMetadataJSON = null;
-      lastPersistedGuestMetadataStorageKey = storageKey;
-      return cachedGuestMetadata;
-    }
-
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      cachedGuestMetadata = parsed as GuestMetadataRecord;
-      cachedGuestMetadataStorageKey = storageKey;
-      lastPersistedGuestMetadataJSON = raw;
-      lastPersistedGuestMetadataStorageKey = storageKey;
-      return cachedGuestMetadata;
-    }
-  } catch (error) {
-    logger.warn('Failed to parse cached guest metadata', error);
-  }
-
-  cachedGuestMetadata = {};
-  cachedGuestMetadataStorageKey = storageKey;
-  lastPersistedGuestMetadataJSON = null;
-  lastPersistedGuestMetadataStorageKey = storageKey;
-  return cachedGuestMetadata;
-};
-
-const clearPendingPersistHandle = (idleWindow: IdleCapableWindow) => {
-  if (persistHandle === null || persistHandleType === null) {
-    return;
-  }
-
-  if (persistHandleType === 'idle' && idleWindow.cancelIdleCallback) {
-    idleWindow.cancelIdleCallback(persistHandle);
-  } else if (persistHandleType === 'timeout') {
-    window.clearTimeout(persistHandle);
-  }
-
-  persistHandle = null;
-  persistHandleType = null;
-};
-
-const runGuestMetadataPersist = () => {
-  if (typeof window === 'undefined' || !pendingPersistMetadata || !pendingPersistStorageKey) {
-    pendingPersistMetadata = null;
-    pendingPersistStorageKey = null;
-    return;
-  }
-
-  const metadata = pendingPersistMetadata;
-  const storageKey = pendingPersistStorageKey;
-  pendingPersistMetadata = null;
-  pendingPersistStorageKey = null;
-
-  const markBase = instrumentationEnabled ? `guest-metadata:persist:${Date.now()}` : null;
-  if (markBase) {
-    performance.mark(`${markBase}:start`);
-  }
-
-  let serialized: string;
-  try {
-    serialized = JSON.stringify(metadata);
-  } catch (error) {
-    if (markBase) {
-      performance.mark(`${markBase}:end`);
-      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
-      performance.clearMarks(`${markBase}:start`);
-      performance.clearMarks(`${markBase}:end`);
-      performance.clearMeasures(markBase);
-    }
-    logger.warn('Failed to serialize guest metadata cache', error);
-    return;
-  }
-
-  if (
-    serialized === lastPersistedGuestMetadataJSON &&
-    storageKey === lastPersistedGuestMetadataStorageKey
-  ) {
-    if (markBase) {
-      performance.mark(`${markBase}:end`);
-      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
-      const entries = performance.getEntriesByName(markBase);
-      const entry = entries[entries.length - 1];
-      if (entry) {
-        logger.debug('[guestMetadataCache] skipped persist (unchanged)', {
-          durationMs: entry.duration,
-        });
-      }
-      performance.clearMarks(`${markBase}:start`);
-      performance.clearMarks(`${markBase}:end`);
-      performance.clearMeasures(markBase);
-    }
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(storageKey, serialized);
-    lastPersistedGuestMetadataJSON = serialized;
-    lastPersistedGuestMetadataStorageKey = storageKey;
-    if (markBase) {
-      performance.mark(`${markBase}:end`);
-      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
-      const entries = performance.getEntriesByName(markBase);
-      const entry = entries[entries.length - 1];
-      if (entry) {
-        logger.debug('[guestMetadataCache] persisted entries', {
-          count: Object.keys(metadata).length,
-          durationMs: entry.duration,
-        });
-      }
-      performance.clearMarks(`${markBase}:start`);
-      performance.clearMarks(`${markBase}:end`);
-      performance.clearMeasures(markBase);
-    }
-  } catch (error) {
-    if (markBase) {
-      performance.mark(`${markBase}:end`);
-      performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
-      performance.clearMarks(`${markBase}:start`);
-      performance.clearMarks(`${markBase}:end`);
-      performance.clearMeasures(markBase);
-    }
-    logger.warn('Failed to persist guest metadata cache', error);
-  }
-};
-
-const queueGuestMetadataPersist = (storageKey: string, metadata: GuestMetadataRecord) => {
-  cachedGuestMetadata = metadata;
-  cachedGuestMetadataStorageKey = storageKey;
-
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  pendingPersistMetadata = metadata;
-  pendingPersistStorageKey = storageKey;
-  const idleWindow = window as IdleCapableWindow;
-
-  clearPendingPersistHandle(idleWindow);
-
-  const schedule: IdleCallback = () => {
-    persistHandle = null;
-    persistHandleType = null;
-    runGuestMetadataPersist();
-  };
-
-  if (idleWindow.requestIdleCallback) {
-    persistHandleType = 'idle';
-    persistHandle = idleWindow.requestIdleCallback(schedule, { timeout: 750 });
-  } else {
-    persistHandleType = 'timeout';
-    persistHandle = window.setTimeout(schedule, 0);
-  }
-};
-
 export function useWorkloadGuestMetadataState(metadataIds?: Accessor<ReadonlySet<string>>) {
   let refreshRevision = 0;
+  let disposed = false;
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
-  const guestMetadataStorageKey = createMemo(() => guestMetadataStorageKeyForOrg(orgScope()));
-  const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(
-    readGuestMetadataCache(guestMetadataStorageKey()),
-  );
+  const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>({});
 
-  const updateGuestMetadataState = (updater: (prev: GuestMetadataRecord) => GuestMetadataRecord) =>
-    setGuestMetadata((prev) => {
-      const next = updater(prev);
-      if (next === prev) {
-        return prev;
-      }
-      queueGuestMetadataPersist(guestMetadataStorageKey(), next);
-      return next;
-    });
+  // The authenticated app shell disposes this owner on confirmed sign-out,
+  // even when provider navigation or browser cleanup cannot complete.
+  onCleanup(() => {
+    disposed = true;
+    refreshRevision += 1;
+    setGuestMetadata({});
+  });
+
+  const updateGuestMetadataState = (
+    updater: (prev: GuestMetadataRecord) => GuestMetadataRecord,
+  ) => {
+    if (!disposed) setGuestMetadata(updater);
+  };
 
   const refreshGuestMetadata = async () => {
+    if (disposed) return;
     const revision = ++refreshRevision;
-    const storageKey = guestMetadataStorageKey();
+    const requestOrg = orgScope();
     try {
       const metadata = await GuestMetadataAPI.getAllMetadata();
-      if (revision !== refreshRevision || storageKey !== guestMetadataStorageKey()) return;
+      if (disposed || revision !== refreshRevision || requestOrg !== orgScope()) return;
       updateGuestMetadataState(() => metadata || {});
       logger.debug('Guest metadata refreshed');
     } catch (error) {
@@ -247,6 +52,7 @@ export function useWorkloadGuestMetadataState(metadataIds?: Accessor<ReadonlySet
   };
 
   const handleCustomUrlUpdate = (guestId: string, url: string) => {
+    if (disposed) return;
     const trimmedUrl = url.trim();
     const nextUrl = trimmedUrl === '' ? undefined : trimmedUrl;
     const currentUrl = guestMetadata()[guestId]?.customUrl;
@@ -336,6 +142,8 @@ export function useWorkloadGuestMetadataState(metadataIds?: Accessor<ReadonlySet
 
     window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleMetadataChanged);
     const unsubscribeOrgSwitched = eventBus.on('org_switched', (nextOrgID) => {
+      refreshRevision += 1;
+      setGuestMetadata({});
       setOrgScope(normalizeOrgScope(nextOrgID));
       void refreshGuestMetadata();
     });
@@ -344,11 +152,6 @@ export function useWorkloadGuestMetadataState(metadataIds?: Accessor<ReadonlySet
       window.removeEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleMetadataChanged);
       unsubscribeOrgSwitched();
     });
-  });
-
-  createEffect(() => {
-    const storageKey = guestMetadataStorageKey();
-    setGuestMetadata(readGuestMetadataCache(storageKey));
   });
 
   return {

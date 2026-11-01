@@ -13,9 +13,8 @@ import { useWorkloadGuestMetadataState } from '../useWorkloadGuestMetadataState'
 // metadata-changed event subscription (no/nil metadataId, missing kind or
 // customUrl, docker kind), refresh (rejection + null payload), the org_switched
 // subscription body, onMount teardown, the handleCustomUrlUpdate clearing/trim
-// arms, and the localStorage persist queue. Each test is isolated by giving the
-// hook a unique org scope (unique storage key) so the module-level metadata
-// cache never leaks state across tests.
+// arms. Saved metadata now comes only from each owner's authenticated read;
+// the separate lifetime suite covers disposal and legacy-cache non-reuse.
 
 type OrgSwitchedHandler = (orgID?: string) => void;
 
@@ -104,30 +103,26 @@ describe('useWorkloadGuestMetadataState (branch coverage 0722am)', () => {
       });
     });
 
-    it('keeps a non-stable entry (dropping only customUrl) when it carries additional metadata', () => {
+    it('keeps a non-stable entry (dropping only customUrl) when it carries additional metadata', async () => {
       mocks.orgID = 'keep-extra';
-      window.localStorage.setItem(
-        keyFor('keep-extra'),
-        JSON.stringify({
-          'guest:keep': {
-            id: 'guest:keep',
-            customUrl: 'https://k.example',
-            description: 'desc',
-            tags: ['t'],
-          },
-        }),
-      );
-      createRoot((dispose) => {
-        const state = useWorkloadGuestMetadataState();
-        state.handleCustomUrlUpdate('guest:keep', '');
-        expect(state.guestMetadata()['guest:keep']).toEqual({
+      mocks.getAllMetadata.mockResolvedValue({
+        'guest:keep': {
           id: 'guest:keep',
+          customUrl: 'https://k.example',
           description: 'desc',
           tags: ['t'],
-        });
-        expect(state.guestMetadata()['guest:keep']?.customUrl).toBeUndefined();
-        dispose();
+        },
       });
+      const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
+      await flush();
+      result.handleCustomUrlUpdate('guest:keep', '');
+      expect(result.guestMetadata()['guest:keep']).toEqual({
+        id: 'guest:keep',
+        description: 'desc',
+        tags: ['t'],
+      });
+      expect(result.guestMetadata()['guest:keep']?.customUrl).toBeUndefined();
+      cleanup();
     });
 
     it('no-ops when clearing a non-stable id that has no entry at all', () => {
@@ -260,7 +255,7 @@ describe('useWorkloadGuestMetadataState (branch coverage 0722am)', () => {
       );
       mocks.getAllMetadata.mockResolvedValue(null);
       const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
-      expect(result.guestMetadata()['guest:seed']?.customUrl).toBe('https://s.example');
+      expect(result.guestMetadata()).toEqual({});
       await flush();
       expect(result.guestMetadata()['guest:seed']).toBeUndefined();
       expect(result.guestMetadata()).toEqual({});
@@ -281,7 +276,7 @@ describe('useWorkloadGuestMetadataState (branch coverage 0722am)', () => {
       cleanup();
     });
 
-    it('re-reads the cache under the new org scope on org_switched', async () => {
+    it('reads metadata with the new org scope without reusing legacy disk data', async () => {
       mocks.orgID = 'scope-default';
       mocks.getAllMetadata.mockRejectedValue(new Error('no api'));
       window.localStorage.setItem(
@@ -293,9 +288,15 @@ describe('useWorkloadGuestMetadataState (branch coverage 0722am)', () => {
       const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
       await flush();
       expect(result.guestMetadata()['guest:target']).toBeUndefined();
+      mocks.getAllMetadata.mockResolvedValue({
+        'guest:target': { id: 'guest:target', customUrl: 'https://authorised.example' },
+      });
       mocks.orgSwitchedHandler.current?.('org-target');
+      expect(result.guestMetadata()).toEqual({});
       await vi.waitFor(() => {
-        expect(result.guestMetadata()['guest:target']?.customUrl).toBe('https://t.example');
+        expect(result.guestMetadata()['guest:target']?.customUrl).toBe(
+          'https://authorised.example',
+        );
       });
       cleanup();
     });
@@ -320,42 +321,6 @@ describe('useWorkloadGuestMetadataState (branch coverage 0722am)', () => {
       expect(mocks.unsubscribeOrgSwitched).not.toHaveBeenCalled();
       cleanup();
       expect(mocks.unsubscribeOrgSwitched).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('localStorage persist queue (no requestIdleCallback -> setTimeout fallback)', () => {
-    it('persists queued metadata to localStorage via the setTimeout fallback', () => {
-      vi.stubGlobal('requestIdleCallback', undefined);
-      vi.stubGlobal('cancelIdleCallback', undefined);
-      vi.useFakeTimers();
-      mocks.orgID = 'persist-ok';
-      mocks.getAllMetadata.mockReturnValue(new Promise(() => {}));
-      const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
-      result.handleCustomUrlUpdate('guest:persist', 'https://p.example');
-      vi.advanceTimersByTime(1);
-      const raw = window.localStorage.getItem(keyFor('persist-ok'));
-      expect(raw).not.toBeNull();
-      expect(raw).toContain('guest:persist');
-      expect(raw).toContain('https://p.example');
-      cleanup();
-    });
-
-    it('swallows a localStorage.setItem failure during persist without throwing', () => {
-      vi.stubGlobal('requestIdleCallback', undefined);
-      vi.stubGlobal('cancelIdleCallback', undefined);
-      vi.useFakeTimers();
-      mocks.orgID = 'persist-err';
-      mocks.getAllMetadata.mockReturnValue(new Promise(() => {}));
-      const setItemSpy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
-        throw new Error('quota exceeded');
-      });
-      const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
-      expect(() => {
-        result.handleCustomUrlUpdate('guest:persist-err', 'https://pe.example');
-        vi.advanceTimersByTime(1);
-      }).not.toThrow();
-      setItemSpy.mockRestore();
-      cleanup();
     });
   });
 });

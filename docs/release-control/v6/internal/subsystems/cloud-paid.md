@@ -3966,8 +3966,19 @@ consumer with synthetic independent sessions and inspected pixels; it is not
 live IdP or original administrator recovery. The proxy guide and shipped mirror
 must describe the same sequence without claiming upstream revocation.
 
-The current Workloads metadata owner also has organisation-scoped persistent
-and module caches plus deferred persistence. This bounded redirect repair does
-not establish their erasure or original administrator recovery. Session-binding
-that existing owner is the next retained Web step; help must not describe
-credential cleanup as erasing every copy of already-held monitoring data.
+Workloads metadata now lives only in its mounted authenticated owner. Each
+mount keeps the existing server read; no org-only disk or module cache is read,
+written or scheduled for idle persistence. Disposal (including the app shell's
+confirmed-sign-out gate) clears that owner's signal and excludes late reads and
+edits. Organisation switches clear outgoing metadata before refreshing, and a
+revision excludes old responses even after switching back to the same org.
+Confirmed sign-out also removes the legacy flat key and every dot-prefixed org
+metadata key, snapshotting names before removal and attempting each separately.
+Enumeration/removal failures retain the existing explicit cleanup warning and
+do not prevent shell teardown. Unrelated local preferences, server metadata,
+API-token authority and independent sessions are unchanged. A pending or denied
+fresh metadata read cannot reuse another credential's browser copy; this can
+withhold saved links until the read succeeds. It is not erasure of every copy
+already held elsewhere, live IdP or original administrator recovery. Registered
+metadata-lifetime, Workloads consumer and runtime tests cover the boundaries;
+desktop/narrow browser proof must exercise the actual platform consumer.

@@ -780,6 +780,10 @@ describe('useAppRuntimeState', () => {
       for (const key of ['auth', 'guest_metadata', 'docker_metadata', 'docker_metadata_hosts']) {
         localStorage.setItem(key, 'synthetic-cache');
       }
+      const scopedMetadataKeys = ['guest_metadata.default', 'guest_metadata.ops%2Feu'];
+      for (const key of scopedMetadataKeys) localStorage.setItem(key, 'synthetic-scoped-cache');
+      localStorage.setItem('guest_metadataTheme', 'keep-near-prefix');
+      localStorage.setItem('workloadsHiddenColumns', '["tags"]');
       sessionStorage.setItem('auth', 'synthetic-browser-token');
       sessionStorage.setItem('pulse_auth_user', 'synthetic-user');
       let finish!: (value: Response) => void;
@@ -797,6 +801,8 @@ describe('useAppRuntimeState', () => {
       expect(clearAuthMock).not.toHaveBeenCalled();
       expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
       expect(localStorage.getItem('auth')).toBe('synthetic-cache');
+      for (const key of scopedMetadataKeys)
+        expect(localStorage.getItem(key)).toBe('synthetic-scoped-cache');
       expect(window.location.hash).toBe('');
       await hookState.handleLogout();
       expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/logout')).toHaveLength(1);
@@ -817,6 +823,9 @@ describe('useAppRuntimeState', () => {
       for (const key of ['auth', 'guest_metadata', 'docker_metadata', 'docker_metadata_hosts']) {
         expect(localStorage.getItem(key)).toBeNull();
       }
+      for (const key of scopedMetadataKeys) expect(localStorage.getItem(key)).toBeNull();
+      expect(localStorage.getItem('guest_metadataTheme')).toBe('keep-near-prefix');
+      expect(localStorage.getItem('workloadsHiddenColumns')).toBe('["tags"]');
       expect(sessionStorage.getItem('auth')).toBeNull();
       expect(sessionStorage.getItem('pulse_auth_user')).toBeNull();
       expect(sessionStorage.getItem('pulse_demo_auto_login')).toBe('suppressed');
@@ -948,6 +957,47 @@ describe('useAppRuntimeState', () => {
       expect.stringContaining('proxy or identity-provider session may still be active'),
     );
   });
+
+  it.each(['scoped-key', 'enumeration'])(
+    'logout reports legacy metadata %s cleanup failure but still tears down the authenticated shell',
+    async (failure) => {
+      const { hookState } = await mountLogout();
+      localStorage.setItem('guest_metadata.default', 'synthetic-cache');
+      localStorage.setItem('guest_metadata.other', 'synthetic-cache');
+      const remove = Storage.prototype.removeItem;
+      const spy =
+        failure === 'scoped-key'
+          ? vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (
+              this: Storage,
+              key: string,
+            ) {
+              if (key === 'guest_metadata.default') throw new Error('Synthetic blocked cache');
+              remove.call(this, key);
+            })
+          : vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+              throw new Error('Synthetic blocked enumeration');
+            });
+      const fallback = apiFetchMock.getMockImplementation()!;
+      apiFetchMock.mockImplementation(async (url: string) =>
+        url === '/api/logout' ? new Response('{"success":true}') : fallback(url),
+      );
+      await hookState.handleLogout();
+      spy.mockRestore();
+      if (failure === 'scoped-key') {
+        expect(localStorage.getItem('guest_metadata.default')).toBe('synthetic-cache');
+        expect(localStorage.getItem('guest_metadata.other')).toBeNull();
+      }
+      expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
+      expect(hookState.enhancedStore()).toBeNull();
+      expect(hookState.needsAuth()).toBe(true);
+      expect(window.location.hash).toBe('');
+      expect(showToastMock).toHaveBeenCalledWith(
+        'error',
+        'Browser cleanup incomplete',
+        expect.stringContaining('could not finish browser cleanup'),
+      );
+    },
+  );
 
   it.each(['auth', 'socket'])('logout keeps %s cleanup failure explicit', async (failure) => {
     const { hookState } = await mountLogout();
