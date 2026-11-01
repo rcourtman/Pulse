@@ -11,6 +11,8 @@ import { useTokenRevealState, dismissTokenReveal } from '@/stores/tokenReveal';
 export const TokenRevealDialog: Component = () => {
   const state = useTokenRevealState();
   const [copied, setCopied] = createSignal(false);
+  const [copying, setCopying] = createSignal(false);
+  let copyGeneration = 0;
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const handleDismiss = () => {
@@ -19,7 +21,18 @@ export const TokenRevealDialog: Component = () => {
   };
 
   const handleCopy = async (token: string) => {
+    const current = state();
+    if (!current || current.token !== token || copying()) return;
+    const generation = ++copyGeneration;
+    if (copiedTimer) clearTimeout(copiedTimer);
+    copiedTimer = undefined;
+    setCopied(false);
+    setCopying(true);
     const success = await copyToClipboard(token);
+    // A clipboard write already requested by the operator cannot be cancelled.
+    // Its completion must not confirm a different or dismissed reveal.
+    if (generation !== copyGeneration || state() !== current) return;
+    setCopying(false);
     if (success) {
       setCopied(true);
       showSuccess('Token copied to clipboard');
@@ -31,12 +44,17 @@ export const TokenRevealDialog: Component = () => {
   };
 
   onCleanup(() => {
+    copyGeneration += 1;
     if (copiedTimer) clearTimeout(copiedTimer);
   });
 
   createEffect(() => {
     const current = state();
+    copyGeneration += 1;
+    if (copiedTimer) clearTimeout(copiedTimer);
+    copiedTimer = undefined;
     setCopied(false);
+    setCopying(false);
     if (!current) {
       return;
     }
@@ -52,9 +70,8 @@ export const TokenRevealDialog: Component = () => {
   });
 
   return (
-    <Show when={state()}>
-      {(tokenInfo) => {
-        const info = tokenInfo();
+    <Show when={state()} keyed>
+      {(info) => {
         const sourceBadge = getSourcePlatformBadge(info.source);
         const sourceLabel = sourceBadge?.label || getSourcePlatformLabel(info.source);
         const recordName = info.record?.name?.trim() || 'Untitled token';
@@ -77,17 +94,8 @@ export const TokenRevealDialog: Component = () => {
             panelClass="max-w-xl"
             ariaLabel="API token ready"
           >
-            <div class="w-full">
+            <div class="w-full min-h-0 overflow-y-auto overscroll-contain">
               <Card padding="lg" class="shadow-xs relative">
-                <button
-                  type="button"
-                  class="absolute top-3 right-3 rounded-md px-2 py-1 text-xs font-medium hover:text-base-content transition-colors"
-                  onClick={handleDismiss}
-                  aria-label="Close token dialog"
-                >
-                  Close
-                </button>
-
                 <div class="flex items-start gap-3">
                   <div class="shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900/25 dark:text-green-300 p-2">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -99,47 +107,58 @@ export const TokenRevealDialog: Component = () => {
                       />
                     </svg>
                   </div>
-                  <div class="space-y-2 flex-1">
+                  <div class="min-w-0 space-y-2 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <h2 class="text-lg font-semibold text-base-content">API token ready</h2>
                       <Show when={sourceLabel}>
                         <span
-                          class={
+                          class={`max-w-full [overflow-wrap:anywhere] ${
                             sourceBadge?.classes ||
-                            'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'
-                          }
+                            'inline-flex items-center rounded-sm px-2 py-0.5 text-[10px] font-medium bg-surface-alt text-base-content'
+                          }`}
                         >
                           {sourceLabel}
                         </span>
                       </Show>
                     </div>
-                    <p class="text-sm text-base-content leading-snug">{hint}</p>
                   </div>
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-md px-2 py-1 text-xs font-medium hover:text-base-content transition-colors"
+                    onClick={handleDismiss}
+                    aria-label="Close token dialog"
+                  >
+                    Close
+                  </button>
                 </div>
+                <p class="mt-3 text-sm text-base-content leading-snug [overflow-wrap:anywhere]">
+                  {hint}
+                </p>
 
                 <div class="mt-5 space-y-3">
                   <div class="text-xs font-semibold uppercase tracking-wide text-muted">
                     Token value
                   </div>
                   <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <code class="flex-1 rounded-md border border-green-300 dark:border-green-700 bg-surface px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
+                    <code class="min-w-0 flex-1 rounded-md border border-green-300 dark:border-green-700 bg-surface px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
                       {info.token}
                     </code>
                     <button
                       type="button"
                       onClick={() => handleCopy(info.token)}
-                      class="inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-xs"
+                      disabled={copying()}
+                      class="disabled:cursor-wait disabled:opacity-60 inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-xs"
                     >
-                      {copied() ? 'Copied!' : 'Copy token'}
+                      {copying() ? 'Copying…' : copied() ? 'Copied!' : 'Copy token'}
                     </button>
                   </div>
-                  <div class="text-xs text-muted">
+                  <div class="text-xs text-muted [overflow-wrap:anywhere]">
                     Label: <span class="font-semibold text-base-content">{recordName}</span>
                     <Show when={tokenHint}>
                       <span>
                         {' '}
                         · Hint:{' '}
-                        <code class="rounded-sm bg-surface-alt px-1.5 py-0.5 font-mono text-[11px] text-muted">
+                        <code class="rounded-sm bg-surface-alt px-1.5 py-0.5 font-mono text-[11px] text-muted break-all">
                           {tokenHint as string}
                         </code>
                       </span>
