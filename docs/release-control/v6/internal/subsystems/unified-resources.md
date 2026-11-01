@@ -1497,6 +1497,20 @@ The compact By date layout reserves enough age space for the full cautionary Unk
 
 Compact Coverage age cells use the existing metadata-size text and reclaim numeric-age gutters so the full Unknown word stays visible even beside a Job column at 320px; text-range checks account for cell padding, not only the outer box.
 
+### Agent updater evidence remains canonical through fleet reads
+
+The agent facet carries the shared typed `models.AgentUpdateStatus` value from
+host ingestion through resource storage, cloning and `HostView.AgentUpdate()`.
+Adapters and views own that value and its three optional timestamps. Neither
+source model mutation nor a snapshot reader may mutate retained evidence.
+Monitoring reconstructs host updater status from that canonical facet, so fleet
+connections and Agent Doctor retain real errors and last-success evidence
+instead of silently dropping it. An absent status remains unknown. This read
+projection creates no new update, enrollment or command authority.
+`TestHostUpdateEvidenceSurvivesCanonicalAdapterViewAndClone` and
+`TestHostsSnapshotPreservesCanonicalUpdaterEvidence` cover retention, mutation
+isolation and replacement of a failed outcome by a newly accepted success.
+
 ## Canonical Files
 
 1. `internal/unifiedresources/types.go`

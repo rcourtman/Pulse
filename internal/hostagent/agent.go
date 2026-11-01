@@ -109,9 +109,11 @@ type Config struct {
 	// collected authoritative report is accepted. Buffered reports and observer
 	// acknowledgements do not satisfy this startup-health signal.
 	OnPrimaryReportAccepted func()
-	// UpdatedFromVersion is supplied by the durable helper-update handoff and
-	// is carried by the first report built by the replacement process.
-	UpdatedFromVersion string
+	// UpdatedFromVersion overrides legacy local update evidence. Nil reads the
+	// local marker. A non-nil value belongs to the typed helper, including an
+	// empty value when no candidate update took effect. Helper-backed installs
+	// must not fall back to stale local evidence after rollback or on restart.
+	UpdatedFromVersion *string
 
 	Collector SystemCollector // Optional: override default system information collector (for testing)
 	// PrivilegedTelemetry routes the exceptional SMART and Proxmox LXC
@@ -409,8 +411,10 @@ func New(cfg Config) (*Agent, error) {
 	const bufferCapacity = 60
 
 	// Check if agent was recently auto-updated (only reported once per restart)
-	updatedFrom := strings.TrimSpace(cfg.UpdatedFromVersion)
-	if updatedFrom == "" {
+	updatedFrom := ""
+	if cfg.UpdatedFromVersion != nil {
+		updatedFrom = strings.TrimSpace(*cfg.UpdatedFromVersion)
+	} else {
 		updatedFrom = updatedFromVersionFn()
 	}
 	if updatedFrom != "" {

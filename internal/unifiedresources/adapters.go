@@ -178,6 +178,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	agent := &AgentData{
 		AgentID:                 host.ID,
 		AgentVersion:            host.AgentVersion,
+		AgentUpdate:             cloneAgentUpdateStatus(host.AgentUpdate),
 		Hostname:                host.Hostname,
 		MachineID:               host.MachineID,
 		TokenID:                 host.TokenID,

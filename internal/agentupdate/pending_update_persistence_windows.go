@@ -4,6 +4,7 @@ package agentupdate
 
 import (
 	"fmt"
+	"os"
 
 	"golang.org/x/sys/windows"
 )
@@ -25,6 +26,17 @@ func replacePendingUpdateFile(from, to string) error {
 		return fmt.Errorf("replace pending update handoff with write-through: %w", err)
 	}
 	return nil
+}
+
+// syncUpdateFile flushes a closed file's data. FlushFileBuffers needs a
+// handle with write access; Windows has no executable mode bit to persist.
+func syncUpdateFile(path string) error {
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return file.Sync()
 }
 
 func syncUpdateDirectory(string) error {

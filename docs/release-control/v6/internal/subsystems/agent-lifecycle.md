@@ -1282,12 +1282,38 @@ typed commit. Buffered or observer reports do not satisfy that floor. An
 expired, interrupted, invalid, or uncommitted activation rolls back during
 helper recovery or through the deadline watchdog; commit and rollback remove
 their fixed staging/quarantine artifacts durably. The first accepted report
-retains the previous-version update evidence from that handoff.
+retains previous-version evidence only while the running executable matches
+the activated candidate. Helper-backed startup owns an explicit update-evidence
+override even when it is empty or no pending handoff remains. Recovered rollback
+and subsequent helper starts therefore cannot consume a stale local update
+marker as fresh success. Installs without the typed helper retain the local
+updater's one-shot marker.
 Deadline recovery retains the exact pending identity and retries transient
 state-read, last-known-good restore, cleanup, and persistence failures with a
 nonzero bounded backoff until the durable state becomes terminal. Each failed
 attempt is emitted to the helper log with the activation identity and retry
 delay; a failed attempt never silently disarms automatic rollback.
+Agent-authored updater state and its accepted-report success history pass
+through the canonical unified-resource agent facet and typed host view into
+monitoring and fleet diagnostics. Snapshot conversion must not discard that
+evidence or share mutable status/timestamp pointers with a reader. This is
+canonical L13 read-state plumbing for the L16 update lifecycle, not a second
+host cache or a frontend reconstruction of an update outcome.
+
+Updater restart recovery follows typed post-replacement state. A failed
+restart after successful helper rollback keeps the restored process running
+with its error status, including any separate failure to clear the handoff.
+A failed rollback or a failed local exec after replacement requires service
+manager handover. Server-controlled error text cannot request process exit.
+Local non-Windows replacement syncs staged bytes and final executable mode
+before renaming over the service path, then syncs its directory. Staged-sync
+failure preserves the old executable. Directory-sync failure reports uncertain
+durability and retains any backup while recording current visible replacement
+evidence. Persistent appliance copies use the same file/rename/directory order.
+The existing Windows two-rename missing-path crash gap remains a separate
+platform limitation. Barrier ordering and model tests do not establish physical
+power-loss durability on every filesystem or storage device.
+
 Before staging or activation, the helper must establish that the signed target
 is the Pulse agent Go command, that its declared and operational version equals
 the requested target, and that the target advances the installed version.
@@ -10622,8 +10648,13 @@ target name with the same status the row badge shows and a one-line verdict.
 Reasons, repair and re-enrol guidance, uninstall and safe-profile guidance and
 the credential reveal render as shared `InlineNotice`s; agent and security
 facts as a `DetailSectionTable`; the connection id and identity evidence sit
-in a closed Details disclosure. No diagnosis, repair or credential flow
-changes: this is presentation only.
+in a closed Details disclosure. Target rows keep their canonical connection
+key across fleet reads and reordering. New target values update the existing
+row instead of remounting its disclosure, so operators keep evidence open and
+keyboard focus while updater status changes. Removing the target disposes its
+local disclosure state. `InfrastructureAgentDoctorPage.test.tsx` covers updated
+success evidence, reorder, focus continuity and removal. No diagnosis, repair
+or credential authority changes.
 
 The agent profiles settings panel reads AI availability from
 `frontend-modern/src/stores/aiAvailability.ts` since 2026-10-22, when the

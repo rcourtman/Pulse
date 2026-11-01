@@ -1111,3 +1111,22 @@ func TestCloneNativeRateObservation(t *testing.T) {
 		t.Fatal("rehydrated scalar invented a sample time")
 	}
 }
+
+func TestCloneResourceOwnsAgentUpdaterStatusAndTimes(t *testing.T) {
+	checked, attempted, succeeded := time.Unix(100, 0).UTC(), time.Unix(200, 0).UTC(), time.Unix(300, 0).UTC()
+	resource := &Resource{Agent: &AgentData{AgentUpdate: &models.AgentUpdateStatus{
+		State: "error", AutoUpdate: true, UpdatedFrom: "6.6.0", AvailableVersion: "6.7.0",
+		LastCheckedAt: &checked, LastAttemptAt: &attempted, LastSuccessAt: &succeeded, LastError: "helper restored previous binary",
+	}}}
+	cloned := cloneResource(resource)
+	if cloned.Agent.AgentUpdate == nil || cloned.Agent.AgentUpdate.LastError != resource.Agent.AgentUpdate.LastError {
+		t.Fatal("clone dropped updater status")
+	}
+	cloned.Agent.AgentUpdate.LastError = "clone changed"
+	*cloned.Agent.AgentUpdate.LastCheckedAt = time.Unix(999, 0)
+	*cloned.Agent.AgentUpdate.LastAttemptAt = time.Unix(999, 0)
+	*cloned.Agent.AgentUpdate.LastSuccessAt = time.Unix(999, 0)
+	if resource.Agent.AgentUpdate.LastError != "helper restored previous binary" || !resource.Agent.AgentUpdate.LastCheckedAt.Equal(time.Unix(100, 0)) || !resource.Agent.AgentUpdate.LastAttemptAt.Equal(time.Unix(200, 0)) || !resource.Agent.AgentUpdate.LastSuccessAt.Equal(time.Unix(300, 0)) {
+		t.Fatal("clone shares updater status or timestamp pointers")
+	}
+}

@@ -270,6 +270,7 @@ func cloneAgentData(in *AgentData) *AgentData {
 		return nil
 	}
 	out := *in
+	out.AgentUpdate = cloneAgentUpdateStatus(in.AgentUpdate)
 	if in.Memory != nil {
 		memory := *in.Memory
 		out.Memory = &memory
@@ -288,6 +289,17 @@ func cloneAgentData(in *AgentData) *AgentData {
 	out.StorageCleanup = cloneAgentStorageCleanupMeta(in.StorageCleanup)
 	out.DiskExclude = cloneStringSlice(in.DiskExclude)
 	out.IdentityConflict = cloneHostIdentityConflict(in.IdentityConflict)
+	return &out
+}
+
+func cloneAgentUpdateStatus(in *models.AgentUpdateStatus) *models.AgentUpdateStatus {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.LastCheckedAt = cloneTimePtr(in.LastCheckedAt)
+	out.LastAttemptAt = cloneTimePtr(in.LastAttemptAt)
+	out.LastSuccessAt = cloneTimePtr(in.LastSuccessAt)
 	return &out
 }
 

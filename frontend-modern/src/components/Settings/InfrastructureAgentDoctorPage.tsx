@@ -231,6 +231,12 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
     return props.targets.filter((target) => target.status === filter);
   });
 
+  // Fleet reads replace target objects. Keep rendered records keyed by
+  // connection identity so fresh evidence updates an open drawer in place.
+  const targetsByKey = createMemo(
+    () => new Map(visibleTargets().map((target) => [target.key, target])),
+  );
+
   // One target open at a time, like every other drawer table. A lone target
   // (the common case when a platform page deep-links one stale agent) starts
   // open so its diagnosis and update command are immediately visible; larger
@@ -547,58 +553,62 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
               </TableRow>
             </TableHeader>
             <TableBody>
-              <For each={visibleTargets()}>
-                {(target) => {
-                  const status = () => STATUS_PRESENTATION[target.status];
-                  const lastSeen = () => formatLastSeen(target.lastSeen);
+              <For each={Array.from(targetsByKey().keys())}>
+                {(key) => {
+                  const initialTarget = targetsByKey().get(key)!;
+                  const target = createMemo(() => targetsByKey().get(key) ?? initialTarget);
+                  const status = () => STATUS_PRESENTATION[target().status];
+                  const lastSeen = () => formatLastSeen(target().lastSeen);
                   const lastSeenRelative = () =>
-                    formatRelativeTime(target.lastSeen ?? undefined, {
+                    formatRelativeTime(target().lastSeen ?? undefined, {
                       compact: true,
                       emptyText: '—',
                       now: now(),
                     });
-                  const command = () =>
-                    target.connection && target.commandPlatform
+                  const command = () => {
+                    const current = target();
+                    return current.connection && current.commandPlatform
                       ? operations.getAgentConnectionUpgradeCommand(
-                          target.connection,
-                          target.installFlags,
-                          target.commandPlatform,
-                          target.needsCredentialRepair,
+                          current.connection,
+                          current.installFlags,
+                          current.commandPlatform,
+                          current.needsCredentialRepair,
                         )
                       : '';
+                  };
                   const otherRepairs = () =>
-                    (target.diagnostic?.repairActions ?? []).filter(
+                    (target().diagnostic?.repairActions ?? []).filter(
                       (action) =>
                         action.code !== 'copy_upgrade_command' &&
                         action.code !== 'repair_authentication' &&
                         action.code !== 'allow_reenroll',
                     );
                   const canAllowReenroll = () =>
-                    (target.diagnostic?.repairActions ?? []).some(
+                    (target().diagnostic?.repairActions ?? []).some(
                       (action) => action.code === 'allow_reenroll' && action.supported,
                     );
                   const uninstallHandoff = () =>
-                    getInfrastructureAgentDoctorUninstallHandoff(target);
-                  const expanded = () => isExpanded(target);
-                  const detailRowId = () => doctorDetailRowId(target);
+                    getInfrastructureAgentDoctorUninstallHandoff(target());
+                  const expanded = () => isExpanded(target());
+                  const detailRowId = () => doctorDetailRowId(target());
                   const factSections = (): DetailSection[] =>
                     compactDetailSections([
                       {
                         label: 'Agent',
                         rows: compactDetailRows([
-                          makeDetailRow('System', target.contextLabel, { wrap: true }),
-                          makeDetailRow('Version', target.currentVersion),
-                          makeDetailRow('Target version', target.expectedVersion),
+                          makeDetailRow('System', target().contextLabel, { wrap: true }),
+                          makeDetailRow('Version', target().currentVersion),
+                          makeDetailRow('Target version', target().expectedVersion),
                           makeDetailRow(
                             'Last seen',
                             lastSeen() ? `${lastSeen()} (${lastSeenRelative()})` : undefined,
                             { wrap: true },
                           ),
-                          makeDetailRow('Updater', target.updaterLabel, { wrap: true }),
+                          makeDetailRow('Updater', target().updaterLabel, { wrap: true }),
                           makeDetailRow(
                             'Profile',
-                            target.profileLabel
-                              ? [target.profileLabel, target.profileVersionLabel]
+                            target().profileLabel
+                              ? [target().profileLabel, target().profileVersionLabel]
                                   .filter(Boolean)
                                   .join(' ')
                               : undefined,
@@ -609,22 +619,22 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                       {
                         label: 'Security',
                         rows: compactDetailRows([
-                          makeDetailRow('Privilege', target.privilegeLabel, { wrap: true }),
-                          target.status !== 'removed'
+                          makeDetailRow('Privilege', target().privilegeLabel, { wrap: true }),
+                          target().status !== 'removed'
                             ? makeDetailRow(
                                 'Safe collector',
-                                target.safeCollector ? 'Confirmed' : 'Not confirmed',
-                                { tone: target.safeCollector ? 'success' : 'warning' },
+                                target().safeCollector ? 'Confirmed' : 'Not confirmed',
+                                { tone: target().safeCollector ? 'success' : 'warning' },
                               )
                             : null,
-                          makeDetailRow('Action runner', target.actionRunnerPosture.join(' · '), {
+                          makeDetailRow('Action runner', target().actionRunnerPosture.join(' · '), {
                             wrap: true,
                           }),
                           makeDetailRow(
                             'Runner credential',
-                            target.actionRunnerCredentialEligible
+                            target().actionRunnerCredentialEligible
                               ? undefined
-                              : target.actionRunnerCredentialBlockReason,
+                              : target().actionRunnerCredentialBlockReason,
                             { wrap: true },
                           ),
                         ]),
@@ -635,35 +645,35 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                       {
                         label: 'Connection',
                         rows: compactDetailRows([
-                          makeDetailRow('Connection ID', target.connectionId, { wrap: true }),
+                          makeDetailRow('Connection ID', target().connectionId, { wrap: true }),
                         ]),
                       },
                       {
                         label: 'Identity evidence',
-                        rows: compactDetailRows(target.evidence.map(evidenceDetailRow)),
+                        rows: compactDetailRows(target().evidence.map(evidenceDetailRow)),
                       },
                     ]);
 
                   return (
                     <>
-                      <TableRow class="cursor-pointer" onClick={() => toggleExpanded(target)}>
+                      <TableRow class="cursor-pointer" onClick={() => toggleExpanded(target())}>
                         <TableCell class="py-1.5 pl-3 pr-3">
                           <div class="flex items-center gap-1.5">
                             <SummaryRowActionButton
                               kind="disclosure"
                               expanded={expanded()}
-                              subjectLabel={`details for ${target.displayName}`}
+                              subjectLabel={`details for ${target().displayName}`}
                               controlsId={detailRowId()}
                               hideWhenRowTappableOnMobile={false}
-                              onAction={() => toggleExpanded(target)}
+                              onAction={() => toggleExpanded(target())}
                             />
                             <span class="truncate text-sm font-medium text-base-content">
-                              {target.displayName}
+                              {target().displayName}
                             </span>
                           </div>
                         </TableCell>
                         <TableCell class="hidden px-3 py-1.5 sm:table-cell">
-                          <span class="truncate text-xs text-muted">{target.contextLabel}</span>
+                          <span class="truncate text-xs text-muted">{target().contextLabel}</span>
                         </TableCell>
                         <TableCell class="px-3 py-1.5">
                           <span
@@ -673,10 +683,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                           </span>
                         </TableCell>
                         <TableCell class="hidden px-3 py-1.5 text-xs text-base-content sm:table-cell">
-                          {target.currentVersion || '—'}
+                          {target().currentVersion || '—'}
                         </TableCell>
                         <TableCell class="agent-doctor-target-column px-3 py-1.5 text-xs text-base-content">
-                          {target.expectedVersion || '—'}
+                          {target().expectedVersion || '—'}
                         </TableCell>
                         <TableCell
                           class="px-2 py-1.5 text-xs text-muted sm:px-3"
@@ -691,21 +701,21 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                         <InlineDetailTableRow
                           cellId={detailRowId()}
                           colspan={6}
-                          data-agent-doctor-detail-for={target.connectionId}
+                          data-agent-doctor-detail-for={target().connectionId}
                         >
                           <InlineDetailPanel
                             testId="agent-doctor-detail"
-                            detailFor={target.key}
-                            title={target.displayName}
+                            detailFor={target().key}
+                            title={target().displayName}
                             status={{ variant: status().variant, label: status().label }}
-                            summary={doctorTargetSummary(target)}
+                            summary={doctorTargetSummary(target())}
                             sections={[]}
-                            onClose={() => closeTarget(target)}
+                            onClose={() => closeTarget(target())}
                           >
-                            <For each={target.reasons}>
+                            <For each={target().reasons}>
                               {(reason) => (
                                 <InlineNotice
-                                  tone={target.status === 'critical' ? 'danger' : 'warning'}
+                                  tone={target().status === 'critical' ? 'danger' : 'warning'}
                                 >
                                   <p class="font-medium">{reason.message}</p>
                                   <Show when={reason.evidence?.length}>
@@ -717,20 +727,20 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               )}
                             </For>
 
-                            <Show when={target.needsUpdate || target.needsCredentialRepair}>
+                            <Show when={target().needsUpdate || target().needsCredentialRepair}>
                               <Show
-                                when={!target.commandBlockedReason}
+                                when={!target().commandBlockedReason}
                                 fallback={
                                   <InlineNotice tone="info">
-                                    {target.commandBlockedReason}
+                                    {target().commandBlockedReason}
                                   </InlineNotice>
                                 }
                               >
                                 <Show
-                                  when={commandReadyForTarget(target)}
+                                  when={commandReadyForTarget(target())}
                                   fallback={
                                     <InlineNotice tone="info">
-                                      {commandRequiresToken(target) && tokenGatedTargetCount() > 1
+                                      {commandRequiresToken(target()) && tokenGatedTargetCount() > 1
                                         ? 'Select this installation above and generate a separate credential to unlock its host-local repair command.'
                                         : 'Generate a token to unlock this host-local repair command.'}
                                     </InlineNotice>
@@ -740,7 +750,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     <CommandCopyButton
                                       onClick={() => void copyCommand(command())}
                                       title="Copy host-local agent repair command"
-                                      label={`Copy ${target.needsCredentialRepair ? 'authentication repair' : 'update'} command for ${target.displayName}`}
+                                      label={`Copy ${target().needsCredentialRepair ? 'authentication repair' : 'update'} command for ${target().displayName}`}
                                     />
                                     <pre
                                       tabIndex={0}
@@ -750,8 +760,8 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                     </pre>
                                     <Show
                                       when={
-                                        commandRequiresToken(target) &&
-                                        target.commandPlatform !== 'windows'
+                                        commandRequiresToken(target()) &&
+                                        target().commandPlatform !== 'windows'
                                       }
                                     >
                                       <p class="mt-2 text-xs text-muted">
@@ -777,10 +787,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                   variant="outline"
                                   size="sm"
                                   class="mt-2"
-                                  disabled={reenrollPendingId() === target.connectionId}
-                                  onClick={() => void allowReenroll(target)}
+                                  disabled={reenrollPendingId() === target().connectionId}
+                                  onClick={() => void allowReenroll(target())}
                                 >
-                                  {reenrollPendingId() === target.connectionId
+                                  {reenrollPendingId() === target().connectionId
                                     ? 'Allowing…'
                                     : 'Allow re-enrol'}
                                 </Button>
@@ -826,7 +836,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                               )
                                             }
                                             title="Copy host-local agent uninstall command"
-                                            label={`Copy ${entry.label} uninstall command for ${target.displayName}`}
+                                            label={`Copy ${entry.label} uninstall command for ${target().displayName}`}
                                           />
                                           <pre
                                             tabIndex={0}
@@ -853,16 +863,16 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               wrapValues
                             />
 
-                            <Show when={target.safeProfileGuidance}>
+                            <Show when={target().safeProfileGuidance}>
                               {(guidance) => <InlineNotice tone="info">{guidance()}</InlineNotice>}
                             </Show>
                             <Show
                               when={
-                                !target.safeCollector &&
-                                target.status !== 'removed' &&
-                                target.commandPlatform === 'linux' &&
-                                target.actionRunnerAgentId &&
-                                target.actionRunnerHostname
+                                !target().safeCollector &&
+                                target().status !== 'removed' &&
+                                target().commandPlatform === 'linux' &&
+                                target().actionRunnerAgentId &&
+                                target().actionRunnerHostname
                               }
                             >
                               <div class="space-y-2 text-xs">
@@ -931,21 +941,21 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               </div>
                             </Show>
 
-                            <Show when={target.actionRunnerCredentialEligible}>
+                            <Show when={target().actionRunnerCredentialEligible}>
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                isLoading={runnerCredentialPendingKey() === target.key}
+                                isLoading={runnerCredentialPendingKey() === target().key}
                                 disabled={
                                   Boolean(runnerCredentialReveal()) ||
-                                  issuedRunnerCredentialKeys().has(target.key)
+                                  issuedRunnerCredentialKeys().has(target().key)
                                 }
-                                onClick={() => void issueActionRunnerCredential(target)}
+                                onClick={() => void issueActionRunnerCredential(target())}
                               >
-                                {issuedRunnerCredentialKeys().has(target.key)
+                                {issuedRunnerCredentialKeys().has(target().key)
                                   ? 'Credential issued for this page session'
-                                  : target.actionRunnerCredentialAction === 'rotate'
+                                  : target().actionRunnerCredentialAction === 'rotate'
                                     ? 'Rotate action-runner credential'
                                     : 'Issue one-time action-runner credential'}
                               </Button>
@@ -953,7 +963,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
 
                             <Show
                               when={
-                                runnerCredentialReveal()?.targetKey === target.key
+                                runnerCredentialReveal()?.targetKey === target().key
                                   ? runnerCredentialReveal()
                                   : null
                               }
@@ -963,8 +973,8 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 const installCommand = () =>
                                   buildActionRunnerInstallCommand({
                                     pulseUrl: operations.selectedAgentUrl(),
-                                    agentId: target.actionRunnerAgentId!,
-                                    hostname: target.actionRunnerHostname!,
+                                    agentId: target().actionRunnerAgentId!,
+                                    hostname: target().actionRunnerHostname!,
                                     insecure: operations.insecureMode(),
                                     customCaPath: operations.customCaPath(),
                                   });
@@ -1003,7 +1013,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                           <CommandCopyButton
                                             onClick={() => void copyCommand(reveal().token)}
                                             title="Copy one-time action-runner credential"
-                                            label={`Copy action-runner credential for ${target.displayName}`}
+                                            label={`Copy action-runner credential for ${target().displayName}`}
                                           />
                                           <pre
                                             tabIndex={0}
@@ -1055,9 +1065,9 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               type="button"
                               variant="outline"
                               size="sm"
-                              onClick={() => void copyReport([target])}
+                              onClick={() => void copyReport([target()])}
                             >
-                              Copy diagnostic report for {target.displayName}
+                              Copy diagnostic report for {target().displayName}
                             </Button>
                           </InlineDetailPanel>
                         </InlineDetailTableRow>

@@ -962,6 +962,9 @@ type AgentStorageCleanupMeta struct {
 type AgentData struct {
 	AgentID      string `json:"agentId,omitempty"`
 	AgentVersion string `json:"agentVersion,omitempty"`
+	// AgentUpdate retains the collector's typed updater evidence in the
+	// canonical facet, including error and one-shot successful-update history.
+	AgentUpdate *models.AgentUpdateStatus `json:"agentUpdate,omitempty"`
 	// Stale is set when the agent has stopped reporting (its host was marked
 	// offline by the staleness evaluator) even though the row itself may stay
 	// online via another source such as the Proxmox API poll. It lets the UI

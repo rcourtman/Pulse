@@ -128,11 +128,21 @@ func wireUpdaterHooks(hostCfg *hostagent.Config, updater *agentupdate.Updater) {
 	hostCfg.OnServerVersion = updater.NudgeVersion
 }
 
-func pendingUpdatePreviousVersion(pending *agentupdate.PendingPrivilegedUpdate) string {
-	if pending == nil {
-		return ""
+// helperUpdatePreviousVersion supplies authoritative startup evidence for
+// helper-backed installs. Only the activated executable may report its previous
+// version. Other helper starts explicitly report no update, suppressing stale
+// legacy markers even after a recovered handoff has been cleared. Nil retains
+// the local updater's one-shot marker on installs without a typed helper.
+func helperUpdatePreviousVersion(helperConfigured bool, pending *agentupdate.PendingPrivilegedUpdate, runningSHA256 string) *string {
+	if !helperConfigured {
+		return nil
 	}
-	return pending.PreviousVersion
+	previousVersion := ""
+	runningSHA256 = strings.TrimSpace(runningSHA256)
+	if pending != nil && runningSHA256 != "" && strings.EqualFold(runningSHA256, pending.Activation.ActiveSHA256) {
+		previousVersion = pending.PreviousVersion
+	}
+	return &previousVersion
 }
 
 func currentCollectorExecutableSHA256() (string, error) {
@@ -668,7 +678,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			PrivilegeHelperStatus:     privilegeHelperStatus,
 			Observers:                 hostObserverTargets(cfg.Observers),
 			PrivilegedTelemetry:       privilegedTelemetry,
-			UpdatedFromVersion:        pendingUpdatePreviousVersion(pendingUpdate),
+			UpdatedFromVersion:        helperUpdatePreviousVersion(privilegedUpdate != nil, pendingUpdate, pendingExecutableSHA256),
 
 			DockerContainerUpdater:           dockerUpdaterBridge,
 			DockerContainerLifecycleOperator: dockerUpdaterBridge,

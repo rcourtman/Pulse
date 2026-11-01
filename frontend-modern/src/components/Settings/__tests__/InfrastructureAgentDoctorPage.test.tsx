@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureAgentDoctorPage } from '../InfrastructureAgentDoctorPage';
@@ -52,6 +53,52 @@ const targetFixture = (
   actionRunnerHostname: 'host-1.local',
   source: 'diagnostics',
   ...overrides,
+});
+
+describe('InfrastructureAgentDoctorPage updater evidence identity', () => {
+  it('keeps evidence open and focused as fleet reads replace and reorder targets', async () => {
+    const other = targetFixture({
+      key: 'agent:host-2',
+      connectionId: 'agent:host-2',
+      displayName: 'host-2',
+    });
+    const [targets, setTargets] = createSignal([
+      targetFixture({ evidence: ['Last update attempt: before-refresh'] }),
+      other,
+    ]);
+    render(() => <InfrastructureAgentDoctorPage targets={targets()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for host-1' }));
+    const evidence = screen.getByTestId('agent-doctor-evidence') as HTMLDetailsElement;
+    const summary = evidence.querySelector('summary')!;
+    evidence.open = true;
+    fireEvent(evidence, new Event('toggle'));
+    summary.focus();
+    await waitFor(() => expect(within(evidence).getByText('before-refresh')).toBeInTheDocument());
+
+    setTargets([
+      { ...other },
+      targetFixture({
+        currentVersion: '6.7.0',
+        evidence: ['Last successful update: accepted-refresh'],
+      }),
+    ]);
+    expect(
+      screen.getByTestId('agent-doctor-evidence'),
+      'UPDATER_EVIDENCE_DISCLOSURE_REMOUNTED',
+    ).toBe(evidence);
+    expect(evidence.open).toBe(true);
+    expect(summary).toHaveFocus();
+    await waitFor(() => expect(within(evidence).getByText('accepted-refresh')).toBeInTheDocument());
+    expect(within(evidence).queryByText('before-refresh')).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('agent-doctor-facts')).getByText('6.7.0')).toBeInTheDocument();
+
+    setTargets([{ ...other }]);
+    expect(evidence.isConnected).toBe(false);
+    setTargets([targetFixture(), { ...other }]);
+    const replacement = screen.getByTestId('agent-doctor-evidence') as HTMLDetailsElement;
+    expect(replacement).not.toBe(evidence);
+    expect(replacement.open).toBe(false);
+  });
 });
 
 describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {

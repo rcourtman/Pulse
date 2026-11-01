@@ -1221,6 +1221,15 @@ func (v HostView) AgentVersion() string {
 	return v.r.Agent.AgentVersion
 }
 
+// AgentUpdate returns owned updater evidence, so a snapshot consumer cannot
+// mutate the registry's status or timestamps.
+func (v HostView) AgentUpdate() *models.AgentUpdateStatus {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneAgentUpdateStatus(v.r.Agent.AgentUpdate)
+}
+
 func (v HostView) AgentID() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""

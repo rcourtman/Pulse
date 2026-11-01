@@ -110,6 +110,11 @@ var (
 	chmodFn                      = os.Chmod
 	renameFn                     = os.Rename
 	closeFileFn                  = func(f *os.File) error { return f.Close() }
+	syncFileFn                   = syncUpdateFile
+	syncDirFn                    = syncUpdateDirectory
+	removeFileFn                 = os.Remove
+	clearPendingUpdateFn         = ClearPendingPrivilegedUpdate
+	exitFn                       = os.Exit
 	readFileFn                   = os.ReadFile
 	writeFileFn                  = os.WriteFile
 	retrySleepFn                 = sleepWithContext
@@ -503,11 +508,13 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 			Msg("failed to self-update agent")
 		// If the binary was replaced but exec failed, the old process is still
 		// running with a stale binary. Exit so systemd restarts us with the
-		// new binary. The "failed to restart" error comes from restartProcess()
-		// which is called AFTER the binary is atomically replaced on disk.
-		if strings.Contains(err.Error(), "failed to restart") {
+		// new binary. Only the replacement paths mark that condition: a helper
+		// update that rolled back has already restored the running binary, and
+		// error text (which can carry server-supplied status) proves nothing.
+		var restartErr *restartAfterReplaceError
+		if errors.As(err, &restartErr) {
 			u.logger.Error().Msg("Binary replaced but exec failed - exiting so service manager restarts with new binary")
-			os.Exit(1)
+			exitFn(1)
 		}
 		return
 	}
@@ -839,6 +846,17 @@ func (u *Updater) validatePulseURL() error {
 	return nil
 }
 
+// restartAfterReplaceError reports a failed in-place restart while the binary
+// on disk is no longer the one this process is running, so the process must
+// exit for the service manager to start the replacement.
+type restartAfterReplaceError struct {
+	err error
+}
+
+func (e *restartAfterReplaceError) Error() string { return e.err.Error() }
+
+func (e *restartAfterReplaceError) Unwrap() error { return e.err }
+
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
 	return u.performUpdateForVersion(ctx, "")
@@ -1025,29 +1043,53 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 		return err
 	}
 
-	// Atomic replacement with backup (use realExecPath for rename operations)
+	// Make the staged bytes and their final executable mode durable before a
+	// rename can expose them at the service path.
+	if err := syncFileFn(tmpPath); err != nil {
+		return fmt.Errorf("failed to sync staged binary: %w", err)
+	}
+
+	// Use realExecPath for rename operations
 	backupPath := realExecPath + ".backup"
-	if err := renameFn(realExecPath, backupPath); err != nil {
-		return fmt.Errorf("failed to backup current binary: %w", err)
-	}
-
-	if err := renameFn(tmpPath, realExecPath); err != nil {
-		// Restore backup on failure
-		if restoreErr := renameFn(backupPath, realExecPath); restoreErr != nil {
-			return errors.Join(
-				fmt.Errorf("failed to replace binary: %w", err),
-				fmt.Errorf("failed to restore backup binary: %w", restoreErr),
-			)
+	switch runtimeGOOS {
+	case goOSWindows:
+		// Windows cannot rename over a running image, so the running binary is
+		// moved aside first and the service path stays empty until the second
+		// rename. A crash in that gap leaves only the backup to restore by hand.
+		if err := renameFn(realExecPath, backupPath); err != nil {
+			return fmt.Errorf("failed to backup current binary: %w", err)
 		}
-		return fmt.Errorf("failed to replace binary: %w", err)
+		if err := renameFn(tmpPath, realExecPath); err != nil {
+			// Restore backup on failure
+			if restoreErr := renameFn(backupPath, realExecPath); restoreErr != nil {
+				return errors.Join(
+					fmt.Errorf("failed to replace binary: %w", err),
+					fmt.Errorf("failed to restore backup binary: %w", restoreErr),
+				)
+			}
+			return fmt.Errorf("failed to replace binary: %w", err)
+		}
+	default:
+		// Renaming over the service path keeps a complete executable there at
+		// every instant, and a failed rename leaves the running binary in place.
+		if err := renameFn(tmpPath, realExecPath); err != nil {
+			return fmt.Errorf("failed to replace binary: %w", err)
+		}
 	}
 
-	// Remove backup on success
-	if err := os.Remove(backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	// Any backup stays until the directory entry is durable. A failed sync
+	// leaves the replacement, and the record written below, without any
+	// crash-durability guarantee.
+	if err := syncDirFn(targetDir); err != nil {
+		u.logger.Warn().Err(err).Str("path", targetDir).Msg("agentupdate.performUpdateWithExecPath: failed to sync binary directory; replacement durability unconfirmed, keeping backup")
+	} else if err := removeFileFn(backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		u.logger.Warn().Err(err).Str("path", backupPath).Msg("agentupdate.performUpdateWithExecPath: failed to remove backup binary")
 	}
 
-	// Write previous version to a file so the agent can report "updated from X" on next start
+	// Write previous version to a file so the agent can report "updated from X"
+	// on next start. It is written even after a failed sync: the visible
+	// replacement is complete, and skipping it would leave any earlier,
+	// unconsumed record to misattribute this update.
 	updateInfoPath := filepath.Join(targetDir, ".pulse-update-info")
 	if err := writeFileFn(updateInfoPath, []byte(u.cfg.CurrentVersion), 0644); err != nil {
 		u.logger.Warn().Err(err).Str("path", updateInfoPath).Msg("agentupdate.performUpdateWithExecPath: failed to write update info")
@@ -1072,7 +1114,10 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	}
 
 	// Restart the process using platform-specific implementation
-	return restartProcessFn(execPath)
+	if err := restartProcessFn(execPath); err != nil {
+		return &restartAfterReplaceError{err: err}
+	}
+	return nil
 }
 
 func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, body io.Reader, contentLength int64, checksumHeader, signature, targetVersion string) error {
@@ -1154,6 +1199,7 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 	if err != nil {
 		return fmt.Errorf("activate signed update through typed helper: %w", err)
 	}
+	binaryRestored := false
 	rollbackActivation := func(cause error) error {
 		rollbackCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -1164,7 +1210,11 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 		if rolledBack.Action != "rolled_back" || !strings.EqualFold(rolledBack.ActiveSHA256, activation.RollbackSHA256) {
 			return errors.Join(cause, errors.New("typed helper returned an invalid rollback result"))
 		}
-		if clearErr := ClearPendingPrivilegedUpdate(u.cfg.StateDir); clearErr != nil {
+		// The helper has put the previous binary back on disk. Clearing the
+		// local handoff is a separate step: if it fails, the handoff is stale
+		// rather than settled, and the returned error names that failure.
+		binaryRestored = true
+		if clearErr := clearPendingUpdateFn(u.cfg.StateDir); clearErr != nil {
 			return errors.Join(fmt.Errorf("%w; update rolled back", cause), fmt.Errorf("clear pending update handoff: %w", clearErr))
 		}
 		return fmt.Errorf("%w; update rolled back", cause)
@@ -1181,7 +1231,15 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 	}
 	cleaned = true
 	if err := restartProcessFn(execPath); err != nil {
-		return rollbackActivation(fmt.Errorf("failed to restart after helper activation: %w", err))
+		restartErr := rollbackActivation(fmt.Errorf("failed to restart after helper activation: %w", err))
+		if !binaryRestored {
+			// The activated binary stays on disk with its pending handoff
+			// persisted while this process still runs the previous binary.
+			return &restartAfterReplaceError{err: restartErr}
+		}
+		// The running binary is the one on disk again, so exiting would only
+		// discard this error, including any stale handoff it names.
+		return restartErr
 	}
 	return rollbackActivation(errors.New("restart returned without replacing the current process"))
 }
@@ -1235,9 +1293,18 @@ func (u *Updater) syncPersistentBinaryCopy(execPath, persistPath, platform strin
 		u.logger.Warn().Err(err).Str("path", tmpPersist).Str("platform", platform).Msg("failed to chmod persistent binary")
 		return
 	}
+	// The persistent copy is what a reboot restores, so its bytes and final
+	// mode must be durable before the rename replaces the previous copy.
+	if err := syncFileFn(tmpPersist); err != nil {
+		u.logger.Warn().Err(err).Str("path", tmpPersist).Str("platform", platform).Msg("failed to sync persistent binary")
+		return
+	}
 	if err := renameFn(tmpPersist, persistPath); err != nil {
 		u.logger.Warn().Err(err).Str("path", persistPath).Str("platform", platform).Msg("failed to replace persistent binary")
 		return
+	}
+	if err := syncDirFn(filepath.Dir(persistPath)); err != nil {
+		u.logger.Warn().Err(err).Str("path", persistPath).Str("platform", platform).Msg("failed to sync persistent binary directory")
 	}
 
 	u.logger.Info().Str("path", persistPath).Str("platform", platform).Msg("updated persistent binary")

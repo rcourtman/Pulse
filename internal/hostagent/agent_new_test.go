@@ -1112,6 +1112,7 @@ func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
 }
 
 func TestNew_PrefersDurableHelperUpdatedFromHandoff(t *testing.T) {
+	previousVersion := "6.0.0"
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
 			return &gohost.InfoStat{Hostname: "upgraded-host", HostID: "machine-id-1", KernelArch: runtime.GOARCH}, nil
@@ -1120,7 +1121,7 @@ func TestNew_PrefersDurableHelperUpdatedFromHandoff(t *testing.T) {
 	agent, err := New(Config{
 		APIToken:             "token",
 		Collector:            mc,
-		UpdatedFromVersion:   "6.0.0",
+		UpdatedFromVersion:   &previousVersion,
 		updatedFromVersionFn: func() string { return "stale-local-marker" },
 	})
 	if err != nil {
@@ -1485,5 +1486,37 @@ func TestGetReliableMachineIDNormalizesWindowsBraces(t *testing.T) {
 	got := GetReliableMachineID(collector, "{9F2F0C1A-1B2C-3D4E-5F60-1234567890AB}", zerolog.Nop())
 	if want := "9f2f0c1a-1b2c-3d4e-5f60-1234567890ab"; got != want {
 		t.Fatalf("GetReliableMachineID() = %q, want %q", got, want)
+	}
+}
+
+// An explicit absence belongs to the helper just as a candidate version does.
+// It must suppress legacy evidence on both recovered and later helper starts.
+func TestNew_HelperNoUpdateEvidenceNeverReadsLegacyMarker(t *testing.T) {
+	previousVersion := ""
+	for start := 0; start < 2; start++ {
+		mc := &mockCollector{
+			hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+				return &gohost.InfoStat{Hostname: "rolled-back-host", HostID: "rollback-host", KernelArch: runtime.GOARCH}, nil
+			},
+		}
+		agent, err := New(Config{
+			APIToken:           "token",
+			Collector:          mc,
+			UpdatedFromVersion: &previousVersion,
+			updatedFromVersionFn: func() string {
+				t.Error("helper startup consulted stale legacy update evidence")
+				return "stale-local-marker"
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		report, err := agent.buildReport(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if report.Agent.UpdatedFrom != "" {
+			t.Fatalf("helper start %d reported a successful update from %q after rollback", start, report.Agent.UpdatedFrom)
+		}
 	}
 }

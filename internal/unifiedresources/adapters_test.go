@@ -2160,3 +2160,32 @@ func TestProviderURLHostnamePreservesIPv6(t *testing.T) {
 		}
 	}
 }
+
+func TestHostUpdateEvidenceSurvivesCanonicalAdapterViewAndClone(t *testing.T) {
+	expected := func() *models.AgentUpdateStatus {
+		checked, attempted, succeeded := time.Unix(100, 0).UTC(), time.Unix(200, 0).UTC(), time.Unix(300, 0).UTC()
+		return &models.AgentUpdateStatus{State: "error", AutoUpdate: true, UpdatedFrom: "6.6.0", AvailableVersion: "6.7.0",
+			LastCheckedAt: &checked, LastAttemptAt: &attempted, LastSuccessAt: &succeeded, LastError: "helper restored the previous executable"}
+	}
+	host := models.Host{ID: "updater-host", Hostname: "updater.example.test", AgentVersion: "6.6.0", Status: "online", AgentUpdate: expected()}
+	record := HostIngestRecord(host)
+	view := NewHostView(&record.Resource)
+	if got := view.AgentUpdate(); !reflect.DeepEqual(got, expected()) {
+		t.Fatalf("canonical updater evidence=%+v, want %+v", got, expected())
+	}
+	host.AgentUpdate.LastError = "source mutated"
+	*host.AgentUpdate.LastCheckedAt = time.Unix(999, 0)
+	if got := view.AgentUpdate(); !reflect.DeepEqual(got, expected()) {
+		t.Fatalf("source mutation changed canonical updater evidence: %+v", got)
+	}
+	got := view.AgentUpdate()
+	got.LastError = "reader mutated"
+	*got.LastAttemptAt = time.Unix(999, 0)
+	*got.LastSuccessAt = time.Unix(999, 0)
+	if got := view.AgentUpdate(); !reflect.DeepEqual(got, expected()) {
+		t.Fatalf("view mutation changed canonical updater evidence: %+v", got)
+	}
+	if NewHostView(&Resource{Agent: &AgentData{}}).AgentUpdate() != nil {
+		t.Fatal("absent updater status became evidence")
+	}
+}
