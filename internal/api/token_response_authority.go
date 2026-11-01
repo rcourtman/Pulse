@@ -15,6 +15,13 @@ import (
 // handler waits for a provider. Keep the original work/context lifetime, but
 // recheck authority at disclosure, including headers and error responses.
 func retainTokenResponseAuthority(cfg *config.Config, scope string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
+	return retainResponseAuthority(cfg, scope, instanceAdmin, false, next)
+}
+
+// retainResponseAuthority also serves the existing private diagnostic download.
+// The caller selects JSON or ZIP, never arbitrary executable media. Authority,
+// closure and plain-text refusals stay shared with synchronous Assistant results.
+func retainResponseAuthority(cfg *config.Config, scope string, instanceAdmin bool, zipDownload bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scope)
 		sessionAllowed := sessionReadRevalidator(r)
@@ -34,7 +41,7 @@ func retainTokenResponseAuthority(cfg *config.Config, scope string, instanceAdmi
 			http.Error(w, "Authentication required", http.StatusUnauthorized)
 			return
 		}
-		writer := &tokenResponseWriter{writer: w, header: w.Header().Clone(), allowed: allowed}
+		writer := &tokenResponseWriter{writer: w, header: w.Header().Clone(), allowed: allowed, zipDownload: zipDownload}
 		defer writer.close()
 		next(writer, r)
 		// A bodyless handler must not implicitly return 200 after withdrawal.
@@ -47,12 +54,13 @@ func retainTokenResponseAuthority(cfg *config.Config, scope string, instanceAdmi
 // write produces a generic 401, not false-success/empty JSON; after any admitted
 // response bytes, denial only stops further output, never appends an auth error.
 type tokenResponseWriter struct {
-	writer  http.ResponseWriter
-	header  http.Header
-	allowed func() bool
-	mu      sync.Mutex
-	started bool
-	closed  bool
+	writer      http.ResponseWriter
+	header      http.Header
+	allowed     func() bool
+	zipDownload bool
+	mu          sync.Mutex
+	started     bool
+	closed      bool
 }
 
 func (w *tokenResponseWriter) Header() http.Header { return w.header }
@@ -83,14 +91,18 @@ func (w *tokenResponseWriter) commitLocked(status int) {
 			}
 			header[key] = append([]string(nil), values...)
 		}
-		// These result endpoints serve JSON or plain-text errors, never HTML.
+		// Results serve only their pinned media type or plain-text errors, never HTML.
 		// Bind non-executable media to the actual transport, not just the
 		// handler's private header map. Missing, malformed or unexpected
 		// types must not allow HTTP sniffing or an extension to render HTML.
 		// Leave payload bytes alone: HTML-escaping JSON would corrupt data.
 		mediaType, _, err := mime.ParseMediaType(w.header.Get("Content-Type"))
-		if err == nil && mediaType == "application/json" {
-			header.Set("Content-Type", "application/json")
+		expectedType := "application/json"
+		if w.zipDownload {
+			expectedType = "application/zip"
+		}
+		if err == nil && mediaType == expectedType {
+			header.Set("Content-Type", expectedType)
 		} else {
 			header.Set("Content-Type", "text/plain; charset=utf-8")
 		}

@@ -107,6 +107,13 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 // HandleDownloadBundle creates a private log archive with an allowlisted diagnostic summary.
 // Log contents are not scrubbed; this is not an anonymised export or configuration backup.
 func (h *LogHandlers) HandleDownloadBundle(w http.ResponseWriter, r *http.Request) {
+	// Raw logs are private even though the system summary is allowlisted.
+	// Recheck the admitted token/session at each actual ZIP transport write,
+	// without buffering the archive or withdrawing other readers/work.
+	retainResponseAuthority(h.config, config.ScopeSettingsRead, true, true, h.writeDownloadBundle)(w, r)
+}
+
+func (h *LogHandlers) writeDownloadBundle(w http.ResponseWriter, r *http.Request) {
 	// Snapshot only diagnostic fields while holding configuration ownership.
 	// Do not serialize Config or the full process environment into this archive.
 	config.Mu.RLock()
