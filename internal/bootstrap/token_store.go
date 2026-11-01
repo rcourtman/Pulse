@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -121,16 +122,10 @@ func Persist(dataPath, token string, createdAt time.Time) (string, error) {
 		return path, fmt.Errorf("marshal bootstrap token: %w", err)
 	}
 
-	tmpFile := path + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0o600); err != nil {
+	// Reuse the private writer used for the encryption key: a unique, exclusive
+	// temporary file cannot follow a stale link or inherit its permissions.
+	if err := securityutil.WriteSecureStorageFile(path, data, 0o700, 0o600); err != nil {
 		return path, fmt.Errorf("persist bootstrap token: %w", err)
-	}
-	if err := os.Rename(tmpFile, path); err != nil {
-		_ = os.Remove(tmpFile)
-		return path, fmt.Errorf("persist bootstrap token: %w", err)
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		return path, fmt.Errorf("harden bootstrap token file: %w", err)
 	}
 
 	return path, nil

@@ -80,7 +80,7 @@ func TestLoadOrCreateBootstrapToken_MkdirAllFailure(t *testing.T) {
 	}
 }
 
-func TestLoadOrCreateBootstrapToken_WriteFileFailure(t *testing.T) {
+func TestLoadOrCreateBootstrapToken_IgnoresStaleTemporaryDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFileBlocker := filepath.Join(tmpDir, bootstrapTokenFilename+".tmp")
 	if err := os.MkdirAll(tmpFileBlocker, 0o700); err != nil {
@@ -88,19 +88,22 @@ func TestLoadOrCreateBootstrapToken_WriteFileFailure(t *testing.T) {
 	}
 
 	token, created, fullPath, err := loadOrCreateBootstrapToken(tmpDir)
-	if err == nil {
-		t.Error("expected error when WriteFile fails, got nil")
+	if err != nil {
+		t.Fatalf("stale temporary directory must not block token creation: %v", err)
 	}
-	if token != "" {
-		t.Errorf("expected empty token, got %q", token)
+	if token == "" || !created {
+		t.Fatal("expected a newly created token")
 	}
-	if created {
-		t.Error("expected created=false")
+	if info, err := os.Stat(tmpFileBlocker); err != nil || !info.IsDir() {
+		t.Fatalf("stale directory was changed: %v", err)
 	}
-	// fullPath should be set even on write failure (path was computed before write)
 	expectedPath := filepath.Join(tmpDir, bootstrapTokenFilename)
 	if fullPath != expectedPath {
 		t.Errorf("expected fullPath=%q, got %q", expectedPath, fullPath)
+	}
+	loaded, loadedPath, migrated, err := bootstrap.Load(tmpDir)
+	if err != nil || loaded != token || loadedPath != fullPath || migrated {
+		t.Fatalf("new encrypted token cannot be reloaded: migrated=%t path=%q error=%v", migrated, loadedPath, err)
 	}
 }
 
