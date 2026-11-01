@@ -26,6 +26,7 @@ const (
 	responseMediaJSON responseMediaPolicy = iota
 	responseMediaZIP
 	responseMediaReport
+	responseMediaAudit
 )
 
 // retainResponseAuthority serves slow synchronous results and private downloads.
@@ -117,6 +118,14 @@ func (w *tokenResponseWriter) commitLocked(status int) {
 			case responseMediaZIP:
 				if mediaType == "application/zip" {
 					pinnedType = mediaType
+				}
+			case responseMediaAudit:
+				// Audit exports are structured evidence, never report PDFs.
+				switch mediaType {
+				case "application/json":
+					pinnedType = mediaType
+				case "text/csv":
+					pinnedType = "text/csv; charset=utf-8"
 				}
 			case responseMediaReport:
 				// Existing PDF/CSV attachments and structured API errors.
