@@ -186,7 +186,7 @@ func TestAtomicConfigIndependentWritersPublishCompleteFiles(t *testing.T) {
 
 func TestAtomicConfigWritesRemainStagedDuringImport(t *testing.T) {
 	cp := NewConfigPersistence(t.TempDir())
-	records := []APITokenRecord{{ID: "fixture-id", Hash: "previous-hash", Scopes: []string{"monitoring:read"}}}
+	records := []APITokenRecord{{ID: "fixture-id", Hash: "previous-hash", OrgID: "default", Scopes: []string{"monitoring:read"}}}
 	require.NoError(t, cp.SaveAPITokens(records))
 	original, err := os.ReadFile(cp.apiTokensFile)
 	require.NoError(t, err)
