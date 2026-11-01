@@ -491,6 +491,99 @@ test("examples, withdrawn selections and prose do not invent a feedback class", 
   }
 });
 
+test("feedback classification examines the complete field instead of its first line", () => {
+  for (const newline of ["\n", "\r\n"]) {
+    for (const selection of [
+      "Bug / regression\nDocumentation issue",
+      "Documentation issue\nBug / regression",
+      "Bug / regression\nThis is a question, not a selected form option.",
+      "Documentation issue\n\nBug / regression",
+      "Bug / regression\n\n![context](https://example.invalid/synthetic.png)",
+      "Bug / regression\n\n- Documentation issue",
+    ]) {
+      const body = `### Feedback type\n${selection}\n\n### Pulse version\nunknown`
+        .replaceAll("\n", newline);
+      assert.equal(triage.internals.classifyV6FeedbackType(body), null, selection);
+    }
+  }
+});
+
+test("a complete single choice retains wrapping, hidden comments and shared reference definitions", () => {
+  for (const newline of ["\n", "\r\n"]) {
+    for (const selection of [
+      "Bug /\nregression",
+      "**Bug /\nregression**",
+      "<!-- optional hint -->\n\nBug / regression\n\n<!-- another hint -->",
+      "Bug / <!-- optional\nhint --> regression",
+      "[Bug /\nregression][choice]",
+    ]) {
+      const body = `### Feedback type\n${selection}\n\n### Pulse version\nunknown\n\n` +
+        '[choice]: https://example.invalid/documentation "Documentation issue"';
+      assert.equal(triage.internals.classifyV6FeedbackType(body.replaceAll("\n", newline)), "bug", selection);
+    }
+  }
+});
+
+test("copied blocks cannot supply or contradict a feedback selection", () => {
+  for (const copied of [
+    "> Documentation issue",
+    "```text\nDocumentation issue\n```",
+    "    Documentation issue",
+    "<div>Documentation issue</div>",
+  ]) {
+    for (const newline of ["\n", "\r\n"]) {
+      for (const selection of [`Bug / regression\n\n${copied}`, `${copied}\n\nBug / regression`]) {
+        const body = `### Feedback type\n${selection}\n\n### Pulse version\nunknown`
+          .replaceAll("\n", newline);
+        assert.equal(triage.internals.classifyV6FeedbackType(body), "bug", selection);
+      }
+      const body = `### Feedback type\n${copied}\n\n### Pulse version\nunknown`
+        .replaceAll("\n", newline);
+      assert.equal(triage.internals.classifyV6FeedbackType(body), null, copied);
+    }
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`${action} ambiguous field content cannot invent labels or lose independent topic review`, async () => {
+    for (const alreadyBug of [false, true]) {
+      const preserved = ["needs-human", "release-blocker", "needs-retest-on-latest", "operator-reviewed", "affects-storage"];
+      if (alreadyBug) preserved.push("bug");
+      const issue = { number: 42, state: "open", title: "Synthetic feedback selection", comments: 0,
+        updated_at: "2026-11-01T05:30:00Z", labels: preserved.map(name => ({ name })),
+        body: "### Feedback type\nBug / regression\nDocumentation issue\n\n### Pulse version\n6.6.0\n\n" +
+          "### Additional actionable topics\nPreserve a separate notification job." };
+      const { github, calls } = createGithub({ currentIssue: issue });
+      const previousBody = issue.body.replace("Preserve a separate notification job.", "None");
+      await syncLabels({ github, context: createContext({ action, issue, previousBody }), core: createCore() });
+      const added = [
+        ...(alreadyBug ? ["affects-6.6.0"] : []),
+        ...(action === "reopened" ? [] : ["needs-decomposition"]),
+      ];
+      assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+        [...preserved, ...added].sort());
+      assert.deepEqual(calls.addLabels.flatMap(call => call.labels), added);
+      assert.deepEqual(calls.removeLabel, []);
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+      assert.deepEqual(calls.getEvents, []);
+
+      // A later unambiguous selection is processed normally, without a refile
+      // or a public question. Preserve any explicit Community bug decision.
+      github.currentIssue = { ...github.currentIssue,
+        body: issue.body.replace("Bug / regression\nDocumentation issue", "Documentation issue"),
+        updated_at: "2026-11-01T05:31:00Z" };
+      await syncLabels({ github,
+        context: createContext({ action: "edited", issue: github.currentIssue, previousBody: issue.body }),
+        core: createCore() });
+      assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+        [...preserved, ...added, "documentation"].sort());
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+    }
+  });
+}
+
 test("repeated feedback declarations require one recognised metadata category", () => {
   const { classifyV6FeedbackType } = triage.internals;
   for (const newline of ["\n", "\r\n"]) {

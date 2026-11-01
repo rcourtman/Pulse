@@ -185,7 +185,7 @@ function firstFieldValue(lines, start = 0) {
   return "";
 }
 
-function extractSectionValues(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
+function extractSectionValues(body, heading, followingHeadings = [], report = parseReportMarkdown(body), declarationsOnly = false) {
   if (!body) return [];
   const lines = report.lines;
   const pattern = new RegExp(`^${escapeRegExp(heading)}$`, "i");
@@ -200,7 +200,8 @@ function extractSectionValues(body, heading, followingHeadings = [], report = pa
           boundary.test(lines[end].heading))))) {
       end += 1;
     }
-    values.push(lines.slice(start + 1, end).map((line) => line.text).join("\n").trim());
+    values.push(lines.slice(start + 1, end).map((line) =>
+      !declarationsOnly || line.declaration ? line.text : "").join("\n").trim());
     // A deeper, form-named subheading is part of this value, not another
     // declaration. Only resume at the boundary that ended the field.
     start = end - 1;
@@ -406,11 +407,15 @@ function classifyFeedbackSelection(feedbackType, report) {
   // This is a single-choice field, not free-form evidence. A link's target
   // or title must not turn documentation/workflow feedback into a bug, and
   // prose, images or a withdrawn selection cannot supply a selected option.
-  const selected = firstFieldValue(parseReportMarkdown(feedbackType).lines);
-  const blocks = lexFieldValue(selected, report);
-  const visible = blocks.length === 1 && blocks[0].type === "paragraph"
-    ? inlineDeclarationText(blocks[0].tokens) : selected;
-  const normalized = visible.trim().toLowerCase().replace(/[ \t]+/g, " ");
+  // Inspect the whole field, not just its first line. An edited selection can
+  // contain a conflicting choice or qualifying prose on a later line/block;
+  // neither field order nor layout makes the first option authoritative.
+  const blocks = lexFieldValue(feedbackType, report).filter(token =>
+    !["space", "def"].includes(token.type) &&
+    !(token.type === "html" && /^(?:\s*<!--[\s\S]*?-->)+\s*$/.test(token.raw || "")));
+  if (blocks.length !== 1 || blocks[0].type !== "paragraph") return null;
+  const visible = inlineDeclarationText(blocks[0].tokens);
+  const normalized = visible.trim().toLowerCase().replace(/\s+/g, " ");
   switch (normalized) {
     case "bug":
     case "regression":
@@ -429,7 +434,9 @@ function classifyFeedbackSelection(feedbackType, report) {
 }
 
 function classifyV6FeedbackType(body, report = parseReportMarkdown(body)) {
-  const classes = extractSectionValues(body, "Feedback type", [], report)
+  // Preserve the report's original block context. Re-lexing copied code or a
+  // quote as bare field text could let examples supply or veto a selection.
+  const classes = extractSectionValues(body, "Feedback type", [], report, true)
     .map(value => classifyFeedbackSelection(value, report));
   // Repeated declarations must agree on the metadata category. Choosing the
   // first can invent a bug and its version requirements from contradictory or
