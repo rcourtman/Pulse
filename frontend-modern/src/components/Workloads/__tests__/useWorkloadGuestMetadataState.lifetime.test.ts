@@ -16,7 +16,9 @@ type Metadata = Record<string, GuestMetadata>;
 const record = (url: string): Metadata => ({ guest: { id: 'guest', customUrl: url } });
 const deferred = () => {
   let resolve!: (value: Metadata) => void;
-  const promise = new Promise<Metadata>((finish) => { resolve = finish; });
+  const promise = new Promise<Metadata>((finish) => {
+    resolve = finish;
+  });
   return { promise, resolve };
 };
 
@@ -33,12 +35,17 @@ describe('Workloads metadata owner lifetime', () => {
   });
 
   it.each(['resolve', 'deny'])(
-    'does not expose a previous credential\'s disk data while the new read will %s',
+    "does not expose a previous credential's disk data while the new read will %s",
     async (result) => {
       localStorage.setItem('pulseGuestMetadata', JSON.stringify(record('https://legacy.example')));
-      localStorage.setItem('pulseGuestMetadata.default', JSON.stringify(record('https://private.example')));
+      localStorage.setItem(
+        'pulseGuestMetadata.default',
+        JSON.stringify(record('https://private.example')),
+      );
       const pending = deferred();
-      mocks.read.mockImplementation(() => result === 'deny' ? Promise.reject(new Error('Forbidden')) : pending.promise);
+      mocks.read.mockImplementation(() =>
+        result === 'deny' ? Promise.reject(new Error('Forbidden')) : pending.promise,
+      );
       const { result: state, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
       expect(state.guestMetadata()).toEqual({});
       await Promise.resolve();
@@ -52,21 +59,24 @@ describe('Workloads metadata owner lifetime', () => {
     },
   );
 
-  it.each(['idle', 'timeout'])('never queues a %s write that can restore removed metadata', async (scheduler) => {
-    vi.useFakeTimers();
-    const idle = vi.fn();
-    vi.stubGlobal('requestIdleCallback', scheduler === 'idle' ? idle : undefined);
-    const writes = vi.spyOn(Storage.prototype, 'setItem');
-    const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
-    await Promise.resolve();
-    result.handleCustomUrlUpdate('guest', 'https://confirmed.example');
-    expect(result.guestMetadata()).toEqual(record('https://confirmed.example'));
-    cleanup();
-    vi.runAllTimers();
-    expect(idle).not.toHaveBeenCalled();
-    expect(writes).not.toHaveBeenCalled();
-    expect(localStorage.length).toBe(0);
-  });
+  it.each(['idle', 'timeout'])(
+    'never queues a %s write that can restore removed metadata',
+    async (scheduler) => {
+      vi.useFakeTimers();
+      const idle = vi.fn();
+      vi.stubGlobal('requestIdleCallback', scheduler === 'idle' ? idle : undefined);
+      const writes = vi.spyOn(Storage.prototype, 'setItem');
+      const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
+      await Promise.resolve();
+      result.handleCustomUrlUpdate('guest', 'https://confirmed.example');
+      expect(result.guestMetadata()).toEqual(record('https://confirmed.example'));
+      cleanup();
+      vi.runAllTimers();
+      expect(idle).not.toHaveBeenCalled();
+      expect(writes).not.toHaveBeenCalled();
+      expect(localStorage.length).toBe(0);
+    },
+  );
 
   it('rejects a disposed read and callback without seeding the next owner in the same org', async () => {
     const old = deferred();
@@ -89,7 +99,8 @@ describe('Workloads metadata owner lifetime', () => {
   });
 
   it('does not reuse even a completed read in a new owner, or disturb an independent owner', async () => {
-    mocks.read.mockResolvedValueOnce(record('https://first.example'))
+    mocks.read
+      .mockResolvedValueOnce(record('https://first.example'))
       .mockResolvedValueOnce(record('https://independent.example'))
       .mockReturnValueOnce(new Promise(() => {}));
     const first = renderHook(() => useWorkloadGuestMetadataState());
@@ -107,7 +118,10 @@ describe('Workloads metadata owner lifetime', () => {
     const oldA = deferred();
     const b = deferred();
     const newA = deferred();
-    mocks.read.mockReturnValueOnce(oldA.promise).mockReturnValueOnce(b.promise).mockReturnValueOnce(newA.promise);
+    mocks.read
+      .mockReturnValueOnce(oldA.promise)
+      .mockReturnValueOnce(b.promise)
+      .mockReturnValueOnce(newA.promise);
     const { result, cleanup } = renderHook(() => useWorkloadGuestMetadataState());
     result.handleCustomUrlUpdate('guest', 'https://confirmed.example');
     eventBus.emit('org_switched', 'b');
@@ -131,7 +145,11 @@ describe('Workloads metadata owner lifetime', () => {
     mocks.read.mockClear();
     setIds(new Set(['moved-guest']));
     eventBus.emit('org_switched', 'another');
-    window.dispatchEvent(new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT, { detail: { metadataId: 'guest', customUrl: 'https://late.example' } }));
+    window.dispatchEvent(
+      new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT, {
+        detail: { metadataId: 'guest', customUrl: 'https://late.example' },
+      }),
+    );
     expect(mocks.read).not.toHaveBeenCalled();
     expect(result.guestMetadata()).toEqual({});
   });

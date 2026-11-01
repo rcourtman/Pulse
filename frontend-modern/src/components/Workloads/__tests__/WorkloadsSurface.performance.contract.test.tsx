@@ -503,7 +503,11 @@ describe('Workloads performance contract', () => {
   it('cannot carry a disposed platform metadata read into its replacement workload state', async () => {
     const read = vi.mocked(GuestMetadataAPI.getAllMetadata);
     let finish!: (metadata: Record<string, GuestMetadata>) => void;
-    read.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    read.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
     const first = renderHook(() => useWorkloadsState({}));
     first.result.handleCustomUrlUpdate('guest', 'https://confirmed.example');
     first.cleanup();

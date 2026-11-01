@@ -801,7 +801,8 @@ describe('useAppRuntimeState', () => {
       expect(clearAuthMock).not.toHaveBeenCalled();
       expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
       expect(localStorage.getItem('auth')).toBe('synthetic-cache');
-      for (const key of scopedMetadataKeys) expect(localStorage.getItem(key)).toBe('synthetic-scoped-cache');
+      for (const key of scopedMetadataKeys)
+        expect(localStorage.getItem(key)).toBe('synthetic-scoped-cache');
       expect(window.location.hash).toBe('');
       await hookState.handleLogout();
       expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/logout')).toHaveLength(1);
@@ -964,12 +965,18 @@ describe('useAppRuntimeState', () => {
       localStorage.setItem('guest_metadata.default', 'synthetic-cache');
       localStorage.setItem('guest_metadata.other', 'synthetic-cache');
       const remove = Storage.prototype.removeItem;
-      const spy = failure === 'scoped-key'
-        ? vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (this: Storage, key: string) {
-            if (key === 'guest_metadata.default') throw new Error('Synthetic blocked cache');
-            remove.call(this, key);
-          })
-        : vi.spyOn(Storage.prototype, 'key').mockImplementation(() => { throw new Error('Synthetic blocked enumeration'); });
+      const spy =
+        failure === 'scoped-key'
+          ? vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(function (
+              this: Storage,
+              key: string,
+            ) {
+              if (key === 'guest_metadata.default') throw new Error('Synthetic blocked cache');
+              remove.call(this, key);
+            })
+          : vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+              throw new Error('Synthetic blocked enumeration');
+            });
       const fallback = apiFetchMock.getMockImplementation()!;
       apiFetchMock.mockImplementation((url: string) =>
         url === '/api/logout' ? new Response('{"success":true}') : fallback(url),
@@ -985,7 +992,9 @@ describe('useAppRuntimeState', () => {
       expect(hookState.needsAuth()).toBe(true);
       expect(window.location.hash).toBe('');
       expect(showToastMock).toHaveBeenCalledWith(
-        'error', 'Browser cleanup incomplete', expect.stringContaining('could not finish browser cleanup'),
+        'error',
+        'Browser cleanup incomplete',
+        expect.stringContaining('could not finish browser cleanup'),
       );
     },
   );

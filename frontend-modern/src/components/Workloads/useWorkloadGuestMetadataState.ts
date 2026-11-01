@@ -1,11 +1,4 @@
-import {
-  createEffect,
-  createSignal,
-  on,
-  onCleanup,
-  onMount,
-  type Accessor,
-} from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, onMount, type Accessor } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { getOrgID } from '@/utils/apiClient';
@@ -38,7 +31,9 @@ export function useWorkloadGuestMetadataState(metadataIds?: Accessor<ReadonlySet
     setGuestMetadata({});
   });
 
-  const updateGuestMetadataState = (updater: (prev: GuestMetadataRecord) => GuestMetadataRecord) => {
+  const updateGuestMetadataState = (
+    updater: (prev: GuestMetadataRecord) => GuestMetadataRecord,
+  ) => {
     if (!disposed) setGuestMetadata(updater);
   };
 

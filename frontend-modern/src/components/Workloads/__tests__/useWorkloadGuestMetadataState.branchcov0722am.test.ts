@@ -294,7 +294,9 @@ describe('useWorkloadGuestMetadataState (branch coverage 0722am)', () => {
       mocks.orgSwitchedHandler.current?.('org-target');
       expect(result.guestMetadata()).toEqual({});
       await vi.waitFor(() => {
-        expect(result.guestMetadata()['guest:target']?.customUrl).toBe('https://authorised.example');
+        expect(result.guestMetadata()['guest:target']?.customUrl).toBe(
+          'https://authorised.example',
+        );
       });
       cleanup();
     });
@@ -321,5 +323,4 @@ describe('useWorkloadGuestMetadataState (branch coverage 0722am)', () => {
       expect(mocks.unsubscribeOrgSwitched).toHaveBeenCalledTimes(1);
     });
   });
-
 });
