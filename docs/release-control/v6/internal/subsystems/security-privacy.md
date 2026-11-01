@@ -2921,6 +2921,23 @@ plaintext secret file on disk. Canonical runtime persistence must keep the
 token encrypted at rest, and any legacy plaintext bootstrap-token file must be
 treated only as migration input that is rewritten immediately into the
 encrypted canonical format on load.
+Bootstrap ciphertext persistence uses the existing secure storage writer's
+exclusive, uniquely named owner-only temporary file in the resolved data
+directory, followed by rename. It must not open, truncate or remove a stale
+`.bootstrap_token.tmp` file, link or directory, or inherit that path's modes.
+Successful direct writes and legacy migration preserve the existing encryption
+key and unrelated files; failed replacement cleans up only the writer's own
+temporary file and returns an error. Concurrent writes with an established key
+remain complete records, not a shared-temporary-file collision. The encrypted
+format, token hash, creation timestamp, local reveal command, initial key
+creation and first-run authentication contract are unchanged.
+`internal/bootstrap/token_store_atomic_test.go` covers stale regular files,
+symlinks, hardlinks and directories through both persistence and migration,
+failed replacement/state preservation, private final modes and independent
+concurrent writes. The ordinary API bootstrap tests retain actual creation,
+reload, rejection and setup validation; a stale temporary directory is not an
+authoritative failure injection. This is local filesystem safety, not evidence
+of installed exposure or a change to rendered setup fields or policy.
 Operator guidance for recovering that token, in the startup log and on the
 first-run unlock screen, must name the supported command and never the token
 file, because the file holds ciphertext. The unlock screen lists the host,
