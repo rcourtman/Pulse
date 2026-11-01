@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "5cbcb053308675c0422b0bc52e8419e566e8a3f5",
+  "verified_at": "2026-11-01T17:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "d8322bf4bda7f3519cac1056e679da98eeeb5e262e78201f4a875a50a041123b",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts": "73bfee53f7f102472d65eee2fdef1007f7aa0561d34930f051282b5a08739c8c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "249eb67996f722d3d8efe03a150712bb72e04c103047ff67e2e80d7ded69da20"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1000,
+      "height": 900
+    },
+    {
+      "width": 760,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock rig PBS servers backup-vault (two datastores) and dr-vault, dark theme",
+    "job verdicts injected into the /api/resources response: failed sync on one datastore, late prune plus not-run verify on another, all OK on the third",
+    "full, expanded, basic and compact Backup server layouts"
+  ],
+  "interactions": [
+    "signed in and opened Backups at 1440x1000, 1000x900, 760x1000 and 375x812",
+    "read every Jobs cell and the phone State cells: Sync failed, OK, Prune late",
+    "measured row heights (32-33px, one line) and checked no Jobs or State text is clipped at any width",
+    "opened the failed datastore's drawer on the phone and read its Jobs line: Sync failed, Verify OK"
+  ]
+}
