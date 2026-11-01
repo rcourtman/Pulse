@@ -3505,6 +3505,34 @@ buffered complete inventory overwrite a newer helper-degraded status report.
 Legacy reports without a sequence retain timestamp-based reconnect-burst
 protection, but a clock correction after a normal report interval must be
 admitted rather than freezing telemetry indefinitely.
+Counter rates follow the same ownership. An accepted sequenced report that
+carries its authored time is measured on the reporting machine's clock: host
+network and disk, physical-disk and container rates divide by the interval
+between the authored collection times of consecutive accepted reports, across
+agent restarts too, so a FIFO drained back to back cannot compress collection
+intervals into milliseconds of receipt time and fabricate throughput spikes.
+A current host agent also sends `ioCountersCollectedAt`, stamped right after
+the metrics snapshot reads its disk-I/O and network counters. Host and
+physical-disk rates are measured on it rather than on the report `timestamp`,
+which follows every optional collector, and a switch between the two sampling
+modes starts a new counter baseline.
+Libvirt domain CPU and I/O counters inside an accepted host report are measured
+on the inventory's `CollectedAt`, which the agent stamps on the same clock just
+before it reads the domain stats, and CPU usage shares the I/O interval rather
+than the gap since the previous host report.
+Legacy and untimestamped reports keep receipt-time rates. A switch between the
+two clocks starts a new counter baseline, and an authored time that does not
+advance past the baseline, a backward step or a repeated timestamp, drops it,
+so no rate is reported until two samples bound a new interval. Liveness,
+history timestamps and rate-series cleanup keep Pulse receipt time.
+Unknown Docker network intervals must be omitted from both history writers;
+the numeric compatibility fields must not turn first samples or clock faults
+into measured idle. A genuine unchanged-counter interval still writes zero.
+Libvirt CPU counter baselines retain the full unsigned nanosecond range rather
+than clamping accumulated CPU time to a signed byte-counter value. The
+`agent_report_counter_clock_test.go`, `agent_report_io_counter_clock_test.go`
+and `agent_report_libvirt_clock_test.go` regressions cover reconnect delivery,
+clock transitions, idle/reset intervals and counter range preservation.
 Host telemetry also has a reporting lease derived from the agent cadence.
 Monitoring must not clear a genuinely active Unraid parity operation or Linux
 RAID rebuild during an ordinary polling gap. Once the lease expires, it must

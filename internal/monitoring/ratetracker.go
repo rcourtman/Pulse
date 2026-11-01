@@ -10,20 +10,41 @@ import (
 // IOMetrics is an alias for models.IOMetrics.
 type IOMetrics = models.IOMetrics
 
-type counterBaseline struct {
-	value       int64
+type counterBaseline[T int64 | uint64] struct {
+	value       T
 	observedAt  time.Time
 	initialized bool
 }
 
 type counterHistory struct {
-	diskRead       counterBaseline
-	diskWrite      counterBaseline
-	diskBusy       counterBaseline
-	networkIn      counterBaseline
-	networkOut     counterBaseline
+	diskRead       counterBaseline[int64]
+	diskWrite      counterBaseline[int64]
+	diskBusy       counterBaseline[int64]
+	networkIn      counterBaseline[int64]
+	networkOut     counterBaseline[int64]
+	cpuTime        counterBaseline[uint64]
 	lastObservedAt time.Time
 	sourceUptime   uint64
+	sampleClock    string
+}
+
+// counterSampleTime is when a producer sampled a set of cumulative counters,
+// on a named clock whose samples the producer has already ordered. Rates
+// measure intervals on that clock, while IOMetrics.Timestamp stays Pulse
+// receipt time for freshness and cleanup. The zero value keeps receipt time
+// for both, which pull-based collectors observe directly.
+type counterSampleTime struct {
+	clock string
+	at    time.Time
+}
+
+// counterTime returns when a counter was sampled: the named clock's time, or
+// else the counter's own receipt time with the payload receipt as fallback.
+func (sampled counterSampleTime) counterTime(counterReceivedAt, receivedAt time.Time) time.Time {
+	if sampled.clock != "" {
+		return sampled.at
+	}
+	return observationTime(counterReceivedAt, receivedAt)
 }
 
 // RateTracker converts cumulative byte counters into adjacent-sample rates.
@@ -41,8 +62,9 @@ func NewRateTracker() *RateTracker {
 
 // CalculateRates calculates disk and network rates in bytes per second.
 // A negative result means the upstream counter was absent, the sample was
-// out-of-order, or no earlier observation exists. A returned zero is a valid
-// observed idle/reset interval.
+// out-of-order, no earlier observation exists, or no comparable interval
+// exists on the sample's clock. A returned zero is a valid observed
+// idle/reset interval.
 func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskReadRate, diskWriteRate, netInRate, netOutRate float64) {
 	diskReadRate, diskWriteRate, _, netInRate, netOutRate = rt.calculateRates(guestID, current)
 	return
@@ -55,18 +77,20 @@ func (rt *RateTracker) CalculateRatesWithBusy(guestID string, current IOMetrics)
 }
 
 func (rt *RateTracker) calculateRates(guestID string, current IOMetrics) (diskReadRate, diskWriteRate, diskBusyPct, netInRate, netOutRate float64) {
+	return rt.calculateSampledRates(guestID, current, counterSampleTime{})
+}
+
+// calculateSampledRates measures each counter interval on sampled's clock.
+// Samples on a different clock than the baseline start a new counter epoch,
+// because their times cannot be subtracted from each other.
+func (rt *RateTracker) calculateSampledRates(guestID string, current IOMetrics, sampled counterSampleTime) (diskReadRate, diskWriteRate, diskBusyPct, netInRate, netOutRate float64) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
 	if current.Timestamp.IsZero() {
 		return -1, -1, -1, -1, -1
 	}
-
-	history := rt.history[guestID]
-	if history == nil {
-		history = &counterHistory{}
-		rt.history[guestID] = history
-	}
+	history, sampled := rt.sampledHistory(guestID, current.Timestamp, sampled)
 	if current.SourceUptime > 0 {
 		if history.sourceUptime > 0 && current.SourceUptime < history.sourceUptime {
 			history.resetCounterEpoch()
@@ -75,11 +99,12 @@ func (rt *RateTracker) calculateRates(guestID string, current IOMetrics) (diskRe
 	}
 
 	presence := current.Presence.Effective()
-	diskReadRate = calculateCounterRate(&history.diskRead, current.DiskRead, observationTime(current.ObservedAt.DiskRead, current.Timestamp), presence.DiskRead)
-	diskWriteRate = calculateCounterRate(&history.diskWrite, current.DiskWrite, observationTime(current.ObservedAt.DiskWrite, current.Timestamp), presence.DiskWrite)
-	diskBusyRate := calculateCounterRate(&history.diskBusy, current.DiskBusy, observationTime(current.ObservedAt.DiskBusy, current.Timestamp), presence.DiskBusy)
-	netInRate = calculateCounterRate(&history.networkIn, current.NetworkIn, observationTime(current.ObservedAt.NetworkIn, current.Timestamp), presence.NetworkIn)
-	netOutRate = calculateCounterRate(&history.networkOut, current.NetworkOut, observationTime(current.ObservedAt.NetworkOut, current.Timestamp), presence.NetworkOut)
+	ordered := sampled.clock != ""
+	diskReadRate = sampledCounterRate(&history.diskRead, current.DiskRead, sampled.counterTime(current.ObservedAt.DiskRead, current.Timestamp), presence.DiskRead, ordered)
+	diskWriteRate = sampledCounterRate(&history.diskWrite, current.DiskWrite, sampled.counterTime(current.ObservedAt.DiskWrite, current.Timestamp), presence.DiskWrite, ordered)
+	diskBusyRate := sampledCounterRate(&history.diskBusy, current.DiskBusy, sampled.counterTime(current.ObservedAt.DiskBusy, current.Timestamp), presence.DiskBusy, ordered)
+	netInRate = sampledCounterRate(&history.networkIn, current.NetworkIn, sampled.counterTime(current.ObservedAt.NetworkIn, current.Timestamp), presence.NetworkIn, ordered)
+	netOutRate = sampledCounterRate(&history.networkOut, current.NetworkOut, sampled.counterTime(current.ObservedAt.NetworkOut, current.Timestamp), presence.NetworkOut, ordered)
 
 	if diskBusyRate < 0 {
 		diskBusyPct = -1
@@ -92,18 +117,51 @@ func (rt *RateTracker) calculateRates(guestID string, current IOMetrics) (diskRe
 		}
 	}
 
-	if current.Timestamp.After(history.lastObservedAt) {
-		history.lastObservedAt = current.Timestamp
-	}
 	return
 }
 
+// sampledHistory applies clock epochs and receipt-time cleanup to every
+// counter series. The caller holds rt.mu and supplies a nonzero receipt time.
+func (rt *RateTracker) sampledHistory(seriesID string, receivedAt time.Time, sampled counterSampleTime) (*counterHistory, counterSampleTime) {
+	if sampled.at.IsZero() {
+		sampled = counterSampleTime{}
+	}
+	history := rt.history[seriesID]
+	if history == nil {
+		history = &counterHistory{}
+		rt.history[seriesID] = history
+	}
+	if sampled.clock != history.sampleClock {
+		history.resetCounterEpoch()
+		history.sampleClock = sampled.clock
+	}
+	if receivedAt.After(history.lastObservedAt) {
+		history.lastObservedAt = receivedAt
+	}
+	return history, sampled
+}
+
+// calculateSampledCounterRate measures one cumulative counter outside the disk
+// and network set, such as a libvirt domain's CPU time, under the same clock,
+// baseline and cleanup rules as calculateSampledRates. Preserve its unsigned
+// range: cumulative CPU nanoseconds can exceed the signed byte-counter range.
+func (rt *RateTracker) calculateSampledCounterRate(seriesID string, value uint64, receivedAt time.Time, sampled counterSampleTime) float64 {
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	if receivedAt.IsZero() {
+		return -1
+	}
+	history, sampled := rt.sampledHistory(seriesID, receivedAt, sampled)
+	return sampledCounterRate(&history.cpuTime, value, sampled.counterTime(time.Time{}, receivedAt), true, sampled.clock != "")
+}
+
 func (history *counterHistory) resetCounterEpoch() {
-	history.diskRead = counterBaseline{}
-	history.diskWrite = counterBaseline{}
-	history.diskBusy = counterBaseline{}
-	history.networkIn = counterBaseline{}
-	history.networkOut = counterBaseline{}
+	history.diskRead = counterBaseline[int64]{}
+	history.diskWrite = counterBaseline[int64]{}
+	history.diskBusy = counterBaseline[int64]{}
+	history.networkIn = counterBaseline[int64]{}
+	history.networkOut = counterBaseline[int64]{}
+	history.cpuTime = counterBaseline[uint64]{}
 }
 
 func observationTime(counterTime, fallback time.Time) time.Time {
@@ -113,7 +171,7 @@ func observationTime(counterTime, fallback time.Time) time.Time {
 	return counterTime
 }
 
-func calculateCounterRate(baseline *counterBaseline, value int64, observedAt time.Time, present bool) float64 {
+func calculateCounterRate[T int64 | uint64](baseline *counterBaseline[T], value T, observedAt time.Time, present bool) float64 {
 	if !present {
 		return -1
 	}
@@ -138,6 +196,19 @@ func calculateCounterRate(baseline *counterBaseline, value int64, observedAt tim
 		return 0
 	}
 	return float64(value-previous) / elapsed
+}
+
+// sampledCounterRate is calculateCounterRate for a sample that may sit on an
+// ordered clock. There a time that does not advance past the baseline is a
+// clock step or a malformed time, not a late sample, so neither sample bounds
+// a known interval: the baseline is dropped, this sample is unknown, and the
+// next sample starts a new baseline.
+func sampledCounterRate[T int64 | uint64](baseline *counterBaseline[T], value T, observedAt time.Time, present, ordered bool) float64 {
+	if ordered && present && baseline.initialized && !observedAt.After(baseline.observedAt) {
+		*baseline = counterBaseline[T]{}
+		return -1
+	}
+	return calculateCounterRate(baseline, value, observedAt, present)
 }
 
 // Clear removes all tracked data.

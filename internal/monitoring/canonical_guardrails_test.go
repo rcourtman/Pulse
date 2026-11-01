@@ -2133,8 +2133,9 @@ func TestHostPhysicalDiskIOMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"m.writeHostPhysicalDiskIOMetrics(host, now)",
-		"func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {",
+		"m.writeHostPhysicalDiskIOMetrics(host, now, counterSampled)",
+		"func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time, sampled counterSampleTime) {",
+		"readRate, writeRate, busyPct, _, _ := m.rateTracker.calculateSampledRates(trackerKey, current, sampled)",
 		`resourceID := unifiedresources.HostSMARTDiskMetricID(host, disk)`,
 		`m.metricsHistory.AddDiskMetric(resourceID, "diskread", readRate, now)`,
 		`m.metricsStore.Write("disk", resourceID, "diskwrite", writeRate, now)`,

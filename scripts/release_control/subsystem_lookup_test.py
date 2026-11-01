@@ -4644,9 +4644,13 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             lifecycle_match["verification_requirement"]["exact_files"],
             [
+                "internal/api/agent_report_decode_io_stamp_compat_test.go",
                 "internal/api/host_agent_removal_lifecycle_integration_test.go",
                 "internal/config/host_continuity_test.go",
                 "internal/models/metrics_types_test.go",
+                "internal/monitoring/agent_report_counter_clock_test.go",
+                "internal/monitoring/agent_report_io_counter_clock_test.go",
+                "internal/monitoring/agent_report_libvirt_clock_test.go",
                 "internal/monitoring/availability_probe_agent_test.go",
                 "internal/monitoring/docker_filesystem_evidence_test.go",
                 "internal/monitoring/docker_metric_presence_test.go",
@@ -4675,6 +4679,9 @@ class SubsystemLookupTest(unittest.TestCase):
             monitoring_match["verification_requirement"]["exact_files"],
             [
                 "internal/config/host_continuity_test.go",
+                "internal/monitoring/agent_report_counter_clock_test.go",
+                "internal/monitoring/agent_report_io_counter_clock_test.go",
+                "internal/monitoring/agent_report_libvirt_clock_test.go",
                 "internal/monitoring/docker_filesystem_evidence_test.go",
                 "internal/monitoring/docker_metric_presence_test.go",
                 "internal/monitoring/issue1485_unraid_lifecycle_test.go",
@@ -4684,6 +4691,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/monitoring/monitor_host_agents_test.go",
                 "internal/monitoring/monitor_package_updates_test.go",
                 "internal/unifiedresources/code_standards_test.go",
+                "pkg/agents/host/report_io_counters_collected_at_test.go",
                 "pkg/agents/host/report_test.go",
             ],
         )
@@ -4989,6 +4997,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/agentupdate/coverage_test.go",
+                "internal/api/agent_report_decode_io_stamp_compat_test.go",
                 "internal/hostagent/action_runner_client_test.go",
                 "internal/hostagent/agent_flushbuffer_test.go",
                 "internal/hostagent/agent_metrics_test.go",
@@ -5008,6 +5017,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/smartctl_standby_guard_test.go",
                 "internal/hostagent/storage_cleanup_test.go",
                 "internal/hostagent/unraid_test.go",
+                "pkg/agents/host/report_io_counters_collected_at_test.go",
                 "pkg/agents/host/report_test.go",
             ],
         )
