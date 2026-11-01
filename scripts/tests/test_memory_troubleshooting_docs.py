@@ -44,8 +44,9 @@ def recipe() -> str:
     return blocks[0]
 
 
-READER = '''#!/usr/bin/env python3
-import json, os, pathlib, signal, subprocess, sys, time
+# These command doubles use only stdlib; keep fixture startup independent of
+# PATH, Python environment and site packages without changing copied recipes.
+READER = f'#!{sys.executable} -IS\n' + '''import json, os, pathlib, signal, subprocess, sys, time
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 root = pathlib.Path(os.environ['RECIPE_FIXTURE'])
@@ -170,6 +171,27 @@ class MemoryTroubleshootingDocsTest(unittest.TestCase):
                          (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
         result = subprocess.run(["bash", "-n"], input=recipe(), text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_fixture_readers_use_selected_isolated_no_site_python(self):
+        # Exercise the actual reader body and copied recipe with hostile startup
+        # inputs. Flag assertions run inside the reader, not in a text scan.
+        checked_reader = READER.replace(
+            "\n", "\nimport sys\n"
+            f"assert sys.executable == {sys.executable!r}\n"
+            "assert sys.flags.isolated and sys.flags.no_site\n", 1)
+        with tempfile.TemporaryDirectory() as temporary:
+            startup = Path(temporary)
+            (startup / "python3").write_text("#!/bin/sh\nexit 29\n", encoding="utf-8")
+            (startup / "python3").chmod(0o700)
+            (startup / "sitecustomize.py").write_text("raise SystemExit(29)\n", encoding="utf-8")
+            environment = dict(PATH=f"{startup}{os.pathsep}{os.environ['PATH']}",
+                               PYTHONPATH=str(startup), PYTHONHOME=str(startup / "missing-home"))
+            with patch(f"{__name__}.READER", checked_reader), \
+                    patch.dict(os.environ, environment):
+                result, calls = self.exercise()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(len(calls), 6)
+                self.assertIn(COUNTERS, result.stdout)
 
     def test_only_five_counters_and_stable_process_identity_leave_the_reader(self):
         result, calls = self.exercise(status="Name: private-workload\nUid: 1001 1001\n"

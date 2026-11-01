@@ -45,7 +45,8 @@ def recipes(heading: str = "### Correlate Logs with Requests") -> dict[str, str]
             for block in blocks}
 
 
-READER = f'''#!{sys.executable}
+# Stdlib-only doubles use the suite interpreter, not ambient startup code.
+READER = f'''#!{sys.executable} -IS
 import json, os, pathlib, signal, sys, time
 pathlib.Path(os.environ['READER_ARGV']).write_text(json.dumps(sys.argv[1:]))
 pathlib.Path(os.environ['READER_PID']).write_text(json.dumps({{
@@ -140,7 +141,7 @@ def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: s
         log_directory.mkdir(mode=0o700)
         cleanup_file = directory / "cleanup.jsonl"
         real_rm = shutil.which("rm")
-        (directory / "rm").write_text(f'''#!{sys.executable}
+        (directory / "rm").write_text(f'''#!{sys.executable} -IS
 import json, os, pathlib, stat, sys
 path = pathlib.Path(sys.argv[2])
 assert sys.argv[1] == '--' and len(sys.argv) == 3
@@ -271,6 +272,29 @@ class TroubleshootingLogRecipesTest(unittest.TestCase):
         self.assertEqual(DOC.read_bytes(),
                          (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
         self.assertEqual(set(recipes()), {"journalctl", "docker"})
+
+    def test_fixture_readers_use_selected_isolated_no_site_python(self):
+        # Exercise the actual reader body and copied recipe with hostile startup
+        # inputs. Flag assertions run inside the reader, not in a text scan.
+        checked_reader = READER.replace(
+            "\n", "\nimport sys\n"
+            f"assert sys.executable == {sys.executable!r}\n"
+            "assert sys.flags.isolated and sys.flags.no_site\n", 1)
+        with tempfile.TemporaryDirectory() as temporary:
+            startup = Path(temporary)
+            (startup / "python3").write_text("#!/bin/sh\nexit 29\n", encoding="utf-8")
+            (startup / "python3").chmod(0o700)
+            (startup / "sitecustomize.py").write_text("raise SystemExit(29)\n", encoding="utf-8")
+            environment = dict(PATH=f"{startup}{os.pathsep}{os.environ['PATH']}",
+                               PYTHONPATH=str(startup), PYTHONHOME=str(startup / "missing-home"))
+            with patch(f"{__name__}.READER", checked_reader), \
+                    patch.dict(os.environ, environment):
+                for reader in recipes():
+                    with self.subTest(reader=reader):
+                        result = self.exercise(reader, stdout=JSON_LOG)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(result.stdout, JSON_LOG)
+                        self.assertEqual(len(result.log_cleanup), 1)
 
     def test_literal_id_matches_json_and_console_without_regex_false_matches(self):
         for reader in recipes():
