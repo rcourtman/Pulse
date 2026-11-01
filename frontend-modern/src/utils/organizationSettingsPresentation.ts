@@ -20,6 +20,9 @@ export function getOrganizationSharingReloadMessage(orgId: string): string {
   return `Reload checks saved incoming and outgoing shares for ${orgId}. It does not repeat a sharing change.`;
 }
 
+export const ORGANIZATION_OVERVIEW_UNCONFIRMED_CHANGE_MESSAGE =
+  'The last name change could not be confirmed. Reload saved organization details before making another change.';
+
 export type OrganizationSettingsLoadContext =
   'access' | 'overview' | 'sharing' | 'billing' | 'billing-admin';
 

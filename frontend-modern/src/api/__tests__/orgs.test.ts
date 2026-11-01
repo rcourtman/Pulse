@@ -79,6 +79,20 @@ describe('OrgsAPI', () => {
     });
   });
 
+  it('binds a name change to its accepted selection with no automatic retry', async () => {
+    const controller = new AbortController();
+    const options = { expectedOrgID: 'org/one', signal: controller.signal, retry: false as const };
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({ id: 'org/one', displayName: 'Renamed' });
+    await OrgsAPI.update('org/one', { displayName: 'Renamed' }, options);
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org%2Fone', {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify({ displayName: 'Renamed' }),
+      preferSessionAuth: true,
+      skipOrgContext: true,
+    });
+  });
+
   describe('remove', () => {
     it('deletes an organization', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);

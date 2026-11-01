@@ -27,6 +27,7 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyIsReadOnly: () => false,
   presentationPolicyHidesOrganizationSurfaces: (...args: unknown[]) =>
     presentationPolicyHidesOrganizationSurfacesMock(...args),
 }));

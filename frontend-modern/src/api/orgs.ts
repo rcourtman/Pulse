@@ -93,12 +93,17 @@ export const OrgsAPI = {
       ...options,
     }),
 
-  update: (id: string, payload: { displayName: string }) =>
+  update: (
+    id: string,
+    payload: { displayName: string },
+    options?: OrganizationAccessRequestOptions,
+  ) =>
     apiFetchJSON<Organization>(`/api/orgs/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
   remove: (id: string) =>
