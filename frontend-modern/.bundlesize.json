@@ -1,123 +1,139 @@
 {
   "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
   "version": 1,
-  "generated": "2026-08-31",
+  "generated": "2026-11-01",
   "defaultThresholdPercent": 15,
   "chunks": {
     "index": {
-      "baselineGzip": 150212
-    },
-    "MetricBar": {
-      "baselineGzip": 120887
+      "baselineGzip": 159788
     },
     "Alerts": {
-      "baselineGzip": 120045
+      "baselineGzip": 129182
+    },
+    "MetricBar": {
+      "baselineGzip": 108880
     },
     "InfrastructureWorkspace": {
-      "baselineGzip": 93227
+      "baselineGzip": 104143
     },
     "Settings": {
-      "baselineGzip": 92219
+      "baselineGzip": 97739
     },
     "Proxmox": {
-      "baselineGzip": 80851,
-      "$comment": "31 Oct 2026: 256-byte reference allowance for retained-focus and no-steal safety repair; the 15% threshold is unchanged."
+      "baselineGzip": 93682
     },
     "AIIntelligence": {
-      "baselineGzip": 73662
+      "baselineGzip": 74075
     },
     "useWorkloadsState": {
-      "baselineGzip": 62538
+      "baselineGzip": 55636
     },
     "Docker": {
-      "baselineGzip": 28290
+      "baselineGzip": 29543
     },
-    "vendor-ai": {
-      "baselineGzip": 23130
+    "alertOverridesModel": {
+      "baselineGzip": 25655
     },
     "Standalone": {
-      "baselineGzip": 22627
+      "baselineGzip": 24118
+    },
+    "vendor-ai": {
+      "baselineGzip": 24017
     },
     "Kubernetes": {
-      "baselineGzip": 21732
-    },
-    "vendor-solid": {
-      "baselineGzip": 17639
+      "baselineGzip": 21677
     },
     "TrueNAS": {
-      "baselineGzip": 17053
+      "baselineGzip": 18242
     },
-    "vendor-icons": {
-      "baselineGzip": 11486
+    "vendor-solid": {
+      "baselineGzip": 17765
     },
     "Vmware": {
-      "baselineGzip": 11172
-    },
-    "AvailabilitySettingsPanel": {
-      "baselineGzip": 10586
+      "baselineGzip": 12565
     },
     "ReportingPanel": {
-      "baselineGzip": 10355
+      "baselineGzip": 11409
+    },
+    "AvailabilitySettingsPanel": {
+      "baselineGzip": 11153
+    },
+    "vendor-icons": {
+      "baselineGzip": 10742
     },
     "messages.de": {
-      "baselineGzip": 10314
-    },
-    "messages.es": {
-      "baselineGzip": 10093
-    },
-    "APIAccessPanel": {
-      "baselineGzip": 9868
-    },
-    "vendor": {
-      "baselineGzip": 9857
-    },
-    "UpdatesSettingsPanel": {
-      "baselineGzip": 9687
-    },
-    "AuditLogPanel": {
-      "baselineGzip": 8806
-    },
-    "useUnifiedResources": {
-      "baselineGzip": 10267
+      "baselineGzip": 10489
     },
     "ActionReviewDialog": {
-      "baselineGzip": 10414
+      "baselineGzip": 10457
     },
-    "DrawerDiskListCard": {
-      "baselineGzip": 6035
+    "APIAccessPanel": {
+      "baselineGzip": 10324
+    },
+    "useUnifiedResources": {
+      "baselineGzip": 10318
+    },
+    "messages.es": {
+      "baselineGzip": 10211
+    },
+    "vendor": {
+      "baselineGzip": 9975
+    },
+    "UpdatesSettingsPanel": {
+      "baselineGzip": 9792
+    },
+    "AuditLogPanel": {
+      "baselineGzip": 8911
+    },
+    "SearchInput": {
+      "baselineGzip": 8106
     },
     "DiagnosticsPanel": {
-      "baselineGzip": 7245
+      "baselineGzip": 7321
     },
-    "SecurityAuthPanel": {
-      "baselineGzip": 5851
+    "monitoring": {
+      "baselineGzip": 7108
     },
-    "HelpIcon": {
-      "baselineGzip": 5836
-    },
-    "truenasPageModel": {
-      "baselineGzip": 5549
-    },
-    "SetupWizard": {
-      "baselineGzip": 5530
-    },
-    "FilterBar": {
-      "baselineGzip": 5321
+    "physicalDiskAlertOwner": {
+      "baselineGzip": 6338
     },
     "OrganizationSharingPanel": {
-      "baselineGzip": 5706,
-      "$comment": "31 Oct 2026: 512-byte reference allowance for selected-organization admission and no-replay sharing safety; the 15% threshold and total budgets are unchanged."
+      "baselineGzip": 6314
+    },
+    "truenasPageModel": {
+      "baselineGzip": 6068
+    },
+    "aiPatrolCost": {
+      "baselineGzip": 6017
+    },
+    "SecurityAuthPanel": {
+      "baselineGzip": 5940
+    },
+    "SetupWizard": {
+      "baselineGzip": 5868
+    },
+    "FilterBar": {
+      "baselineGzip": 5374
+    },
+    "HelpIcon": {
+      "baselineGzip": 5300
+    },
+    "PlatformHostScope": {
+      "baselineGzip": 5289
     },
     "RelaySettingsPanel": {
-      "baselineGzip": 5156
+      "baselineGzip": 5252
+    },
+    "UserAssignmentsPanel": {
+      "baselineGzip": 5148
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 1307688
+      "baselineGzip": 1343188
     },
     "css": {
-      "baselineGzip": 31865
+      "baselineGzip": 32551
     }
   }
 }
