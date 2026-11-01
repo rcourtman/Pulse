@@ -120,6 +120,32 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
         for name, doc in DOCUMENTS.items():
             self.assertEqual(doc.read_bytes(), (ROOT / f"frontend-modern/public/docs/{name}.md").read_bytes())
 
+    def test_proxy_logout_guidance_separates_redirect_from_access_withdrawal(self):
+        source = DOCUMENTS["PROXY_AUTH"].read_text()
+        self.assertEqual(source.count("### Sign out and session boundaries\n"), 1)
+        self.assertIn("[browser redirect, proxy session and IdP session](#sign-out-and-session-boundaries)", source)
+        guide = " ".join(source.split("### Sign out and session boundaries\n", 1)[1]
+                         .split("### Verify Headers", 1)[0].split())
+        for boundary in (
+            "instead of calling Pulse's local `/api/logout` endpoint",
+            "leaves the proxy/IdP sessions alone",
+            "other browser sessions, API tokens or the shared proxy secret",
+            "active IdP session can sign the user straight back in",
+            "logout URL is exposed to the browser and can appear in startup logs",
+            "never put a token, password, session cookie or shared secret in it",
+            "not your only administrator session",
+            "public `/api/health` response or an unavailable page is not proof",
+            "clearing browser storage does not establish server-side revocation",
+            "Do not repeatedly sign out or change permissions just to obtain evidence",
+            "cookies and full browser/network exports private",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, guide)
+        # No new cookie-bearing command or guessed provider endpoint is a
+        # prerequisite for understanding the result of an existing sign-out.
+        self.assertNotIn("```", guide)
+        self.assertNotRegex(guide, r"https?://|curl\b|--cookie\b")
+
     def test_ai_guidance_keeps_response_privacy_and_uncertain_writes_explicit(self):
         guide = " ".join(DOCUMENTS["AI_AUTONOMY"].read_text().split())
         for boundary in ("in the same Bash session", "not an installed Pulse command",
