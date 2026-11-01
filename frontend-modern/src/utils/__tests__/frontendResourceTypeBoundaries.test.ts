@@ -3178,7 +3178,13 @@ describe('frontend resource type boundaries', () => {
     );
     expect(ssoProvidersStateSource).toContain('@/components/Settings/ssoProvidersModel');
     expect(ssoProvidersStateSource).toContain('getSSOTestResultPresentation');
-    expect(ssoProvidersStateSource).toContain('getSSOProvidersLoadErrorMessage');
+    // Inventory failure belongs to the panel's persistent unknown state,
+    // not a background toast emitted by the request owner.
+    expect(ssoProvidersPanelSource).toContain('getSSOProvidersLoadErrorMessage()');
+    expect(ssoProvidersStateSource).toContain('setLoadError(true)');
+    expect(ssoProvidersStateSource).not.toContain(
+      'notificationStore.error(getSSOProvidersLoadErrorMessage()',
+    );
     expect(ssoProvidersStateSource).toContain('getSSOProviderDetailsLoadErrorMessage');
     expect(ssoProvidersStateSource).toContain('getSSOProviderSaveSuccessMessage');
     expect(ssoProvidersStateSource).toContain('getSSOProviderDeleteSuccessMessage');

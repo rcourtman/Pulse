@@ -125,11 +125,11 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
         return json({ providers: editing ? [provider] : [] });
       });
       render(() => <SSOProvidersPanel />);
-      fireEvent.click(
-        await screen.findByRole('button', {
-          name: editing ? 'Edit provider' : `Add ${type.toUpperCase()}`,
-        }),
-      );
+      const opener = await screen.findByRole('button', {
+        name: editing ? 'Edit provider' : `Add ${type.toUpperCase()}`,
+      });
+      await waitFor(() => expect(opener).toBeEnabled());
+      fireEvent.click(opener);
       const dialog = within(await screen.findByRole('dialog'));
       const name = dialog.getByLabelText('Provider Name') as HTMLInputElement;
       fireEvent.input(name, { target: { value: 'Retained draft' } });

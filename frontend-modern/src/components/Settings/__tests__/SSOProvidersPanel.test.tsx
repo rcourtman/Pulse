@@ -93,6 +93,7 @@ describe('SSOProvidersPanel OIDC scopes', () => {
     render(() => <SSOProvidersPanel />);
 
     const addButton = await screen.findByRole('button', { name: /Add OIDC/i });
+    await waitFor(() => expect(addButton).toBeEnabled());
     fireEvent.click(addButton);
 
     const scopes = scopesInput();
@@ -336,6 +337,7 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
     render(() => <SSOProvidersPanel />);
 
     const addButton = await screen.findByRole('button', { name: /Add OIDC/i });
+    await waitFor(() => expect(addButton).toBeEnabled());
     fireEvent.click(addButton);
 
     expect(
@@ -479,7 +481,9 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
         : read(url, options),
     );
     render(() => <SSOProvidersPanel />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add SAML' }));
+    const addButton = await screen.findByRole('button', { name: 'Add SAML' });
+    await waitFor(() => expect(addButton).toBeEnabled());
+    fireEvent.click(addButton);
     const dialog = within(screen.getByRole('dialog'));
     fireEvent.input(dialog.getByLabelText('IdP Metadata URL'), {
       target: { value: 'https://idp.example.com/metadata' },

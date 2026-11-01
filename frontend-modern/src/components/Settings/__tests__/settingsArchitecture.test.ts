@@ -1206,7 +1206,17 @@ describe('settings architecture guardrails', () => {
     expect(previewLifecycle).toContain('getSSOMetadataFetchErrorMessage()');
     expect(previewLifecycle).toContain('setEditorFeedback');
     expect(ssoProvidersPanelSource).toContain('returnFocus={() => metadataPreviewButton}');
-    expect(previewLifecycle).toContain('retry: false');
+    expect(previewLifecycle).toContain('...requestOptions(controller)');
+    const requestPolicy = ssoProvidersStateSource.slice(
+      ssoProvidersStateSource.indexOf('const requestOptions ='),
+      ssoProvidersStateSource.indexOf('const clearPreviewAndTest ='),
+    );
+    expect(requestPolicy).toContain('retry: false');
+    expect(requestPolicy).toContain('expectedOrgID: selectedOrg');
+    expect(requestPolicy).toContain('signal: controller.signal');
+    expect(settingsPanelRegistryContextSource).toMatch(
+      /<SSOProvidersPanel\s+currentUser=\{currentUser\(\)\}/,
+    );
     expect(previewLifecycle).not.toContain('response.text()');
     expect(previewLifecycle).not.toContain('String(error)');
     expect(previewLifecycle).not.toContain('notificationStore');

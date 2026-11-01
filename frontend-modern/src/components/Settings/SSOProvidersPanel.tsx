@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -26,6 +27,7 @@ import {
   getSSOProvidersLoadingState,
   getSSOProviderModalTitle,
   getSSOProviderSummary,
+  getSSOProvidersLoadErrorMessage,
   getSSOProviderTypeBadgeClass,
   getSSOProviderTypeLabel,
 } from '@/utils/ssoProviderPresentation';
@@ -60,12 +62,18 @@ const SSOEndpoint: Component<{
 interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
   canManage?: boolean;
+  currentUser?: string;
 }
 
 export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const {
     providers,
     loading,
+    loadError,
+    loadProviders,
+    loadingDetails,
+    canEdit,
+    mutating,
     saving,
     editorFeedback,
     showModal,
@@ -109,7 +117,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             <Button
               type="button"
               onClick={() => openAddModal('oidc')}
-              disabled={!canManage()}
+              disabled={!canEdit()}
               variant="primary"
               size="settingsAction"
               class="gap-1.5"
@@ -120,7 +128,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             <Button
               type="button"
               onClick={() => openAddModal('saml')}
-              disabled={!canManage()}
+              disabled={!canEdit()}
               variant="outline"
               size="settingsAction"
               class="gap-1.5"
@@ -147,7 +155,23 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           </div>
         </Show>
 
-        <Show when={!loading() && providers().length === 0}>
+        <Show when={!loading() && loadError()}>
+          <InlineNotice
+            role="alert"
+            tone="danger"
+            layout="banner"
+            actionLabel="Retry"
+            actionOnClick={() => void loadProviders()}
+          >
+            {getSSOProvidersLoadErrorMessage()} Configured providers are unknown.
+          </InlineNotice>
+        </Show>
+        <Show when={loadingDetails()}>
+          <p role="status" class="text-sm text-muted">
+            Loading provider details…
+          </p>
+        </Show>
+        <Show when={!loading() && !loadError() && providers().length === 0}>
           <EmptyState
             variant="panel"
             icon={<Shield class="h-5 w-5" />}
@@ -156,7 +180,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           />
         </Show>
 
-        <Show when={!loading() && providers().length > 0}>
+        <Show when={!loading() && !loadError() && providers().length > 0}>
           <div class="space-y-3">
             <For each={providers()}>
               {(provider) => (
@@ -189,14 +213,15 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     <div class="flex items-center gap-2 self-end sm:self-auto">
                       <Toggle
                         checked={provider.enabled}
+                        ariaLabel={`${provider.enabled ? 'Disable' : 'Enable'} ${provider.name}`}
                         onChange={() => handleToggleEnabled(provider)}
-                        disabled={!canManage()}
+                        disabled={!canEdit()}
                         containerClass="items-center"
                       />
                       <ActionIconButton
                         type="button"
                         onClick={() => openEditModal(provider)}
-                        disabled={!canManage()}
+                        disabled={!canEdit()}
                         label="Edit provider"
                         tone="accent"
                         size="md"
@@ -206,7 +231,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <ActionIconButton
                         type="button"
                         onClick={() => setDeleteConfirm(provider.id)}
-                        disabled={!canManage()}
+                        disabled={!canEdit()}
                         label="Delete provider"
                         tone="danger"
                         size="md"
@@ -291,7 +316,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </h3>
             </div>
 
-            <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+            <fieldset
+              disabled={saving()}
+              class="min-w-0 min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"
+            >
               {/* Common fields */}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class={formField}>
@@ -379,7 +407,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         <Button
                           type="button"
                           onClick={testConnection}
-                          disabled={testing() || !canTest()}
+                          disabled={testing() || loadingPreview() || !canTest()}
                           variant="secondary"
                           size="mdCompact"
                           class="whitespace-nowrap"
@@ -496,7 +524,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         <Button
                           type="button"
                           onClick={testConnection}
-                          disabled={testing() || !canTest()}
+                          disabled={testing() || loadingPreview() || !canTest()}
                           variant="secondary"
                           size="mdCompact"
                           class="flex-1 whitespace-nowrap sm:flex-none"
@@ -508,7 +536,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           ref={metadataPreviewButton}
                           type="button"
                           onClick={fetchMetadataPreview}
-                          disabled={loadingPreview() || !form.samlIdpMetadataUrl.trim()}
+                          disabled={
+                            loadingPreview() || testing() || !form.samlIdpMetadataUrl.trim()
+                          }
                           variant="secondary"
                           size="mdCompact"
                           class="flex-1 gap-1 whitespace-nowrap sm:flex-none"
@@ -794,7 +824,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   </div>
                 </Show>
               </div>
-            </div>
+            </fieldset>
 
             {/* Keep feedback and recovery actions inside the active modal, clear of toasts. */}
             <div class="relative z-10 shrink-0 space-y-3 border-t border-border bg-surface p-4 sm:px-6">
@@ -828,7 +858,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   variant="primary"
                   size="md"
                   isLoading={saving()}
-                  disabled={saving()}
+                  disabled={saving() || testing() || loadingPreview()}
                 >
                   {saving() ? 'Saving...' : editingProvider() ? 'Save Changes' : 'Create Provider'}
                 </Button>
@@ -856,6 +886,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
+                disabled={mutating()}
                 variant="outline"
                 size="md"
               >
@@ -864,6 +895,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Button
                 type="button"
                 onClick={() => handleDelete(deleteConfirm()!)}
+                disabled={mutating()}
                 variant="danger"
                 size="md"
               >
