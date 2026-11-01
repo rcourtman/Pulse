@@ -88,7 +88,7 @@ func (w *tokenResponseWriter) commitLocked(status int) {
 		// handler's private header map. Missing, malformed or unexpected
 		// types must not allow HTTP sniffing or an extension to render HTML.
 		// Leave payload bytes alone: HTML-escaping JSON would corrupt data.
-		mediaType, err := mime.ParseMediaType(w.header.Get("Content-Type"))
+		mediaType, _, err := mime.ParseMediaType(w.header.Get("Content-Type"))
 		if err == nil && mediaType == "application/json" {
 			header.Set("Content-Type", "application/json")
 		} else {
