@@ -822,32 +822,44 @@ candidate commit; an unowned or unreachable route is not proof coverage.
 
 ### Ordinary CI compiles the backend with the same checkout's real frontend
 
-The required `Frontend` check aggregates the complete build/audit/runtime job
-and every one of four isolated Vitest file shards. Missing, failed, cancelled
-or skipped proof fails that check; only an explicit, consistent non-runtime
-classification admits inapplicable checks. Each execution job retains the
-30-minute ceiling; the aggregate has a five-minute orchestration deadline.
+The required `Frontend` check aggregates the complete build/audit job, the
+backend/runtime job and every one of four isolated Vitest file shards. Missing,
+failed, cancelled or skipped proof fails that check; only an explicit, consistent
+non-runtime classification admits inapplicable checks. Each execution job retains
+the 30-minute ceiling; the aggregate has a five-minute orchestration deadline.
 
-Before admitting unit shards, `frontend-checks` builds and size-checks the
-production frontend, selects Go from `go.mod`,
-requires a nonempty built index/assets tree and compares the complete generated
-frontend and embed copy before backend compilation and server/API vet. Missing,
-extra or changed embedded files stop the phase; it never creates a placeholder
-or imports assets from another job/source. Build and vet use the read-only Go
-graph and two workers; the binary stays in the runner's temporary directory.
-The log records the checkout and binary digest without publishing an artifact.
-The same job retains native updater and ordinary notification/restart proof.
-Only successful build/size/runtime phases emit the explicit unit-admission
-output. The complete dependency audit still reports its own terminal verdict
-after that output: an audit failure does not suppress unit proof, but always
-fails the required aggregate. Shards use the same lock, configuration and
-assertions with only Vitest's built-in file partition; no maintained file list,
+`frontend-build` installs the locked graph, performs the unchanged formatting,
+lint and type checks, then builds and size-checks the production frontend. It
+requires a nonempty index/assets tree and compares the complete generated
+frontend and embed copy. Only that successful checkout-bound build is packed
+and transferred as an immutable, one-day artifact named for this run's source
+and attempt, with its SHA256 separately exported by the producer. Successful
+build/size/transfer phases emit the explicit admission output. Unit shards and
+`frontend-checks` then run independently, rather than making every unit shard
+wait for backend compilation and runtime checks. An audit failure still permits
+that diagnostic proof but always fails the required aggregate.
+
+The runtime job downloads only the same run/source/attempt artifact. It verifies
+the checkout and producer digest before opening the archive, rejects entries
+outside the two fixed dist trees, traversal and non-file/non-directory entries,
+and safely restores the complete built bytes. Missing, extra or changed embedded
+files stop the phase; it never creates a placeholder or rebuilds a different
+bundle. Go comes from `go.mod`; build and server/API vet retain the read-only
+graph and two workers. The log records the checkout and binary digest; the
+binary stays in the runner's temporary directory. Native updater and ordinary
+notification/restart proof remain required with their unchanged commands and
+bounded receipts. Shards retain the same lock, configuration and assertions,
+using only Vitest's complete file partition. No maintained file list,
 changed-file filter, shared mutable runner or extra in-runner concurrency is
 introduced. Type/build/size failure still stops the expensive suite early.
 
 `TestFrontendCIRequiresSameCheckoutRealEmbedBackend` executes the exact phase
 with private assets and Git/compiler doubles, covering mismatch refusal,
-declared command/ordering checks and terminal compiler/vet failures. These
+declared command/ordering checks and terminal compiler/vet failures. Its transfer
+controls also execute the actual pack/restore shells, verify byte-for-byte
+round trips and reject source, digest, missing-packet and unsafe-member controls.
+`TestFrontendCIBuildTransferIsSourceBound` runs those transfer controls explicitly
+in the Go install-test suite, separately from compiler/asset admission. These
 controls are not real compilation. `TestFrontendCIRequiresCompleteIsolatedUnitProof`
 executes the workflow-order, complete-shard and actual fail-closed audit/verdict
 controls in `scripts/tests/test_frontend_workflow_order.py`. Actual containing CI checkout/phase logs

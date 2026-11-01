@@ -39,7 +39,7 @@ def recipe(source):
     job = re.search(r"(?ms)^  frontend-checks:\n(.*?)(?=^  [a-z][a-z0-9-]*:|\Z)", source)[1]
     steps = dict(re.findall(r"(?ms)^      - name: ([^\n]+)\n(.*?)(?=^      - name:|\Z)", job))
     order = list(steps)
-    assert order.index("Verify backend with real frontend embed") < order.index(STEP) < order.index("Require frontend dependency audit")
+    assert order.index("Verify backend with real frontend embed") < order.index(STEP) < order.index("Check ordinary notification policy and restart")
     step = steps[STEP]
     assert not re.search(r"^        (if|continue-on-error|working-directory):", step, re.M)
     assert "runs-on: ubuntu-24.04" in job and "timeout-minutes: 30" in job
