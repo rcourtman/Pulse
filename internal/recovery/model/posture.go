@@ -92,6 +92,48 @@ func (coverage ProtectionCoverage) Valid() bool {
 	}
 }
 
+// ProtectionReason names which rule decided a posture, so a surface can group
+// resources by cause without parsing the explanation sentence.
+type ProtectionReason string
+
+const (
+	ProtectionReasonRecentVerified          ProtectionReason = "recent-verified"
+	ProtectionReasonRecent                  ProtectionReason = "recent"
+	ProtectionReasonSourceFailed            ProtectionReason = "source-failed"
+	ProtectionReasonBackupFutureDated       ProtectionReason = "backup-future-dated"
+	ProtectionReasonStale                   ProtectionReason = "stale"
+	ProtectionReasonVerificationFutureDated ProtectionReason = "verification-future-dated"
+	ProtectionReasonVerificationOverdue     ProtectionReason = "verification-overdue"
+	ProtectionReasonHistoryPartial          ProtectionReason = "history-partial"
+	ProtectionReasonHistoryUnreadable       ProtectionReason = "history-unreadable"
+	ProtectionReasonNoHistory               ProtectionReason = "no-history"
+	ProtectionReasonSnapshotsOnly           ProtectionReason = "snapshots-only"
+	ProtectionReasonNoBackup                ProtectionReason = "no-backup"
+)
+
+// Valid accepts the empty reason: postures stored before reasons existed
+// carry none until their next evaluation.
+func (reason ProtectionReason) Valid() bool {
+	switch reason {
+	case "",
+		ProtectionReasonRecentVerified,
+		ProtectionReasonRecent,
+		ProtectionReasonSourceFailed,
+		ProtectionReasonBackupFutureDated,
+		ProtectionReasonStale,
+		ProtectionReasonVerificationFutureDated,
+		ProtectionReasonVerificationOverdue,
+		ProtectionReasonHistoryPartial,
+		ProtectionReasonHistoryUnreadable,
+		ProtectionReasonNoHistory,
+		ProtectionReasonSnapshotsOnly,
+		ProtectionReasonNoBackup:
+		return true
+	default:
+		return false
+	}
+}
+
 type ProtectionHistoryCompleteness string
 
 const (
@@ -279,6 +321,7 @@ type ProtectionPosture struct {
 	ProviderStates        []ProtectionProviderState `json:"providerStates"`
 	RepositoryResourceIDs []string                  `json:"repositoryResourceIds"`
 	EvidenceIDs           []string                  `json:"evidenceIds"`
+	Reason                ProtectionReason          `json:"reason,omitempty"`
 	Explanation           string                    `json:"explanation"`
 	EvaluatedAt           time.Time                 `json:"evaluatedAt"`
 }
@@ -312,6 +355,9 @@ func (posture ProtectionPosture) Validate() error {
 	}
 	if !posture.Coverage.Valid() {
 		return fmt.Errorf("protection posture coverage %q is invalid", posture.Coverage)
+	}
+	if !posture.Reason.Valid() {
+		return fmt.Errorf("protection posture reason %q is invalid", posture.Reason)
 	}
 	if posture.EvaluatedAt.IsZero() {
 		return errors.New("protection posture evaluation time is required")

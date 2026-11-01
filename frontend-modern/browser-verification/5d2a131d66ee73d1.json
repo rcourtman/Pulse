@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "c86ca8d308f1216a63cea049a0120caa6058f346",
+  "verified_at": "2026-11-01T20:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/types/recovery.ts",
+    "frontend-modern/src/utils/protectionPostureResponse.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "da66e90865ea22028525e4bd0f6b8bc749f72bfb38c5e6f6070fffa6f1f9b236",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "a4ae2f7a230c296ab6409205a7f1d74b3454902c1b0ccbda60bd26a6601ed724",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts": "572bcd528cdd97a2ccfa057709e1ee7cf6b5b0945b7cc7bc8b8eed4c383951a2",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "281b5e06d55dae874dc0386f7b101890aaedc6d0bad15b59595a3b3ff95f5af1",
+    "frontend-modern/src/routing/resourceLinks.ts": "49aa58a9b56efa0a9b99cd139039d05c1e7177aa9651046e2243de472f5e97b5",
+    "frontend-modern/src/types/recovery.ts": "dc63a51abf99082fe7bb6f7ca2c21a10fd30ba0a847c1f74edc0faf522b61286",
+    "frontend-modern/src/utils/protectionPostureResponse.ts": "49a5fe04a110ff26f05d79aa5e0bb5fe711e721f82c15438b9d8727011992930"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage?reason=no-backup"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock rig with 932 Proxmox backup targets: 0 protected, 3 not evaluated, the rest split across five posture reasons",
+    "posture reasons added to the rig's /api/recovery/postures responses from each explanation, as the new evaluator sets them",
+    "dark theme, desktop and phone layouts"
+  ],
+  "interactions": [
+    "signed in and opened Backups By date at 1440x1000 and 375x812",
+    "read the verdict (0 of 929 protected, 3 not evaluated) and the five exception lines with counts and, on desktop, preview names",
+    "clicked the No successful backup line: Coverage opened with ?reason=no-backup, the line pressed, 86 of 932 targets listed",
+    "measured exception lines (24px desktop, 28px phone, none clipped) and confirmed no horizontal page overflow"
+  ]
+}

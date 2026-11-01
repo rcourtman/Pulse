@@ -50,6 +50,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 		wantVerify   ProtectionVerification
 		wantCoverage ProtectionCoverage
 		wantText     string
+		wantReason   ProtectionReason
 	}{
 		{
 			name:         "current verified PBS backup is protected",
@@ -59,6 +60,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageComplete,
 			wantText:     "A recent backup is available",
+			wantReason:   ProtectionReasonRecentVerified,
 		},
 		{
 			name: "stale success needs attention",
@@ -70,6 +72,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationStale,
 			wantCoverage: ProtectionCoverageComplete,
 			wantText:     "newest confirmed backup is older than 7 days",
+			wantReason:   ProtectionReasonStale,
 		},
 		{
 			name: "missing expected verification needs attention",
@@ -83,6 +86,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationUnverified,
 			wantCoverage: ProtectionCoverageComplete,
 			wantText:     "verification is missing or overdue",
+			wantReason:   ProtectionReasonVerificationOverdue,
 		},
 		{
 			name: "newer provider failure invalidates protected claim",
@@ -98,6 +102,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageComplete,
 			wantText:     "one of its backup sources has reported a failure",
+			wantReason:   ProtectionReasonSourceFailed,
 		},
 		{
 			name: "complete snapshot-only history is unprotected",
@@ -118,6 +123,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationUnknown,
 			wantCoverage: ProtectionCoverageNone,
 			wantText:     "A snapshot is not a separate backup",
+			wantReason:   ProtectionReasonSnapshotsOnly,
 		},
 		{
 			name: "partial provider history is attention when a backup exists",
@@ -132,6 +138,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoveragePartial,
 			wantText:     "only part of the backup history",
+			wantReason:   ProtectionReasonHistoryPartial,
 		},
 		{
 			name: "partial history without any backup does not claim one exists",
@@ -146,6 +153,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationUnknown,
 			wantCoverage: ProtectionCoveragePartial,
 			wantText:     "cannot confirm a backup",
+			wantReason:   ProtectionReasonHistoryPartial,
 		},
 		{
 			name: "partial history with unknown access is attention when a backup exists",
@@ -160,6 +168,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoveragePartial,
 			wantText:     "only part of the backup history",
+			wantReason:   ProtectionReasonHistoryPartial,
 		},
 		{
 			name: "partial history with unknown access and no backup does not claim one exists",
@@ -175,6 +184,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationUnknown,
 			wantCoverage: ProtectionCoveragePartial,
 			wantText:     "cannot confirm a backup",
+			wantReason:   ProtectionReasonHistoryPartial,
 		},
 		{
 			name: "unavailable history with unknown access is unknown",
@@ -189,6 +199,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageUnknown,
 			wantText:     "cannot read the backup history",
+			wantReason:   ProtectionReasonHistoryUnreadable,
 		},
 		{
 			name: "permission denied is unknown",
@@ -203,6 +214,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageUnknown,
 			wantText:     "cannot read the backup history",
+			wantReason:   ProtectionReasonHistoryUnreadable,
 		},
 		{
 			name: "confirmed PBS recovery is not invalidated by an unknown legacy provider",
@@ -227,6 +239,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationVerified,
 			wantCoverage: ProtectionCoverageUnknown,
 			wantText:     "does not change this backup",
+			wantReason:   ProtectionReasonRecentVerified,
 		},
 		{
 			name:         "no provider evidence is unknown",
@@ -236,6 +249,7 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantVerify:   ProtectionVerificationUnknown,
 			wantCoverage: ProtectionCoverageUnknown,
 			wantText:     "no readable backup history",
+			wantReason:   ProtectionReasonNoHistory,
 		},
 	}
 
@@ -263,6 +277,9 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			}
 			if !strings.Contains(got.Explanation, test.wantText) {
 				t.Fatalf("explanation = %q, want substring %q", got.Explanation, test.wantText)
+			}
+			if got.Reason != test.wantReason {
+				t.Fatalf("reason = %q, want %q", got.Reason, test.wantReason)
 			}
 			if err := got.Validate(); err != nil {
 				t.Fatalf("Validate() error = %v", err)
@@ -400,6 +417,9 @@ func TestBuildProtectionPostureDoesNotTreatSuccessfulTaskAsAvailableBackup(t *te
 	}
 	if !strings.Contains(got.Explanation, "found no successful, completed backup") {
 		t.Fatalf("explanation = %q, want no qualifying backup", got.Explanation)
+	}
+	if got.Reason != ProtectionReasonNoBackup {
+		t.Fatalf("reason = %q, want %q", got.Reason, ProtectionReasonNoBackup)
 	}
 }
 
@@ -597,6 +617,18 @@ func TestBuildProtectionPostureUsesCanonicalPointIdentity(t *testing.T) {
 	}
 }
 
+var clockBoundReason = map[string]ProtectionReason{
+	"future-backup":                      ProtectionReasonBackupFutureDated,
+	"future-backup-without-verification": ProtectionReasonBackupFutureDated,
+	"one-nanosecond-ahead":               ProtectionReasonBackupFutureDated,
+	"future-verification":                ProtectionReasonVerificationFutureDated,
+	"optional-future-verification":       ProtectionReasonRecent,
+	"exactly-now":                        ProtectionReasonRecentVerified,
+	"exact-window-boundary":              ProtectionReasonRecentVerified,
+	"expired-window":                     ProtectionReasonStale,
+	"missing-verification":               ProtectionReasonVerificationOverdue,
+}
+
 func TestProtectionPostureClockBounds(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.FixedZone("source", 3600))
@@ -639,6 +671,9 @@ func TestProtectionPostureClockBounds(t *testing.T) {
 			}
 			if !strings.Contains(posture.Explanation, tc.wantText) {
 				t.Errorf("explanation=%q, want %q", posture.Explanation, tc.wantText)
+			}
+			if want := clockBoundReason[tc.name]; posture.Reason != want {
+				t.Errorf("reason=%q, want %q", posture.Reason, want)
 			}
 			if posture.Coverage != ProtectionCoverageComplete || !posture.LastSuccessfulPointAt.Equal(tc.success) || len(posture.ProviderStates) != 1 || !posture.ProviderStates[0].LastSuccessAt.Equal(tc.success) || !reflect.DeepEqual(summary, before) {
 				t.Error("clock assessment changed source evidence or collection coverage")

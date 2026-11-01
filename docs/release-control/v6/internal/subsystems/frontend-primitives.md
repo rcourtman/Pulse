@@ -7307,7 +7307,7 @@ title on narrow screens. A wrapped context must not retain an auto margin that
 creates an apparent empty column.
 That surface also keeps asynchronous posture presentation explicit: an
 unresolved canonical posture request uses a neutral `Checking` row state and
-coverage segment, while host and orphan recovery rows without a canonical
+verdict note, while host and orphan recovery rows without a canonical
 workload identity use neutral `Not evaluated`. Neither presentation state may
 reuse the server-owned `Unknown` label, enter the posture filter contract, or
 be styled as a protection success or failure.
@@ -9376,14 +9376,15 @@ ZFS dataset table rows inside `StoragePoolDetail` inherit their separator from
 the shared `STORAGE_DETAIL_ROW_CLASS` presentation constant. The component
 must not reintroduce a raw border-token class for dataset rows.
 
-### Coverage strip segments can be filter toggles
+### Coverage strip exception groups are filter toggles
 
-`ProxmoxBackupsCoverageStrip` segments may carry `onSelect` and `pressed`.
-Such a segment renders as a bordered toggle button with `aria-pressed`, 28px
-tall below `sm` and 24px from `sm`, with the segment's count and label as
-its accessible name (the colour dot is decorative); segments without
-`onSelect` stay plain legend text. The strip owns no filter state; its
-caller decides which segments map to a filter.
+`ProxmoxBackupsCoverageStrip` renders a `BackupVerdict`: one headline with a
+tone dot, then one line per exception group. With `onSelectGroup`, a group
+renders as a button with `aria-pressed`, 28px tall below `sm` and 24px from
+`sm`, whose accessible name is its count and reason ("163 no successful backup");
+the colour dot is decorative and the preview names, shown from `sm`, are
+visual context only. Without `onSelectGroup` a group stays plain text. The
+strip owns no filter state; its caller maps a group key to a filter.
 
 ### The settings nav gates Infrastructure, and the blocked-route fallback is capability-aware
 

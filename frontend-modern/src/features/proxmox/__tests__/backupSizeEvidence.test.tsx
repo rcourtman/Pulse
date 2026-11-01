@@ -127,7 +127,7 @@ describe('restore-point size evidence through parsed inventory', () => {
         expect(panel).not.toHaveTextContent('0 B');
       }
       expect(document.body).toHaveTextContent('3 completed restore points');
-      expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
       expect(api.fetch).toHaveBeenCalledTimes(2);
     },
   );

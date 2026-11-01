@@ -174,7 +174,7 @@ describe('restore-point source connections in real inventory consumers', () => {
       expect(evidence).toHaveTextContent('main / pve-1');
       expect(evidence).toHaveTextContent('Verified');
     }
-    expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);
   });
 

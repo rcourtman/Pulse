@@ -88,6 +88,7 @@ const postureShape = {
   lastVerifiedAt: optionalTime,
   repositoryResourceIds: idList,
   evidenceIds: idList,
+  reason: optionalText,
   explanation: text,
   evaluatedAt: timestamp,
 };

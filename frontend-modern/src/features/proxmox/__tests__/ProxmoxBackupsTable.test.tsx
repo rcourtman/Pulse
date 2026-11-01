@@ -153,10 +153,11 @@ function mockBackupAPIs(
         providerStates: [],
         repositoryResourceIds: [],
         evidenceIds: ['evidence-1'],
+        reason: state === 'protected' ? 'recent-verified' : 'source-failed',
         explanation:
           state === 'protected'
             ? 'A current verified backup is available.'
-            : 'The latest provider job needs attention.',
+            : 'A backup exists, but one of its backup sources has reported a failure.',
         evaluatedAt: '2026-05-25T02:05:00Z',
       },
     ],
@@ -607,7 +608,7 @@ describe('ProxmoxBackupsTable', () => {
 
     await screen.findAllByText('pbs-docker');
 
-    const healthSummary = screen.getByText(/targets · .*restore points/);
+    const healthSummary = screen.getByText(/^\d+ completed restore point/);
     expect(healthSummary.parentElement).toHaveClass('w-full', 'sm:ml-auto', 'sm:w-auto');
     expect(healthSummary.parentElement).not.toHaveClass('ml-auto');
 
@@ -760,9 +761,7 @@ describe('ProxmoxBackupsTable', () => {
     });
   });
 
-  it('lets a backup health count filter Coverage to those workloads', async () => {
-    // "17 attention" was text: finding which workloads it counted took the
-    // Filters sheet on a phone.
+  it('states the verdict and names each exception group by its reason', async () => {
     mockBackupAPIs('attention');
     window.history.replaceState({}, '', '/proxmox/backups/date');
 
@@ -770,42 +769,87 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    // Keep accessible-role queries in the health legend so unrelated table
-    // rows do not add lookup work to the unchanged five-second test budget.
-    const legend = within((await screen.findByText('unprotected')).closest('ul')!);
-    const attention = await legend.findByRole('button', { name: '1 attention' });
-    expect(attention).toHaveAttribute('aria-pressed', 'false');
-    // A zero count would open an empty list, so it stays text.
-    expect(legend.queryByRole('button', { name: '0 unprotected' })).toBeNull();
-    expect(legend.getByText('unprotected')).toBeInTheDocument();
+    const verdict = await waitFor(() => {
+      const element = document.querySelector('[data-backup-verdict]');
+      expect(element).toHaveTextContent('0 of 1 protected');
+      return element!;
+    });
+    expect(verdict).toHaveAttribute('data-backup-verdict', 'attention');
+    const exceptions = within(screen.getByRole('list', { name: 'Backups that are not protected' }));
+    const group = exceptions.getByRole('button', { name: '1 backup source reported a failure' });
+    expect(group).toHaveTextContent('Backup source reported a failure');
+    expect(group).toHaveTextContent('pbs-docker');
+    // The old posture bar and per-posture counts are gone: the sentence is the answer.
+    expect(screen.queryByRole('button', { name: '1 attention' })).toBeNull();
+  });
 
-    await fireEvent.click(attention);
+  it('lets a backup exception group filter Coverage to those workloads', async () => {
+    // "17 attention" was text: finding which workloads it counted took the
+    // Filters sheet on a phone. A group is one tap to exactly its workloads.
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    // Keep accessible-role queries in the exception list so unrelated table
+    // rows do not add lookup work to the unchanged five-second test budget.
+    const exceptions = within(
+      await screen.findByRole('list', { name: 'Backups that are not protected' }),
+    );
+    const group = await exceptions.findByRole('button', {
+      name: '1 backup source reported a failure',
+    });
+    expect(group).toHaveAttribute('aria-pressed', 'false');
+
+    await fireEvent.click(group);
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/backups/coverage');
-      expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
+      expect(new URLSearchParams(window.location.search).get('reason')).toBe('source-failed');
     });
-    expect(legend.getByRole('button', { name: '1 attention' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(new URLSearchParams(window.location.search).get('posture')).toBeNull();
+    expect(
+      exceptions.getByRole('button', { name: '1 backup source reported a failure' }),
+    ).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
 
     // Toggling off keeps the same focused control rather than rebuilding it.
-    const pressed = legend.getByRole('button', { name: '1 attention' });
-    expect(pressed).toBe(attention);
+    const pressed = exceptions.getByRole('button', { name: '1 backup source reported a failure' });
+    expect(pressed).toBe(group);
     pressed.focus();
     await fireEvent.click(pressed);
     await waitFor(() =>
-      expect(new URLSearchParams(window.location.search).get('posture')).toBeNull(),
+      expect(new URLSearchParams(window.location.search).get('reason')).toBeNull(),
     );
     expect(window.location.pathname).toBe('/proxmox/backups/coverage');
     expect(pressed).toHaveAttribute('aria-pressed', 'false');
     expect(pressed).toHaveFocus();
   });
 
-  it('pins Coverage when a health count is used on the bare Backups route', async () => {
+  it('drops an exception group when a posture is chosen, so the two never narrow to nothing', async () => {
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/coverage?reason=source-failed');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await screen.findByRole('button', {
+      name: '1 backup source reported a failure',
+      pressed: true,
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /^protected$/i }));
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get('posture')).toBe('protected');
+      expect(params.get('reason')).toBeNull();
+    });
+  });
+
+  it('pins Coverage when an exception group is used on the bare Backups route', async () => {
     // Coverage was chosen only because something needs attention; without the
-    // route segment the view would flip to By date once the counts reached zero.
+    // route segment the view would flip to By date once the exceptions cleared.
     mockBackupAPIs('attention');
     window.history.replaceState({}, '', '/proxmox/backups');
 
@@ -813,10 +857,12 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    await fireEvent.click(await screen.findByRole('button', { name: '1 attention' }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: '1 backup source reported a failure' }),
+    );
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/backups/coverage');
-      expect(new URLSearchParams(window.location.search).get('posture')).toBe('attention');
+      expect(new URLSearchParams(window.location.search).get('reason')).toBe('source-failed');
     });
   });
 
@@ -1946,7 +1992,7 @@ describe('backup-identity: connected Coverage and By date', () => {
     expect(coverage).toHaveTextContent('PBS');
     expect(coverage).toHaveTextContent('PVE file');
     expect(coverage).toHaveTextContent('Snapshot');
-    expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
 
     fireEvent.input(search, { target: { value: 'absent-native-point' } });
@@ -2204,7 +2250,7 @@ describe('Coverage withdraws failed protection assessments', () => {
         await screen.findByText(/Protection posture is unavailable/);
         expect(row()).toHaveTextContent('Unknown');
         expect(row()).not.toHaveTextContent('Protected');
-        expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
         expect(detail).not.toHaveTextContent('A current verified backup is available.');
         expect(detail).toHaveTextContent('Restore evidence');
         expect(within(detail).getByText('PVE file', { exact: true })).toBeInTheDocument();
@@ -2237,7 +2283,7 @@ describe('Coverage withdraws failed protection assessments', () => {
         document.querySelector('[data-proxmox-backup-row="coverage"]') as HTMLElement;
       await waitFor(() => expect(row()).toHaveTextContent('Protected'));
       const accepted = (await apiFetchJSONMock.mock.results[0].value) as ProtectionPosturesResponse;
-      expect(screen.getByRole('button', { name: '1 protected' })).toBeInTheDocument();
+      expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent('1 of 1 protected');
       fireEvent.click(within(row()).getByRole('button', { name: /expand details/i }));
       const detail = await screen.findByTestId('proxmox-coverage-detail');
       expect(detail).toHaveTextContent('A current verified backup is available.');
@@ -2247,10 +2293,8 @@ describe('Coverage withdraws failed protection assessments', () => {
       await screen.findByText(/Protection posture is unavailable/);
       expect(row()).toHaveTextContent('Unknown');
       expect(row()).not.toHaveTextContent('Protected');
-      expect(screen.getByText('protected', { exact: true }).closest('li')).toHaveTextContent(
-        /0\s*protected/,
-      );
-      expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+      expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent('0 of 1 protected');
+      expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
       expect(detail).not.toHaveTextContent('A current verified backup is available.');
       expect(detail).not.toHaveTextContent('History Complete');
       expect(detail).toHaveTextContent('Restore evidence');
@@ -2277,7 +2321,7 @@ describe('Coverage withdraws failed protection assessments', () => {
       await waitFor(() => expect(row()).toHaveTextContent(/attention/i));
       expect(detail).toHaveTextContent('The current backup verification needs attention.');
       expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '1 attention' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '1 needs attention' })).toBeInTheDocument();
       expect(document.querySelector('[data-coverage-posture-rule]')).not.toBeNull();
       expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(2);
       expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(2);
@@ -2854,8 +2898,8 @@ describe('location-scoped evidence keeps workload-wide protection explicit', () 
       expect(note).toHaveTextContent(
         'Protection assessments and task history are workload-wide, not a rating of this location.',
       );
-      expect(screen.getByRole('button', { name: '1 protected' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '1 unprotected' })).toBeInTheDocument();
+      expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent('1 of 2 protected');
+      expect(screen.getByRole('button', { name: '1 not protected' })).toBeInTheDocument();
       const row = document.querySelector<HTMLElement>('[data-proxmox-backup-row="coverage"]')!;
       expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
       expect(row).toHaveTextContent('Protected');
@@ -2884,7 +2928,7 @@ describe('location-scoped evidence keeps workload-wide protection explicit', () 
       ).not.toBeInTheDocument();
       expect(pointTable(panel)).toHaveTextContent('current-local');
       expect(pointTable(panel).querySelectorAll('tbody > tr')).toHaveLength(2);
-      expect(screen.getByRole('button', { name: '1 protected' })).toBeInTheDocument();
+      expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent('1 of 2 protected');
       expect(apiFetchMock).toHaveBeenCalledTimes(2);
       expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
     },
@@ -3133,6 +3177,13 @@ describe('bare Backups entry retains its assessed workspace', () => {
     data: [{ ...protectionPosture('ct-112'), state, explanation: `Observed ${state} posture.` }],
     policy: protectionPolicy,
   });
+  // The health strip's settled reading for one assessed workload.
+  const verdictShows = (state: 'protected' | 'attention') =>
+    state === 'protected'
+      ? expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent(
+          '1 of 1 protected',
+        )
+      : expect(screen.getByRole('button', { name: '1 needs attention' })).toBeInTheDocument();
 
   it.each([
     { initial: 'attention', next: 'protected', view: 'coverage', table: 'coverage' },
@@ -3159,9 +3210,7 @@ describe('bare Backups entry retains its assessed workspace', () => {
 
       state = next;
       await vi.advanceTimersByTimeAsync(30_000);
-      await waitFor(() =>
-        expect(screen.getByRole('button', { name: `1 ${next}` })).toBeInTheDocument(),
-      );
+      await waitFor(() => verdictShows(next));
       expect(window.location.pathname).toBe(`/proxmox/backups/${view}`);
       expect(
         screen.getByRole('link', { name: view === 'date' ? /by date/i : /coverage/i }),
@@ -3206,15 +3255,17 @@ describe('bare Backups entry retains its assessed workspace', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
     await screen.findByText(/Protection posture is unavailable/);
     await fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
-    await screen.findByRole('button', { name: '1 protected' });
+    await waitFor(() => verdictShows('protected'));
     expect(window.location.pathname).toBe('/proxmox/backups/coverage');
     await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
     await settleNavigation();
-    const protectedCount = screen.getByRole('button', { name: '1 protected' });
-    await fireEvent.click(protectedCount);
+    expect(window.location.pathname).toBe('/proxmox/backups/date');
+    apiFetchJSONMock.mockResolvedValue(responseFor('attention'));
+    await vi.advanceTimersByTimeAsync(30_000);
+    await fireEvent.click(await screen.findByRole('button', { name: '1 needs attention' }));
     await settleNavigation();
     await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
-    expect(new URLSearchParams(window.location.search).get('posture')).toBe('protected');
+    expect(new URLSearchParams(window.location.search).get('reason')).toBe('attention');
   });
 
   it.each([
@@ -3227,7 +3278,7 @@ describe('bare Backups entry retains its assessed workspace', () => {
     apiFetchJSONMock.mockResolvedValue(responseFor('attention'));
     mountBackupReadState();
     await settleNavigation();
-    await screen.findByRole('button', { name: '1 attention' });
+    await screen.findByRole('button', { name: '1 needs attention' });
     expect(window.location.pathname + window.location.search).toBe(path);
   });
 
@@ -3239,9 +3290,18 @@ describe('bare Backups entry retains its assessed workspace', () => {
     await fireEvent.click(await screen.findByRole('link', { name: /by date/i }));
     pending.resolve(responseFor('attention'));
     await settleNavigation();
-    await screen.findByRole('button', { name: '1 attention' });
+    await screen.findByRole('button', { name: '1 needs attention' });
     expect(window.location.pathname).toBe('/proxmox/backups/date');
     expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps a saved exception filter on Coverage once that group is empty', async () => {
+    window.history.replaceState({}, '', '/proxmox/backups?reason=stale');
+    apiFetchJSONMock.mockResolvedValue(responseFor('protected'));
+    mountBackupReadState();
+    await settleNavigation();
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+    expect(new URLSearchParams(window.location.search).get('reason')).toBe('stale');
   });
 
   it('does not navigate after the pending entry is unmounted', async () => {

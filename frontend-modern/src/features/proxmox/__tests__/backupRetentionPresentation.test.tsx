@@ -71,7 +71,7 @@ describe('prune protection is independent of backup verification', () => {
       const row = await restorePointRow();
       expect(within(row).getByText(label)).toHaveClass(tone);
       expect(within(row).queryByText('Protected')).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
       await fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
       const detail = screen.getByTestId('proxmox-recoverable-detail');
       expect(within(detail).getByText('Prune protection')).toBeInTheDocument();

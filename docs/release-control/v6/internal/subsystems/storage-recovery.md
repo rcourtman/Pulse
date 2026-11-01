@@ -5012,25 +5012,32 @@ presentation and sort change only; it adds no backup, restore, or retention
 authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
 `ProxmoxCoverageTable.test.tsx`.
 
-### Backup health counts filter Coverage to their workloads
+### Backup health states a verdict and groups exceptions by reason (1 November 2026)
 
-The Backups health strip's protected, attention, unprotected and unknown
-counts are toggles for the Coverage posture filter (`?posture=`), the same
-URL state the inline posture pills and the phone Filters sheet set. In
-Coverage a count toggles that filter; from By date it opens Coverage already
-filtered, through the same view path the tabs use, so date-only facets drop
-and scope facets stay. On the bare Backups route, where Coverage was chosen
-only because something needs attention, a count also navigates to the
-Coverage route so the view cannot fall back to By date when the counts
-change. The legend keeps each item's node across updates, so a focused count
-that stays a button keeps focus when it toggles. A zero count stays text
-unless it is the active filter, and checking and not-evaluated have no
-filter, so they stay text. On a 375px phone the coverage list starts below
-the fold and the posture filter sits behind Filters, so "which 11 are
-unprotected?" took three taps through a sheet; it is now one tap on the
-count. The posture rule, the posture sort (attention before unprotected)
-and the servers table are unchanged, and no posture, freshness or protection
-evaluation changes.
+The Backups health strip opens with one sentence, "47 of 49 protected" (or
+"All 49 protected"), then one line per cause for everything that is not:
+"No successful backup 2", "Not verified recently 723". The cause is the
+protection posture's server-owned `reason`, set in `DeriveProtectionPostureAt`
+beside the explanation it summarizes, so the page groups workloads without
+parsing sentences or re-deriving the posture rules. Each reason belongs to
+exactly one state; a posture stored before reasons existed, or a reason the
+browser does not know, groups under its state ("Needs attention", "Not
+protected", "Status unknown") rather than being dropped. The rating counts
+active backup targets only: orphaned records, workloads still `checking` and
+`not-evaluated` host and orphan rows stay out of both numbers, and the last two
+are named beside the sentence.
+
+A group line toggles Coverage to exactly its workloads through the `?reason=`
+URL state. From By date it opens Coverage already filtered, through the same
+view path the tabs use; on the bare Backups route it also pins the Coverage
+route, so the view cannot fall back to By date when the exceptions clear.
+Choosing a posture pill drops `?reason=`, and By date drops both, so the two
+filters never combine into an empty list. The posture bar and the
+per-posture count toggles are gone; the inline posture pills and the phone
+Filters sheet still filter by posture. On the production install the strip
+read "0 protected, 38 attention", which left the operator counting rows to
+find the cause; on the 932-guest mock it now reads as five lines. No posture,
+freshness or protection evaluation changes.
 
 ### Backups page states its answer before its caveats (1 November 2026)
 

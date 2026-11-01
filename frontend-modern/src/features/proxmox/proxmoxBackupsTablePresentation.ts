@@ -367,7 +367,7 @@ export const getBackupPostureRuleText = (
   return `Attention: the newest backup is older than ${formatPostureWindow(seconds)}, a newer backup job failed, expected verification is missing or overdue, or Pulse can see only part of the backup history. Unprotected: Pulse sees the full history and no backup it can count. Guest snapshots alone do not count. Unknown: Pulse cannot read the backup history or has no backup source linked to the guest.`;
 };
 
-const formatPostureWindow = (seconds: number): string => {
+export const formatPostureWindow = (seconds: number): string => {
   if (seconds >= 86_400 && seconds % 86_400 === 0) {
     const days = seconds / 86_400;
     return days === 1 ? '1 day' : `${days} days`;

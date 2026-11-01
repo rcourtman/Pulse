@@ -427,6 +427,7 @@ func DeriveProtectionPostureAt(
 		ProviderStates:        []ProtectionProviderState{},
 		RepositoryResourceIDs: []string{},
 		EvidenceIDs:           []string{},
+		Reason:                ProtectionReasonNoHistory,
 		Explanation:           "Pulse has no readable backup history for this resource, so it cannot say whether it is protected.",
 		EvaluatedAt:           now,
 	}
@@ -612,8 +613,10 @@ func DeriveProtectionPostureAt(
 		// A backup the latest collection read stays a backup when some other
 		// storage could not be read; coverage carries that gap.
 		posture.State = ProtectionStateProtected
+		posture.Reason = ProtectionReasonRecent
 		switch {
 		case posture.Verification == ProtectionVerificationVerified:
+			posture.Reason = ProtectionReasonRecentVerified
 			posture.Explanation = "A recent backup is available and it was verified recently."
 		case hasPartial || hasUnknownBlock:
 			posture.Explanation = "A recent backup is available."
@@ -631,23 +634,31 @@ func DeriveProtectionPostureAt(
 		posture.State = ProtectionStateAttention
 		switch {
 		case hasInvalidatingFailure:
+			posture.Reason = ProtectionReasonSourceFailed
 			posture.Explanation = "A backup exists, but one of its backup sources has reported a failure."
 		case stateLastSuccessAt != nil && stateLastSuccessAt.After(now):
+			posture.Reason = ProtectionReasonBackupFutureDated
 			posture.Explanation = "The newest backup is dated in the future, so Pulse cannot confirm its age. Check the backup source and Pulse server clocks."
 		case posture.Freshness == ProtectionFreshnessStale:
+			posture.Reason = ProtectionReasonStale
 			posture.Explanation = fmt.Sprintf("The newest confirmed backup is older than %s.", formatPostureWindow(policy.FreshnessWindow))
 		case stateVerificationExpected && stateLastVerifiedAt != nil && stateLastVerifiedAt.After(now):
+			posture.Reason = ProtectionReasonVerificationFutureDated
 			posture.Explanation = "The backup verification is dated in the future, so Pulse cannot confirm it. Check the backup source and Pulse server clocks."
 		case stateVerificationExpected && posture.Verification != ProtectionVerificationVerified:
+			posture.Reason = ProtectionReasonVerificationOverdue
 			posture.Explanation = "A recent backup exists, but its verification is missing or overdue."
 		default:
+			posture.Reason = ProtectionReasonHistoryPartial
 			posture.Explanation = "A backup exists, but Pulse can see only part of the backup history or cannot read all of it."
 		}
 	case hasUnknownBlock:
 		posture.State = ProtectionStateUnknown
+		posture.Reason = ProtectionReasonHistoryUnreadable
 		posture.Explanation = "Pulse cannot read the backup history (it is unavailable or Pulse lacks permission), so it cannot say whether this is protected."
 	case hasQualifyingSuccess || hasPartial:
 		posture.State = ProtectionStateAttention
+		posture.Reason = ProtectionReasonHistoryPartial
 		if hasQualifyingSuccess {
 			posture.Explanation = "A backup exists, but Pulse can see only part of the backup history or cannot read all of it."
 		} else {
@@ -658,7 +669,9 @@ func DeriveProtectionPostureAt(
 		}
 	case hasCompleteHistory:
 		posture.State = ProtectionStateUnprotected
+		posture.Reason = ProtectionReasonNoBackup
 		if hasSnapshotsOnly {
+			posture.Reason = ProtectionReasonSnapshotsOnly
 			posture.Explanation = "Only snapshots were found. A snapshot is not a separate backup, so it does not count."
 		} else {
 			posture.Explanation = "Pulse can see the full backup history, but found no successful, completed backup for this resource."

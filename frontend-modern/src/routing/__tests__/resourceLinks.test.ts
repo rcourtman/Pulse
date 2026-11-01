@@ -175,6 +175,7 @@ describe('resource link routing contract', () => {
       source: 'source',
       location: 'location',
       posture: 'posture',
+      reason: 'reason',
       day: 'day',
     });
     expect(buildProxmoxPath()).toBe('/proxmox/overview');
