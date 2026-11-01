@@ -4523,15 +4523,19 @@ func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
 
 // Execute the exact producer/consumer shells, including every-byte round trips
 // and source, digest and unsafe-member refusals before any asset extraction.
+// Retained producer-output fixtures also cover partial/full retry selection
+// and missing identity refusing admission before any artifact download.
 // Artifact transport and hosted overlap still need containing CI observations.
 func TestFrontendCIBuildTransferIsSourceBound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendEmbedTransfer", "-v")
 	cmd.Env = append(os.Environ(), "PULSE_BUILD_WORKFLOW_UNDER_TEST="+repoFile(".github", "workflows", "build-and-test.yml"))
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("source-bound frontend build transfer controls: %v\n%s", err, out)
 	}
+	t.Logf("source-bound frontend transfer and retry controls:\n%s", out)
 }
 
 // Keep the registered frontend security-proof route bound to the actual

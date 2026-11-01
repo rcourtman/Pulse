@@ -266,6 +266,7 @@ jobs:
     outputs:
       unit_admitted: ${{ steps.unit-admission.outputs.admitted }}
       embed_sha256: ${{ steps.embed-packet.outputs.sha256 }}
+      embed_artifact_id: ${{ steps.embed-upload.outputs.artifact-id }}
     env:
       FRONTEND_DIR: frontend-modern
 
@@ -366,6 +367,7 @@ jobs:
           printf 'CI_FRONTEND_EMBED_SOURCE=%s SHA256=%s\n' "$EXPECTED_SOURCE_SHA" "${digest%% *}"
 
       - name: Transfer the validated frontend embed
+        id: embed-upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-frontend-embed-${{ github.sha }}-${{ github.run_attempt }}
@@ -380,7 +382,12 @@ jobs:
       # A missing output never grants admission.
       - name: Admit frontend unit shards
         id: unit-admission
-        run: echo 'admitted=true' >> "$GITHUB_OUTPUT"
+        env:
+          EMBED_ARTIFACT_ID: ${{ steps.embed-upload.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          [[ "$EMBED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          echo 'admitted=true' >> "$GITHUB_OUTPUT"
 
       # An audit service failure or real advisory stays gating, but it must not
       # suppress formatting, tests, type-checking, or production-build proof.
@@ -406,11 +413,25 @@ jobs:
         with:
           persist-credentials: false
 
+      # A failed-jobs rerun keeps a successful producer's original outputs.
+      # Validate its immutable ID before download: an empty selector must not
+      # fall back to downloading every artifact. Never derive it from the
+      # consumer's run_attempt, which can differ from the producer's attempt.
+      - name: Check validated frontend embed identity
+        env:
+          EMBED_ARTIFACT_ID: ${{ needs.frontend-build.outputs.embed_artifact_id }}
+          EXPECTED_EMBED_SHA256: ${{ needs.frontend-build.outputs.embed_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EMBED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_EMBED_SHA256" =~ ^[a-f0-9]{64}$ ]]
+
       - name: Download this run's validated frontend embed
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ci-frontend-embed-${{ github.sha }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.frontend-build.outputs.embed_artifact_id }}
           path: ${{ runner.temp }}/frontend-embed
+          merge-multiple: true
 
       - name: Verify and restore the validated frontend embed
         env:

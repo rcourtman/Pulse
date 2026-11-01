@@ -37,7 +37,8 @@ def recipe(source):
     build, producer = workflow_steps(source, "frontend-build")
     job, steps = workflow_steps(source, "frontend-checks")
     order = list(steps)
-    required = ["Checkout repository", "Download this run's validated frontend embed",
+    required = ["Checkout repository", "Check validated frontend embed identity",
+                "Download this run's validated frontend embed",
                 "Verify and restore the validated frontend embed", GO_SETUP, VERIFY]
     if any(name not in order for name in required) or [order.index(name) for name in required] != sorted(order.index(name) for name in required):
         raise AssertionError("same-run build transfer or real-embed ordering missing")
@@ -160,13 +161,16 @@ class FrontendEmbedTransfer(unittest.TestCase):
 
     def setUp(self):
         self.source = WORKFLOW.read_text()
-        _, self.producer = workflow_steps(self.source, "frontend-build")
+        self.build, self.producer = workflow_steps(self.source, "frontend-build")
         _, self.consumer = workflow_steps(self.source, "frontend-checks")
 
-    def test_transfer_is_fixed_to_this_run_source_and_attempt(self):
+    def test_transfer_selects_producer_immutable_identity_in_this_run(self):
         upload = self.producer["Transfer the validated frontend embed"]
         download = self.consumer["Download this run's validated frontend embed"]
         self.assertEqual(upload["uses"], "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9")
+        self.assertEqual(upload["id"], "embed-upload")
+        self.assertEqual(self.build["outputs"]["embed_artifact_id"], "${{ steps.embed-upload.outputs.artifact-id }}")
+        self.assertEqual(self.build["outputs"]["embed_sha256"], "${{ steps.embed-packet.outputs.sha256 }}")
         self.assertEqual(upload["with"], {
             "name": "ci-frontend-embed-${{ github.sha }}-${{ github.run_attempt }}",
             "path": "${{ runner.temp }}/frontend-embed.tar", "if-no-files-found": "error",
@@ -174,13 +178,120 @@ class FrontendEmbedTransfer(unittest.TestCase):
         })
         self.assertEqual(download["uses"], "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333")
         self.assertEqual(download["with"], {
-            "name": upload["with"]["name"], "path": "${{ runner.temp }}/frontend-embed",
+            "artifact-ids": "${{ needs.frontend-build.outputs.embed_artifact_id }}",
+            "path": "${{ runner.temp }}/frontend-embed", "merge-multiple": True,
+        })
+        self.assertEqual(self.producer["Admit frontend unit shards"]["env"], {
+            "EMBED_ARTIFACT_ID": "${{ steps.embed-upload.outputs.artifact-id }}",
+        })
+        self.assertEqual(self.consumer["Check validated frontend embed identity"]["env"], {
+            "EMBED_ARTIFACT_ID": "${{ needs.frontend-build.outputs.embed_artifact_id }}",
+            "EXPECTED_EMBED_SHA256": "${{ needs.frontend-build.outputs.embed_sha256 }}",
         })
         self.assertEqual(self.producer["Bind the validated frontend embed"]["env"], {"EXPECTED_SOURCE_SHA": "${{ github.sha }}"})
         self.assertEqual(self.consumer["Verify and restore the validated frontend embed"]["env"], {
             "EXPECTED_EMBED_SHA256": "${{ needs.frontend-build.outputs.embed_sha256 }}",
             "EXPECTED_SOURCE_SHA": "${{ github.sha }}",
         })
+
+    @staticmethod
+    def expand(value, context):
+        """Resolve only the dotted output references used by this recipe.
+
+        This is not a workflow engine: the caller supplies retained successful
+        producer outputs, as failed-jobs reruns do, or new full-rerun outputs.
+        """
+        def substitute(match):
+            result = context
+            for key in match.group(1).strip().split("."):
+                result = result[key]
+            return str(result)
+        return re.sub(r"\$\{\{\s*([\w. -]+)\s*\}\}", substitute, value)
+
+    def check_identity(self, step, env):
+        with tempfile.TemporaryDirectory(prefix="pulse-embed-identity-") as directory:
+            output = Path(directory) / "outputs"
+            result = subprocess.run(["bash", "-c", step["run"]],
+                                    env=dict(os.environ, **env, GITHUB_OUTPUT=str(output)),
+                                    text=True, capture_output=True, timeout=5)
+            return result, output.read_text() if output.exists() else ""
+
+    def select_artifact(self, *, producer_attempt, consumer_attempt, full_rerun=False,
+                        legacy_consumer_name=False):
+        """Private immutable-artifact fixtures exercise the actual selectors.
+
+        No GitHub upload, download or hosted rerun is performed. Both runs and
+        both attempts deliberately coexist to expose wrong/latest selection.
+        """
+        upload = self.producer["Transfer the validated frontend embed"]
+        download = self.consumer["Download this run's validated frontend embed"]
+        # The current-run store is the download action's default scope; the
+        # static contract above refuses repository/run-id/token overrides.
+        artifacts = {"current": {}, "other-run": {}}
+        for attempt in ((1, 2) if full_rerun else (1,)):
+            producer_context = {"github": {"sha": self.SHA, "run_attempt": attempt}}
+            artifacts["current"][str(1000 + attempt)] = {
+                "name": self.expand(upload["with"]["name"], producer_context),
+                "digest": hashlib.sha256(f"fixture build {attempt}".encode()).hexdigest(),
+                "producer_attempt": attempt,
+            }
+        # Same name in another run must not become an alternate source.
+        artifacts["other-run"]["9001"] = dict(artifacts["current"]["1001"])
+        producer_id = str(1000 + producer_attempt)
+        producer_digest = artifacts["current"][producer_id]["digest"]
+        output_context = {"steps": {
+            upload["id"]: {"outputs": {"artifact-id": producer_id}},
+            self.producer["Bind the validated frontend embed"]["id"]: {"outputs": {"sha256": producer_digest}},
+        }}
+        outputs = {key: self.expand(value, output_context) for key, value in self.build["outputs"].items()
+                   if key in ("embed_artifact_id", "embed_sha256")}
+        context = {"github": {"sha": self.SHA, "run_attempt": consumer_attempt},
+                   "needs": {"frontend-build": {"outputs": outputs}}}
+        identity = self.consumer["Check validated frontend embed identity"]
+        result, _ = self.check_identity(identity, {key: self.expand(value, context) for key, value in identity["env"].items()})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        if legacy_consumer_name:
+            # The rejected recipe independently resolved the upload name in
+            # the consumer. Retain that exact fault as a negative control.
+            name = self.expand(upload["with"]["name"], context)
+            selected = [artifact for artifact in artifacts["current"].values() if artifact["name"] == name]
+            if len(selected) != 1:
+                raise ValueError("consumer-attempt artifact does not exist")
+            selected = selected[0]
+        else:
+            selected_id = self.expand(download["with"]["artifact-ids"], context)
+            selected = artifacts["current"][selected_id]
+            self.assertEqual(selected_id, producer_id)
+        restore = self.consumer["Verify and restore the validated frontend embed"]
+        self.assertEqual(self.expand(restore["env"]["EXPECTED_EMBED_SHA256"], context), selected["digest"])
+        return selected["producer_attempt"]
+
+    def test_partial_retry_consumes_untouched_attempt_one_producer(self):
+        self.assertEqual(self.select_artifact(producer_attempt=1, consumer_attempt=2), 1)
+
+    def test_full_retry_selects_new_attempt_two_producer_not_old_artifact(self):
+        self.assertEqual(self.select_artifact(producer_attempt=2, consumer_attempt=2, full_rerun=True), 2)
+
+    def test_retry_fixture_exposes_the_rejected_consumer_attempt_name(self):
+        with self.assertRaisesRegex(ValueError, "consumer-attempt artifact does not exist"):
+            self.select_artifact(producer_attempt=1, consumer_attempt=2, legacy_consumer_name=True)
+
+    def test_missing_or_malformed_identity_never_admits_or_downloads(self):
+        for artifact_id in ("", "0", "-1", "1,2", "1.5", " 1001", "1001\n1002", "latest", "${{ missing }}"):
+            for name, step in (("producer", self.producer["Admit frontend unit shards"]),
+                               ("consumer", self.consumer["Check validated frontend embed identity"])):
+                with self.subTest(phase=name, artifact_id=artifact_id):
+                    result, output = self.check_identity(step, {"EMBED_ARTIFACT_ID": artifact_id, "EXPECTED_EMBED_SHA256": "a" * 64})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(output, "")
+        for digest in ("", "a" * 63, "A" * 64, "not-a-digest"):
+            with self.subTest(digest=digest):
+                result, _ = self.check_identity(self.consumer["Check validated frontend embed identity"],
+                                                {"EMBED_ARTIFACT_ID": "1001", "EXPECTED_EMBED_SHA256": digest})
+                self.assertNotEqual(result.returncode, 0)
+        result, output = self.check_identity(self.producer["Admit frontend unit shards"], {"EMBED_ARTIFACT_ID": "1001"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(output, "admitted=true\n")
 
     def transfer(self, mutation=""):
         with tempfile.TemporaryDirectory(prefix="pulse-embed-transfer-") as directory:

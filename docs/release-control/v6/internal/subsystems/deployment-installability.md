@@ -833,15 +833,22 @@ lint and type checks, then builds and size-checks the production frontend. It
 requires a nonempty index/assets tree and compares the complete generated
 frontend and embed copy. Only that successful checkout-bound build is packed
 and transferred as an immutable, one-day artifact named for this run's source
-and attempt, with its SHA256 separately exported by the producer. Successful
-build/size/transfer phases emit the explicit admission output. Unit shards and
-`frontend-checks` then run independently, rather than making every unit shard
+and producer attempt. The producer exports the upload's immutable artifact ID
+and the packet's SHA256 separately; missing or malformed upload identity cannot
+emit admission. Successful build/size/transfer phases emit the explicit admission
+output. Unit shards and `frontend-checks` then run independently, rather than making every unit shard
 wait for backend compilation and runtime checks. An audit failure still permits
 that diagnostic proof but always fails the required aggregate.
 
-The runtime job downloads only the same run/source/attempt artifact. It verifies
-the checkout and producer digest before opening the archive, rejects entries
-outside the two fixed dist trees, traversal and non-file/non-directory entries,
+The runtime job requires a single positive artifact ID and a valid producer
+digest before downloading only that ID from the current run, with no alternate
+run, repository or token selector. It consumes the successful producer's outputs,
+never a name recomputed from its own attempt: a partial failed-jobs retry on
+attempt two still consumes the untouched attempt-one producer, while a full
+rerun consumes its new producer's ID and digest even when both artifacts exist.
+Missing identity fails before download rather than selecting all artifacts.
+It verifies the checkout and producer digest before opening the archive, rejects
+entries outside the two fixed dist trees, traversal and non-file/non-directory entries,
 and safely restores the complete built bytes. Missing, extra or changed embedded
 files stop the phase; it never creates a placeholder or rebuilds a different
 bundle. Go comes from `go.mod`; build and server/API vet retain the read-only
@@ -856,8 +863,11 @@ introduced. Type/build/size failure still stops the expensive suite early.
 `TestFrontendCIRequiresSameCheckoutRealEmbedBackend` executes the exact phase
 with private assets and Git/compiler doubles, covering mismatch refusal,
 declared command/ordering checks and terminal compiler/vet failures. Its transfer
-controls also execute the actual pack/restore shells, verify byte-for-byte
-round trips and reject source, digest, missing-packet and unsafe-member controls.
+controls also execute the actual pack/restore and identity-admission shells,
+verify byte-for-byte round trips and reject source, digest, missing-packet and
+unsafe-member controls. Confined artifact/output fixtures cover producer-one /
+consumer-two retries, full attempt-two reruns and the old consumer-attempt name
+selection failure; they do not reproduce hosted GitHub rerun/transport behaviour.
 `TestFrontendCIBuildTransferIsSourceBound` runs those transfer controls explicitly
 in the Go install-test suite, separately from compiler/asset admission. These
 controls are not real compilation. `TestFrontendCIRequiresCompleteIsolatedUnitProof`

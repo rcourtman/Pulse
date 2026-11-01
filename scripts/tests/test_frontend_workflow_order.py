@@ -75,13 +75,15 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
 
     def test_unit_admission_is_after_bundle_transfer_but_before_the_audit_verdict(self):
         admission = self.step("Admit frontend unit shards")
-        self.assertEqual(admission, {
-            "name": "Admit frontend unit shards", "id": "unit-admission",
-            "run": "echo 'admitted=true' >> \"$GITHUB_OUTPUT\"",
+        self.assertEqual(admission["id"], "unit-admission")
+        self.assertEqual(admission["env"], {
+            "EMBED_ARTIFACT_ID": "${{ steps.embed-upload.outputs.artifact-id }}",
         })
+        self.assertIn('echo \'admitted=true\' >> "$GITHUB_OUTPUT"', admission["run"])
         self.assertEqual(self.job["outputs"], {
             "unit_admitted": "${{ steps.unit-admission.outputs.admitted }}",
             "embed_sha256": "${{ steps.embed-packet.outputs.sha256 }}",
+            "embed_artifact_id": "${{ steps.embed-upload.outputs.artifact-id }}",
         })
         self.assertEqual(self.job["needs"], "changes")
         self.assertEqual(self.job["if"], "needs.changes.outputs.code == 'true'")
@@ -132,7 +134,8 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         self.assertEqual(runtime["timeout-minutes"], 30)
         self.assertNotIn("continue-on-error", runtime)
         names = [step["name"] for step in runtime["steps"]]
-        ordered = ["Download this run's validated frontend embed",
+        ordered = ["Check validated frontend embed identity",
+                   "Download this run's validated frontend embed",
                    "Verify and restore the validated frontend embed",
                    "Set up Go for real-embed verification", "Verify backend with real frontend embed",
                    "Check current-source unattended recovery on native systemd",
