@@ -75,6 +75,8 @@ import {
   COVERAGE_FILTERS,
   RECOVERABLE_FILTERS,
   artifactStateLabel,
+  getBackupWorkloadPVEConnection,
+  hasMultipleConnections,
 } from './proxmoxBackupsTableShared';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
@@ -423,6 +425,19 @@ export const ProxmoxBackupsTable: Component<{
   const coverageHasTask = createMemo(() =>
     recoveryModel().coverageRows.some((row) =>
       Boolean(row.latestTask || row.taskCandidates?.length),
+    ),
+  );
+
+  // Connection labels in rows tell namesakes apart. Decide over the whole
+  // inventory so they do not appear and vanish as filters narrow the list.
+  const showWorkloadConnection = createMemo(() =>
+    hasMultipleConnections(
+      recoveryModel().coverageRows.map((row) => getBackupWorkloadPVEConnection(row.workload)),
+    ),
+  );
+  const showSourceConnection = createMemo(() =>
+    hasMultipleConnections(
+      recoveryModel().recoverableArtifacts.map((artifact) => artifact.locationConnection ?? ''),
     ),
   );
 
@@ -863,15 +878,10 @@ export const ProxmoxBackupsTable: Component<{
             {/* The health strip renders identically in both route-backed views. */}
             <ProxmoxBackupsCoverageStrip
               title="Backup health"
-              footnote={
-                <>
-                  <span class="font-medium">
-                    Health counts cover all targets and backup locations, regardless of filters.
-                  </span>
-                  <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
-                    {(rule) => <span data-coverage-posture-rule> {rule()}</span>}
-                  </Show>
-                </>
+              rule={
+                <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
+                  {(rule) => <span data-coverage-posture-rule>{rule()}</span>}
+                </Show>
               }
               tail={
                 <span>
@@ -990,9 +1000,6 @@ export const ProxmoxBackupsTable: Component<{
                 }
               >
                 <div ref={retainEvidenceFocus} class="space-y-1">
-                  <p class="text-xs text-muted">
-                    Activity follows the backup filters. Selecting a day narrows only the list.
-                  </p>
                   <Show when={recoverableMetricMode() === 'volume' && unknownVolumeCount() > 0}>
                     <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
                       Sizes are unavailable for {unknownVolumeCount()} completed restore{' '}
@@ -1085,6 +1092,8 @@ export const ProxmoxBackupsTable: Component<{
                 onSort={handleRecoverableSort}
                 sizeMaxBytes={recoverableSizeMaxBytes()}
                 groupByDay
+                showWorkloadConnection={showWorkloadConnection()}
+                showSourceConnection={showSourceConnection()}
                 retainInspectionFocus={retainEvidenceFocus}
               />
             </Show>
@@ -1116,6 +1125,7 @@ export const ProxmoxBackupsTable: Component<{
                 onToggleExpand={toggleCoverageExpansion}
                 retainInspectionFocus={retainEvidenceFocus}
                 showTaskColumn={coverageHasTask()}
+                showWorkloadConnection={showWorkloadConnection()}
                 evidenceLocationLabel={evidenceLocationLabel()}
                 historyReadIncomplete={
                   inventoryIncomplete() ||
@@ -1159,6 +1169,7 @@ export const ProxmoxBackupsTable: Component<{
                         onToggleExpand={toggleCoverageExpansion}
                         retainInspectionFocus={retainEvidenceFocus}
                         showTaskColumn={coverageHasTask()}
+                        showWorkloadConnection={showWorkloadConnection()}
                         evidenceLocationLabel={evidenceLocationLabel()}
                         historyReadIncomplete={
                           inventoryIncomplete() ||

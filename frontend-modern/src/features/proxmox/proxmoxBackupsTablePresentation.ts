@@ -265,10 +265,9 @@ export const RECOVERABLE_COLUMNS: readonly BackupTableColumn<RecoverableColumnId
 ];
 
 const RECOVERABLE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly RecoverableColumnId[]> = {
-  // Narrow restore-point rows group full workload/source/location identity in
-  // the first cell. Separate tiny columns hid namesake connections behind hover
-  // titles on touch devices. Age and state remain independent scan columns;
-  // size and provider identifiers stay progressive detail in the drawer.
+  // Narrow restore-point rows keep the workload, age and state on one line.
+  // Source, location, size and provider identifiers are drawer detail; the
+  // row names a connection inline only when it tells namesakes apart.
   compact: ['workload', 'created', 'state'],
   basic: ['workload', 'created', 'state'],
   operational: ['workload', 'type', 'source', 'location', 'created', 'size', 'state'],

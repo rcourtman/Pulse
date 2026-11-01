@@ -365,20 +365,52 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact; wrap
   );
 }
 
+// True when the listed values name more than one distinct connection, so a
+// connection label would tell same-named workloads or repositories apart.
+// Undefined means the row has no such connection at all (a host backup).
+export const hasMultipleConnections = (values: readonly (string | undefined)[]): boolean =>
+  new Set(values.filter((value) => value !== undefined).map((value) => value.trim())).size > 1;
+
 // A provider kind and a repository name do not identify a backup's origin:
-// separate connections can both contain "main". Coverage wraps the full
-// connection; the compact list keeps it in its cell and its drawer shows it whole.
-export function ArtifactSourceIdentity(props: { artifact: RecoverableArtifact; wrap?: boolean }) {
+// separate connections can both contain "main". Drawers wrap the full
+// connection. Table rows stay on one line and name the connection only when
+// the rows span more than one, since a single connection disambiguates nothing.
+export function ArtifactSourceIdentity(props: {
+  artifact: RecoverableArtifact;
+  wrap?: boolean;
+  showConnection?: boolean;
+}) {
   const connection = () => props.artifact.locationConnection || 'Unknown connection';
   return (
+    <Show
+      when={props.wrap}
+      fallback={
+        <div class="flex min-w-0 items-center gap-1.5" title={`Connection: ${connection()}`}>
+          <ArtifactSourceBadge artifact={props.artifact} />
+          <Show when={props.showConnection}>
+            <span class="min-w-0 truncate text-muted" data-backup-source-connection>
+              <span class="sr-only">Connection: </span>
+              {connection()}
+            </span>
+          </Show>
+        </div>
+      }
+    >
+      <ArtifactSourceWrappedIdentity artifact={props.artifact} connection={connection()} />
+    </Show>
+  );
+}
+
+function ArtifactSourceWrappedIdentity(props: {
+  artifact: RecoverableArtifact;
+  connection: string;
+}) {
+  const connection = () => props.connection;
+  return (
     <div class="min-w-0 space-y-0.5">
-      <ArtifactSourceBadge artifact={props.artifact} wrap={props.wrap} />
+      <ArtifactSourceBadge artifact={props.artifact} wrap />
       <span
-        class={
-          props.wrap
-            ? 'block whitespace-normal text-muted leading-snug wrap-anywhere'
-            : 'block truncate text-muted'
-        }
+        class="block whitespace-normal text-muted leading-snug wrap-anywhere"
         title={`Connection: ${connection()}`}
         data-backup-source-connection
       >

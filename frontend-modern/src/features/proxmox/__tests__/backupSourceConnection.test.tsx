@@ -181,7 +181,8 @@ describe('restore-point source connections in real inventory consumers', () => {
   it('keeps a missing source explicit instead of borrowing the guest connection or namespace', async () => {
     mount(() => [identityPBS({ instance: undefined })]);
     const [row] = await inventoryRows();
-    expect(connectionOf(row)).toBe('Connection: Unknown connection');
+    // A lone source tells no rows apart, so only the drawer names it.
+    expect(connectionOf(row)).toBeUndefined();
     fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
     const detail = screen.getByTestId('proxmox-recoverable-detail');
     const connectionRow = within(detail).getByText('Connection').closest('tr')!;
@@ -221,7 +222,7 @@ describe('restore-point source connections in real inventory consumers', () => {
     const name = '<img data-source-injected src=x>';
     mount(() => [identityPBS({ instance: name })]);
     const [row] = await inventoryRows();
-    expect(connectionOf(row)).toBe(`Connection: ${name}`);
+    expect(connectionOf(row)).toBeUndefined();
     fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
     expect(
       within(screen.getByTestId('proxmox-recoverable-detail')).getByText(name),

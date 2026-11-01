@@ -4981,9 +4981,20 @@ unless it is the active filter, and checking and not-evaluated have no
 filter, so they stay text. On a 375px phone the coverage list starts below
 the fold and the posture filter sits behind Filters, so "which 11 are
 unprotected?" took three taps through a sheet; it is now one tap on the
-count. The rule footnote, the posture sort (attention before unprotected)
+count. The posture rule, the posture sort (attention before unprotected)
 and the servers table are unchanged, and no posture, freshness or protection
 evaluation changes.
+
+### Backups page states its answer before its caveats (1 November 2026)
+
+The health strip's posture rule moved behind a collapsed "What the counts
+mean" toggle, the "Health counts cover all targets and backup locations,
+regardless of filters" sentence and the chart's "Activity follows the backup
+filters" caption are gone, and restore-point and Coverage rows stay on one
+line (see frontend-primitives "Backup rows stay on one line"). On a phone the
+always-open copy took most of the first screen above the list. Each workload's
+drawer still explains its own posture, and the recovery docs still describe the
+chart and day-filter scope. No count, posture, filter or read changes.
 
 ### Backup table values truncate inside their own column
 

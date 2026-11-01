@@ -60,6 +60,7 @@ import {
   retainBackupTableFocus,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
+  hasMultipleConnections,
   getBackupWorkloadNodeLabel,
   getBackupWorkloadDisclosureLabel,
 } from './proxmoxBackupsTableShared';
@@ -529,6 +530,8 @@ export function ProxmoxCoverageTable(props: {
   /** Resolved restore-evidence filter; assessments and tasks remain workload-wide. */
   evidenceLocationLabel?: string;
   layoutWidth?: Accessor<number | null | undefined>;
+  /** Name each row's PVE connection; defaults to whether the rows span several. */
+  showWorkloadConnection?: boolean;
   /** Register focus retention with each row/detail's own cleanup owner. */
   retainInspectionFocus?: (content: HTMLElement) => void;
 }) {
@@ -558,9 +561,14 @@ export function ProxmoxCoverageTable(props: {
     const width = props.layoutWidth?.() ?? observedWidth.width();
     return typeof width === 'number' && width > 0 ? getCoverageLayoutForContainer(width) : 'full';
   });
-  // Phones (and narrow panes beside the Assistant) cannot reveal hover titles.
-  // Keep complete guest/connection identity visible before opening a namesake.
-  const wrapWorkloadIdentity = () => layoutMode() === 'compact' || layoutMode() === 'basic';
+  // Rows stay on one line at every width. The PVE connection is named inline
+  // only when the rows span more than one, where it tells namesakes apart;
+  // the drawer always shows it in full.
+  const showWorkloadConnection = createMemo(
+    () =>
+      props.showWorkloadConnection ??
+      hasMultipleConnections(props.rows.map((row) => getBackupWorkloadPVEConnection(row.workload))),
+  );
   const visibleColumns = createMemo(() =>
     getCoverageColumns(layoutMode(), {
       task: props.showTaskColumn,
@@ -713,21 +721,8 @@ export function ProxmoxCoverageTable(props: {
                               onToggle={() => props.onToggleExpand(row.key)}
                             />
                             <div class="min-w-0 flex-1">
-                              <div
-                                class={
-                                  wrapWorkloadIdentity()
-                                    ? 'flex min-w-0 flex-col items-start'
-                                    : 'flex min-w-0 items-center gap-1'
-                                }
-                              >
-                                <span
-                                  class={`font-semibold ${
-                                    wrapWorkloadIdentity()
-                                      ? 'block w-full whitespace-normal wrap-anywhere'
-                                      : 'truncate'
-                                  }`}
-                                  title={row.workload.label}
-                                >
+                              <div class="flex min-w-0 items-baseline gap-1.5">
+                                <span class="truncate font-semibold" title={row.workload.label}>
                                   {row.workload.name || row.workload.label}
                                 </span>
                                 <Show
@@ -743,22 +738,24 @@ export function ProxmoxCoverageTable(props: {
                                     {row.workload.typeLabel} {row.workload.vmid}
                                   </span>
                                 </Show>
+                                <Show
+                                  when={
+                                    showWorkloadConnection() &&
+                                    getBackupWorkloadPVEConnection(row.workload)
+                                  }
+                                >
+                                  {(connection) => (
+                                    <span
+                                      class="min-w-0 truncate text-[10px] text-muted"
+                                      title={`PVE connection: ${connection()}`}
+                                      data-backup-workload-connection
+                                    >
+                                      <span class="sr-only">PVE: </span>
+                                      {connection()}
+                                    </span>
+                                  )}
+                                </Show>
                               </div>
-                              <Show when={getBackupWorkloadPVEConnection(row.workload)}>
-                                {(connection) => (
-                                  <span
-                                    class={`block text-[10px] text-muted ${
-                                      wrapWorkloadIdentity()
-                                        ? 'whitespace-normal wrap-anywhere'
-                                        : 'truncate'
-                                    }`}
-                                    title={`PVE connection: ${connection()}`}
-                                    data-backup-workload-connection
-                                  >
-                                    PVE: {connection()}
-                                  </span>
-                                )}
-                              </Show>
                             </div>
                           </div>
                         </TableCell>

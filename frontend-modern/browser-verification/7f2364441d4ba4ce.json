@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "c93d188aff3c0e6c10839a29bcdfe7f4f3d49373",
+  "verified_at": "2026-11-01T14:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "03a085996e5d1b21de47ce7f8d484c210b4f9a7d6eb18cba63821f921fc4ee0d",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "19d4f7759acc6abe69f3345a965373e1da3a84b3a56ba595f929493d495d3f26",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "c67f7adc16cd4dcf0c048862d0deb802f9b58ba6bf23f4b38fb594e830bac8e5",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "410b7d1323806646a1856d8038093653c040c38d2f32d62e0850989a5e54d6da",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "3c01481ff02b1fee297b0212ea705f1af51e986e28ce59f769c99711e33181fc",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "df54d96188fb4df2e06ebd977edcb1667a0786b8d338c2cf93028a1277985a41"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock rig inventory, dark theme, By date and Coverage views",
+    "health strip with the posture rule collapsed behind What the counts mean",
+    "multi-connection inventory naming connections inline on one line"
+  ],
+  "interactions": [
+    "signed in, opened Backups By date and Coverage at 1440x1000 and 375x812",
+    "measured the first 20 row heights per view: phone date 116-132px to 37px, Coverage 65-81px to 32px, desktop 47px to 33px",
+    "compared before/after screenshots of each view and width"
+  ]
+}

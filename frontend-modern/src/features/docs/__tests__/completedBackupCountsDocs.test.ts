@@ -58,9 +58,6 @@ describe('completed backup count guidance', () => {
     }
     expect(copy).not.toContain('Completed restore volume per day');
     expect(tableSource).toContain('aria-label="Clear date filter"');
-    expect(tableSource).toContain(
-      'Activity follows the backup filters. Selecting a day narrows only the list.',
-    );
     expect(copy).toContain(
       'covers the loaded inventory, not just the rows matching your list filters',
     );

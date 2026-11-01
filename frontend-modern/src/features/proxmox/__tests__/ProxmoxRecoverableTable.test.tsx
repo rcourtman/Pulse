@@ -135,20 +135,18 @@ describe('ProxmoxRecoverableTable record drawer', () => {
 });
 
 describe('ProxmoxRecoverableTable responsive columns', () => {
-  it('groups full restore-point identity beside age and state in compact containers', () => {
+  it('keeps compact rows to one line of workload, age and state', () => {
     renderTable(330);
 
     expect([...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual([
-      'Restore point',
+      'Workload',
       'Age▼',
       'State',
     ]);
     expect(document.body.textContent).toContain('VM 100');
-    // No hover is needed to identify the repository on a phone.
-    expect(document.querySelector('[data-backup-location]')).toHaveTextContent('main / pve1');
-    expect(document.querySelector('[data-backup-source-connection]')).toHaveTextContent(
-      'Connection: Unknown connection',
-    );
+    // Repository and connection are drawer detail, not a stack under the name.
+    expect(document.body.textContent).not.toContain('main / pve1');
+    expect(document.querySelector('[data-backup-source-connection]')).toBeNull();
     expect(document.body.textContent).not.toContain('5 PBS files');
   });
 
