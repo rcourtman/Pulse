@@ -4,7 +4,6 @@ import { RBACAPI } from '@/api/rbac';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
-import { logger } from '@/utils/logger';
 import {
   getUserAssignmentsDeleteErrorMessage,
   getUserAssignmentsLoadErrorMessage,
@@ -156,7 +155,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     } catch {
       if (!isCurrentRead()) return;
       setLoadError(getUserAssignmentsLoadErrorMessage());
-      logger.error('Failed to load user assignments');
     } finally {
       if (isCurrentRead()) {
         controller.abort();
@@ -240,7 +238,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     } catch {
       if (!isCurrentRead()) return;
       setPermissionsError('Saved permissions could not be loaded. Access is unknown.');
-      logger.error('Failed to load user permissions');
     } finally {
       if (isCurrentRead()) {
         permissionsController = undefined;
