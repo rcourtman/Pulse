@@ -1185,14 +1185,35 @@ API-token callers must hold every scope on the target token.
 ```
 Returns `{ "valid": true, "message": "Token is valid" }` for a known, unexpired token. An unknown or expired token returns HTTP 200 with `"valid": false` and `"message": "Token is invalid"`. An empty `token` returns HTTP 400 with `"valid": false` and `"message": "Token is required"`. When no API tokens are configured, the response is HTTP 200 with `"valid": false` and `"message": "API token authentication is not configured"`. API-token callers need the `settings:write` scope; a token without it gets HTTP 403. Non-admin proxy-auth callers get HTTP 403. Requests over the rate limit get HTTP 429. A successful validation updates the token's last-used time. This endpoint is not gated by the Pro audit licence.
 
-### Recovery (Localhost or Recovery Token)
-`POST /api/security/recovery`
-Supports actions:
-- `generate_token` (localhost only)
-- `disable_auth`
-- `enable_auth`
+### Recovery sessions (direct loopback)
 
-`GET /api/security/recovery` returns recovery mode status.
+`GET /api/security/recovery` and `POST /api/security/recovery` are advanced
+recovery operations, not password reset or a server-wide authentication switch.
+For a forgotten password, use [local administrator recovery](TROUBLESHOOTING.md#i-forgot-my-password);
+for a temporary lockout, use the separate reset-lockout operation below.
+
+Direct loopback requests are admitted; forwarded requests do not count as
+direct loopback. The endpoint also accepts a single-use `X-Recovery-Token`
+bound to the IP that generated it. Token admission does **not** make the
+resulting recovery session usable remotely or through a reverse proxy.
+
+For POST, send the chosen `action` in the JSON body:
+
+| Action | Effect |
+|---|---|
+| `generate_token` | Direct loopback only. Returns a token valid for 15 minutes by default; an integer `duration` from 1 to 60 selects its lifetime in minutes. It does not create a browser session. |
+| `disable_auth` | Despite its legacy name, creates a recovery session for the requesting client, using its session cookie. It does not remove configured authentication or unlock other clients. The session is usable only on matching direct loopback requests. |
+| `enable_auth` | Clears the requesting client's session. It does not reset a password, revoke other clients' sessions or change IdP access. |
+
+GET returns `recovery_mode` for the requesting client's matching recovery
+session, not a global authentication state. **A valid supplied recovery token
+is consumed at admission**, including by GET or a request that later fails
+validation. Do not use one as a status probe or blindly repeat an uncertain POST.
+
+A successful curl request does not unlock a separate browser. Do not transfer
+session cookies between clients or paste recovery tokens into command arguments,
+URLs or reports. See [Recovery Mode](TROUBLESHOOTING.md#recovery-mode) for the
+boundary and safer login-recovery path; keep any working administrator session.
 
 ### Reset Account Lockout (Admin or settings:write token)
 `POST /api/security/reset-lockout` (admin, `settings:write`)
