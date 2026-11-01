@@ -115,7 +115,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// they sit behind the same settings:read scope as the cost summary.
 	r.mux.HandleFunc("/api/ai/patrol/cost-preview", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetPatrolCostPreview)))
 	r.mux.HandleFunc("/api/ai/patrol/model-guidance", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetPatrolModelGuidance)))
-	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolStream)))
+	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		retainTokenStreamAuthority(r.config, config.ScopeAIExecute, false, r.aiSettingsHandler.HandlePatrolStream))))
 	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.routeAIPatrolFindings))
 	r.mux.HandleFunc("/api/ai/patrol/objectives", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolObjectives)))
 	r.mux.HandleFunc("/api/ai/patrol/objectives/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolObjective)))
