@@ -21,6 +21,37 @@
 
 ## Purpose
 
+### Slow Assistant JSON results use current token authority
+
+The existing POST `execute` and `kubernetes/analyze` routes revalidate the
+admitted API-token identity, principal, `ai:execute` scope and selected
+organisation/instance authority at each response write, not only before waiting
+for the provider. The Kubernetes guard sits outside the extension binding.
+Revocation, expiry, identity/principal replacement, invalid runtime role or lost
+scope/organisation/instance authority denies undisclosed results. Before a final
+response is committed, refusal returns a generic 401 without handler-specific
+headers, JSON data or false empty success. After an admitted prefix, refusal
+only stops later writes; it never appends a new HTTP error to that response.
+An already-admitted write can be in flight when authority changes.
+
+This synchronous writer exposes no streaming, hijacking, `ReaderFrom` or
+`Unwrap` escape, buffers no payload and closes at handler return. It does not
+replace the original request context, cancel admitted work on token withdrawal,
+change the 120/180-second execution bounds, or detach work from normal client
+cancellation. Session/proxy admission, licence checks, authorised payloads and
+the retired raw-command endpoint remain unchanged. No new route, tool, history
+source or grant is added.
+
+`assistant_json_lifetime_test.go` uses the full Router, native HTTP and real
+execute/Kubernetes core handlers with a held local text-only provider. Both token
+headers, independent readers, all withdrawal cases, unchanged session/proxy
+readers, client cancellation and the extension licence refusal are covered.
+`TestContract_AssistantJSONWithdrawAfterPersistedTokenDelete` exercises the real
+DELETE and durable token inventory for both JSON routes. Writer regressions pin
+undisclosed headers/bodyless refusal, admitted prefixes, closure, transport errors
+and no bypass. These are synthetic source proofs, not installed/private-binary
+recovery, exposure or release evidence.
+
 ### Assistant streams use current token authority at disclosure
 
 The existing POST `execute/stream`, `investigate-alert` and `chat` routes

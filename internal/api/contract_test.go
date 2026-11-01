@@ -29008,3 +29008,9 @@ func TestContract_AssistantStreamsWithdrawAfterPersistedTokenDelete(t *testing.T
 func TestContract_AssistantStreamDeadlineSurvivesAPIWrappers(t *testing.T) {
 	TestAssistantStreamsClearNativeServerDeadline(t)
 }
+
+// A persisted token DELETE must also protect results still being computed for
+// the slow JSON routes, not just their already-admitted SSE counterparts.
+func TestContract_AssistantJSONWithdrawAfterPersistedTokenDelete(t *testing.T) {
+	assistantJSONWithdrawAfterPersistedTokenDelete(t)
+}

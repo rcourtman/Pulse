@@ -48,10 +48,12 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/test/{provider}", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleTestProvider)))
 	// AI models list - require ai:chat scope (needed to select a model for chat)
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleListModels)))
-	r.mux.HandleFunc("/api/ai/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecute)))
+	r.mux.HandleFunc("/api/ai/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute,
+		retainTokenResponseAuthority(r.config, config.ScopeAIExecute, true, r.aiSettingsHandler.HandleExecute))))
 	r.mux.HandleFunc("/api/ai/execute/stream", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute,
 		retainTokenStreamAuthority(r.config, config.ScopeAIExecute, true, r.aiSettingsHandler.HandleExecuteStream))))
-	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAlertAnalysisEndpoints.HandleAnalyzeKubernetesCluster)))
+	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute,
+		retainTokenResponseAuthority(r.config, config.ScopeAIExecute, true, r.aiAlertAnalysisEndpoints.HandleAnalyzeKubernetesCluster))))
 	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute,
 		retainTokenStreamAuthority(r.config, config.ScopeAIExecute, true, r.aiAlertAnalysisEndpoints.HandleInvestigateAlert))))
 

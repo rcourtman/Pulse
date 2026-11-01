@@ -15,6 +15,15 @@
 
 ## Purpose
 
+### Slow Assistant JSON reads do not own work cancellation
+
+The synchronous execute and Kubernetes-analysis routes retain current API-token
+authority at their result writer. Withdrawal withholds results, not an agent
+disconnect, command cancellation or new grant. Their original request context
+and 120/180-second bounds remain: client cancellation still ends request-bound
+provider work. Native JSON independent-reader, cancellation and persisted-delete
+regressions exercise this boundary with synthetic text, not tools or agents.
+
 ### Assistant result streams do not own agent execution lifetime
 
 Assistant HTTP result readers recheck current token authority at their serialized
