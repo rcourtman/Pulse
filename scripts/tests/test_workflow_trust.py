@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,6 +36,78 @@ class WorkflowTrustTest(unittest.TestCase):
             path = Path(temporary_directory) / name
             path.write_text(content, encoding="utf-8")
             return [finding.message for finding in workflow_trust.audit_workflow(path)]
+
+    def test_key_pattern_reuse_is_bounded_without_caching_workflow_verdicts(self) -> None:
+        expected = workflow_trust._yaml_key("uses")
+        for index in range(128):
+            workflow_trust._yaml_key(f"fixture-key-{index}")
+        cache = workflow_trust._yaml_key.cache_info()
+        self.assertEqual(cache.maxsize, 64)
+        self.assertLessEqual(cache.currsize, cache.maxsize)
+        self.assertEqual(workflow_trust._yaml_key("uses"), expected)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "test.yml"
+            safe = f"""permissions: {{}}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: owner/action@{PIN}
+"""
+            for source, rejected in ((safe, False), (safe.replace(PIN, "v2"), True),
+                                     (safe, False)):
+                path.write_text(source, encoding="utf-8")
+                findings = workflow_trust.audit_workflow(path)
+                self.assertEqual(bool(findings), rejected)
+                if rejected:
+                    self.assertTrue(any("full commit SHA" in finding.message
+                                        for finding in findings))
+
+    def test_readable_jobs_use_raw_and_decoded_secrets_without_yaml_dump(self) -> None:
+        # No fallback is needed, but both raw and YAML-decoded secret access
+        # must still be checked. The escaped spelling exists only after decode.
+        source = r'''permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RAW: ${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}
+      DECODED: "${{ secre\x74s.WORKFLOW_PAT }}"
+    steps:
+      - run: echo safe
+'''
+        with mock.patch.object(workflow_trust.yaml, "safe_dump",
+                               side_effect=AssertionError("unneeded fallback dump")):
+            findings = self.audit(source)
+        self.assertTrue(any("environment: release" in finding for finding in findings))
+        self.assertTrue(any("deployment environment" in finding for finding in findings))
+
+    def test_unreadable_job_keeps_fallback_and_decoded_secret_rejection(self) -> None:
+        # An escaped job key is rejected as a shape, not ignored. Its protected
+        # secret still needs the decoded-node check through the fallback path.
+        source = r'''permissions: {}
+jobs:
+  readable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - run: echo safe
+  "\x75nreadable":
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DECODED: "${{ secre\x74s.WORKFLOW_PAT }}"
+    steps:
+      - run: echo safe
+'''
+        with mock.patch.object(workflow_trust.yaml, "safe_dump",
+                               wraps=workflow_trust.yaml.safe_dump) as dump:
+            findings = self.audit(source)
+        self.assertEqual(dump.call_count, 1)
+        self.assertTrue(any("plain block mapping" in finding for finding in findings))
+        self.assertTrue(any("environment: release" in finding for finding in findings))
 
     def test_setup_node_upgrade_preserves_consumer_contract(self) -> None:
         # v7 changes its internal module format, not the Node 24 consumer ABI.

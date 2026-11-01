@@ -322,6 +322,7 @@ type NotificationManager struct {
 	pendingAlerts      []*alerts.Alert
 	pendingAlertIndex  map[pendingFiringOccurrence]int
 	groupTimer         *time.Timer
+	groupDeadline      time.Time // First admission fixes this window; shutdown must not restart or shorten it
 	pendingResolved    []*alerts.Alert
 	resolvedGroupTimer *time.Timer
 	groupByNode        bool
@@ -1143,10 +1144,10 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 	var appriseConfig AppriseConfig
 	var initialTarget notificationDeliveryTarget
 	var queue *NotificationQueue
-	if !enabled || seconds == 0 {
+	if (!enabled || seconds == 0) && n.lifecycle.accepting() {
 		resolved = n.takePendingResolvedLocked()
-		// Stop clears pending groups in the critical section that refuses
-		// admission, so a pending group here is always admitted.
+		// Only a live manager may flush to delivery; Stop checkpoints any
+		// remaining buffer without bypassing its deadline.
 		if len(n.pendingAlerts) > 0 && n.lifecycle.admit() {
 			pending = append(pending, n.pendingAlerts...)
 		}
@@ -1156,6 +1157,7 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 		if n.groupTimer != nil {
 			n.groupTimer.Stop()
 			n.groupTimer = nil
+			n.groupDeadline = time.Time{}
 		}
 		emailConfig = copyEmailConfig(n.emailConfig)
 		webhooks = copyWebhookConfigs(n.webhooks)
@@ -1272,6 +1274,7 @@ func (n *NotificationManager) SetEnabled(enabled bool) {
 		if n.groupTimer != nil {
 			n.groupTimer.Stop()
 			n.groupTimer = nil
+			n.groupDeadline = time.Time{}
 		}
 		if n.queue != nil && n.lifecycle.join() {
 			queue = n.queue
@@ -1415,7 +1418,8 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 
 	// If this is the first alert in the group, start the timer
 	if n.groupTimer == nil {
-		n.groupTimer = time.AfterFunc(n.groupWindow, func() {
+		n.groupDeadline = time.Now().Add(n.groupWindow)
+		n.groupTimer = time.AfterFunc(time.Until(n.groupDeadline), func() {
 			n.sendGroupedAlerts()
 		})
 		log.Debug().
@@ -1855,6 +1859,7 @@ func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool
 				log.Debug().Str("alertID", alertID).Msg("stopped grouping timer after alert cancellation")
 			}
 			n.groupTimer = nil
+			n.groupDeadline = time.Time{}
 		}
 	}
 
@@ -1898,8 +1903,8 @@ func (n *NotificationManager) sendGroupedAlerts() {
 		n.mu.Unlock()
 		return
 	}
-	// Stop clears pending groups in the critical section that refuses
-	// admission, so a timer that finds a group here is always admitted.
+	// A timer racing Stop must leave the buffer for the shutdown checkpoint,
+	// not dispatch it directly or lose it after admission has closed.
 	if !n.lifecycle.admit() {
 		n.mu.Unlock()
 		return
@@ -1918,6 +1923,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 		n.groupTimer.Stop()
 	}
 	n.groupTimer = nil
+	n.groupDeadline = time.Time{}
 
 	log.Info().
 		Int("alertCount", len(alertsToSend)).
@@ -4534,15 +4540,12 @@ func (n *NotificationManager) cleanupOldNotificationRecords() {
 // Stop gracefully stops the notification manager
 func (n *NotificationManager) Stop() {
 	n.stopOnce.Do(func() {
-		// Refuse new alerts and discard volatile groups in one critical
-		// section, so a pending group is either already admitted with a lease
-		// or discarded here, as Stop has always discarded it.
+		// Refuse new admissions and stop the firing timer, but keep its snapshots
+		// until the queue is quiescent. Shutdown checkpoints the accepted batch
+		// without sending it or waiting for its grouping deadline.
 		n.mu.Lock()
 		n.lifecycle.drain()
 		n.takePendingResolvedLocked()
-		clear(n.pendingAlerts)
-		n.pendingAlerts = n.pendingAlerts[:0]
-		n.pendingAlertIndex = nil
 		if n.groupTimer != nil {
 			n.groupTimer.Stop()
 			n.groupTimer = nil
@@ -4559,6 +4562,14 @@ func (n *NotificationManager) Stop() {
 		if queue != nil {
 			queue.stopProcessing()
 		}
+		// With workers stopped, no checkpoint can race a provider attempt. Keep
+		// n.mu across the buffer-to-queue handoff: a concurrent resolution/pause
+		// either removes the snapshot first or cancels the committed queue row.
+		// Neither can fall between removing the buffer and persisting the row.
+		n.mu.Lock()
+		n.checkpointPendingFiringGroupLocked(queue)
+		n.mu.Unlock()
+
 		// Wait for admitted writes, cancellations, operator changes and direct
 		// deliveries. No lease can be taken once this returns.
 		n.lifecycle.close()

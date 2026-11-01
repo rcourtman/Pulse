@@ -374,3 +374,45 @@ func TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation(t *testing.T)
 		})
 	}
 }
+
+// The real monitor stop/reconstruction path must checkpoint a still-buffered
+// warning before replacing the notifier, and bootstrap must leave its deadline
+// alone. No provider or artificial queue timestamp is involved.
+func TestMonitorReloadKeepsBufferedWarning(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dir)
+	persistence := config.NewConfigPersistence(dir)
+	saved := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive,
+		Schedule: alerts.ScheduleConfig{InitialNotify: "webhook", NotifyOnResolve: true,
+			Grouping: alerts.GroupingConfig{Enabled: true, Window: 600, ByNode: true, ByGuest: true}}}
+	if err := persistence.SaveAlertConfig(saved); err != nil {
+		t.Fatal(err)
+	}
+	if err := persistence.SaveWebhooks([]notifications.WebhookConfig{{ID: "reload-ops", Name: "Reload ops", URL: "https://example.invalid/not-contacted", Service: "generic", Enabled: true}}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(&config.Config{DataPath: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.GetNotificationManager().SendAlert(&alerts.Alert{ID: "reload-warning", ResourceID: "reload-host", ResourceName: "Reload host", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: time.Now().UTC()})
+	m.Stop()
+	m, err = New(&config.Config{DataPath: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Stop()
+	q := m.GetNotificationManager().GetQueue()
+	stats, err := q.GetQueueStats()
+	if err != nil || stats["pending"] != 1 || stats["sent"] != 0 {
+		t.Fatalf("reload lost or flushed accepted warning: %v, %v", stats, err)
+	}
+	ready, err := q.GetPending(10)
+	if err != nil || len(ready) != 0 {
+		t.Fatalf("reload shortened original grouping deadline: %+v, %v", ready, err)
+	}
+	entries, err := q.GetDeliveryLog(time.Now().Add(-time.Hour), 10)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("reload manufactured provider attempts: %+v, %v", entries, err)
+	}
+}
