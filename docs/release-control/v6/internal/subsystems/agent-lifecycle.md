@@ -10756,3 +10756,16 @@ itself served (`Sec-Fetch-Site: same-origin`), so the Pulse UI running on the
 setup admin token stops reading as external-agent use. This changes no agent
 token, enrolment, credential scope, authentication or runtime operation; only
 which requests write the content-free activity marker.
+
+
+### Diagnostic log downloads do not export recovery credentials
+
+The existing administrative log-bundle route retains its auth/scope gates and
+raw log-file/buffer evidence. Its system-info member now uses the API contract's
+explicit diagnostic allowlist rather than a full Config/environment copy. No
+endpoint/name/path, arbitrary environment or credential is included in that
+summary; logs still require private manual review. Connection and polling
+settings remain live and unchanged. This is not a backup, credential recovery,
+agent/guest probe or installed recovery. The normal HTTP contract
+`TestContractSupportBundleCredentialBoundary` and `log_bundle_test.go` cover the
+summary, scope denials, state preservation and configured-file/buffer fallbacks.

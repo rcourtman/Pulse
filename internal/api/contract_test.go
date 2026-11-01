@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -28851,4 +28852,109 @@ func TestAgentEventTokenLifecycleRefreshesDisclosure(t *testing.T) {
 
 func TestContract_MonitoringWebSocketTokenDeleteThroughHTTP(t *testing.T) {
 	deleteMonitoringWebSocketTokenThroughHTTP(t)
+}
+
+// Support downloads use a fixed diagnostic schema, not a serialized Config or
+// a name-based guess about which environment variables might hold credentials.
+func TestContractSupportBundleCredentialBoundary(t *testing.T) {
+	const canary = "synthetic-bundle-confidential-value"
+	t.Setenv("HTTPS_PROXY", "http://operator:"+canary+"@proxy.invalid:3128")
+	t.Setenv("DATABASE_URL", "postgres://operator:"+canary+"@database.invalid/db")
+	t.Setenv("ORDINARY_OPTION", canary)
+	t.Setenv("GOMAXPROCS", "2")
+	t.Setenv("GOGC", "100")
+	t.Setenv("GOMEMLIMIT", "512MiB")
+
+	_, cfg, server := newLogStreamRouter(t)
+	logFile := filepathWithTemp(t, "private.log")
+	const logLine = "synthetic private log evidence: review before sharing"
+	if err := os.WriteFile(logFile, []byte(logLine), 0600); err != nil {
+		t.Fatal(err)
+	}
+	config.Mu.Lock()
+	cfg.LogFile, cfg.LogLevel, cfg.LogFormat = logFile, "info", "json"
+	cfg.PublicURL = "https://operator:" + canary + "@pulse.invalid/?auth=" + canary
+	cfg.PVEInstances = []config.PVEInstance{{Name: canary, Host: canary, Password: canary, TokenValue: canary, VerifySSL: true, MonitorVMs: true}}
+	cfg.PVEPollingInterval = 10 * time.Second
+	monitorToken := newTokenRecord(t, "synthetic-bundle-monitor-token.12345678", []string{config.ScopeMonitoringRead}, nil)
+	cfg.APITokens = append(cfg.APITokens, monitorToken)
+	tenantToken := newTokenRecord(t, "synthetic-bundle-tenant-token.12345678", []string{config.ScopeSettingsRead}, nil)
+	// Keep the selected default organisation valid so this case reaches the
+	// existing instance-admin gate, not an absent-org 400 in tenant admission.
+	tenantToken.OrgIDs = []string{"default", "tenant-only"}
+	cfg.APITokens = append(cfg.APITokens, tenantToken)
+	config.Mu.Unlock()
+
+	for _, tc := range []struct {
+		name, token, transport string
+		status                 int
+	}{
+		{"settings read", logStreamToken, "X-API-Token", http.StatusOK},
+		{"bearer", logStreamToken, "Authorization", http.StatusOK},
+		{"independent admin", logStreamControl, "X-API-Token", http.StatusOK},
+		{"unauthenticated", "", "X-API-Token", http.StatusUnauthorized},
+		{"monitoring is not settings", "synthetic-bundle-monitor-token.12345678", "X-API-Token", http.StatusForbidden},
+		{"tenant is not instance admin", "synthetic-bundle-tenant-token.12345678", "X-API-Token", http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, server.URL+"/api/logs/download", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.token != "" {
+				value := tc.token
+				if tc.transport == "Authorization" {
+					value = "Bearer " + value
+				}
+				req.Header.Set(tc.transport, value)
+			}
+			resp, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != tc.status {
+				t.Fatalf("download status = %d, want %d", resp.StatusCode, tc.status)
+			}
+			if tc.status != http.StatusOK {
+				if strings.Contains(resp.Header.Get("Content-Type"), "zip") || bytes.Contains(body, []byte("system-info.json")) {
+					t.Fatal("denied caller received archive data")
+				}
+				return
+			}
+			if resp.Header.Get("Content-Type") != "application/zip" || !strings.HasPrefix(resp.Header.Get("Content-Disposition"), `attachment; filename="pulse-support-bundle-`) {
+				t.Fatal("support download lost attachment headers")
+			}
+			entries := readSupportBundle(t, body)
+			if len(entries) != 2 || string(entries["pulse.log"]) != logLine {
+				t.Fatal("private log evidence changed or archive entries missing")
+			}
+			system := entries["system-info.json"]
+			if bytes.Contains(system, []byte(canary)) || bytes.Contains(system, []byte("HTTPS_PROXY")) || bytes.Contains(system, []byte("ORDINARY_OPTION")) || bytes.Contains(system, []byte("DATABASE_URL")) {
+				t.Fatal("system-info disclosed synthetic credentials or arbitrary process environment")
+			}
+			var info struct {
+				Config supportBundleConfig
+				Env    []string
+			}
+			if err := json.Unmarshal(system, &info); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(info.Env, "GOMAXPROCS=2") || !slices.Contains(info.Env, "GOGC=100") || !slices.Contains(info.Env, "GOMEMLIMIT=512MiB") || len(info.Env) != 3 {
+				t.Fatal("safe runtime environment details lost")
+			}
+			if info.Config.LogLevel != "info" || info.Config.PVEPollingInterval != 10*time.Second || len(info.Config.PVEInstances) != 1 || !info.Config.PVEInstances[0].VerifySSL || !info.Config.PVEInstances[0].PasswordConfigured || !info.Config.PVEInstances[0].TokenConfigured {
+				t.Fatal("useful connection/polling diagnostics lost")
+			}
+		})
+	}
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	if cfg.PublicURL != "https://operator:"+canary+"@pulse.invalid/?auth="+canary || cfg.PVEInstances[0].Password != canary || cfg.PVEInstances[0].TokenValue != canary || len(cfg.APITokens) != 4 {
+		t.Fatal("download mutated live credentials or connection state")
+	}
 }

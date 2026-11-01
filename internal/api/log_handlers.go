@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
 
@@ -101,8 +103,16 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleDownloadBundle creates a zip file with system logs and sanitized config
+// HandleDownloadBundle creates a private log archive with an allowlisted diagnostic summary.
+// Log contents are not scrubbed; this is not an anonymised export or configuration backup.
 func (h *LogHandlers) HandleDownloadBundle(w http.ResponseWriter, r *http.Request) {
+	// Snapshot only diagnostic fields while holding configuration ownership.
+	// Do not serialize Config or the full process environment into this archive.
+	config.Mu.RLock()
+	logFile := h.config.LogFile
+	summary := newSupportBundleConfig(h.config)
+	config.Mu.RUnlock()
+
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"pulse-support-bundle-%s.zip\"", time.Now().Format("20060102-150405")))
 
@@ -113,8 +123,8 @@ func (h *LogHandlers) HandleDownloadBundle(w http.ResponseWriter, r *http.Reques
 	// If a log file is configured and exists, add it.
 	// Otherwise (or in addition), dump the in-memory buffer.
 	addedLogFile := false
-	if h.config.LogFile != "" {
-		if f, err := os.Open(h.config.LogFile); err == nil {
+	if logFile != "" {
+		if f, err := os.Open(logFile); err == nil {
 			defer f.Close()
 			if wr, err := zipWriter.Create("pulse.log"); err == nil {
 				if _, err := io.Copy(wr, f); err != nil {
@@ -136,66 +146,22 @@ func (h *LogHandlers) HandleDownloadBundle(w http.ResponseWriter, r *http.Reques
 
 	// 2. Add Sanitized System Info
 	if wr, err := zipWriter.Create("system-info.json"); err == nil {
-		// Create a sanitized copy of config
-		sanitizedConfig := h.config.DeepCopy()
-
-		// Scrub top-level secrets
-		if sanitizedConfig.AuthPass != "" {
-			sanitizedConfig.AuthPass = "[REDACTED]"
+		version := strings.TrimSpace(updates.BuildVersion)
+		if version == "" {
+			version = "unknown"
 		}
-		if sanitizedConfig.APIToken != "" {
-			sanitizedConfig.APIToken = "[REDACTED]"
-		}
-		if sanitizedConfig.ProxyAuthSecret != "" {
-			sanitizedConfig.ProxyAuthSecret = "[REDACTED]"
-		}
-
-		// Scrub array secrets
-		for i := range sanitizedConfig.PVEInstances {
-			sanitizedConfig.PVEInstances[i].Password = "[REDACTED]"
-			sanitizedConfig.PVEInstances[i].TokenValue = "[REDACTED]"
-		}
-		for i := range sanitizedConfig.PBSInstances {
-			sanitizedConfig.PBSInstances[i].Password = "[REDACTED]"
-			sanitizedConfig.PBSInstances[i].TokenValue = "[REDACTED]"
-		}
-		for i := range sanitizedConfig.PMGInstances {
-			sanitizedConfig.PMGInstances[i].Password = "[REDACTED]"
-			sanitizedConfig.PMGInstances[i].TokenValue = "[REDACTED]"
-		}
-
-		// Sanitize environment variables
-		rawEnv := os.Environ()
-		sanitizedEnv := make([]string, 0, len(rawEnv))
-		for _, e := range rawEnv {
-			parts := strings.SplitN(e, "=", 2)
-			if len(parts) == 2 {
-				key := parts[0]
-				upperKey := strings.ToUpper(key)
-				// Redact known sensitive keys
-				if strings.Contains(upperKey, "TOKEN") ||
-					strings.Contains(upperKey, "PASS") ||
-					strings.Contains(upperKey, "SECRET") ||
-					strings.Contains(upperKey, "KEY") {
-					sanitizedEnv = append(sanitizedEnv, fmt.Sprintf("%s=[REDACTED]", key))
-				} else {
-					sanitizedEnv = append(sanitizedEnv, e)
-				}
-			}
-		}
-
 		safeConfig := struct {
 			Version   string
 			GoVersion string
 			OS        string
-			Config    *config.Config
+			Config    supportBundleConfig
 			Env       []string
 		}{
-			Version:   "5.x",
-			GoVersion: "go1.21+",
-			OS:        "linux",
-			Config:    sanitizedConfig,
-			Env:       sanitizedEnv,
+			Version:   version,
+			GoVersion: runtime.Version(),
+			OS:        runtime.GOOS,
+			Config:    summary,
+			Env:       supportBundleEnvironment(os.Environ()),
 		}
 
 		enc := json.NewEncoder(wr)
@@ -225,7 +191,9 @@ func (h *LogHandlers) HandleSetLevel(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Update Runtime
 	logging.SetGlobalLevel(level)
+	config.Mu.Lock()
 	h.config.LogLevel = level
+	config.Mu.Unlock()
 	log.Info().Str("level", level).Msg("Log level updated via API")
 
 	// 2. Persist to system.json
