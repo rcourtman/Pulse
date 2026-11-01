@@ -188,6 +188,7 @@ func (f *assistantStreamFixture) request(t *testing.T, label, raw, transport str
 		req.Header.Set("Authorization", "Bearer "+raw)
 	case "session":
 		req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: raw})
+		req.Header.Set("X-CSRF-Token", generateCSRFToken(raw))
 	case "proxy":
 		req.Header.Set("X-Proxy-Secret", f.router.config.ProxyAuthSecret)
 		req.Header.Set("X-Remote-User", "assistant-fixture-admin")
