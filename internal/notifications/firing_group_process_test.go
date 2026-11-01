@@ -150,8 +150,8 @@ func TestGroupedWarningProcessHelper(t *testing.T) {
 				// and receipt-gated entry points as the monitor callback.
 				nm.SetGroupingConfig(false, 0, false, false)
 				for _, a := range am.GetActiveAlerts() {
-					nm.CancelResolvedAlert(a)
-					nm.SendResolvedAlert(&alerts.ResolvedAlert{Alert: a, ResolvedTime: time.Now().UTC()})
+					nm.CancelResolvedAlert(&a)
+					nm.SendResolvedAlert(&alerts.ResolvedAlert{Alert: &a, ResolvedTime: time.Now().UTC()})
 				}
 				emit("resolved")
 			case "stop":
