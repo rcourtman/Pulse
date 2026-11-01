@@ -4513,12 +4513,29 @@ func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int)
 func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "-v")
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendRealEmbed", "-v")
 	cmd.Env = append(os.Environ(), "PULSE_BUILD_WORKFLOW_UNDER_TEST="+repoFile(".github", "workflows", "build-and-test.yml"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("same-checkout real-embed CI admission controls: %v\n%s", err, out)
 	}
+}
+
+// Execute the exact producer/consumer shells, including every-byte round trips
+// and source, digest and unsafe-member refusals before any asset extraction.
+// Retained producer-output fixtures also cover partial/full retry selection
+// and missing identity refusing admission before any artifact download.
+// Artifact transport and hosted overlap still need containing CI observations.
+func TestFrontendCIBuildTransferIsSourceBound(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendEmbedTransfer", "-v")
+	cmd.Env = append(os.Environ(), "PULSE_BUILD_WORKFLOW_UNDER_TEST="+repoFile(".github", "workflows", "build-and-test.yml"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("source-bound frontend build transfer controls: %v\n%s", err, out)
+	}
+	t.Logf("source-bound frontend transfer and retry controls:\n%s", out)
 }
 
 // Keep the registered frontend security-proof route bound to the actual
@@ -4631,9 +4648,21 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read %s: %v", workflowPath, err)
 	}
-	frontendJob := workflowJobBlock(t, string(workflow), "frontend-checks")
+	frontendJob := workflowJobBlock(t, string(workflow), "frontend-build")
+	for _, needle := range []string{
+		`- name: Check Solid serialization dependency edges`,
+		`- name: Install frontend dependencies`,
+		`- name: Audit complete frontend dependency graph`,
+		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
+		`- name: Require frontend dependency audit`,
+		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
+	} {
+		if !strings.Contains(frontendJob, needle) {
+			t.Fatalf("frontend build/audit producer missing %s", needle)
+		}
+	}
 	if !strings.Contains(frontendJob, "timeout-minutes: 30") {
-		t.Fatal("frontend job must keep a bounded timeout above the audit budget")
+		t.Fatal("frontend build/audit producer must keep a bounded timeout above the audit budget")
 	}
 }
 

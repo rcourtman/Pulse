@@ -179,7 +179,7 @@ class NotificationRuntimeControls(unittest.TestCase):
     def test_ci_reuses_the_real_embed_with_exact_source_and_attempt_receipt(self):
         workflow = (ROOT / '.github/workflows/build-and-test.yml').read_text()
         section = workflow.split('- name: Check ordinary notification policy and restart', 1)[1]
-        section = section.split('# An audit service failure', 1)[0]
+        section = section.split('\n  frontend-unit:', 1)[0]
         self.assertIn('timeout-minutes: 3', section)
         self.assertIn('--binary "$RUNNER_TEMP/pulse-real-embed"', section)
         self.assertIn('--expected-source-sha "${{ github.sha }}"', section)
