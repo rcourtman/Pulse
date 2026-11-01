@@ -185,8 +185,26 @@ func coreMemoryClient(t *testing.T, scenario *coreMemoryScenario, config ClientC
 				fmt.Fprint(w, `{"error":"synthetic"}`)
 				return
 			}
-			now := time.Now().Unix()
-			fmt.Fprintf(w, `[{"name":"cpu","legend":["usage"],"start":%d,"end":%d,"step":10,"data":[[12]]},{"name":"memory","legend":["free"],"start":%d,"end":%d,"step":10,"data":[[2178945024]]},{"name":"arcsize","legend":["arc_size"],"start":%d,"end":%d,"step":10,"data":[[%d]]}]`, now, now, now, now, now, now, scenario.restARC)
+			var request struct {
+				ReportingQuery struct {
+					End int64 `json:"end"`
+				} `json:"reporting_query"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode fixture reporting query: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			end := request.ReportingQuery.End
+			if end <= 0 {
+				t.Error("fixture reporting query has no positive end")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			// The client fixes its query end before the HTTP round trip. Using
+			// the responder's wall clock can cross a second and invent future
+			// samples that the live freshness filter correctly discards.
+			fmt.Fprintf(w, `[{"name":"cpu","legend":["usage"],"start":%d,"end":%d,"step":10,"data":[[12]]},{"name":"memory","legend":["free"],"start":%d,"end":%d,"step":10,"data":[[2178945024]]},{"name":"arcsize","legend":["arc_size"],"start":%d,"end":%d,"step":10,"data":[[%d]]}]`, end, end, end, end, end, end, scenario.restARC)
 		default:
 			if response, ok := routes[r.URL.Path]; ok {
 				if response.status != 0 {
