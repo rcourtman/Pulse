@@ -450,7 +450,10 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			if !r.authorizeConfigTransfer(w, req, configTransferExport) {
 				return
 			}
-			r.configHandlers.HandleExportConfig(w, req)
+			// Encryption can outlive the admitted credential. Keep the existing
+			// transfer/recovery policy, but refuse undisclosed backup bytes after
+			// token withdrawal or local logout. Import's apply lifetime is separate.
+			retainTokenResponseAuthority(r.config, config.ScopeSettingsRead, false, r.configHandlers.HandleExportConfig)(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

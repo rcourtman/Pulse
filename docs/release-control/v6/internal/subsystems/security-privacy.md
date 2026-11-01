@@ -38,6 +38,28 @@ reader changes, disposal, malformed/refused inventory, dialog/draft replacement
 and stale mutation completions alongside the existing save/preview recovery tests.
 Synthetic source/browser checks do not establish native IdP/admin recovery.
 
+### Configuration backups retain their admitted reader
+
+The existing configuration export POST keeps canonical transfer admission and
+requires no new grant. After that admission, its synchronous JSON result checks
+the current admitted API token or local session at each write, including after
+persistence and passphrase encryption. A withdrawn/expired/replaced credential,
+lost settings-read scope or token organisation/principal authority returns the
+fixed 401 before output; after an admitted prefix it only stops later writes.
+Encryption with the caller's chosen passphrase is not a substitute for authority.
+The public recovery route records the session actually admitted by its local
+policy, since it deliberately does not run the ordinary CheckAuth wrapper.
+
+No payload, passphrase rule, backup format, tenant boundary, Basic/proxy/no-auth
+recovery policy, import apply lifetime or independent work changes. Session
+admission cannot be borrowed from an ambient cookie when an explicit token was
+chosen. Normal-suite config-export lifetime/current-admission tests use actual
+DELETE/logout and the real exporter held after encryption through its existing
+audit dependency. Authorised synthetic backups restore in a separate temporary
+scope; withdrawal does not remove source connections or independent credentials.
+This is not installed/IdP recovery, exposure measurement or release evidence.
+
+
 ### Dashboard sockets do not retain withdrawn token authority
 
 The existing `/ws` route keeps its initial authentication, monitoring-read,

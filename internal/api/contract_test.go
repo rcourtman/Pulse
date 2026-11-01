@@ -495,7 +495,7 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		authorize string
 		handler   string
 	}{
-		{authorize: "authorizeConfigTransfer(w, req, configTransferExport)", handler: "HandleExportConfig(w, req)"},
+		{authorize: "authorizeConfigTransfer(w, req, configTransferExport)", handler: "retainTokenResponseAuthority(r.config, config.ScopeSettingsRead, false, r.configHandlers.HandleExportConfig)(w, req)"},
 		{authorize: "authorizeConfigTransfer(w, req, configTransferImport)", handler: "HandleImportConfig(w, req)"},
 	} {
 		authorizeAt := strings.Index(routes, sequence.authorize)

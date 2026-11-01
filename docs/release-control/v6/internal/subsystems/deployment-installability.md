@@ -1708,6 +1708,23 @@ to this module. Incomplete JSON execution or failed children cannot be hidden
 by another passing command. The existing artifacts retain every task's exit and
 duration alongside the unchanged slice coverage. These are four package workers,
 not extra hosted jobs; they do not establish a hosted latency improvement.
+The queue atomically retains its planned inventory before submission and each
+returned child result as it arrives, without waiting behind a slower first child.
+`ordinary-packages.json` keeps completed observations in source order and names
+unobserved packages separately. `collection_complete=false` is incomplete
+collection, not a liveness or passing verdict. An interruption may leave that
+snapshot; it cannot erase already retained sibling results or invent outcomes
+for the remaining work. A process-start failure records `started=false` and a
+null exit, not a fabricated shell exit. The existing always-run coverage artifact
+upload retains these snapshots; upload and hosted interruption recovery remain
+separate observations. All children must still return zero for the check to pass.
+`run_go_package_slice_test.py` drives the actual queue with a held first child,
+an early exit-nine child and a successful sibling, checking readable incomplete
+snapshots, source-ordered final results and an unchanged failing aggregate.
+Its interrupted-write control preserves the previous JSON snapshot, and a real
+missing-executable control completes result collection without claiming process
+execution or granting a passing check. The final ordered-list verdict remains
+compatible with the current stable's source-contract assertions.
 Documentation-only changes retain the original explicit
 runtime-inapplicable results and required check names.
 
