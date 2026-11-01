@@ -150,12 +150,17 @@ func (f *protectedReadFixture) emit(kind, marker string) {
 
 func protectedReaderEOF(t *testing.T, reader *bufio.Reader, forbidden string) {
 	t.Helper()
-	rest, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("withdrawn stream did not close: %v", err)
-	}
-	if strings.Contains(string(rest), forbidden) {
-		t.Fatalf("withdrawn reader disclosed %q", forbidden)
+	for {
+		line, err := reader.ReadString('\n')
+		if strings.Contains(line, forbidden) {
+			t.Fatalf("withdrawn reader disclosed %q", forbidden)
+		}
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("withdrawn stream did not close: %v", err)
+		}
 	}
 }
 
@@ -243,7 +248,7 @@ func TestProtectedReadStreamsWithdrawAuthority(t *testing.T) {
 						}
 						resp.Body.Close()
 						want := http.StatusForbidden
-						if change == "revoked" || change == "expired" {
+						if change == "revoked" || change == "expired" || change == "invalid_role" {
 							want = http.StatusUnauthorized
 						}
 						if resp.StatusCode != want {
@@ -440,5 +445,44 @@ func TestTokenStreamWriterChecksReplayQueueAndFinalClosure(t *testing.T) {
 				t.Fatal("guard disclosed initial replay")
 			}
 		})
+	}
+}
+
+// The update broadcaster can still hold a writer after its HTTP handler has
+// observed cancellation. Closure must join the active write and reject later
+// queued writes before the ResponseWriter returns to the HTTP server.
+type blockingTokenStreamWriter struct {
+	*httptest.ResponseRecorder
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (w *blockingTokenStreamWriter) Write(p []byte) (int, error) {
+	close(w.entered)
+	<-w.release
+	return w.ResponseRecorder.Write(p)
+}
+func TestTokenStreamWriterCloseJoinsActiveWrite(t *testing.T) {
+	base := &blockingTokenStreamWriter{ResponseRecorder: httptest.NewRecorder(), entered: make(chan struct{}), release: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	writer := &tokenStreamWriter{writer: base, flusher: base, ctx: ctx, cancel: cancel, allowed: func() bool { return true }}
+	wrote, closed := make(chan struct{}), make(chan struct{})
+	go func() { defer close(wrote); _, _ = writer.Write([]byte("admitted")) }()
+	<-base.entered
+	go func() { writer.close(); close(closed) }()
+	select {
+	case <-closed:
+		t.Error("closure returned during an active write")
+	default:
+	}
+	close(base.release)
+	<-wrote
+	<-closed
+	if _, err := writer.Write([]byte("forbidden")); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("late write = %v", err)
+	}
+	if base.Body.String() != "admitted" {
+		t.Fatalf("late bytes = %q", base.Body.String())
 	}
 }
