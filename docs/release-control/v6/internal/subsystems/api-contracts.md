@@ -133,8 +133,9 @@ normally; a legitimate replacement identity may reconnect.
 
 The shared validator returns detached authority without changing the original
 HTTP request after its handler returns. Tenant removal cannot fall back to a
-stale or global inventory. Session/proxy behaviour, wanted monitoring reads
-after execute-scope removal, other subscribers and canonical data are unchanged.
+stale or global inventory. Proxy admission, wanted monitoring reads after
+execute-scope removal, other subscribers and canonical data are unchanged.
+Browser-session withdrawal follows the session read-lifetime contract below.
 The existing frontend policy-close path returns to sign-in rather than silently
 retrying withdrawn credentials. No route, token grant or event/history source
 is added, and source/browser proof is not installed recovery or publication.
@@ -13485,3 +13486,35 @@ synthetic credentials and preserved live data. `log_bundle_test.go` covers
 value grammars, detached projections, log fallbacks, runtime identity and race
 ownership. Consuming browser evidence exercises the unchanged download control
 with the exact synthetic native ZIP; it is not installed/customer recovery.
+
+### Logged-out sessions cannot retain confidential live reads
+
+Successful route authentication records the exact selected browser session in
+server-only request context. The existing protected WebSocket, agent-event,
+System Logs, progress and Assistant stream/result boundaries retain that
+session's store, creation identity, principal and recovery kind. Each protected
+write (and existing idle recheck) refuses a deleted, expired, replaced or
+rebound session. Reads never extend session expiry, re-authenticate with a
+fallback credential or refresh an identity provider. Recovery reads retain their
+original direct-loopback/IP binding. Proxy/basic/development admission and
+explicit-token precedence are unchanged; an ambient cookie or response header
+cannot establish session authority.
+
+Before a synchronous result commits, session withdrawal returns generic `401`
+and withholds handler-specific headers; an admitted stream ends without new
+private data or an appended HTTP error. Monitoring WebSocket uses its existing
+`1008`/`Monitoring access ended` close, so its current web consumer returns to
+sign-in; System Logs observes EOF and a denied reconnect, not live monitoring.
+An already-admitted write can be in flight. This does not erase previously
+received data, cancel independent jobs/legacy executions, introduce dynamic
+role-policy rechecks or qualify installed/identity-provider recovery. Chat
+retains its existing request-bound work lifetime.
+
+`session_read_authority_test.go` covers detached identity, secure-cookie choice,
+expiry without sliding extension, replacement, recovery/store withdrawal,
+credential precedence and idle/result closure. `session_read_logout_test.go`
+and the native Assistant/Logs/event cases exercise real persisted logout and
+independent sessions. `TestContractSessionReadLogoutBoundary` asserts native
+HTTP/WS logout, private-line withholding and fresh denial, optionally exporting
+safe wire evidence for the existing browser consumers; the browser-only fixture
+is retained evidence, not product source.

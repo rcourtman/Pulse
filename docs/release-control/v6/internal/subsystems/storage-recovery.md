@@ -9213,3 +9213,12 @@ settings remain live and unchanged. This is not a backup, credential recovery,
 agent/guest probe or installed recovery. The normal HTTP contract
 `TestContractSupportBundleCredentialBoundary` and `log_bundle_test.go` cover the
 summary, scope denials, state preservation and configured-file/buffer fallbacks.
+
+### Session read withdrawal is not job cancellation
+
+The existing protected API reads retain actual admitted browser-session
+identity and refuse later disclosure after logout, invalidation, expiry or
+replacement. Session withdrawal does not cancel independent agents, updates,
+deployments, backups or legacy executions, nor prove original recovery.
+`TestContractSessionReadLogoutBoundary` covers persisted logout and native
+HTTP/WS refusal; the API contract describes the credential and idle boundaries.

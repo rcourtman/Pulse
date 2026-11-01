@@ -10808,3 +10808,12 @@ HTTP delivery before any router exists for default and tenant paths, saved
 public URL precedence and deployment lock, and a tenant grant that cannot override installation revocation.
 `TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation` covers corrupt
 settings and invalid CIDRs without creating queue storage.
+
+### Read lifetime after session logout
+
+The existing protected API reads retain actual admitted browser-session
+identity and refuse later disclosure after logout, invalidation, expiry or
+replacement. Session withdrawal does not cancel independent agents, updates,
+deployments, backups or legacy executions, nor prove original recovery.
+`TestContractSessionReadLogoutBoundary` covers persisted logout and native
+HTTP/WS refusal; the API contract describes the credential and idle boundaries.

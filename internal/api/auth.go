@@ -715,6 +715,11 @@ func snapshotLocalAuthCredentialsLocked(cfg *config.Config) (string, string) {
 }
 
 func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, writeDefaultFailure bool) bool {
+	// Only the credential selected by this authentication attempt may own a
+	// long-lived read. A later proxy/token/basic admission must not inherit an
+	// earlier session marker if middleware checks this request again.
+	*r = *r.WithContext(context.WithValue(r.Context(), sessionReadAdmissionKey{}, (*sessionReadAdmission)(nil)))
+
 	// Dev mode bypass for all auth (disabled by default)
 	if adminBypassAppliesToRequest(r) {
 		if w != nil {
@@ -799,6 +804,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 		session := GetSessionStore().GetSession(cookie.Value)
 		if session != nil && session.RecoveryBypass {
 			if requestMatchesRecoverySession(r, session) && ValidateAndExtendSession(cookie.Value) {
+				attachSessionReadAdmission(r, cookie.Value, session)
 				if session.Username != "" {
 					w.Header().Set("X-Authenticated-User", session.Username)
 				}
@@ -812,6 +818,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 				Str("session_ip", session.IP).
 				Msg("Rejected recovery session outside direct loopback binding")
 		} else if ValidateAndExtendSession(cookie.Value) {
+			attachSessionReadAdmission(r, cookie.Value, session)
 			username := GetSessionUsername(cookie.Value)
 			if session != nil && hasEnabledSSOProvidersForAuth(cfg) {
 				if shouldRefreshOIDCSessionToken(time.Now(), session) {

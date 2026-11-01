@@ -29014,3 +29014,9 @@ func TestContract_AssistantStreamDeadlineSurvivesAPIWrappers(t *testing.T) {
 func TestContract_AssistantJSONWithdrawAfterPersistedTokenDelete(t *testing.T) {
 	assistantJSONWithdrawAfterPersistedTokenDelete(t)
 }
+
+// Successful persisted logout withdraws already-admitted System Logs and
+// monitoring WebSocket readers as well as their fresh reconnects.
+func TestContractSessionReadLogoutBoundary(t *testing.T) {
+	sessionReadBrowserEvidence(t)
+}

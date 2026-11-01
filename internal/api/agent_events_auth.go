@@ -12,12 +12,12 @@ func (r *Router) handleAgentEvents(w http.ResponseWriter, req *http.Request) {
 
 // agentEventTokenRevalidator keeps a long-lived token stream bound to its
 // admitted credential and organization, not its connection-time snapshot.
-// Session/proxy authentication is unchanged. The callback runs on the stream
+// Session withdrawal is checked too. The callback runs on the stream
 // goroutine; it never writes an HTTP auth error after streaming has begun.
 func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bool {
 	revalidate := monitoringTokenSnapshotRevalidator(cfg, req)
 	if revalidate == nil {
-		return nil
+		return sessionReadRevalidator(req)
 	}
 	admittedContext := req.Context()
 	return func() bool {
