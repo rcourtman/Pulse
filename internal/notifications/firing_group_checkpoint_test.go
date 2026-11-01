@@ -321,7 +321,9 @@ func TestCheckpointReplayRechecksCurrentPolicy(t *testing.T) {
 				}
 				switch policy {
 				case "allowed":
-					return rows[0].Status == QueueStatusSent
+					entries, err := m.GetQueue().GetDeliveryLog(time.Now().Add(-time.Hour), 100)
+					require.NoError(t, err)
+					return rows[0].Status == QueueStatusSent && len(entries) == 1
 				case "new-quiet-hours":
 					return rows[0].NextRetryAt != nil && rows[0].NextRetryAt.After(time.Now().Add(30*time.Minute))
 				default:

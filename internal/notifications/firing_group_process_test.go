@@ -302,7 +302,7 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 					_, err := fmt.Fprintln(c.input, "status")
 					require.NoError(t, err)
 					state := read(c, "status")
-					if state.Stats["sent"] == want {
+					if state.Stats["sent"] == want && len(state.Log) == want {
 						return state
 					}
 					require.True(t, time.Now().Before(deadline), "durable completion missing")
