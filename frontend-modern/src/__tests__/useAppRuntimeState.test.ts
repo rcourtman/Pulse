@@ -978,7 +978,7 @@ describe('useAppRuntimeState', () => {
               throw new Error('Synthetic blocked enumeration');
             });
       const fallback = apiFetchMock.getMockImplementation()!;
-      apiFetchMock.mockImplementation((url: string) =>
+      apiFetchMock.mockImplementation(async (url: string) =>
         url === '/api/logout' ? new Response('{"success":true}') : fallback(url),
       );
       await hookState.handleLogout();
