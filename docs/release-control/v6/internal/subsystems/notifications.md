@@ -348,6 +348,54 @@ notifier, replaces the router monitor, and exercises stats, Retry and Dismiss;
 replacement and unavailable-manager reads with the race detector. This is
 lifecycle regression proof, not installed SMTP receipt or reporter confirmation.
 
+### Manager shutdown is a restart boundary, not a delivery verdict
+
+`NotificationManager.Stop` first refuses new alerts and discards volatile
+firing and recovery groups in one critical section, as Stop has always
+discarded them. Work that reads the queue outside the manager lock holds a
+lease taken in the critical section that reads it. An admitted alert, recovery
+or timer group is written to the open queue. Cancellation, operator pause and
+channel disable still run while Stop drains. Direct delivery started by
+admitted work is owned until it finishes and records its receipt. An attempt
+made after Stop begins is refused, neither queued nor sent directly, and no
+direct delivery starts once Stop has finished.
+
+Stop then quiesces the queue. A worker that observes the stop begins no
+quiet-hours hold, partition or claim: its job stays `pending` with no attempt,
+audit or receipt, and the next start delivers it. Work a worker began before
+that observation finishes while delivery is still permitted, recording its
+status, audit and durable firing receipt. Only after every worker and lease
+has ended does Stop withdraw delivery, detach the queue and close storage. A
+recovery after restart therefore still reaches each destination that received
+the firing. Shutdown must never cancel queued work as "delivery disabled";
+that verdict belongs to the pause and destination controls. Resolution
+cancellation and at-least-once replay of interrupted sends are unchanged.
+Delivery attempts retain their existing provider timeouts and SMTP retry
+budget. Stop waits for their durable outcomes instead of closing storage
+under an active writer. There is no separate aggregate drain deadline. The
+queue logs the processing stop after refusing new attempts and before waiting,
+so process-signal proofs can release held provider responses at that boundary.
+
+`TestManagerStopKeepsQueuedDeliveryForRestart` holds five real HTTP sends in
+the worker pool while a sixth admitted job waits for a slot, stops the manager,
+reopens the persistent queue, and checks the kept job, the in-flight outcomes,
+their durable receipts and a recovery delivered after restart.
+`manager_lifecycle_test.go` holds an admitted alert, recovery or timer group at
+queue serialisation while two concurrent Stop calls run. It checks the write
+after reopen, the refusal of a later attempt, and pause and channel disable
+during the drain. It also checks a never-started queue, the discarded buffered
+group, and direct delivery that Stop waits for and refuses afterwards. These
+are loopback source proofs, not process-signal, reload or installed-provider
+acceptance.
+
+Monitor bootstrap also restores the shared installation webhook policy before
+activating persistent work, including tenant queues. A later router refresh is
+too late for a due private-webhook job. Missing settings retain default denial;
+unreadable settings or invalid CIDRs fail construction before queue creation.
+The monitor startup tests cover delivery with no router, installation revocation
+against tenant-local grants, and invalid-policy admission. This boundary keeps
+shutdown-preserved rows from becoming terminal failures during reconstruction.
+
 
 Own notification delivery transport, provider configuration, queueing, and
 notification-management API surfaces.

@@ -1839,6 +1839,31 @@ func New(cfg *config.Config) (*Monitor, error) {
 		return nil, fmt.Errorf("load Docker report order journal: %w", err)
 	}
 
+	// Queued deliveries can run before a router exists. Restore the instance
+	// policy before creating workers, including for tenant persistence paths.
+	// An unreadable policy must not turn accepted work into a terminal failure.
+	notificationPersistence := config.NewConfigPersistence(cfg.DataPath)
+	notificationSystemPersistence := notificationPersistence
+	if sharedDir := notificationPersistence.SharedInstallationDataDir(); sharedDir != notificationPersistence.GetConfigDir() {
+		notificationSystemPersistence = config.NewConfigPersistence(sharedDir)
+	}
+	notificationSystemSettings, notificationSettingsErr := notificationSystemPersistence.LoadSystemSettings()
+	if notificationSettingsErr != nil {
+		return nil, fmt.Errorf("load notification system settings: %w", notificationSettingsErr)
+	}
+	notificationPrivateCIDRs := ""
+	notificationPublicURL := cfg.PublicURL
+	if notificationSystemSettings != nil {
+		notificationPrivateCIDRs = notificationSystemSettings.WebhookAllowedPrivateCIDRs
+		if !cfg.EnvOverrides["publicURL"] && notificationSystemSettings.PublicURL != "" {
+			notificationPublicURL = notificationSystemSettings.PublicURL
+		}
+	}
+	notificationPrivateNetworks, notificationPolicyErr := notifications.ParseAllowedPrivateCIDRs(notificationPrivateCIDRs)
+	if notificationPolicyErr != nil {
+		return nil, fmt.Errorf("load notification private CIDR policy: %w", notificationPolicyErr)
+	}
+
 	// Initialize temperature collector with sensors SSH key
 	// Will use root user for now - can be made configurable later
 	homeDir := os.Getenv("HOME")
@@ -2006,9 +2031,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 		mockModeAligned:            builtInMockMode,
 		mockModeSwitchesSeen:       switchesSeen,
 		incidentStore:              incidentStore,
-		notificationMgr:            notifications.NewNotificationManagerWithDeferredQueue(cfg.PublicURL, cfg.DataPath),
+		notificationMgr:            notifications.NewNotificationManagerWithDeferredQueue(notificationPublicURL, cfg.DataPath),
 		deadMan:                    newDeadManRuntime(config.ResolveRuntimeDataDir(cfg.DataPath)),
-		configPersist:              config.NewConfigPersistence(cfg.DataPath),
+		configPersist:              notificationPersistence,
 		discoveryService:           nil, // Will be initialized in Start()
 		authFailures:               make(map[string]int),
 		lastAuthAttempt:            make(map[string]time.Time),
@@ -2159,8 +2184,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("failed to load webhook configuration")
 	}
 	// The queue worker starts with the manager but has no processor until all
-	// saved destinations are installed. Activate it only after the last load;
-	// a slow migration or config read must not cancel due persisted work.
+	// saved destinations and shared delivery policy are installed. A router
+	// may not exist yet, so its later settings refresh cannot own this boundary.
+	m.notificationMgr.ApplyAllowedPrivateCIDRs(notificationPrivateCIDRs, notificationPrivateNetworks)
 	m.notificationMgr.SetQuietHoursPolicyProvider(m.alertManager.QuietHoursNotificationPolicy)
 	m.notificationMgr.StartQueueProcessing()
 

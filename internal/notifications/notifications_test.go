@@ -4846,8 +4846,12 @@ func TestGetWebhooksReturnsDeepCopies(t *testing.T) {
 }
 
 func TestSendGroupedAlertsQueueEnqueueFailureDoesNotDeadlock(t *testing.T) {
+	// Hold the fallback rather than run it: the cooldown check below needs it
+	// not to have delivered. Stop waits for direct delivery it owns, so the
+	// held fallback completes against an in-memory SMTP server before Stop.
+	var held []func()
 	origSpawn := spawnAsync
-	spawnAsync = func(func()) {}
+	spawnAsync = func(f func()) { held = append(held, f) }
 	t.Cleanup(func() { spawnAsync = origSpawn })
 
 	nm := NewNotificationManager("")
@@ -4900,6 +4904,13 @@ func TestSendGroupedAlertsQueueEnqueueFailureDoesNotDeadlock(t *testing.T) {
 	nm.mu.RUnlock()
 	if notified {
 		t.Fatal("did not expect a cooldown record when fallback delivery never ran")
+	}
+	if len(held) == 0 {
+		t.Fatal("enqueue failure did not hand the group to direct delivery")
+	}
+	stubSMTPDialSuccess(t, nil)
+	for _, deliver := range held {
+		deliver()
 	}
 }
 

@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -217,4 +220,157 @@ func TestMonitorResolvedSnapshotKeepsRefiringPBSDelivery(t *testing.T) {
 		t.Fatal("delayed resolution kept the wrong occurrence")
 	}
 	assertOccurrenceHTTP(t, n, receipts, current)
+}
+
+// No router or post-construction setter may be needed to resume accepted work.
+// A tenant must use the installation policy, including revocation, rather than
+// a policy file placed in its own persistence directory.
+func TestNewRestoresSharedWebhookPolicyBeforeQueueActivation(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		tenant, allowed bool
+		configuredURL   string
+		urlLocked       bool
+	}{
+		{name: "default", allowed: true},
+		{name: "tenant", tenant: true, allowed: true},
+		{name: "tenant-cannot-grant", tenant: true},
+		{name: "saved-url-replaces-stale-config", allowed: true, configuredURL: "https://stale-config.example.test"},
+		{name: "deployment-url-lock", allowed: true, configuredURL: "https://deployment.example.test", urlLocked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", root)
+			received := make(chan string, 4)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Instance string `json:"instance"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+				}
+				received <- body.Instance
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			global := config.NewConfigPersistence(root)
+			settings := config.DefaultSystemSettings()
+			settings.PublicURL = "https://notification-bootstrap.example.test"
+			if tc.allowed {
+				settings.WebhookAllowedPrivateCIDRs = "127.0.0.1/32"
+			}
+			if err := global.SaveSystemSettings(*settings); err != nil {
+				t.Fatal(err)
+			}
+			dir := root
+			if tc.tenant {
+				dir = filepath.Join(root, "orgs", "queue-policy")
+			}
+			persistence := config.NewConfigPersistence(dir)
+			if tc.tenant {
+				local := config.DefaultSystemSettings()
+				local.PublicURL = "https://tenant-policy-must-not-win.example.test"
+				if !tc.allowed {
+					local.WebhookAllowedPrivateCIDRs = "127.0.0.1/32"
+				}
+				if err := persistence.SaveSystemSettings(*local); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := persistence.SaveAlertConfig(alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive}); err != nil {
+				t.Fatal(err)
+			}
+			hook := notifications.WebhookConfig{ID: "startup-policy", Name: "startup-policy", Enabled: true, URL: server.URL, Service: "generic", Template: `{"instance":"{{.Instance | jsonString}}"}`}
+			if err := persistence.SaveWebhooks([]notifications.WebhookConfig{hook}); err != nil {
+				t.Fatal(err)
+			}
+			configJSON, err := json.Marshal(hook)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seed, err := notifications.NewNotificationQueue(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := seed.Enqueue(&notifications.QueuedNotification{ID: "accepted-before-restart", Type: "webhook", Config: configJSON, Alerts: []*alerts.Alert{{ID: "accepted-policy", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)}}}); err != nil {
+				t.Fatal(err)
+			}
+			if err := seed.Stop(); err != nil {
+				t.Fatal(err)
+			}
+			m, err := New(&config.Config{DataPath: dir, ConfigPath: dir, PublicURL: tc.configuredURL,
+				EnvOverrides: map[string]bool{"publicURL": tc.urlLocked}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer m.Stop()
+			q := m.GetNotificationManager().GetQueue()
+			want := "dlq"
+			if tc.allowed {
+				want = "sent"
+			}
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				stats, err := q.GetQueueStats()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if stats[want] == 1 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("BOOTSTRAP_POLICY: accepted row did not reach %s before router construction: %v", want, stats)
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if tc.allowed {
+				select {
+				case got := <-received:
+					wantURL := settings.PublicURL
+					if tc.urlLocked {
+						wantURL = tc.configuredURL
+					}
+					if got != wantURL {
+						t.Fatalf("bootstrap URL=%q, want effective installation URL %q", got, wantURL)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("accepted row has no actual provider receipt")
+				}
+			} else if len(received) != 0 {
+				t.Fatal("tenant policy granted a destination denied by the installation")
+			}
+		})
+	}
+}
+
+func TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation(t *testing.T) {
+	for _, bad := range []string{"invalid-json", "invalid-cidr"} {
+		t.Run(bad, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", dir)
+			persistence := config.NewConfigPersistence(dir)
+			if bad == "invalid-json" {
+				if err := os.WriteFile(filepath.Join(dir, "system.json"), []byte(`{"broken":`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				settings := config.DefaultSystemSettings()
+				settings.WebhookAllowedPrivateCIDRs = "not-a-network"
+				if err := persistence.SaveSystemSettings(*settings); err != nil {
+					t.Fatal(err)
+				}
+			}
+			m, err := New(&config.Config{DataPath: dir})
+			if m != nil {
+				m.Stop()
+				t.Fatal("monitor admitted runtime before notification policy was readable")
+			}
+			if err == nil || !strings.Contains(err.Error(), "notification") {
+				t.Fatalf("missing notification policy error: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "notification_queue.db")); !os.IsNotExist(err) {
+				t.Fatalf("policy failure created queue storage: %v", err)
+			}
+		})
+	}
 }

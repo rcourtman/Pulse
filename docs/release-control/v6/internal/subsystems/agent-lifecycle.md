@@ -10769,3 +10769,21 @@ settings remain live and unchanged. This is not a backup, credential recovery,
 agent/guest probe or installed recovery. The normal HTTP contract
 `TestContractSupportBundleCredentialBoundary` and `log_bundle_test.go` cover the
 summary, scope denials, state preservation and configured-file/buffer fallbacks.
+
+### Notification policy precedes persistent queue activation
+
+`monitoring.New` reads notification system settings from the shared installation
+directory before creating notification workers. Tenant-local settings cannot
+grant private destinations or replace the installation public URL. The
+constructor validates the private CIDR policy, restores the saved public URL
+while preserving a deployment-enforced URL, and installs the policy before activating persisted work. Missing
+settings keep the default private-destination denial. Unreadable settings or an
+invalid CIDR policy fail construction before queue creation, so accepted rows
+cannot acquire a terminal failure merely because bootstrap has not restored
+policy yet. Router settings refresh remains responsible for later live changes.
+
+`TestNewRestoresSharedWebhookPolicyBeforeQueueActivation` covers a real pending
+HTTP delivery before any router exists for default and tenant paths, saved
+public URL precedence and deployment lock, and a tenant grant that cannot override installation revocation.
+`TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation` covers corrupt
+settings and invalid CIDRs without creating queue storage.
