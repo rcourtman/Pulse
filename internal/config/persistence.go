@@ -72,6 +72,7 @@ type ConfigPersistence struct {
 type FileSystem interface {
 	ReadFile(name string) ([]byte, error)
 	WriteFile(name string, data []byte, perm os.FileMode) error
+	CreateTemp(dir, pattern string) (TemporaryFile, error)
 	Rename(oldpath, newpath string) error
 	Remove(name string) error
 	Stat(name string) (os.FileInfo, error)
@@ -460,28 +461,14 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 		return nil
 	}
 
-	tmp := path + ".tmp"
-	if err := c.fs.WriteFile(tmp, data, perm); err != nil {
-		return fmt.Errorf("write temp config file %s: %w", tmp, err)
-	}
-	if err := c.fs.Rename(tmp, path); err != nil {
-		renameErr := fmt.Errorf("rename temp config file %s to %s: %w", tmp, path, err)
-		if removeErr := c.fs.Remove(tmp); removeErr != nil && !os.IsNotExist(removeErr) {
-			return errors.Join(renameErr, fmt.Errorf("cleanup temp config file %s: %w", tmp, removeErr))
-		}
-		return renameErr
-	}
-	return nil
+	return writeConfigFileAtomic(c.fs, path, data, perm)
 }
 
 // writeConfigBackupLocked preserves ordinary backup writes, but makes them
 // part of an active import instead of changing recovery files before commit.
 // Caller must hold c.mu.
 func (c *ConfigPersistence) writeConfigBackupLocked(path string, data []byte, perm os.FileMode) error {
-	if c.tx != nil {
-		return c.tx.StageFile(path, data, perm)
-	}
-	return c.fs.WriteFile(path, data, perm)
+	return c.writeConfigFileLocked(path, data, perm)
 }
 
 // preserveCorruptConfigFileLocked moves a config file that failed to parse or
@@ -3923,8 +3910,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		return nil
 	}
 
-	// Write to temp file first using owner-only permissions.
-	tempFile := envFile + ".tmp"
+	// Preserve owner permissions, never group/other access to environment secrets.
 	perm := os.FileMode(0600)
 	if info, err := c.fs.Stat(envFile); err == nil {
 		perm = info.Mode().Perm() & 0700
@@ -3932,18 +3918,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 			perm = 0600
 		}
 	}
-	if c.tx != nil {
-		return c.writeConfigFileLocked(envFile, []byte(content), perm)
-	}
-	if err := c.fs.WriteFile(tempFile, []byte(content), perm); err != nil {
-		return fmt.Errorf("write temp env file %s: %w", tempFile, err)
-	}
-
-	// Atomic rename
-	if err := c.fs.Rename(tempFile, envFile); err != nil {
-		return fmt.Errorf("rename temp env file %s to %s: %w", tempFile, envFile, err)
-	}
-	return nil
+	return c.writeConfigFileLocked(envFile, []byte(content), perm)
 }
 
 // IsEncryptionEnabled returns whether the config persistence has encryption enabled

@@ -25,6 +25,28 @@ func (failingWriteFileSystem) WriteFile(string, []byte, os.FileMode) error {
 	return errors.New("forced write failure")
 }
 
+// Inject the same write failure through the owned temporary descriptor.
+type failingPersistenceTempFile struct {
+	*os.File
+	fail func() error
+}
+
+func (f *failingPersistenceTempFile) Write([]byte) (int, error) {
+	return 0, f.fail()
+}
+
+func newFailingPersistenceTempFile(dir, pattern string, fail func() error) (config.TemporaryFile, error) {
+	f, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	return &failingPersistenceTempFile{File: f, fail: fail}, nil
+}
+
+func (fs failingWriteFileSystem) CreateTemp(dir, pattern string) (config.TemporaryFile, error) {
+	return newFailingPersistenceTempFile(dir, pattern, func() error { return fs.WriteFile("", nil, 0) })
+}
+
 func (failingWriteFileSystem) Rename(oldPath, newPath string) error {
 	return os.Rename(oldPath, newPath)
 }
