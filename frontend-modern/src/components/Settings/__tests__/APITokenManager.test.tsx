@@ -899,22 +899,22 @@ describe('APITokenManager', () => {
       scopes: [MONITORING_READ_SCOPE, SETTINGS_READ_SCOPE],
     });
     render(() => <APITokenManager canManage />);
-    fireEvent.click(within(await findTokenTableRow('Sequential token')).getByRole('button', {
-      name: 'Edit scopes',
-    }));
+    const row = await findTokenTableRow('Sequential token');
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
     const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /^Settings \(read\)/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save scopes' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    fireEvent.click(within(getTokenTableRow('Sequential token')).getByRole('button', {
-      name: 'Revoke',
-    }));
+    const updatedRow = getTokenTableRow('Sequential token');
+    fireEvent.click(within(updatedRow).getByRole('button', { name: 'Revoke' }));
     const revoke = await screen.findByRole('dialog', { name: 'Revoke API token' });
     fireEvent.click(within(revoke).getByRole('button', { name: 'Revoke token' }));
-    await waitFor(() => expect(deleteTokenMock).toHaveBeenCalledWith(
-      token.id,
-      expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
-    ));
+    await waitFor(() => {
+      expect(deleteTokenMock).toHaveBeenCalledWith(
+        token.id,
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
+    });
     await screen.findByText(/No tokens yet/);
     expect(updateTokenScopesMock).toHaveBeenCalledTimes(1);
     expect(deleteTokenMock).toHaveBeenCalledTimes(1);
