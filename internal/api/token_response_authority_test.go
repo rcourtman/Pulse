@@ -138,7 +138,7 @@ func TestTokenResponseAuthorityRefusesStaleAdmissionBeforeWork(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", nil)
 	req.Header.Set("X-API-Token", scopedReadToken)
 	base := httptest.NewRecorder()
-	AuthContextMiddleware(cfg, nil, between).ServeHTTP(base, req)
+	AuthContextMiddleware(cfg, nil, http.HandlerFunc(between)).ServeHTTP(base, req)
 	if called || base.Code != http.StatusUnauthorized {
 		t.Fatal("stale admission started work")
 	}
