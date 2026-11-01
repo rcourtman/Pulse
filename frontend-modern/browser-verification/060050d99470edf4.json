@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "a10470c1425db323267d0edd8627647a88eb7bb8",
+  "changed_paths": [
+    "frontend-modern/src/api/license.ts",
+    "frontend-modern/src/api/orgs.ts",
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/license.ts": "9640965eef875e0646b39fa3cc00521970dc4f025f9baf02e6def24025ed5e36",
+    "frontend-modern/src/api/orgs.ts": "7d7a43321c8a8b7c661c71c0191845c0e8ccdab0d6545d7b1a9e07c2e4441ba7",
+    "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx": "9526296cc0d61ae501cf00a018ac7151d3597e6f42867df112db92c724715af8",
+    "frontend-modern/src/components/Settings/OrganizationOverviewPanel.tsx": "a92442c1560b51e71d78de5aa1e5e331c02997d6e1e2bd9cedcfab08e154ec8b",
+    "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts": "3eca91a9b0fa0b82569d819acce061f3c5f13f8a6847686458cb319c4a6c16ab",
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts": "e71d874c84c06cac8ffeaf9c73e0aa3093e5a58d91a379329b7aea050617d80c",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "b9ad4363810d6790c1fcb30e8358c0fe1774d23b2a60cb2fa7d92c54e73e6bf4"
+  },
+  "routes": [
+    "/settings/organization",
+    "/settings/organization/billing"
+  ],
+  "states": [
+    "selected organization with populated billing and members",
+    "A/B overlapping reads and pending skeletons",
+    "denied or unavailable reads without prior tenant data or false zero/free values",
+    "accepted empty members",
+    "capability/demo withdrawal and re-entry",
+    "disposed read with fresh remount",
+    "read-only and changed-current-user editor",
+    "single exact-org name change with saved-data refresh",
+    "unconfirmed write with explicit read-only recovery",
+    "organization switch during CSRF wait prevents stale PUT",
+    "settled membership before and after saved rename"
+  ],
+  "interactions": [
+    "switch organizations while reads are pending",
+    "reload failed reads explicitly",
+    "withdraw/restore capabilities and demo presentation",
+    "unmount and remount an active read",
+    "change current user and read-only presentation",
+    "rename one organization and inspect the saved summary and settled member row",
+    "read saved state after a simulated applied write/lost response without repeating the write",
+    "switch during CSRF preparation and observe no stale rename dispatch"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 920
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-01T02:26:23.729877Z",
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "proof_scope": "Real compiled consuming panels/API client with safe local HTTP fixtures and production CSS, not installed authentication or customer recovery. All 19 retained captures inspected natively. Original batch timeout and intermediate pixel-fixture failure retained in lane receipts; settled membership proof uses saved summary rather than editable draft."
+}
