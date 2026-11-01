@@ -539,3 +539,12 @@ authorisation, IdP deprovisioning and existing self-modification protection rema
 unchanged. Registered reader-lifetime, paywall-panel and RBAC transport tests
 cover these rules; synthetic desktop/narrow browser proof is not installed
 administrator or native IdP recovery.
+
+User Access action feedback is owned by that same reader, not the global toast
+queue: success notices withdraw on context change or a new confirmation, and
+failures stay beside the current save/removal controls without discarding the
+draft. Directory failure has one persistent read-only Retry notice. Account
+principals must not survive an organisation switch in an old notification.
+Paired directory/role reads are aborted when their combined read settles so a
+failed sibling does not leave an unowned pending request. The registered
+reader-lifetime/paywall tests and actual App browser witness cover this bound.

@@ -274,7 +274,8 @@ describe('User Access reader lifetime', () => {
     await state.handleSaveAssignments();
     expect(state.showModal()).toBe(true);
     expect(state.formRoleIds()).toEqual([]);
-    expect(mocks.error).toHaveBeenCalledWith('Failed to update user roles');
+    expect(state.actionError()).toBe('Failed to update user roles');
+    expect(mocks.error).not.toHaveBeenCalled();
     expect(JSON.stringify(mocks.log.mock.calls)).not.toContain('private response canary');
     expect(mocks.success).not.toHaveBeenCalled();
   });
@@ -391,5 +392,35 @@ describe('User Access reader lifetime', () => {
     state.openDeleteUser(row);
     expect(state.showModal()).toBe(false);
     expect(state.userPendingDeletion()).toBeNull();
+  });
+  it('owns successful identity feedback locally and withdraws it on context change', async () => {
+    const { state } = mount();
+    await loaded(state);
+    await state.openManageAccess(alice);
+    await state.handleSaveAssignments();
+    expect(state.successNotice()).toBe(`Roles updated for ${alice.username}`);
+    expect(mocks.success).not.toHaveBeenCalled();
+    switchOrg();
+    await loaded(state);
+    expect(state.successNotice()).toBeNull();
+    expect(state.actionError()).toBeNull();
+  });
+
+  it('withdraws failed-action feedback before another confirmation and when authority changes', async () => {
+    mocks.deleteUser.mockRejectedValueOnce(new Error('private deletion details'));
+    const { state, setAllowed } = mount();
+    await loaded(state);
+    state.openDeleteUser(alice);
+    await state.handleDeleteUser();
+    expect(state.actionError()).not.toBeNull();
+    expect(state.userPendingDeletion()).toEqual(alice);
+    expect(mocks.error).not.toHaveBeenCalled();
+    state.closeDeleteUser();
+    await state.openManageAccess(alice);
+    expect(state.actionError()).toBeNull();
+    setAllowed(false);
+    await pause();
+    expect(state.successNotice()).toBeNull();
+    expect(state.actionError()).toBeNull();
   });
 });

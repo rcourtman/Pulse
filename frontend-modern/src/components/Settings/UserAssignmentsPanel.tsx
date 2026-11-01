@@ -46,6 +46,14 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-border"
       >
+        <Show when={state.successNotice()}>
+          {(message) => (
+            <InlineNotice tone="success" role="status" aria-live="polite">
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+
         <Show when={state.featureGate.paywallVisible()}>
           <RBACFeatureGateSection
             copy={state.featureGate.featureGateCopy()}
@@ -205,6 +213,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
       </SettingsPanel>
 
       <UserAssignmentsDialog
+        actionError={state.actionError()}
         editingUser={state.editingUser()}
         formRoleIds={state.formRoleIds()}
         isOpen={state.showModal()}
@@ -241,6 +250,13 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                 This does not disable the account at the identity provider. A later authorized SSO
                 login will create the user record again.
               </div>
+              <Show when={state.actionError()}>
+                {(message) => (
+                  <InlineNotice tone="danger" role="alert" aria-live="polite">
+                    {message()}
+                  </InlineNotice>
+                )}
+              </Show>
               <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button onClick={state.closeDeleteUser} disabled={state.deletingUser()}>
                   Cancel

@@ -4,7 +4,6 @@ import { RBACAPI } from '@/api/rbac';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
-import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
   getUserAssignmentsDeleteErrorMessage,
@@ -32,6 +31,8 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   const [permissionsError, setPermissionsError] = createSignal<string | null>(null);
   const [formRoleIds, setFormRoleIds] = createSignal<string[]>([]);
   const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [actionError, setActionError] = createSignal<string | null>(null);
+  const [successNotice, setSuccessNotice] = createSignal<string | null>(null);
   const [deletingUser, setDeletingUser] = createSignal(false);
   const [userPendingDeletion, setUserPendingDeletion] = createSignal<UserRoleAssignment | null>(
     null,
@@ -84,6 +85,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
       setShowModal(false);
       setEditingUser(null);
       setFormRoleIds([]);
+      setActionError(null);
     });
   };
   const closeModal = () => {
@@ -155,9 +157,9 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
       if (!isCurrentRead()) return;
       setLoadError(getUserAssignmentsLoadErrorMessage());
       logger.error('Failed to load user assignments');
-      notificationStore.error(getUserAssignmentsLoadErrorMessage());
     } finally {
       if (isCurrentRead()) {
+        controller.abort();
         readController = undefined;
         setLoading(false);
       }
@@ -176,6 +178,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
       setRoles([]);
       setInventoryLoaded(false);
       setSearchQuery('');
+      setSuccessNotice(null);
       setLoadError(null);
       setUserPendingDeletion(null);
       setSaving(false);
@@ -249,6 +252,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   const openManageAccess = async (assignment: UserRoleAssignment) => {
     if (!canEdit() || !isCurrentUser(assignment)) return;
     clearEditor();
+    setSuccessNotice(null);
     setUserPendingDeletion(null);
     setEditingUser(assignment);
     setFormRoleIds([...assignment.roleIds]);
@@ -258,6 +262,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   const openDeleteUser = (assignment: UserRoleAssignment) => {
     if (!canEdit() || !isCurrentUser(assignment)) return;
     clearEditor();
+    setSuccessNotice(null);
     setUserPendingDeletion(assignment);
   };
   const closeDeleteUser = () => {
@@ -271,6 +276,8 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     const isCurrentMutation = () =>
       contextIsCurrent() && version === contextVersion && mutationController === controller;
     mutationController = controller;
+    setActionError(null);
+    setSuccessNotice(null);
     if (kind === 'save') setSaving(true);
     else setDeletingUser(true);
     let saved = false;
@@ -286,17 +293,12 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
       }
       if (!isCurrentMutation()) return;
       saved = true;
-      notificationStore.success(
-        kind === 'save'
-          ? `Roles updated for ${user.username}`
-          : `User access removed for ${getUserIdentityDisplayName(user)}`,
-      );
     } catch (err) {
       if (!isCurrentMutation()) return;
       logger.error(
         kind === 'save' ? 'Failed to update user roles' : 'Failed to remove user access',
       );
-      notificationStore.error(
+      setActionError(
         kind === 'save'
           ? getUserAssignmentsUpdateErrorMessage()
           : getUserAssignmentsDeleteErrorMessage(err),
@@ -306,7 +308,16 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
         mutationController = undefined;
         setSaving(false);
         setDeletingUser(false);
-        if (saved) await loadData();
+        if (saved) {
+          await loadData();
+          if (contextIsCurrent() && version === contextVersion) {
+            setSuccessNotice(
+              kind === 'save'
+                ? `Roles updated for ${user.username}`
+                : `User access removed for ${getUserIdentityDisplayName(user)}`,
+            );
+          }
+        }
       }
     }
   };
@@ -331,6 +342,8 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     roles().find((role) => role.id === roleId)?.name || roleId;
 
   return {
+    actionError,
+    successNotice,
     accessAllowed,
     canEdit,
     closeDeleteUser,

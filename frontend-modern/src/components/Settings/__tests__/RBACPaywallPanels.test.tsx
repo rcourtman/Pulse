@@ -487,7 +487,8 @@ describe('RBAC paywall settings panels', () => {
         }),
       );
     });
-    expect(notificationSuccessMock).toHaveBeenCalledWith('User access removed for Alice Example');
+    expect(await screen.findByText('User access removed for Alice Example')).toBeInTheDocument();
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.queryByText('Alice Example')).not.toBeInTheDocument();
     });
@@ -509,7 +510,7 @@ describe('RBAC paywall settings panels', () => {
     });
     expect(screen.queryByText('alice')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search users...')).toBeDisabled();
-    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to load user assignments');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => {
@@ -568,7 +569,12 @@ describe('RBAC paywall settings panels', () => {
         }),
       );
     });
-    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to update user roles');
+    expect(
+      await within(screen.getByRole('dialog', { name: 'Manage access: alice' })).findByRole(
+        'alert',
+      ),
+    ).toHaveTextContent('Failed to update user roles');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
     expect(notificationSuccessMock).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
   });
