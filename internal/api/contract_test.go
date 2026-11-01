@@ -28958,3 +28958,53 @@ func TestContractSupportBundleCredentialBoundary(t *testing.T) {
 		t.Fatal("download mutated live credentials or connection state")
 	}
 }
+
+// Deleting a credential through the real persisted API withdraws existing
+// Assistant readers as well as fresh admission. Only local text-only providers
+// and temporary stores run; no command or private extension is needed.
+func TestContract_AssistantStreamsWithdrawAfterPersistedTokenDelete(t *testing.T) {
+	for _, kind := range []string{"execute", "investigate-alert", "chat"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newAssistantStreamFixture(t, kind, []string{assistantScope(kind)})
+			primary := f.open(t, "primary", f.token, "header")
+			control := f.open(t, "control", assistantControlToken, "bearer")
+			id := f.router.config.APITokens[0].ID
+			req, err := http.NewRequest(http.MethodDelete, f.server.URL+"/api/security/tokens/"+id, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("X-API-Token", assistantControlToken)
+			deleted, err := f.server.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			deleted.Body.Close()
+			if deleted.StatusCode != http.StatusNoContent {
+				t.Fatalf("persisted DELETE = %d", deleted.StatusCode)
+			}
+			records, err := f.router.persistence.LoadAPITokens()
+			if err != nil || len(records) != 1 || records[0].ID == id {
+				t.Fatalf("deleted token remains durable: records=%d error=%v", len(records), err)
+			}
+			fresh, err := f.server.Client().Do(f.request(t, "primary", f.token, "header"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			fresh.Body.Close()
+			if fresh.StatusCode != http.StatusUnauthorized || f.primary.calls.Load() != 1 {
+				t.Fatalf("fresh DELETE admission = %d; execution calls = %d", fresh.StatusCode, f.primary.calls.Load())
+			}
+			f.primary.unblock()
+			f.control.unblock()
+			readAssistantResult(t, primary, false)
+			readAssistantResult(t, control, true)
+		})
+	}
+}
+
+// The production middleware is part of the transport contract, not merely a
+// recorder used for direct handler tests. All three native journeys must live
+// past the server's initial write deadline without bypassing the guard.
+func TestContract_AssistantStreamDeadlineSurvivesAPIWrappers(t *testing.T) {
+	TestAssistantStreamsClearNativeServerDeadline(t)
+}

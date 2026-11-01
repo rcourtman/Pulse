@@ -21,6 +21,41 @@
 
 ## Purpose
 
+### Assistant streams use current token authority at disclosure
+
+The existing POST `execute/stream`, `investigate-alert` and `chat` routes
+revalidate their admitted API-token identity, principal and selected organisation
+at the actual serialized writer, including idle progress, heartbeats and terminal
+frames. The first two retain instance-admin and `ai:execute` requirements, with
+the guard outside the alert-analysis extension. Chat retains its existing
+`ai:chat` **or** relay-mobile scope alternatives; removing an unrelated scope or
+replacing one allowed chat scope with the other does not end a permitted read.
+Revocation, expiry, invalid runtime role, identity/principal replacement, lost
+scope or organisation/instance authority suppress subsequent output. No HTTP
+error or invented terminal success is appended to an admitted SSE response.
+A frame admitted before concurrent withdrawal can already be in flight.
+
+The guard exposes deadline setters, not an unguarded response-writer escape:
+Assistant handlers still clear the initial server deadlines and bound each
+write. The outer API error/status wrapper forwards these same two controls
+without exposing its raw writer; native short-server-deadline regressions run
+all three actual routes past that initial deadline. Closure joins active transport writes and rejects queued/late callbacks.
+Legacy execute and investigation keep their independent background execution
+and original 15/5-minute bounds; denying their read is not cancelling their work,
+and HTTP completion can therefore wait for that work. Chat keeps its existing
+request-bound 15-minute execution and cancellation behaviour. Session/proxy
+admission, licence gates, payloads and other readers remain unchanged. This adds
+no route, grant, tool, event type or history source.
+
+`assistant_stream_lifetime_test.go` uses the full Router, native HTTP/SSE and
+real legacy/chat handlers against a held local text-only provider. It covers
+both token headers, fresh denials, independent readers, scope alternatives,
+non-token readers, instance/licence gates and actual idle execution lifetimes.
+`TestContract_AssistantStreamsWithdrawAfterPersistedTokenDelete` executes the
+real persisted DELETE for all three routes. Shared writer tests pin deadline
+forwarding, final closure and the lack of a bypass. These are synthetic source
+proofs, not installed/private-extension recovery, exposure or publication.
+
 ### Selected organization detail and billing request lifetimes
 
 The existing organization `update` client optionally accepts the same
