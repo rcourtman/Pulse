@@ -323,7 +323,14 @@ describe('RBAC paywall settings panels', () => {
       within(dialog).queryByRole('button', { name: 'Retry saved permissions' }),
     ).not.toBeInTheDocument();
     expect(getUserPermissionsMock).toHaveBeenCalledTimes(2);
-    expect(getUserPermissionsMock).toHaveBeenLastCalledWith('alice');
+    expect(getUserPermissionsMock).toHaveBeenLastCalledWith(
+      'alice',
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     pending.resolve([{ action: 'read', resource: 'alerts' }]);
     expect(await within(dialog).findByText('alerts')).toBeInTheDocument();
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
@@ -333,7 +340,17 @@ describe('RBAC paywall settings panels', () => {
     expect(deleteUserMock).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
-    await waitFor(() => expect(updateUserRolesMock).toHaveBeenCalledWith('alice', ['viewer']));
+    await waitFor(() =>
+      expect(updateUserRolesMock).toHaveBeenCalledWith(
+        'alice',
+        ['viewer'],
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
+      ),
+    );
     expect(updateUserRolesMock).toHaveBeenCalledTimes(1);
   });
 
@@ -461,9 +478,17 @@ describe('RBAC paywall settings panels', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove User Access' }));
     await waitFor(() => {
-      expect(deleteUserMock).toHaveBeenCalledWith('sso:oidc:okta:opaque_subject');
+      expect(deleteUserMock).toHaveBeenCalledWith(
+        'sso:oidc:okta:opaque_subject',
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
+      );
     });
-    expect(notificationSuccessMock).toHaveBeenCalledWith('User access removed for Alice Example');
+    expect(await screen.findByText('User access removed for Alice Example')).toBeInTheDocument();
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.queryByText('Alice Example')).not.toBeInTheDocument();
     });
@@ -485,7 +510,7 @@ describe('RBAC paywall settings panels', () => {
     });
     expect(screen.queryByText('alice')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search users...')).toBeDisabled();
-    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to load user assignments');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => {
@@ -534,9 +559,22 @@ describe('RBAC paywall settings panels', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => {
-      expect(updateUserRolesMock).toHaveBeenCalledWith('alice', ['admin']);
+      expect(updateUserRolesMock).toHaveBeenCalledWith(
+        'alice',
+        ['admin'],
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
+      );
     });
-    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to update user roles');
+    expect(
+      await within(screen.getByRole('dialog', { name: 'Manage access: alice' })).findByRole(
+        'alert',
+      ),
+    ).toHaveTextContent('Failed to update user roles');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
     expect(notificationSuccessMock).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
   });

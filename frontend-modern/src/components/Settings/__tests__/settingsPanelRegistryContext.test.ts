@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Setter } from 'solid-js';
+import { createSignal, type Setter } from 'solid-js';
 import type { SecurityStatus } from '@/types/config';
 import type { SettingsSystemPanels } from '../useSettingsSystemPanels';
 import {
@@ -52,6 +52,7 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationAccessPanelProps().currentUser).toBe('org-owner');
     expect(context.getOrganizationOverviewPanelProps().currentUser).toBe('org-owner');
     expect(context.getApiAccessPanelProps().currentUser).toBe('org-owner');
+    expect(context.getUserAssignmentsPanelProps().currentUser).toBe('org-owner');
   });
 
   it('does not replace an explicitly empty principal with the configured admin', () => {
@@ -147,5 +148,32 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationAccessPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getOrganizationSharingPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getApiAccessPanelProps()).toMatchObject({ currentUser: undefined });
+  });
+  it('binds User Access to the live principal and explicit users capability', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    expect(context.getUserAssignmentsPanelProps()).toEqual({
+      currentUser: undefined,
+      canManage: false,
+    });
+    setStatus({
+      currentUsername: 'reader-one',
+      settingsCapabilities: { users: true },
+    } as SecurityStatus);
+    expect(context.getUserAssignmentsPanelProps()).toEqual({
+      currentUser: 'reader-one',
+      canManage: true,
+    });
+    setStatus({
+      currentUsername: 'reader-two',
+      settingsCapabilities: { users: false },
+    } as SecurityStatus);
+    expect(context.getUserAssignmentsPanelProps()).toEqual({
+      currentUser: 'reader-two',
+      canManage: false,
+    });
   });
 });

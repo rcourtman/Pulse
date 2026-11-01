@@ -1,9 +1,13 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { Role, UserRoleAssignment, Permission } from '@/types/rbac';
+import type { RBACAdminRequestOptions } from '@/types/api';
+
+const readRBAC = <T>(url: string, options?: RBACAdminRequestOptions) =>
+  options === undefined ? apiFetchJSON<T>(url) : apiFetchJSON<T>(url, options);
 
 export const RBACAPI = {
   // Roles
-  getRoles: () => apiFetchJSON<Role[]>('/api/admin/roles'),
+  getRoles: (options?: RBACAdminRequestOptions) => readRBAC<Role[]>('/api/admin/roles', options),
   getRole: (id: string) => apiFetchJSON<Role>(`/api/admin/roles/${encodeURIComponent(id)}`),
   saveRole: (role: Role) => {
     const method = role.createdAt ? 'PUT' : 'POST';
@@ -18,20 +22,29 @@ export const RBACAPI = {
     apiFetchJSON(`/api/admin/roles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   // User Assignments
-  getUsers: () => apiFetchJSON<UserRoleAssignment[]>('/api/admin/users'),
+  getUsers: (options?: RBACAdminRequestOptions) =>
+    readRBAC<UserRoleAssignment[]>('/api/admin/users', options),
   getUserAssignment: (username: string) =>
     apiFetchJSON<UserRoleAssignment>(`/api/admin/users/${encodeURIComponent(username)}/roles`),
-  updateUserRoles: (username: string, roleIds: string[]) =>
+  updateUserRoles: (username: string, roleIds: string[], options?: RBACAdminRequestOptions) =>
     apiFetchJSON(`/api/admin/users/${encodeURIComponent(username)}/roles`, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify({ roleIds }),
     }),
-  deleteUser: (username: string) =>
-    apiFetchJSON(`/api/admin/users/${encodeURIComponent(username)}`, { method: 'DELETE' }),
+  deleteUser: (username: string, options?: RBACAdminRequestOptions) =>
+    apiFetchJSON(`/api/admin/users/${encodeURIComponent(username)}`, {
+      ...options,
+      method: 'DELETE',
+    }),
 
-  getUserPermissions: async (username: string): Promise<Permission[]> => {
-    const permissions = await apiFetchJSON<unknown>(
+  getUserPermissions: async (
+    username: string,
+    options?: RBACAdminRequestOptions,
+  ): Promise<Permission[]> => {
+    const permissions = await readRBAC<unknown>(
       `/api/admin/users/${encodeURIComponent(username)}/permissions`,
+      options,
     );
     if (
       !Array.isArray(permissions) ||

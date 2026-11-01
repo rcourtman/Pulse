@@ -9,6 +9,7 @@ import X from 'lucide-solid/icons/x';
 import { getUserIdentityDisplayName, getUserIdentityProviderLabel } from '@/utils/rbacPresentation';
 
 interface UserAssignmentsDialogProps {
+  actionError?: string | null;
   editingUser: UserRoleAssignment | null;
   formRoleIds: string[];
   isOpen: boolean;
@@ -63,6 +64,13 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
         </div>
 
         <div class="px-4 sm:px-6 py-6 space-y-8 max-h-[70vh] overflow-y-auto">
+          <Show when={props.actionError}>
+            {(message) => (
+              <InlineNotice tone="danger" role="alert" aria-live="polite">
+                {message()}
+              </InlineNotice>
+            )}
+          </Show>
           <div class="space-y-4">
             <h4 class="text-sm font-semibold text-base-content flex items-center gap-2">
               <Shield class="w-4 h-4 text-blue-500" />
