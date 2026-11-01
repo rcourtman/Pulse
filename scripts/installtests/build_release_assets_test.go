@@ -4513,11 +4513,24 @@ func assertInternalAPIShardSelectionExhaustive(t *testing.T, workflowShards int)
 func TestFrontendCIRequiresSameCheckoutRealEmbedBackend(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "-v")
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendRealEmbed", "-v")
 	cmd.Env = append(os.Environ(), "PULSE_BUILD_WORKFLOW_UNDER_TEST="+repoFile(".github", "workflows", "build-and-test.yml"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("same-checkout real-embed CI admission controls: %v\n%s", err, out)
+	}
+}
+
+// Execute the exact producer/consumer shells, including every-byte round trips
+// and source, digest and unsafe-member refusals before any asset extraction.
+// Artifact transport and hosted overlap still need containing CI observations.
+func TestFrontendCIBuildTransferIsSourceBound(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendEmbedTransfer", "-v")
+	cmd.Env = append(os.Environ(), "PULSE_BUILD_WORKFLOW_UNDER_TEST="+repoFile(".github", "workflows", "build-and-test.yml"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("source-bound frontend build transfer controls: %v\n%s", err, out)
 	}
 }
 
