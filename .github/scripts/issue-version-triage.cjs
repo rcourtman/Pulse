@@ -406,11 +406,15 @@ function classifyFeedbackSelection(feedbackType, report) {
   // This is a single-choice field, not free-form evidence. A link's target
   // or title must not turn documentation/workflow feedback into a bug, and
   // prose, images or a withdrawn selection cannot supply a selected option.
-  const selected = firstFieldValue(parseReportMarkdown(feedbackType).lines);
-  const blocks = lexFieldValue(selected, report);
-  const visible = blocks.length === 1 && blocks[0].type === "paragraph"
-    ? inlineDeclarationText(blocks[0].tokens) : selected;
-  const normalized = visible.trim().toLowerCase().replace(/[ \t]+/g, " ");
+  // Inspect the whole field, not just its first line. An edited selection can
+  // contain a conflicting choice or qualifying prose on a later line/block;
+  // neither field order nor layout makes the first option authoritative.
+  const blocks = lexFieldValue(feedbackType, report).filter(token =>
+    !["space", "def"].includes(token.type) &&
+    !(token.type === "html" && /^(?:\s*<!--[\s\S]*?-->)+\s*$/.test(token.raw || "")));
+  if (blocks.length !== 1 || blocks[0].type !== "paragraph") return null;
+  const visible = inlineDeclarationText(blocks[0].tokens);
+  const normalized = visible.trim().toLowerCase().replace(/\s+/g, " ");
   switch (normalized) {
     case "bug":
     case "regression":
