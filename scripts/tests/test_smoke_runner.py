@@ -170,6 +170,81 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertEqual(self.observed_calls(), ["test_first.py", "test-second.sh"])
         self.assertIn("Summary: 1/2 passed", result.stdout)
 
+    def test_failure_summary_keeps_observed_exits_in_execution_order(self):
+        self.python_fixture("test_python.py", 7)
+        self.shell_fixture("test-shell.sh", 3)
+        self.python_fixture("test_later.py")
+        result = self.run_runner("test_python.py", "test-shell.sh", "test_later.py")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.observed_calls(), ["test_python.py", "test-shell.sh", "test_later.py"])
+        self.assertTrue(result.stdout.endswith(
+            "Summary: 1/3 passed\nFailures: 2\nFailed suites:\n"
+            "  scripts/tests/test_python.py (exit 7)\n"
+            "  scripts/tests/test-shell.sh (exit 3)\n"), result.stdout)
+
+    def test_failure_summary_reports_nonexecutable_suite_and_keeps_later_tests(self):
+        blocked = self.shell_fixture("test-blocked.sh")
+        blocked.chmod(0o600)
+        self.python_fixture("test_later.py")
+        result = self.run_runner(blocked, "test_later.py")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.observed_calls(), ["test_later.py"])
+        self.assertTrue(result.stdout.endswith(
+            "Summary: 1/2 passed\nFailures: 1\nFailed suites:\n"
+            "  scripts/tests/test-blocked.sh (exit 126)\n"), result.stdout)
+
+    def test_failure_summary_reports_exit_137_without_diagnosing_a_signal(self):
+        self.shell_fixture("test-exit.sh", 137)
+        result = self.run_runner("test-exit.sh")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.observed_calls(), ["test-exit.sh"])
+        self.assertTrue(result.stdout.endswith(
+            "Summary: 0/1 passed\nFailures: 1\nFailed suites:\n"
+            "  scripts/tests/test-exit.sh (exit 137)\n"), result.stdout)
+        self.assertNotIn("signal", result.stdout.lower())
+        self.assertNotIn("oom", result.stdout.lower())
+
+    def test_failure_summary_preserves_literal_paths_with_spaces_and_percent(self):
+        name = "test percent%s.py"
+        self.python_fixture(name, 9)
+        result = self.run_runner(name)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.observed_calls(), [name])
+        self.assertTrue(result.stdout.endswith(
+            "Summary: 0/1 passed\nFailures: 1\nFailed suites:\n"
+            f"  scripts/tests/{name} (exit 9)\n"), result.stdout)
+
+    def test_failure_summary_names_only_failures_in_both_sharded_modes(self):
+        names = [f"test_{index}_docs.py" for index in range(8)]
+        statuses = {name: index + 1 if index < 4 else 0 for index, name in enumerate(names)}
+        for name, status in statuses.items():
+            self.python_fixture(name, status)
+        for mode, count in (("--smoke-shard", 2), ("--docs-shard", 4)):
+            for shard in range(count):
+                with self.subTest(mode=mode, shard=shard):
+                    before = len(self.observed_calls())
+                    result = self.run_runner(mode, shard)
+                    calls = self.observed_calls()[before:]
+                    self.assertEqual(calls, names[shard::count])
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    failures = [name for name in calls if statuses[name]]
+                    expected = "Failed suites:\n" + "".join(
+                        f"  scripts/tests/{name} (exit {statuses[name]})\n" for name in failures)
+                    self.assertTrue(result.stdout.endswith(expected), result.stdout)
+
+    def test_success_does_not_emit_a_failure_list_and_keeps_child_output(self):
+        fixture = self.python_fixture("test_success.py")
+        fixture.write_text("import sys\nprint('child stdout')\n"
+                           "print('child stderr', file=sys.stderr)\n" + fixture.read_text(), encoding="utf-8")
+        result = self.run_runner(fixture)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.observed_calls(), ["test_success.py"])
+        self.assertEqual(result.stdout.count("child stdout"), 1)
+        self.assertEqual(result.stderr, "child stderr\n")
+        self.assertTrue(result.stdout.endswith("Summary: 1/1 passed\n"), result.stdout)
+        self.assertNotIn("Failed suites:", result.stdout)
+        self.assertNotIn("FAIL", result.stdout)
+
     def test_docs_shards_cover_current_and_future_suites_once_without_unrelated_tests(self):
         names = ["test_admin_docs.py", "test_api_auth_docs.py", "test_docs_reader.py",
                  "test_future_docs.py", "test_recovery_docs.py", "test_security_docs.py",
