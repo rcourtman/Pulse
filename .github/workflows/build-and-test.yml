@@ -132,6 +132,19 @@ jobs:
             echo "triage_helper=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # These four completion-helper inputs run in Canonical Governance,
+          # including their full tests and consuming audits, not Pulse. Keep
+          # that required workflow and secret scan; do not spend application
+          # runners on an isolated helper change. Mixed/unavailable diffs and
+          # edits to this admission still require the ordinary runtime checks.
+          if [ "$(python3 scripts/ci_completion_only.py --base "$base" --head "${{ github.sha }}")" = true ]; then
+            echo "Completion-helper-only tree diff; Canonical Governance owns verification, application runtime checks are not applicable."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "frontend_deps=false" >> "$GITHUB_OUTPUT"
+            echo "go_compile=false" >> "$GITHUB_OUTPUT"
+            echo "triage_helper=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           changed=$(git diff --name-only "$base" "${{ github.sha }}")
           printf 'Changed files:\n%s\n' "$changed"
           # The issue-event job tests before minting its App token, but that

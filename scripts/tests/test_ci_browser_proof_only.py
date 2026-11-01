@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute receipt/triage-only admission and the workflows' actual verdict paths."""
+"""Execute narrow CI admission and the workflows' actual verdict paths."""
 
 import importlib.util
 import os
@@ -24,6 +24,9 @@ SPEC.loader.exec_module(SCOPE)
 TRIAGE_SPEC = importlib.util.spec_from_file_location("ci_triage_only", ROOT / "scripts/ci_triage_only.py")
 TRIAGE = importlib.util.module_from_spec(TRIAGE_SPEC)
 TRIAGE_SPEC.loader.exec_module(TRIAGE)
+COMPLETION_SPEC = importlib.util.spec_from_file_location("ci_completion_only", ROOT / "scripts/ci_completion_only.py")
+COMPLETION = importlib.util.module_from_spec(COMPLETION_SPEC)
+COMPLETION_SPEC.loader.exec_module(COMPLETION)
 RECEIPT = "frontend-modern/browser-verification/2026-10-14-proof.json"
 JOBS = ("tier-selection", "test-images", "e2e", "agent-registration")
 
@@ -170,6 +173,81 @@ class TriageScopeTest(unittest.TestCase):
                 ])
 
 
+class CompletionScopeTest(unittest.TestCase):
+    def test_only_the_four_governance_tested_inputs_are_eligible(self):
+        self.assertEqual(COMPLETION.COMPLETION_INPUTS, {
+            f"scripts/release_control/canonical_completion_{helper}{suffix}.py".encode()
+            for helper in ("guard", "history") for suffix in ("", "_test")
+        })
+        self.assertFalse(COMPLETION.completion_only_paths([]))
+        for path in COMPLETION.COMPLETION_INPUTS:
+            self.assertTrue(COMPLETION.completion_only_paths([path]))
+            for suffix in (b".extra", b"/extra", b"\ninternal/api/server.go"):
+                self.assertFalse(COMPLETION.completion_only_paths([path + suffix]))
+        for path in (
+            b"scripts/ci_completion_only.py", b"scripts/tests/test_ci_browser_proof_only.py",
+            b"scripts/release_control/canonical_completion_history.json",
+            b"scripts/release_control/browser_verification_guard.py", b"scripts/release_control/repo_file_io.py",
+            b".github/workflows/canonical-governance.yml", b".github/workflows/build-and-test.yml",
+            b"frontend-modern/package-lock.json", b"internal/api/server.go", b"go.mod", b"go.sum",
+            b"install.sh", b"scripts/tests/run.sh", b"docs/other.md", RECEIPT.encode(),
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(COMPLETION.completion_only_paths([*COMPLETION.COMPLETION_INPUTS, path]))
+
+    def test_unavailable_invalid_incomplete_or_failed_diff_keeps_runtime(self):
+        for base, head in (("", "a" * 40), ("HEAD^", "a" * 40), ("a" * 40, "main")):
+            with patch.object(COMPLETION.subprocess, "run") as run:
+                self.assertFalse(COMPLETION.completion_only_diff(base, head))
+                run.assert_not_called()
+        path = next(iter(COMPLETION.COMPLETION_INPUTS))
+        for output, code in ((b"", 0), (path, 0), (path + b"\0", 1)):
+            with patch.object(COMPLETION.subprocess, "run", return_value=subprocess.CompletedProcess([], code, output)):
+                self.assertFalse(COMPLETION.completion_only_diff("a" * 40, "b" * 40))
+        for error in (OSError("fixture unavailable"), subprocess.TimeoutExpired("git", 30)):
+            with patch.object(COMPLETION.subprocess, "run", side_effect=error):
+                self.assertFalse(COMPLETION.completion_only_diff("a" * 40, "b" * 40))
+
+    def test_complete_diff_disables_external_diff_and_rename_detection(self):
+        path = next(iter(COMPLETION.COMPLETION_INPUTS)) + b"\0"
+        for output, expected in ((path, True), (path * 4000 + b"internal/api/server.go\0", False)):
+            with patch.object(COMPLETION.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, output)) as run:
+                self.assertEqual(COMPLETION.completion_only_diff("a" * 40, "b" * 40), expected)
+                self.assertEqual(run.call_args.args[0], [
+                    "git", "diff", "--no-ext-diff", "--no-renames", "--name-only", "-z",
+                    "a" * 40, "b" * 40, "--",
+                ])
+
+    def test_governance_still_runs_the_real_helpers_suites_and_consumers(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/canonical-governance.yml").read_text())
+        # PyYAML's YAML 1.1 loader recognises the unquoted Actions 'on' as True.
+        for event in ("push", "pull_request", "workflow_dispatch"):
+            self.assertIn(event, workflow[True])
+            config = workflow[True][event] or {}
+            self.assertNotIn("paths", config)
+            self.assertNotIn("paths-ignore", config)
+        job = workflow["jobs"]["governance"]
+        self.assertNotIn("if", job)
+        self.assertNotIn("continue-on-error", job)
+        steps = {step["name"]: step for step in job["steps"]}
+        required = {
+            "Run canonical completion guard against changed commits": "scripts/release_control/canonical_completion_guard.py",
+            "Run canonical completion guard unit tests": "python3 scripts/release_control/canonical_completion_guard_test.py",
+            "Run canonical completion history unit tests": "python3 scripts/release_control/canonical_completion_history_test.py",
+            "Run registry audit": "python3 scripts/release_control/registry_audit.py --check --repo-scope pulse",
+            "Run contract audit": "python3 scripts/release_control/contract_audit.py --check --repo-scope pulse",
+            "Run status audit unit tests": "python3 scripts/release_control/status_audit_test.py",
+            "Run subsystem lookup unit tests": "python3 scripts/release_control/subsystem_lookup_test.py",
+        }
+        for name, command in required.items():
+            with self.subTest(step=name):
+                self.assertIn(command, steps[name]["run"])
+                self.assertNotIn("if", steps[name])
+                self.assertNotIn("continue-on-error", steps[name])
+        self.assertIn("scripts/release_control/canonical_completion_history.py",
+                      steps["Run canonical completion guard against changed commits"]["run"])
+
+
 class GitTreeScopeTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -177,6 +255,7 @@ class GitTreeScopeTest(unittest.TestCase):
         self.repo = Path(self.temp.name)
         self.git("init", "-q", "--initial-branch=main")
         for name in ("scripts/ci_browser_proof_only.py", "scripts/ci_triage_only.py",
+                     "scripts/ci_completion_only.py",
                      "scripts/go-test-compile-required.sh"):
             path = self.repo / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,6 +360,69 @@ class GitTreeScopeTest(unittest.TestCase):
             "triage_helper": "false",
         })
 
+    def test_completion_inputs_keep_governance_without_runtime_fanout(self):
+        for path in sorted(COMPLETION.COMPLETION_INPUTS):
+            with self.subTest(path=path):
+                before = self.git("rev-parse", "HEAD")
+                self.write(path.decode(), "# governance helper fixture\n")
+                head = self.commit()
+                self.assertEqual(self.classify(before, head), {
+                    "code": "false", "frontend_deps": "false", "go_compile": "false",
+                    "triage_helper": "false",
+                })
+                (self.repo / path.decode()).unlink()
+                deleted = self.commit()
+                self.assertEqual(self.classify(head, deleted)["code"], "false")
+        self.assertEqual(self.classify(deleted, deleted)["code"], "false")  # ordinary empty diff
+        empty = subprocess.run(
+            ["python3", str(ROOT / "scripts/ci_completion_only.py"), "--base", deleted, "--head", deleted],
+            cwd=self.repo, capture_output=True, text=True, check=True, timeout=10,
+        )
+        self.assertEqual(empty.stdout.strip(), "false")
+
+    def test_completion_mixed_whole_range_and_missing_base_keep_runtime(self):
+        self.write("internal/api/fixture.go", "package fixture\nvar Changed = true\n")
+        source = self.commit()
+        self.write("scripts/release_control/canonical_completion_guard.py", "# helper fixture\n")
+        helper = self.commit()
+        self.assertEqual(self.classify(source, helper)["code"], "false")
+        self.assertEqual(self.classify(self.base, helper)["code"], "true")
+        self.assertEqual(self.classify("0" * 40, helper), {
+            "code": "true", "frontend_deps": "true", "go_compile": "true", "triage_helper": "true",
+        })
+        self.write("frontend-modern/package-lock.json", "{}\n")
+        graph = self.commit()
+        self.assertEqual(self.classify(source, graph)["code"], "true")
+        self.assertEqual(self.classify(source, graph)["frontend_deps"], "true")
+
+    def test_completion_controls_and_pair_registry_cannot_skip_runtime(self):
+        for path in ("scripts/ci_completion_only.py", "scripts/tests/test_ci_browser_proof_only.py",
+                     ".github/workflows/build-and-test.yml", ".github/workflows/canonical-governance.yml",
+                     "scripts/release_control/canonical_completion_history.json"):
+            with self.subTest(path=path):
+                before = self.git("rev-parse", "HEAD")
+                self.write(path, (self.repo / path).read_text() + "\n# Changed control\n"
+                           if (self.repo / path).exists() else "# Changed control\n")
+                head = self.commit()
+                self.assertEqual(self.classify(before, head)["code"], "true")
+
+    def test_completion_rename_and_quoted_path_cannot_hide_runtime_changes(self):
+        self.write("scripts/release_control/canonical_completion_guard.py", "package fixture\n")
+        helper = self.commit()
+        (self.repo / "internal/api/fixture.go").rename(
+            self.repo / "scripts/release_control/canonical_completion_history.py")
+        renamed = self.commit()
+        self.assertEqual(self.classify(helper, renamed)["code"], "true")
+        self.write("scripts/release_control/canonical_completion_guard.py\ninternal/api/source.go", "# lookalike\n")
+        quoted = self.commit()
+        self.assertEqual(self.classify(renamed, quoted)["code"], "true")
+
+    def test_failed_completion_selector_does_not_admit_a_skip(self):
+        self.write("scripts/release_control/canonical_completion_guard.py", "# helper fixture\n")
+        self.write("scripts/ci_completion_only.py", "raise SystemExit(42)\n")
+        failed = self.commit()
+        self.assertEqual(self.classify(self.base, failed)["code"], "true")
+
     def test_actual_classifier_selects_every_triage_input_and_policy_consumer(self):
         for path in (
             ".github/scripts/issue-version-triage.cjs",
@@ -380,6 +522,36 @@ class GitTreeScopeTest(unittest.TestCase):
 
 
 class WorkflowScopeTest(unittest.TestCase):
+    def test_completion_skip_keeps_required_runtime_verdicts_honest(self):
+        workflow = BUILD.read_text()
+        frontend = step_script(job_block(workflow, "frontend"), "Require complete frontend proof")
+        env = {**os.environ, "CHANGE_RESULT": "success", "CODE_CHANGED": "false",
+               "BUILD_RESULT": "skipped", "CHECKS_RESULT": "skipped", "UNIT_RESULT": "skipped"}
+        def run(command, variables):
+            return subprocess.run(["bash", "-c", command], env=variables,
+                                  capture_output=True, text=True, timeout=5)
+        result = run(frontend, env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no frontend tests ran", result.stdout)
+        self.assertNotIn("passed", result.stdout)
+        for key in ("CHANGE_RESULT", "CODE_CHANGED", "BUILD_RESULT", "CHECKS_RESULT", "UNIT_RESULT"):
+            self.assertNotEqual(run(frontend, {**env, key: ""}).returncode, 0)
+        for job in ("backend", "backend-api"):
+            command = step_script(job_block(workflow, job), "Require compiled backend tests")
+            admitted = {**os.environ, "CODE_CHANGED": "false", "COMPILE_REQUIRED": "false",
+                        "COMPILE_RESULT": "skipped"}
+            self.assertEqual(run(command, admitted).returncode, 0)
+            for key in ("CODE_CHANGED", "COMPILE_REQUIRED", "COMPILE_RESULT"):
+                self.assertNotEqual(run(command, {**admitted, key: ""}).returncode, 0)
+        api = step_script(job_block(workflow, "backend-api-verdict"), "Require every internal/api shard")
+        api_env = {**env, "API_SHARDS_RESULT": "success"}
+        result = run(api, api_env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("no internal/api tests ran", result.stdout)
+        self.assertNotIn("passed", result.stdout)
+        for state in ("skipped", "failure", "cancelled", ""):
+            self.assertNotEqual(run(api, {**api_env, "API_SHARDS_RESULT": state}).returncode, 0)
+
     def test_triage_check_runs_locked_real_tests_without_mutation_or_tolerant_exit(self):
         workflow = BUILD.read_text()
         self.assertIn("triage_helper: ${{ steps.filter.outputs.triage_helper }}",
