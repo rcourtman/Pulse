@@ -82,8 +82,9 @@ describe('SSO provider read and editor ownership', () => {
       fetchMock.mockResolvedValueOnce(json(body));
       render(() => <SSOProvidersPanel />);
       expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Configured providers are unknown',
+        'Unable to load SSO providers. Configured providers are unknown.',
       );
+      expect(notices.error).not.toHaveBeenCalled();
       expect(screen.queryByText('No SSO providers configured')).toBeNull();
       expect(screen.getByRole('button', { name: 'Add OIDC' })).toBeDisabled();
       expect(listCalls()).toHaveLength(1);
@@ -92,13 +93,17 @@ describe('SSO provider read and editor ownership', () => {
       expect(listCalls()).toHaveLength(2);
       expect(writes()).toHaveLength(0);
       expect(screen.queryByRole('alert')).toBeNull();
+      expect(notices.error).not.toHaveBeenCalled();
     },
   );
 
   it('reports refused inventory without private text or a false empty state, including read-only recovery', async () => {
     fetchMock.mockResolvedValueOnce(json({ error: 'PRIVATE_SSO_CANARY' }, 403));
     render(() => <SSOProvidersPanel canManage={false} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Configured providers are unknown');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to load SSO providers. Configured providers are unknown.',
+    );
+    expect(notices.error).not.toHaveBeenCalled();
     expect(document.body).not.toHaveTextContent('PRIVATE_SSO_CANARY');
     expect(screen.queryByText('No SSO providers configured')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -106,6 +111,7 @@ describe('SSO provider read and editor ownership', () => {
     expect(screen.getAllByRole('button', { name: 'Edit provider' })[0]).toBeDisabled();
     expect(listCalls()).toHaveLength(2);
     expect(writes()).toHaveLength(0);
+    expect(notices.error).not.toHaveBeenCalled();
   });
 
   it('accepts only the latest requested provider details, even if aborted fetch completes', async () => {
