@@ -609,8 +609,9 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findAllByText('pbs-docker');
 
     const healthSummary = screen.getByText(/^\d+ completed restore point/);
-    expect(healthSummary.parentElement).toHaveClass('w-full', 'sm:ml-auto', 'sm:w-auto');
-    expect(healthSummary.parentElement).not.toHaveClass('ml-auto');
+    // Restore-point totals sit in the header strip from sm up; a phone keeps
+    // the protected count and reason rows.
+    expect(healthSummary.parentElement).toHaveClass('hidden', 'sm:inline');
 
     expect(proxmoxBackupsTableSource).toContain('<PlatformSectionTabs');
     expect(proxmoxBackupsTableSource).not.toContain('FilterSegmentedControl');
@@ -778,7 +779,9 @@ describe('ProxmoxBackupsTable', () => {
     const exceptions = within(screen.getByRole('list', { name: 'Backups that are not protected' }));
     const group = exceptions.getByRole('button', { name: '1 backup source reported a failure' });
     expect(group).toHaveTextContent('Backup source reported a failure');
-    expect(group).toHaveTextContent('pbs-docker');
+    // Names preview on hover; the filtered Coverage table lists them all.
+    expect(group).toHaveAttribute('title', 'pbs-docker (LXC 112)');
+    expect(group).not.toHaveTextContent('pbs-docker');
     // The old posture bar and per-posture counts are gone: the sentence is the answer.
     expect(screen.queryByRole('button', { name: '1 attention' })).toBeNull();
   });

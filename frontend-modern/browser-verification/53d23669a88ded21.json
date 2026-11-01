@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "b59e047b126bf323da9ad42769f9de15571bb134",
+  "verified_at": "2026-11-02T00:25:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "25a02e7fc735a589edeaeafd787e55de5098c3a90645abecf2be0b0a30e8f6be"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage?reason=no-backup"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock rig with 932 Proxmox backup targets: 0 protected, 3 not evaluated, five posture reasons",
+    "posture reasons added to the rig's /api/recovery/postures responses from each explanation, as the evaluator sets them",
+    "dark theme, desktop and phone layouts"
+  ],
+  "interactions": [
+    "signed in and opened Backups By date at 1440x1000 and 375x812",
+    "read the header strip (0 / 929 protected, 3 not evaluated from sm, restore-point totals on the right from sm) and five reason rows with count pills and share bars",
+    "compared the card against the Proxmox overview nodes table: same header strip, pill and bar primitives",
+    "clicked the No successful backup row: Coverage opened with ?reason=no-backup",
+    "measured reason rows at 32px with none clipped and no horizontal page overflow on either width"
+  ]
+}

@@ -9378,13 +9378,17 @@ must not reintroduce a raw border-token class for dataset rows.
 
 ### Coverage strip exception groups are filter toggles
 
-`ProxmoxBackupsCoverageStrip` renders a `BackupVerdict`: one headline with a
-tone dot, then one line per exception group. With `onSelectGroup`, a group
-renders as a button with `aria-pressed`, 28px tall below `sm` and 24px from
-`sm`, whose accessible name is its count and reason ("163 no successful backup");
-the colour dot is decorative and the preview names, shown from `sm`, are
-visual context only. Without `onSelectGroup` a group stays plain text. The
-strip owns no filter state; its caller maps a group key to a filter.
+`ProxmoxBackupsCoverageStrip` renders a `BackupVerdict` as a `TableCard` in
+the platform overview's vocabulary: the `TableCardHeader` strip carries the
+tone dot and "0 / 929 protected" (the headline sentence stays as screen-reader
+text), with the caller's tail muted on the right from `sm`. Each exception
+group is one 32px row of dot, reason, count pill and a `ProgressBar` for its
+share of rated targets, and a green Protected row closes the list. With
+`onSelectGroup`, a group row is a button with `aria-pressed` whose accessible
+name is its count and reason ("163 no successful backup"); workload names are
+a hover title only, because the filtered Coverage table lists them. Without
+`onSelectGroup` a row stays plain. The card owns no filter state; its caller
+maps a group key to a filter.
 
 ### The settings nav gates Infrastructure, and the blocked-route fallback is capability-aware
 
