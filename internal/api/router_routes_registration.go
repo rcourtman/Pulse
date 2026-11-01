@@ -139,7 +139,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/updates/apply", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateHandlers.HandleApplyUpdate)))
 	r.mux.HandleFunc("/api/updates/rollback", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateHandlers.HandleRollbackUpdate)))
 	r.mux.HandleFunc("/api/updates/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleUpdateStatus)))
-	r.mux.HandleFunc("/api/updates/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleUpdateStream)))
+	r.mux.HandleFunc("/api/updates/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead,
+		retainTokenStreamAuthority(r.config, config.ScopeSettingsRead, true, updateHandlers.HandleUpdateStream))))
 	r.mux.HandleFunc("/api/updates/plan", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleGetUpdatePlan)))
 	r.mux.HandleFunc("/api/updates/pro-runtime", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, updateHandlers.HandleCheckProRuntimeSwitch)))
 	r.mux.HandleFunc("/api/updates/pro-runtime/apply", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, updateHandlers.HandleApplyProRuntimeSwitch)))
@@ -537,7 +538,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			path := req.URL.Path
 			switch {
 			case strings.HasSuffix(path, "/events"):
-				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandlePreflightEvents))(w, req)
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead,
+					retainTokenStreamAuthority(r.config, config.ScopeSettingsRead, false, r.deployHandlers.HandlePreflightEvents)))(w, req)
 			default:
 				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleGetPreflight))(w, req)
 			}
@@ -547,7 +549,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			path := req.URL.Path
 			switch {
 			case strings.HasSuffix(path, "/events"):
-				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.deployHandlers.HandleJobEvents))(w, req)
+				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead,
+					retainTokenStreamAuthority(r.config, config.ScopeSettingsRead, false, r.deployHandlers.HandleJobEvents)))(w, req)
 			case strings.HasSuffix(path, "/cancel"):
 				RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.deployHandlers.HandleCancelJob))(w, req)
 			case strings.HasSuffix(path, "/retry"):
