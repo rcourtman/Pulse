@@ -4659,7 +4659,11 @@ composition access, not the reporter's missing native ARC or I/O/History source.
 
 The existing app runtime sends a single bounded, cookie/CSRF-bearing POST to
 `/api/logout` before clearing saved authentication and cached metadata, stopping
-its runtime and following any configured proxy/SSO destination. It requires the
+its runtime and following any configured proxy/SSO destination. The canonical
+global WebSocket shutdown ends this tab's current connection/request owner
+even if storage cleanup fails or provider navigation never occurs; clearing
+the local accessor alone is not teardown. Auth-clear and shutdown errors still
+allow the remaining cleanup and leave an explicit close-tab warning. It requires the
 endpoint's successful JSON acknowledgement; rejection, a redirect, malformed
 reply, lost response or timeout stays visibly uncertain and allows deliberate
 retry. The API client must not turn a logout 401 into a success-looking login

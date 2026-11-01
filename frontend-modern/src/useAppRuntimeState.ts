@@ -7,7 +7,7 @@ import {
   onMount,
   runWithOwner,
 } from 'solid-js';
-import { getGlobalWebSocketStore } from '@/stores/websocket-global';
+import { getGlobalWebSocketStore, shutdownGlobalWebSocketStore } from '@/stores/websocket-global';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import {
@@ -856,7 +856,6 @@ export const useAppRuntimeState = () => {
         throw new Error('Pulse did not acknowledge sign-out');
       }
       controller.signal.throwIfAborted();
-      clearAuth();
 
       // One blocked storage operation must not prevent the remaining cleanup.
       let cleanupFailed = false;
@@ -867,6 +866,7 @@ export const useAppRuntimeState = () => {
           cleanupFailed = true;
         }
       };
+      clean(clearAuth);
       for (const key of [
         STORAGE_KEYS.AUTH,
         STORAGE_KEYS.GUEST_METADATA,
@@ -879,6 +879,7 @@ export const useAppRuntimeState = () => {
       clean(() => sessionStorage.setItem(SESSION_STORAGE_KEYS.DEMO_AUTO_LOGIN, 'suppressed'));
       clean(() => localStorage.setItem('just_logged_out', 'true'));
       aiAvailabilityStore.setEnabled(false);
+      clean(shutdownGlobalWebSocketStore);
       setWsStore(null);
       setNeedsAuth(true);
 
@@ -886,7 +887,7 @@ export const useAppRuntimeState = () => {
         showToast(
           'error',
           'Browser cleanup incomplete',
-          'Pulse ended this session, but could not clear saved browser data. Close this tab. Your proxy or identity-provider session may still be active.',
+          'Pulse ended this session, but could not finish browser cleanup. Close this tab. Your proxy or identity-provider session may still be active.',
         );
         return;
       }

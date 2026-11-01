@@ -66,6 +66,7 @@ describe('useAppRuntimeState', () => {
   let hasStoredAuthSessionMock: ReturnType<typeof vi.fn>;
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let clearAuthMock: ReturnType<typeof vi.fn>;
+  let shutdownGlobalWebSocketStoreMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiAvailabilitySetEnabledMock: ReturnType<typeof vi.fn>;
   let aiAvailabilityRefreshMock: ReturnType<typeof vi.fn>;
@@ -148,6 +149,7 @@ describe('useAppRuntimeState', () => {
       window.sessionStorage.removeItem('pulse_auth_user');
       window.localStorage.removeItem('org_id');
     });
+    shutdownGlobalWebSocketStoreMock = vi.fn();
     showToastMock = vi.fn();
     aiAvailabilitySetEnabledMock = vi.fn();
     aiAvailabilityRefreshMock = vi.fn().mockResolvedValue(undefined);
@@ -164,6 +166,7 @@ describe('useAppRuntimeState', () => {
     onStoreAcquired = undefined;
 
     vi.doMock('@/stores/websocket-global', () => ({
+      shutdownGlobalWebSocketStore: shutdownGlobalWebSocketStoreMock,
       getGlobalWebSocketStore: () => {
         const store = {
           state: websocketState,
@@ -792,6 +795,7 @@ describe('useAppRuntimeState', () => {
       await waitFor(() => expect(finish).toBeDefined());
       expect(hookState.isLoggingOut()).toBe(true);
       expect(clearAuthMock).not.toHaveBeenCalled();
+      expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
       expect(localStorage.getItem('auth')).toBe('synthetic-cache');
       expect(window.location.hash).toBe('');
       await hookState.handleLogout();
@@ -809,6 +813,7 @@ describe('useAppRuntimeState', () => {
       finish(new Response('{"success":true}', { status: 200 }));
       await pending;
       expect(clearAuthMock).toHaveBeenCalledOnce();
+      expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
       for (const key of ['auth', 'guest_metadata', 'docker_metadata', 'docker_metadata_hosts']) {
         expect(localStorage.getItem(key)).toBeNull();
       }
@@ -851,6 +856,7 @@ describe('useAppRuntimeState', () => {
       expect(hookState.isLoggingOut()).toBe(false);
       expect(hookState.needsAuth()).toBe(false);
       expect(clearAuthMock).not.toHaveBeenCalled();
+      expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
       expect(sessionStorage.getItem('auth')).toBe('saved-browser-credential');
       expect(localStorage.getItem('just_logged_out')).toBeNull();
       expect(window.location.hash).toBe('');
@@ -862,6 +868,7 @@ describe('useAppRuntimeState', () => {
       await hookState.handleLogout();
       expect(attempts).toBe(2);
       expect(clearAuthMock).toHaveBeenCalledOnce();
+      expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
       expect(window.location.hash).toBe('#proxy-logout');
     },
   );
@@ -882,6 +889,7 @@ describe('useAppRuntimeState', () => {
       await vi.advanceTimersByTimeAsync(15_000);
       await pending;
       expect(clearAuthMock).not.toHaveBeenCalled();
+      expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
       expect(hookState.isLoggingOut()).toBe(false);
       expect(window.location.hash).toBe('');
       expect(showToastMock).toHaveBeenCalledWith(
@@ -909,6 +917,7 @@ describe('useAppRuntimeState', () => {
     finish(new Response('{"success":true}'));
     await pending;
     expect(clearAuthMock).not.toHaveBeenCalled();
+    expect(shutdownGlobalWebSocketStoreMock).not.toHaveBeenCalled();
     expect(showToastMock).not.toHaveBeenCalled();
     expect(window.location.hash).toBe('');
   });
@@ -928,6 +937,7 @@ describe('useAppRuntimeState', () => {
     );
     await hookState.handleLogout();
     expect(clearAuthMock).toHaveBeenCalledOnce();
+    expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
     expect(localStorage.getItem('docker_metadata')).toBeNull();
     expect(hookState.needsAuth()).toBe(true);
     expect(hookState.enhancedStore()).toBeNull();
@@ -936,6 +946,32 @@ describe('useAppRuntimeState', () => {
       'error',
       'Browser cleanup incomplete',
       expect.stringContaining('proxy or identity-provider session may still be active'),
+    );
+  });
+
+  it.each(['auth', 'socket'])('logout keeps %s cleanup failure explicit', async (failure) => {
+    const { hookState } = await mountLogout();
+    sessionStorage.setItem('auth', 'synthetic-browser-credential');
+    const fail = () => {
+      throw new Error('Synthetic cleanup failure');
+    };
+    if (failure === 'auth') clearAuthMock.mockImplementation(fail);
+    else shutdownGlobalWebSocketStoreMock.mockImplementation(fail);
+    const fallback = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string) =>
+      url === '/api/logout' ? new Response('{"success":true}') : fallback(url),
+    );
+    await hookState.handleLogout();
+    expect(clearAuthMock).toHaveBeenCalledOnce();
+    expect(shutdownGlobalWebSocketStoreMock).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem('auth')).toBeNull();
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(hookState.needsAuth()).toBe(true);
+    expect(window.location.hash).toBe('');
+    expect(showToastMock).toHaveBeenCalledWith(
+      'error',
+      'Browser cleanup incomplete',
+      expect.stringContaining('could not finish browser cleanup'),
     );
   });
 
