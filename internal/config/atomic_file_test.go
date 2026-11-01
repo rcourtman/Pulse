@@ -159,9 +159,11 @@ func TestAtomicConfigIndependentWritersPublishCompleteFiles(t *testing.T) {
 		}()
 	}
 	close(start)
+	var failures []error
 	for range writers {
-		require.NoError(t, <-results)
+		failures = append(failures, <-results)
 	}
+	require.NoError(t, errors.Join(failures...))
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 	complete := false
