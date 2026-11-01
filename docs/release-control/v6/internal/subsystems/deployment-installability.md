@@ -7191,7 +7191,15 @@ fixtures, including production argument forwarding and findings accompanied by
 transport errors, positive package/severity evidence with missing or zero
 totals, malformed zero summaries under both outage modes, failed/signalled
 zero summaries, zero and positive reports written before a real watchdog stop,
-and metadata annotation injection. The shell smoke provider models a clean
+and metadata annotation injection. The stdlib-only audit supervisor and report
+classifier run with Python isolated/no-site startup (`-I -S`): caller-local
+modules, `PYTHONPATH`, `PYTHONHOME` and site hooks must not execute or replace
+the captured report's interpretation. Synthetic startup-hook and local-JSON
+shadow controls retain positive findings and unavailable evidence, while clean
+reports and literal audit arguments remain usable under the same environments.
+This does not isolate npm itself or change the selected Python executable,
+severity policy, retries, deadlines or process-group cleanup.
+The shell smoke provider models a clean
 report with exit zero and findings with exit one, like npm's terminal contract.
 Retrying is bounded by wall clock and not by attempt count alone,
 because npm's own `fetch-timeout` defaults to five minutes and it retries
