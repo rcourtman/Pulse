@@ -121,7 +121,9 @@ describe('Billing Admin accepted inventory and billing reads', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(screen.queryByText('Organization org-a')).not.toBeInTheDocument();
     pending.reject(new Error('SYNTHETIC PRIVATE BACKEND DETAIL'));
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Failed to load'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Unable to load the organization list.'),
+    );
     expect(screen.queryByText(/No organizations/)).not.toBeInTheDocument();
     expect(screen.queryByText(/SYNTHETIC PRIVATE/)).not.toBeInTheDocument();
     expect(mocks.error).not.toHaveBeenCalled();
@@ -163,7 +165,9 @@ describe('Billing Admin accepted inventory and billing reads', () => {
     await settle();
     expect(mocks.get).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/SYNTHETIC PRIVATE/)).not.toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: /Organization org-a/ }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Organization org-a org-a', exact: true }),
+    );
     expect(screen.getByRole('status')).toHaveTextContent(BILLING_ADMIN_READ_ERROR);
     expect(screen.queryByText(/"loading": true/)).not.toBeInTheDocument();
     const before = mocks.put.mock.calls.length;

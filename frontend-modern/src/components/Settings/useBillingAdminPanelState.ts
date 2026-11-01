@@ -106,10 +106,10 @@ export function useBillingAdminPanelState() {
   const clearSnapshot = () => {
     setOrgs([]);
     setOrgsError(null);
-    setBillingByOrgID(emptyRecord());
-    setBillingLoadingByOrgID(emptyRecord());
-    setBillingErrorByOrgID(emptyRecord());
-    setSavingByOrgID(emptyRecord());
+    setBillingByOrgID(emptyRecord<BillingState | undefined>());
+    setBillingLoadingByOrgID(emptyRecord<boolean>());
+    setBillingErrorByOrgID(emptyRecord<string>());
+    setSavingByOrgID(emptyRecord<boolean>());
     setExpandedOrgID(null);
   };
 
@@ -133,7 +133,7 @@ export function useBillingAdminPanelState() {
       const state = await BillingAdminAPI.getBillingState(orgID, { signal: controller.signal });
       if (!readIsCurrent()) return;
       if (!isBillingState(state)) throw new Error('Billing state returned invalid data');
-      setBillingByOrgID((prev) => withEntry(prev, orgID, state));
+      setBillingByOrgID((prev) => withEntry<BillingState | undefined>(prev, orgID, state));
     } catch (err) {
       if (!readIsCurrent()) return;
       logger.error('Failed to fetch billing state', { orgID, err });
@@ -231,13 +231,13 @@ export function useBillingAdminPanelState() {
       if (!isBillingState(saved) || saved.subscription_state.toLowerCase() !== nextState) {
         throw new Error('Billing update did not confirm the requested subscription state');
       }
-      setBillingByOrgID((prev) => withEntry(prev, orgID, saved));
+      setBillingByOrgID((prev) => withEntry<BillingState | undefined>(prev, orgID, saved));
       notificationStore.success(getBillingAdminStateUpdateSuccessMessage(nextState), 2500);
     } catch (err) {
       if (!writeIsCurrent()) return;
       logger.error('Failed to update billing state', { orgID, err });
       batch(() => {
-        setBillingByOrgID((prev) => withEntry(prev, orgID, undefined));
+        setBillingByOrgID((prev) => withEntry<BillingState | undefined>(prev, orgID, undefined));
         setBillingErrorByOrgID((prev) => withEntry(prev, orgID, BILLING_ADMIN_UNCONFIRMED_CHANGE));
       });
     } finally {
@@ -261,7 +261,7 @@ export function useBillingAdminPanelState() {
     billingReads.get(orgID)?.abort();
     billingReads.delete(orgID);
     batch(() => {
-      setBillingByOrgID((prev) => withEntry(prev, orgID, undefined));
+      setBillingByOrgID((prev) => withEntry<BillingState | undefined>(prev, orgID, undefined));
       setBillingErrorByOrgID((prev) => {
         const next = Object.assign(emptyRecord<string>(), prev);
         delete next[orgID];
