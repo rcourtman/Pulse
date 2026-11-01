@@ -2,6 +2,7 @@ import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup 
 import type { JSX } from 'solid-js';
 import { A, useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
+import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
@@ -807,24 +808,31 @@ export function AppLayout(props: AppLayoutProps) {
                 onClick={props.handleLogout}
                 disabled={props.isLoggingOut?.()}
                 aria-busy={props.isLoggingOut?.() || undefined}
-                class="group relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10"
+                class="group relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-wait disabled:opacity-60 sm:h-10 sm:w-10"
                 title={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
                 aria-label={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
               >
-                <svg
-                  class="h-4 w-4 shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  aria-hidden="true"
+                <Show
+                  when={props.isLoggingOut?.()}
+                  fallback={
+                    <svg
+                      class="h-4 w-4 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                      />
+                    </svg>
+                  }
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                  />
-                </svg>
+                  <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
+                </Show>
               </button>
             </div>
           </Show>

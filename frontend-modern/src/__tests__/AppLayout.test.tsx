@@ -655,7 +655,14 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
   });
   it('names and disables the actual sign-out control while withdrawal is pending, and restores retry', async () => {
     const [loggingOut, setLoggingOut] = createSignal(false);
-    renderLayout([], '/settings/infrastructure', undefined, ['settings:read'], undefined, loggingOut);
+    renderLayout(
+      [],
+      '/settings/infrastructure',
+      undefined,
+      ['settings:read'],
+      undefined,
+      loggingOut,
+    );
     expect(screen.getByRole('button', { name: 'Logout' })).not.toBeDisabled();
     setLoggingOut(true);
     const pending = screen.getByRole('button', { name: 'Signing out…' });
@@ -664,5 +671,4 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     setLoggingOut(false);
     expect(screen.getByRole('button', { name: 'Logout' })).not.toBeDisabled();
   });
-
 });

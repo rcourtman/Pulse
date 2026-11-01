@@ -826,20 +826,33 @@ export const useAppRuntimeState = () => {
     const destination = proxyAuthInfo()?.logoutURL || '/';
     const controller = new AbortController();
     logoutController = controller;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      controller.signal.addEventListener('abort', () => reject(new Error('Sign-out aborted')), {
+        once: true,
+      });
+    });
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
 
     try {
-      const { apiFetch: runtimeApiFetch, clearAuth } = await import('@/utils/apiClient');
-      const response = await runtimeApiFetch('/api/logout', {
-        method: 'POST',
-        // Keep normal credentials and CSRF, including token-only browsers.
-        // The endpoint ends only the cookie session; it does not revoke tokens.
-        skipOrgContext: true,
-        retry: false,
-        redirect: 'error',
-        signal: controller.signal,
-      });
-      if (!response.ok || (await response.json())?.success !== true) {
+      const { apiFetch: runtimeApiFetch, clearAuth } = await Promise.race([
+        import('@/utils/apiClient'),
+        aborted,
+      ]);
+      const response = await Promise.race([
+        runtimeApiFetch('/api/logout', {
+          method: 'POST',
+          // Keep normal credentials and CSRF, including token-only browsers.
+          // The endpoint ends only the cookie session; it does not revoke tokens.
+          skipOrgContext: true,
+          // Also stops a late CSRF preparation from dispatching after abort.
+          retry: false,
+          redirect: 'error',
+          signal: controller.signal,
+        }),
+        aborted,
+      ]);
+      const acknowledgement = response.ok ? await Promise.race([response.json(), aborted]) : null;
+      if (acknowledgement?.success !== true) {
         throw new Error('Pulse did not acknowledge sign-out');
       }
       controller.signal.throwIfAborted();
