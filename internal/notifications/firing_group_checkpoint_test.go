@@ -2,7 +2,9 @@ package notifications
 
 import (
 	"encoding/json"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -105,7 +107,7 @@ func TestStopCheckpointsFiringWindowPolicy(t *testing.T) {
 				if row.Type == "webhook" {
 					var saved WebhookConfig
 					require.NoError(t, json.Unmarshal(row.Config, &saved))
-					require.Equal(t, f.hook, saved)
+					require.Equal(t, NormalizeWebhookConfig(f.hook), saved)
 				}
 			}
 			due, err := m.GetQueue().GetPending(100)
@@ -211,5 +213,131 @@ func TestStopCheckpointRacesTimerOnce(t *testing.T) {
 		require.Zero(t, row.Attempts)
 		require.Len(t, row.Alerts, 1)
 		require.Equal(t, QueueStatusPending, row.Status)
+	}
+}
+
+func TestCheckpointRoutesOnlySelectedDestinations(t *testing.T) {
+	for _, target := range []string{"all", "webhook", "email", "apprise"} {
+		t.Run(target, func(t *testing.T) {
+			dir := t.TempDir()
+			m := NewNotificationManagerWithDeferredQueue("", dir)
+			t.Cleanup(m.Stop)
+			m.SetGroupingConfig(true, 600, true, true)
+			m.SetInitialNotifyTarget(target)
+			m.SetEmailConfig(EmailConfig{Enabled: true, TagFilter: []string{"customer:alpha"}, MinimumSeverity: "warning"})
+			m.SetAppriseConfig(AppriseConfig{Enabled: true, MinimumSeverity: "critical", Targets: []string{"ntfy://example.invalid/ops"}})
+			for _, hook := range []WebhookConfig{
+				{ID: "alpha", Enabled: true, TagFilter: []string{"customer:alpha"}, MinimumSeverity: "warning"},
+				{ID: "beta", Enabled: true, TagFilter: []string{"customer:beta"}},
+				{ID: "disabled", Enabled: false},
+			} {
+				m.AddWebhook(hook)
+			}
+			for _, tc := range []struct {
+				id, tag string
+				level   alerts.AlertLevel
+			}{
+				{"alpha-warning", "customer:alpha", alerts.AlertLevelWarning},
+				{"alpha-info", "customer:alpha", alerts.AlertLevelInfo},
+				{"beta-critical", "customer:beta", alerts.AlertLevelCritical},
+			} {
+				a := taggedRoutingAlert(tc.id, []string{tc.tag})
+				a.Level = tc.level
+				m.SendAlert(a)
+			}
+			m.Stop()
+			reopened := NewNotificationManagerWithDeferredQueue("", dir)
+			defer reopened.Stop()
+			rows := quietReplayRows(t, reopened.GetQueue())
+			want := 1
+			if target == "all" {
+				want = 4
+			}
+			if target == "webhook" {
+				want = 2
+			}
+			require.Len(t, rows, want)
+			for _, row := range rows {
+				require.Len(t, row.Alerts, 1)
+				if target != "all" {
+					require.Equal(t, target, row.Type)
+				}
+				if row.Type == "email" || row.DestinationID == "webhook:alpha" {
+					require.Equal(t, "alpha-warning", row.Alerts[0].ID)
+				} else {
+					require.Equal(t, "beta-critical", row.Alerts[0].ID)
+				}
+				require.Zero(t, row.Attempts)
+			}
+		})
+	}
+}
+
+// Checkpointed work goes through the ordinary autonomous queue and its current
+// policy, not a shutdown-only delivery path or a synthetic successful receipt.
+func TestCheckpointReplayRechecksCurrentPolicy(t *testing.T) {
+	for _, policy := range []string{"allowed", "resolved", "paused", "destination-disabled", "removed", "new-quiet-hours"} {
+		t.Run(policy, func(t *testing.T) {
+			var received atomic.Int32
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1); w.WriteHeader(http.StatusOK) }))
+			defer server.Close()
+			dir := t.TempDir()
+			hook := WebhookConfig{ID: "ops", URL: server.URL, Enabled: true, Service: "generic"}
+			open := func(add bool) *NotificationManager {
+				m := NewNotificationManagerWithDeferredQueue("", dir)
+				t.Cleanup(m.Stop)
+				require.NoError(t, m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"))
+				m.SetGroupingConfig(true, 1, true, true)
+				if add {
+					m.AddWebhook(hook)
+				}
+				return m
+			}
+			m := open(true)
+			a := quietReplayAlert("policy-warning", alerts.AlertLevelWarning, time.Now().UTC())
+			m.SendAlert(a)
+			m.Stop()
+			if policy == "destination-disabled" {
+				hook.Enabled = false
+			}
+			m = open(policy != "removed")
+			require.Len(t, quietReplayRows(t, m.GetQueue()), 1)
+			switch policy {
+			case "resolved":
+				require.True(t, m.CancelResolvedAlert(a))
+				m.SendResolvedAlert(&alerts.ResolvedAlert{Alert: a, ResolvedTime: time.Now()})
+			case "paused":
+				m.SetEnabled(false)
+			case "new-quiet-hours":
+				m.SetQuietHoursPolicyProvider(func() func(*alerts.Alert, time.Time) *time.Time {
+					return func(_ *alerts.Alert, now time.Time) *time.Time { due := now.Add(time.Hour); return &due }
+				})
+			}
+			m.StartQueueProcessing()
+			awaitShutdownCondition(t, "checkpoint replay policy verdict", func() bool {
+				rows := quietReplayRows(t, m.GetQueue())
+				if len(rows) != 1 {
+					return false
+				}
+				switch policy {
+				case "allowed":
+					return rows[0].Status == QueueStatusSent
+				case "new-quiet-hours":
+					return rows[0].NextRetryAt != nil && rows[0].NextRetryAt.After(time.Now().Add(30*time.Minute))
+				default:
+					return rows[0].Status == QueueStatusCancelled
+				}
+			})
+			entries, err := m.GetQueue().GetDeliveryLog(time.Now().Add(-time.Hour), 100)
+			require.NoError(t, err)
+			if policy == "allowed" {
+				require.Equal(t, int32(1), received.Load())
+				require.Len(t, entries, 1)
+				require.True(t, entries[0].Success)
+			} else {
+				require.Zero(t, received.Load())
+				require.Empty(t, entries, "held/cancelled work manufactured provider evidence")
+			}
+		})
 	}
 }
