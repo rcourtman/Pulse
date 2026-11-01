@@ -294,14 +294,22 @@ describe('useThresholdsTableState — branch coverage', () => {
   });
 
   describe('hasActiveAlert', () => {
+    const cpuAlert = {
+      id: 'node-1::metric-threshold:cpu',
+      type: 'cpu',
+      resourceId: 'node-1',
+    };
+
     it('returns false up-front when alert detection is disabled', () => {
       mockAlertsEnabled = false;
       const props = buildProps();
-      props.activeAlerts = { 'r-cpu': {} } as unknown as ThresholdsTableProps['activeAlerts'];
+      props.activeAlerts = {
+        [cpuAlert.id]: cpuAlert,
+      } as unknown as ThresholdsTableProps['activeAlerts'];
       const captured = mount(props);
 
       // Detection gate short-circuits before the lookup even happens.
-      expect(captured.hasActiveAlert('r', 'cpu')).toBe(false);
+      expect(captured.hasActiveAlert({ id: 'node-1', name: 'node-1' }, 'cpu')).toBe(false);
     });
 
     it('returns false when no activeAlerts map is supplied', () => {
@@ -309,19 +317,25 @@ describe('useThresholdsTableState — branch coverage', () => {
       // activeAlerts intentionally left undefined.
       const captured = mount(props);
 
-      expect(captured.hasActiveAlert('r', 'cpu')).toBe(false);
+      expect(captured.hasActiveAlert({ id: 'node-1', name: 'node-1' }, 'cpu')).toBe(false);
     });
 
-    it('distinguishes present vs absent "<id>-<metric>" keys when enabled', () => {
+    it('matches alerts on their resourceId and type, not their map key', () => {
       const props = buildProps();
       props.activeAlerts = {
-        'node-1-cpu': { id: 'x' },
+        [cpuAlert.id]: cpuAlert,
       } as unknown as ThresholdsTableProps['activeAlerts'];
       const captured = mount(props);
 
-      expect(captured.hasActiveAlert('node-1', 'cpu')).toBe(true);
-      expect(captured.hasActiveAlert('node-1', 'memory')).toBe(false);
-      expect(captured.hasActiveAlert('node-9', 'cpu')).toBe(false);
+      expect(captured.hasActiveAlert({ id: 'node-1', name: 'node-1' }, 'cpu')).toBe(true);
+      expect(captured.hasActiveAlert({ id: 'node-1', name: 'node-1' }, 'memory')).toBe(false);
+      expect(captured.hasActiveAlert({ id: 'node-9', name: 'node-9' }, 'cpu')).toBe(false);
+      expect(
+        captured.hasActiveAlert(
+          { id: 'node-unified', name: 'node-1', alertResourceIds: ['node-unified', 'node-1'] },
+          'cpu',
+        ),
+      ).toBe(true);
     });
   });
 

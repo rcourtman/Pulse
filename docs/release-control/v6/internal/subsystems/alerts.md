@@ -5163,6 +5163,31 @@ had no alert highlighting at all. `getAlertStyles` keeps its
 id-plus-node-name matching for the platform tables whose alerts are keyed that
 way.
 
+### Threshold rows mark the limits whose alerts are open
+
+On Alerts > Thresholds a metric value carries a pulsing "Active alert" dot
+while an alert on that metric is open. `useThresholdsTableState` indexes the
+websocket `activeAlerts` map by each alert's `resourceId` and `type`
+(`indexActiveMetricAlerts` in
+`frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`)
+and asks `thresholdRowHasActiveAlert` per cell. The map is keyed by alert ID
+(`<resource>::metric-threshold:<metric>` for threshold alerts), so a row never
+rebuilds a key; until 2026-11-01 it looked up `<row id>-<metric>`, a key no
+alert has carried since canonical metric IDs, and no row ever showed the dot.
+A row matches on `alertResourceIds` when its data projector sets them, else on
+its own id. Machine rows answer to `agent:<host ID>` (CheckHost's
+`hostResourceID`, while the row and its override keep the bare host ID) and to
+their disks' usage and SMART temperature alerts nested under it
+(`agent:<host>/disk:` and `agent:<host>/disk_temp:`), because the machine's
+Disk % and Disk Temp limits are what those disks inherit; sensor and RAID
+children have limits of their own. Machine disk and sensor rows are keyed on
+the alert resource ID already. Proxmox node rows answer only to their Proxmox
+node ID: a node merged with its Pulse agent hands CPU, memory and disk to the
+agent, and those alerts mark the Machines row whose limits judge them, never
+the node row's unused limits. Guest rows answer to
+`getUnifiedResourceAlertResourceIds` (`frontend-modern/src/utils/alerts.ts`),
+the exact keys `getOwnAlertsForUnifiedResource` matches.
+
 ### SMART temperature continuity and pending-only policy intervals
 
 Disk temperature activation/grace and recovery require continuous accepted

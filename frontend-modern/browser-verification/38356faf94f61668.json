@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "c93d188aff3c0e6c10839a29bcdfe7f4f3d49373",
+  "verified_at": "2026-11-01T13:42:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts",
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "fe131d17441c84233ceb74c54df84c6bfcbacc5fad219f8d87b67b6989f91e02",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "0d0473a9d75b46eeef68c1f0886c857fa82539ff01b7b02d1500f4bb259f0410",
+    "frontend-modern/src/components/Alerts/ResourceTable.tsx": "3f7f4dff833191c07b83cefeeece8282b74b3ab07ef59eab38577b0fbe3ce6f6",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts": "658d8d0290241da9c73a04b89854fad87f26f76ea401b768cf373616a9f55daf",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts": "c0e926fe6f30bb35af04be10414f3d8c9382e140b5b30662e07c19a6ecccfa1d",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts": "4845d81add01cd5bc7111390acfd6f37095c94bce57e9b01976663258d049a28",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts": "4b5a3141aa1029451671097df2c3bd20864fdc180863954075a4ccd6b799bd0f",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts": "4e2d546bf99c1a9ad6b838b6a854a7efc8d837b1f1102609a112b15ee3fce2a2",
+    "frontend-modern/src/utils/alerts.ts": "a212a0c87912af3943d18ee2736cc65aa8e48dcb209877557cc98cb45ad08786"
+  },
+  "routes": [
+    "/alerts/thresholds/systems",
+    "/alerts/thresholds/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack on pulse-dev (PULSE_MOCK_MODE, 4 nodes) built from this change with its embedded frontend, viewed in the Claude desktop Browser pane (Chromium) over an SSH tunnel. Thresholds lowered through PUT /api/alerts/config (node/agent CPU 3%, memory 10%, agent disk 5%, node temperature 20C, guest CPU 3%) plus one sensor override on agent:host-linux-1/sensor:<hex>, so canonical metric-threshold alerts fired on nodes, machines, machine disks, a machine sensor and guests.",
+    "Before (main build, same stack and config): Machines and Proxmox tabs rendered zero [title=\"Active alert\"] elements with 60+ metric alerts open.",
+    "After, Machines tab at 1440x900: machine cards (AlertResourceTableMobile at that container width) lit CPU/Memory/Disk exactly where agent:<host> cpu/memory alerts or nested agent:<host>/disk: alerts were open; a scripted cross-check of all 88 rendered machine metric cells against /api/alerts/active found 0 mismatches (39 lit). Machine Disks table rows (AlertResourceTableRow) showed 13 dots for 13 open agent disk alerts; Machine Sensors table showed 1 dot for the 1 open sensor alert. backup-vault (PBS, no host-agent alerts) correctly showed none.",
+    "After, Proxmox tab at 1440x900: node cards lit only Temp for the 4 open node temperature alerts; linked-agent CPU/memory/disk alerts did not light the node rows' unused limits. Guest rows lit CPU; 69 rendered guest metric cells cross-checked against open alerts with 0 mismatches.",
+    "Narrow pass at 375x812 on the Machines tab: dots render beside the values in the card layout, no horizontal page overflow (scrollWidth == innerWidth)."
+  ],
+  "interactions": [
+    "Opened the Machines and Proxmox threshold tabs, clicked Expand all, scrolled the app shell to the lit rows, and compared every rendered dot to the live /api/alerts/active list by resourceId and type.",
+    "Reloaded after swapping the main build for the fixed build on the same mock configuration (before/after)."
+  ]
+}

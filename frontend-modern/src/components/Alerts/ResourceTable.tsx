@@ -54,7 +54,7 @@ export interface ResourceTableProps {
   editingThresholds: () => Record<string, number | undefined>;
   setEditingThresholds: (value: Record<string, number | undefined>) => void;
   formatMetricValue: (metric: string, value: number | undefined) => string;
-  hasActiveAlert: (resourceId: string, metric: string) => boolean;
+  hasActiveAlert: (resource: Resource, metric: string) => boolean;
   globalDefaults?: Record<string, number | undefined>;
   /** Metrics whose unset global default follows another setting. */
   globalDefaultFallbacks?: Record<string, AlertResourceGlobalDefaultFallback>;

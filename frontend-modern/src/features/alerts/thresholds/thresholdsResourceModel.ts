@@ -8,7 +8,8 @@ import {
 } from '@/utils/discoveryTarget';
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 
-import type { GroupHeaderMeta } from './tableTypes';
+import type { Alert } from '@/types/api';
+import type { GroupHeaderMeta, Resource as TableResource } from './tableTypes';
 import type { Override, ThresholdsTableProps } from './types';
 
 export interface ThresholdsDataInputs {
@@ -238,6 +239,68 @@ export const agentDiskResourceId = (
     .replace(/^-|-$/g, '');
   if (!label) label = 'unknown';
   return `agent:${agentId}/disk:${label}`;
+};
+
+// The resource ID a machine's own alerts are raised on (internal/alerts host.go
+// hostResourceID). Its threshold row and override are keyed on the bare host ID.
+export const agentAlertResourceId = (hostId: string): string => {
+  const trimmed = hostId.trim();
+  if (trimmed.startsWith('agent:')) return trimmed;
+  return `agent:${trimmed || 'unknown'}`;
+};
+
+export interface ActiveMetricAlertIndex {
+  /** Metrics with an open alert, by the resource ID the alert was raised on. */
+  byResource: Map<string, Set<string>>;
+  /** Metrics with an open alert on a machine's disks, by the machine's "agent:<host>" key. */
+  byMachine: Map<string, Set<string>>;
+}
+
+const addIndexedMetric = (index: Map<string, Set<string>>, key: string, metric: string) => {
+  const metrics = index.get(key);
+  if (metrics) metrics.add(metric);
+  else index.set(key, new Set([metric]));
+};
+
+// The live alert map is keyed by alert ID ("<resource>::metric-threshold:<metric>"
+// for threshold alerts), which a row cannot rebuild. Rows match on the fields
+// each alert carries instead: the resource it was raised on and its metric type.
+export const indexActiveMetricAlerts = (
+  activeAlerts: Record<string, Alert> | undefined,
+): ActiveMetricAlertIndex => {
+  const byResource = new Map<string, Set<string>>();
+  const byMachine = new Map<string, Set<string>>();
+  Object.values(activeAlerts ?? {}).forEach((alert) => {
+    const resourceId = alert?.resourceId?.trim();
+    const metric = alert?.type?.trim();
+    if (!resourceId || !metric) return;
+    addIndexedMetric(byResource, resourceId, metric);
+    // "agent:<host>/disk:<mount>", "agent:<host>/disk_temp:<device>". Other
+    // children (sensors, RAID arrays) have limits of their own.
+    const childSeparator = resourceId.indexOf('/');
+    if (!resourceId.startsWith('agent:') || childSeparator < 0) return;
+    const child = resourceId.slice(childSeparator + 1);
+    if (child.startsWith('disk:') || child.startsWith('disk_temp:')) {
+      addIndexedMetric(byMachine, resourceId.slice(0, childSeparator), metric);
+    }
+  });
+  return { byResource, byMachine };
+};
+
+// Whether a threshold row has an open alert on one of its metrics. A machine
+// row's Disk % and Disk Temp limits are what its disks' alerts judge, and
+// those alerts are raised on the disks, so a machine row also answers for them.
+export const thresholdRowHasActiveAlert = (
+  index: ActiveMetricAlertIndex,
+  row: Pick<TableResource, 'id' | 'alertResourceIds' | 'type'>,
+  metric: string,
+): boolean => {
+  const alertResourceIds = row.alertResourceIds?.length ? row.alertResourceIds : [row.id];
+  return alertResourceIds.some(
+    (alertResourceId) =>
+      index.byResource.get(alertResourceId)?.has(metric) ||
+      (row.type === 'agent' && index.byMachine.get(alertResourceId)?.has(metric)),
+  );
 };
 
 export const storageCoords = (resource: Resource): { node: string; instance: string } => {

@@ -9,6 +9,7 @@ import {
 } from '@/features/alerts/guestOverrideIdentity';
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 import type { Disk } from '@/types/api';
+import { getUnifiedResourceAlertResourceIds } from '@/utils/alerts';
 import { hasPulseRelaxedGuestTag } from '@/utils/metricThresholds';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
@@ -56,6 +57,7 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
 
       return {
         id: guest.id,
+        alertResourceIds: getUnifiedResourceAlertResourceIds(guest),
         name: getAlertResourceDisplayLabel(guest),
         displayName: getAlertResourceDisplayLabel(guest),
         rawName: guest.name,

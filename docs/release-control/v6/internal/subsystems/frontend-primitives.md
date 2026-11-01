@@ -6192,7 +6192,12 @@ its text like the other drawers. Their table rows (Docker hosts, Machines,
 Kubernetes nodes) take the platform host rows'
 red (critical) or yellow tint from the same set through
 `getUnifiedResourceAlertStyles`, only for unacknowledged alerts and never on
-an expanded row, so a row and its drawer agree. The remaining Overview rows are additive
+an expanded row, so a row and its drawer agree. The Alerts > Thresholds
+"Active alert" dot reads the same map by each alert's `resourceId` and
+`type`, never by rebuilding an alert-ID key; a threshold row names the
+resource IDs its alerts are raised on (`alertResourceIds`, with
+`getUnifiedResourceAlertResourceIds` for unified guest rows) and machine rows
+also answer for their disks' alerts. The remaining Overview rows are additive
 operator context that the parent table row cannot carry, such as OS/runtime,
 Pulse observation or action coverage, primary reachability, protection gaps,
 pending updates, or an identified service. Routine health, placement, and

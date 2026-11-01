@@ -3,6 +3,7 @@ import {
   getAlertsForResource,
   getAlertsForUnifiedResource,
   getOwnAlertsForUnifiedResource,
+  getUnifiedResourceAlertResourceIds,
   getAlertStyles,
   getUnifiedResourceAlertStyles,
 } from '@/utils/alerts';
@@ -238,6 +239,26 @@ describe('alerts module surface', () => {
     const alertsModule = await import('@/utils/alerts');
     expect(Object.keys(alertsModule)).not.toContain('isStateAlertType');
     expect(Object.keys(alertsModule)).not.toContain('isMetricAlertType');
+  });
+});
+
+describe('getUnifiedResourceAlertResourceIds', () => {
+  it("lists the exact keys a Proxmox guest's own alerts are raised on", () => {
+    // Shape from a mock-mode /api/resources payload: the row carries the
+    // unified id, the guest's threshold alerts its Proxmox source id.
+    const guest = {
+      id: 'vm-24bae4f81cb24f06',
+      type: 'vm',
+      name: 'analytics-batch-01',
+      proxmox: { sourceId: 'mock-cluster-1-pve1-109' },
+      canonicalIdentity: { primaryId: 'vm:mock-cluster-1-pve1-109' },
+    } as unknown as Resource;
+
+    expect(getUnifiedResourceAlertResourceIds(guest)).toEqual([
+      'vm-24bae4f81cb24f06',
+      'vm:mock-cluster-1-pve1-109',
+      'mock-cluster-1-pve1-109',
+    ]);
   });
 });
 
