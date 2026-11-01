@@ -8,14 +8,14 @@ import CIUnitReceipts from '../../frontend-modern/scripts/ci-unit-receipts.mjs';
 
 const sha = 'a'.repeat(40);
 
-function fixture(t) {
+function fixture(t, config = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-receipts-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const lock = '{"synthetic":"lock"}\n';
   fs.writeFileSync(path.join(root, 'package-lock.json'), lock);
   const outputFile = path.join(root, 'evidence', 'units.json');
   const reporter = new CIUnitReceipts({ outputFile, sourceSha: sha });
-  const ctx = { config: { root, shard: { index: 2, count: 4 } } };
+  const ctx = { config: { root, ...config } };
   const spec = name => ({
     taskId: name, moduleId: path.join(root, `${name}.test.ts`),
     project: { name: '' }, pool: 'forks',
@@ -39,8 +39,9 @@ test('initial receipt binds source, lock and actual shard, with no invented inve
   const receipt = f.read();
   assert.equal(receipt.source_sha, sha);
   assert.equal(receipt.package_lock_sha256, createHash('sha256').update(f.lock).digest('hex'));
-  assert.deepEqual(receipt.shard, { index: 2, count: 4 });
+  assert.deepEqual(receipt.shard, { index: 1, count: 1 });
   assert.equal(receipt.inventory_observed, false);
+  assert.equal(receipt.selection_observed, false);
   assert.equal(receipt.collection_complete, false);
   assert.equal(receipt.test_run_end_observed, false);
   assert.equal(receipt.test_run_reason, null);
@@ -49,6 +50,35 @@ test('initial receipt binds source, lock and actual shard, with no invented inve
   assert.equal('exit_code' in receipt, false);
   assert.equal('passed' in receipt, false);
   assert.equal(fs.statSync(f.outputFile).mode & 0o777, 0o600);
+});
+
+test('observe the actual sequencer selection once, returning its unchanged array and sort behaviour', async t => {
+  let calls = 0;
+  let returned;
+  class Sequencer {
+    async shard(files) { calls++; returned = files.slice(1, 2); return returned; }
+    sort(files) { return files; }
+  }
+  const { reporter, ctx, spec, module, read } = fixture(t, {
+    shard: { index: 2, count: 4 }, sequence: { sequencer: Sequencer },
+  });
+  const discovered = ['outside-a', 'selected', 'outside-b', 'outside-c'].map(spec);
+  reporter.onTestRunStart(discovered);
+  assert.equal(read().inventory_observed, true);
+  assert.equal(read().selection_observed, false);
+  assert.deepEqual(read().modules, []);
+  const sequencer = new ctx.config.sequence.sequencer(ctx);
+  assert.ok(sequencer instanceof Sequencer);
+  assert.equal(await sequencer.shard(discovered), returned);
+  assert.equal(calls, 1, 'never independently predict or re-run sharding');
+  assert.equal(sequencer.sort(discovered), discovered);
+  assert.equal(read().discovered_module_count, 4);
+  assert.deepEqual(read().modules.map(m => m.id), ['selected']);
+  assert.deepEqual(read().unobserved_modules, ['selected']);
+  assert.deepEqual(read().shard, { index: 2, count: 4 });
+  reporter.onTestRunEnd([module('selected')], [], 'passed');
+  assert.equal(read().collection_complete, true);
+  assert.equal(read().modules.length, 1);
 });
 
 test('completed failure and success survive while another selected module is unobserved', t => {

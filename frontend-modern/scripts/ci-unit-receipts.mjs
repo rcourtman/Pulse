@@ -23,6 +23,21 @@ export default class CIUnitReceipts {
     }
     this.root = path.resolve(ctx.config.root);
     this.modules = new Map();
+    this.sharded = Boolean(ctx.config.shard);
+    if (this.sharded) {
+      // Vitest 4 calls run-start BEFORE the pool shards its inventory. Observe
+      // the actual sequencer call once; do not copy/re-run its selection rule
+      // or mistake another shard's files for missing results in this one.
+      const Sequencer = ctx.config.sequence.sequencer;
+      const reporter = this;
+      ctx.config.sequence.sequencer = class extends Sequencer {
+        async shard(files) {
+          const selected = await super.shard(files);
+          reporter.onShardSelected(selected);
+          return selected;
+        }
+      };
+    }
     this.receipt = {
       schema_version: 1,
       source_sha: this.sourceSha,
@@ -30,6 +45,7 @@ export default class CIUnitReceipts {
         .update(fs.readFileSync(path.join(this.root, 'package-lock.json'))).digest('hex'),
       shard: ctx.config.shard ?? { index: 1, count: 1 },
       inventory_observed: false,
+      selection_observed: false,
       test_run_end_observed: false,
       test_run_reason: null,
       unhandled_error_count: null,
@@ -55,11 +71,29 @@ export default class CIUnitReceipts {
         module_error_count: null,
       });
     }
-    this.modules = modules;
+    this.discovered = modules;
+    this.modules = new Map();
     this.receipt.inventory_observed = true;
+    this.receipt.discovered_module_count = modules.size;
+    this.receipt.selection_observed = false;
     this.receipt.test_run_end_observed = false;
     this.receipt.test_run_reason = null;
     this.receipt.unhandled_error_count = null;
+    if (this.sharded) this.write();
+    else this.onShardSelected(specifications);
+  }
+
+  onShardSelected(specifications) {
+    const selected = new Map();
+    for (const spec of specifications) {
+      const entry = this.discovered?.get(spec.taskId);
+      if (!entry || selected.has(spec.taskId)) {
+        throw new Error('Shard selection is absent from the discovered unit inventory');
+      }
+      selected.set(spec.taskId, entry);
+    }
+    this.modules = selected;
+    this.receipt.selection_observed = true;
     this.write();
   }
 
@@ -105,7 +139,8 @@ export default class CIUnitReceipts {
     const receipt = {
       ...this.receipt,
       // A run-end callback is not an observed process exit or a passing suite.
-      collection_complete: this.receipt.inventory_observed && modules.length > 0
+      collection_complete: this.receipt.inventory_observed && this.receipt.selection_observed
+        && modules.length > 0
         && this.receipt.test_run_end_observed
         && this.receipt.test_run_reason !== 'interrupted' && unobserved.length === 0,
       unobserved_modules: unobserved,
