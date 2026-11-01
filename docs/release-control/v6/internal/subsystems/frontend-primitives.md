@@ -11129,15 +11129,3 @@ literal date evidence and the browser-reproduced focus repair. The 15% threshold
 all other per-chunk baselines, total JS/CSS and preload/SRI checks stay unchanged.
 This is a narrowly declared intentional UI/accessibility cost, not suppression
 of the retained failed budget runs or permission to omit browser verification.
-
-### User Access reader projection
-
-The canonical settings panel registry supplies User Access with the effective
-authenticated principal and explicit `settingsCapabilities.users` value from
-the shared security status, just as the existing SSO surface receives its
-reader. Primitive value changes, not a containing status-object refresh, retire
-that reader. Missing authority is denied; registry navigation gating alone is
-not a lifetime guard for mounted directory reads, dialogs or pending writes.
-`settingsPanelRegistryContext.test.ts`, `settingsArchitecture.test.ts` and the
-registered User Access lifetime tests cover this projection without introducing
-a new route or an alternative permission model.
