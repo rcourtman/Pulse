@@ -42,6 +42,7 @@ describe('API URL encoding', () => {
     await SecurityAPI.deleteToken('tok/123?x=1');
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/security/tokens/tok%2F123%3Fx%3D1', {
       method: 'DELETE',
+      retry: false,
     });
   });
 
