@@ -234,7 +234,7 @@ class SecurityDocsTest(unittest.TestCase):
     def test_guidance_retains_authority_and_credential_lifecycle_boundaries(self):
         guide = " ".join(DOC.read_text().split())
         for boundary in ("monitoring:read", "settings:read", "settings:write", "CSRF",
-                         "organization-bound", "direct loopback", "export only",
+                         "organization-bound", "direct loopback", "only to configuration export",
                          "12 characters", "public", "separate from the export",
                          "entire configuration bundle", "31 March 2027", "no longer sold",
                          "does not reset a password", "deleting `.env` is not a universal reset",
@@ -259,6 +259,8 @@ class SecurityDocsTest(unittest.TestCase):
         for boundary in ("instance administrator", "owner/admin", "viewer or editor",
                          "trusted-proxy identity", "explicitly supplied token",
                          "no configured authentication", "direct loopback",
+                         "private-network and forwarded requests are not loopback",
+                         "only to configuration export", "It never enables import",
                          "server's own network namespace", "your laptop's `localhost`",
                          "Do not change network exposure or remove working authentication",
                          "anyone who can reach the export endpoint",

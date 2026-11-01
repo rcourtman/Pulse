@@ -313,9 +313,10 @@ explicitly supplied token's scopes or organisation binding.
 Only when Pulse has **no configured authentication**, configuration export and
 import can use a direct loopback connection without enabling a network-wide
 exception. The request must reach Pulse directly inside the server's own
-network namespace. A private LAN address, reverse proxy, forwarded request or
-your laptop's `localhost` is not that connection. Do not change network
-exposure or remove working authentication to make recovery possible.
+network namespace: private-network and forwarded requests are not loopback.
+A reverse proxy or your laptop's `localhost` is not that connection. Do not
+change network exposure or remove working authentication to make recovery
+possible.
 
 If authentication is configured but you cannot sign in, follow the
 [deployment-specific access recovery guide](docs/TROUBLESHOOTING.md#i-forgot-my-password).
@@ -324,8 +325,8 @@ authentication. Keep the existing deployment, data and credentials intact.
 
 ### Existing unprotected-export exception
 
-`ALLOW_UNPROTECTED_EXPORT=true` is an **export only** exception for an
-installation with no configured authentication. It permits export beyond
+`ALLOW_UNPROTECTED_EXPORT=true` applies only to configuration export, and only
+when Pulse has no configured authentication. It permits export beyond
 direct loopback: **anyone who can reach the export endpoint can choose their
 own passphrase and receive the configuration, including provider and SSO
 secrets**. Export encryption does not authenticate the caller, and a homelab
