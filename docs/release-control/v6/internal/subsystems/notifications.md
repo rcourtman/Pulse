@@ -299,9 +299,19 @@ do not extend the original timer or establish delivery.
 instant equality across time-zone/monotonic representations, cloned payloads,
 concurrent callbacks, occurrence-qualified cancellation, all-destination and
 webhook-only disable/zero-window flushes, and notification disable/re-enable.
-Stopping the manager cancels its volatile firing timer and snapshots, rather
-than letting an abandoned timer send directly after its queue is closed.
-Committed queue work retains its existing restart semantics.
+Stopping the manager cancels its firing timer and checkpoints its accepted
+snapshots as ordinary delayed queue work after workers quiesce. It preserves
+batch membership, current destination snapshots and the first admission's
+original deadline (rounded up to queue precision), or a later quiet-hours
+replay deadline. It does not flush, restart the window, invent a delivery
+receipt, or fall back to an early direct send if checkpoint storage fails.
+A restarted manager treats this committed batch as immutable; new admissions
+start their own window rather than merging into the old process's batch.
+Queue replay still applies current quiet hours and destination/enable policy.
+`firing_group_checkpoint_test.go` verifies exact occurrence/link snapshots,
+original deadlines after config edits, cancellation, pause/channel selection,
+tenant-directory isolation, concurrent timer/stop ownership and storage-error
+silence. Queue schema, drivers and event types are unchanged.
 `TestPendingFiringGroupStopCancelsTimer` checks actual timer/HTTP silence after stop.
 The connected `TestPendingFiringGroupHTTPAcrossRestart` uses actual timer expiry,
 persistent queue reopen, the autonomous sender and two loopback receivers: one
@@ -350,9 +360,11 @@ lifecycle regression proof, not installed SMTP receipt or reporter confirmation.
 
 ### Manager shutdown is a restart boundary, not a delivery verdict
 
-`NotificationManager.Stop` first refuses new alerts and discards volatile
-firing and recovery groups in one critical section, as Stop has always
-discarded them. Work that reads the queue outside the manager lock holds a
+`NotificationManager.Stop` first refuses new alerts and stops the firing timer
+in one critical section, retaining its buffered snapshots for checkpointing.
+Queue-less recovery buffers keep their existing volatile semantics; persistent
+recovery grouping is already durable. Work that reads the queue outside the
+manager lock holds a
 lease taken in the critical section that reads it. An admitted alert, recovery
 or timer group is written to the open queue. Cancellation, operator pause and
 channel disable still run while Stop drains. Direct delivery started by
@@ -365,8 +377,13 @@ quiet-hours hold, partition or claim: its job stays `pending` with no attempt,
 audit or receipt, and the next start delivers it. Work a worker began before
 that observation finishes while delivery is still permitted, recording its
 status, audit and durable firing receipt. Only after every worker and lease
-has ended does Stop withdraw delivery, detach the queue and close storage. A
-recovery after restart therefore still reaches each destination that received
+has ended does Stop withdraw delivery, detach the queue and close storage.
+Between quiescing workers and closing admission leases, Stop checkpoints the
+remaining firing group under the manager lock: resolution/pause either removes
+its buffered snapshot first or cancels its committed row afterwards, never
+falling between those states. Grouping edits during draining leave this
+checkpoint intact. Storage failures are logged, not called durable or routed
+to direct delivery. A recovery after restart still reaches each destination that received
 the firing. Shutdown must never cancel queued work as "delivery disabled";
 that verdict belongs to the pause and destination controls. Resolution
 cancellation and at-least-once replay of interrupted sends are unchanged.
@@ -1654,3 +1671,20 @@ SMTP, rate-limit and routing preservation through edits and reloads with email
 on or off. Backend configuration, transport, retry policy, TLS, queue recovery
 and notification delivery are unchanged. Browser controls are synthetic, not
 native SMTP acceptance or a containing release.
+
+### Buffered warnings survive graceful process boundaries
+
+`TestGroupedWarningGracefulProcessRestartAndReload` drives ordinary CheckHost
+warning callbacks through real alert/notification managers, persists active
+warning dispatch markers and performs actual SIGTERM/normal-exit process
+restarts plus same-process manager reload. Zero-repeat and positive-cooldown
+cases retain accepted pending batches; two loopback destinations receive the
+two-warning group no earlier than its original window. Another real process
+restart precedes occurrence/destination receipt-gated recoveries. No queue
+clock edit or fabricated successful firing receipt is used.
+`TestMonitorReloadKeepsBufferedWarning` separately covers the production
+monitor constructor/stop/reconstruction with saved notification policy and
+destinations: pending work remains delayed with no attempt or audit. These are
+source/native process proofs, not installed-service, external provider, stable
+release or reporter recovery. A crash before graceful checkpointing can still
+lose volatile firing buffers; this repair makes no crash-durability promise.

@@ -267,7 +267,7 @@ func TestStopDrainKeepsPauseAndChannelDisable(t *testing.T) {
 }
 
 // A deferred queue that never started keeps admitted rows for the next start,
-// and Stop still discards a firing group that was only buffered in memory.
+// and Stop checkpoints the buffered group without starting provider delivery.
 func TestStopNeverStartedQueueAndBufferedGroup(t *testing.T) {
 	f := newShutdownAdmissionFixture(t)
 	m := f.open(nil)
@@ -301,11 +301,14 @@ func TestStopNeverStartedQueueAndBufferedGroup(t *testing.T) {
 			statuses[alert.ID] = row.Status
 		}
 	}
-	if len(rows) != 2 || statuses["queued-1"] != QueueStatusPending || statuses["queued-2"] != QueueStatusPending {
+	if len(rows) != 3 || statuses["queued-1"] != QueueStatusPending || statuses["queued-2"] != QueueStatusPending || statuses["buffered"] != QueueStatusPending {
 		t.Fatalf("never-started queue lost admitted rows across Stop: %+v", rows)
 	}
-	if _, persisted := statuses["buffered"]; persisted {
-		t.Fatal("Stop persisted a buffered firing group; buffered groups are discarded at shutdown")
+	for _, row := range rows {
+		if row.Alerts[0].ID == "buffered" {
+			require.NotNil(t, row.NextRetryAt)
+			require.True(t, row.NextRetryAt.After(time.Now().Add(3500*time.Second)), "shutdown must not flush or reset the original deadline")
+		}
 	}
 }
 
