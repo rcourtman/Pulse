@@ -68,6 +68,44 @@ class MetricAlertHelpDocsTest(unittest.TestCase):
                 self.assertIn(boundary, self.guide)
         self.assertNotIn('```', self.guide)
 
+    def test_threshold_marker_help_follows_both_current_consumers(self):
+        source = (ROOT / 'docs/CONFIGURATION.md').read_text()
+        heading = '### Read active-alert markers\n'
+        self.assertEqual(source.count(heading), 1)
+        self.assertIn('[active-alert markers](#read-active-alert-markers)', source)
+        self.assertEqual(source.encode(),
+                         (ROOT / 'frontend-modern/public/docs/CONFIGURATION.md').read_bytes())
+        guide = ' '.join(source.split(heading, 1)[1].split('\n### ', 1)[0].split())
+        for file in ('AlertResourceTableRow.tsx', 'AlertResourceTableMobile.tsx'):
+            consumer = (ROOT / 'frontend-modern/src/components/Alerts' / file).read_text()
+            self.assertIn('title="Active alert"', consumer)
+            self.assertIn('hasActiveAlert(', consumer)
+        self.assertIn('current alert list contains an open alert for that row and metric', guide)
+        self.assertIn('not a new reading, another threshold', guide)
+        self.assertIn('No dot is not proof that the workload is healthy', guide)
+        self.assertIn('Recent delivery activity', guide)
+        self.assertIn('#usage-alert-stays-open-after-the-reading-falls', guide)
+        self.assertIn('#test-succeeds-but-real-alerts-are-missing', guide)
+        self.assertIn('Do not create load, change thresholds or send a Test', guide)
+        self.assertNotIn('```', guide)
+
+    def test_marker_attribution_distinguishes_machine_disks_and_linked_nodes(self):
+        source = (ROOT / 'docs/CONFIGURATION.md').read_text()
+        guide = ' '.join(source.split('### Read active-alert markers\n', 1)[1]
+                         .split('\n### ', 1)[0].split())
+        model = (ROOT / 'frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts').read_text()
+        host = (ROOT / 'frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsHostData.ts').read_text()
+        self.assertIn("child.startsWith('disk:') || child.startsWith('disk_temp:')", model)
+        self.assertIn("row.type === 'agent' && index.byMachine", model)
+        self.assertIn('alertResourceIds: uniqueIds(node.proxmox?.sourceId, node.id)', host)
+        self.assertIn('agentAlertResourceId(', host)
+        for boundary in ('**Disk %** or **Disk Temp**', 'exact filesystem or device',
+                         'does not mean every disk is affected',
+                         "agent's CPU, memory and disk alerts", 'not the node',
+                         'Check the owning row rather than changing the node'):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, guide)
+
 
 if __name__ == '__main__':
     unittest.main()
