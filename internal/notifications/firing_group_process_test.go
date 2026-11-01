@@ -194,7 +194,7 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 				received <- d
 				w.WriteHeader(200)
 			}))
-			defer server.Close()
+			t.Cleanup(server.Close)
 			dir := t.TempDir()
 			type child struct {
 				cmd    *exec.Cmd

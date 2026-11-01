@@ -280,7 +280,7 @@ func TestCheckpointReplayRechecksCurrentPolicy(t *testing.T) {
 		t.Run(policy, func(t *testing.T) {
 			var received atomic.Int32
 			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1); w.WriteHeader(http.StatusOK) }))
-			defer server.Close()
+			t.Cleanup(server.Close)
 			dir := t.TempDir()
 			hook := WebhookConfig{ID: "ops", URL: server.URL, Enabled: true, Service: "generic"}
 			open := func(add bool) *NotificationManager {
@@ -314,7 +314,10 @@ func TestCheckpointReplayRechecksCurrentPolicy(t *testing.T) {
 				})
 			}
 			m.StartQueueProcessing()
-			awaitShutdownCondition(t, "checkpoint replay policy verdict", func() bool {
+			// This is an asynchronous completion watchdog, not a delivery-latency
+			// SLO. Allow the configured HTTP timeout plus a queue discovery tick;
+			// the old ten-second helper could tear down a still-owned request.
+			require.Eventually(t, func() bool {
 				rows := quietReplayRows(t, m.GetQueue())
 				if len(rows) != 1 {
 					return false
@@ -329,7 +332,7 @@ func TestCheckpointReplayRechecksCurrentPolicy(t *testing.T) {
 				default:
 					return rows[0].Status == QueueStatusCancelled
 				}
-			})
+			}, WebhookTimeout+10*time.Second, 10*time.Millisecond, "checkpoint replay policy verdict")
 			entries, err := m.GetQueue().GetDeliveryLog(time.Now().Add(-time.Hour), 100)
 			require.NoError(t, err)
 			if policy == "allowed" {
