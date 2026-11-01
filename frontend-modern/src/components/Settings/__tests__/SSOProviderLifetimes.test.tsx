@@ -186,6 +186,16 @@ describe('SSO provider read and editor ownership', () => {
       expect(notices.success).not.toHaveBeenCalled();
       expect(notices.error).not.toHaveBeenCalled();
       expect(writes()).toHaveLength(0);
+      const create = screen.getByRole('button', { name: 'Add OIDC' });
+      if (change === 'permission') {
+        expect(create).toBeDisabled();
+      } else {
+        await waitFor(() => expect(create).toBeEnabled());
+        expect(screen.queryByText(/Single sign-on is read-only/)).toBeNull();
+        fireEvent.click(create);
+        expect(screen.getByLabelText('Client Secret')).toHaveValue('');
+        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+      }
       expect(listCalls()[1][1].headers['X-Pulse-Org-ID']).toBe(
         change === 'organisation' ? 'sso-b' : 'sso-a',
       );

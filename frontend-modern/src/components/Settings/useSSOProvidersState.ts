@@ -68,9 +68,9 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const managementAllowed = createMemo(() => props.canManage !== false);
   const authenticatedUser = createMemo(() => props.currentUser);
   const currentOrg = () => getOrgID() || 'default';
-  let selectedOrg = currentOrg();
-  let selectedUser = authenticatedUser();
-  let selectedManagement = managementAllowed();
+  const [selectedOrg, setSelectedOrg] = createSignal(currentOrg());
+  const [selectedUser, setSelectedUser] = createSignal(authenticatedUser());
+  const [selectedManagement, setSelectedManagement] = createSignal(managementAllowed());
   let disposed = false;
   let contextVersion = 0;
   let editorVersion = 0;
@@ -82,16 +82,16 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   const contextIsCurrent = () =>
     !disposed &&
-    selectedOrg === currentOrg() &&
-    selectedUser === authenticatedUser() &&
-    selectedManagement === managementAllowed();
+    selectedOrg() === currentOrg() &&
+    selectedUser() === authenticatedUser() &&
+    selectedManagement() === managementAllowed();
   const canManage = () => contextIsCurrent() && managementAllowed();
   const canEdit = () =>
     canManage() && providersLoaded() && !loading() && !loadError() && !mutating();
   const isCurrentProvider = (provider: SSOProvider) => providers().includes(provider);
   const requestOptions = (controller: AbortController) => ({
     signal: controller.signal,
-    expectedOrgID: selectedOrg,
+    expectedOrgID: selectedOrg(),
     retry: false,
   });
 
@@ -217,10 +217,10 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     readController?.abort();
     mutationController?.abort();
     readController = mutationController = undefined;
-    selectedOrg = currentOrg();
-    selectedUser = authenticatedUser();
-    selectedManagement = managementAllowed();
     batch(() => {
+      setSelectedOrg(currentOrg());
+      setSelectedUser(authenticatedUser());
+      setSelectedManagement(managementAllowed());
       clearEditor();
       setProviders([]);
       setProvidersLoaded(false);
