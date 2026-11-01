@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shlex
 import signal
 import subprocess
+import sys
 import tempfile
 import textwrap
 import time
@@ -145,6 +147,7 @@ class NpmAuditRetryTest(unittest.TestCase):
     def run_check(
         self, mode: str, *arguments: str, require: str = "true", report=None,
         attempts: int = 3, attempt_timeout: int = 60, max_seconds: int = 240,
+        python_startup: str = "",
     ):
         with tempfile.TemporaryDirectory() as directory:
             fake_bin = Path(directory)
@@ -255,21 +258,102 @@ class NpmAuditRetryTest(unittest.TestCase):
                     "NPM_AUDIT_RETRY_DELAY": "0",
                 }
             )
+            caller = ROOT
+            startup_marker = fake_bin / "python-startup"
+            python_calls = fake_bin / "python-calls"
+            if python_startup:
+                # Use the actual helpers and parser, not replacement verdict
+                # adapters. Only the interpreter entry logs their real argv.
+                # Each hook is confined to this subprocess's synthetic caller.
+                interpreter = fake_bin / "python3"
+                interpreter.write_text(
+                    '#!/bin/sh\nprintf "%s\\000" "$1" "${2-}" "${3-}" >> "$AUDIT_PYTHON_CALLS"\n'
+                    f'exec {shlex.quote(sys.executable)} "$@"\n', encoding="utf-8")
+                interpreter.chmod(0o700)
+                env.update(PATH=f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+                           AUDIT_PYTHON_CALLS=str(python_calls))
+                clean = {"metadata": {"vulnerabilities": dict.fromkeys(
+                    ("info", "low", "moderate", "high", "critical", "total"), 0)}}
+                marker = (f"with open({str(startup_marker)!r}, 'a') as marker: "
+                          "marker.write('unexpected startup\\n')\n")
+                injected = fake_bin / "injected"
+                injected.mkdir()
+                if python_startup == "site":
+                    (injected / "sitecustomize.py").write_text(
+                        marker + f"import json\njson.loads = lambda *args, **kwargs: {clean!r}\n")
+                    env["PYTHONPATH"] = str(injected)
+                elif python_startup == "shadow":
+                    (injected / "json.py").write_text(
+                        marker + f"def loads(*args, **kwargs): return {clean!r}\n")
+                    caller = injected
+                elif python_startup == "home":
+                    env["PYTHONHOME"] = str(injected / "not-a-python-home")
+                else:
+                    raise AssertionError("unknown synthetic Python startup")
             result = subprocess.run(
                 [str(SCRIPT), *arguments],
-                cwd=ROOT,
+                cwd=caller,
                 env=env,
                 text=True,
                 capture_output=True,
                 check=False,
                 timeout=30,
             )
+            result.python_startup = startup_marker.exists()
+            result.python_calls = (python_calls.read_bytes().split(b"\0")[:-1]
+                                   if python_calls.exists() else [])
             recorded_calls = (
                 calls.read_text(encoding="utf-8").splitlines()
                 if calls.exists()
                 else []
             )
             return result, recorded_calls
+
+    def assert_isolated_helpers(self, result) -> None:
+        self.assertFalse(result.python_startup, result.stdout + result.stderr)
+        self.assertEqual(len(result.python_calls), 6, result.stdout + result.stderr)
+        self.assertEqual(result.python_calls[:2], [b"-I", b"-S"])
+        self.assertTrue(result.python_calls[2].endswith(b"/npm_audit_process.py"))
+        self.assertEqual(result.python_calls[3:], [b"-I", b"-S", b"-c"])
+
+    def test_python_startup_cannot_replace_captured_positive_findings(self) -> None:
+        for startup in ("site", "shadow"):
+            for require in ("true", "false"):
+                with self.subTest(startup=startup, require=require):
+                    result, calls = self.run_check(
+                        "vulnerability-success", "all", require=require,
+                        python_startup=startup,
+                    )
+                    self.assertEqual(result.returncode, 1 if require == "true" else 0,
+                                     result.stdout + result.stderr)
+                    self.assertEqual(calls, ["audit --json"])
+                    self.assertIn("vulnerabilities present", result.stdout)
+                    self.assertIn("::error::" if require == "true" else "::warning::",
+                                  result.stdout)
+                    self.assertNotIn("no vulnerabilities", result.stdout)
+                    self.assertNotIn("retrying", result.stdout)
+                    self.assert_isolated_helpers(result)
+
+    def test_clean_audit_ignores_caller_python_home_and_startup(self) -> None:
+        for startup in ("site", "shadow", "home"):
+            with self.subTest(startup=startup):
+                result, calls = self.run_check("success", "production", "--package-lock-only",
+                                               python_startup=startup)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(calls, ["audit --json --package-lock-only --omit=dev"])
+                self.assertIn("no vulnerabilities", result.stdout)
+                self.assert_isolated_helpers(result)
+
+    def test_python_startup_cannot_turn_unavailable_evidence_clean(self) -> None:
+        for startup in ("site", "shadow", "home"):
+            with self.subTest(startup=startup):
+                result, calls = self.run_check("garbage", "all", attempts=1,
+                                               python_startup=startup)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(calls, ["audit --json"])
+                self.assertIn("could not reach the advisory endpoint", result.stdout)
+                self.assertNotIn("no vulnerabilities", result.stdout)
+                self.assert_isolated_helpers(result)
 
     def test_fake_audit_budget_is_not_inherited_from_the_caller(self) -> None:
         # These are fixture controls, not a real advisory query. A caller's

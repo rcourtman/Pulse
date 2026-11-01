@@ -113,7 +113,9 @@ run_audit() {
   # Keep Bash's existing executable-script fallback (ENOEXEC), including on
   # macOS. The fixed exec program forwards argv literally; no npm argument or
   # executable path is interpolated into shell code.
-  python3 "${audit_runner_dir}/npm_audit_process.py" \
+  # Both Python helpers are stdlib-only. Do not let the caller's PYTHONPATH,
+  # local modules or site startup replace the supervisor or captured verdict.
+  python3 -I -S "${audit_runner_dir}/npm_audit_process.py" \
     "${limit}" "${out}" "${BASH}" -c 'exec "$@"' npm-audit \
     "${NPM_BIN}" "${AUDIT_ARGS[@]}"
 }
@@ -124,7 +126,7 @@ run_audit() {
 #   vulnerable     — audit completed, vulnerabilities present
 #   unreachable    — npm could not get an answer from the advisory endpoint
 classify_report() {
-  python3 -c '
+  python3 -I -S -c '
 import json, sys
 
 raw = sys.stdin.read().strip()
