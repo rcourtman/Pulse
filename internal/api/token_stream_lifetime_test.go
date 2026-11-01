@@ -504,3 +504,57 @@ func TestTokenStreamWriterNonTokenReadClosesBeforeReturn(t *testing.T) {
 		t.Fatal("non-token read accepted a write after handler return")
 	}
 }
+
+// Deadline forwarding is deliberately narrow: ResponseController must work,
+// but Unwrap/ReaderFrom must not expose an unguarded output path.
+type deadlineTokenStreamWriter struct {
+	*httptest.ResponseRecorder
+	writeDeadlines []time.Time
+	readDeadlines  []time.Time
+}
+
+func (w *deadlineTokenStreamWriter) SetWriteDeadline(deadline time.Time) error {
+	w.writeDeadlines = append(w.writeDeadlines, deadline)
+	return nil
+}
+func (w *deadlineTokenStreamWriter) SetReadDeadline(deadline time.Time) error {
+	w.readDeadlines = append(w.readDeadlines, deadline)
+	return nil
+}
+
+func TestTokenStreamWriterPreservesDeadlineControlWithoutEscape(t *testing.T) {
+	base := &deadlineTokenStreamWriter{ResponseRecorder: httptest.NewRecorder()}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	allowed := true
+	writer := &tokenStreamWriter{writer: base, flusher: base, ctx: ctx, cancel: cancel, allowed: func() bool { return allowed }}
+	controller := http.NewResponseController(writer)
+	deadline := time.Now().Add(10 * time.Second)
+	for _, d := range []time.Time{{}, deadline} {
+		if err := controller.SetWriteDeadline(d); err != nil {
+			t.Fatal(err)
+		}
+		if err := controller.SetReadDeadline(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(base.writeDeadlines) != 2 || !base.writeDeadlines[0].IsZero() || !base.writeDeadlines[1].Equal(deadline) || len(base.readDeadlines) != 2 || !base.readDeadlines[0].IsZero() || !base.readDeadlines[1].Equal(deadline) {
+		t.Fatal("deadline clearing/bounding did not reach the underlying transport")
+	}
+	if _, ok := any(writer).(interface{ Unwrap() http.ResponseWriter }); ok {
+		t.Fatal("writer exposes an unguarded response writer")
+	}
+	if _, ok := any(writer).(io.ReaderFrom); ok {
+		t.Fatal("writer exposes an unguarded ReaderFrom")
+	}
+	allowed = false
+	if err := controller.SetWriteDeadline(deadline); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("withdrawn deadline control = %v", err)
+	}
+	if err := controller.SetReadDeadline(deadline); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("closed deadline control = %v", err)
+	}
+	if len(base.writeDeadlines) != 2 || len(base.readDeadlines) != 2 || ctx.Err() == nil {
+		t.Fatal("withdrawn control reached transport or retained live request")
+	}
+}

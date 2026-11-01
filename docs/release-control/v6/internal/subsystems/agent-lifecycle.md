@@ -15,6 +15,17 @@
 
 ## Purpose
 
+### Assistant result streams do not own agent execution lifetime
+
+Assistant HTTP result readers recheck current token authority at their serialized
+writer, including deadline control. Token withdrawal denies further Assistant
+output; it does not introduce an agent disconnect, deployment cancellation or
+command-cancellation operation. Legacy execute and alert investigation retain
+their independent 15/5-minute work bounds; chat retains request cancellation.
+Independent authorised readers and session/proxy admission are unchanged. The
+native Assistant lifetime and persisted-delete tests in `internal/api/` cover
+this distinction without starting an agent or a command.
+
 ### Dashboard token lifetime is not agent-execution authority
 
 An already-open dashboard `/ws` read loses access when its admitted API token

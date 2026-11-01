@@ -21,6 +21,17 @@
 
 ## Purpose
 
+### Assistant reader withdrawal is not a recovery mutation
+
+The shared API stream guard also covers Assistant results, not recovery-state
+mutation. Current API-token refusal suppresses subsequent response frames and
+retains the admitted organisation; it never deletes stored evidence, clears a
+recovery marker or cancels an independent recovery job. Deadline forwarding does
+not expose an unguarded writer. Legacy Assistant work remains background-bound;
+chat remains request-bound. Native Assistant independent-reader/lifetime and
+persisted-token-delete regressions in `internal/api/` pin this boundary using
+synthetic text, not a recovery replay or customer workload.
+
 ### Revoked monitoring sockets do not preserve recovery access
 
 Dashboard `/ws` token reads revalidate current authority before data/queued

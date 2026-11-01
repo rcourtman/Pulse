@@ -45,7 +45,7 @@ func monitoringTokenSnapshotRevalidator(cfg *config.Config, req *http.Request) f
 // tokenStreamSnapshotRevalidator preserves the stream's admitted credential,
 // principal and organization while checking its current operation-specific
 // scope. Callers must retain any additional route policy (e.g. instance admin).
-func tokenStreamSnapshotRevalidator(cfg *config.Config, req *http.Request, scope string) func() (*config.APITokenRecord, bool) {
+func tokenStreamSnapshotRevalidator(cfg *config.Config, req *http.Request, scopes ...string) func() (*config.APITokenRecord, bool) {
 	admitted := getAPITokenRecordFromRequest(req)
 	if admitted == nil {
 		return nil
@@ -77,8 +77,14 @@ func tokenStreamSnapshotRevalidator(cfg *config.Config, req *http.Request, scope
 		if !ok || (tenantInventory && tenantTokenConfigForRequest(req) != live) {
 			return nil, false
 		}
+		// Keep the route's existing scope alternatives (notably mobile chat)
+		// rather than requiring a new grant or pinning one interchangeable scope.
+		hasScope := false
+		for _, scope := range scopes {
+			hasScope = hasScope || current.HasScope(scope)
+		}
 		if current.ID != admitted.ID || apiTokenAuthenticatedUser(current) != apiTokenAuthenticatedUser(admitted) ||
-			!current.HasScope(scope) || !checker.CheckAccess(current, "", orgID).Allowed {
+			!hasScope || !checker.CheckAccess(current, "", orgID).Allowed {
 			return nil, false
 		}
 		return current, true

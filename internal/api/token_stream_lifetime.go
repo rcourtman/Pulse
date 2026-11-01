@@ -15,8 +15,12 @@ import (
 // is produced: replay and queued broadcasts can otherwise disclose after a
 // credential is withdrawn. Session/proxy admission is intentionally unchanged.
 func retainTokenStreamAuthority(cfg *config.Config, scope string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
+	return retainTokenStreamAuthorityForScopes(cfg, []string{scope}, instanceAdmin, next)
+}
+
+func retainTokenStreamAuthorityForScopes(cfg *config.Config, scopes []string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scope)
+		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scopes...)
 		allowed := func() bool {
 			if revalidate == nil {
 				// Session/proxy admission stays with the route. They still
@@ -88,6 +92,27 @@ type tokenStreamWriter struct {
 }
 
 func (w *tokenStreamWriter) Header() http.Header { return w.writer.Header() }
+
+// Forward deadline control without exposing Unwrap, which would also let a
+// caller bypass the disclosure guard. Assistant streams clear the server's
+// initial deadlines and bound every subsequent write, including heartbeats.
+func (w *tokenStreamWriter) SetWriteDeadline(deadline time.Time) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.checkLocked() {
+		return io.ErrClosedPipe
+	}
+	return http.NewResponseController(w.writer).SetWriteDeadline(deadline)
+}
+
+func (w *tokenStreamWriter) SetReadDeadline(deadline time.Time) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.checkLocked() {
+		return io.ErrClosedPipe
+	}
+	return http.NewResponseController(w.writer).SetReadDeadline(deadline)
+}
 
 func (w *tokenStreamWriter) checkLocked() bool {
 	if w.closed {

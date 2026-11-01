@@ -49,9 +49,11 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// AI models list - require ai:chat scope (needed to select a model for chat)
 	r.mux.HandleFunc("/api/ai/models", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleListModels)))
 	r.mux.HandleFunc("/api/ai/execute", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecute)))
-	r.mux.HandleFunc("/api/ai/execute/stream", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleExecuteStream)))
+	r.mux.HandleFunc("/api/ai/execute/stream", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute,
+		retainTokenStreamAuthority(r.config, config.ScopeAIExecute, true, r.aiSettingsHandler.HandleExecuteStream))))
 	r.mux.HandleFunc("/api/ai/kubernetes/analyze", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAlertAnalysisEndpoints.HandleAnalyzeKubernetesCluster)))
-	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAlertAnalysisEndpoints.HandleInvestigateAlert)))
+	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute,
+		retainTokenStreamAuthority(r.config, config.ScopeAIExecute, true, r.aiAlertAnalysisEndpoints.HandleInvestigateAlert))))
 
 	r.mux.HandleFunc("/api/ai/run-command", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleRunCommand)))
 	// Knowledge reads belong to ai:chat; durable mutations require ai:execute.
@@ -257,7 +259,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// SECURITY: Status endpoint reports the chat service and should require ai:chat scope for token clients.
 	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleStatus)))
 	r.mux.HandleFunc("/api/ai/workflow-prompts/activity", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleRecordWorkflowPromptActivity)))
-	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteChatSend, r.aiHandler.HandleChat)))
+	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteChatSend,
+		retainTokenStreamAuthorityForScopes(r.config, relayMobileRuntimeRouteSpecFor(relayMobileRouteChatSend).compatibleScopes(), false, r.aiHandler.HandleChat))))
 	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
 
