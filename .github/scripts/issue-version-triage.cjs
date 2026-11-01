@@ -185,7 +185,7 @@ function firstFieldValue(lines, start = 0) {
   return "";
 }
 
-function extractSectionValues(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
+function extractSectionValues(body, heading, followingHeadings = [], report = parseReportMarkdown(body), declarationsOnly = false) {
   if (!body) return [];
   const lines = report.lines;
   const pattern = new RegExp(`^${escapeRegExp(heading)}$`, "i");
@@ -200,7 +200,8 @@ function extractSectionValues(body, heading, followingHeadings = [], report = pa
           boundary.test(lines[end].heading))))) {
       end += 1;
     }
-    values.push(lines.slice(start + 1, end).map((line) => line.text).join("\n").trim());
+    values.push(lines.slice(start + 1, end).map((line) =>
+      !declarationsOnly || line.declaration ? line.text : "").join("\n").trim());
     // A deeper, form-named subheading is part of this value, not another
     // declaration. Only resume at the boundary that ended the field.
     start = end - 1;
@@ -433,7 +434,9 @@ function classifyFeedbackSelection(feedbackType, report) {
 }
 
 function classifyV6FeedbackType(body, report = parseReportMarkdown(body)) {
-  const classes = extractSectionValues(body, "Feedback type", [], report)
+  // Preserve the report's original block context. Re-lexing copied code or a
+  // quote as bare field text could let examples supply or veto a selection.
+  const classes = extractSectionValues(body, "Feedback type", [], report, true)
     .map(value => classifyFeedbackSelection(value, report));
   // Repeated declarations must agree on the metadata category. Choosing the
   // first can invent a bug and its version requirements from contradictory or

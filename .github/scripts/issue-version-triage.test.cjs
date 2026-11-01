@@ -498,8 +498,6 @@ test("feedback classification examines the complete field instead of its first l
       "Documentation issue\nBug / regression",
       "Bug / regression\nThis is a question, not a selected form option.",
       "Documentation issue\n\nBug / regression",
-      "Bug / regression\n\n> Documentation issue",
-      "Bug / regression\n\n```text\nDocumentation issue\n```",
       "Bug / regression\n\n![context](https://example.invalid/synthetic.png)",
       "Bug / regression\n\n- Documentation issue",
     ]) {
@@ -522,6 +520,26 @@ test("a complete single choice retains wrapping, hidden comments and shared refe
       const body = `### Feedback type\n${selection}\n\n### Pulse version\nunknown\n\n` +
         '[choice]: https://example.invalid/documentation "Documentation issue"';
       assert.equal(triage.internals.classifyV6FeedbackType(body.replaceAll("\n", newline)), "bug", selection);
+    }
+  }
+});
+
+test("copied blocks cannot supply or contradict a feedback selection", () => {
+  for (const copied of [
+    "> Documentation issue",
+    "```text\nDocumentation issue\n```",
+    "    Documentation issue",
+    "<div>Documentation issue</div>",
+  ]) {
+    for (const newline of ["\n", "\r\n"]) {
+      for (const selection of [`Bug / regression\n\n${copied}`, `${copied}\n\nBug / regression`]) {
+        const body = `### Feedback type\n${selection}\n\n### Pulse version\nunknown`
+          .replaceAll("\n", newline);
+        assert.equal(triage.internals.classifyV6FeedbackType(body), "bug", selection);
+      }
+      const body = `### Feedback type\n${copied}\n\n### Pulse version\nunknown`
+        .replaceAll("\n", newline);
+      assert.equal(triage.internals.classifyV6FeedbackType(body), null, copied);
     }
   }
 });
