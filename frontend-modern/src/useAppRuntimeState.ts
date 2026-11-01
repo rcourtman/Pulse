@@ -870,7 +870,7 @@ export const useAppRuntimeState = () => {
       // Older Workloads versions persisted an org-only copy of server
       // metadata. New owners never read/write it; remove every legacy scope
       // only after withdrawal is acknowledged. Snapshot keys before removal.
-      const guestMetadataKeys = new Set([STORAGE_KEYS.GUEST_METADATA]);
+      const guestMetadataKeys = new Set<string>([STORAGE_KEYS.GUEST_METADATA]);
       clean(() => {
         for (let index = 0; index < localStorage.length; index += 1) {
           const key = localStorage.key(index);
