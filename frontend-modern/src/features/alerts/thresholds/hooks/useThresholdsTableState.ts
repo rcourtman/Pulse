@@ -42,6 +42,10 @@ import {
 } from '@/utils/alertThresholdsPresentation';
 import { PMG_THRESHOLD_COLUMNS } from '@/features/alerts/thresholds/constants';
 import { normalizeDockerIgnoredInput } from '@/features/alerts/thresholds/helpers';
+import {
+  indexActiveMetricAlerts,
+  thresholdRowHasActiveAlert,
+} from '@/features/alerts/thresholds/thresholdsResourceModel';
 import type { ThresholdsTableProps } from '@/features/alerts/thresholds/types';
 import type {
   Resource as TableResource,
@@ -268,10 +272,11 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     props.setHasUnsavedChanges(true);
   };
 
-  const hasActiveAlert = (resourceId: string, metric: string): boolean => {
+  const activeMetricAlerts = createMemo(() => indexActiveMetricAlerts(props.activeAlerts));
+
+  const hasActiveAlert = (resource: TableResource, metric: string): boolean => {
     if (!alertsEnabled()) return false;
-    if (!props.activeAlerts) return false;
-    return `${resourceId}-${metric}` in props.activeAlerts;
+    return thresholdRowHasActiveAlert(activeMetricAlerts(), resource, metric);
   };
 
   const {

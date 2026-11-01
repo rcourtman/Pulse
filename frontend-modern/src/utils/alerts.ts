@@ -233,6 +233,15 @@ const getUnifiedResourceAlertKeys = (
 };
 
 /**
+ * The resource IDs a unified resource's own alerts are raised on: its unified
+ * id, the poller's source or metrics-target id, and a machine's "agent:<id>"
+ * and "docker:<id>" keys. Alerts on its components nest under the latter.
+ */
+export const getUnifiedResourceAlertResourceIds = (resource: Resource): string[] => [
+  ...getUnifiedResourceAlertKeys(resource).exact,
+];
+
+/**
  * Open alerts for one unified resource, read from the websocket's active
  * alert map, most severe first. This is the canonical source for a resource
  * drawer's "Needs attention" list: resources do not embed their alerts.

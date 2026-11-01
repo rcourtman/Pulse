@@ -144,7 +144,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
     value <= 0 ? 'Off' : props.table.formatMetricValue(metric, value);
 
   const MetricValueWithHeat = (metricProps: {
-    resourceId: string;
+    resource: Resource;
     metric: string;
     value: number;
     isOverridden: boolean;
@@ -168,7 +168,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
         >
           {displayText}
         </span>
-        <Show when={props.table.hasActiveAlert(metricProps.resourceId, metricProps.metric)}>
+        <Show when={props.table.hasActiveAlert(metricProps.resource, metricProps.metric)}>
           <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert" />
         </Show>
       </div>
@@ -529,7 +529,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                               aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}: ${metricValueText(metric, displayValue(metric))}`}
                             >
                               <MetricValueWithHeat
-                                resourceId={resource.id}
+                                resource={resource}
                                 metric={metric}
                                 value={displayValue(metric)}
                                 isOverridden={isOverridden(metric)}

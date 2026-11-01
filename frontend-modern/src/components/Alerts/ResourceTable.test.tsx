@@ -844,17 +844,24 @@ describe('ResourceTable', () => {
     });
 
     it('shows active alert indicator dot when hasActiveAlert returns true', () => {
-      const hasActiveAlert = vi.fn((_resourceId: string, metric: string) => metric === 'cpu');
-      const props = makeProps({
-        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 90, memory: 85 } })],
-        hasActiveAlert,
+      const hasActiveAlert = vi.fn((_resource: unknown, metric: string) => metric === 'cpu');
+      const resource = makeResource({
+        id: 'vm-1',
+        alertResourceIds: ['vm-1', 'pve1-101'],
+        thresholds: { cpu: 90, memory: 85 },
       });
+      const props = makeProps({ resources: [resource], hasActiveAlert });
       render(() => <ResourceTable {...props} />);
 
       // The active alert indicator is a pulsing red dot
-      const alertDot = document.querySelector('[title="Active alert"]');
-      expect(alertDot).toBeTruthy();
-      expect(alertDot!.className).toContain('animate-pulse');
+      const alertDots = document.querySelectorAll('[title="Active alert"]');
+      expect(alertDots).toHaveLength(1);
+      expect(alertDots[0].className).toContain('animate-pulse');
+      // The row hands over the whole resource so its alert resource IDs reach the lookup.
+      expect(hasActiveAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'vm-1', alertResourceIds: ['vm-1', 'pve1-101'] }),
+        'cpu',
+      );
     });
   });
 

@@ -52,7 +52,7 @@ interface AlertResourceTableRowProps {
   editingThresholds: () => Record<string, number | undefined>;
   setEditingThresholds: (value: Record<string, number | undefined>) => void;
   formatMetricValue: (metric: string, value: number | undefined) => string;
-  hasActiveAlert: (resourceId: string, metric: string) => boolean;
+  hasActiveAlert: (resource: Resource, metric: string) => boolean;
   onEdit: (
     resourceId: string,
     thresholds: Record<string, number | undefined>,
@@ -159,7 +159,6 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
     value <= 0 ? 'Off' : props.formatMetricValue(metric, value);
 
   const MetricValueWithHeat = (metricProps: {
-    resourceId: string;
     metric: string;
     value: number;
     isOverridden: boolean;
@@ -183,7 +182,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         >
           {displayText}
         </span>
-        <Show when={props.hasActiveAlert(metricProps.resourceId, metricProps.metric)}>
+        <Show when={props.hasActiveAlert(props.resource, metricProps.metric)}>
           <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Active alert" />
         </Show>
       </div>
@@ -450,7 +449,6 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                       aria-label={`Edit ${column} threshold for ${resourceLabel()}: ${metricValueText(metric, displayValue(metric))}`}
                     >
                       <MetricValueWithHeat
-                        resourceId={props.resource.id}
                         metric={metric}
                         value={displayValue(metric)}
                         isOverridden={isOverridden(metric)}

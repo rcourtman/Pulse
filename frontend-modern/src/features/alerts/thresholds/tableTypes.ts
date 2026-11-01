@@ -9,6 +9,8 @@ export interface Resource {
   id: string;
   overrideIdCandidates?: string[];
   overrideStorageId?: string;
+  /** Resource IDs this row's alerts are raised on (getUnifiedResourceAlertResourceIds); `id` when unset. */
+  alertResourceIds?: string[];
   name: string;
   displayName?: string;
   policy?: ResourcePolicy;

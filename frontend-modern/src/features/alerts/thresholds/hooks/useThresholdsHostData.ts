@@ -10,6 +10,7 @@ import { formatTemperature } from '@/utils/temperature';
 import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
 import {
+  agentAlertResourceId,
   agentDiskResourceId,
   buildAgentHeaderMeta,
   createOverridesMap,
@@ -22,6 +23,7 @@ import {
   platformData,
   readRecord,
   readString,
+  uniqueIds,
 } from '../thresholdsResourceModel';
 
 export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
@@ -65,6 +67,10 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
 
       return {
         id: node.id,
+        // The node's own alerts are raised on its Proxmox node ID. A node merged
+        // with its Pulse agent hands CPU, memory and disk to the agent, whose
+        // alerts its Machines row shows against the agent's limits.
+        alertResourceIds: uniqueIds(node.proxmox?.sourceId, node.id),
         name: sanitizedName,
         displayName: sanitizedName,
         rawName: originalDisplayName,
@@ -115,6 +121,11 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
 
       return {
         id: resourceId,
+        alertResourceIds: [
+          agentAlertResourceId(
+            readString(agentResource.agent?.agentId) || hostActionId(agentResource),
+          ),
+        ],
         name: displayName,
         displayName,
         rawName: agentResource.identity?.hostname ?? agentResource.name,
