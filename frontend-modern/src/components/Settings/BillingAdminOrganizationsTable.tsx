@@ -48,7 +48,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
     const currentSubState = () =>
       (props.billingByOrgID[orgID]?.subscription_state || '').toLowerCase();
     return (
-      <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
+      <div class="flex flex-col sm:inline-flex sm:flex-row sm:items-center gap-2">
         <Button
           variant="secondary"
           size="sm"
