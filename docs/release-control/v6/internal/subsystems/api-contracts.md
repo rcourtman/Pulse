@@ -13485,3 +13485,21 @@ synthetic credentials and preserved live data. `log_bundle_test.go` covers
 value grammars, detached projections, log fallbacks, runtime identity and race
 ownership. Consuming browser evidence exercises the unchanged download control
 with the exact synthetic native ZIP; it is not installed/customer recovery.
+
+### API token panel requests retain their confirmed context
+
+The existing API Access token inventory and create, rename, scope-edit and revoke
+calls accept an abort signal and expected organisation. They use the ordinary
+credentials, retain backend permission/scope/owner checks, and do not automatically
+retry a refusal or switch a confirmation to the default organisation. CSRF
+preparation must finish without dispatching an aborted or differently scoped
+write. The Relay/mobile issuer and token detail API are unchanged.
+
+The consuming panel rejects results after disposal, an organisation/user change
+or management-authority change, including leave-and-return cycles. Only one write
+runs at once; an inventory read interrupted by a write resumes as a new read,
+never an old snapshot. An unreadable inventory remains unknown and read-only
+accounts retain explicit inventory recovery. These guarantees are exercised by
+`security.transport.test.ts`, `security.test.ts`, `APITokenLifetimes.test.tsx`
+and the registered API token panel tests; browser proof covers the actual API
+Access consumer with synthetic responses, not installed administrator recovery.

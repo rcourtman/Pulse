@@ -21,6 +21,11 @@ function isTokenInventoryRecord(value: unknown): value is APITokenRecord {
   );
 }
 
+export interface APITokenRequestOptions {
+  signal?: AbortSignal;
+  expectedOrgID?: string;
+}
+
 export interface CreateAPITokenResponse {
   token: string;
   record: APITokenRecord;
@@ -38,8 +43,11 @@ export class SecurityAPI {
     return response.record;
   }
 
-  static async listTokens(): Promise<APITokenRecord[]> {
-    const response = await apiFetchJSON<unknown>('/api/security/tokens');
+  static async listTokens(options?: APITokenRequestOptions): Promise<APITokenRecord[]> {
+    const response = await apiFetchJSON<unknown>('/api/security/tokens', {
+      ...options,
+      retry: false,
+    });
     if (response && typeof response === 'object' && !Array.isArray(response)) {
       const tokens = (response as { tokens?: unknown }).tokens;
       // A legacy nil list is explicitly empty; a missing or malformed list is not.
@@ -52,7 +60,11 @@ export class SecurityAPI {
     throw new Error('Invalid API token inventory.');
   }
 
-  static async createToken(name?: string, scopes?: string[]): Promise<CreateAPITokenResponse> {
+  static async createToken(
+    name?: string,
+    scopes?: string[],
+    options?: APITokenRequestOptions,
+  ): Promise<CreateAPITokenResponse> {
     const payload: Record<string, unknown> = {};
     if (name) {
       payload.name = name;
@@ -62,6 +74,8 @@ export class SecurityAPI {
     }
 
     return apiFetchJSON<CreateAPITokenResponse>('/api/security/tokens', {
+      ...options,
+      retry: false,
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -74,10 +88,16 @@ export class SecurityAPI {
     });
   }
 
-  static async updateTokenScopes(id: string, scopes: string[]): Promise<APITokenRecord> {
+  static async updateTokenScopes(
+    id: string,
+    scopes: string[],
+    options?: APITokenRequestOptions,
+  ): Promise<APITokenRecord> {
     const response = await apiFetchJSON<{ record: APITokenRecord }>(
       `/api/security/tokens/${encodeURIComponent(id)}`,
       {
+        ...options,
+        retry: false,
         method: 'PATCH',
         body: JSON.stringify({ scopes }),
       },
@@ -85,16 +105,24 @@ export class SecurityAPI {
     return response.record;
   }
 
-  static async deleteToken(id: string): Promise<void> {
+  static async deleteToken(id: string, options?: APITokenRequestOptions): Promise<void> {
     await apiFetchJSON(`/api/security/tokens/${encodeURIComponent(id)}`, {
+      ...options,
+      retry: false,
       method: 'DELETE',
     });
   }
 
-  static async renameToken(id: string, name: string): Promise<APITokenRecord> {
+  static async renameToken(
+    id: string,
+    name: string,
+    options?: APITokenRequestOptions,
+  ): Promise<APITokenRecord> {
     const response = await apiFetchJSON<{ record: APITokenRecord }>(
       `/api/security/tokens/${encodeURIComponent(id)}`,
       {
+        ...options,
+        retry: false,
         method: 'PATCH',
         body: JSON.stringify({ name }),
       },

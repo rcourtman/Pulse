@@ -7,6 +7,7 @@ import APITokenManager from './APITokenManager';
 
 interface APIAccessPanelProps {
   currentTokenHint?: string;
+  currentUser?: string;
   onTokensChanged: () => void;
   refreshing: boolean;
   canManage: boolean;
@@ -35,6 +36,7 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
       <div data-testid="api-access-token-section">
         <APITokenManager
           currentTokenHint={props.currentTokenHint}
+          currentUser={props.currentUser}
           onTokensChanged={props.onTokensChanged}
           refreshing={props.refreshing}
           canManage={props.canManage}

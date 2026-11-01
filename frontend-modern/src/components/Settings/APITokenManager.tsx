@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal, lazy } from 'solid-js';
+import { Component, For, Show, createEffect, createSignal, lazy, on, onCleanup } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -20,6 +20,7 @@ import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 interface APITokenManagerProps {
   currentTokenHint?: string;
+  currentUser?: string;
   onTokensChanged?: () => void;
   refreshing?: boolean;
   canManage?: boolean;
@@ -39,6 +40,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [tokenToRename, setTokenToRename] = createSignal<APITokenRecord | null>(null);
   const [renameInput, setRenameInput] = createSignal('');
   let dialogTrigger: HTMLButtonElement | undefined;
+  let focusTimer: number | undefined;
   const {
     API_SCOPE_LABELS,
     API_TOKEN_SCOPES_DOC_URL,
@@ -46,6 +48,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     applyFullAccessPreset,
     applyScopePreset,
     canManage,
+    contextVersion,
+    isMutating,
     canGenerateToken,
     clearScopes,
     copyNewMonitoringKioskLink,
@@ -88,6 +92,18 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     presetMatchesSelection,
   } = useAPITokenManagerState(props);
 
+  const clearDialogs = () => {
+    window.clearTimeout(focusTimer);
+    dialogTrigger = undefined;
+    setTokenToEdit(null);
+    setEditScopes([]);
+    setTokenToRevoke(null);
+    setTokenToRename(null);
+    setRenameInput('');
+  };
+  createEffect(on(contextVersion, clearDialogs, { defer: true }));
+  onCleanup(() => window.clearTimeout(focusTimer));
+
   const effectiveScopes = (token: APITokenRecord) =>
     token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
 
@@ -100,7 +116,9 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     const tokenId = trigger?.dataset.apiTokenId;
     const action = trigger?.dataset.apiTokenAction;
     dialogTrigger = undefined;
-    window.setTimeout(() => {
+    const version = contextVersion();
+    focusTimer = window.setTimeout(() => {
+      if (version !== contextVersion() || !canManage()) return;
       if (trigger?.isConnected && !trigger.disabled) {
         trigger.focus();
         return;
@@ -122,17 +140,20 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   };
 
   const openScopeEditor = (token: APITokenRecord, trigger: HTMLButtonElement) => {
+    if (!canManage() || isMutating()) return;
     rememberDialogTrigger(trigger);
     setEditScopes([...effectiveScopes(token)]);
     setTokenToEdit(token);
   };
 
   const openRevokeDialog = (token: APITokenRecord, trigger: HTMLButtonElement) => {
+    if (!canManage() || isMutating()) return;
     rememberDialogTrigger(trigger);
     setTokenToRevoke(token);
   };
 
   const openRenameDialog = (token: APITokenRecord, trigger: HTMLButtonElement) => {
+    if (!canManage() || isMutating()) return;
     rememberDialogTrigger(trigger);
     setRenameInput(token.name ?? '');
     setTokenToRename(token);
@@ -293,7 +314,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         data-api-token-id={token.id}
         data-api-token-action="edit-scopes"
         onClick={(event) => openScopeEditor(token, event.currentTarget)}
-        disabled={!canManage()}
+        disabled={!canManage() || isMutating()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 ${
           compact ? 'flex-1 border border-blue-200 dark:border-blue-800' : 'sm:min-h-9'
         }`}
@@ -305,7 +326,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         data-api-token-id={token.id}
         data-api-token-action="rename"
         onClick={(event) => openRenameDialog(token, event.currentTarget)}
-        disabled={!canManage()}
+        disabled={!canManage() || isMutating()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 ${
           compact ? 'flex-1 border border-blue-200 dark:border-blue-800' : 'sm:min-h-9'
         }`}
@@ -317,7 +338,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         data-api-token-id={token.id}
         data-api-token-action="revoke"
         onClick={(event) => openRevokeDialog(token, event.currentTarget)}
-        disabled={!canManage()}
+        disabled={!canManage() || isMutating()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900/25 dark:hover:text-red-300 ${
           compact ? 'flex-1 border border-red-200 dark:border-red-900/25' : 'sm:min-h-9'
         }`}
