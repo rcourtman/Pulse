@@ -167,9 +167,18 @@ func TestPBSNamespaceTransientGroupReadKeepsLiveInventory(t *testing.T) {
 								}
 							}
 						}
+						// The accepted sibling was re-read; the failed namespace's
+						// retained point was not and cannot count.
+						acceptedID := f.ids[0]
+						if accepted == "101" {
+							acceptedID = f.ids[1]
+						}
 						for _, p := range f.postures(t) {
-							if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown {
-								t.Errorf("incomplete history claimed current protection: %+v", p)
+							if len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown || p.Coverage != recovery.ProtectionCoveragePartial {
+								t.Errorf("incomplete history claimed complete coverage: %+v", p)
+							}
+							if (p.State == recovery.ProtectionStateProtected) != (p.SubjectResourceID == acceptedID) {
+								t.Errorf("protection does not follow the re-read namespace: %+v", p)
 							}
 						}
 					}
@@ -224,9 +233,11 @@ func TestPBSNamespaceDiscoveryContinuityAndAccessWithdrawal(t *testing.T) {
 					if f.tenantReads.Load() != childReads {
 						t.Error("discovery failure guessed a hidden namespace read")
 					}
+					// The root namespace was still read; only the tenant is unread.
 					for _, p := range f.postures(t) {
-						if p.State == recovery.ProtectionStateProtected {
-							t.Errorf("failed discovery claimed protection: %+v", p)
+						if (p.State == recovery.ProtectionStateProtected) != (p.SubjectResourceID == f.ids[0]) ||
+							(p.State == recovery.ProtectionStateProtected && p.Coverage != recovery.ProtectionCoveragePartial) {
+							t.Errorf("failed discovery protection does not follow the read root: %+v", p)
 						}
 					}
 				}
@@ -369,7 +380,10 @@ func TestPBSNamespaceContinuityLifecycle(t *testing.T) {
 		}
 		postures := f.postures(t)
 		for _, p := range postures {
-			healthy := phase == "observed" || phase == "recovered" || phase == "restored"
+			// Tenant failures leave the root snapshot re-read each poll.
+			tenantUnread := phase == "throttled" || phase == "timed-out" || phase == "denied"
+			healthy := phase == "observed" || phase == "recovered" || phase == "restored" ||
+				(tenantUnread && p.SubjectResourceID == f.ids[0])
 			if healthy != (p.State == recovery.ProtectionStateProtected) {
 				t.Fatalf("phase %s posture=%+v", phase, p)
 			}

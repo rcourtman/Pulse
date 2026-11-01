@@ -113,6 +113,105 @@ func (completeness ProtectionHistoryCompleteness) Valid() bool {
 	}
 }
 
+// ProtectionUnreadScopeKind names the level of provider history that a
+// collection could not read.
+type ProtectionUnreadScopeKind string
+
+const (
+	// A PVE node whose storage list could not be read.
+	ProtectionUnreadScopeNode ProtectionUnreadScopeKind = "node"
+	// A PVE storage whose content could not be read. Node is set when the
+	// failed read was made through, or belongs to, one node.
+	ProtectionUnreadScopeStorage ProtectionUnreadScopeKind = "storage"
+	// A PBS datastore whose namespaces could not all be discovered.
+	ProtectionUnreadScopeDatastore ProtectionUnreadScopeKind = "datastore"
+	// A PBS namespace (Namespace "" is the root) whose groups or snapshots
+	// could not all be read.
+	ProtectionUnreadScopeNamespace ProtectionUnreadScopeKind = "namespace"
+)
+
+// MaxProtectionUnreadScopes bounds the unread scopes kept on one observation.
+// The list explains a partial collection; it is not an inventory.
+const MaxProtectionUnreadScopes = 32
+
+// ProtectionUnreadScope names one part of a provider's backup history that its
+// latest collection could not read. Recovery points stored from that part are
+// retained evidence, not current confirmation.
+type ProtectionUnreadScope struct {
+	Kind         ProtectionUnreadScopeKind `json:"kind"`
+	Node         string                    `json:"node,omitempty"`
+	Storage      string                    `json:"storage,omitempty"`
+	Namespace    string                    `json:"namespace,omitempty"`
+	AccessDenied bool                      `json:"accessDenied,omitempty"`
+}
+
+func (scope ProtectionUnreadScope) normalize() (ProtectionUnreadScope, bool) {
+	scope.Node = strings.TrimSpace(scope.Node)
+	scope.Storage = strings.TrimSpace(scope.Storage)
+	scope.Namespace = strings.TrimSpace(scope.Namespace)
+	switch scope.Kind {
+	case ProtectionUnreadScopeNode:
+		scope.Storage, scope.Namespace = "", ""
+		return scope, scope.Node != ""
+	case ProtectionUnreadScopeStorage:
+		scope.Namespace = ""
+		return scope, scope.Storage != ""
+	case ProtectionUnreadScopeDatastore:
+		scope.Node, scope.Namespace = "", ""
+		return scope, scope.Storage != ""
+	case ProtectionUnreadScopeNamespace:
+		scope.Node = ""
+		return scope, scope.Storage != ""
+	default:
+		return scope, false
+	}
+}
+
+func (scope ProtectionUnreadScope) sortKey() string {
+	return strings.Join([]string{
+		string(scope.Kind), scope.Storage, scope.Namespace, scope.Node,
+	}, "\x00")
+}
+
+// NormalizeProtectionUnreadScopes drops invalid entries, merges duplicates
+// (a denied read wins), sorts, and caps the list.
+func NormalizeProtectionUnreadScopes(scopes []ProtectionUnreadScope) []ProtectionUnreadScope {
+	if len(scopes) == 0 {
+		return nil
+	}
+	byKey := make(map[string]ProtectionUnreadScope, len(scopes))
+	for _, scope := range scopes {
+		normalized, ok := scope.normalize()
+		if !ok {
+			continue
+		}
+		key := normalized.sortKey()
+		if existing, seen := byKey[key]; seen {
+			normalized.AccessDenied = normalized.AccessDenied || existing.AccessDenied
+		}
+		byKey[key] = normalized
+	}
+	if len(byKey) == 0 {
+		return nil
+	}
+	out := make([]ProtectionUnreadScope, 0, len(byKey))
+	for _, scope := range byKey {
+		out = append(out, scope)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].sortKey() < out[j].sortKey() })
+	if len(out) > MaxProtectionUnreadScopes {
+		out = out[:MaxProtectionUnreadScopes]
+	}
+	return out
+}
+
+func cloneProtectionUnreadScopes(scopes []ProtectionUnreadScope) []ProtectionUnreadScope {
+	if len(scopes) == 0 {
+		return nil
+	}
+	return append([]ProtectionUnreadScope(nil), scopes...)
+}
+
 type ProtectionProviderState struct {
 	Provider             Provider                             `json:"provider"`
 	Source               string                               `json:"source"`
@@ -125,6 +224,9 @@ type ProtectionProviderState struct {
 	LastVerifiedAt       *time.Time                           `json:"lastVerifiedAt,omitempty"`
 	EvidenceIDs          []string                             `json:"evidenceIds"`
 	VerificationExpected bool                                 `json:"verificationExpected,omitempty"`
+	// UnreadScopes names what the provider's latest collection could not
+	// read. Only a partial or unavailable history carries it.
+	UnreadScopes []ProtectionUnreadScope `json:"unreadScopes,omitempty"`
 }
 
 func (state ProtectionProviderState) Clone() ProtectionProviderState {
@@ -133,6 +235,7 @@ func (state ProtectionProviderState) Clone() ProtectionProviderState {
 	clone.LastSuccessAt = cloneTime(state.LastSuccessAt)
 	clone.LastVerifiedAt = cloneTime(state.LastVerifiedAt)
 	clone.EvidenceIDs = append([]string(nil), state.EvidenceIDs...)
+	clone.UnreadScopes = cloneProtectionUnreadScopes(state.UnreadScopes)
 	return clone
 }
 
@@ -248,11 +351,28 @@ type ProtectionProviderObservation struct {
 	ObservedAt           time.Time                            `json:"observedAt"`
 	IngestedAt           time.Time                            `json:"ingestedAt"`
 	Evidence             operationaltrust.EvidenceEnvelope    `json:"evidence"`
+	// UnreadScopes names the parts of a partial or unavailable collection that
+	// went unread. It explains the gap; point confirmation does not depend on it.
+	UnreadScopes []ProtectionUnreadScope `json:"unreadScopes,omitempty"`
 }
 
 func (observation ProtectionProviderObservation) Clone() ProtectionProviderObservation {
 	clone := observation
 	clone.Evidence = observation.Evidence.Clone()
+	clone.UnreadScopes = cloneProtectionUnreadScopes(observation.UnreadScopes)
+	return clone
+}
+
+// WithUnreadScopes returns the observation carrying the normalized unread
+// scopes. A complete collection read everything, so it carries none.
+func (observation ProtectionProviderObservation) WithUnreadScopes(
+	scopes []ProtectionUnreadScope,
+) ProtectionProviderObservation {
+	clone := observation.Clone()
+	clone.UnreadScopes = nil
+	if observation.HistoryCompleteness != ProtectionHistoryComplete {
+		clone.UnreadScopes = NormalizeProtectionUnreadScopes(scopes)
+	}
 	return clone
 }
 
@@ -343,20 +463,27 @@ type ProtectionPostureQuery struct {
 }
 
 type ProtectionProviderSummary struct {
-	Provider              Provider
-	Source                string
-	Scope                 string
-	JobState              Outcome
-	HistoryCompleteness   ProtectionHistoryCompleteness
-	Permissions           operationaltrust.EvidencePermissions
-	VerificationExpected  bool
-	LastAttemptAt         *time.Time
-	LastSuccessAt         *time.Time
-	LastVerifiedAt        *time.Time
-	BackupPointCount      int
-	SnapshotPointCount    int
-	RepositoryResourceIDs []string
-	EvidenceIDs           []string
+	Provider             Provider
+	Source               string
+	Scope                string
+	JobState             Outcome
+	HistoryCompleteness  ProtectionHistoryCompleteness
+	Permissions          operationaltrust.EvidencePermissions
+	VerificationExpected bool
+	LastAttemptAt        *time.Time
+	LastSuccessAt        *time.Time
+	LastVerifiedAt       *time.Time
+	// ConfirmedLastSuccessAt and ConfirmedLastVerifiedAt cover only the points
+	// that the provider's latest collection re-read. A partial collection can
+	// still confirm those points; retained points from its unread scopes may
+	// have been pruned since and stay out of these fields.
+	ConfirmedLastSuccessAt  *time.Time
+	ConfirmedLastVerifiedAt *time.Time
+	UnreadScopes            []ProtectionUnreadScope
+	BackupPointCount        int
+	SnapshotPointCount      int
+	RepositoryResourceIDs   []string
+	EvidenceIDs             []string
 }
 
 func (summary ProtectionProviderSummary) normalize() ProtectionProviderSummary {

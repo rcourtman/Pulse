@@ -565,6 +565,39 @@ describe('ProxmoxBackupsTable', () => {
     expect(postureURL.searchParams.getAll('resourceId')).toEqual(['ct-112']);
   });
 
+  it('names a backup storage Pulse cannot read once, above the coverage list', async () => {
+    mockBackupAPIs('protected');
+    const response = await apiFetchJSONMock();
+    response.data[0].coverage = 'partial';
+    response.data[0].providerStates = [
+      {
+        provider: 'proxmox-pve',
+        source: 'pve-backup-enumeration',
+        scope: 'homelab',
+        jobState: 'warning',
+        historyCompleteness: 'partial',
+        permissions: 'unknown',
+        evidenceIds: ['evidence-2'],
+        unreadScopes: [{ kind: 'storage', node: 'delly', storage: 'pbs-energy-offsite' }],
+      },
+    ];
+    apiFetchJSONMock.mockResolvedValue(response);
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={[pbsServerResource]}
+      />
+    ));
+
+    const notice = await screen.findByText(
+      'Pulse cannot read pbs-energy-offsite on delly, so it cannot confirm the backups stored there. Check that the storage is reachable from Proxmox.',
+    );
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(document.querySelectorAll('[data-unread-backup-sources]')).toHaveLength(1);
+  });
+
   it('offers By date / Coverage views and no legacy sub-tab tree', async () => {
     mockBackupAPIs();
 

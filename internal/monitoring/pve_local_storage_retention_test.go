@@ -217,12 +217,15 @@ func TestPVELocalStorageAcceptedReadLifecycle(t *testing.T) {
 			t.Fatalf("phase %s live/recorded inventory = %d/%d, want %d", phase, len(rows.StorageBackups), len(points), want)
 		}
 		for _, p := range postures {
-			if phase == "observed" || phase == "recovered" {
+			// Node-a's guest keeps a re-read backup through the partial phase;
+			// node-b's retained one was not re-read.
+			readA := phase == "partial" && p.SubjectResourceID == f.ids[0]
+			if phase == "observed" || phase == "recovered" || readA {
 				if p.State != recovery.ProtectionStateProtected {
 					t.Fatalf("phase %s accepted completed backup is not protected: %+v", phase, p)
 				}
 			} else if p.State == recovery.ProtectionStateProtected {
-				t.Fatalf("phase %s claimed protection without complete current backup evidence", phase)
+				t.Fatalf("phase %s claimed protection without a current backup read: %+v", phase, p)
 			}
 		}
 		frames[phase] = map[string]any{"pve": map[string]any{"data": rows}, "postures": map[string]any{"data": postures, "policy": recovery.DefaultProtectionPosturePolicy.Payload()}, "points": points}

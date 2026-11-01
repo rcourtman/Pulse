@@ -111,6 +111,18 @@ const (
 )
 
 type ProtectionProviderState = model.ProtectionProviderState
+type ProtectionUnreadScope = model.ProtectionUnreadScope
+type ProtectionUnreadScopeKind = model.ProtectionUnreadScopeKind
+
+const (
+	ProtectionUnreadScopeNode      ProtectionUnreadScopeKind = model.ProtectionUnreadScopeNode
+	ProtectionUnreadScopeStorage   ProtectionUnreadScopeKind = model.ProtectionUnreadScopeStorage
+	ProtectionUnreadScopeDatastore ProtectionUnreadScopeKind = model.ProtectionUnreadScopeDatastore
+	ProtectionUnreadScopeNamespace ProtectionUnreadScopeKind = model.ProtectionUnreadScopeNamespace
+)
+
+var NormalizeProtectionUnreadScopes = model.NormalizeProtectionUnreadScopes
+
 type ProtectionPosture = model.ProtectionPosture
 type ProtectionProviderObservation = model.ProtectionProviderObservation
 type ProtectionPosturePolicy = model.ProtectionPosturePolicy

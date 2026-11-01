@@ -223,8 +223,14 @@ func exercisePBSBudgetAcceptedListings(t *testing.T) {
 						}
 					}
 					for _, posture := range f.postures(t) {
-						if posture.State == recovery.ProtectionStateProtected || len(posture.ProviderStates) != 1 || posture.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || posture.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown {
-							t.Errorf("partial collection invented protection: %+v", posture)
+						if len(posture.ProviderStates) != 1 || posture.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || posture.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown || posture.Coverage != recovery.ProtectionCoveragePartial {
+							t.Errorf("partial collection invented complete history: %+v", posture)
+						}
+						// Only guest 100's snapshot was accepted before the budget
+						// expired; at the tasks boundary it is still being written.
+						wantProtected := posture.SubjectResourceID == f.ids[0] && boundary != "tasks"
+						if (posture.State == recovery.ProtectionStateProtected) != wantProtected {
+							t.Errorf("partial collection protection does not follow the accepted read (protected=%t): %+v", wantProtected, posture)
 						}
 					}
 					frames["partial"] = f.frame(t)

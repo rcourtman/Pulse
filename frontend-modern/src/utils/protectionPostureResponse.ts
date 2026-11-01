@@ -29,6 +29,19 @@ const choice =
   (value) =>
     typeof value === 'string' && values.includes(value);
 const idList: Check = (value) => value === null || (Array.isArray(value) && value.every(text));
+const optionalText: Check = (value) => value === undefined || typeof value === 'string';
+const unreadScope: Check = (value) =>
+  value !== null &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  choice('node', 'storage', 'datastore', 'namespace')((value as Record<string, unknown>).kind) &&
+  ['node', 'storage', 'namespace'].every((key) =>
+    optionalText((value as Record<string, unknown>)[key]),
+  ) &&
+  ((value as Record<string, unknown>).accessDenied === undefined ||
+    boolean((value as Record<string, unknown>).accessDenied));
+const unreadScopeList: Check = (value) =>
+  value == null || (Array.isArray(value) && value.every(unreadScope));
 
 function record(value: unknown, shape: Readonly<Record<string, Check>>): Record<string, unknown> {
   if (
@@ -62,6 +75,7 @@ const providerShape = {
   lastVerifiedAt: optionalTime,
   evidenceIds: idList,
   verificationExpected: (value: unknown) => value === undefined || boolean(value),
+  unreadScopes: unreadScopeList,
 };
 const postureShape = {
   subjectResourceId: text,

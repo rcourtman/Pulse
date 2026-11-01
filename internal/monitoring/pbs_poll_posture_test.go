@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -283,8 +284,14 @@ func TestPBSOrdinaryPollSnapshotFailuresDoNotClaimCompleteHistory(t *testing.T) 
 					t.Errorf("raw snapshot rows=%d, want %d", got, wantRaw)
 				}
 				for _, p := range f.postures(t) {
-					if p.State != tc.state || len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != tc.permissions || p.ProviderStates[0].JobState != recovery.OutcomeWarning {
-						t.Errorf("snapshot failure posture=%+v, want %s/partial/%s/warning", p, tc.state, tc.permissions)
+					// Only guest 100's snapshot read fails; guest 101's snapshot
+					// is re-read and stays protected under partial coverage.
+					state := tc.state
+					if p.SubjectResourceID == f.ids[1] {
+						state = recovery.ProtectionStateProtected
+					}
+					if p.State != state || p.Coverage != recovery.ProtectionCoveragePartial || len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != tc.permissions || p.ProviderStates[0].JobState != recovery.OutcomeWarning {
+						t.Errorf("snapshot failure posture=%+v, want %s/partial/%s/warning", p, state, tc.permissions)
 					}
 				}
 				// No TTL manipulation on the next poll: a failed refresh must not
@@ -309,8 +316,11 @@ func TestPBSOrdinaryPollPartialNamespaceRetainsUnseenHistory(t *testing.T) {
 	if len(f.points(t, "pbs-main")) != 4 {
 		t.Error("partial namespace poll deleted unseen historical points")
 	}
+	// Both guests' root snapshots were re-read; only the unreadable
+	// namespace's retained points went unconfirmed, and it is named.
 	for _, p := range f.postures(t) {
-		if p.State != recovery.ProtectionStateAttention || len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsPartial {
+		if p.State != recovery.ProtectionStateProtected || p.Coverage != recovery.ProtectionCoveragePartial || len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial || p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsPartial ||
+			!reflect.DeepEqual(p.ProviderStates[0].UnreadScopes, []recovery.ProtectionUnreadScope{{Kind: recovery.ProtectionUnreadScopeNamespace, Storage: "archive", Namespace: "unreadable", AccessDenied: true}}) {
 			t.Errorf("partial namespace posture=%+v", p)
 		}
 	}

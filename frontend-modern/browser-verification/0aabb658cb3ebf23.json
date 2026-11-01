@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "598994dfc20f06bc293f676bbba438ee8cfbf0ed",
+  "verified_at": "2026-11-01T16:38:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupUnreadSources.ts",
+    "frontend-modern/src/types/recovery.ts",
+    "frontend-modern/src/utils/protectionPostureResponse.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "784647117e6dfd2b5d536cd9e6abc427ac7c2957b3c3b5f768705d371ab20fba",
+    "frontend-modern/src/features/proxmox/proxmoxBackupUnreadSources.ts": "e138b5b1f86f4f110be1a411d20f4cf55bebd225621157ed02d58b98b12f68a4",
+    "frontend-modern/src/types/recovery.ts": "d52030f31023f078d65e40f3ba2433ef2289d94242e3feeb1e776fa8bab8c47c",
+    "frontend-modern/src/utils/protectionPostureResponse.ts": "00aa34f7e724bb2daa7398855a1a9d6c66f3894818ddda66edfce93c0ba34c9c"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "frames exported from the real PVE poll, recovery ingest and posture reader, replayed into the production Backups table (static build of browser-tests/backups.html)",
+    "one enabled but unreachable PBS storage (pbs-energy-offsite on node-a) beside readable archives: 2 protected, one amber notice naming the storage",
+    "node-b archive pruned while the storage stays unreadable: 1 protected, 1 attention, notice and guest-102 drawer explanation name the storage",
+    "storage readable again: notice gone, complete coverage",
+    "light theme only; the fixture does not apply the class-based dark theme"
+  ],
+  "interactions": [
+    "loaded Coverage in Chromium 141 at 1440x1000 and WebKit 26 at 375x812, reloading per phase",
+    "checked the notice text and role=status, the health-strip counts, and absence after recovery",
+    "expanded and collapsed guest-102 by keyboard and matched its posture explanation",
+    "asserted no page errors and no horizontal overflow in every phase; viewed screenshots"
+  ]
+}

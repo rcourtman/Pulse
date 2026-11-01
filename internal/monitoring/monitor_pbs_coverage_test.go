@@ -821,9 +821,19 @@ func TestPBSNamespaceDiscoveryFirstPollDoesNotInventScope(t *testing.T) {
 			if len(f.points(t, "pbs-main")) != 1 || f.childReads.Load() != 0 {
 				t.Fatal("failed first discovery invented a child namespace or lost readable root history")
 			}
+			// The root snapshot was read; only undiscovered namespaces are
+			// unknown, so coverage is partial and names the datastore.
 			for _, p := range f.postures(t) {
-				if p.State == recovery.ProtectionStateProtected {
-					t.Errorf("incomplete first discovery claimed current protection: %+v", p)
+				if len(p.ProviderStates) == 0 {
+					if p.State == recovery.ProtectionStateProtected {
+						t.Errorf("guest without evidence claimed protection: %+v", p)
+					}
+					continue
+				}
+				if p.State != recovery.ProtectionStateProtected || p.Coverage != recovery.ProtectionCoveragePartial ||
+					len(p.ProviderStates[0].UnreadScopes) != 1 ||
+					p.ProviderStates[0].UnreadScopes[0].Kind != recovery.ProtectionUnreadScopeDatastore {
+					t.Errorf("incomplete first discovery lost the read root or its partial coverage: %+v", p)
 				}
 			}
 		})

@@ -777,6 +777,19 @@ producer feeds the production Backups coverage surface in
 `scripts/check-pve-backup-reconciliation.cjs`. Retained history is not a fresh
 provider read, an available archive, guest thaw or filesystem-liveness proof.
 
+A partial PVE or PBS observation also names what went unread, from the same
+read-failure bookkeeping that drives carry-forward: PVE unread nodes, node-local
+storages and shared storages no node read (with the node when exactly one node
+attempted it, and whether authorization rejected it); PBS datastores whose
+namespace discovery failed and namespaces whose groups or snapshots were not all
+read. The names never decide which points this poll confirmed; that remains the
+renewed point evidence described in the storage-recovery contract, so a guest
+whose backup this scan re-read is protected with partial coverage while one whose
+only backup sits on the unread storage is not.
+`TestPVEUnreadStorageLeavesReadBackupsProtected` covers one enabled but
+unreachable PBS storage beside readable archives, a pruned archive retained by
+the partial poll, and the complete recovery.
+
 ### Skipped PVE backup storage is unread, not empty
 
 A configured backup target that is not safe to query (including disabled

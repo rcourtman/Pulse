@@ -146,8 +146,18 @@ func (f *pveReconciliationFixture) assertHistory(t *testing.T, history recovery.
 		if len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != history || p.ProviderStates[0].Permissions != permissions {
 			t.Errorf("posture lost source-bound history/access evidence: %+v", p)
 		}
-		if history != recovery.ProtectionHistoryComplete && p.State == recovery.ProtectionStateProtected {
-			t.Errorf("incomplete collection claimed protection: %+v", p)
+		if history == recovery.ProtectionHistoryComplete || p.State != recovery.ProtectionStateProtected {
+			continue
+		}
+		// An incomplete poll still confirms the archives it re-read, so a guest
+		// whose backup it read may be protected, but only with partial coverage.
+		// In two-guest fixtures node-b's guest is the unread one: its retained
+		// point was not re-read and may have been pruned, so it never counts.
+		// Single-guest fixtures also keep a re-read archive on node-a.
+		unreadGuest := len(f.ids) > 1 && p.SubjectResourceID == f.ids[1]
+		if history != recovery.ProtectionHistoryPartial || unreadGuest ||
+			p.Coverage != recovery.ProtectionCoveragePartial {
+			t.Errorf("incomplete collection claimed protection from unread history: %+v", p)
 		}
 	}
 }

@@ -792,3 +792,90 @@ func TestStoreProtectionPosturePublishesCanonicalLegacySubject(t *testing.T) {
 		t.Fatalf("obsolete attention posture remains: %+v total=%d err=%v", attention, total, err)
 	}
 }
+
+// A partial collection persists which scope it could not read, and a point it
+// re-read keeps its standing while one it only retained does not.
+func TestStoreProtectionPostureKeepsReReadPointsUnderPartialCollection(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	backupTime := now.Add(-time.Hour)
+	point := recovery.RecoveryPoint{
+		ID:                "pve-backup:cluster:archive:vm-100",
+		Provider:          recovery.ProviderProxmoxPVE,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeLocal,
+		Outcome:           recovery.OutcomeSuccess,
+		CompletedAt:       &backupTime,
+		SubjectResourceID: "resource:vm-100",
+		ProviderScope:     "cluster",
+	}
+	unread := []recovery.ProtectionUnreadScope{{
+		Kind:    recovery.ProtectionUnreadScopeStorage,
+		Node:    "delly",
+		Storage: "pbs-energy-offsite",
+	}}
+	collect := func(at time.Time, reRead bool) {
+		t.Helper()
+		observation, err := recovery.NewProtectionProviderObservation(
+			recovery.ProviderProxmoxPVE, "pve-backup-enumeration", "cluster",
+			recovery.OutcomeWarning, recovery.ProtectionHistoryPartial,
+			operationaltrust.EvidencePermissionsUnknown, false, at, at, nil,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reRead {
+			evidence, err := recovery.NewRecoveryPointEvidence(point, "pve-storage-backup-inventory", at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			read := point
+			read.Evidence = evidence
+			if err := store.UpsertPoints(ctx, []recovery.RecoveryPoint{read}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := store.UpsertProtectionProviderObservations(
+			ctx,
+			[]recovery.ProtectionProviderObservation{observation.WithUnreadScopes(unread)},
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	posture := func() recovery.ProtectionPosture {
+		t.Helper()
+		got, _, err := store.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{
+			SubjectResourceIDs: []string{"resource:vm-100"},
+		})
+		if err != nil || len(got) != 1 {
+			t.Fatalf("ListProtectionPostures() = %d, %v", len(got), err)
+		}
+		return got[0]
+	}
+
+	collect(now, true)
+	got := posture()
+	if got.State != recovery.ProtectionStateProtected || got.Coverage != recovery.ProtectionCoveragePartial {
+		t.Fatalf("re-read point under partial collection = %s/%s, want protected/partial: %+v", got.State, got.Coverage, got)
+	}
+	if len(got.ProviderStates) != 1 || len(got.ProviderStates[0].UnreadScopes) != 1 ||
+		got.ProviderStates[0].UnreadScopes[0] != unread[0] {
+		t.Fatalf("unread scopes did not survive persistence: %+v", got.ProviderStates)
+	}
+	if !strings.Contains(got.Explanation, "pbs-energy-offsite on delly") {
+		t.Fatalf("explanation does not name the unread storage: %q", got.Explanation)
+	}
+
+	collect(now.Add(time.Minute), false)
+	if got := posture(); got.State != recovery.ProtectionStateAttention {
+		t.Fatalf("retained point the latest collection did not read = %s, want attention", got.State)
+	}
+}
