@@ -410,9 +410,11 @@ function classifyFeedbackSelection(feedbackType, report) {
   // Inspect the whole field, not just its first line. An edited selection can
   // contain a conflicting choice or qualifying prose on a later line/block;
   // neither field order nor layout makes the first option authoritative.
+  // The original declaration projection already omits hidden comment blocks.
+  // Do not scan comment delimiters again: unexpected HTML is not a choice,
+  // and a repeated-comment regular expression can backtrack exponentially.
   const blocks = lexFieldValue(feedbackType, report).filter(token =>
-    !["space", "def"].includes(token.type) &&
-    !(token.type === "html" && /^(?:\s*<!--[\s\S]*?-->)+\s*$/.test(token.raw || "")));
+    !["space", "def"].includes(token.type));
   if (blocks.length !== 1 || blocks[0].type !== "paragraph") return null;
   const visible = inlineDeclarationText(blocks[0].tokens);
   const normalized = visible.trim().toLowerCase().replace(/\s+/g, " ");

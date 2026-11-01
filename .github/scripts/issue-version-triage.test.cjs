@@ -584,6 +584,61 @@ for (const action of ["opened", "edited", "reopened"]) {
   });
 }
 
+test("comment-rich feedback keeps hidden hints separate from the complete visible choice", () => {
+  const comments = "<!-- hint -->".repeat(4000);
+  for (const newline of ["\n", "\r\n"]) {
+    for (const [selection, expected] of [
+      [`${comments}\n\nDocumentation issue`, "documentation"],
+      [`Bug / regression\n\n${comments}`, "bug"],
+      [`${comments}\n\nBug /\nregression`, "bug"],
+      [`Bug / regression\n\n${comments}\n\nDocumentation issue`, null],
+      [`Documentation issue\n\n${comments}\n\nThis is only a question.`, null],
+      [`${comments}\n\n\`<!-- literal -->\``, null],
+    ]) {
+      const body = `### Feedback type\n${selection}\n\n### Pulse version\nunknown`
+        .replaceAll("\n", newline);
+      assert.equal(triage.internals.classifyV6FeedbackType(body), expected);
+    }
+  }
+});
+
+test("repeated comment delimiters cannot become selected feedback or hide later visible choices", () => {
+  const delimiters = "<!--" + "--><!--".repeat(6000);
+  for (const newline of ["\n", "\r\n"]) {
+    for (const [selection, expected] of [
+      [delimiters + "unclosed hint", null],
+      [`Bug / regression\n\n${delimiters}unclosed hint`, "bug"],
+      [delimiters + "-->\n\nDocumentation issue", "documentation"],
+      [`Bug / regression\n\n${delimiters}-->\nDocumentation issue`, null],
+    ]) {
+      const body = `### Feedback type\n${selection}\n\n### Pulse version\nunknown`
+        .replaceAll("\n", newline);
+      assert.equal(triage.internals.classifyV6FeedbackType(body), expected);
+    }
+  }
+});
+
+test("comment-rich intake remains silent and preserves Community labels and topic review", async () => {
+  for (const [selection, addedClass] of [
+    ["Documentation issue", ["documentation"]],
+    ["Bug / regression\n\nDocumentation issue", []],
+  ]) {
+    const preserved = ["needs-human", "needs-retest-on-latest", "operator-reviewed"];
+    const issue = { number: 42, title: "Synthetic comment-rich feedback", state: "open", comments: 0,
+      updated_at: "2026-11-01T06:25:00Z", labels: preserved.map(name => ({ name })),
+      body: `### Feedback type\n${"<!-- hint -->".repeat(4000)}\n\n${selection}\n\n` +
+        "### Pulse version\nunknown\n\n### Additional actionable topics\nKeep the independent notification review." };
+    const { github, calls } = createGithub({ currentIssue: issue });
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels), [...addedClass, "needs-decomposition"]);
+    assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+      [...preserved, ...addedClass, "needs-decomposition"].sort());
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+  }
+});
+
 test("repeated feedback declarations require one recognised metadata category", () => {
   const { classifyV6FeedbackType } = triage.internals;
   for (const newline of ["\n", "\r\n"]) {
