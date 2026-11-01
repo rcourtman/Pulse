@@ -18,11 +18,28 @@ const (
 	maxAgentLibvirtDomainNameBytes = 256
 )
 
+// agentLibvirtSampleTime returns when a libvirt inventory's domain counters
+// were sampled. The agent stamps CollectedAt on its own clock just before it
+// reads the domain stats, nearer that sample than the report's
+// end-of-collection Timestamp. As with agentCounterSampleTime, only a
+// sequenced report is ordered on that clock; legacy reports and inventories
+// without CollectedAt keep receipt time.
+func agentLibvirtSampleTime(sequenceID string, inventory *agentshost.LibvirtInventory) counterSampleTime {
+	if inventory == nil {
+		return counterSampleTime{}
+	}
+	return agentCounterSampleTime(sequenceID, inventory.CollectedAt)
+}
+
+// normalizeAgentLibvirtInventory admits a host report's libvirt inventory.
+// observedAt is Pulse receipt time for freshness; sampled times the CPU and
+// I/O counter intervals.
 func (m *Monitor) normalizeAgentLibvirtInventory(
 	report *agentshost.LibvirtInventory,
 	hostID string,
 	previous *models.Host,
 	observedAt time.Time,
+	sampled counterSampleTime,
 ) *models.HostLibvirtInventory {
 	if report == nil {
 		if previous != nil && previous.Libvirt != nil {
@@ -34,13 +51,9 @@ func (m *Monitor) normalizeAgentLibvirtInventory(
 	}
 
 	previousByID := make(map[string]models.HostLibvirtDomain)
-	previousAt := time.Time{}
-	if previous != nil {
-		previousAt = previous.LastSeen
-		if previous.Libvirt != nil {
-			for _, domain := range previous.Libvirt.Domains {
-				previousByID[domain.ID] = domain
-			}
+	if previous != nil && previous.Libvirt != nil {
+		for _, domain := range previous.Libvirt.Domains {
+			previousByID[domain.ID] = domain
 		}
 	}
 
@@ -80,17 +93,24 @@ func (m *Monitor) normalizeAgentLibvirtInventory(
 			domain.MemoryCurrentBytes = domain.MemoryMaximumBytes
 		}
 
-		if prior, ok := previousByID[domain.ID]; ok {
-			domain.CPUUsagePercent, domain.CPUUsageValid = libvirtCPUUsagePercent(
-				prior,
-				domain,
-				observedAt.Sub(previousAt),
-			)
-		}
-
 		if m != nil && m.rateTracker != nil {
-			diskRead, diskWrite, netIn, netOut := m.rateTracker.CalculateRates(
-				"libvirt:"+strings.TrimSpace(hostID)+":"+domain.ID,
+			seriesID := "libvirt:" + strings.TrimSpace(hostID) + ":" + domain.ID
+			// CPU time is sampled with the domain's I/O counters, so it is
+			// measured over the same interval on the same clock. Every sample
+			// moves its baseline; only a domain present in the previous report
+			// whose CPU time did not reset yields a usage.
+			cpuRate := m.rateTracker.calculateSampledCounterRate(
+				seriesID+":cpu",
+				domain.CPUTimeNanoseconds,
+				observedAt,
+				sampled,
+			)
+			if prior, ok := previousByID[domain.ID]; ok && domain.CPUTimeNanoseconds >= prior.CPUTimeNanoseconds {
+				domain.CPUUsagePercent, domain.CPUUsageValid = libvirtCPUUsagePercent(cpuRate, domain.VCPUs)
+			}
+
+			diskRead, diskWrite, _, netIn, netOut := m.rateTracker.calculateSampledRates(
+				seriesID,
 				IOMetrics{
 					DiskRead:   uint64ToInt64(domain.DiskReadBytes),
 					DiskWrite:  uint64ToInt64(domain.DiskWriteBytes),
@@ -98,6 +118,7 @@ func (m *Monitor) normalizeAgentLibvirtInventory(
 					NetworkOut: uint64ToInt64(domain.NetworkTXBytes),
 					Timestamp:  observedAt,
 				},
+				sampled,
 			)
 			if diskRead >= 0 && diskWrite >= 0 && netIn >= 0 && netOut >= 0 {
 				domain.DiskReadRate = diskRead
@@ -142,16 +163,17 @@ func agentLibvirtDomainID(name string) string {
 	return "domain-" + hex.EncodeToString(sum[:8])
 }
 
-func libvirtCPUUsagePercent(previous, current models.HostLibvirtDomain, elapsed time.Duration) (float64, bool) {
-	if elapsed <= 0 || current.CPUTimeNanoseconds < previous.CPUTimeNanoseconds {
+// libvirtCPUUsagePercent converts a domain's CPU-time rate, in nanoseconds per
+// second summed across its vCPUs, to a percentage of its vCPU capacity. A
+// negative rate means no comparable interval.
+func libvirtCPUUsagePercent(cpuNanosecondsPerSecond float64, vcpus int) (float64, bool) {
+	if cpuNanosecondsPerSecond < 0 {
 		return 0, false
 	}
-	vcpus := current.VCPUs
 	if vcpus <= 0 {
 		vcpus = 1
 	}
-	delta := current.CPUTimeNanoseconds - previous.CPUTimeNanoseconds
-	percent := (float64(delta) / float64(elapsed.Nanoseconds()) / float64(vcpus)) * 100
+	percent := (cpuNanosecondsPerSecond / float64(time.Second) / float64(vcpus)) * 100
 	if math.IsNaN(percent) || math.IsInf(percent, 0) {
 		return 0, false
 	}

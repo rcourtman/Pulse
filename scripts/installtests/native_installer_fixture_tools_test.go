@@ -158,9 +158,35 @@ func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing
 	}
 }
 
+// nativeVersionStreamTool preserves real tool behavior while making its version
+// producer outlive an early matching grep. A matched but failed producer must
+// still fail the prerequisite under pipefail.
+func nativeVersionStreamTool(t *testing.T, path, realTool string, exitCode int) {
+	t.Helper()
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	quote := func(value string) string {
+		return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+	}
+	script := fmt.Sprintf(`#!/bin/sh
+set -e
+if [ "${1:-}" = --version ]; then
+  %s "$@"
+  %s -c 'import os, signal; signal.signal(signal.SIGPIPE, signal.SIG_DFL); data = b"version continuation\n" * 256; [os.write(1, data) for _ in range(64)]'
+  exit %d
+fi
+exec %s "$@"
+`, quote(realTool), quote(python), exitCode, quote(realTool))
+	if err := os.WriteFile(path, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "symlinked fixture root", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing sha256sum", "non-GNU sha256sum", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
+	for _, scenario := range []string{"real tools", "symlinked fixture root", "streamed version output", "failed version producer", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing sha256sum", "non-GNU sha256sum", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			if scenario == "symlinked fixture root" {
@@ -223,7 +249,11 @@ esac
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := os.Symlink(realTool, path); err != nil {
+					if scenario == "streamed version output" && name != "bash" {
+						nativeVersionStreamTool(t, path, realTool, 0)
+					} else if scenario == "failed version producer" && name == "stat" {
+						nativeVersionStreamTool(t, path, realTool, 23)
+					} else if err := os.Symlink(realTool, path); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -251,9 +281,9 @@ esac
 			if ctx.Err() != nil {
 				t.Fatalf("fixture prerequisite deadline: %v", ctx.Err())
 			}
-			if scenario != "real tools" && scenario != "symlinked fixture root" {
+			if scenario != "real tools" && scenario != "symlinked fixture root" && scenario != "streamed version output" {
 				want := 1
-				if scenario == "install failure" {
+				if scenario == "install failure" || scenario == "failed version producer" {
 					want = 23
 				}
 				exit, ok := runErr.(*exec.ExitError)

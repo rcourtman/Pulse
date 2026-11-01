@@ -226,6 +226,46 @@ func advanceHostReportOrder(
 	return order, accepted
 }
 
+// agentAuthoredCounterClock names the reporting machine's own clock, on which
+// an agent authors each report's collection time.
+const agentAuthoredCounterClock = "agent-authored"
+
+// agentCounterSampleTime returns when an accepted agent report's cumulative
+// counters were collected. The stream watermark admits sequenced reports in
+// order, so the authored times of consecutive accepted reports measure the
+// real collection interval, across an agent restart on the same machine clock
+// too, even when reconnect delivery drains a buffered FIFO back to back and
+// Pulse receipt times collapse toward zero. Legacy and untimestamped reports
+// have no ordered source clock and keep receipt time; a switch between the two
+// starts a new counter baseline.
+func agentCounterSampleTime(sequenceID string, authoredAt time.Time) counterSampleTime {
+	if _, _, sequenced := agentshost.ParseReportSequenceID(sequenceID); !sequenced || authoredAt.IsZero() {
+		return counterSampleTime{}
+	}
+	return counterSampleTime{clock: agentAuthoredCounterClock, at: authoredAt.UTC()}
+}
+
+// agentIOCounterReadClock is the sampling mode of a host report whose agent
+// stamped when it read the DiskIO and Network counters. It shares the machine
+// clock with report Timestamp but not its offset from the read, so a switch
+// between the two modes starts a new counter baseline.
+const agentIOCounterReadClock = "agent-io-counter-read"
+
+// agentIOCounterSampleTime returns when an accepted host report's DiskIO and
+// Network counters were read. A current agent stamps the read itself, and the
+// report Timestamp follows every optional collector, so the stamp is preferred.
+// Older agents, and a missing or zero stamp, keep the report-Timestamp
+// fallback, and legacy reports keep receipt time.
+func agentIOCounterSampleTime(report agentshost.Report) counterSampleTime {
+	if report.IOCountersCollectedAt != nil {
+		if sampled := agentCounterSampleTime(report.SequenceID, *report.IOCountersCollectedAt); sampled.clock != "" {
+			sampled.clock = agentIOCounterReadClock
+			return sampled
+		}
+	}
+	return agentCounterSampleTime(report.SequenceID, report.Timestamp)
+}
+
 // lockHostReportApplication serializes the complete state transition for one
 // host while allowing different hosts to ingest concurrently. Reserving a
 // sequence number without holding this lock through the subsequent state write
@@ -2350,8 +2390,12 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		dockerVersion = runtimeVersion
 	}
 
+	counterSampled := agentCounterSampleTime(report.SequenceID, report.Timestamp)
 	containers := make([]models.DockerContainer, 0, len(report.Containers))
-	for _, payload := range report.Containers {
+	// Legacy container fields remain numeric. Carry the current calculation's
+	// validity through to history so warmup and clock faults cannot become idle.
+	containerNetworkValidity := make([]models.IORateValidity, len(report.Containers))
+	for i, payload := range report.Containers {
 		container := models.DockerContainer{
 			ID:                 payload.ID,
 			Name:               payload.Name,
@@ -2451,9 +2495,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				metrics.DiskWrite = clampToInt64(payload.BlockIO.WriteBytes)
 			}
 
-			readRate, writeRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
+			readRate, writeRate, _, netInRate, netOutRate := m.rateTracker.calculateSampledRates(
 				fmt.Sprintf("docker:%s:%s", identifier, containerIdentifier),
 				metrics,
+				counterSampled,
 			)
 
 			if container.BlockIO != nil && readRate >= 0 {
@@ -2466,9 +2511,11 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			}
 			if netInRate >= 0 {
 				container.NetInRate = netInRate
+				containerNetworkValidity[i].NetworkIn = true
 			}
 			if netOutRate >= 0 {
 				container.NetOutRate = netOutRate
+				containerNetworkValidity[i].NetworkOut = true
 			}
 		}
 
@@ -2722,7 +2769,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}
 
 		// Use a prefixed key (docker:containerID) to distinguish from Proxmox containers.
-		for _, container := range containers {
+		for i, container := range containers {
 			if container.ID == "" {
 				continue
 			}
@@ -2743,10 +2790,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
 				m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
-				if container.NetInRate >= 0 {
+				if containerNetworkValidity[i].NetworkIn {
 					m.metricsHistory.AddGuestMetric(metricKey, "netin", container.NetInRate, now)
 				}
-				if container.NetOutRate >= 0 {
+				if containerNetworkValidity[i].NetworkOut {
 					m.metricsHistory.AddGuestMetric(metricKey, "netout", container.NetOutRate, now)
 				}
 				if diskReadRate >= 0 {
@@ -2760,10 +2807,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			if m.metricsStore != nil {
 				m.metricsStore.Write("dockerContainer", container.ID, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
 				m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
-				if container.NetInRate >= 0 {
+				if containerNetworkValidity[i].NetworkIn {
 					m.metricsStore.Write("dockerContainer", container.ID, "netin", container.NetInRate, now)
 				}
-				if container.NetOutRate >= 0 {
+				if containerNetworkValidity[i].NetworkOut {
 					m.metricsStore.Write("dockerContainer", container.ID, "netout", container.NetOutRate, now)
 				}
 				if diskReadRate >= 0 {
@@ -3542,6 +3589,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		identifier,
 		previousHostModel,
 		observedAt,
+		agentLibvirtSampleTime(report.SequenceID, report.Libvirt),
 	)
 	xcpngData := normalizeAgentXCPNGInventory(report.XCPNG, previousHostModel, observedAt)
 
@@ -3744,6 +3792,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Network and disk bytes from the agent are cumulative totals since boot;
 	// the RateTracker converts them to bytes/second, just like VMs and containers.
 	now := receivedAt
+	counterSampled := agentIOCounterSampleTime(report)
 
 	var totalRXBytes, totalTXBytes uint64
 	for _, nic := range host.NetworkInterfaces {
@@ -3767,7 +3816,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		NetworkOut: int64(totalTXBytes),
 		Timestamp:  now,
 	}
-	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(hostRateKey, currentMetrics)
+	diskReadRate, diskWriteRate, _, netInRate, netOutRate := m.rateTracker.calculateSampledRates(hostRateKey, currentMetrics, counterSampled)
 
 	// Store computed rates on the host model so they flow through to unified resources
 	if netInRate >= 0 {
@@ -3878,7 +3927,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			}
 		}
 
-		m.writeHostPhysicalDiskIOMetrics(host, now)
+		m.writeHostPhysicalDiskIOMetrics(host, now, counterSampled)
 
 		if m.metricsStore != nil {
 			m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
@@ -4398,7 +4447,10 @@ func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO, proxmoxDisks
 	return fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), device)
 }
 
-func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {
+// writeHostPhysicalDiskIOMetrics records per-device disk rates. now is Pulse
+// receipt time for history and rate-series freshness; sampled times the
+// counter interval itself.
+func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time, sampled counterSampleTime) {
 	if shouldSkipNativeMockStateMetricWrites() || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
@@ -4429,7 +4481,7 @@ func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time
 			DiskBusy:  int64(io.IOTime),
 			Timestamp: now,
 		}
-		readRate, writeRate, busyPct, _, _ := m.rateTracker.CalculateRatesWithBusy(trackerKey, current)
+		readRate, writeRate, busyPct, _, _ := m.rateTracker.calculateSampledRates(trackerKey, current, sampled)
 
 		if readRate >= 0 {
 			if m.metricsHistory != nil {
