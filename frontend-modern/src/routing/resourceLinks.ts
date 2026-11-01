@@ -36,6 +36,8 @@ export const PROXMOX_BACKUPS_QUERY_PARAMS = {
   source: 'source',
   location: 'location',
   posture: 'posture',
+  // An exception group from the backup verdict: guests sharing one posture reason.
+  reason: 'reason',
   day: 'day',
 } as const;
 export const DOCKER_PATH = '/docker';

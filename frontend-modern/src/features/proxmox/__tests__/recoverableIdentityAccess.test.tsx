@@ -219,7 +219,7 @@ describe('restore-point identity without hover', () => {
         );
       }
       expect(api.fetch).toHaveBeenCalledTimes(2);
-      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     },
   );
 

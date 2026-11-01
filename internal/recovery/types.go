@@ -101,6 +101,23 @@ const (
 	ProtectionCoverageUnknown  ProtectionCoverage = model.ProtectionCoverageUnknown
 )
 
+type ProtectionReason = model.ProtectionReason
+
+const (
+	ProtectionReasonRecentVerified          ProtectionReason = model.ProtectionReasonRecentVerified
+	ProtectionReasonRecent                  ProtectionReason = model.ProtectionReasonRecent
+	ProtectionReasonSourceFailed            ProtectionReason = model.ProtectionReasonSourceFailed
+	ProtectionReasonBackupFutureDated       ProtectionReason = model.ProtectionReasonBackupFutureDated
+	ProtectionReasonStale                   ProtectionReason = model.ProtectionReasonStale
+	ProtectionReasonVerificationFutureDated ProtectionReason = model.ProtectionReasonVerificationFutureDated
+	ProtectionReasonVerificationOverdue     ProtectionReason = model.ProtectionReasonVerificationOverdue
+	ProtectionReasonHistoryPartial          ProtectionReason = model.ProtectionReasonHistoryPartial
+	ProtectionReasonHistoryUnreadable       ProtectionReason = model.ProtectionReasonHistoryUnreadable
+	ProtectionReasonNoHistory               ProtectionReason = model.ProtectionReasonNoHistory
+	ProtectionReasonSnapshotsOnly           ProtectionReason = model.ProtectionReasonSnapshotsOnly
+	ProtectionReasonNoBackup                ProtectionReason = model.ProtectionReasonNoBackup
+)
+
 type ProtectionHistoryCompleteness = model.ProtectionHistoryCompleteness
 
 const (

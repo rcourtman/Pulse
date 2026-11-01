@@ -146,7 +146,7 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       }
       expect(panel.querySelector('img')).toBeNull();
       expect(panel).toHaveTextContent('entries cannot be placed in time');
-      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
       const before = evidenceRows(panel);
       const toggle = screen.getByRole('button', { name: /Collapse details for east-100/ });
       toggle.focus();
@@ -200,7 +200,7 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       }
       expect(panel.querySelector('img')).toBeNull();
       expect(within(panel).getByText('Failed', { exact: true })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
       expect(screen.getByText(/5 completed restore points/)).toBeInTheDocument();
       expect(api.fetch).toHaveBeenCalledTimes(2);
       await fireEvent.click(screen.getByRole('button', { name: /Expand details for west-100/ }));

@@ -104,7 +104,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
       within(section).getByText('Task status does not verify a restore or guest responsiveness.'),
     ).toHaveClass('whitespace-normal');
     expect(panel).toHaveTextContent('Restore evidence');
-    expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Collapse same-name details' }));
@@ -156,7 +156,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
     if (extra.duration === 'Unknown') expect(timingNotice).toBeInTheDocument();
     else expect(timingNotice).toBeNull();
     expect(within(section).queryByText('Error', { exact: true, selector: 'td' })).toBeNull();
-    expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('A current verified backup is available.');
   });
 
@@ -181,7 +181,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
     expect(taskSection(panel)).not.toHaveTextContent('do not establish a completed duration');
     expect(document.activeElement).toBe(toggle);
     expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
-    expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(6);
   });
 
@@ -214,7 +214,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
     expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
     expect(toggle.closest('tr')).toBe(summary);
     expect(document.activeElement).toBe(toggle);
-    expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(4);
 
     tasks = [];
@@ -280,7 +280,7 @@ describe('uncertain task chronology through the inventory consumer', () => {
       expect(summary).not.toHaveTextContent('OK');
       expect(panel).toHaveTextContent('dated-ok');
       expect(panel).toHaveTextContent('Restore evidence');
-      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
       expect(api.fetch).toHaveBeenCalledTimes(2);
 
       fireEvent.click(within(panel).getByRole('button', { name: 'Collapse same-name details' }));
@@ -404,7 +404,7 @@ describe('bounded uncertain-task inspection', () => {
       expect(panel.querySelector('svg[onload]')).toBeNull();
       expect(panel).toHaveTextContent('It is not a time order.');
       expect(panel).not.toHaveTextContent('history-150');
-      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
       expect(api.fetch).toHaveBeenCalledTimes(2);
     },
   );

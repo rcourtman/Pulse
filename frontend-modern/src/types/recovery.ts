@@ -88,6 +88,21 @@ export type ProtectionState = 'protected' | 'attention' | 'unprotected' | 'unkno
 export type ProtectionFreshness = 'current' | 'stale' | 'unknown';
 export type ProtectionVerification = 'verified' | 'unverified' | 'stale' | 'unknown';
 export type ProtectionCoverage = 'complete' | 'partial' | 'none' | 'unknown';
+// Which posture rule decided the state. Absent on assessments stored before the
+// server named reasons; a newer server may send a reason this build lacks.
+export type ProtectionReason =
+  | 'recent-verified'
+  | 'recent'
+  | 'source-failed'
+  | 'backup-future-dated'
+  | 'stale'
+  | 'verification-future-dated'
+  | 'verification-overdue'
+  | 'history-partial'
+  | 'history-unreadable'
+  | 'no-history'
+  | 'snapshots-only'
+  | 'no-backup';
 export type ProtectionHistoryCompleteness = 'complete' | 'partial' | 'unavailable' | 'unknown';
 
 export type ProtectionUnreadScopeKind = 'node' | 'storage' | 'datastore' | 'namespace';
@@ -129,6 +144,7 @@ export interface ProtectionPosture {
   providerStates: ProtectionProviderState[];
   repositoryResourceIds: string[];
   evidenceIds: string[];
+  reason?: ProtectionReason | (string & {});
   explanation: string;
   evaluatedAt: string;
 }

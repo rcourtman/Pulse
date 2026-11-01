@@ -3323,10 +3323,12 @@ projection; they must not cause provider nodes or availability endpoints to
 enter the Machines membership bucket.
 `PROXMOX_BACKUPS_QUERY_PARAMS` in the same shared route-helper module is
 storage/recovery-owned filter and workspace state for the Proxmox Backups
-surface. Its query, view, node, type, source, posture, and day keys may
-narrow already-correlated backup rows, but they do not add unified-resource
-membership, change canonical workload identity, or turn recovery evidence
-into a provider-resource projection.
+surface. Its query, view, node, type, source, posture, reason, and day keys
+may narrow already-correlated backup rows, but they do not add
+unified-resource membership, change canonical workload identity, or turn
+recovery evidence into a provider-resource projection. `reason` names one
+exception group from the Backup health verdict: a server posture reason, or
+the bare posture state for an assessment that carries none.
 The Proxmox backup workspace's chronological and coverage views are
 canonical route state under `/proxmox/backups/date` and
 `/proxmox/backups/coverage`. The shared route helper owns those path

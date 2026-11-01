@@ -104,7 +104,7 @@ describe('backup workload identity in real inventory consumers', () => {
         expect(detail).not.toHaveTextContent('Unverified');
         fireEvent.click(toggle);
       }
-      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
       expect(api.fetch).toHaveBeenCalledTimes(2);
     },
   );
@@ -161,7 +161,7 @@ describe('backup workload identity in real inventory consumers', () => {
         fireEvent.click(toggle);
       }
       expect(api.fetch).toHaveBeenCalledTimes(2);
-      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     },
   );
 

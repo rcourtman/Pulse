@@ -80,6 +80,7 @@ import {
 } from './proxmoxBackupsTableShared';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
+import { backupExceptionGroupKey, buildBackupVerdict } from './proxmoxBackupVerdict';
 import {
   collectUnreadBackupSources,
   describeUnreadBackupSources,
@@ -238,13 +239,19 @@ export const ProxmoxBackupsTable: Component<{
       ? value
       : 'all';
   };
+  // A posture choice replaces an exception group: combined they would only
+  // narrow to an empty list.
   const setCoverageFilter = (value: CoverageFilterValue): void =>
     setSearchParams(
       {
         [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: value === 'all' ? null : value,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.reason]: null,
       },
       { replace: true },
     );
+  // An exception group selected from the Backup health verdict.
+  const exceptionFilter = (): string | null =>
+    queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.reason).trim() || null;
   const recoverableFilter = (): RecoverableFilterValue => {
     const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.source);
     return value === 'pbs' ||
@@ -474,10 +481,12 @@ export const ProxmoxBackupsTable: Component<{
   const filteredCoverageRows = createMemo(() => {
     const term = search().trim().toLowerCase();
     const filter = coverageFilter();
+    const exception = exceptionFilter();
     const list = coverageRowsForLocation().filter((row) => {
       if (!nodeMatches(row.workload.node)) return false;
       if (!typeMatches(row.workload.type)) return false;
       if (filter !== 'all' && row.posture !== filter) return false;
+      if (exception && backupExceptionGroupKey(row) !== exception) return false;
       return coverageRowMatchesSearch(row, term);
     });
     const sortKey = coverageSortKey();
@@ -515,24 +524,16 @@ export const ProxmoxBackupsTable: Component<{
     () => recoveryModel().coverageRows.filter((row) => row.isOrphaned).length,
   );
 
-  // Health strip counts active backup targets only — orphaned records are all
-  // stale and would otherwise inflate the "attention" segment with dead data.
-  const liveHealthSummary = createMemo(() => {
-    const live = recoveryModel().coverageRows.filter((row) => !row.isOrphaned);
-    return {
-      protected: live.filter((row) => row.posture === 'protected').length,
-      attention: live.filter((row) => row.posture === 'attention').length,
-      unprotected: live.filter((row) => row.posture === 'unprotected').length,
-      unknown: live.filter((row) => row.posture === 'unknown').length,
-      checking: live.filter((row) => row.posture === 'checking').length,
-      notEvaluated: live.filter((row) => row.posture === 'not-evaluated').length,
-    };
-  });
+  // The verdict rates active backup targets only — orphaned records are all
+  // stale and would otherwise add dead data to the exceptions.
+  const backupVerdict = createMemo(() =>
+    buildBackupVerdict(recoveryModel().coverageRows, protectionPostures.policy()),
+  );
   const view = (): BackupView =>
     routeView() ??
     legacyQueryView() ??
-    (liveHealthSummary().attention + liveHealthSummary().unprotected + liveHealthSummary().unknown >
-    0
+    // A saved exception filter keeps Coverage even once that group is empty.
+    (exceptionFilter() !== null || backupVerdict().exceptions.length > 0
       ? 'coverage'
       : PROXMOX_BACKUPS_DEFAULT_VIEW);
 
@@ -541,6 +542,7 @@ export const ProxmoxBackupsTable: Component<{
     params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.view);
     if (next === 'date') {
       params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
+      params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.reason);
     } else {
       params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.source);
       params.delete(PROXMOX_BACKUPS_QUERY_PARAMS.day);
@@ -548,8 +550,8 @@ export const ProxmoxBackupsTable: Component<{
     const query = params.toString();
     return `${buildProxmoxBackupsPath(next)}${query ? `?${query}` : ''}`;
   };
-  // The health strip's counts that name a posture filter toggle it. From the
-  // date view a count opens Coverage already filtered to those workloads.
+  // Each exception group in the health strip toggles a Coverage filter to its
+  // workloads. From the date view a group opens Coverage already filtered.
   const navigate = useNavigate();
   // Old bookmarks can enter without a view segment. Pick their useful default
   // only after the first assessment settles, then let the existing URL own it.
@@ -565,26 +567,27 @@ export const ProxmoxBackupsTable: Component<{
     }
     navigate(`${backupViewPath(view())}${location.hash}`, { replace: true, scroll: false });
   });
-  const postureSegmentFilter = (posture: Exclude<CoverageFilterValue, 'all'>) => {
-    const pressed = view() === 'coverage' && coverageFilter() === posture;
-    // A zero count would only open an empty list.
-    if (!pressed && liveHealthSummary()[posture] === 0) return {};
-    return {
-      pressed,
-      onSelect: () => {
-        const next = coverageFilter() === posture && view() === 'coverage' ? 'all' : posture;
-        if (routeView() === 'coverage') {
-          setCoverageFilter(next);
-          return;
-        }
-        // By date, or Coverage chosen only by the health fallback: land on the
-        // Coverage route so the view cannot flip back when the counts change.
-        const target = new URL(backupViewPath('coverage'), 'https://pulse.invalid');
-        if (next === 'all') target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
-        else target.searchParams.set(PROXMOX_BACKUPS_QUERY_PARAMS.posture, next);
-        navigate(`${target.pathname}${target.search}`);
-      },
-    };
+  const exceptionGroupPressed = (key: string): boolean =>
+    view() === 'coverage' && exceptionFilter() === key;
+  const selectExceptionGroup = (key: string): void => {
+    const next = exceptionGroupPressed(key) ? null : key;
+    if (routeView() === 'coverage') {
+      setSearchParams(
+        {
+          [PROXMOX_BACKUPS_QUERY_PARAMS.reason]: next,
+          [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: null,
+        },
+        { replace: true },
+      );
+      return;
+    }
+    // By date, or Coverage chosen only by the health fallback: land on the
+    // Coverage route so the view cannot flip back when the exceptions clear.
+    const target = new URL(backupViewPath('coverage'), 'https://pulse.invalid');
+    target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
+    if (next) target.searchParams.set(PROXMOX_BACKUPS_QUERY_PARAMS.reason, next);
+    else target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.reason);
+    navigate(`${target.pathname}${target.search}`);
   };
   const backupViewTabs = createMemo(() =>
     BACKUP_VIEW_TABS.map((tab) => ({ ...tab, path: backupViewPath(tab.id) })),
@@ -757,6 +760,7 @@ export const ProxmoxBackupsTable: Component<{
       locationFilter() ||
       typeFilter() ||
       coverageFilter() !== 'all' ||
+      exceptionFilter() !== null ||
       recoverableFilter() !== 'all' ||
       selectedDateKey(),
     );
@@ -770,6 +774,7 @@ export const ProxmoxBackupsTable: Component<{
         [PROXMOX_BACKUPS_QUERY_PARAMS.type]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.source]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.reason]: null,
         [PROXMOX_BACKUPS_QUERY_PARAMS.day]: null,
       },
       { replace: true },
@@ -896,7 +901,6 @@ export const ProxmoxBackupsTable: Component<{
               }
               tail={
                 <span>
-                  {liveTotalCount()} targets ·{' '}
                   {recoveryModel().coverageSummary.recoverableArtifacts} completed restore{' '}
                   {recoveryModel().coverageSummary.recoverableArtifacts === 1 ? 'point' : 'points'}
                   {inventoryIncomplete() ? ' read' : ''}
@@ -919,53 +923,9 @@ export const ProxmoxBackupsTable: Component<{
                   </Show>
                 </span>
               }
-              segments={[
-                {
-                  key: 'protected',
-                  value: liveHealthSummary().protected,
-                  ...postureSegmentFilter('protected'),
-                  label: 'protected',
-                  toneClass: 'bg-emerald-500',
-                },
-                {
-                  key: 'attention',
-                  value: liveHealthSummary().attention,
-                  ...postureSegmentFilter('attention'),
-                  label: 'attention',
-                  toneClass: 'bg-amber-500',
-                  muted: liveHealthSummary().attention === 0,
-                },
-                {
-                  key: 'unprotected',
-                  value: liveHealthSummary().unprotected,
-                  ...postureSegmentFilter('unprotected'),
-                  label: 'unprotected',
-                  toneClass: 'bg-red-500',
-                  muted: liveHealthSummary().unprotected === 0,
-                },
-                {
-                  key: 'unknown',
-                  value: liveHealthSummary().unknown,
-                  ...postureSegmentFilter('unknown'),
-                  label: 'unknown',
-                  toneClass: 'bg-slate-400',
-                  muted: liveHealthSummary().unknown === 0,
-                },
-                {
-                  key: 'checking',
-                  value: liveHealthSummary().checking,
-                  label: 'checking',
-                  toneClass: 'bg-blue-400',
-                  muted: liveHealthSummary().checking === 0,
-                },
-                {
-                  key: 'not-evaluated',
-                  value: liveHealthSummary().notEvaluated,
-                  label: 'not evaluated',
-                  toneClass: 'bg-slate-300 dark:bg-slate-600',
-                  muted: liveHealthSummary().notEvaluated === 0,
-                },
-              ]}
+              verdict={backupVerdict()}
+              isGroupPressed={exceptionGroupPressed}
+              onSelectGroup={selectExceptionGroup}
             />
 
             <Show when={unreadBackupSourcesNotice()}>

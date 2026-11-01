@@ -209,6 +209,34 @@ describe('useProtectionPostures transport', () => {
     }
   });
 
+  it('keeps the posture reason, accepts one this build lacks or none, and rejects a non-string', async () => {
+    const named = { ...protectionPosture('vm:1'), state: 'attention' as const, reason: 'stale' };
+    const newer = { ...protectionPosture('vm:2'), reason: 'reason-from-a-newer-server' };
+    const stored = protectionPosture('vm:3');
+    apiFetchJSONMock.mockResolvedValue({ data: [named, newer, stored], policy: protectionPolicy });
+    let dispose = () => {};
+    const hook = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return useProtectionPostures(() => ['vm:1', 'vm:2', 'vm:3']);
+    });
+    try {
+      await vi.waitFor(() => expect(hook.postures()).toHaveLength(3));
+      expect(hook.postureByResourceID().get('vm:1')?.reason).toBe('stale');
+      expect(hook.postureByResourceID().get('vm:2')?.reason).toBe('reason-from-a-newer-server');
+      expect(hook.postureByResourceID().get('vm:3')?.reason).toBeUndefined();
+
+      apiFetchJSONMock.mockResolvedValue({
+        data: [{ ...named, reason: 7 }],
+        policy: protectionPolicy,
+      });
+      await hook.refetch();
+      expect(hook.response.error).toBeInstanceOf(ProtectionPostureFormatError);
+      expect(hook.postures()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not restore a failed cached assessment when Coverage remounts', async () => {
     apiFetchJSONMock.mockResolvedValue({
       data: [protectionPosture('vm:1')],

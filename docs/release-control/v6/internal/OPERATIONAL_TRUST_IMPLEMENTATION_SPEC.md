@@ -328,6 +328,12 @@ ProtectionPosture
   providerStates[]
   repositoryResourceIds[]
   evidenceIds[]
+  reason                recent-verified | recent | source-failed |
+                        backup-future-dated | stale |
+                        verification-future-dated | verification-overdue |
+                        history-partial | history-unreadable | no-history |
+                        snapshots-only | no-backup   (omitted when stored
+                        before reasons existed)
   explanation
   evaluatedAt
 ```
@@ -364,6 +370,9 @@ Derivation rules:
    evidence, but it must not silently become subject-level protection
 8. the posture explanation names the strongest evidence and the limiting
    uncertainty in plain language
+9. `reason` names the derivation branch that set `state`, so a surface can
+   group subjects by cause without parsing the explanation; each reason
+   belongs to exactly one state
 
 The existing recovery-point and protection-rollup models must be migrated or
 adapted into this contract without breaking supported clients.

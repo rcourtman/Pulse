@@ -113,7 +113,7 @@ describe('malformed timestamp evidence through the parsed HTTP consumer', () => 
     const evidence = evidenceTable(panel);
     expect(within(evidence).getAllByText('Unknown', { exact: true })).toHaveLength(3);
     expect(document.body).toHaveTextContent('3 completed restore points');
-    expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -160,7 +160,7 @@ describe('malformed timestamp evidence through the parsed HTTP consumer', () => 
     expect(within(evidence).queryByText('Unknown', { exact: true })).toBeNull();
     expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
     expect(document.activeElement).toBe(toggle);
-    expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(4);
   });
 });
