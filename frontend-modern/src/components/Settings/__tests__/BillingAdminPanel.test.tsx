@@ -34,6 +34,7 @@ vi.mock('@/stores/notifications', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyIsReadOnly: () => false,
   presentationPolicyHidesOrganizationSurfaces: (...args: unknown[]) =>
     presentationPolicyHidesOrganizationSurfacesMock(...args),
 }));
