@@ -13509,3 +13509,10 @@ values, not the containing security-status object's identity. An ordinary status
 refresh or primary-token hint change with the same user/permission must not
 withdraw a confirmed token or start another inventory read. The registered
 unchanged-principal status-refresh test pins this boundary.
+
+Accepted token rows retain their inventory-read generation across confirmed
+scope/name replacements. Keyed desktop-table reconciliation may retain the
+earlier raw object; that current-read object remains usable for the same live
+ID. A later full read, context withdrawal or deletion invalidates the old
+confirmation. The registered sequential scope-edit/revoke consumer regression
+and earlier-read rejection test cover both sides without ID-only admission.

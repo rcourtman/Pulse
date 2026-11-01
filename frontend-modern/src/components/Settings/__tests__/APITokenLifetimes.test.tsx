@@ -306,9 +306,10 @@ describe('API token request lifetimes', () => {
 
   it('rejects a row retained from an earlier accepted inventory', async () => {
     await ready();
+    const obsolete = state.sortedTokens()[0];
+    vi.mocked(SecurityAPI.listTokens).mockResolvedValueOnce([{ ...record }]);
     await state.loadTokens();
-    // Same ID, different accepted object is not the earlier confirmation.
-    const obsolete = { ...record };
+    // Same ID in a new read must not re-admit the preceding read's object.
     expect(await state.handleRename(obsolete, 'Wrong')).toBe(false);
     expect(await state.handleUpdateScopes(obsolete, ['*'])).toBe(false);
     await state.handleDelete(obsolete);

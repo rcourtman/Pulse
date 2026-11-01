@@ -100,11 +100,19 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   let readController: AbortController | undefined;
   let mutationController: AbortController | undefined;
   let ownedReveal: ReturnType<typeof tokenRevealState> = null;
+  let inventoryVersion = 0;
+  const recordBindings = new WeakMap<APITokenRecord, number>();
+  const rememberToken = (record: APITokenRecord) => {
+    recordBindings.set(unwrap(record), inventoryVersion);
+    return record;
+  };
   const contextIsCurrent = () =>
     !disposed && selectedOrg() === currentOrg() && selectedUser() === authenticatedUser();
   const canManage = () => contextIsCurrent() && managementAllowed();
   const isCurrentRecord = (record: APITokenRecord) =>
-    tokensLoaded() && tokens().includes(unwrap(record));
+    tokensLoaded() &&
+    recordBindings.get(unwrap(record)) === inventoryVersion &&
+    tokens().some((current) => current.id === record.id);
 
   const clearTokenValue = () => {
     // A different issuer may have replaced the global dialog. Never dismiss theirs.
@@ -115,6 +123,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   };
 
   const invalidateRequests = () => {
+    inventoryVersion += 1;
     setContextVersion((version) => version + 1);
     readController?.abort();
     readController = undefined;
@@ -252,6 +261,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
         expectedOrgID: selectedOrg(),
       });
       if (!isCurrent()) return;
+      // Keyed table reconciliation retains a row's raw object across confirmed
+      // edits. Bind accepted objects to this read, not the latest replacement's
+      // identity, while excluding every object from an earlier inventory read.
+      inventoryVersion += 1;
+      list.forEach(rememberToken);
       setTokens(list);
       setTokensLoaded(true);
     } catch (err) {
@@ -438,6 +452,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       );
       if (!mutation.isCurrent()) return;
 
+      rememberToken(record);
       setTokens((previous) => [record, ...previous]);
       setNewTokenRecord(record);
       setNewTokenValue(token);
@@ -544,6 +559,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
         mutation.options,
       );
       if (!mutation.isCurrent()) return false;
+      rememberToken(updated);
       setTokens((previous) => previous.map((token) => (token.id === updated.id ? updated : token)));
       if (newTokenRecord()?.id === updated.id) {
         setNewTokenRecord(updated);
@@ -575,6 +591,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     try {
       const updated = await SecurityAPI.renameToken(record.id, trimmedName, mutation.options);
       if (!mutation.isCurrent()) return false;
+      rememberToken(updated);
       setTokens((previous) => previous.map((token) => (token.id === updated.id ? updated : token)));
       setNewTokenRecord((current) => (current?.id === updated.id ? updated : current));
       notificationStore.success('Token renamed');
