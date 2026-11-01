@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "b5a27bbbced966e528db89e80bdfd0f9f6d47a2b",
+  "verified_at": "2026-11-01T00:27:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/pages/Docs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/pages/Docs.tsx": "7f71b04a62d05c0025e9a369ae9a8b0add3de394b0410ebb021dc934528ed405"
+  },
+  "routes": [
+    "/docs/FAQ?reader=fixture#whats-the-easiest-way-to-install",
+    "/docs/README",
+    "/docs/focus#answer",
+    "/docs/next#next"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 920
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real Docs fetch/renderer/router/shared controls and production CSS, built at b5a27bbbced966e528db89e80bdfd0f9f6d47a2b; fixture application shell, shipped FAQ/index and synthetic upstream errors. Source proof source-1z1ukrzx: 79 tests/five files, types, changed-file lint/format and full frontend/embed build pass.",
+    "Playwright 1.56.1 matches integration lock; Chromium 141.0.7390.37 desktop/light and touch WebKit 26.0 narrow/dark. Missing (404/410/200 HTML), denied (401/403), unavailable (408/429/500/503), rejected fetch and interrupted body are classified without rendering synthetic private response details.",
+    "Original partial browser pass retains five completed desktop cases and a subsequent 6000ms alert-wait timeout at the next planned raw-server 408 case. Exact transport cause is unestablished. The continuation only runs unfinished cases, delivers synthetic 408 at the intercepted fetch response and records observed 408; source, deadline and assertions are unchanged. Both original and continuation results are retained; the partial pass is not relabelled as passed.",
+    "Native view_image pixel inspection of all 12 retained captures: readable missing/access/unavailable text, visible focused retry and loading status, shipped FAQ recovery and focused section headings, no page-wide horizontal overflow at either viewport."
+  ],
+  "interactions": [
+    "One explicit keyboard/touch retry after every failure; duplicate activation blocked while aria-disabled, control remains keyboard-focused during pending and failed retry, next deliberate retry succeeds. URL/query/fragment, history length and shell identity are unchanged.",
+    "Recover the actual shipped FAQ and focus its requested section. Navigate to the existing index during an obsolete pending FAQ read; late content does not replace the index.",
+    "Activate the current fragment twice without a refetch, return visible heading focus, then Tab follows the section reading order. Cross-document 503 removes the prior heading and shows unavailable rather than missing."
+  ],
+  "evidence": {
+    "source_proof": "source-1z1ukrzx",
+    "source_sha": "b5a27bbbced966e528db89e80bdfd0f9f6d47a2b",
+    "preview_sha256": "0799455963b93be0042a02a2cbe9088d5fa68b49e5588cc4fef56a2b456b59dc",
+    "browser_runs": [
+      "original partial: 5 completed desktop checks; client 1, timeout; browser/server closed",
+      "unfinished-case continuation: 9 desktop and 14 narrow checks; client 0; browser/server closed, no pending handlers or uncaught page errors"
+    ],
+    "retained_in_lane": [
+      "RECEIPTS.md",
+      "SOURCE-PROOF.json",
+      "BROWSER-CONTINUATION-PLAN.json",
+      "BROWSER-SUMMARY.json",
+      "PIXEL-REVIEW.json",
+      "BROWSER-EVIDENCE.tar.xz"
+    ]
+  }
+}
