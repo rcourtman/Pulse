@@ -29,6 +29,8 @@ import {
   getAlertResourceMetricDisplayValue,
   getAlertResourceRelaxedTriggerSummary,
   isAlertResourceMetricOverridden,
+  getAlertResourceIntentTargetLabel,
+  getAlertResourcePreferredIntentSignal,
   normalizeAlertResourceMetricKey,
 } from './alertResourceTableModel';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
@@ -392,18 +394,13 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   </Show>
                   <Show when={!isEditing() && props.table.onConfigureResourceIntent}>
                     <ActionIconButton
-                      onClick={() => {
-                        const preferredMetric = ['cpu', 'memory', 'disk'].find(
-                          (metric) =>
-                            props.table.columns.some(
-                              (column) => normalizeAlertResourceMetricKey(column) === metric,
-                            ) && alertResourceSupportsMetric(resource.type, metric),
-                        );
+                      onClick={() =>
                         props.table.onConfigureResourceIntent?.(
                           resource.id,
-                          preferredMetric ? `metric.${preferredMetric}` : 'state.offline',
-                        );
-                      }}
+                          getAlertResourcePreferredIntentSignal(props.table.columns, resource.type),
+                          getAlertResourceIntentTargetLabel(resource),
+                        )
+                      }
                       label={`Configure alert delay for ${getAlertResourceLabel(resource)}`}
                       title="Configure individual alert delay"
                       tone="neutral"

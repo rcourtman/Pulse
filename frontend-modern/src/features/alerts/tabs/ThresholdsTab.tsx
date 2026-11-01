@@ -15,11 +15,16 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
     createSignal<AlertIntentPolicySelectionTarget | null>(null);
   let intentSelectionRequest = 0;
 
-  const configureResourceIntent = (resourceId: string, signal: AlertIntentSignal) => {
+  const configureResourceIntent = (
+    resourceId: string,
+    signal: AlertIntentSignal,
+    label?: string,
+  ) => {
     intentSelectionRequest += 1;
     setIntentSelectionTarget({
       resourceId,
       signal,
+      label,
       requestId: intentSelectionRequest,
     });
   };

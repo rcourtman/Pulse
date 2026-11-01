@@ -13,6 +13,7 @@ export type OverrideType =
   | 'guestDisk'
   | 'agent'
   | 'agentDisk'
+  | 'agentSensor'
   | 'storage'
   | 'pbs'
   | 'pmg'
@@ -75,7 +76,11 @@ export interface SimpleThresholds {
 }
 
 export interface ThresholdsTableProps {
-  onConfigureResourceIntent?: (resourceId: string, signal: AlertIntentSignal) => void;
+  onConfigureResourceIntent?: (
+    resourceId: string,
+    signal: AlertIntentSignal,
+    label?: string,
+  ) => void;
   overrides: () => Override[];
   setOverrides: (overrides: Override[]) => void;
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;

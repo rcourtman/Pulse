@@ -23,6 +23,7 @@ interface ThresholdsAvailabilityMutationResources {
   nodesWithOverrides: () => TableResource[];
   agentsWithOverrides: () => TableResource[];
   agentDisksWithOverrides: () => TableResource[];
+  agentSensorsWithOverrides?: () => TableResource[];
   guestDisksWithOverrides?: () => TableResource[];
   dockerHostsWithOverrides: () => TableResource[];
   guestsFlat: () => TableResource[];
@@ -76,6 +77,7 @@ export function useThresholdsAvailabilityMutations({
       ...resources.pbsServersWithOverrides(),
       ...resources.agentsWithOverrides(),
       ...resources.agentDisksWithOverrides(),
+      ...optionalResources(resources.agentSensorsWithOverrides),
       ...optionalResources(resources.guestDisksWithOverrides),
       ...optionalResources(resources.kubernetesClustersWithOverrides),
       ...optionalResources(resources.kubernetesNodesWithOverrides),
@@ -100,6 +102,7 @@ export function useThresholdsAvailabilityMutations({
         resource.type !== 'dockerContainer' &&
         resource.type !== 'agent' &&
         resource.type !== 'agentDisk' &&
+        resource.type !== 'agentSensor' &&
         resource.type !== 'guestDisk' &&
         resource.type !== 'kubernetesCluster' &&
         resource.type !== 'kubernetesNode' &&

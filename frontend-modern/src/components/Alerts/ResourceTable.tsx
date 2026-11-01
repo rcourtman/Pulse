@@ -19,7 +19,11 @@ export type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tab
 
 export interface ResourceTableProps {
   title: string;
-  onConfigureResourceIntent?: (resourceId: string, signal: AlertIntentSignal) => void;
+  onConfigureResourceIntent?: (
+    resourceId: string,
+    signal: AlertIntentSignal,
+    label?: string,
+  ) => void;
   resources?: Resource[];
   groupedResources?: Record<string, Resource[]>;
   columns: string[];

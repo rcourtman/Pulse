@@ -1,6 +1,11 @@
 import { createMemo } from 'solid-js';
 
+import {
+  parseAgentSensorResourceId,
+  agentSensorResourceId,
+} from '@/features/alerts/agentSensorIdentity';
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
+import { formatTemperature } from '@/utils/temperature';
 
 import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
@@ -277,6 +282,153 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
     return grouped;
   });
 
+  // One row per usable temperature sensor a machine reports, plus every sensor
+  // that has saved alert settings, so a configured sensor stays editable and
+  // removable while it reads invalid, has gone missing or its machine is
+  // offline. Sensors have no global default: the presentation default of 0
+  // makes an unconfigured row read Off, which is what the alert engine does.
+  const agentSensorsWithOverrides = createMemo<TableResource[]>((prev = []) => {
+    if (editingId()) {
+      return prev;
+    }
+
+    const search = searchTerm().toLowerCase();
+    const overridesMap = createOverridesMap(props.overrides());
+    // Configured sensor IDs parsed once, by host, so each machine reads only
+    // its own entries.
+    const configuredSensorIdsByHost = new Map<string, string[]>();
+    (props.overrides() ?? []).forEach((override) => {
+      if (override.type !== 'agentSensor') return;
+      const parsed = parseAgentSensorResourceId(override.id);
+      if (!parsed) return;
+      const ids = configuredSensorIdsByHost.get(parsed.hostId) ?? [];
+      ids.push(parsed.sensorId);
+      configuredSensorIdsByHost.set(parsed.hostId, ids);
+    });
+    const seen = new Set<string>();
+    const sensors: TableResource[] = [];
+
+    (props.agents ?? []).forEach((agentResource) => {
+      const hostId = readString(agentResource.agent?.agentId) || hostActionId(agentResource);
+      const agentDisplayName = getAlertResourceDisplayLabel(agentResource);
+      const hostReporting =
+        agentResource.status !== 'offline' && agentResource.agent?.stale !== true;
+      const reported = (agentResource.agent?.sensors?.native ?? []).filter(
+        (sensor) => sensor.kind === 'temperature',
+      );
+      const reportedById = new Map(reported.map((sensor) => [sensor.id, sensor]));
+      const labelCounts = new Map<string, number>();
+      reported.forEach((sensor) => {
+        const labelKey = `${sensor.chip}\u0000${sensor.label}`;
+        labelCounts.set(labelKey, (labelCounts.get(labelKey) ?? 0) + 1);
+      });
+
+      const sensorIds = new Set(
+        reported.filter((sensor) => sensor.status === 'ok').map((sensor) => sensor.id),
+      );
+      configuredSensorIdsByHost.get(hostId)?.forEach((sensorId) => sensorIds.add(sensorId));
+
+      sensorIds.forEach((sensorId) => {
+        const resourceId = agentSensorResourceId(hostId, sensorId);
+        const override = overridesMap.get(resourceId);
+        const sensor = reportedById.get(sensorId);
+        const label = sensor?.label.trim() || sensorId;
+        const name =
+          sensor && (labelCounts.get(`${sensor.chip}\u0000${sensor.label}`) ?? 0) > 1
+            ? `${label} (${sensor.channel})`
+            : label;
+        const chip = sensor?.chip || sensorId.split('/')[0] || '';
+        let readingMessage: string | undefined;
+        let reading: string | undefined;
+        if (!sensor) {
+          readingMessage = 'Not reported by this machine. Saved alert settings are retained.';
+        } else if (!hostReporting) {
+          readingMessage = 'Machine is not reporting, so there is no current reading.';
+        } else if (sensor.status !== 'ok' || typeof sensor.value !== 'number') {
+          readingMessage = 'No valid reading from this sensor.';
+        } else {
+          reading = formatTemperature(sensor.value, { decimals: 1 });
+        }
+
+        seen.add(resourceId);
+        sensors.push({
+          id: resourceId,
+          name,
+          displayName: name,
+          rawName: sensorId,
+          type: 'agentSensor' as const,
+          resourceType: 'Machine Sensor',
+          groupKey: agentResource.id,
+          node: agentDisplayName,
+          instance: chip,
+          status: agentResource.status,
+          // The default is presentation-only, so any stored entry is an
+          // override: a saved 0 stays visible and removable.
+          hasOverride: Boolean(override),
+          note: override?.note,
+          disabled: override?.disabled || false,
+          thresholds: override?.thresholds || {},
+          defaults: { temperature: 0 },
+          presentationDefaults: true,
+          subtitle: reading ? `${reading} · ${chip}` : chip,
+          readingMessage,
+        } satisfies TableResource);
+      });
+    });
+
+    (props.overrides() ?? [])
+      .filter((override) => override.type === 'agentSensor' && !seen.has(override.id))
+      .forEach((override) => {
+        const parsed = parseAgentSensorResourceId(override.id);
+        const name = parsed?.sensorId || override.name || override.id;
+        sensors.push({
+          id: override.id,
+          name,
+          displayName: name,
+          rawName: name,
+          type: 'agentSensor' as const,
+          resourceType: 'Machine Sensor',
+          groupKey: parsed?.hostId || override.node || 'Unknown Machine',
+          node: override.node || parsed?.hostId || 'Unknown Machine',
+          instance: '',
+          status: 'unknown',
+          hasOverride: true,
+          disabled: override.disabled || false,
+          thresholds: override.thresholds || {},
+          defaults: { temperature: 0 },
+          presentationDefaults: true,
+          note: override.note,
+          readingMessage: 'Machine not found. Saved alert settings are retained.',
+        } satisfies TableResource);
+      });
+
+    return search
+      ? sensors.filter(
+          (sensor) =>
+            sensor.name.toLowerCase().includes(search) ||
+            sensor.rawName?.toLowerCase().includes(search) ||
+            sensor.node?.toLowerCase().includes(search),
+        )
+      : sensors;
+  }, []);
+
+  // Grouped by the machine's resource ID, not its display name, so two
+  // machines with the same name keep separate sensor lists.
+  const agentSensorsGroupedByAgent = createMemo<Record<string, TableResource[]>>(() => {
+    const grouped: Record<string, TableResource[]> = {};
+    agentSensorsWithOverrides().forEach((sensor) => {
+      const key =
+        typeof sensor.groupKey === 'string' && sensor.groupKey
+          ? sensor.groupKey
+          : 'Unknown Machine';
+      (grouped[key] ??= []).push(sensor);
+    });
+    Object.values(grouped).forEach((resources) => {
+      resources.sort((a, b) => a.name.localeCompare(b.name));
+    });
+    return grouped;
+  });
+
   const agentGroupHeaderMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.agents ?? []).forEach((agent) => {
@@ -293,6 +445,8 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
     agentsWithOverrides,
     agentDisksWithOverrides,
     agentDisksGroupedByAgent,
+    agentSensorsWithOverrides,
+    agentSensorsGroupedByAgent,
     agentGroupHeaderMeta,
   };
 }

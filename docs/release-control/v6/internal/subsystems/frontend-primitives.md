@@ -10392,6 +10392,23 @@ muted dash for metrics an override cannot store (Docker container restart and
 memory-limit rules, every PMG threshold). No shared primitive, table component
 or layout changes.
 
+### Threshold rows hand a labelled target to the delay editor (1 November 2026)
+
+A threshold row's delay action passes its resource ID, the alert signal from
+the shared `getAlertResourcePreferredIntentSignal` (first supported CPU,
+memory, disk or temperature column, else offline; desktop and mobile rows use
+the same helper) and a label from `getAlertResourceIntentTargetLabel` (the
+row's name and, when known, its machine or node). `AlertIntentPolicyPanel`
+lists a target that is not one of its resources, such as a machine disk or
+sensor child ID, as its own option under that label instead of resetting the
+selection to the first listed resource, and disables preview for it. It
+applies each handoff once, reading the resource list untracked, so an
+inventory change cannot replay it over the operator's later selection. The
+Machine Sensors section reuses the shared table with no Global Defaults row
+and no Alerts column; its rows stay one line, with the reading and chip in the
+subtitle and any `readingMessage` on the name's line. No shared primitive or
+layout changes.
+
 ### Stopped VM filesystem presentation (12 October 2026)
 
 `getWorkloadGuestDiskRead` treats an explicitly stopped VM as having no current

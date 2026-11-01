@@ -1,3 +1,4 @@
+import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 import type { Resource as UnifiedResource, ResourcePolicy } from '@/types/resource';
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
@@ -330,6 +331,35 @@ export function getAlertResourceInitialEditMetric(columns: string[], resourceTyp
     );
 }
 
+// The alert signal a row's delay action configures: its first threshold
+// metric the resource supports, else its offline state.
+export function getAlertResourcePreferredIntentSignal(
+  columns: readonly string[],
+  resourceType: string | undefined,
+): AlertIntentSignal {
+  for (const metric of ['cpu', 'memory', 'disk', 'temperature'] as const) {
+    if (
+      columns.some((column) => normalizeAlertResourceMetricKey(column) === metric) &&
+      alertResourceSupportsMetric(resourceType, metric)
+    ) {
+      return `metric.${metric}`;
+    }
+  }
+  return 'state.offline';
+}
+
+// How the delay panel names a row it may not list itself, such as a machine
+// disk or sensor: the row's label and, when known, its machine or node.
+export function getAlertResourceIntentTargetLabel(resource: {
+  name: string;
+  displayName?: string;
+  node?: string;
+}): string {
+  const label = resource.displayName?.trim() || resource.name;
+  const node = resource.node?.trim();
+  return node && node !== label ? `${label} · ${node}` : label;
+}
+
 export function alertResourceSupportsMetric(
   resourceType: string | undefined,
   metric: string,
@@ -346,6 +376,9 @@ export function alertResourceSupportsMetric(
   }
   if (resourceType === 'storage') {
     return metric === 'usage';
+  }
+  if (resourceType === 'agentSensor') {
+    return metric === 'temperature';
   }
   if (resourceType === 'kubernetesNamespace') {
     return false;

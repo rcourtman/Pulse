@@ -6405,9 +6405,13 @@ in `native`: `id` (`<chip>/<channel>`), `chip`, optional `adapter`, `channel`,
 `label`, `kind` (`temperature`/`fan`), `unit` (`celsius`/`rpm`), optional
 `value` and `status` (`ok`/`invalid`). The models-backed frontend host
 summary always emits `native` as a possibly empty array, beside `custom` and
-`gpu`; the unified-resource and agent payloads omit it when empty. No
-frontend code reads it yet, so `frontend-modern/src/types/api.ts` gains its
-optional `native` type with the first consumer.
+`gpu`; the unified-resource and agent payloads omit it when empty.
+`frontend-modern/src/types/api.ts` mirrors it as optional
+`HostSensorSummary.native: HostNativeSensor[]`, with `kind` and `unit` as the
+literal unions above. Its first reader is the Alerts → Thresholds Machine
+Sensors section, which lists only `temperature` entries, never shows an
+`invalid` entry's value as a reading, and keeps a configured sensor whose
+entry is missing as a retained row rather than a removal.
 `id` is the host-scoped sensor source key; `label` is display text and is not
 unique. Clients must not chart, alert on or headline an `invalid` entry, and
 must not read an absent or empty `native` array, or an entry missing from a

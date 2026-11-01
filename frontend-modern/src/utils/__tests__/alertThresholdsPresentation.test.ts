@@ -212,6 +212,7 @@ describe('alertThresholdsPresentation', () => {
       pmg: 'Mail Gateway Thresholds',
       agents: 'Machines',
       agentDisks: 'Machine Disks',
+      agentSensors: 'Machine Sensors',
       dockerHosts: 'Container Runtimes',
       dockerContainers: 'Containers',
     });

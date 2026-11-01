@@ -24,6 +24,8 @@ export interface Resource {
   readingMessage?: string;
   thresholds?: AlertResourceThresholdMap;
   defaults?: AlertResourceThresholdMap;
+  /** Defaults are display-only (no inherited policy), so an Off value is no override. */
+  presentationDefaults?: boolean;
   disabled?: boolean;
   disableConnectivity?: boolean;
   poweredOffSeverity?: 'warning' | 'critical';

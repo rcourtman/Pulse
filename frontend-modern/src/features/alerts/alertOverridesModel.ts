@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import { getActionableAgentIdFromResource, isTrueNASSystemResource } from '@/utils/agentResources';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 
+import { parseAgentSensorResourceId } from './agentSensorIdentity';
 import {
   extractTriggerValues,
   getAlertResourceDisplayLabel,
@@ -313,7 +314,15 @@ export const buildProjectedOverrides = ({
     { resource: Resource; type: Override['type']; resourceType: string }
   >();
 
-  const upsertProjectedOverride = (override: Override) => {
+  // Every projection is keyed by its raw override key, so the stored note is
+  // carried here once for all resource types. Without it a reloaded editor
+  // opens with a blank note and the next save drops the stored one.
+  const upsertProjectedOverride = (projected: Override) => {
+    const storedNote = rawConfig[projected.id]?.note;
+    const override =
+      projected.note === undefined && typeof storedNote === 'string' && storedNote.trim()
+        ? { ...projected, note: storedNote }
+        : projected;
     const existingIndex = overrideIndexByID.get(override.id);
     if (existingIndex !== undefined) {
       overridesList[existingIndex] = override;
@@ -583,6 +592,21 @@ export const buildProjectedOverrides = ({
         type: 'dockerHost',
         resourceType: 'Container Runtime',
         disableConnectivity: thresholds.disableConnectivity || false,
+        thresholds: extractTriggerValues(thresholds),
+      });
+      return;
+    }
+
+    const sensorKey = parseAgentSensorResourceId(key);
+    if (sensorKey) {
+      const agent = agentMap.get(sensorKey.hostId);
+      upsertProjectedOverride({
+        id: key,
+        name: sensorKey.sensorId,
+        type: 'agentSensor',
+        resourceType: 'Machine Sensor',
+        node: agent ? getAlertResourceDisplayLabel(agent) : sensorKey.hostId,
+        disabled: thresholds.disabled || false,
         thresholds: extractTriggerValues(thresholds),
       });
       return;
