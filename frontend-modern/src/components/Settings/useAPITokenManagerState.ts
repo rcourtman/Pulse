@@ -269,7 +269,8 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   const resetContext = () => {
     if (disposed) return;
-    const selectionChanged = selectedOrg() !== currentOrg() || selectedUser() !== authenticatedUser();
+    const selectionChanged =
+      selectedOrg() !== currentOrg() || selectedUser() !== authenticatedUser();
     invalidateRequests();
     batch(() => {
       setSelectedOrg(currentOrg());
