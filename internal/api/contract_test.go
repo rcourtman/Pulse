@@ -29139,3 +29139,10 @@ func TestContractSupportBundleStopsAfterAdmittedPrefix(t *testing.T) {
 func TestContractReportDownloadWithdrawal(t *testing.T) {
 	reportDownloadNativeWithdrawal(t)
 }
+
+// Audit evidence stays behind current admitted authority even when storage
+// returns after a persisted DELETE/logout. Existing admission, signed evidence
+// and independent readers remain unchanged.
+func TestContractAuditReadWithdrawal(t *testing.T) {
+	auditReadNativeWithdrawal(t)
+}
