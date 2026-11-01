@@ -45,6 +45,161 @@ func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitor
 	}
 }
 
+func containerAgentWrapperCommand(t *testing.T, arguments ...string) (*exec.Cmd, string) {
+	t.Helper()
+	root := t.TempDir()
+	scriptDir := filepath.Join(root, "scripts with spaces")
+	temporaryDir := filepath.Join(root, "temporary files")
+	for _, directory := range []string{scriptDir, temporaryDir} {
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wrapper, err := os.ReadFile(repoFile("scripts", "install-container-agent.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(scriptDir, "install-container-agent.sh")
+	if err := os.WriteFile(path, wrapper, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	t.Cleanup(cancel)
+	cmd := exec.CommandContext(ctx, "bash", append([]string{path}, arguments...)...)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "TMPDIR="+temporaryDir,
+		"CURL_HOME="+root, "NO_PROXY=*", "no_proxy=*",
+		"WRAPPER_MARKER="+filepath.Join(root, "executed"),
+		"WRAPPER_ARGS="+filepath.Join(root, "arguments"))
+	return cmd, root
+}
+
+func assertContainerWrapperDownloadRemoved(t *testing.T, root string) {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(root, "temporary files"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("temporary installer download remains: entries=%v err=%v", entries, err)
+	}
+}
+
+func TestContainerAgentCompatibilityWrapperRejectsIncompleteDownloadBeforeExecution(t *testing.T) {
+	const prefix = "printf touched > \"$WRAPPER_MARKER\"\n"
+	for _, tc := range []struct {
+		name, body, diagnostic string
+		status, extraBytes     int
+	}{
+		{"truncated", prefix, "Could not download the complete install.sh", http.StatusOK, 100},
+		{"invalid-shell", prefix + "if then\n", "empty or invalid Bash", http.StatusOK, 0},
+		{"empty", "", "empty or invalid Bash", http.StatusOK, 0},
+		{"http-error", prefix, "Could not download the complete install.sh", http.StatusServiceUnavailable, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path != "/install.sh" {
+					t.Errorf("unexpected installer URL %q", r.URL.Path)
+				}
+				w.Header().Set("Content-Length", strconv.Itoa(len(tc.body)+tc.extraBytes))
+				w.WriteHeader(tc.status)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer server.Close()
+			cmd, root := containerAgentWrapperCommand(t, "--url", server.URL)
+			output, err := cmd.CombinedOutput()
+			if err == nil || !strings.Contains(string(output), tc.diagnostic) {
+				t.Fatalf("inadmissible download was not rejected: %v\n%s", err, output)
+			}
+			if _, err := os.Stat(filepath.Join(root, "executed")); !os.IsNotExist(err) {
+				t.Fatalf("download prefix executed or marker unavailable: %v", err)
+			}
+			if requests.Load() != 1 {
+				t.Fatalf("download was replayed: %d requests", requests.Load())
+			}
+			assertContainerWrapperDownloadRemoved(t, root)
+		})
+	}
+}
+
+func TestContainerAgentCompatibilityWrapperPreservesRemoteArgumentsAndExit(t *testing.T) {
+	const body = "printf touched > \"$WRAPPER_MARKER\"\nprintf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\nexit 37\n"
+	for _, uninstall := range []bool{false, true} {
+		t.Run(fmt.Sprintf("uninstall=%t", uninstall), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = io.WriteString(w, body)
+			}))
+			defer server.Close()
+			arguments := []string{"--url", server.URL, "--token", "synthetic $; literal", "--interval", "7 s; literal"}
+			expected := append([]string{}, arguments...)
+			if uninstall {
+				arguments = append(arguments, "--uninstall")
+				expected = append(expected, "--uninstall")
+			} else {
+				expected = append(expected, "--enable-docker", "--enable-host")
+			}
+			cmd, root := containerAgentWrapperCommand(t, arguments...)
+			output, err := cmd.CombinedOutput()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 37 {
+				t.Fatalf("installer exit changed: %v\n%s", err, output)
+			}
+			actual, err := os.ReadFile(filepath.Join(root, "arguments"))
+			if err != nil || string(actual) != strings.Join(expected, "\x00")+"\x00" {
+				t.Fatalf("installer arguments changed: %q (%v)", actual, err)
+			}
+			assertContainerWrapperDownloadRemoved(t, root)
+		})
+	}
+}
+
+func TestContainerAgentCompatibilityWrapperRetainsExplicitTLSOptOut(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "printf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\n")
+	}))
+	defer server.Close()
+	for _, insecure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("insecure=%t", insecure), func(t *testing.T) {
+			arguments := []string{"--url", server.URL}
+			if insecure {
+				arguments = append(arguments, "--insecure")
+			}
+			cmd, root := containerAgentWrapperCommand(t, arguments...)
+			output, err := cmd.CombinedOutput()
+			if (err == nil) != insecure {
+				t.Fatalf("unexpected TLS admission: %v\n%s", err, output)
+			}
+			actual, readErr := os.ReadFile(filepath.Join(root, "arguments"))
+			if insecure {
+				expected := append(arguments, "--enable-docker", "--enable-host")
+				if readErr != nil || string(actual) != strings.Join(expected, "\x00")+"\x00" {
+					t.Fatalf("explicit insecure arguments changed: %q (%v)", actual, readErr)
+				}
+			} else if !os.IsNotExist(readErr) {
+				t.Fatalf("untrusted TLS download executed: %q (%v)", actual, readErr)
+			}
+			assertContainerWrapperDownloadRemoved(t, root)
+		})
+	}
+}
+
+func TestContainerAgentCompatibilityWrapperPrefersAdjacentInstaller(t *testing.T) {
+	cmd, root := containerAgentWrapperCommand(t, "--uninstall")
+	local := filepath.Join(root, "scripts with spaces", "install.sh")
+	if err := os.WriteFile(local, []byte("#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$WRAPPER_ARGS\"\nexit 39\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	output, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 39 {
+		t.Fatalf("adjacent installer route changed: %v\n%s", err, output)
+	}
+	actual, err := os.ReadFile(filepath.Join(root, "arguments"))
+	if err != nil || string(actual) != "--uninstall\x00" {
+		t.Fatalf("adjacent installer arguments changed: %q (%v)", actual, err)
+	}
+	assertContainerWrapperDownloadRemoved(t, root)
+}
+
 func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {

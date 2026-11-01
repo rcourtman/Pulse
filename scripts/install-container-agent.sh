@@ -112,4 +112,36 @@ if [[ "$INSECURE" == "true" ]]; then
   curl_flags=(-kfsSL)
 fi
 
-curl "${curl_flags[@]}" "$URL/install.sh" | bash -s -- "${forward_args[@]}"
+# A pipe can execute an installer's first commands before curl discovers a
+# truncated transfer. Admit the complete script before running any of it.
+download_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-container-installer.XXXXXX")" || {
+  echo "[ERROR] Could not prepare a private installer download directory." >&2
+  exit 1
+}
+download_file="$download_dir/install.sh"
+cleanup_download() {
+  local status=$?
+  trap - EXIT
+  if ! rm -f -- "$download_file" || ! rmdir -- "$download_dir"; then
+    echo "[WARNING] Could not remove the temporary installer download." >&2
+  fi
+  exit "$status"
+}
+trap cleanup_download EXIT
+
+# Keep downloaded code private even when the caller's umask is permissive.
+if ! (umask 077; : > "$download_file"); then
+  echo "[ERROR] Could not prepare the installer download file." >&2
+  exit 1
+fi
+if ! curl "${curl_flags[@]}" --output "$download_file" -- "$URL/install.sh"; then
+  echo "[ERROR] Could not download the complete install.sh; nothing was executed." >&2
+  exit 1
+fi
+if [[ ! -s "$download_file" ]] || ! bash -n -- "$download_file" >/dev/null 2>&1; then
+  echo "[ERROR] Downloaded install.sh is empty or invalid Bash; nothing was executed." >&2
+  exit 1
+fi
+
+# Do not exec: the wrapper still owns cleanup and preserves the installer's exit.
+bash -- "$download_file" "${forward_args[@]}"
