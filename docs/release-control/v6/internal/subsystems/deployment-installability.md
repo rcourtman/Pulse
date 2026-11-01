@@ -9465,6 +9465,17 @@ signature-sidecar fixture also supplies the publisher's error logger, so a
 failed copy reports its real diagnostic rather than a missing shell function.
 This supplies Linux fixture semantics, not a macOS or installed-upgrade verdict.
 
+The same step-local directory supplies verified GNU `sha256sum`. The registered
+frontend transfer fixture executes Linux CI's `--check --strict` recipe; the
+native macOS utility does not accept those options. Both installer phases must
+resolve the verified tool without changing native agent/runtime PATH. Missing
+or non-GNU hashing fails before fixture-path export. The registered fixture-tool
+test exercises strict valid, corrupt and malformed checksum inputs plus the
+actual eight frontend packet/identity/retry controls with an unusable native
+hash tool behind the staged directory. Production digest, archive admission,
+artifact identity and full required checks remain unchanged; containing hosted
+macOS results remain separate from this offline recipe proof.
+
 ### Bounded Docker module-proxy recovery (7 October 2026)
 
 The Docker backend builder uses `scripts/go-mod-download.sh` with the same

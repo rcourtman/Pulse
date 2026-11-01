@@ -195,7 +195,7 @@ jobs:
           timeout --version | grep -q 'GNU coreutils'
 
       # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
-      # Keep their Bash/GNU metadata, archive and rename semantics local to that step;
+      # Keep their Bash/GNU metadata, archive, checksum and rename semantics local to that step;
       # native macOS agent/runtime tests still use the runner's own utilities.
       - name: Supply Linux server installer fixture tools on macOS
         if: runner.os == 'macOS'
@@ -209,7 +209,7 @@ jobs:
           coreutils_bin="$(brew --prefix coreutils)/bin"
           fixture_bin="$(mktemp -d "$RUNNER_TEMP/pulse-installer-fixture-tools.XXXXXX")"
           ln -s "$linux_bash" "$fixture_bin/bash"
-          for tool in stat chmod chown cp mv ln readlink; do
+          for tool in stat chmod chown cp mv ln readlink sha256sum; do
             executable="$coreutils_bin/g$tool"
             test -x "$executable"
             "$executable" --version | grep -q 'GNU coreutils'
