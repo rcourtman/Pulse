@@ -6,12 +6,17 @@ import billingAdminOrganizationsTableSource from '../BillingAdminOrganizationsTa
 import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
 import billingAdminPanelStateSource from '../useBillingAdminPanelState.ts?raw';
 
+const isMobileMock = vi.fn();
 const listOrganizationsMock = vi.fn();
 const getBillingStateMock = vi.fn();
 const putBillingStateMock = vi.fn();
 const successMock = vi.fn();
 const errorMock = vi.fn();
 const presentationPolicyHidesOrganizationSurfacesMock = vi.fn();
+
+vi.mock('@/hooks/useBreakpoint', () => ({
+  useBreakpoint: () => ({ isMobile: () => isMobileMock() }),
+}));
 
 vi.mock('@/api/billingAdmin', () => ({
   BillingAdminAPI: {
@@ -34,6 +39,7 @@ vi.mock('@/stores/notifications', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyIsReadOnly: () => false,
   presentationPolicyHidesOrganizationSurfaces: (...args: unknown[]) =>
     presentationPolicyHidesOrganizationSurfacesMock(...args),
 }));
@@ -46,6 +52,7 @@ vi.mock('@/utils/logger', () => ({
 
 describe('BillingAdminPanel', () => {
   beforeEach(() => {
+    isMobileMock.mockReset().mockReturnValue(false);
     listOrganizationsMock.mockReset();
     getBillingStateMock.mockReset();
     putBillingStateMock.mockReset();
@@ -177,5 +184,26 @@ describe('BillingAdminPanel', () => {
     ).toBeInTheDocument();
     expect(listOrganizationsMock).not.toHaveBeenCalled();
     expect(getBillingStateMock).not.toHaveBeenCalled();
+  });
+  it('keeps one set of mobile subscription actions beside their confirmed billing state', async () => {
+    isMobileMock.mockReturnValue(true);
+    getBillingStateMock.mockResolvedValue({
+      capabilities: [],
+      limits: {},
+      meters_enabled: [],
+      subscription_state: 'active',
+    });
+    putBillingStateMock.mockImplementation(async (_orgID, payload) => payload);
+    render(() => <BillingAdminPanel />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suspend Org' })).toBeEnabled());
+    expect(screen.getAllByRole('button', { name: 'Suspend Org' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Activate Org' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Suspend Org' }).closest('td')).toHaveTextContent(
+      'Active',
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org' }));
+    await waitFor(() => expect(putBillingStateMock).toHaveBeenCalledTimes(1));
+    expect(putBillingStateMock.mock.calls[0][0]).toBe('org-1');
+    expect(putBillingStateMock.mock.calls[0][1].subscription_state).toBe('suspended');
   });
 });

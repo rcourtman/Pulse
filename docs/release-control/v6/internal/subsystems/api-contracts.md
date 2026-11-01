@@ -56,6 +56,21 @@ real persisted DELETE for all three routes. Shared writer tests pin deadline
 forwarding, final closure and the lack of a bypass. These are synthetic source
 proofs, not installed/private-extension recovery, exposure or publication.
 
+### Billing Admin cancellation and non-replayed writes
+
+`frontend-modern/src/api/billingAdmin.ts` accepts an optional cancellation signal
+for the global hosted organization inventory, per-organization billing read and
+subscription PUT. Existing session preference, encoded organization path and
+`skipOrgContext` are unchanged: the platform-admin endpoints still use default
+request context, not the UI's selected tenant. Idempotent reads retain the
+existing client fallback policy. Subscription writes set `retry: false`, so an
+unconfirmed response does not replay after CSRF refresh, rate limiting or token
+fallback; the client rechecks cancellation after CSRF preparation before dispatch.
+A pending abort does not claim a server-side rollback. Existing server-side
+administration, organization and capability checks remain authoritative.
+API unit and real-client transport tests cover option propagation, headers,
+encoded targets, non-retry responses and cancellation during CSRF preparation.
+
 ### Selected organization detail and billing request lifetimes
 
 The existing organization `update` client optionally accepts the same

@@ -15,6 +15,39 @@
 
 ## Purpose
 
+### Billing Admin reads and changes use an accepted global snapshot
+
+Hosted Billing Admin remains a platform-administration surface, not an
+organization-selected read. Its existing hosted/multitenant/demo and server
+permission boundaries stay in place. A refresh, capability/presentation
+withdrawal, read-only transition or disposal invalidates the inventory and row
+requests, aborts pending transport and removes retained billing details. Late
+successes, failures and spinner completions cannot change a newer snapshot.
+The six-worker billing prefetch runs once per accepted inventory; failures are
+not rescheduled by sibling completions. Opaque organization IDs are own keys,
+not object-prototype entries.
+
+Only a successful, well-formed inventory can assert emptiness. Failed inventory
+reads show a fixed inline error, not old rows or an empty-list claim. Failed or
+malformed billing rows show unavailable data and deliberate read-only recovery,
+not a trial/customer default or a permanent JSON loading placeholder. Subscription
+controls require the current accepted row and a non-read-only session; they
+never fetch missing billing data as an implicit prelude to writing.
+
+A subscription change preserves the saved plan and other billing fields, admits
+one in-flight write per row and is never automatically repeated. Refresh,
+withdrawal and disposal abort its transport, including after CSRF preparation.
+Cancellation is not server rollback. A failed, malformed or mismatched response
+withdraws the row snapshot and says the change is unconfirmed until an explicit
+reload. Obsolete completions produce no success or failure toast in a later view.
+On phones, one set of subscription actions stays in the subscription cell, beside
+its accepted state and recovery control, rather than extending a separate column
+off-screen. Error text and expanded JSON override inherited table no-wrap rules
+so the warning, recovery and billing details remain readable. Normal-suite
+BillingAdminPanel/ReadLifetimes and billingAdmin transport tests pin these boundaries. Desktop and phone browser evidence uses the actual panel,
+grid, client and capability stores with synthetic HTTP responses; no installed
+billing, provider mutation or original administrator recovery is claimed.
+
 ### Organization billing reads are a selected snapshot, not fallback plan data
 
 The existing Billing & Usage panel displays plan and member figures only after

@@ -92,4 +92,31 @@ describe('BillingAdminAPI', () => {
       expect(result).toEqual(mockState);
     });
   });
+  it('forwards cancellation for all operations and makes writes non-retrying', async () => {
+    const signal = new AbortController().signal;
+    await BillingAdminAPI.listOrganizations({ signal });
+    await BillingAdminAPI.getBillingState('org/one', { signal });
+    const state: BillingState = { subscription_state: 'active', capabilities: [], limits: {} };
+    await BillingAdminAPI.putBillingState('org/one', state, { signal });
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(
+      1,
+      '/api/hosted/organizations',
+      expect.objectContaining({ signal, preferSessionAuth: true, skipOrgContext: true }),
+    );
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/orgs/org%2Fone/billing-state',
+      expect.objectContaining({ signal, preferSessionAuth: true, skipOrgContext: true }),
+    );
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(
+      3,
+      '/api/admin/orgs/org%2Fone/billing-state',
+      expect.objectContaining({
+        signal,
+        retry: false,
+        preferSessionAuth: true,
+        skipOrgContext: true,
+      }),
+    );
+  });
 });

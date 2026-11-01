@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "057b6bab50df9824ff8a7f8475b7e8c1880b44b0",
+  "verified_at": "2026-11-01T04:02:01.787308Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/billingAdmin.ts",
+    "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
+    "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
+    "frontend-modern/src/components/Settings/useBillingAdminPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/billingAdmin.ts": "002a8d6098da60a54343d63713f472d3fc6da087db5bfa7feb798d307618ae3d",
+    "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx": "e4ddd3767d966ca1821f4d22755c4c0d76ea0c4a2b73b3202898d5f016e07ab8",
+    "frontend-modern/src/components/Settings/BillingAdminPanel.tsx": "ee9b471b5478a20eec2656e02367ee8e9520066765729b1a382129a1d45e0e60",
+    "frontend-modern/src/components/Settings/useBillingAdminPanelState.ts": "f1d0f8405fec7463dcbc7e157d2ad045382696f7c152acc47eace5e94e7f91ac"
+  },
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 920
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Safe compiled adapter renders the actual existing Billing Admin panel, grid, global API client and runtime/presentation stores with production CSS. The route is the synthetic adapter root, not a full Settings-router or installed authorization journey. All backend responses and billing fields are synthetic.",
+    "Exact source 057b6bab50df9824ff8a7f8475b7e8c1880b44b0; source-1xw2f265 passes types, 8 affected consumer tests, changed-file lint/format and full production/embed plus preview builds. The 44 compiled source inputs match this tree.",
+    "Playwright 1.56.1 matches the integration lock; desktop/light Chromium141.0.7390.37 and narrow/dark touch WebKit26.0. Native view_image inspection of all 12 final captures confirms readable state, warnings, controls and wrapped JSON, without overlap or inner-table/page-wide clipping."
+  ],
+  "interactions": [
+    "Read-pending and unavailable rows disable both mutation actions; explicit keyboard Reload billing is a read, not a PUT. Accepted empty inventory differs from failed inventory, and refreshing removes old rows.",
+    "One subscription PUT preserves the accepted plan/limits/capabilities/meters/trial/customer fields; duplicate activation is blocked. A failed response clears old billing and shows unconfirmed, followed by deliberate saved-state read and a separately confirmed change.",
+    "Withdraw pending inventory and re-enter with fresh reads. Withdraw while the real client awaits CSRF preparation: no subscription PUT in the bounded 100ms post-response observation. Read-only state blocks programmatic clicks but keeps billing readable.",
+    "All admin reads/writes use the existing default global request context and omit the synthetic stored API token on the session-preferred request. This is transport evidence, not real server-side authority or customer billing recovery."
+  ],
+  "evidence": {
+    "source_proof": "source-1xw2f265",
+    "source_sha": "057b6bab50df9824ff8a7f8475b7e8c1880b44b0",
+    "preview_sha256": "210afbaff54ac827b8009537d87cf3af04749ce8ddf47fb26de0a9302345aba8",
+    "scripted_checks": 15,
+    "captures_natively_inspected": 12,
+    "page_errors": 0,
+    "pending_handlers": 0,
+    "browser_server_closed": true,
+    "lane_records": [
+      "RECEIPTS.md",
+      "SOURCE-FINAL.json",
+      "FINAL-PREVIEW-BINDING.json",
+      "BROWSER-COMPLETE-SUMMARY.json",
+      "PIXEL-REVIEW.json",
+      "BROWSER-EVIDENCE.tar.xz"
+    ]
+  }
+}

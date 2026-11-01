@@ -9,8 +9,8 @@ const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const repoRoot = path.resolve(frontendRoot, '..');
 const readDoc = (name: string) => readFileSync(path.join(repoRoot, 'docs', `${name}.md`), 'utf8');
 const guide = readDoc('KUBERNETES');
-// js-yaml is already in the committed lint/build graph. Parse the copied YAML,
-// rather than accepting a permissions sentence elsewhere in the guide.
+// js-yaml is an explicit test dependency, not an incidental ESLint dependency.
+// Parse the copied YAML rather than accepting a permissions sentence elsewhere.
 const yaml = createRequire(import.meta.url)('js-yaml') as {
   loadAll: (text: string) => unknown[];
 };
