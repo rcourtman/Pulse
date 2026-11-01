@@ -662,7 +662,8 @@ Manage alert rules in **Alerts → Thresholds**. Choose the platform and resourc
 before editing; a group default can affect many resources, while a custom
 resource override takes precedence. Finish the edit and use **Save Changes**;
 an unsaved value is not the running policy. Reload after a successful save to
-check that the intended value persisted.
+check that the intended value persisted. Read the [active-alert markers](#read-active-alert-markers)
+separately from the saved limits.
 
 For TrueNAS physical disks, read the [disk temperature and health guide](TRUENAS.md#disk-temperature-and-health)
 before changing a rule: heat, SMART faults and missing readings are different
@@ -724,6 +725,28 @@ metric rule, review [Quiet hours](#quiet-hours-and-notification-holds) and their
 critical-alert exceptions. Check [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
 separately: a saved threshold or a successful destination Test does not prove
 ordinary alert delivery.
+
+### Read active-alert markers
+
+A pulsing red dot titled **Active alert** beside a metric in **Alerts →
+Thresholds** means the current alert list contains an open alert for that row
+and metric. It is not a new reading, another threshold or proof that a
+notification was delivered.
+
+- A **Machines** row's **Disk %** or **Disk Temp** dot can come from an alert
+  on one of that machine's filesystems or SMART disk temperatures. Open
+  **Alerts → Overview** to identify the exact filesystem or device; the dot
+  does not mean every disk is affected.
+- When a Proxmox node is linked to a Pulse agent, the agent's CPU, memory and
+  disk alerts appear against its **Machines** row, not the node's corresponding
+  metric. Check the owning row rather than changing the node's limits.
+
+**No dot is not proof that the workload is healthy or that no notification
+failed.** Check the matching alert and its current reading in Overview;
+[an open alert can outlast a falling reading](TROUBLESHOOTING.md#usage-alert-stays-open-after-the-reading-falls).
+Check [Recent delivery activity](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
+separately for notification failures. Do not create load, change thresholds or
+send a Test just to make a marker appear or disappear.
 
 ### VM and container powered-off tolerance
 
