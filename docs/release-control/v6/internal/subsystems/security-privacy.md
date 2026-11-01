@@ -18,6 +18,32 @@
 
 ## Purpose
 
+### Configuration writes own their temporary files
+
+Ordinary shared configuration writes, their retained credential backups and
+legacy `.env` updates prepare exclusively created, uniquely named files in the
+destination directory. Owner permissions are set before writing through the
+owned descriptor; a complete write and successful close precede replacement.
+Stale predictable `.tmp` paths must not redirect a save or migration, disclose
+environment secrets through inherited modes, or block it with a directory.
+Existing destination links are replaced, not written through, including backups.
+
+Failure preserves the previous destination, closes the descriptor and removes
+only the temporary file this write owns; cleanup errors remain reported.
+Imports still stage primary, backup and environment changes until transaction
+commit. Encryption/key formats, exact backup contents, scope/authentication,
+best-effort ordinary backup policy and environment update rules are unchanged.
+This is atomic file publication, not a new power-loss durability or multi-file
+transaction guarantee outside import. Other metadata/journal writers are not
+changed. No rendered field, response policy or installed-recovery claim follows.
+
+The registered `persistence_atomic_test.go` exercises real encrypted credential
+and token saves, SSO plaintext migration, environment preservation and backup
+replacement against stale regular files, symlinks, hardlinks and directories.
+`atomic_file_test.go` covers descriptor/short-write/close/rename failures, cleanup
+errors, independent concurrent writes and unchanged import staging. Existing
+filesystem fault tests inject write errors through the same descriptor seam.
+
 ### SSO settings results remain with their current reader
 
 The existing SSO provider inventory, provider-detail editor, connection test and
