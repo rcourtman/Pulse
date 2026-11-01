@@ -150,10 +150,12 @@ describe('frontend dependency security floors', () => {
 
   it('keeps every js-yaml copy above the empty-merge CPU exhaustion floor', () => {
     // GHSA-2883-xcg3-v3hh: our override keeps every transitive copy on patched 4.x.
-    // ESLint's flat-config graph no longer needs the legacy YAML consumer.
-    // Removing that dependency is safe; any copy that returns still needs the fix.
+    // The Kubernetes docs tests parse the actual copied RBAC YAML. Declare that
+    // consumer directly instead of relying on legacy ESLint's transitive copy.
+    expect(manifest.devDependencies['js-yaml']).toBe('^4.3.2');
     expect(manifest.overrides['js-yaml']).toBe('^4.3.2');
     const versions = lockedVersions('js-yaml');
+    expect(versions, 'the Kubernetes docs parser must be installed').not.toHaveLength(0);
     for (const version of versions) {
       expect(version).not.toContain('-');
       expect(atLeast(version, [4, 3, 2]), `js-yaml ${version} is vulnerable`).toBe(true);
