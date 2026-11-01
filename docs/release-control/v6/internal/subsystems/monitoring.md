@@ -5798,6 +5798,15 @@ an active process from an initialized monitoring source. The Kubernetes module
 uses the shared agent TLS constructor for custom CA and leaf-fingerprint trust;
 its Pulse transport must not regress to a Kubernetes-local insecure-only TLS
 configuration.
+Updater evidence also survives canonical resource reads: host ingestion stores
+the shared typed status on `AgentData`, resource clones and `HostView.AgentUpdate()`
+own its optional timestamps, and `hostFromReadStateView` carries it into
+`HostsSnapshot()`. Connection-ledger and Agent Doctor reads must preserve the
+reported error and accepted one-shot success history, with no synthetic success
+or timestamp refresh during projection. An absent status remains unknown.
+`TestHostsSnapshotPreservesCanonicalUpdaterEvidence` covers failed-outcome
+readback, reader isolation and replacement by newly accepted success; the
+unified-resource adapter and clone tests cover the preceding ownership boundary.
 The same host report carries bounded OS package-update posture: supported
 manager, pending count, package/version identifiers, inspection time,
 reboot-required state, and an operator-safe inspection error. Monitoring owns

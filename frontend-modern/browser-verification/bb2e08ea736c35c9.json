@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "1655845baed66397c016e3e3cf077eb5365bbc40",
+  "verified_at": "2026-11-01T11:53:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "5f04c49da9ed919080b16904c0bd1fd09ca013b18c79aba8efcad7c34db25fa5"
+  },
+  "routes": [
+    "/settings/infrastructure/agent-doctor"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Empty fleet and structured-diagnostics loading.",
+    "Real source-built collector after signed-helper activation, repeated rollback and later restart. No fabricated success or stale local marker.",
+    "Public error-report fixture retains its failure in structured diagnostics and connection-ledger fallback.",
+    "Real signed-helper candidate commit after its first accepted report. Last successful update is present only after that accepted update.",
+    "Open evidence retains its DOM identity, contents and keyboard focus through actual fleet polls at all three widths.",
+    "Desktop, intermediate and phone pixels inspected, including wrapped success timestamps and matching visible header and data columns."
+  ],
+  "interactions": [
+    "Status filter selected and restored. A lone open target closed and reopened by keyboard.",
+    "Nested native disclosure opened with Enter and closed with Space. Focus remains on its summary. Escape and outside click retain the open native disclosure.",
+    "Actual connections and diagnostics poll responses update the open evidence without remounting it or losing focus.",
+    "Page reload followed by mouse reopening of evidence preserves the accepted update history.",
+    "Owned diagnostics 503 exercises ledger fallback. Retry by keyboard restores the real diagnostics response.",
+    "Successful-update label scrolled into view and inspected at desktop, intermediate and phone widths."
+  ]
+}

@@ -3930,6 +3930,7 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		IntervalSeconds:   view.IntervalSeconds(),
 		LastSeen:          lastSeen,
 		AgentVersion:      view.AgentVersion(),
+		AgentUpdate:       view.AgentUpdate(),
 		IntegrationSource: view.IntegrationSource(),
 		MachineID:         view.MachineID(),
 		CommandsEnabled:   view.CommandsEnabled(),

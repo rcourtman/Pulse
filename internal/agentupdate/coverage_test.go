@@ -1328,9 +1328,14 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("BackupRenameError", func(t *testing.T) {
+		// Only the Windows path moves the running binary aside; elsewhere the
+		// staged binary is renamed over it (update_recovery_test.go).
+		origGOOS := runtimeGOOS
+		t.Cleanup(func() { runtimeGOOS = origGOOS })
+		runtimeGOOS = goOSWindows
 		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
-		data := testBinary()
+		data := []byte{'M', 'Z', 0x90, 0x00, 0x01, 0x02, 0x03, 0x04}
 
 		origRename := renameFn
 		origRestart := restartProcessFn
@@ -1363,9 +1368,13 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("ReplaceRenameError", func(t *testing.T) {
+		// The second rename exists only on the Windows path (see above).
+		origGOOS := runtimeGOOS
+		t.Cleanup(func() { runtimeGOOS = origGOOS })
+		runtimeGOOS = goOSWindows
 		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
-		data := testBinary()
+		data := []byte{'M', 'Z', 0x90, 0x00, 0x01, 0x02, 0x03, 0x04}
 
 		origRename := renameFn
 		origRestart := restartProcessFn

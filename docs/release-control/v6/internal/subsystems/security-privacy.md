@@ -1302,7 +1302,12 @@ the `white_label` branding entitlement.
     toward accepted-report commit, the rollback identity may only acknowledge
     the helper's idempotent rolled-back state and clear the stale handoff, and
     an unrelated executable identity must leave the handoff intact and fail
-    closed without mutation.
+    closed without mutation. Helper-backed startup supplies an authoritative
+    update-evidence override even when no update took effect or the recovered
+    handoff was already cleared. It must not fall back to a stale local update
+    marker and manufacture first-report success. Only typed post-replacement
+    restart failure can trigger service-manager handover; upstream error text
+    does not carry process-exit authority.
     Node-local LXC filesystem capacity is a distinct automatic host telemetry
     boundary, not inside-guest command authority. A PVE Unified Agent may use
     bounded `pct list` plus `pct df` only for guests reported running and may

@@ -2504,6 +2504,17 @@ verification truth, or recovery evidence. Storage pressure and cleanup posture
 remain independently observed inputs, and the live authenticated agent-server
 readiness check remains authoritative before any action admission or dispatch.
 
+Agent updater history on `AgentData` in `internal/unifiedresources/types.go`
+is observational fleet metadata. Its shared typed status and optional update
+check, attempt and success timestamps survive canonical resource cloning and
+host read views as owned copies. This must not alter a coexisting storage or
+recovery facet or become evidence of backup completeness, protection health,
+restored data, restore readiness or successful recovery. A helper activation
+commit or an accepted one-shot agent update report proves only that updater
+outcome. `TestCloneResourceOwnsAgentUpdaterStatusAndTimes` and
+`TestHostUpdateEvidenceSurvivesCanonicalAdapterViewAndClone` pin metadata
+ownership and isolation, without qualifying a storage or recovery operation.
+
 Per-member cluster endpoint connection-address overrides accepted by
 `internal/api/configapi/config_node_handlers.go` (`clusterEndpointOverrides` on the node
 update payload writing `ClusterEndpoints[n].IPOverride`), including the

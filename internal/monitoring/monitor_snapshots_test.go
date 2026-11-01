@@ -2,7 +2,11 @@ package monitoring
 
 import (
 	"context"
+	"reflect"
 	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -145,5 +149,34 @@ func TestCollectSnapshotSizes(t *testing.T) {
 	want := int64(20 << 30)
 	if got != want {
 		t.Fatalf("unexpected size: got %d want %d", got, want)
+	}
+}
+
+func TestHostsSnapshotPreservesCanonicalUpdaterEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	checked, attempted := now.Add(-time.Minute), now.Add(-time.Second)
+	failed := &models.AgentUpdateStatus{State: "error", AutoUpdate: true, AvailableVersion: "6.7.0", LastCheckedAt: &checked, LastAttemptAt: &attempted, LastError: "restart failed; helper rollback restored running executable"}
+	host := models.Host{ID: "updater-host", Hostname: "updater.example.test", AgentVersion: "6.6.0", Status: "online", LastSeen: now, AgentUpdate: failed}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}, LastUpdate: now})
+	m := &Monitor{state: models.NewState(), resourceStore: unifiedresources.NewMonitorAdapter(registry)}
+	hosts := m.HostsSnapshot()
+	if len(hosts) != 1 || !reflect.DeepEqual(hosts[0].AgentUpdate, failed) {
+		t.Fatalf("UPDATER_EVIDENCE_DROPPED: host snapshot=%+v", hosts)
+	}
+	hosts[0].AgentUpdate.LastError = "snapshot reader mutation"
+	*hosts[0].AgentUpdate.LastAttemptAt = now.Add(time.Hour)
+	again := m.HostsSnapshot()
+	if len(again) != 1 || !reflect.DeepEqual(again[0].AgentUpdate, failed) {
+		t.Fatalf("snapshot mutation changed canonical updater evidence: %+v", again)
+	}
+	succeeded := now.Add(time.Second)
+	host.AgentVersion = "6.7.0"
+	host.LastSeen = succeeded
+	host.AgentUpdate = &models.AgentUpdateStatus{State: "idle", AutoUpdate: true, UpdatedFrom: "6.6.0", LastSuccessAt: &succeeded}
+	registry.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}, LastUpdate: succeeded})
+	current := m.HostsSnapshot()
+	if len(current) != 1 || !reflect.DeepEqual(current[0].AgentUpdate, host.AgentUpdate) {
+		t.Fatalf("accepted update outcome did not replace error evidence: %+v", current)
 	}
 }
