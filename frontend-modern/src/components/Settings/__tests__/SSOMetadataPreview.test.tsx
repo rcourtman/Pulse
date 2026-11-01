@@ -138,9 +138,11 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
         return json({ providers: editing ? [provider] : [] });
       });
       render(() => <SSOProvidersPanel />);
-      fireEvent.click(
-        await screen.findByRole('button', { name: editing ? 'Edit provider' : 'Add SAML' }),
-      );
+      const editorOpener = await screen.findByRole('button', {
+        name: editing ? 'Edit provider' : 'Add SAML',
+      });
+      await waitFor(() => expect(editorOpener).toBeEnabled());
+      fireEvent.click(editorOpener);
       const editor = await screen.findByRole('dialog');
       const dialog = within(editor);
       const url = dialog.getByLabelText('IdP Metadata URL') as HTMLInputElement;
@@ -197,9 +199,11 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
       return json({ providers: editing ? [provider] : [] });
     });
     render(() => <SSOProvidersPanel />);
-    fireEvent.click(
-      await screen.findByRole('button', { name: editing ? 'Edit provider' : 'Add SAML' }),
-    );
+    const editorOpener = await screen.findByRole('button', {
+      name: editing ? 'Edit provider' : 'Add SAML',
+    });
+    await waitFor(() => expect(editorOpener).toBeEnabled());
+    fireEvent.click(editorOpener);
     const editor = within(await screen.findByRole('dialog'));
     fireEvent.input(editor.getByLabelText('IdP Metadata URL'), {
       target: { value: 'https://idp.example.test/metadata' },
@@ -224,9 +228,11 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
       url.endsWith('/corp-saml') ? json(provider) : json({ providers: editing ? [provider] : [] }),
     );
     render(() => <SSOProvidersPanel />);
-    fireEvent.click(
-      await screen.findByRole('button', { name: editing ? 'Edit provider' : 'Add SAML' }),
-    );
+    const editorOpener = await screen.findByRole('button', {
+      name: editing ? 'Edit provider' : 'Add SAML',
+    });
+    await waitFor(() => expect(editorOpener).toBeEnabled());
+    fireEvent.click(editorOpener);
     const dialog = within(await screen.findByRole('dialog'));
     fireEvent.input(dialog.getByLabelText('IdP Metadata URL'), { target: { value: '  ' } });
     expect(dialog.getByRole('button', { name: 'Preview' })).toBeDisabled();
