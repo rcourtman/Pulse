@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
-"""Controls for the source-bound ordinary notification journey, without a server."""
+"""Controls for the source-bound notification journey and its owned loopback sink."""
 import contextlib
 import copy
+import hashlib
+import http.client
 import importlib.util
 import io
+import json
 from pathlib import Path
+import socket
+import sys
+import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -188,6 +195,177 @@ class NotificationRuntimeControls(unittest.TestCase):
         self.assertIn('notification-runtime-${{ github.run_id }}-${{ github.run_attempt }}', section)
         self.assertNotIn('sudo', section)
         self.assertNotIn('go build', section)
+
+
+class NotificationSinkControls(unittest.TestCase):
+    def test_real_request_preserves_payload_and_closes_every_owned_thread(self):
+        sink = RUNTIME.Sink()
+        payload = b'{"event":"alert","resourceName":"owned.example.test"}'
+        client = http.client.HTTPConnection('127.0.0.1', sink.port, timeout=3)
+        try:
+            client.request('POST', '/owned-alert', body=payload)
+            response = client.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.read(), b'OK')
+            self.assertEqual(sink.snapshot(), [{'body': json.loads(payload),
+                'bytes': len(payload), 'sha256': hashlib.sha256(payload).hexdigest(),
+                'path': '/owned-alert'}])
+        finally:
+            client.close()
+            sink.close()
+        self.assertIsNone(sink.error)
+        self.assertFalse(sink.thread.is_alive())
+        self.assertFalse(any(thread.is_alive() for thread in sink.server._threads))
+
+    def stalled_request(self, prefix, trickle=False):
+        # Exercise the real parser, socket and non-daemon request thread. Use
+        # a shorter instance of the fixed timer, not a fake socket/clock.
+        with mock.patch.object(RUNTIME, 'SINK_REQUEST_TIMEOUT_SECONDS', .25):
+            sink = RUNTIME.Sink()
+            accepted = threading.Event()
+            closed = threading.Event()
+            stop_writes = threading.Event()
+            errors = []
+            original = sink.server.finish_request
+
+            def observe(*args):
+                accepted.set()
+                original(*args)
+
+            def close():
+                try:
+                    sink.close()
+                except Exception as exc:
+                    errors.append(type(exc).__name__)
+                finally:
+                    closed.set()
+
+            sink.server.finish_request = observe
+            peer = socket.create_connection(('127.0.0.1', sink.port), timeout=2)
+            closer = None
+            writer = None
+            bounded = False
+            try:
+                peer.sendall(prefix)
+                self.assertTrue(accepted.wait(2), 'loopback request was not accepted')
+                if trickle:
+                    def write():
+                        while not stop_writes.wait(.02):
+                            try:
+                                peer.sendall(b' ')
+                            except OSError:
+                                break
+                    writer = threading.Thread(target=write, name='owned-fixture-trickle')
+                    writer.start()
+                closer = threading.Thread(target=close, name='owned-fixture-close')
+                closer.start()
+                bounded = closed.wait(2)
+            finally:
+                # A broken regression must still finish the fixture, not hang
+                # its caller. Release the peer even when bounded closure failed.
+                stop_writes.set()
+                try:
+                    peer.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                peer.close()
+                if writer:
+                    writer.join(timeout=2)
+                if closer:
+                    closer.join(timeout=2)
+                else:
+                    sink.close()
+            self.assertTrue(bounded, 'owned sink cleanup waited for the stalled peer')
+            self.assertEqual(errors, [])
+            self.assertFalse(closer.is_alive())
+            self.assertFalse(writer and writer.is_alive())
+            self.assertFalse(any(thread.is_alive() for thread in sink.server._threads))
+            self.assertEqual(sink.error, 'TimeoutError')
+            self.assertEqual(sink.snapshot(), [])
+
+    def test_partial_headers_cannot_block_cleanup(self):
+        self.stalled_request(b'POST /owned-alert HTTP/1.0\r\nContent-Length:')
+
+    def test_partial_body_cannot_block_cleanup(self):
+        self.stalled_request(b'POST /owned-alert HTTP/1.0\r\nContent-Length: 100\r\n\r\n{')
+
+    def test_body_trickle_cannot_reset_the_absolute_deadline(self):
+        self.stalled_request(b'POST /owned-alert HTTP/1.0\r\nContent-Length: 10000\r\n\r\n{',
+                             trickle=True)
+
+    def test_invalid_http_records_closed_failure_without_payload_output(self):
+        sink = RUNTIME.Sink()
+        client = http.client.HTTPConnection('127.0.0.1', sink.port, timeout=3)
+        try:
+            with contextlib.redirect_stderr(io.StringIO()) as errors:
+                client.request('PRIVATE_PAYLOAD', '/owned-alert')
+                response = client.getresponse()
+                self.assertEqual(response.status, 501)
+                response.read()
+                client.close()
+                sink.close()
+            self.assertEqual(errors.getvalue(), '')
+        finally:
+            client.close()
+            sink.close()
+        self.assertEqual(sink.error, 'HTTPError')
+        self.assertEqual(sink.snapshot(), [])
+
+    def test_invalid_json_rejects_without_printing_its_private_body(self):
+        sink = RUNTIME.Sink()
+        client = http.client.HTTPConnection('127.0.0.1', sink.port, timeout=3)
+        try:
+            with contextlib.redirect_stderr(io.StringIO()) as errors:
+                client.request('POST', '/owned-alert', body=b'PRIVATE_SYNTHETIC_BODY')
+                response = client.getresponse()
+                self.assertEqual(response.status, 400)
+                self.assertEqual(response.read(), b'')
+                client.close()
+                sink.close()
+            self.assertEqual(errors.getvalue(), '')
+        finally:
+            client.close()
+            sink.close()
+        self.assertEqual(sink.error, 'JSONDecodeError')
+        self.assertEqual(sink.snapshot(), [])
+
+    def test_first_destination_failure_is_not_replaced(self):
+        sink = RUNTIME.Sink()
+        try:
+            sink.reject('TimeoutError')
+            sink.reject('Failure')
+            self.assertEqual(sink.error, 'TimeoutError')
+        finally:
+            sink.close()
+
+    def test_terminal_receipt_distinguishes_sink_failure_from_completed_cleanup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / 'owned-binary'
+            binary.write_bytes(b'synthetic binary identity')
+            receipt = root / 'receipt.json'
+            sink = SimpleNamespace(error='TimeoutError', close=mock.Mock())
+            journey = SimpleNamespace(run=mock.Mock(), phases=[], exits=[], requests=[],
+                                      active_request=None, deliveries=[], delivery_observations=[])
+            args = ['check_notification_runtime.py', '--binary', str(binary),
+                    '--expected-source-sha', SHA, '--receipt', str(receipt)]
+            with mock.patch.object(sys, 'argv', args), \
+                 mock.patch.object(RUNTIME, 'source_binding', return_value={'checkout_sha': SHA}), \
+                 mock.patch.object(RUNTIME, 'Sink', return_value=sink), \
+                 mock.patch.object(RUNTIME, 'Journey', return_value=journey), \
+                 mock.patch.object(RUNTIME.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(RUNTIME.main(), 1)
+            report = json.loads(receipt.read_text())
+            self.assertEqual(report['outcome'], 'failed')
+            self.assertEqual(report['sink_error'], 'TimeoutError')
+            self.assertEqual(report['sink_request_timeout_seconds'], 2)
+            self.assertTrue(report['sink_thread_joined_and_listener_closed'])
+            self.assertTrue(report['owned_temporary_data_removed'])
+            self.assertTrue(report['source_clean_after'])
+            self.assertNotIn('cleanup_error', report)
+            sink.close.assert_called_once()
+            journey.run.assert_called_once()
 
 
 if __name__ == '__main__':
