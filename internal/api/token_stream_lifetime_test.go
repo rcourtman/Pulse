@@ -57,6 +57,7 @@ func newProtectedReadFixture(t *testing.T, scopes []string) *protectedReadFixtur
 		t.Fatal("missing fixture read producer")
 	}
 	patrol.DebugResetStreamForRun("synthetic-read-run")
+	patrol.DebugSetStreamPhase("analyzing")
 	patrol.DebugAppendStreamContent("admitted-stream")
 	router.updateManager.GetSSEBroadcaster().Broadcast(updates.UpdateStatus{Status: "idle", Message: "admitted-stream"})
 	for _, kind := range []string{"preflights", "jobs"} {
@@ -90,7 +91,7 @@ func (f *protectedReadFixture) request(t *testing.T, kind, raw, transport string
 	t.Cleanup(cancel)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, f.server.URL+protectedReadPath(kind), nil)
 	// Keep the selected org explicit: a token rebound to another org must not
-	// silently select that org on reconnect (the old Patrol probe's ambiguity).
+	// silently select that org instead of exercising the selected-org denial.
 	req.Header.Set("X-Pulse-Org-ID", "default")
 	switch transport {
 	case "bearer":
@@ -474,7 +475,7 @@ func TestTokenStreamWriterCloseJoinsActiveWrite(t *testing.T) {
 	select {
 	case <-closed:
 		t.Error("closure returned during an active write")
-	default:
+	case <-time.After(20 * time.Millisecond):
 	}
 	close(base.release)
 	<-wrote
