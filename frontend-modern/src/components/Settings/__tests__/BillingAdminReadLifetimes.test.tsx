@@ -165,9 +165,7 @@ describe('Billing Admin accepted inventory and billing reads', () => {
     await settle();
     expect(mocks.get).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/SYNTHETIC PRIVATE/)).not.toBeInTheDocument();
-    await fireEvent.click(
-      screen.getByRole('button', { name: 'Organization org-a org-a', exact: true }),
-    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Organization org-a org-a' }));
     expect(screen.getByRole('status')).toHaveTextContent(BILLING_ADMIN_READ_ERROR);
     expect(screen.queryByText(/"loading": true/)).not.toBeInTheDocument();
     const before = mocks.put.mock.calls.length;
