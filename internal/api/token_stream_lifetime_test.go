@@ -487,3 +487,20 @@ func TestTokenStreamWriterCloseJoinsActiveWrite(t *testing.T) {
 		t.Fatalf("late bytes = %q", base.Body.String())
 	}
 }
+
+func TestTokenStreamWriterNonTokenReadClosesBeforeReturn(t *testing.T) {
+	var retained http.ResponseWriter
+	handler := retainTokenStreamAuthority(&config.Config{}, config.ScopeSettingsRead, true, func(w http.ResponseWriter, r *http.Request) {
+		retained = w
+		fmt.Fprint(w, "data: admitted-session\n\n")
+		w.(http.Flusher).Flush()
+	})
+	rec := httptest.NewRecorder()
+	handler(rec, httptest.NewRequest(http.MethodGet, "/api/updates/stream", nil))
+	if _, err := retained.Write([]byte("late-broadcast")); !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("non-token writer outlived HTTP handler: %v", err)
+	}
+	if strings.Contains(rec.Body.String(), "late-broadcast") {
+		t.Fatal("non-token read accepted a write after handler return")
+	}
+}

@@ -17,11 +17,12 @@ import (
 func retainTokenStreamAuthority(cfg *config.Config, scope string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scope)
-		if revalidate == nil {
-			next(w, r)
-			return
-		}
 		allowed := func() bool {
+			if revalidate == nil {
+				// Session/proxy admission stays with the route. They still
+				// need the same join-before-return protection from async writes.
+				return true
+			}
 			current, ok := revalidate()
 			return ok && (!instanceAdmin || tokenActsForInstance(current))
 		}
@@ -42,7 +43,7 @@ func retainTokenStreamAuthority(cfg *config.Config, scope string, instanceAdmin 
 		ctx, cancel := context.WithCancel(r.Context())
 		writer := &tokenStreamWriter{writer: w, flusher: flusher, ctx: ctx, cancel: cancel, allowed: allowed}
 		watchDone := make(chan struct{})
-		go func() {
+		watch := func() {
 			defer close(watchDone)
 			ticker := time.NewTicker(15 * time.Second)
 			defer ticker.Stop()
@@ -56,7 +57,13 @@ func retainTokenStreamAuthority(cfg *config.Config, scope string, instanceAdmin 
 					}
 				}
 			}
-		}()
+		}
+		if revalidate != nil {
+			go watch()
+		} else {
+			// No new periodic authentication checks for session/proxy readers.
+			close(watchDone)
+		}
 		defer func() {
 			// Join any in-flight broadcaster write before returning the HTTP
 			// writer, and reject queued writes even after handler cleanup.
