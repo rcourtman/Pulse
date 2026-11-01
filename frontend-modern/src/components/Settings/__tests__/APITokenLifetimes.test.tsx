@@ -253,6 +253,34 @@ describe('API token request lifetimes', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a confirmed credential through an unchanged-principal status refresh', async () => {
+    const [status, setStatus] = createSignal({ user: 'admin', allowed: true, hint: 'primary-one' });
+    const Panel = () => {
+      state = useAPITokenManagerState({
+        get currentUser() {
+          return status().user;
+        },
+        get canManage() {
+          return status().allowed;
+        },
+        get currentTokenHint() {
+          return status().hint;
+        },
+      });
+      return null;
+    };
+    render(() => <Panel />);
+    await waitFor(() => expect(state.tokensLoaded()).toBe(true));
+    state.applyScopePreset(['monitoring:read']);
+    await state.handleGenerate();
+    const acceptedReveal = reveal();
+    setStatus({ user: 'admin', allowed: true, hint: 'primary-two' });
+    expect(reveal()).toBe(acceptedReveal);
+    expect(state.newTokenValue()).toBe(created.token);
+    expect(SecurityAPI.listTokens).toHaveBeenCalledTimes(1);
+    expect(SecurityAPI.createToken).toHaveBeenCalledTimes(1);
+  });
+
   it('clears only its owned reveal and local credential when its authority is withdrawn', async () => {
     await ready();
     await state.handleGenerate();

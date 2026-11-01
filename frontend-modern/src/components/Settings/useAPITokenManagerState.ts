@@ -89,9 +89,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [selectedScopes, setSelectedScopes] = createSignal<string[]>([]);
   const [agentCapabilitiesManifest] = createResource(fetchAgentCapabilitiesManifest);
   const tokenRevealState = useTokenRevealState();
+  const managementAllowed = createMemo(() => props.canManage !== false);
+  const authenticatedUser = createMemo(() => props.currentUser);
   const currentOrg = () => getOrgID() || 'default';
   const [selectedOrg, setSelectedOrg] = createSignal(currentOrg());
-  const [selectedUser, setSelectedUser] = createSignal(props.currentUser);
+  const [selectedUser, setSelectedUser] = createSignal(authenticatedUser());
   const [contextVersion, setContextVersion] = createSignal(0);
   const [isMutating, setIsMutating] = createSignal(false);
   let disposed = false;
@@ -99,8 +101,8 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   let mutationController: AbortController | undefined;
   let ownedReveal: ReturnType<typeof tokenRevealState> = null;
   const contextIsCurrent = () =>
-    !disposed && selectedOrg() === currentOrg() && selectedUser() === props.currentUser;
-  const canManage = () => contextIsCurrent() && props.canManage !== false;
+    !disposed && selectedOrg() === currentOrg() && selectedUser() === authenticatedUser();
+  const canManage = () => contextIsCurrent() && managementAllowed();
   const isCurrentRecord = (record: APITokenRecord) =>
     tokensLoaded() && tokens().includes(unwrap(record));
 
@@ -267,11 +269,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   const resetContext = () => {
     if (disposed) return;
-    const selectionChanged = selectedOrg() !== currentOrg() || selectedUser() !== props.currentUser;
+    const selectionChanged = selectedOrg() !== currentOrg() || selectedUser() !== authenticatedUser();
     invalidateRequests();
     batch(() => {
       setSelectedOrg(currentOrg());
-      setSelectedUser(props.currentUser);
+      setSelectedUser(authenticatedUser());
       setTokens([]);
       setTokensLoaded(false);
       setLoadError(null);
@@ -284,7 +286,9 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     void loadTokens();
   };
 
-  createEffect(on(() => [props.canManage, props.currentUser], resetContext, { defer: true }));
+  // Settings refreshes replace the status object. Equal authority/principal
+  // values are not withdrawal: memo equality keeps a newly revealed token usable.
+  createEffect(on([managementAllowed, authenticatedUser], resetContext, { defer: true }));
   const unsubscribeOrg = eventBus.on('org_switched', resetContext);
   onCleanup(() => {
     disposed = true;

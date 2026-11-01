@@ -4010,3 +4010,9 @@ scope/organisation containment remain unchanged. Registered
 cycles, single writes, obsolete rows and reveal ownership; native browser proof
 uses synthetic credentials and responses. No release or installed recovery is
 implied by source/component/browser proof.
+
+Authority and authenticated-user watchers compare their effective primitive
+values, not the containing security-status object's identity. An ordinary status
+refresh or primary-token hint change with the same user/permission must not
+withdraw a confirmed token or start another inventory read. The registered
+unchanged-principal status-refresh test pins this boundary.

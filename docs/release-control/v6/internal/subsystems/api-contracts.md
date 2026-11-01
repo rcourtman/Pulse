@@ -13503,3 +13503,9 @@ accounts retain explicit inventory recovery. These guarantees are exercised by
 `security.transport.test.ts`, `security.test.ts`, `APITokenLifetimes.test.tsx`
 and the registered API token panel tests; browser proof covers the actual API
 Access consumer with synthetic responses, not installed administrator recovery.
+
+Authority and authenticated-user watchers compare their effective primitive
+values, not the containing security-status object's identity. An ordinary status
+refresh or primary-token hint change with the same user/permission must not
+withdraw a confirmed token or start another inventory read. The registered
+unchanged-principal status-refresh test pins this boundary.
