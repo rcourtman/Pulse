@@ -28,6 +28,10 @@ PUBLIC_URL = 'https://notification-runtime.example.test'
 LIMIT = 2 * 1024 * 1024
 # prepareWebhookData's ordinary event; resolution is a different path.
 ORDINARY_EVENT = 'alert'
+# The owned application must finish one small loopback request within this
+# bound. An idle socket timeout alone still permits an endless header/body
+# trickle, and server_close() waits for every non-daemon handler.
+SINK_REQUEST_TIMEOUT_SECONDS = 2
 
 
 class Failure(RuntimeError):
@@ -52,9 +56,31 @@ class Sink:
         self.error = None
         owner = self
 
+        class Server(http.server.ThreadingHTTPServer):
+            daemon_threads = False
+
+            def finish_request(self, connection, client_address):
+                def expire():
+                    owner.reject('TimeoutError')
+                    try:
+                        connection.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+
+                deadline = threading.Timer(SINK_REQUEST_TIMEOUT_SECONDS, expire)
+                deadline.start()
+                try:
+                    super().finish_request(connection, client_address)
+                finally:
+                    deadline.cancel()
+                    deadline.join()
+
         class Handler(http.server.BaseHTTPRequestHandler):
             def log_message(self, *_):
                 pass
+
+            def log_error(self, *_):
+                owner.reject('HTTPError')
 
             def do_POST(self):
                 try:
@@ -72,16 +98,26 @@ class Sink:
                     self.end_headers()
                     self.wfile.write(b'OK')
                 except Exception as exc:
-                    owner.error = type(exc).__name__
-                    self.send_response(400)
-                    self.send_header('Content-Length', '0')
-                    self.end_headers()
+                    owner.reject(type(exc).__name__)
+                    # A timed-out/closed peer need not receive a response.
+                    # Keep the failure, but never print its payload or an
+                    # incidental broken-pipe traceback during teardown.
+                    try:
+                        self.send_response(400)
+                        self.send_header('Content-Length', '0')
+                        self.end_headers()
+                    except OSError:
+                        pass
 
-        self.server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
-        self.server.daemon_threads = False
+        self.server = Server(('127.0.0.1', 0), Handler)
         self.port = self.server.server_port
         self.thread = threading.Thread(target=self.server.serve_forever, name='owned-webhook')
         self.thread.start()
+
+    def reject(self, kind):
+        with self.lock:
+            if self.error is None:
+                self.error = kind
 
     def snapshot(self):
         with self.lock:
@@ -340,7 +376,8 @@ def main():
     binary = args.binary.resolve(strict=True)
     binding = source_binding(binary, args.expected_source_sha)
     report = {'source_binding': binding, 'kind': 'offline-development-source-notification-runtime',
-              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'outcome': 'failed'}
+              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'outcome': 'failed',
+              'sink_request_timeout_seconds': SINK_REQUEST_TIMEOUT_SECONDS}
     with tempfile.TemporaryDirectory(prefix='pulse-notification-runtime-') as temporary:
         data = Path(temporary)
         sink = Sink()
@@ -359,6 +396,12 @@ def main():
             except Exception as exc:
                 report['sink_thread_joined_and_listener_closed'] = False
                 report['cleanup_error'] = type(exc).__name__
+                report['outcome'] = 'failed'
+            # A destination failure cannot disappear behind a later matching
+            # delivery or a successful resource cleanup. Keep those facts
+            # separate, without retaining request/exception text.
+            if sink.error is not None:
+                report['sink_error'] = sink.error
                 report['outcome'] = 'failed'
             if journey:
                 report.update(phases=journey.phases, child_exits=journey.exits,
