@@ -40,13 +40,22 @@ import {
   getBackupServerLayoutForContainer,
   type BackupServerColumnId,
 } from './proxmoxBackupsTablePresentation';
+import {
+  describeDatastoreJobs,
+  summarizeDatastoreJobs,
+  type DatastoreJobState,
+  type DatastoreJobSummary,
+} from './proxmoxBackupServerJobs';
 
 // "Backup servers" answers the two questions the coverage table can't: is my
 // PBS reachable, and is its datastore about to fill? Datastore fill is the
 // headline backup risk — a full datastore silently fails every future backup —
 // so it lives here on the Backups page, not buried on the platform Storage tab
-// where the rows read as generic "PVE" storage. One row per datastore, labelled
-// by its server; a server with no datastore data still gets a reachability row.
+// where the rows read as generic "PVE" storage. Each datastore row also says
+// whether its GC, prune, verify and sync jobs last succeeded, because a failed
+// sync or verify leaves backups that exist but cannot be relied on. One row
+// per datastore, labelled by its server; a server with no datastore data still
+// gets a reachability row.
 // PBS hosts left the v5 nodes table in the v6 IA, so this is where their health
 // lives. Host status, version, CPU, memory and uptime show once, on the server's
 // first datastore row; its later rows keep the server name (muted), toggle and
@@ -67,6 +76,8 @@ interface BackupServerRow {
   memoryReading?: MemoryObservationPresentation | null;
   uptimeSeconds?: number;
   datastore?: ResourcePBSDatastore;
+  // The worst backend-judged GC, prune, verify or sync result for this store.
+  jobs: DatastoreJobSummary;
   backupCount: number;
   // A later datastore row of the server on the row above: host cells stay empty.
   continuesServer: boolean;
@@ -145,6 +156,16 @@ function usageVariant(pct: number | undefined): StatusIndicatorVariant {
   return 'success';
 }
 
+function jobToneClass(state: DatastoreJobState): string {
+  if (state === 'critical') return 'text-red-600 dark:text-red-300';
+  if (state === 'warning') return 'text-amber-600 dark:text-amber-300';
+  if (state === 'ok') return 'text-base-content';
+  return 'text-muted';
+}
+
+const jobDetailTone = (state: DatastoreJobState): DetailValueTone | undefined =>
+  state === 'critical' ? 'danger' : state === 'warning' ? 'warning' : undefined;
+
 function usageToneClass(pct: number | undefined): string {
   if (pct === undefined) return 'text-muted';
   if (pct >= 90) return 'text-red-600 dark:text-red-300';
@@ -202,6 +223,12 @@ function BackupServerDatastoreContext(props: {
                 value: capacityText(),
                 layout: 'stacked',
                 tone: capacityTone(),
+              },
+              {
+                label: 'Jobs',
+                value: describeDatastoreJobs(props.row.jobs),
+                layout: 'stacked',
+                tone: jobDetailTone(props.row.jobs.state),
               },
               { label: 'Backup entries', value: inventoryText(), layout: 'stacked' },
             ],
@@ -498,6 +525,7 @@ export function buildBackupServerRows(
         key: server.id,
         ...host,
         resource: resourceSnapshot(),
+        jobs: summarizeDatastoreJobs(server.pbs?.jobHealthEvidence, undefined),
         backupCount: 0,
         continuesServer: false,
       });
@@ -513,6 +541,7 @@ export function buildBackupServerRows(
         // not alias its datastore object: a reordered snapshot reconciles that
         // array by position and would overwrite this row's datastore identity.
         datastore: { ...datastore },
+        jobs: summarizeDatastoreJobs(server.pbs?.jobHealthEvidence, datastore.name),
         backupCount: countFor(server, datastore.name),
       });
     }
@@ -542,6 +571,13 @@ export function ProxmoxBackupServersTable(props: {
   const detail = createPlatformResourceDetailState({ idPrefix: 'proxmox-backup-server-detail' });
   const columnVisible = (column: BackupServerColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
+  // The phone layout has no Jobs column. A reachable server whose datastore
+  // job failed or is overdue is not "OK", so State names the job instead;
+  // an unreachable server keeps its connection state, the bigger problem.
+  const showJobProblemAsState = (row: BackupServerRow) =>
+    !columnVisible('jobs') &&
+    row.online &&
+    (row.jobs.state === 'critical' || row.jobs.state === 'warning');
 
   return (
     <Show when={rows().length > 0}>
@@ -596,6 +632,9 @@ export function ProxmoxBackupServersTable(props: {
               <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')}`}>
                 Used
               </TableHead>
+              <Show when={columnVisible('jobs')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Jobs</TableHead>
+              </Show>
               <Show when={columnVisible('backups')}>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')}`}
@@ -667,23 +706,36 @@ export function ProxmoxBackupServersTable(props: {
                           </div>
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
-                          <Show when={!row.continuesServer}>
-                            <div class="flex items-center gap-2">
-                              <Show when={layoutMode() !== 'compact'}>
-                                <StatusDot
-                                  size="sm"
-                                  variant={row.online ? 'success' : 'danger'}
-                                  title={row.connectionLabel}
-                                  ariaHidden
-                                />
-                              </Show>
+                          <Show
+                            when={!showJobProblemAsState(row)}
+                            fallback={
                               <span
-                                class="truncate text-[11px] text-base-content"
-                                title={row.connectionLabel}
+                                class={`block truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
+                                title={describeDatastoreJobs(row.jobs)}
+                                data-backup-server-jobs={row.jobs.state}
                               >
-                                {row.connectionLabel}
+                                {row.jobs.label}
                               </span>
-                            </div>
+                            }
+                          >
+                            <Show when={!row.continuesServer}>
+                              <div class="flex items-center gap-2">
+                                <Show when={layoutMode() !== 'compact'}>
+                                  <StatusDot
+                                    size="sm"
+                                    variant={row.online ? 'success' : 'danger'}
+                                    title={row.connectionLabel}
+                                    ariaHidden
+                                  />
+                                </Show>
+                                <span
+                                  class="truncate text-[11px] text-base-content"
+                                  title={row.connectionLabel}
+                                >
+                                  {row.connectionLabel}
+                                </span>
+                              </div>
+                            </Show>
                           </Show>
                         </TableCell>
                         <Show when={columnVisible('version')}>
@@ -831,6 +883,15 @@ export function ProxmoxBackupServersTable(props: {
                             )}
                           </Show>
                         </TableCell>
+                        <Show when={columnVisible('jobs')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
+                            title={describeDatastoreJobs(row.jobs)}
+                            data-backup-server-jobs={row.jobs.state}
+                          >
+                            {row.jobs.label}
+                          </TableCell>
+                        </Show>
                         <Show when={columnVisible('backups')}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

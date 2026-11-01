@@ -3451,24 +3451,25 @@ describe('PBS inventory state column', () => {
         ]}
         backups={[]}
         backupInventoryState={state()}
-        layoutWidth={() => 520}
+        layoutWidth={() => 720}
       />
     ));
     const table = container.querySelector('table')!;
     const countColumn = table.querySelector<HTMLElement>(
       'col[data-proxmox-backups-column="backups"]',
     )!;
+    // Server, status, CPU, memory, datastore, used, jobs, then the count.
     const cells = table.querySelector('tbody tr')!.querySelectorAll('td');
-    expect(countColumn.style.width).toBe('15.5%');
-    expect(cells[4]).toHaveTextContent(/^Loading$/);
+    expect(countColumn.style.width).toBe('12%');
+    expect(cells[7]).toHaveTextContent(/^Loading$/);
     setState('unavailable');
-    expect(cells[4]).toHaveTextContent(/^Unavailable$/);
+    expect(cells[7]).toHaveTextContent(/^Unavailable$/);
     expect(cells[1]).toHaveTextContent('Healthy');
-    expect(cells[3]).toHaveTextContent('40.0%');
-    expect(cells[3]).toHaveTextContent('400 B / 1000 B');
+    expect(cells[5]).toHaveTextContent('40.0%');
+    expect(cells[5]).toHaveTextContent('400 B / 1000 B');
     setState('available');
-    expect(cells[4]).toHaveTextContent(/^0$/);
-    expect(countColumn.style.width).toBe('15.5%');
+    expect(cells[7]).toHaveTextContent(/^0$/);
+    expect(countColumn.style.width).toBe('12%');
   });
 });
 

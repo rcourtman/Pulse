@@ -9601,6 +9601,17 @@ muted, and leave the parent cells empty, so one parent never reads as several
 identical ones. The rows must already be grouped; the Backups "Backup server"
 table follows this through `BackupServerRow.continuesServer`.
 
+### A narrow table folds a dropped column's problem into one it keeps
+
+When a responsive table drops a column at phone width, a problem that column
+would have shown must not vanish into the row's drawer. It takes the closest
+kept cell that answers the same question, in that column's tone, and only
+while it outranks what the cell normally says. The Backups "Backup server"
+table drops Jobs below 520px, so a reachable server's failed or late datastore
+job ("Sync failed") replaces State on that row, while an unreachable server
+keeps its connection state. The wording stays short enough to fit whole
+("late" rather than "overdue"), because a truncated warning is not read.
+
 ### Fixed-layout tables give free width to the column that varies
 
 In a fixed-layout table whose columns change with the container, columns
