@@ -11,6 +11,23 @@ describe('LicenseAPI', () => {
     vi.clearAllMocks();
   });
 
+  it('binds a billing status read to the selected session and cancellation signal', async () => {
+    const controller = new AbortController();
+    const options = {
+      expectedOrgID: 'org-a',
+      signal: controller.signal,
+      retry: false as const,
+      preferSessionAuth: true as const,
+    };
+    await LicenseAPI.getStatus(options);
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/status', options);
+  });
+
+  it('keeps unbound status reads unchanged for existing callers', async () => {
+    await LicenseAPI.getStatus();
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/status');
+  });
+
   it('reads runtime capabilities from the canonical runtime endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       capabilities: ['relay'],

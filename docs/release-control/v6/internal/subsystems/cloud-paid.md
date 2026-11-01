@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Organization billing reads are a selected snapshot, not fallback plan data
+
+The existing Billing & Usage panel displays plan and member figures only after
+all three reads for its current organization succeed. Selection, capability,
+presentation withdrawal and disposal invalidate the generation and abort its
+reads; an older response cannot overwrite the new selection or finish its
+spinner. License status prefers the browser session just as the organization
+reads do, carries the expected organization and cancellation signal, and disables
+automatic retries for this selected read without changing other status callers.
+
+An incomplete or malformed read clears the former snapshot and renders a fixed,
+inline unavailable notice with a deliberate reload of the same selection. It
+must not fabricate a Free plan, zero members, unconfigured email or unlimited
+usage from failed input. Accepted empty member lists still mean zero members.
+Organization-change events refresh the saved snapshot; no purchase, entitlement,
+pricing, plan or hosted-mode authority changes. Normal-suite Billing panel and
+OrganizationReadLifetimes tests cover failed/obsolete reads, A/B/A races,
+withdrawal, disposal and recovery. Desktop/narrow proof consumes actual source
+through the real API client with safe fixtures; it is not installed billing or
+commercial delivery acceptance.
+
+
 ### Manual licence recovery feedback
 
 The existing Plan page keeps the latest deliberate apply/clear-key result in

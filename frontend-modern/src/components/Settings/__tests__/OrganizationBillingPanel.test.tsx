@@ -123,6 +123,19 @@ describe('OrganizationBillingPanel', () => {
     expect(listMembersMock).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps failed billing reads distinct from an empty or free plan', async () => {
+    getStatusMock.mockRejectedValueOnce(new Error('private upstream detail'));
+    render(() => <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to load billing and plan details.',
+    );
+    expect(screen.getByRole('button', { name: 'Reload billing' })).toBeInTheDocument();
+    expect(screen.queryByText('Plan Tier')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not configured')).not.toBeInTheDocument();
+    expect(screen.queryByText('private upstream detail')).not.toBeInTheDocument();
+    expect(errorMock).not.toHaveBeenCalled();
+  });
+
   it('keeps organization billing runtime split into dedicated state and loading owners', () => {
     expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');
     expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');

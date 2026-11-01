@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Selected organization detail and billing request lifetimes
+
+The existing organization `update` client optionally accepts the same
+`expectedOrgID`, `AbortSignal` and `retry: false` binding as access and sharing.
+It preserves the exact encoded organization path, session preference, body and
+no-implicit-context behaviour. The common API client validates that binding
+again after CSRF preparation and must not dispatch a stale-selection rename.
+License `getStatus` likewise optionally accepts an expected organization,
+cancellation signal, explicit no-retry policy and session preference for the
+existing Billing panel. Unbound callers retain their previous status transport;
+no endpoint, response shape, scope or backend authority changes. Registered
+`orgs.test.ts`, `license.test.ts` and the common transport access tests verify
+the forwarding and pre-dispatch boundaries, with consuming Overview/Billing
+read-generation and adverse-response proof in OrganizationReadLifetimes.
+
+
 ### Dashboard sockets do not retain withdrawn token authority
 
 The existing `/ws` route keeps its initial authentication, monitoring-read,

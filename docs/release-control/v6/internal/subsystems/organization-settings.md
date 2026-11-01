@@ -15,6 +15,29 @@
 
 ## Purpose
 
+### Overview reads and name changes belong to the selected organization
+
+Overview clears its accepted metadata, member list and unsaved name when a
+selection, current user, presentation gate or lifetime changes. All reads carry
+one cancellation signal and the expected organization through the existing
+session-preferred API client, with automatic retries disabled. Only the current
+read generation may publish a matching organization and a complete member list;
+a late success, failure or completion cannot replace a newer selection or end
+its loading state. A failed read is an inline unavailable state, never an empty
+member list, and offers an explicit read-only reload.
+
+Renaming requires the current accepted snapshot, owner/admin authority and a
+non-read-only session. Dispatch binds the exact organization even across a CSRF
+wait and permits only one current write, without automatic write retries. A
+withdrawn or disposed completion cannot change data or notify a later selection.
+An unconfirmed write clears the editable snapshot and requires a saved read;
+reload does not repeat the rename. Successful writes notify the existing
+organization-change bus and refresh the saved snapshot. Normal-suite Overview,
+OrganizationReadLifetimes and organization-client tests cover those boundaries;
+desktop/narrow browser proof exercises the actual panels and API client with
+safe HTTP fixtures, not an installed tenant or SSO recovery claim.
+
+
 ### Saved permissions belong to one open user-access dialog
 
 User Access displays only an admitted saved-permissions read for the principal

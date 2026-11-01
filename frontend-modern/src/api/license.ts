@@ -142,8 +142,17 @@ function normalizeRuntimeCapabilities(payload: unknown): LicenseRuntimeCapabilit
 export class LicenseAPI {
   private static baseUrl = '/api/license';
 
-  static async getStatus(): Promise<LicenseStatus> {
-    return apiFetchJSON(`${this.baseUrl}/status`) as Promise<LicenseStatus>;
+  static async getStatus(options?: {
+    expectedOrgID: string;
+    signal: AbortSignal;
+    retry: false;
+    preferSessionAuth: true;
+  }): Promise<LicenseStatus> {
+    return (
+      options
+        ? apiFetchJSON(`${this.baseUrl}/status`, options)
+        : apiFetchJSON(`${this.baseUrl}/status`)
+    ) as Promise<LicenseStatus>;
   }
 
   static async getRuntimeCapabilities(): Promise<LicenseRuntimeCapabilities> {
