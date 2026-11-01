@@ -18,6 +18,26 @@
 
 ## Purpose
 
+### SSO settings results remain with their current reader
+
+The existing SSO provider inventory, provider-detail editor, connection test and
+SAML metadata preview belong to the mounted observed principal, organisation
+and write-capability lifetime. Withdrawal or disposal cancels their requests
+and discards late results, drafts and preview payloads. A replacement dialog or
+edited draft cannot inherit an earlier test/preview. Equal-principal status
+refreshes preserve the active draft. Read-only accounts can still recover the
+permitted inventory. Unread, denied or malformed lists are unknown, never an
+empty configured-provider claim; explicit Retry performs only the existing read.
+
+Provider mutations are serialised and bound to the confirmed organisation; they
+use cancellation and no automatic retry, without changing backend admission,
+OIDC/SAML payloads, stored-secret preservation or Community availability. Local
+cancellation cannot undo a server-applied write or an already requested clipboard
+operation. The registered `SSOProviderLifetimes.test.tsx` covers superseded reads,
+reader changes, disposal, malformed/refused inventory, dialog/draft replacement
+and stale mutation completions alongside the existing save/preview recovery tests.
+Synthetic source/browser checks do not establish native IdP/admin recovery.
+
 ### Dashboard sockets do not retain withdrawn token authority
 
 The existing `/ws` route keeps its initial authentication, monitoring-read,

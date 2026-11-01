@@ -1,4 +1,6 @@
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
+import { apiFetch, apiErrorFromResponse, getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 import { createStore } from 'solid-js/store';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
@@ -15,7 +17,6 @@ import {
   getSSOProviderSaveSuccessMessage,
   getSSOProviderToggleErrorMessage,
   getSSOProviderToggleSuccessMessage,
-  getSSOProvidersLoadErrorMessage,
   getSSOTestResultPresentation,
 } from '@/utils/ssoProviderPresentation';
 import type {
@@ -37,6 +38,7 @@ import {
 interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
   canManage?: boolean;
+  currentUser?: string;
 }
 
 export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
@@ -47,11 +49,11 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     tone: 'success' | 'error';
     message: string;
   } | null>(null);
-  const [showModal, setShowModal] = createSignal(false);
+  const [showModal, setShowModalValue] = createSignal(false);
   const [editingProvider, setEditingProvider] = createSignal<SSOProvider | null>(null);
   const [form, setForm] = createStore<ProviderForm>(createEmptyProviderForm());
   const [advancedOpen, setAdvancedOpen] = createSignal(false);
-  const [deleteConfirm, setDeleteConfirm] = createSignal<string | null>(null);
+  const [deleteConfirm, setDeleteConfirmValue] = createSignal<string | null>(null);
   const [publicUrl, setPublicUrl] = createSignal('');
   const [testing, setTesting] = createSignal(false);
   const [testResult, setTestResult] = createSignal<SSOProviderTestResult | null>(null);
@@ -59,185 +61,312 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [metadataPreview, setMetadataPreview] = createSignal<MetadataPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = createSignal(false);
 
-  const canManage = () => props.canManage !== false;
+  const [loadError, setLoadError] = createSignal(false);
+  const [providersLoaded, setProvidersLoaded] = createSignal(false);
+  const [loadingDetails, setLoadingDetails] = createSignal(false);
+  const [mutating, setMutating] = createSignal(false);
+  const managementAllowed = createMemo(() => props.canManage !== false);
+  const authenticatedUser = createMemo(() => props.currentUser);
+  const currentOrg = () => getOrgID() || 'default';
+  let selectedOrg = currentOrg();
+  let selectedUser = authenticatedUser();
+  let selectedManagement = managementAllowed();
+  let disposed = false;
+  let contextVersion = 0;
+  let editorVersion = 0;
+  let readController: AbortController | undefined;
+  let detailController: AbortController | undefined;
+  let testController: AbortController | undefined;
+  let previewController: AbortController | undefined;
+  let mutationController: AbortController | undefined;
+
+  const contextIsCurrent = () =>
+    !disposed && selectedOrg === currentOrg() && selectedUser === authenticatedUser() &&
+    selectedManagement === managementAllowed();
+  const canManage = () => contextIsCurrent() && managementAllowed();
+  const canEdit = () => canManage() && providersLoaded() && !loading() && !loadError() && !mutating();
+  const isCurrentProvider = (provider: SSOProvider) => providers().includes(provider);
+  const requestOptions = (controller: AbortController) => ({
+    signal: controller.signal, expectedOrgID: selectedOrg, retry: false,
+  });
+
+  const clearPreviewAndTest = () => {
+    testController?.abort();
+    previewController?.abort();
+    testController = previewController = undefined;
+    batch(() => {
+      setTesting(false);
+      setTestResult(null);
+      setLoadingPreview(false);
+      setMetadataPreview(null);
+      setShowMetadataPreview(false);
+    });
+  };
+  const clearEditor = () => {
+    editorVersion += 1;
+    detailController?.abort();
+    detailController = undefined;
+    clearPreviewAndTest();
+    batch(() => {
+      setLoadingDetails(false);
+      setShowModalValue(false);
+      setEditingProvider(null);
+      setEditorFeedback(null);
+      setForm(createEmptyProviderForm());
+      setAdvancedOpen(false);
+    });
+  };
+  const setShowModal = (open: boolean) => {
+    if (!open && !mutating()) clearEditor();
+  };
+  const setDeleteConfirm = (id: string | null) => {
+    if (mutating()) return;
+    if (id === null || (canEdit() && providers().some((provider) => provider.id === id))) {
+      clearEditor();
+      setDeleteConfirmValue(id);
+    }
+  };
+  // A test/preview describes exactly the submitted draft, not later edits in
+  // the same dialog. Closing/replacing that dialog also releases its payload.
+  createEffect(on(() => JSON.stringify(form), () => {
+    clearPreviewAndTest();
+    setEditorFeedback(null);
+  }, { defer: true }));
 
   const loadProviders = async () => {
+    if (!contextIsCurrent() || readController) return;
+    const version = contextVersion;
+    const controller = new AbortController();
+    const isCurrent = () => contextIsCurrent() && version === contextVersion && readController === controller;
+    readController = controller;
     setLoading(true);
+    setLoadError(false);
+    setProvidersLoaded(false);
+    setProviders([]);
     try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch('/api/security/sso/providers');
-      if (!response.ok) {
-        throw new Error(`Failed to load SSO providers (${response.status})`);
-      }
+      const response = await apiFetch('/api/security/sso/providers', requestOptions(controller));
+      if (!isCurrent()) return;
+      if (!response.ok) throw new Error('Provider read refused');
       const data = (await response.json()) as SSOProvidersResponse;
-      setProviders(data.providers || []);
-
-      const statusResponse = await apiFetch('/api/security/status');
-      if (statusResponse.ok) {
-        const status = (await statusResponse.json()) as { publicUrl?: string };
-        setPublicUrl(status.publicUrl || window.location.origin);
-      }
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to load providers:', error);
-      notificationStore.error(getSSOProvidersLoadErrorMessage());
+      if (!isCurrent()) return;
+      const ids = new Set<string>();
+      // A missing or malformed list is unknown, not an empty configuration.
+      if (!data || !Array.isArray(data.providers) || data.providers.some((provider) => {
+        if (!provider || typeof provider.id !== 'string' || !provider.id.trim() ||
+            ids.has(provider.id) || typeof provider.name !== 'string' ||
+            !['oidc', 'saml'].includes(provider.type) || typeof provider.enabled !== 'boolean') return true;
+        ids.add(provider.id);
+        return false;
+      })) throw new Error('Invalid provider inventory');
+      setProviders(data.providers);
+      setProvidersLoaded(true);
+      setPublicUrl(window.location.origin);
+      // The optional public URL is not evidence that a provider read failed.
+      try {
+        const statusResponse = await apiFetch('/api/security/status', requestOptions(controller));
+        if (statusResponse.ok) {
+          const status = (await statusResponse.json()) as { publicUrl?: string };
+          if (isCurrent() && typeof status.publicUrl === 'string' && status.publicUrl) setPublicUrl(status.publicUrl);
+        }
+      } catch { /* Keep the current origin when optional status is unavailable. */ }
+    } catch {
+      if (!isCurrent()) return;
+      setLoadError(true);
+      logger.error('[SSOProvidersPanel] Failed to load providers.');
     } finally {
-      setLoading(false);
+      if (isCurrent()) {
+        readController = undefined;
+        setLoading(false);
+      }
     }
   };
 
-  onMount(() => {
+  const resetContext = () => {
+    contextVersion += 1;
+    readController?.abort();
+    mutationController?.abort();
+    readController = mutationController = undefined;
+    selectedOrg = currentOrg();
+    selectedUser = authenticatedUser();
+    selectedManagement = managementAllowed();
+    batch(() => {
+      clearEditor();
+      setProviders([]);
+      setProvidersLoaded(false);
+      setPublicUrl('');
+      setDeleteConfirmValue(null);
+      setSaving(false);
+      setMutating(false);
+    });
     void loadProviders();
+  };
+  createEffect(on([managementAllowed, authenticatedUser], resetContext, { defer: true }));
+  const unsubscribeOrg = eventBus.on('org_switched', resetContext);
+  onMount(() => void loadProviders());
+  onCleanup(() => {
+    disposed = true;
+    contextVersion += 1;
+    readController?.abort();
+    mutationController?.abort();
+    clearEditor();
+    setProviders([]);
+    unsubscribeOrg();
   });
 
   const openAddModal = (type: 'oidc' | 'saml') => {
-    if (!canManage()) {
-      return;
-    }
-    setEditorFeedback(null);
-    setTestResult(null);
-    setEditingProvider(null);
-    setForm(createEmptyProviderForm());
+    if (!canEdit()) return;
+    clearEditor();
+    setDeleteConfirmValue(null);
     setForm('type', type);
-    setAdvancedOpen(false);
-    setShowModal(true);
+    setShowModalValue(true);
   };
 
   const openEditModal = async (provider: SSOProvider) => {
-    if (!canManage()) {
-      return;
-    }
-    setEditorFeedback(null);
-    setTestResult(null);
-    setEditingProvider(provider);
+    if (!canEdit() || !isCurrentProvider(provider)) return;
+    clearEditor();
+    setDeleteConfirmValue(null);
+    const version = editorVersion;
+    const context = contextVersion;
+    const controller = new AbortController();
+    detailController = controller;
+    const isCurrent = () => canEdit() && version === editorVersion && context === contextVersion && detailController === controller;
+    setLoadingDetails(true);
     try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch(`/api/security/sso/providers/${provider.id}`);
-      if (!response.ok) {
-        throw new Error('Failed to load provider details');
-      }
-      setForm(mapProviderDetailsToForm(await response.json()));
-      setAdvancedOpen(false);
-      setShowModal(true);
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to load provider for editing:', error);
+      const response = await apiFetch(`/api/security/sso/providers/${encodeURIComponent(provider.id)}`, requestOptions(controller));
+      if (!isCurrent()) return;
+      if (!response.ok) throw new Error('Provider details refused');
+      const data = await response.json();
+      if (!isCurrent()) return;
+      if (!data || data.id !== provider.id || data.type !== provider.type) throw new Error('Mismatched provider details');
+      setForm(mapProviderDetailsToForm(data));
+      setEditingProvider(provider);
+      setShowModalValue(true);
+    } catch {
+      if (!isCurrent()) return;
+      logger.error('[SSOProvidersPanel] Failed to load provider details.');
       notificationStore.error(getSSOProviderDetailsLoadErrorMessage());
+    } finally {
+      if (detailController === controller) {
+        detailController = undefined;
+        setLoadingDetails(false);
+      }
     }
+  };
+
+  const beginMutation = () => {
+    if (!canEdit()) return;
+    const context = contextVersion;
+    const controller = new AbortController();
+    mutationController = controller;
+    setMutating(true);
+    return {
+      options: requestOptions(controller),
+      isCurrent: () => contextIsCurrent() && context === contextVersion && mutationController === controller,
+      finish: () => {
+        if (mutationController !== controller) return;
+        mutationController = undefined;
+        setMutating(false);
+        setSaving(false);
+      },
+    };
   };
 
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
-    if (!canManage() || saving()) {
-      return;
-    }
+    if (!showModal() || testing() || loadingPreview()) return;
+    const mutation = beginMutation();
+    if (!mutation) return;
+    const isEdit = Boolean(editingProvider());
+    const providerId = editingProvider()?.id;
+    const payload = buildProviderPayload(form);
     setEditorFeedback(null);
     setSaving(true);
-
     try {
-      const { apiFetch, apiErrorFromResponse } = await import('@/utils/apiClient');
-      const isEdit = Boolean(editingProvider());
       const response = await apiFetch(
-        isEdit
-          ? `/api/security/sso/providers/${editingProvider()!.id}`
-          : '/api/security/sso/providers',
-        {
-          method: isEdit ? 'PUT' : 'POST',
-          // Keep failed configuration writes in this draft until an explicit retry.
-          retry: false,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildProviderPayload(form)),
-        },
+        isEdit ? `/api/security/sso/providers/${encodeURIComponent(providerId!)}` : '/api/security/sso/providers',
+        { ...mutation.options, method: isEdit ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
       );
-
+      if (!mutation.isCurrent()) return;
       if (!response.ok) {
         const error = await apiErrorFromResponse(response);
+        if (!mutation.isCurrent()) return;
         setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage(error) });
-        // Envelope details and upstream bodies can contain private provider data.
         logger.error('[SSOProvidersPanel] Failed to save provider.', { status: response.status });
         return;
       }
-
       notificationStore.success(getSSOProviderSaveSuccessMessage(isEdit));
-      setShowModal(false);
+      clearEditor();
       await loadProviders();
-      props.onConfigUpdated?.();
+      if (mutation.isCurrent()) props.onConfigUpdated?.();
     } catch {
+      if (!mutation.isCurrent()) return;
       // A lost response cannot establish whether the server saved the change.
       logger.error('[SSOProvidersPanel] Failed to save provider.');
       setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage() });
     } finally {
-      setSaving(false);
+      mutation.finish();
     }
   };
 
   const handleDelete = async (providerId: string) => {
-    if (!canManage()) {
-      return;
-    }
+    if (deleteConfirm() !== providerId || !providers().some((provider) => provider.id === providerId)) return;
+    const mutation = beginMutation();
+    if (!mutation) return;
     try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch(`/api/security/sso/providers/${providerId}`, {
-        method: 'DELETE',
+      const response = await apiFetch(`/api/security/sso/providers/${encodeURIComponent(providerId)}`, {
+        ...mutation.options, method: 'DELETE',
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete provider (${response.status})`);
-      }
-
+      if (!mutation.isCurrent()) return;
+      if (!response.ok) throw new Error('Provider deletion refused');
       notificationStore.success(getSSOProviderDeleteSuccessMessage());
-      setDeleteConfirm(null);
+      setDeleteConfirmValue(null);
       await loadProviders();
-      props.onConfigUpdated?.();
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to delete provider:', error);
+      if (mutation.isCurrent()) props.onConfigUpdated?.();
+    } catch {
+      if (!mutation.isCurrent()) return;
+      logger.error('[SSOProvidersPanel] Failed to delete provider.');
       notificationStore.error(getSSOProviderDeleteErrorMessage());
-    }
+    } finally { mutation.finish(); }
   };
 
   const handleToggleEnabled = async (provider: SSOProvider) => {
-    if (!canManage()) {
-      return;
-    }
+    if (!isCurrentProvider(provider)) return;
+    const mutation = beginMutation();
+    if (!mutation) return;
+    clearEditor();
     try {
-      const { apiFetch } = await import('@/utils/apiClient');
-      // Send only writable provider fields: the list item also carries
-      // computed response fields (oidcLoginUrl, samlAcsUrl, ...) that the
-      // strict PUT decoder rejects. Nested oidc/saml config and the client
-      // secret are intentionally absent; the backend preserves them.
-      const response = await apiFetch(`/api/security/sso/providers/${provider.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      // Only writable fields; omitted nested configuration and secret are preserved.
+      const response = await apiFetch(`/api/security/sso/providers/${encodeURIComponent(provider.id)}`, {
+        ...mutation.options, method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: provider.id,
-          name: provider.name,
-          type: provider.type,
-          enabled: !provider.enabled,
-          displayName: provider.displayName,
-          iconUrl: provider.iconUrl,
-          priority: provider.priority,
-          allowedGroups: provider.allowedGroups ?? [],
-          allowedDomains: provider.allowedDomains ?? [],
-          allowedEmails: provider.allowedEmails ?? [],
-          groupsClaim: provider.groupsClaim,
+          id: provider.id, name: provider.name, type: provider.type, enabled: !provider.enabled,
+          displayName: provider.displayName, iconUrl: provider.iconUrl, priority: provider.priority,
+          allowedGroups: provider.allowedGroups ?? [], allowedDomains: provider.allowedDomains ?? [],
+          allowedEmails: provider.allowedEmails ?? [], groupsClaim: provider.groupsClaim,
           groupRoleMappings: provider.groupRoleMappings,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to update provider (${response.status})`);
-      }
-
+      if (!mutation.isCurrent()) return;
+      if (!response.ok) throw new Error('Provider update refused');
       notificationStore.success(getSSOProviderToggleSuccessMessage(!provider.enabled));
       await loadProviders();
-      props.onConfigUpdated?.();
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to toggle provider:', error);
+      if (mutation.isCurrent()) props.onConfigUpdated?.();
+    } catch {
+      if (!mutation.isCurrent()) return;
+      logger.error('[SSOProvidersPanel] Failed to toggle provider.');
       notificationStore.error(getSSOProviderToggleErrorMessage());
-    }
+    } finally { mutation.finish(); }
   };
 
   const copyToClipboard = async (text: string, label: string) => {
+    if (!contextIsCurrent()) return;
+    const context = contextVersion;
+    const editor = editorVersion;
+    const isCurrent = () => contextIsCurrent() && context === contextVersion && editor === editorVersion;
     try {
       await navigator.clipboard.writeText(text);
+      if (!isCurrent()) return;
       const message = getSSOCopySuccessMessage(label);
       if (showModal()) {
         setEditorFeedback({ tone: 'success', message });
@@ -245,6 +374,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         notificationStore.success(message);
       }
     } catch {
+      if (!isCurrent()) return;
       const message = getSSOCopyErrorMessage(label);
       if (showModal()) {
         setEditorFeedback({ tone: 'error', message });
@@ -259,38 +389,36 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   );
 
   const testConnection = async () => {
+    if (!canEdit() || !showModal() || !canTest() || testing() || loadingPreview()) return;
+    const controller = new AbortController();
+    testController = controller;
+    const version = editorVersion;
+    const context = contextVersion;
+    const payload = JSON.stringify(buildProviderTestPayload(form));
+    const isCurrent = () => canEdit() && showModal() && version === editorVersion && context === contextVersion && testController === controller && payload === JSON.stringify(buildProviderTestPayload(form));
     setEditorFeedback(null);
     setTesting(true);
     setTestResult(null);
-
     try {
-      const { apiFetch } = await import('@/utils/apiClient');
       const response = await apiFetch('/api/security/sso/providers/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildProviderTestPayload(form)),
+        ...requestOptions(controller), method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
       });
-
+      if (!isCurrent()) return;
       const result = (await response.json()) as SSOProviderTestResult;
-      setTestResult(result);
-
-      // The result belongs to the active dialog, not its inert background toast.
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Test connection error:', error);
-      setTestResult({
-        success: false,
-        message: getSSOConnectionTestErrorMessage(),
-        error: String(error),
-      });
+      if (isCurrent()) setTestResult(result);
+    } catch {
+      if (!isCurrent()) return;
+      logger.error('[SSOProvidersPanel] Test connection failed.');
+      setTestResult({ success: false, message: getSSOConnectionTestErrorMessage() });
     } finally {
-      setTesting(false);
+      if (testController === controller) { testController = undefined; setTesting(false); }
     }
   };
 
   const canTest = () => canTestProviderForm(form);
 
   const fetchMetadataPreview = async () => {
-    if (!canManage() || loadingPreview()) {
+    if (!canEdit() || !showModal() || testing() || loadingPreview()) {
       return;
     }
     setEditorFeedback(null);
@@ -299,38 +427,53 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       return;
     }
 
+    const controller = new AbortController();
+    previewController = controller;
+    const version = editorVersion;
+    const context = contextVersion;
+    const payload = JSON.stringify(buildMetadataPreviewPayload(form));
+    const isCurrent = () => canEdit() && showModal() && version === editorVersion && context === contextVersion && previewController === controller && payload === JSON.stringify(buildMetadataPreviewPayload(form));
     setLoadingPreview(true);
     setMetadataPreview(null);
 
     try {
-      const { apiFetch, apiErrorFromResponse } = await import('@/utils/apiClient');
       const response = await apiFetch('/api/security/sso/providers/metadata/preview', {
+        ...requestOptions(controller),
         method: 'POST',
-        retry: false,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildMetadataPreviewPayload(form)),
+        body: payload,
       });
 
+      if (!isCurrent()) return;
       if (!response.ok) {
         const error = await apiErrorFromResponse(response);
+        if (!isCurrent()) return;
         setEditorFeedback({ tone: 'error', message: getSSOMetadataFetchErrorMessage(error) });
         logger.error('[SSOProvidersPanel] Metadata preview failed.', { status: response.status });
         return;
       }
 
-      setMetadataPreview((await response.json()) as MetadataPreview);
+      const preview = (await response.json()) as MetadataPreview;
+      if (!isCurrent()) return;
+      setMetadataPreview(preview);
       setShowMetadataPreview(true);
     } catch {
+      if (!isCurrent()) return;
       logger.error('[SSOProvidersPanel] Metadata preview failed.');
       setEditorFeedback({ tone: 'error', message: getSSOMetadataFetchErrorMessage() });
     } finally {
-      setLoadingPreview(false);
+      if (previewController === controller) { previewController = undefined; setLoadingPreview(false); }
     }
   };
 
   return {
     providers,
     loading,
+    loadError,
+    loadProviders,
+    loadingDetails,
+    canEdit,
+    mutating,
     saving,
     editorFeedback,
     showModal,
