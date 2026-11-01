@@ -4648,9 +4648,21 @@ func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read %s: %v", workflowPath, err)
 	}
-	frontendJob := workflowJobBlock(t, string(workflow), "frontend-checks")
+	frontendJob := workflowJobBlock(t, string(workflow), "frontend-build")
+	for _, needle := range []string{
+		`- name: Check Solid serialization dependency edges`,
+		`- name: Install frontend dependencies`,
+		`- name: Audit complete frontend dependency graph`,
+		`NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}`,
+		`- name: Require frontend dependency audit`,
+		`COMPLETE_AUDIT_RESULT: ${{ steps.audit-complete.outcome }}`,
+	} {
+		if !strings.Contains(frontendJob, needle) {
+			t.Fatalf("frontend build/audit producer missing %s", needle)
+		}
+	}
 	if !strings.Contains(frontendJob, "timeout-minutes: 30") {
-		t.Fatal("frontend job must keep a bounded timeout above the audit budget")
+		t.Fatal("frontend build/audit producer must keep a bounded timeout above the audit budget")
 	}
 }
 

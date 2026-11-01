@@ -25,6 +25,24 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         self.assertEqual(len(matches), 1, f"expected one {name} step")
         return matches[0]
 
+    def test_preinstall_serialization_step_runs_its_registered_graph_controls(self):
+        # Run the actual dependency-free pre-install recipe, not just the
+        # Python workflow assertions. Its Node controls also read this workflow
+        # and must follow the producer when build and runtime jobs are split.
+        # Otherwise a stale job selector can pass local proof and stop CI before
+        # npm installation, leaving all expensive proof inapplicable.
+        check = self.step("Check Solid serialization dependency edges")
+        self.assertEqual(check, {
+            "name": "Check Solid serialization dependency edges",
+            "run": "node --test scripts/tests/check-frontend-serialization.test.mjs\n"
+                   "node scripts/check-frontend-serialization.mjs\n",
+        })
+        names = [step.get("name") for step in self.steps]
+        self.assertLess(names.index(check["name"]), names.index("Install frontend dependencies"))
+        result = subprocess.run(["bash", "-e", "-u", "-o", "pipefail", "-c", check["run"]],
+                                cwd=ROOT, text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_type_build_and_size_admit_the_unit_suite_in_order(self):
         names = [step.get("name") for step in self.steps]
         ordered = [

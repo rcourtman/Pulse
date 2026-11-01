@@ -828,7 +828,10 @@ failed, cancelled or skipped proof fails that check; only an explicit, consisten
 non-runtime classification admits inapplicable checks. Each execution job retains
 the 30-minute ceiling; the aggregate has a five-minute orchestration deadline.
 
-`frontend-build` installs the locked graph, performs the unchanged formatting,
+Before installation, `frontend-build` executes the dependency-free Solid
+serialization graph controls and checks the complete lock. Its pre-install
+ordering and unchanged strict audit are bound to this producer, not the separate
+runtime consumer. `frontend-build` installs the locked graph, performs the unchanged formatting,
 lint and type checks, then builds and size-checks the production frontend. It
 requires a nonempty index/assets tree and compares the complete generated
 frontend and embed copy. Only that successful checkout-bound build is packed
@@ -872,7 +875,11 @@ selection failure; they do not reproduce hosted GitHub rerun/transport behaviour
 in the Go install-test suite, separately from compiler/asset admission. These
 controls are not real compilation. `TestFrontendCIRequiresCompleteIsolatedUnitProof`
 executes the workflow-order, complete-shard and actual fail-closed audit/verdict
-controls in `scripts/tests/test_frontend_workflow_order.py`. Actual containing CI checkout/phase logs
+controls in `scripts/tests/test_frontend_workflow_order.py`, including execution
+of the actual pre-install Node test/check recipe so a stale workflow selector
+cannot escape this registered proof route. `TestFrontendDependencySecurityAuditsAreRequired`
+also binds the audit deadline and verdict to the build/audit producer.
+Actual containing CI checkout/phase logs
 remain necessary before using the result as real-embed source proof; unrelated
 stub builds, workflow success, releases and installed recovery remain distinct.
 
