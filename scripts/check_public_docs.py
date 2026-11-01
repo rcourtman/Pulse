@@ -112,7 +112,11 @@ def check_links(files: list[Path]) -> list[str]:
                 and resolved.suffix.lower() == ".md"
                 and not anchor.startswith(("-", "\ufe0f"))
             ):
-                anchors = anchor_cache.setdefault(resolved, anchors_for(resolved))
+                # setdefault would parse the file even on a cache hit. Keep
+                # this cache local so the next check sees changed headings.
+                if resolved not in anchor_cache:
+                    anchor_cache[resolved] = anchors_for(resolved)
+                anchors = anchor_cache[resolved]
                 if anchor.lower() not in anchors:
                     errors.append(
                         f"{display_source}: missing anchor #{anchor} in "
