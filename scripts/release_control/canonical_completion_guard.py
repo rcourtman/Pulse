@@ -768,10 +768,30 @@ def check_staged_contracts(
     )
     print(
         "If this change is contract-neutral (behavioral fix, no public-contract "
-        "delta), you may bypass only this block by setting "
-        f"{CONTRACT_NEUTRAL_OVERRIDE_ENV}=<reason>. The reason is logged to "
-        "stderr. Sensitivity, gitleaks, governance-stage, control-plane, "
-        "status, registry, and contract audits still run.",
+        "delta), declare a concrete reason rather than adding artificial "
+        "contract or test changes. For a new, unshared commit, put "
+        "'Contract-Neutral: <reason>' in its final trailer block. With the "
+        "prepare-commit-msg hook installed, setting "
+        f"{CONTRACT_NEUTRAL_OVERRIDE_ENV}=<reason> when creating the commit "
+        "records that trailer. A local environment override alone is not "
+        "sent to CI: canonical governance reads each evaluated commit's "
+        "trailer, not the PR body or a later commit's trailer.",
+        file=sys.stderr,
+    )
+    print(
+        "Do not amend shared or published history. For an already shared "
+        "incomplete commit, use a separately reviewed completion with the "
+        "required contract and verification updates and an exact pair in "
+        "scripts/release_control/canonical_completion_history.json. "
+        "The pair is validated; a later trailer alone does not complete it.",
+        file=sys.stderr,
+    )
+    print(
+        "A contract-neutral declaration bypasses only this canonical-shape "
+        "block; its reason is logged to stderr. A real contract delta still "
+        "requires the updates listed above. Sensitivity, gitleaks, "
+        "governance-stage, control-plane, status, registry, and contract "
+        "audits still run.",
         file=sys.stderr,
     )
     return 1

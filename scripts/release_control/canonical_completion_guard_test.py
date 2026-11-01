@@ -3948,7 +3948,7 @@ class ContractNeutralOverrideTest(unittest.TestCase):
         self.assertIn("Suppressed requirements", stderr_value)
         self.assertIn("BLOCKED: missing contract", stderr_value)
 
-    def test_check_staged_contracts_blocks_and_suggests_bypass_when_unset(self):
+    def test_blocked_guard_explains_durable_declaration_without_rewriting_history(self):
         stderr = io.StringIO()
         with (
             patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}, clear=False),
@@ -3985,6 +3985,40 @@ class ContractNeutralOverrideTest(unittest.TestCase):
         self.assertIn("BLOCKED: missing contract", stderr_value)
         self.assertIn(CONTRACT_NEUTRAL_OVERRIDE_ENV, stderr_value)
         self.assertIn("contract-neutral", stderr_value)
+        self.assertIn("no public-contract delta", stderr_value)
+        self.assertIn("new, unshared commit", stderr_value)
+        self.assertIn("'Contract-Neutral: <reason>' in its final trailer block", stderr_value)
+        self.assertIn("prepare-commit-msg hook installed", stderr_value)
+        self.assertIn("A local environment override alone is not sent to CI", stderr_value)
+        self.assertIn("not the PR body or a later commit's trailer", stderr_value)
+        self.assertIn("Do not amend shared or published history", stderr_value)
+        self.assertIn("separately reviewed completion", stderr_value)
+        self.assertIn("required contract and verification updates", stderr_value)
+        self.assertIn("scripts/release_control/canonical_completion_history.json", stderr_value)
+        self.assertIn("The pair is validated", stderr_value)
+        self.assertIn("A real contract delta still requires the updates listed above", stderr_value)
+        self.assertIn("audits still run", stderr_value)
+
+    def test_committed_guard_keeps_missing_requirements_blocked_with_same_guidance(self):
+        stderr = io.StringIO()
+        contract = "docs/subsystems/example.md"
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: "  "}, clear=False),
+            patch("canonical_completion_guard.infer_impacted_subsystems", return_value={}),
+            patch(
+                "canonical_completion_guard.required_contract_updates",
+                return_value={contract: {"subsystem": "example", "touched_runtime_files": ["pkg/runtime.go"]}},
+            ),
+            redirect_stderr(stderr),
+        ):
+            status = check_staged_contracts(
+                ["pkg/runtime.go"], diff_base="a" * 40, revision="b" * 40,
+            )
+
+        self.assertEqual(status, 1)
+        self.assertIn(f"missing contract {contract}", stderr.getvalue())
+        self.assertIn("Contract-Neutral: <reason>", stderr.getvalue())
+        self.assertIn("Do not amend shared or published history", stderr.getvalue())
 
 
 class DiffBaseContractComparisonTest(unittest.TestCase):
