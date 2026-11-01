@@ -241,8 +241,8 @@ func TestCheckpointRoutesOnlySelectedDestinations(t *testing.T) {
 				{"alpha-info", "customer:alpha", alerts.AlertLevelInfo},
 				{"beta-critical", "customer:beta", alerts.AlertLevelCritical},
 			} {
-				a := taggedRoutingAlert(tc.id, []string{tc.tag})
-				a.Level = tc.level
+				a := quietReplayAlert(tc.id, tc.level, time.Now().UTC())
+				a.Metadata = map[string]interface{}{"tags": []string{tc.tag}}
 				m.SendAlert(a)
 			}
 			m.Stop()

@@ -177,6 +177,7 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 				At      time.Time
 				Path    string
 				Event   string          `json:"event"`
+				Source  string          `json:"source"`
 				Alerts  []*alerts.Alert `json:"alerts"`
 				Count   int             `json:"count"`
 				Grouped bool            `json:"grouped"`
@@ -289,7 +290,12 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 					require.True(t, d.Grouped)
 					require.Equal(t, 2, d.Count)
 					require.Len(t, d.Alerts, 2)
-					require.Equal(t, "alert", d.Event)
+					require.Empty(t, d.Event, "the existing generic grouped firing payload has no event field")
+					require.Equal(t, "pulse-monitoring", d.Source)
+					require.NotEqual(t, d.Alerts[0].ID, d.Alerts[1].ID)
+					for _, a := range d.Alerts {
+						require.Equal(t, alerts.AlertLevelWarning, a.Level)
+					}
 					require.False(t, seen[d.Path])
 					seen[d.Path] = true
 				case <-time.After(10 * time.Second):
