@@ -13578,14 +13578,3 @@ earlier raw object; that current-read object remains usable for the same live
 ID. A later full read, context withdrawal or deletion invalidates the old
 confirmation. The registered sequential scope-edit/revoke consumer regression
 and earlier-read rejection test cover both sides without ID-only admission.
-
-### User Access requests retain their confirmed context
-
-RBAC directory/role reads, saved-permission reads and user assignment/removal
-operations accept client-only `RBACAdminRequestOptions`. User Access supplies an
-abort signal, exact expected organisation and `retry: false` to the canonical
-API client, including its CSRF preparation boundary. A withdrawn confirmation
-must not dispatch into the default or a new organisation or automatically replay
-a refusal. Endpoint paths, encoded principal keys, JSON payloads, authentication
-and server permission checks are unchanged. `api/__tests__/rbac.test.ts` and
-`UserAccessReaderLifetime.test.tsx` pin forwarding and the consuming lifecycle.
