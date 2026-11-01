@@ -30,6 +30,9 @@ func TestSupportBundleNativeWithdrawal(t *testing.T) {
 			raw := logStreamToken
 			if transport == "session" {
 				raw = "synthetic-held-bundle-session"
+				config.Mu.Lock()
+				cfg.AuthUser = "operator"
+				config.Mu.Unlock()
 				GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", cfg.AuthUser)
 				t.Cleanup(func() { GetSessionStore().DeleteSession(raw) })
 			}
