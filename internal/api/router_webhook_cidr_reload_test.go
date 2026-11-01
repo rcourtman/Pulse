@@ -10,11 +10,9 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
-// TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor verifies the fix
-// for issue #1507: after a monitor reload (which recreates the notification
-// manager), ReloadSystemSettings must re-apply the persisted webhook private
-// CIDR allowlist to the new notification manager. Without this, webhooks to
-// private IPs fail after any auto-registration-triggered monitor reload.
+// A recreated monitor restores its bootstrap policy before any router exists.
+// ReloadSystemSettings still owns later persisted changes, including revoking
+// a previously allowed private destination (the live replacement path of #1507).
 func TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -59,41 +57,50 @@ func TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor(t *testing.T) {
 		t.Fatalf("initial monitor: expected CIDR to allow 192.168.1.50, got: %v", err)
 	}
 
-	// Simulate a monitor reload: create a fresh monitor with a brand-new
-	// notification manager (empty CIDR allowlist).
+	// Recreated managers must already have saved policy before queued work runs.
 	monitor2, err := monitoring.New(cfg)
 	if err != nil {
 		t.Fatalf("monitoring.New (reload): %v", err)
 	}
 	t.Cleanup(func() { monitor2.Stop() })
 
-	// Before the fix: the reload path in server.go never called
-	// ReloadSystemSettings, so the new notification manager would have
-	// an empty allowlist and reject private IPs.
 	nm2 := monitor2.GetNotificationManager()
 	if nm2 == nil {
 		t.Fatal("reloaded monitor has no notification manager")
 	}
-	if err := nm2.ValidateWebhookURL("http://192.168.1.50/hook"); err == nil {
-		t.Fatal("fresh notification manager should reject private IP before settings are re-applied")
-	}
-
-	// Now update the router's monitor reference (as SetMonitor does during reload).
-	router.monitor = monitor2
-
-	// Call ReloadSystemSettings — this is the fix.
-	router.ReloadSystemSettings()
-
-	// The new notification manager should now have the persisted CIDR allowlist.
 	if err := nm2.ValidateWebhookURL("http://192.168.1.50/hook"); err != nil {
-		t.Fatalf("after ReloadSystemSettings: expected CIDR to allow 192.168.1.50, got: %v", err)
+		t.Fatalf("fresh manager must restore policy before router refresh: %v", err)
 	}
-	if err := nm2.ValidateWebhookURL("http://10.5.5.5/hook"); err != nil {
-		t.Fatalf("after ReloadSystemSettings: expected CIDR to allow 10.5.5.5, got: %v", err)
+
+	// Persist a real policy replacement after construction. Saving alone must
+	// not mutate the live manager; refreshing must replace, not merge, grants.
+	settings.WebhookAllowedPrivateCIDRs = "172.16.0.0/16"
+	if err := persistence.SaveSystemSettings(*settings); err != nil {
+		t.Fatalf("SaveSystemSettings replacement: %v", err)
 	}
-	// IPs outside the allowlist should still be rejected.
+	if err := nm2.ValidateWebhookURL("http://192.168.1.50/hook"); err != nil {
+		t.Fatalf("persisting replacement unexpectedly changed live policy: %v", err)
+	}
 	if err := nm2.ValidateWebhookURL("http://172.16.0.1/hook"); err == nil {
-		t.Fatal("after ReloadSystemSettings: expected 172.16.0.1 to be rejected (not in allowlist)")
+		t.Fatal("replacement grant reached the live manager before refresh")
+	}
+	router.monitor = monitor2
+	router.ReloadSystemSettings()
+	if err := nm2.ValidateWebhookURL("http://172.16.0.1/hook"); err != nil {
+		t.Fatalf("after refresh: replacement destination rejected: %v", err)
+	}
+	for _, revoked := range []string{"http://192.168.1.50/hook", "http://10.5.5.5/hook"} {
+		if err := nm2.ValidateWebhookURL(revoked); err == nil {
+			t.Fatalf("after refresh: old grant retained for %s", revoked)
+		}
+	}
+	settings.WebhookAllowedPrivateCIDRs = ""
+	if err := persistence.SaveSystemSettings(*settings); err != nil {
+		t.Fatalf("SaveSystemSettings revocation: %v", err)
+	}
+	router.ReloadSystemSettings()
+	if err := nm2.ValidateWebhookURL("http://172.16.0.1/hook"); err == nil {
+		t.Fatal("clearing the installation policy did not revoke the final grant")
 	}
 }
 

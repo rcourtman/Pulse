@@ -221,11 +221,92 @@ type webhookRateLimit struct {
 	sentCount int
 }
 
+type notificationLifecycleState int
+
+const (
+	notificationLifecycleRunning notificationLifecycleState = iota
+	notificationLifecycleDraining
+	notificationLifecycleClosed
+)
+
+// notificationLifecycle owns work that holds the queue outside the manager
+// lock. Each lease is taken in the critical section that reads the queue, so
+// a lease holder always writes to an open queue. Stop drains the lifecycle,
+// refusing new alerts while cancellations, operator pause and direct delivery
+// already owed continue, then closes it once every lease has ended.
+type notificationLifecycle struct {
+	mu     sync.Mutex
+	idle   sync.Cond
+	state  notificationLifecycleState
+	leases int
+}
+
+// admit leases new alert or recovery work. Stop refuses it from the start.
+func (l *notificationLifecycle) admit() bool {
+	return l.acquire(notificationLifecycleRunning)
+}
+
+// join leases work that must still reach an open queue while Stop drains:
+// cancellation, operator pause or channel disable, and direct delivery
+// started by admitted work. It is refused only once the drain has finished.
+func (l *notificationLifecycle) join() bool {
+	return l.acquire(notificationLifecycleDraining)
+}
+
+func (l *notificationLifecycle) acquire(latest notificationLifecycleState) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.state > latest {
+		return false
+	}
+	l.leases++
+	return true
+}
+
+func (l *notificationLifecycle) release() {
+	l.mu.Lock()
+	l.leases--
+	if l.leases == 0 {
+		l.idle.Broadcast()
+	}
+	l.mu.Unlock()
+}
+
+// accepting reports whether new work may still be buffered for later
+// admission.
+func (l *notificationLifecycle) accepting() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.state == notificationLifecycleRunning
+}
+
+func (l *notificationLifecycle) drain() {
+	l.mu.Lock()
+	if l.state == notificationLifecycleRunning {
+		l.state = notificationLifecycleDraining
+	}
+	l.mu.Unlock()
+}
+
+// close waits for every lease to end, then refuses all later work.
+func (l *notificationLifecycle) close() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.idle.L == nil {
+		l.idle.L = &l.mu
+	}
+	for l.leases > 0 {
+		l.idle.Wait()
+	}
+	l.state = notificationLifecycleClosed
+}
+
 // NotificationManager handles sending notifications
 type NotificationManager struct {
 	mu                 sync.RWMutex
 	stopOnce           sync.Once
 	cleanupWG          sync.WaitGroup
+	lifecycle          notificationLifecycle // Admission and shutdown ownership of queue and direct delivery work
 	emailConfig        EmailConfig
 	emailManager       *EnhancedEmailManager // Shared email manager for rate limiting
 	webhooks           []WebhookConfig
@@ -936,11 +1017,14 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 		AuthRequired:  config.Username != "" && config.Password != "",
 	}
 	n.emailManager = NewEnhancedEmailManager(providerConfig)
-	queue := n.queue
-	disabled := !config.Enabled
+	var queue *NotificationQueue
+	if !config.Enabled && n.queue != nil && n.lifecycle.join() {
+		queue = n.queue
+	}
 	n.mu.Unlock()
 
-	if disabled && queue != nil {
+	if queue != nil {
+		defer n.lifecycle.release()
 		if err := queue.CancelByTypes([]string{"email", "email" + queueTypeSuffixResolved}, "Email notifications disabled"); err != nil {
 			log.Error().Err(err).Msg("failed to cancel queued email notifications after disabling email delivery")
 		}
@@ -951,11 +1035,14 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) {
 	n.mu.Lock()
 	n.appriseConfig = NormalizeAppriseConfig(config)
-	queue := n.queue
-	disabled := !n.appriseConfig.Enabled
+	var queue *NotificationQueue
+	if !n.appriseConfig.Enabled && n.queue != nil && n.lifecycle.join() {
+		queue = n.queue
+	}
 	n.mu.Unlock()
 
-	if disabled && queue != nil {
+	if queue != nil {
+		defer n.lifecycle.release()
 		if err := queue.CancelByTypes([]string{"apprise", "apprise" + queueTypeSuffixResolved}, "Apprise notifications disabled"); err != nil {
 			log.Error().Err(err).Msg("failed to cancel queued Apprise notifications after disabling delivery")
 		}
@@ -1058,7 +1145,11 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 	var queue *NotificationQueue
 	if !enabled || seconds == 0 {
 		resolved = n.takePendingResolvedLocked()
-		pending = append(pending, n.pendingAlerts...)
+		// Stop clears pending groups in the critical section that refuses
+		// admission, so a pending group here is always admitted.
+		if len(n.pendingAlerts) > 0 && n.lifecycle.admit() {
+			pending = append(pending, n.pendingAlerts...)
+		}
 		clear(n.pendingAlerts)
 		n.pendingAlerts = n.pendingAlerts[:0]
 		n.pendingAlertIndex = nil
@@ -1073,6 +1164,9 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 		queue = n.queue
 	}
 	n.mu.Unlock()
+	if len(pending) > 0 {
+		defer n.lifecycle.release()
+	}
 
 	for _, alert := range resolved {
 		n.dispatchResolvedAlerts([]*alerts.Alert{alert})
@@ -1179,7 +1273,9 @@ func (n *NotificationManager) SetEnabled(enabled bool) {
 			n.groupTimer.Stop()
 			n.groupTimer = nil
 		}
-		queue = n.queue
+		if n.queue != nil && n.lifecycle.join() {
+			queue = n.queue
+		}
 	}
 	n.mu.Unlock()
 
@@ -1187,7 +1283,8 @@ func (n *NotificationManager) SetEnabled(enabled bool) {
 		log.Info().Bool("enabled", enabled).Msg("updated notification manager enabled state")
 	}
 
-	if !enabled && queue != nil {
+	if queue != nil {
+		defer n.lifecycle.release()
 		types := []string{
 			"email", "email" + queueTypeSuffixResolved,
 			"webhook", "webhook" + queueTypeSuffixResolved,
@@ -1259,6 +1356,14 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		n.mu.Unlock()
 		return
 	}
+	// The lease covers the queue read below until its write completes, so Stop
+	// cannot close storage under an admitted alert.
+	if !n.lifecycle.admit() {
+		log.Debug().Str("alertID", alert.ID).Msg("notification manager stopping, alert not admitted")
+		n.mu.Unlock()
+		return
+	}
+	defer n.lifecycle.release()
 
 	// Check cooldown. A disabled cooldown means "do not send repeat
 	// notifications for the same active alert occurrence". A higher severity is
@@ -1623,7 +1728,7 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	annotateResolvedMetadata(alertCopy, resolvedAt)
 
 	n.mu.Lock()
-	if !n.enabled || !n.notifyOnResolve {
+	if !n.enabled || !n.notifyOnResolve || !n.lifecycle.accepting() {
 		n.mu.Unlock()
 		return
 	}
@@ -1674,10 +1779,13 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 	webhooks := copyWebhookConfigs(n.webhooks)
 	appriseConfig := copyAppriseConfig(n.appriseConfig)
 	queue := n.queue
+	// The lease precedes the receipt read below, which already uses the queue.
+	admitted := enabled && n.lifecycle.admit()
 	n.mu.RUnlock()
-	if !enabled {
+	if !admitted {
 		return
 	}
+	defer n.lifecycle.release()
 	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertList, eventResolved, resolvedTimeFromAlerts(alertList))
 	// Filter each destination independently at dispatch, not merely when the
 	// alert enters the window. Never announce a recovery for an undelivered firing.
@@ -1711,6 +1819,11 @@ func (n *NotificationManager) CancelResolvedAlert(alert *alerts.Alert) bool {
 func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool {
 	n.mu.Lock()
 	queue := n.queue
+	// Cancellation still runs while Stop drains; its lease keeps the queue
+	// open until the cancellation is committed.
+	if queue != nil && !n.lifecycle.join() {
+		queue = nil
+	}
 	record, firingDelivered := n.lastNotified[alertID]
 	firingDelivered = firingDelivered && (start == nil || record.alertStart.Equal(*start))
 
@@ -1755,6 +1868,7 @@ func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool
 	// Cancel any queued notifications containing this alert
 	cancelledPending := 0
 	if queue != nil {
+		defer n.lifecycle.release()
 		var err error
 		if start == nil {
 			cancelledPending, err = queue.CancelByAlertIdentifiers([]string{alertID})
@@ -1784,6 +1898,13 @@ func (n *NotificationManager) sendGroupedAlerts() {
 		n.mu.Unlock()
 		return
 	}
+	// Stop clears pending groups in the critical section that refuses
+	// admission, so a timer that finds a group here is always admitted.
+	if !n.lifecycle.admit() {
+		n.mu.Unlock()
+		return
+	}
+	defer n.lifecycle.release()
 
 	// Copy alerts to send
 	alertsToSend := make([]*alerts.Alert, len(n.pendingAlerts))
@@ -2107,7 +2228,18 @@ func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailC
 }
 
 func (n *NotificationManager) dispatchNotificationJobAsync(job notificationDeliveryJob, failureMessage string) {
+	// Direct delivery stays owned until it finishes, so Stop waits for it and
+	// nothing is sent, or recorded only in memory, after Stop returns.
+	if !n.lifecycle.join() {
+		log.Warn().
+			Str("type", job.Type).
+			Str("event", string(job.Event)).
+			Int("alertCount", len(job.Alerts)).
+			Msg("notification manager stopped; direct delivery refused")
+		return
+	}
 	spawnAsync(func() {
+		defer n.lifecycle.release()
 		if err := n.deliverNotificationJob(job); err != nil {
 			n.logNotificationJobError(job, err, failureMessage)
 			return
@@ -4402,8 +4534,11 @@ func (n *NotificationManager) cleanupOldNotificationRecords() {
 // Stop gracefully stops the notification manager
 func (n *NotificationManager) Stop() {
 	n.stopOnce.Do(func() {
+		// Refuse new alerts and discard volatile groups in one critical
+		// section, so a pending group is either already admitted with a lease
+		// or discarded here, as Stop has always discarded it.
 		n.mu.Lock()
-		n.enabled = false
+		n.lifecycle.drain()
 		n.takePendingResolvedLocked()
 		clear(n.pendingAlerts)
 		n.pendingAlerts = n.pendingAlerts[:0]
@@ -4413,6 +4548,23 @@ func (n *NotificationManager) Stop() {
 			n.groupTimer = nil
 		}
 		queue := n.queue
+		n.mu.Unlock()
+
+		// Shutdown is a restart boundary, not a delivery verdict. Quiesce the
+		// queue while this manager still permits delivery and records receipts
+		// durably: a queued job reaching the processor after delivery is
+		// withdrawn below would be cancelled as disabled, and a send completing
+		// after the queue is detached would keep its firing receipt only in
+		// memory. Rows no worker has begun stay pending for the next start.
+		if queue != nil {
+			queue.stopProcessing()
+		}
+		// Wait for admitted writes, cancellations, operator changes and direct
+		// deliveries. No lease can be taken once this returns.
+		n.lifecycle.close()
+
+		n.mu.Lock()
+		n.enabled = false
 		cleanupDone := n.cleanupDone
 		client := n.webhookClient
 

@@ -179,6 +179,7 @@ type NotificationQueue struct {
 	deliveryGateMu        sync.Mutex
 	deliveryGates         map[string]*notificationDeliveryGate
 	stopOnce              sync.Once
+	stopProcessingOnce    sync.Once
 	stopErr               error
 	db                    *sql.DB
 	dbPath                string
@@ -1791,6 +1792,12 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			nq.notifyDeliveryHealthChanged()
 		}
 	}()
+	// A worker that observes the stop begins no hold, partition or claim, so
+	// its row stays pending for the next start. A worker already past this
+	// check finishes normally; stopProcessing waits for it.
+	if nq.stopping() {
+		return
+	}
 	if quietHoursPolicy != nil {
 		ready, err := nq.prepareQuietHoursDelivery(notif, quietHoursPolicy)
 		if err != nil {
@@ -2119,14 +2126,37 @@ func (nq *NotificationQueue) performCleanup() {
 	}
 }
 
-// Stop gracefully stops the queue processor
-func (nq *NotificationQueue) Stop() error {
-	nq.stopOnce.Do(func() {
+// stopping reports whether processing has begun to stop. Queues built
+// without a stop channel are never stopping.
+func (nq *NotificationQueue) stopping() bool {
+	select {
+	case <-nq.stopChan:
+		return true
+	default:
+		return false
+	}
+}
+
+// stopProcessing ends delivery work but keeps storage open. Workers that
+// observe the stop leave their rows pending for the next start; a worker
+// already past that check finishes its hold, partition or attempt and records
+// the outcome before this returns. Stop calls it, and an owner that must
+// withdraw delivery permission calls it first so no worker sees that change.
+func (nq *NotificationQueue) stopProcessing() {
+	nq.stopProcessingOnce.Do(func() {
 		close(nq.stopChan)
+		log.Info().Str("component", "notification_queue").Msg("Stopping notification queue processing")
 		nq.wg.Wait()
 
 		nq.processorTicker.Stop()
 		nq.cleanupTicker.Stop()
+	})
+}
+
+// Stop gracefully stops the queue processor
+func (nq *NotificationQueue) Stop() error {
+	nq.stopOnce.Do(func() {
+		nq.stopProcessing()
 
 		if err := nq.db.Close(); err != nil {
 			nq.stopErr = fmt.Errorf("failed to close database: %w", err)
