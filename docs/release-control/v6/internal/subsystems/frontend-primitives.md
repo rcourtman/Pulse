@@ -10434,8 +10434,10 @@ applies each handoff once, reading the resource list untracked, so an
 inventory change cannot replay it over the operator's later selection. The
 Machine Sensors section reuses the shared table with no Global Defaults row
 and no Alerts column; its rows stay one line, with the reading and chip in the
-subtitle and any `readingMessage` on the name's line. No shared primitive or
-layout changes.
+subtitle and any `readingMessage` on the name's line. The threshold override
+read model (`useAlertOverridesState`) treats a note-only change as a change,
+so the row and its editor show the stored note after Discard or a reload. No
+shared primitive or layout changes.
 
 ### Stopped VM filesystem presentation (12 October 2026)
 

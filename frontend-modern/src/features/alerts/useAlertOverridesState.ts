@@ -143,6 +143,7 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
         if (!existing) return true;
         return (
           JSON.stringify(newOverride.thresholds) !== JSON.stringify(existing.thresholds) ||
+          (newOverride.note ?? '') !== (existing.note ?? '') ||
           Boolean(newOverride.disableConnectivity) !== Boolean(existing.disableConnectivity) ||
           Boolean(newOverride.disabled) !== Boolean(existing.disabled) ||
           (newOverride.poweredOffSeverity ?? null) !== (existing.poweredOffSeverity ?? null) ||
