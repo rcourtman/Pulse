@@ -13,7 +13,8 @@ import (
 // retainTokenStreamAuthority runs AFTER the route's auth/admin/scope gates.
 // Recheck the admitted credential at the actual writer, not just when an event
 // is produced: replay and queued broadcasts can otherwise disclose after a
-// credential is withdrawn. Session/proxy admission is intentionally unchanged.
+// credential is withdrawn. Session withdrawal is checked too; other
+// authentication policy stays with the route.
 func retainTokenStreamAuthority(cfg *config.Config, scope string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
 	return retainTokenStreamAuthorityForScopes(cfg, []string{scope}, instanceAdmin, next)
 }
@@ -21,11 +22,12 @@ func retainTokenStreamAuthority(cfg *config.Config, scope string, instanceAdmin 
 func retainTokenStreamAuthorityForScopes(cfg *config.Config, scopes []string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scopes...)
+		sessionAllowed := sessionReadRevalidator(r)
 		allowed := func() bool {
 			if revalidate == nil {
-				// Session/proxy admission stays with the route. They still
-				// need the same join-before-return protection from async writes.
-				return true
+				// Proxy/basic/bypass admission stays with the route. A
+				// session read retains its exact admitted session instance.
+				return sessionAllowed == nil || sessionAllowed()
 			}
 			current, ok := revalidate()
 			return ok && (!instanceAdmin || tokenActsForInstance(current))
@@ -62,10 +64,10 @@ func retainTokenStreamAuthorityForScopes(cfg *config.Config, scopes []string, in
 				}
 			}
 		}
-		if revalidate != nil {
+		if revalidate != nil || sessionAllowed != nil {
 			go watch()
 		} else {
-			// No new periodic authentication checks for session/proxy readers.
+			// No new periodic authentication checks for other credentials.
 			close(watchDone)
 		}
 		defer func() {

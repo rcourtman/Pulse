@@ -15,12 +15,16 @@ import (
 func retainTokenResponseAuthority(cfg *config.Config, scope string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scope)
-		if revalidate == nil {
-			// No new authentication policy for session/proxy requests.
+		sessionAllowed := sessionReadRevalidator(r)
+		if revalidate == nil && sessionAllowed == nil {
+			// No new authentication policy for proxy/basic/bypass requests.
 			next(w, r)
 			return
 		}
 		allowed := func() bool {
+			if revalidate == nil {
+				return sessionAllowed()
+			}
 			current, ok := revalidate()
 			return ok && (!instanceAdmin || tokenActsForInstance(current))
 		}

@@ -32,10 +32,11 @@ func NewLogHandlers(cfg *config.Config, persistence *config.ConfigPersistence) *
 // HandleStreamLogs streams logs using SSE (Server-Sent Events)
 func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	revalidate := tokenStreamSnapshotRevalidator(h.config, r, config.ScopeSettingsRead)
+	sessionAllowed := sessionReadRevalidator(r)
 	allowed := func() bool {
 		if revalidate == nil {
-			// Existing browser-session/proxy admission remains with the route.
-			return true
+			// Other credential admission remains with the route.
+			return sessionAllowed == nil || sessionAllowed()
 		}
 		current, ok := revalidate()
 		return ok && tokenActsForInstance(current)
@@ -71,10 +72,10 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 
 	notify := r.Context().Done()
-	// End an idle withdrawn token reader too, without generating log entries,
-	// writing keepalive frames or changing session/proxy stream behaviour.
+	// End an idle withdrawn token/session reader too, without generating log
+	// entries or writing keepalive frames.
 	var recheck <-chan time.Time
-	if revalidate != nil {
+	if revalidate != nil || sessionAllowed != nil {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		recheck = ticker.C

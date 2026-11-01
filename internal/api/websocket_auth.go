@@ -11,7 +11,7 @@ func monitoringWebSocketAuthorization(cfg *config.Config, req *http.Request) fun
 	// request copy, not one its returning middleware may still be observing.
 	revalidate := monitoringTokenSnapshotRevalidator(cfg, req.Clone(req.Context()))
 	if revalidate == nil {
-		return nil
+		return sessionReadRevalidator(req)
 	}
 	return func() bool {
 		_, ok := revalidate()
