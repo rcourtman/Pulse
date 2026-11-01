@@ -665,6 +665,17 @@ describe('App architecture', () => {
     expect(preparation).toContain('process.env.PULSE_E2E_OFFLINE_ACTIVATION_KEY');
   });
 
+  it('owns mounted platform pages inside the confirmed-sign-out authentication gate', () => {
+    // This gate disposes Workloads metadata without relying on provider
+    // navigation. Runtime tests exercise successful and partial cleanup;
+    // the metadata lifetime tests exercise late results after disposal.
+    expect(appSource).toContain('when={!runtime.needsAuth()}');
+    expect(appRuntimeStateSource).toContain('setNeedsAuth(true)');
+    for (const source of platformSurfaceSources) {
+      expect(source).not.toContain('pulseGuestMetadata');
+    }
+  });
+
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
     expect(appLayoutSource).toContain(

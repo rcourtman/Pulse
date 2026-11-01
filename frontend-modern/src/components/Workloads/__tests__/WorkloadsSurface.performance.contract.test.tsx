@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, renderHook, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
+import { GuestMetadataAPI } from '@/api/guestMetadata';
+import type { GuestMetadata } from '@/api/guestMetadata';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import { WorkloadsSurface, type WorkloadsSurfaceProps } from '../WorkloadsSurface';
 import { useWorkloadsState, type WorkloadsStateOptions } from '../useWorkloadsState';
@@ -496,6 +498,22 @@ describe('Workloads performance contract', () => {
     wsConnected = true;
     wsInitialDataReceived = true;
     wsReconnecting = false;
+  });
+
+  it('cannot carry a disposed platform metadata read into its replacement workload state', async () => {
+    const read = vi.mocked(GuestMetadataAPI.getAllMetadata);
+    let finish!: (metadata: Record<string, GuestMetadata>) => void;
+    read.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const first = renderHook(() => useWorkloadsState({}));
+    first.result.handleCustomUrlUpdate('guest', 'https://confirmed.example');
+    first.cleanup();
+    read.mockReturnValueOnce(new Promise(() => {}));
+    const replacement = renderHook(() => useWorkloadsState({}));
+    finish({ guest: { id: 'guest', customUrl: 'https://obsolete.example' } });
+    await flushEffects();
+    expect(first.result.guestMetadata()).toEqual({});
+    expect(replacement.result.guestMetadata()).toEqual({});
+    replacement.cleanup();
   });
 
   describe('Fixture profile validation', () => {
