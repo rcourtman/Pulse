@@ -37,7 +37,9 @@ A frame admitted before concurrent withdrawal can already be in flight.
 
 The guard exposes deadline setters, not an unguarded response-writer escape:
 Assistant handlers still clear the initial server deadlines and bound each
-write. Closure joins active transport writes and rejects queued/late callbacks.
+write. The outer API error/status wrapper forwards these same two controls
+without exposing its raw writer; native short-server-deadline regressions run
+all three actual routes past that initial deadline. Closure joins active transport writes and rejects queued/late callbacks.
 Legacy execute and investigation keep their independent background execution
 and original 15/5-minute bounds; denying their read is not cancelling their work,
 and HTTP completion can therefore wait for that work. Chat keeps its existing

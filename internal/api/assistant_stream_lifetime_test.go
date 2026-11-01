@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -63,7 +64,7 @@ type assistantStreamFixture struct {
 	otherCalls atomic.Int32
 }
 
-func newAssistantStreamFixture(t *testing.T, kind string, scopes []string) *assistantStreamFixture {
+func newAssistantStreamFixture(t *testing.T, kind string, scopes []string, writeTimeout ...time.Duration) *assistantStreamFixture {
 	t.Helper()
 	f := &assistantStreamFixture{kind: kind, primary: newAssistantProviderGate(), control: newAssistantProviderGate()}
 	f.licensed.Store(true)
@@ -141,7 +142,22 @@ func newAssistantStreamFixture(t *testing.T, kind string, scopes []string) *assi
 		}
 		t.Cleanup(func() { _ = f.router.aiHandler.Stop(context.Background()) })
 	}
-	f.server = newIPv4HTTPServer(t, f.router.Handler())
+	if len(writeTimeout) == 0 {
+		f.server = newIPv4HTTPServer(t, f.router.Handler())
+	} else {
+		// Set before Start: an initial server deadline must really be cleared
+		// through the complete Router/middleware/guard chain, not a test writer.
+		server := httptest.NewUnstartedServer(f.router.Handler())
+		_ = server.Listener.Close()
+		listener, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		server.Listener = listener
+		server.Config.WriteTimeout = writeTimeout[0]
+		server.Start()
+		f.server = server
+	}
 	t.Cleanup(f.server.Close)
 	t.Cleanup(func() { f.primary.unblock(); f.control.unblock() })
 	return f
@@ -383,6 +399,20 @@ func TestAssistantStreamsPreserveExecutionLifetimes(t *testing.T) {
 				f.primary.unblock()
 			}
 			readAssistantResult(t, response, false)
+		})
+	}
+}
+
+func TestAssistantStreamsClearNativeServerDeadline(t *testing.T) {
+	for _, kind := range []string{"execute", "investigate-alert", "chat"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newAssistantStreamFixture(t, kind, []string{assistantScope(kind)}, 100*time.Millisecond)
+			response := f.open(t, "primary", f.token, "header")
+			// The initial HTTP deadline has passed, but this stream was
+			// deliberately admitted with a longer execution/write budget.
+			time.Sleep(200 * time.Millisecond)
+			f.primary.unblock()
+			readAssistantResult(t, response, true)
 		})
 	}
 }

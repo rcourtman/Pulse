@@ -168,6 +168,17 @@ type responseWriter struct {
 	written    bool
 }
 
+// Keep ResponseController deadline operations available to streaming handlers.
+// Do not expose Unwrap: transports can forward these controls without creating
+// an unguarded response-writer escape for callers further inside the chain.
+func (rw *responseWriter) SetWriteDeadline(deadline time.Time) error {
+	return http.NewResponseController(rw.ResponseWriter).SetWriteDeadline(deadline)
+}
+
+func (rw *responseWriter) SetReadDeadline(deadline time.Time) error {
+	return http.NewResponseController(rw.ResponseWriter).SetReadDeadline(deadline)
+}
+
 func (rw *responseWriter) WriteHeader(code int) {
 	if !rw.written {
 		rw.statusCode = code

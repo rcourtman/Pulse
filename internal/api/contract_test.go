@@ -29001,3 +29001,10 @@ func TestContract_AssistantStreamsWithdrawAfterPersistedTokenDelete(t *testing.T
 		})
 	}
 }
+
+// The production middleware is part of the transport contract, not merely a
+// recorder used for direct handler tests. All three native journeys must live
+// past the server's initial write deadline without bypassing the guard.
+func TestContract_AssistantStreamDeadlineSurvivesAPIWrappers(t *testing.T) {
+	TestAssistantStreamsClearNativeServerDeadline(t)
+}

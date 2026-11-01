@@ -18,7 +18,8 @@
 ### Assistant result streams do not own agent execution lifetime
 
 Assistant HTTP result readers recheck current token authority at their serialized
-writer, including deadline control. Token withdrawal denies further Assistant
+writer, including deadline control forwarded through the outer API status/error
+wrapper without exposing its raw writer. Token withdrawal denies further Assistant
 output; it does not introduce an agent disconnect, deployment cancellation or
 command-cancellation operation. Legacy execute and alert investigation retain
 their independent 15/5-minute work bounds; chat retains request cancellation.
