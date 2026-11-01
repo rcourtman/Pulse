@@ -52,6 +52,31 @@ undisclosed headers/bodyless refusal, admitted prefixes, closure, transport erro
 and no bypass. These are synthetic source proofs, not installed/private-binary
 recovery, exposure or release evidence.
 
+### Non-executable media at the Assistant result boundary
+
+The synchronous writer on the existing execute and Kubernetes analysis result
+routes admits only `application/json` or `text/plain; charset=utf-8`, with
+`X-Content-Type-Options: nosniff` on the actual response transport. Valid JSON
+media parameters are normalized to the JSON type. Missing, malformed or other
+handler types fall back to plain text; none may turn a result into HTML, SVG or
+JavaScript. Alternate-case media headers are discarded before the canonical
+headers are set. Payload bytes, status and other admitted headers are preserved:
+JSON is not HTML-escaped twice, parsed or buffered by this boundary.
+
+This does not change admission, withdrawal checks, request cancellation or the
+extension licence gate. Undisclosed withdrawn responses still return the generic
+401 without handler headers; committed responses cannot change media later.
+The actual core handlers already marshal their successful payloads as JSON and
+return plain errors. The narrower writer contract also prevents a downstream
+implementation from omitting a type and relying on HTTP content sniffing.
+
+`token_response_media_test.go` exercises native HTTP with omitted, malformed,
+HTML/XHTML/SVG/JavaScript, JSON and plain-text types, explicit and implicit status,
+JSON round-trip and noncanonical headers. `TestContract_AssistantJSONMediaBoundary`
+checks both real handlers through the full Router with token and session readers,
+a text-only local provider and HTML-shaped data. These are source regressions,
+not installed/private-binary acceptance or a security-scanner disposition.
+
 ### Assistant streams use current token authority at disclosure
 
 The existing POST `execute/stream`, `investigate-alert` and `chat` routes

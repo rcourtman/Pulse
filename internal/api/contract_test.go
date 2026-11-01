@@ -29020,3 +29020,15 @@ func TestContract_AssistantJSONWithdrawAfterPersistedTokenDelete(t *testing.T) {
 func TestContractSessionReadLogoutBoundary(t *testing.T) {
 	sessionReadBrowserEvidence(t)
 }
+
+// The existing JSON result routes must preserve hostile-shaped provider text
+// as data, for actual token and session readers through the complete Router.
+func TestContract_AssistantJSONMediaBoundary(t *testing.T) {
+	for _, kind := range []string{"execute", "kubernetes"} {
+		for _, transport := range []string{"header", "session"} {
+			t.Run(kind+"/"+transport, func(t *testing.T) {
+				assistantJSONMediaReply(t, kind, transport)
+			})
+		}
+	}
+}

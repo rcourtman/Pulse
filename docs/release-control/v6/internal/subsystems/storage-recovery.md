@@ -30,6 +30,12 @@ does not delete evidence, reset recovery state, widen grants or cancel a recover
 job. Native JSON independent-reader and persisted-token-delete regressions cover
 the disclosure boundary without replaying a recovery workload or changing data.
 
+Assistant synchronous results are returned as JSON or plain text with
+`nosniff`; omitted or executable downstream media cannot make recovery-related
+result text render as HTML. The transport does not rewrite result bytes,
+mutate saved evidence or cancel work. Native media and core-handler round-trip
+regressions do not establish original workload or filesystem recovery.
+
 ### Assistant reader withdrawal is not a recovery mutation
 
 The shared API stream guard also covers Assistant results, not recovery-state

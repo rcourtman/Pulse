@@ -32,6 +32,7 @@ type assistantProviderGate struct {
 	enterOnce, releaseOnce     sync.Once
 	calls                      atomic.Int32
 	cancelled                  atomic.Bool
+	result                     string // Set before the request; empty retains the ordinary fixture text.
 }
 
 func newAssistantProviderGate() *assistantProviderGate {
@@ -114,6 +115,9 @@ func newAssistantStreamFixture(t *testing.T, kind string, scopes []string, write
 				return
 			}
 			content = assistantPrivateResult
+			if gate.result != "" {
+				content = gate.result
+			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"model": "llama3", "message": map[string]any{"role": "assistant", "content": content},
