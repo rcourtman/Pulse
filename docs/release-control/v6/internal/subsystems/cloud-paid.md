@@ -40,8 +40,11 @@ withdrawal and disposal abort its transport, including after CSRF preparation.
 Cancellation is not server rollback. A failed, malformed or mismatched response
 withdraws the row snapshot and says the change is unconfirmed until an explicit
 reload. Obsolete completions produce no success or failure toast in a later view.
-Normal-suite BillingAdminPanel/ReadLifetimes and billingAdmin transport tests pin
-these boundaries. Desktop and phone browser evidence uses the actual panel,
+On phones, one set of subscription actions stays in the subscription cell, beside
+its accepted state and recovery control, rather than extending a separate column
+off-screen. Error text and expanded JSON override inherited table no-wrap rules
+so the warning, recovery and billing details remain readable. Normal-suite
+BillingAdminPanel/ReadLifetimes and billingAdmin transport tests pin these boundaries. Desktop and phone browser evidence uses the actual panel,
 grid, client and capability stores with synthetic HTTP responses; no installed
 billing, provider mutation or original administrator recovery is claimed.
 

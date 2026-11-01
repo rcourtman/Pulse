@@ -1,6 +1,7 @@
 import { Show, type Component } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
   BILLING_ADMIN_EMPTY_STATE,
   getBillingAdminOrganizationBadges,
@@ -34,6 +35,7 @@ const stripeCustomerCell = (state?: BillingState) => {
 export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizationsTableProps> = (
   props,
 ) => {
+  const { isMobile } = useBreakpoint();
   const unreadLabel = (orgID: string) =>
     props.billingLoadingByOrgID[orgID] ? 'Loading' : 'Unavailable';
   const actionsDisabled = (orgID: string) =>
@@ -42,6 +44,30 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
     !!props.billingErrorByOrgID[orgID] ||
     props.savingByOrgID[orgID] ||
     props.billingLoadingByOrgID[orgID];
+  const subscriptionActions = (orgID: string) => {
+    const currentSubState = () =>
+      (props.billingByOrgID[orgID]?.subscription_state || '').toLowerCase();
+    return (
+      <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => props.onSuspendOrganization(orgID)}
+          disabled={actionsDisabled(orgID) || currentSubState() === 'suspended'}
+        >
+          Suspend Org
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => props.onActivateOrganization(orgID)}
+          disabled={actionsDisabled(orgID) || currentSubState() === 'active'}
+        >
+          Activate Org
+        </Button>
+      </div>
+    );
+  };
   return (
     <PulseDataGrid
       data={props.orgs}
@@ -57,7 +83,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
             return (
               <button
                 type="button"
-                class="text-left w-full"
+                class="text-left w-full whitespace-normal [overflow-wrap:anywhere]"
                 onClick={() => {
                   props.onToggleOrganization(orgID);
                 }}
@@ -97,7 +123,10 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
                     : unreadLabel(orgID)}
                 </span>
                 <Show when={props.billingErrorByOrgID[orgID]}>
-                  <p role="alert" class="max-w-xs text-xs text-red-700 dark:text-red-300">
+                  <p
+                    role="alert"
+                    class="max-w-xs whitespace-normal [overflow-wrap:anywhere] text-xs text-red-700 dark:text-red-300"
+                  >
                     {props.billingErrorByOrgID[orgID]}
                   </p>
                   <Button
@@ -110,6 +139,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
                     Reload billing
                   </Button>
                 </Show>
+                <Show when={isMobile()}>{subscriptionActions(orgID)}</Show>
               </div>
             );
           },
@@ -144,36 +174,9 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
         {
           key: 'actions',
           label: 'Actions',
+          hiddenOnMobile: true,
           align: 'right',
-          render: (org) => {
-            const orgID = (org.org_id || '').trim();
-            const billing = props.billingByOrgID[orgID];
-            const currentSubState = (billing?.subscription_state || '').toLowerCase() || 'unknown';
-            return (
-              <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    props.onSuspendOrganization(orgID);
-                  }}
-                  disabled={actionsDisabled(orgID) || currentSubState === 'suspended'}
-                >
-                  Suspend Org
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    props.onActivateOrganization(orgID);
-                  }}
-                  disabled={actionsDisabled(orgID) || currentSubState === 'active'}
-                >
-                  Activate Org
-                </Button>
-              </div>
-            );
-          },
+          render: (org) => <Show when={!isMobile()}>{subscriptionActions(org.org_id)}</Show>,
         },
       ]}
       keyExtractor={(org) => org.org_id}
@@ -181,7 +184,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
       expandedRender={(org) => {
         const orgID = (org.org_id || '').trim();
         return (
-          <div class="px-3 pb-3 bg-surface-alt">
+          <div class="px-3 pb-3 bg-surface-alt whitespace-normal">
             <div class="rounded-md border border-border bg-surface-alt p-3">
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
                 <div class="text-xs font-semibold text-muted">Billing state JSON</div>
@@ -204,7 +207,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
                   </p>
                 }
               >
-                <pre class="text-xs overflow-x-auto whitespace-pre-wrap break-words font-mono text-base-content">
+                <pre class="text-xs overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-base-content">
                   {JSON.stringify(props.billingByOrgID[orgID], null, 2)}
                 </pre>
               </Show>
