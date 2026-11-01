@@ -14,7 +14,7 @@ import tempfile
 import textwrap
 import unittest
 
-from test_public_docs_workflow import job_body, step_body
+from test_public_docs_workflow import job_body, step_body, workflow_fixture_environment
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -120,8 +120,8 @@ class SmokeWorkflowTest(unittest.TestCase):
                 if name.endswith(".sh"):
                     code = f'#!/bin/bash\nprintf "%s\\n" {shlex.quote(name)} >> "$CALLS"\nexit {status}\n'
                 else:
-                    code = ("import os\nfrom pathlib import Path\n"
-                            f"with Path(os.environ['CALLS']).open('a') as log: log.write({name!r} + '\\n')\n"
+                    code = ("import os\n"
+                            f"with open(os.environ['CALLS'], 'a', encoding='utf-8') as log: log.write({name!r} + '\\n')\n"
                             f"raise SystemExit({status})\n")
                 (tests / name).write_text(code, encoding="utf-8")
                 (tests / name).chmod(0o700)
@@ -130,7 +130,7 @@ class SmokeWorkflowTest(unittest.TestCase):
             (tests / "run.sh").chmod(0o700)
             result = subprocess.run(
                 ["bash", "-e", "-o", "pipefail", "-c", smoke_command(self.source, shard)],
-                cwd=root, env=dict(os.environ, CALLS=str(calls)), text=True,
+                cwd=root, env=workflow_fixture_environment(root, calls), text=True,
                 capture_output=True, timeout=15,
             )
             return result, calls.read_text().splitlines() if calls.exists() else []

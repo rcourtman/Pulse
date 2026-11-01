@@ -14,6 +14,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -76,6 +77,20 @@ def verdict_command(source: str) -> str:
     if body.count(marker) != 1:
         raise AssertionError("expected one literal verdict command")
     return textwrap.dedent(body.split(marker, 1)[1]).strip()
+
+
+def workflow_fixture_environment(root: Path, calls: Path) -> dict[str, str]:
+    # These exit adapters and the real selector need only the standard library.
+    # Use this suite's interpreter without repeating site/package startup for
+    # every suite in every single-failure control. Real safety suites still run
+    # separately through the unchanged production runner and environment.
+    tools = root / "tools"
+    tools.mkdir()
+    python = tools / "python3"
+    python.write_text(
+        f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -I -S "$@"\n', encoding="utf-8")
+    python.chmod(0o700)
+    return dict(os.environ, PATH=f"{tools}{os.pathsep}{os.environ['PATH']}", CALLS=str(calls))
 
 
 class PublicDocsWorkflowTest(unittest.TestCase):
@@ -147,6 +162,17 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                                         capture_output=True, timeout=5)
                 self.assertEqual(result.returncode == 0, state == "success", result.stdout + result.stderr)
 
+    def test_exit_adapters_use_the_selected_interpreter_without_site_startup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result = subprocess.run(
+                ["python3", "-c", "import sys; print(sys.executable); "
+                 "print(sys.flags.isolated, sys.flags.no_site)"],
+                env=workflow_fixture_environment(root, root / "calls"),
+                text=True, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.splitlines(), [sys.executable, "1 1"])
+
     def run_adapters(self, shard: int, failing: str = ""):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -164,14 +190,14 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                 if name.endswith(".sh"):
                     code = f'#!/bin/bash\nprintf "%s\\n" {shlex.quote(name)} >> "$CALLS"\nexit {status}\n'
                 else:
-                    code = ("import os\nfrom pathlib import Path\n"
-                            f"with Path(os.environ['CALLS']).open('a') as log: log.write({name!r} + '\\n')\n"
+                    code = ("import os\n"
+                            f"with open(os.environ['CALLS'], 'a', encoding='utf-8') as log: log.write({name!r} + '\\n')\n"
                             f"raise SystemExit({status})\n")
                 (tests / name).write_text(code, encoding="utf-8")
                 (tests / name).chmod(0o700)
             calls = root / "calls"
             result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", safety_command(self.source, shard)],
-                                    cwd=root, env=dict(os.environ, CALLS=str(calls)),
+                                    cwd=root, env=workflow_fixture_environment(root, calls),
                                     text=True, capture_output=True, timeout=15)
             return result, calls.read_text().splitlines() if calls.exists() else []
 
