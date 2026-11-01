@@ -3995,3 +3995,36 @@ synthetic credentials and preserved live data. `log_bundle_test.go` covers
 value grammars, detached projections, log fallbacks, runtime identity and race
 ownership. Consuming browser evidence exercises the unchanged download control
 with the exact synthetic native ZIP; it is not installed/customer recovery.
+
+### Token values belong to the active API Access panel
+
+API Access binds token request completion to its organisation, authenticated
+username, current management permission and mounted lifetime. An obsolete
+create response cannot open the shared token-reveal dialog, change inventory,
+notify success or call its containing panel. Withdrawal/disposal clears the
+panel's retained raw token and kiosk link and dismisses only the exact reveal
+state it issued, never a newer reveal from another issuer. Editing dialogs and
+pending focus restoration do not survive that context boundary. Aborting is not
+server-side rollback: a dispatched change may have applied and must not replay.
+
+The primary-token hint is not an authenticated identity; the existing Settings
+username is passed through API Access instead. Token metadata visibility,
+least-privilege scope presets, deliberate wildcard selection and server-side
+scope/organisation containment remain unchanged. Registered
+`APITokenLifetimes.test.tsx` covers late successes/failures, authority/user/org
+cycles, single writes, obsolete rows and reveal ownership; native browser proof
+uses synthetic credentials and responses. No release or installed recovery is
+implied by source/component/browser proof.
+
+Authority and authenticated-user watchers compare their effective primitive
+values, not the containing security-status object's identity. An ordinary status
+refresh or primary-token hint change with the same user/permission must not
+withdraw a confirmed token or start another inventory read. The registered
+unchanged-principal status-refresh test pins this boundary.
+
+Accepted token rows retain their inventory-read generation across confirmed
+scope/name replacements. Keyed desktop-table reconciliation may retain the
+earlier raw object; that current-read object remains usable for the same live
+ID. A later full read, context withdrawal or deletion invalidates the old
+confirmation. The registered sequential scope-edit/revoke consumer regression
+and earlier-read rejection test cover both sides without ID-only admission.
