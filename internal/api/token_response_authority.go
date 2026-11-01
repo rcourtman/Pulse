@@ -2,7 +2,9 @@ package api
 
 import (
 	"io"
+	"mime"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -76,8 +78,23 @@ func (w *tokenResponseWriter) commitLocked(status int) {
 		header := w.writer.Header()
 		clear(header)
 		for key, values := range w.header {
+			if strings.EqualFold(key, "Content-Type") || strings.EqualFold(key, "X-Content-Type-Options") {
+				continue
+			}
 			header[key] = append([]string(nil), values...)
 		}
+		// These result endpoints serve JSON or plain-text errors, never HTML.
+		// Bind non-executable media to the actual transport, not just the
+		// handler's private header map. Missing, malformed or unexpected
+		// types must not allow HTTP sniffing or an extension to render HTML.
+		// Leave payload bytes alone: HTML-escaping JSON would corrupt data.
+		mediaType, _, err := mime.ParseMediaType(w.header.Get("Content-Type"))
+		if err == nil && mediaType == "application/json" {
+			header.Set("Content-Type", "application/json")
+		} else {
+			header.Set("Content-Type", "text/plain; charset=utf-8")
+		}
+		header.Set("X-Content-Type-Options", "nosniff")
 		w.writer.WriteHeader(status)
 		// Informational headers do not commit the final response.
 		w.started = status >= 200 || status == http.StatusSwitchingProtocols

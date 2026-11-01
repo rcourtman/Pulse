@@ -24,6 +24,12 @@ and 120/180-second bounds remain: client cancellation still ends request-bound
 provider work. Native JSON independent-reader, cancellation and persisted-delete
 regressions exercise this boundary with synthetic text, not tools or agents.
 
+The synchronous result transport also pins non-executable media: JSON or plain
+text with `nosniff`, never HTML/SVG/JavaScript from a downstream type or HTTP
+sniffing. It preserves result bytes, status, current-authority checks and
+execution/cancellation lifetime. Native HTTP and both actual core-handler
+round-trip regressions use text-only fixtures, not agent execution.
+
 ### Assistant result streams do not own agent execution lifetime
 
 Assistant HTTP result readers recheck current token authority at their serialized
