@@ -110,7 +110,7 @@ describe('backup workload identity in real inventory consumers', () => {
   );
 
   it.each([320, 390, 600, 719, 720, 1200])(
-    'keeps complete guest and connection labels readable in narrow Coverage at %ipx',
+    'keeps namesake Coverage rows on one line with their connection named at %ipx',
     async (width) => {
       api.width = width;
       const name = 'accounting-database-production-primary';
@@ -141,16 +141,12 @@ describe('backup workload identity in real inventory consumers', () => {
         const row = rows.find((item) => connectionOf(item) === `PVE: ${scope}`)!;
         const label = within(row).getByText(name, { exact: true });
         const connection = row.querySelector('[data-backup-workload-connection]')!;
-        if (width < 720) {
-          expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
-          expect(label).not.toHaveClass('truncate');
-          expect(label.parentElement).toHaveClass('flex-col', 'items-start');
-          expect(connection).toHaveClass('whitespace-normal', 'wrap-anywhere');
-          expect(connection).not.toHaveClass('truncate');
-        } else {
-          expect(label).toHaveClass('truncate');
-          expect(connection).toHaveClass('truncate');
-        }
+        // Rows never grow a second line; the full identity is in the drawer.
+        expect(label).toHaveClass('truncate');
+        expect(label).not.toHaveClass('whitespace-normal');
+        expect(label.parentElement).not.toHaveClass('flex-col');
+        expect(connection).toHaveClass('truncate');
+        expect(connection).toHaveAttribute('title', `PVE connection: ${scope}`);
         if (width < 1120) expect(row).toHaveTextContent('VM 100');
         const toggle = within(row).getByRole('button', { name: /Expand details/ });
         fireEvent.click(toggle);
@@ -176,7 +172,8 @@ describe('backup workload identity in real inventory consumers', () => {
       pbs: [identityPBS({ instance: 'pbs-reader', namespace: 'unrelated-namespace' })],
     });
     const [row] = await coverageRows();
-    expect(connectionOf(row)).toBe('PVE: east');
+    // One PVE connection tells no rows apart, so only the drawer names it.
+    expect(connectionOf(row)).toBeUndefined();
     fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
     let detail = screen.getByTestId('proxmox-coverage-detail');
     expect(connectionRow(detail)).toHaveTextContent('east');
@@ -275,7 +272,7 @@ describe('backup workload identity in real inventory consumers', () => {
       pve: emptyPVE,
     });
     const [row] = await coverageRows();
-    expect(connectionOf(row)).toBe('PVE: Not reported');
+    expect(connectionOf(row)).toBeUndefined();
     fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
     expect(connectionRow(screen.getByTestId('proxmox-coverage-detail'))).toHaveTextContent(
       'Not reported',
@@ -290,11 +287,9 @@ describe('backup workload identity in real inventory consumers', () => {
     fireEvent.click(toggle);
     toggle.focus();
     const detail = screen.getByTestId('proxmox-coverage-detail');
-    const origin = row.querySelector('[data-backup-workload-connection]');
     const literal = '<img data-workload-injected src=x>';
     setWorkloads([{ ...guest, proxmox: { ...guest.proxmox!, instance: literal } }]);
-    await waitFor(() => expect(connectionOf(row)).toBe(`PVE: ${literal}`));
-    expect(row.querySelector('[data-backup-workload-connection]')).toBe(origin);
+    await waitFor(() => expect(connectionRow(detail)).toHaveTextContent(literal));
     expect(screen.getByTestId('proxmox-coverage-detail')).toBe(detail);
     expect(connectionRow(detail)).toHaveTextContent(literal);
     expect(document.querySelector('[data-workload-injected]')).toBeNull();

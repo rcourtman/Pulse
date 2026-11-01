@@ -1,4 +1,5 @@
 import { For, Index, Show, type Component, type JSX } from 'solid-js';
+import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 
 // A single horizontal bar broken into proportional segments, followed by
 // a one-line legend of labels + counts. Visually integrated with the page
@@ -28,9 +29,10 @@ export interface CoverageStripProps {
   segments: readonly CoverageStripSegment[];
   // Compact context shown to the right of the title (e.g. "1.2 TB on disk").
   tail?: JSX.Element;
-  // The rule behind the segments, so a count such as "17 attention" says what
-  // it is counting.
-  footnote?: JSX.Element;
+  // The rule behind the segments, so a count such as "17 attention" can say
+  // what it is counting. Collapsed by default: the counts are the answer, and
+  // each workload's own drawer explains its state.
+  rule?: JSX.Element;
 }
 
 export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props) => {
@@ -115,10 +117,17 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
           }}
         </Index>
       </ul>
-      <Show when={props.footnote}>
-        <p class="mt-1.5 text-[11px] leading-4 text-muted" data-coverage-strip-footnote>
-          {props.footnote}
-        </p>
+      <Show when={props.rule}>
+        <details class="group mt-1 text-[11px] text-muted" data-coverage-strip-rule>
+          <summary class="inline-flex cursor-pointer list-none items-center gap-1 rounded-sm hover:text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 [&::-webkit-details-marker]:hidden">
+            <ChevronRightIcon
+              class="h-3 w-3 transition-transform group-open:rotate-90"
+              aria-hidden="true"
+            />
+            What the counts mean
+          </summary>
+          <p class="mt-1 leading-4">{props.rule}</p>
+        </details>
       </Show>
     </div>
   );

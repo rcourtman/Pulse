@@ -33,7 +33,6 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
 import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
-  ArtifactSourceBadge,
   ArtifactSourceIdentity,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
@@ -46,12 +45,12 @@ import {
   getBackupWorkloadPVEConnection,
   getBackupWorkloadNodeLabel,
   getBackupWorkloadDisclosureLabel,
+  hasMultipleConnections,
 } from './proxmoxBackupsTableShared';
 import {
   getRecoverableColumns,
   getRecoverableColumnWidthStyle,
   getRecoverableLayoutForContainer,
-  isCompactBackupIdentityLayout,
   type RecoverableColumnId,
 } from './proxmoxBackupsTablePresentation';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
@@ -267,6 +266,10 @@ export function ProxmoxRecoverableTable(props: {
   sizeMaxBytes: number;
   groupByDay?: boolean;
   layoutWidth?: Accessor<number | null | undefined>;
+  /** Name each row's PVE connection; defaults to whether the rows span several. */
+  showWorkloadConnection?: boolean;
+  /** Name each row's backup source connection; defaults to whether the rows span several. */
+  showSourceConnection?: boolean;
   /** Register focus retention with each row/detail's own cleanup owner. */
   retainInspectionFocus?: (content: HTMLElement) => void;
 }) {
@@ -279,7 +282,20 @@ export function ProxmoxRecoverableTable(props: {
       : 'full';
   });
   const visibleColumns = createMemo(() => getRecoverableColumns(layoutMode()));
-  const stackedIdentity = () => isCompactBackupIdentityLayout(layoutMode());
+  // Connection labels appear only when they tell rows apart. The page decides
+  // over the whole inventory so labels do not come and go as filters narrow it.
+  const showWorkloadConnection = createMemo(
+    () =>
+      props.showWorkloadConnection ??
+      hasMultipleConnections(
+        props.artifacts.map((artifact) => getBackupWorkloadPVEConnection(artifact.workload)),
+      ),
+  );
+  const showSourceConnection = createMemo(
+    () =>
+      props.showSourceConnection ??
+      hasMultipleConnections(props.artifacts.map((artifact) => artifact.locationConnection ?? '')),
+  );
   const columnVisible = (column: RecoverableColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
   const showDayGroups = () => props.groupByDay && props.sortKey() === 'created';
@@ -318,7 +334,9 @@ export function ProxmoxRecoverableTable(props: {
         data-proxmox-backup-row="recoverable"
       >
         <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
-          <div class={`flex min-w-0 gap-2 ${stackedIdentity() ? 'items-start' : 'items-center'}`}>
+          {/* One line at every width: source, connection and location live in
+              their own columns or the drawer, never stacked under the name. */}
+          <div class="flex min-w-0 items-center gap-2">
             <PlatformResourceDetailToggleButton
               expanded={drawer.isExpanded(artifact)}
               resourceLabel={artifactDisclosureLabel(artifact)}
@@ -327,45 +345,28 @@ export function ProxmoxRecoverableTable(props: {
               class="my-0"
               onToggle={() => drawer.toggle(artifact)}
             />
-            <div class="min-w-0 flex-1">
-              <span
-                class={`block font-semibold ${stackedIdentity() ? 'whitespace-normal wrap-anywhere' : 'truncate'}`}
-                title={artifact.workload.label}
-              >
+            <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
+              <span class="truncate font-semibold" title={artifact.workload.label}>
                 {artifact.workload.name || artifact.workload.label}
               </span>
               <Show when={!columnVisible('targetId') && artifact.workload.vmid}>
-                <span class="block text-[10px] text-muted">
+                <span class="shrink-0 text-[10px] text-muted">
                   {artifact.workload.typeLabel} {artifact.workload.vmid}
                 </span>
               </Show>
-              <Show when={getBackupWorkloadPVEConnection(artifact.workload)}>
+              <Show
+                when={showWorkloadConnection() && getBackupWorkloadPVEConnection(artifact.workload)}
+              >
                 {(connection) => (
                   <span
-                    class={`block text-[10px] text-muted ${stackedIdentity() ? 'whitespace-normal wrap-anywhere' : 'truncate'}`}
+                    class="min-w-0 truncate text-[10px] text-muted"
                     title={`PVE connection: ${connection()}`}
                     data-backup-workload-connection
                   >
-                    PVE: {connection()}
+                    <span class="sr-only">PVE: </span>
+                    {connection()}
                   </span>
                 )}
-              </Show>
-              <Show when={stackedIdentity()}>
-                <div class="mt-1 space-y-0.5 text-[10px] leading-snug">
-                  <ArtifactSourceBadge artifact={artifact} wrap />
-                  <span
-                    class="block whitespace-normal text-muted wrap-anywhere"
-                    data-backup-source-connection
-                  >
-                    Connection: {artifact.locationConnection || 'Unknown connection'}
-                  </span>
-                  <span
-                    class="block whitespace-normal text-muted wrap-anywhere"
-                    data-backup-location
-                  >
-                    Location: {artifact.location}
-                  </span>
-                </div>
               </Show>
             </div>
           </div>
@@ -387,7 +388,7 @@ export function ProxmoxRecoverableTable(props: {
         </Show>
         <Show when={columnVisible('source')}>
           <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-            <ArtifactSourceIdentity artifact={artifact} />
+            <ArtifactSourceIdentity artifact={artifact} showConnection={showSourceConnection()} />
           </TableCell>
         </Show>
         <Show when={columnVisible('location')}>
@@ -488,7 +489,7 @@ export function ProxmoxRecoverableTable(props: {
           header={
             <>
               <SortableHead
-                label={stackedIdentity() ? 'Restore point' : 'Workload'}
+                label="Workload"
                 sortKey="workload"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
@@ -568,7 +569,7 @@ export function ProxmoxRecoverableTable(props: {
                 items={tableItems}
                 keyExtractor={(item) => `${item.kind}:${item.key}`}
                 colSpan={visibleColumns().length}
-                estimatedRowHeight={stackedIdentity() ? 128 : 44}
+                estimatedRowHeight={44}
                 reserveScrollExtent
               >
                 {(item) => (

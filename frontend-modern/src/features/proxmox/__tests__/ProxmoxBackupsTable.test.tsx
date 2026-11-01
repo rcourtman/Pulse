@@ -2823,11 +2823,6 @@ describe('location-scoped evidence keeps workload-wide protection explicit', () 
       );
       expect(screen.getByRole('button', { name: '1 protected' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '1 unprotected' })).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          'Health counts cover all targets and backup locations, regardless of filters.',
-        ),
-      ).toBeInTheDocument();
       const row = document.querySelector<HTMLElement>('[data-proxmox-backup-row="coverage"]')!;
       expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
       expect(row).toHaveTextContent('Protected');
@@ -3265,11 +3260,12 @@ describe('By-date restore-point scope', () => {
     const toggle = await screen.findByRole('button', {
       name: /^Expand details for east-100 \(VM 100\) · PVE connection: east · PBS snapshot/,
     });
+    // With one PVE connection and one reader the row stays a single line;
+    // the disclosure still names both scopes before it is opened.
+    expect(toggle).toHaveAccessibleName(/Backup connection: independent-pbs-reader/);
     const point = toggle.closest('tr')!;
-    expect(point.querySelector('[data-backup-workload-connection]')).toHaveTextContent('PVE: east');
-    expect(point.querySelector('[data-backup-source-connection]')).toHaveTextContent(
-      'independent-pbs-reader',
-    );
+    expect(point.querySelector('[data-backup-workload-connection]')).toBeNull();
+    expect(point.querySelector('[data-backup-source-connection]')).toBeNull();
     expect(screen.queryByTestId('proxmox-recoverable-detail')).not.toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     vi.useRealTimers();

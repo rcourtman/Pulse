@@ -9382,20 +9382,27 @@ misrepresented. `ProxmoxCoverageTable.test.tsx` checks narrow/full projection
 and complete long location text; the parsed inventory regressions also retain
 reader identity and full repository context without adding reads or routes.
 
-### Narrow Coverage keeps workload identity visible
+### Backup rows stay on one line (1 November 2026)
 
-Coverage containers below 720px wrap the full workload name and PVE connection
-instead of making touch users rely on hover titles. The folded VM/LXC target ID
-sits on its own line so it cannot squeeze the name to an ellipsis. Wider tables
-retain their dense projection; the expanded owner, inventory association, posture,
-read cadence and guest operations are unchanged. This is readable identity, not
-original-incident recovery.
+Coverage and By date rows keep one line at every container width, phones
+included: the workload name truncates beside its folded type/target ID, and a
+PVE or reader connection is named inline only when the loaded inventory spans
+more than one, where it tells namesakes apart. The page decides that over the
+whole inventory, so labels do not appear and vanish as filters narrow the list.
+Narrow By date rows are workload, age and state; source kind, reader
+connection, repository location, size and provider identifiers live in the
+single-point drawer, whose disclosure name already carries both scopes before
+it opens. This supersedes the earlier wrapped-identity projections below
+720px, which grew phone date rows to 116-132px and Coverage rows to 65-81px
+and pushed the list below the fold; measured on the mock rig the rows are now
+37px and 32px (desktop 47px to 33px). Matching, posture, verification, filters,
+polling and the API are unchanged.
 
-The normal `backupWorkloadIdentity.test.tsx` suite checks long namesake labels,
-end-distinguished connections, 719/720px projection, scoped evidence and owner
-links. Browser proof must inspect complete rendered names/connections, layout
-resize, keyboard/touch disclosure and retained polling at desktop and narrow
-widths, with actual pixels.
+`backupWorkloadIdentity.test.tsx`, `recoverableIdentityAccess.test.tsx` and
+`backupSourceConnection.test.tsx` exercise the parsed inventory consumers at
+320-1200px: single-line truncation, inline connections only for multi-connection
+inventories, drawer identity and live refresh. Browser proof measures row
+heights and inspects actual pixels at desktop and phone widths.
 
 ### Location-filtered backup evidence is not a location protection rating
 
@@ -9465,30 +9472,6 @@ usage and `Dialog.test.tsx` owns modal isolation/focus. Browser proof exercises
 the consuming TrueNAS table with ordinary keyboard/phone taps, hover parity,
 updates and dismissal, and natively inspected desktop/narrow pixels. This repairs
 composition access, not the reporter's missing native ARC or I/O/History source.
-
-### Restore-point identity is readable before narrow-screen disclosure
-
-The existing Proxmox By date list groups workload name/type/target ID, PVE
-workload connection, source kind, reader connection and repository location in
-one wrapping identity cell below 720px table width. These are different scopes:
-a PBS reader/namespace never supplies an unknown guest's PVE connection. Age and
-state retain independent columns and their existing meanings. Wider tables keep
-separate source/location columns and expose PVE scope beneath the workload name;
-a hidden Target ID column never hides the ID itself. Full provider identifiers,
-size and existing owner links remain in the same single-point drawer. This
-changes no matching, posture, verification, pruning, filter, poll or API contract.
-
-The three-column narrow projection reserves enough width for the grouped
-identity, Unknown age and full state words instead of the old single-name 40%
-anchor. Normal-suite `recoverableIdentityAccess.test.tsx` exercises the real
-parsed inventory consumer across 320/479/480/719/720/1200px, namesakes, every source
-kind, unmatched/host scope and open-record live refresh/focus. The registered
-`ProxmoxBackupsTable.test.tsx` checks workload/reader separation before disclosure;
-`ProxmoxRecoverableTable.test.tsx` and `proxmoxBackupsTablePresentation.test.ts`
-protect grouped metadata, responsive columns and bounded rendering. Browser
-proof must exercise the consuming list at desktop/narrow widths, inspect actual
-pixels, identity, state/age fit, touch/keyboard disclosure, filters and live
-updates. This is safer evidence inspection, not a restore or installed recovery.
 
 ### Monitor adapter announces the changes it recorded (29 October 2026)
 

@@ -191,22 +191,22 @@ describe('restore-point identity without hover', () => {
         expect(row).toBeDefined();
         expect(row).toHaveTextContent(name);
         expect(row).toHaveTextContent('100');
-        expect(row.querySelector('[data-backup-source-connection]')).toHaveTextContent(scope);
-        expect(row).toHaveTextContent(`repository-${index}`);
+        // Rows stay on one line: identity truncates, never wraps.
+        for (const element of [
+          within(row).getByText(name, { exact: true }),
+          row.querySelector('[data-backup-workload-connection]')!,
+        ]) {
+          expect(element).toHaveClass('truncate');
+          expect(element).not.toHaveClass('whitespace-normal');
+        }
         if (width < 720) {
-          for (const element of [
-            within(row).getByText(name, { exact: true }),
-            row.querySelector('[data-backup-workload-connection]')!,
-            row.querySelector('[data-backup-source-connection]')!,
-            row.querySelector('[data-backup-location]')!,
-          ]) {
-            expect(element).toHaveClass('whitespace-normal', 'wrap-anywhere');
-            expect(element).not.toHaveClass('truncate');
-          }
+          // Narrow rows are workload, age and state; source and location are drawer detail.
           expect(row.children).toHaveLength(3);
-          expect(row.closest('table')?.querySelector('thead th')).toHaveTextContent(
-            'Restore point',
-          );
+          expect(row.querySelector('[data-backup-source-connection]')).toBeNull();
+          expect(row).not.toHaveTextContent(`repository-${index}`);
+        } else {
+          expect(row.querySelector('[data-backup-source-connection]')).toHaveTextContent(scope);
+          expect(row).toHaveTextContent(`repository-${index}`);
         }
         fireEvent.click(within(row).getByRole('button', { name: /Expand details/ }));
         const panel = screen.getByTestId('proxmox-recoverable-detail');
@@ -242,18 +242,17 @@ describe('restore-point identity without hover', () => {
             : [],
       });
       const [point] = await rows();
-      expect(point.querySelector('[data-backup-workload-connection]')).toHaveTextContent(scopes[0]);
-      expect(point.querySelector('[data-backup-source-connection]')).toHaveTextContent(
-        kind === 'pbs' ? reader : scopes[0],
-      );
-      expect(point.querySelector('[data-backup-location]')).toHaveTextContent(
+      // A narrow row holds no reader or location text; the drawer has it whole.
+      expect(point.querySelector('[data-backup-workload-connection]')).toBeNull();
+      expect(point.querySelector('[data-backup-source-connection]')).toBeNull();
+      fireEvent.click(within(point).getByRole('button', { name: /Expand details/ }));
+      const panel = screen.getByTestId('proxmox-recoverable-detail');
+      expect(
+        within(panel).getByText('Connection', { exact: true }).closest('tr'),
+      ).toHaveTextContent(kind === 'pbs' ? reader : scopes[0]);
+      expect(panel).toHaveTextContent(
         kind === 'pbs' ? `${location} / pve-1` : kind === 'archive' ? location : 'pve-1',
       );
-      expect(
-        within(point.children[0] as HTMLElement).getByText(
-          kind === 'pbs' ? 'PBS' : kind === 'archive' ? 'PVE file' : 'Snapshot',
-        ),
-      ).toBeInTheDocument();
       expect(point).toHaveTextContent(
         kind === 'pbs' ? 'Verified' : kind === 'snapshot' ? 'Snapshot' : 'Backup file',
       );
@@ -271,15 +270,31 @@ describe('restore-point identity without hover', () => {
     const points = await rows();
     expect(points).toHaveLength(2);
     const guest = points.find((point) => point.textContent?.includes('VM 100'))!;
+    const host = points.find((point) => point !== guest)!;
+    // The inventory spans two PVE connections, so the guest row names its own
+    // (not reported) rather than borrowing the reader; a host has none.
     expect(guest.querySelector('[data-backup-workload-connection]')).toHaveTextContent(
       'PVE: Not reported',
     );
-    expect(guest.querySelector('[data-backup-source-connection]')).toHaveTextContent('shared-pbs');
-    const host = points.find((point) => point !== guest)!;
     expect(host.querySelector('[data-backup-workload-connection]')).toBeNull();
-    expect(host.querySelector('[data-backup-source-connection]')).toHaveTextContent('shared-pbs');
+    for (const point of points) {
+      expect(point.querySelector('[data-backup-source-connection]')).toBeNull();
+    }
     fireEvent.click(within(guest).getByRole('button', { name: /Expand details/ }));
-    expect(within(screen.getByTestId('proxmox-recoverable-detail')).queryByRole('link')).toBeNull();
+    let panel = screen.getByTestId('proxmox-recoverable-detail');
+    expect(within(panel).getByText('PVE connection').closest('tr')).toHaveTextContent(
+      'Not reported',
+    );
+    expect(within(panel).getByText('Connection', { exact: true }).closest('tr')).toHaveTextContent(
+      'shared-pbs',
+    );
+    expect(within(panel).queryByRole('link')).toBeNull();
+    fireEvent.click(within(host).getByRole('button', { name: /Expand details/ }));
+    panel = screen.getByTestId('proxmox-recoverable-detail');
+    expect(within(panel).queryByText('PVE connection')).toBeNull();
+    expect(within(panel).getByText('Connection', { exact: true }).closest('tr')).toHaveTextContent(
+      'shared-pbs',
+    );
   });
 
   it('updates an open point in place without dropping focus or borrowing its new reader', async () => {
@@ -302,11 +317,7 @@ describe('restore-point identity without hover', () => {
     reader = 'pbs-after';
     datastore = 'after';
     await vi.advanceTimersByTimeAsync(30_000);
-    await waitFor(() =>
-      expect(point.querySelector('[data-backup-source-connection]')).toHaveTextContent(reader),
-    );
-    expect(point.querySelector('[data-backup-workload-connection]')).toHaveTextContent(scopes[0]);
-    expect(point.querySelector('[data-backup-location]')).toHaveTextContent('after / pve-1');
+    await waitFor(() => expect(panel).toHaveTextContent('after / pve-1'));
     expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(panel);
     expect(panel).toHaveTextContent(reader);
     expect(panel).not.toHaveTextContent('pbs-before');

@@ -508,14 +508,15 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxBackupServersTableSource).toContain(
       "title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}",
     );
-    // The date feed groups complete scope on phones instead of requiring a
-    // single clipped line. Real inventory/width/focus cases live in
-    // recoverableIdentityAccess.test.tsx, not this source-wiring check.
-    expect(proxmoxRecoverableTableSource).toContain('class="min-w-0 flex-1"');
+    // Date-feed rows stay on one line at every width: the identity truncates
+    // and full scope lives in the drawer. Real inventory/width/focus cases live
+    // in recoverableIdentityAccess.test.tsx, not this source-wiring check.
+    expect(proxmoxRecoverableTableSource).toContain(
+      'class="flex min-w-0 flex-1 items-baseline gap-1.5"',
+    );
     expect(proxmoxRecoverableTableSource).toContain('data-backup-workload-connection');
-    expect(proxmoxRecoverableTableSource).toContain('data-backup-source-connection');
-    expect(proxmoxRecoverableTableSource).toContain('data-backup-location');
-    expect(proxmoxRecoverableTableSource).not.toContain('class="truncate text-[10px] text-muted"');
+    expect(proxmoxRecoverableTableSource).not.toContain("whitespace-normal wrap-anywhere'");
+    expect(proxmoxRecoverableTableSource).not.toContain('data-backup-location');
   });
 
   it('hydrates only the active source-scoped resource family', () => {
