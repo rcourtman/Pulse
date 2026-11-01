@@ -143,13 +143,16 @@ func TestConfigPersistenceMigrationIgnoresStaleTemporaryPaths(t *testing.T) {
 	for _, kind := range []string{"regular", "symlink", "hardlink", "directory"} {
 		t.Run(kind, func(t *testing.T) {
 			cp := NewConfigPersistence(t.TempDir())
-			legacy := []byte(`{"providers":[],"allowMultipleProviders":true}`)
+			legacy := []byte(`{"providers":[{"id":"fixture-oidc","name":"Synthetic","type":"oidc","enabled":true,"oidc":{"issuerUrl":"https://idp.example.test","clientId":"fixture","clientSecret":"synthetic-private-value"}}],"allowMultipleProviders":true}`)
 			require.NoError(t, os.WriteFile(cp.ssoFile, legacy, 0o600))
 			unrelated := staleConfigPath(t, cp.ssoFile+".tmp", kind)
 			loaded, err := cp.LoadSSOConfig()
 			require.NoError(t, err)
 			require.NotNil(t, loaded)
 			require.True(t, loaded.AllowMultipleProviders)
+			require.Len(t, loaded.Providers, 1)
+			require.NotNil(t, loaded.Providers[0].OIDC)
+			require.Equal(t, "synthetic-private-value", loaded.Providers[0].OIDC.ClientSecret)
 			requireUntouchedConfigFixture(t, unrelated)
 			requirePrivateConfigFile(t, cp.ssoFile)
 			raw, err := os.ReadFile(cp.ssoFile)
