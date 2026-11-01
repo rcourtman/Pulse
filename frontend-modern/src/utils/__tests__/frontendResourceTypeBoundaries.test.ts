@@ -1177,7 +1177,9 @@ describe('frontend resource type boundaries', () => {
     expect(billingAdminPanelSource).not.toContain('soft-deleted');
     expect(billingAdminPanelSource).not.toContain('Organization billing suspended');
     expect(billingAdminPanelStateSource).toContain('getBillingAdminStateUpdateSuccessMessage');
-    expect(billingAdminPanelStateSource).toContain('getOrganizationSettingsPanelLoadErrorMessage');
+    expect(billingAdminPanelStateSource).toContain(
+      "getOrganizationSettingsLoadErrorMessage('', 'billing-admin')",
+    );
     expect(billingAdminOrganizationsTableSource).toContain('getBillingAdminTrialStatus');
     expect(organizationSettingsPresentationSource).toContain(
       'export function getOrganizationSettingsLoadErrorMessage',

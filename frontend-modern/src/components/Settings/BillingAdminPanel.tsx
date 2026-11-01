@@ -38,33 +38,40 @@ export const BillingAdminPanel: Component = () => {
         bodyClass="space-y-4"
       >
         <Show when={state.orgsError()}>
-          <div class="rounded-md border border-red-200 dark:border-red-900/25 bg-red-50 dark:bg-red-900/25 p-3 text-sm text-red-800 dark:text-red-200">
+          <div
+            role="alert"
+            class="rounded-md border border-red-200 dark:border-red-900/25 bg-red-50 dark:bg-red-900/25 p-3 text-sm text-red-800 dark:text-red-200"
+          >
             {state.orgsError()}
           </div>
         </Show>
 
-        <div class="mt-4">
-          <BillingAdminOrganizationsTable
-            orgs={state.orgs()}
-            isLoading={state.loadingOrgs()}
-            billingByOrgID={state.billingByOrgID()}
-            billingLoadingByOrgID={state.billingLoadingByOrgID()}
-            savingByOrgID={state.savingByOrgID()}
-            expandedOrgID={state.expandedOrgID()}
-            onToggleOrganization={(orgID) => {
-              void state.toggleExpandedOrganization(orgID);
-            }}
-            onSuspendOrganization={(orgID) => {
-              void state.updateSubscriptionState(orgID, 'suspended');
-            }}
-            onActivateOrganization={(orgID) => {
-              void state.updateSubscriptionState(orgID, 'active');
-            }}
-            onReloadOrganization={(orgID) => {
-              void state.reloadOrganization(orgID);
-            }}
-          />
-        </div>
+        <Show when={!state.orgsError()}>
+          <div class="mt-4" aria-busy={state.loadingOrgs()}>
+            <BillingAdminOrganizationsTable
+              orgs={state.orgs()}
+              isLoading={state.loadingOrgs()}
+              billingByOrgID={state.billingByOrgID()}
+              billingLoadingByOrgID={state.billingLoadingByOrgID()}
+              billingErrorByOrgID={state.billingErrorByOrgID()}
+              canManageBilling={state.canManageBilling()}
+              savingByOrgID={state.savingByOrgID()}
+              expandedOrgID={state.expandedOrgID()}
+              onToggleOrganization={(orgID) => {
+                void state.toggleExpandedOrganization(orgID);
+              }}
+              onSuspendOrganization={(orgID) => {
+                void state.updateSubscriptionState(orgID, 'suspended');
+              }}
+              onActivateOrganization={(orgID) => {
+                void state.updateSubscriptionState(orgID, 'active');
+              }}
+              onReloadOrganization={(orgID) => {
+                void state.reloadOrganization(orgID);
+              }}
+            />
+          </div>
+        </Show>
       </SettingsPanel>
     </Show>
   );

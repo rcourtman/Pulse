@@ -22,24 +22,34 @@ export interface BillingState {
   stripe_price_id?: string;
 }
 
+interface BillingAdminRequestOptions {
+  signal?: AbortSignal;
+}
+
 export const BillingAdminAPI = {
-  listOrganizations: () =>
+  listOrganizations: (options?: BillingAdminRequestOptions) =>
     apiFetchJSON<HostedOrganizationSummary[]>('/api/hosted/organizations', {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  getBillingState: (orgID: string) =>
+  getBillingState: (orgID: string, options?: BillingAdminRequestOptions) =>
     apiFetchJSON<BillingState>(`/api/admin/orgs/${encodeURIComponent(orgID)}/billing-state`, {
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
     }),
 
-  putBillingState: (orgID: string, payload: BillingState) =>
+  putBillingState: (orgID: string, payload: BillingState, options?: BillingAdminRequestOptions) =>
     apiFetchJSON<BillingState>(`/api/admin/orgs/${encodeURIComponent(orgID)}/billing-state`, {
       method: 'PUT',
       body: JSON.stringify(payload),
       preferSessionAuth: true,
       skipOrgContext: true,
+      ...options,
+      // A failed response does not establish whether a subscription changed.
+      // Also recheck cancellation after the client's CSRF preparation wait.
+      retry: false,
     }),
 };
