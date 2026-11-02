@@ -186,9 +186,17 @@ jobs:
           done <<< "$PROFILE_OUTPUT"
           printf 'Resolved target-compatible demo runtime profile for %s:\n%s\n' "$TAG" "$PROFILE_OUTPUT"
 
-  update-demo:
+  native_acceptance:
+    name: Prove demo transaction
     needs: resolve
-    if: needs.resolve.outputs.skip != 'true'
+    if: inputs.verify_only != true && needs.resolve.outputs.skip != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/demo-runtime-native.yml
+
+  update-demo:
+    needs: [resolve, native_acceptance]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.skip != 'true' && (inputs.verify_only == true || needs.native_acceptance.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: ${{ needs.resolve.outputs.environment_name }}

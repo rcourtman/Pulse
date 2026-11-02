@@ -1580,6 +1580,21 @@ before service operations. Neither this driver nor worker source tests install
 host policy. Production activation still requires independent review and the
 operational owner's acceptance of the native result and published-source path.
 
+The native proof is also an explicit dependency of both production consumers,
+without secret inheritance, inputs or write permission. Path-filtered push
+history is not required to schedule that proof. The dispatcher instead binds
+one successful native job to the current main workflow-dispatch run, exact
+control SHA and attempt, using the attempt-specific job list. Old-attempt,
+other-source, pending/failed/skipped, duplicate or incomplete evidence cannot
+admit production SSH. No read failure falls back to history or another query.
+Verification-only skips the native job and remains non-mutating; only its
+explicit condition can admit that skip. A different run cannot cancel the
+proof through shared concurrency. Full 300-second forward/recovery, owned
+cleanup, signed runtime, production lease and later browser checks are unchanged.
+`NativeGateTest` executes the admission/refusal decision; the promotion-policy
+suite checks the actual reusable workflow and both consuming dependency graphs.
+Passing source controls is not actual native execution or installed convergence.
+
 ### Workflow trust scanning reuses patterns, not decisions
 
 `scripts/check_workflow_trust.py` retains at most 64 escaped-key pattern strings

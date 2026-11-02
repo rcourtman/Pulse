@@ -6,7 +6,6 @@ import base64
 import hashlib
 import importlib.util
 import json
-import datetime
 import re
 import os
 from pathlib import Path
@@ -131,61 +130,68 @@ def payload(mode, environ=os.environ):
             'binary': base64.b64encode(binary).decode(), 'version_file': base64.b64encode(version_file).decode()}
 
 
-NATIVE_PATHS = ('.github/scripts/demo-runtime-transaction.py',
-                '.github/scripts/dispatch-demo-runtime.py',
-                '.github/scripts/tests/demo_runtime_native.py',
-                '.github/workflows/demo-runtime-native.yml')
+NATIVE_JOBS = {
+    '.github/workflows/release-convergence.yml':
+        'Converge stable demo / Prove demo transaction / Native demo systemd/Caddy proof',
+    '.github/workflows/recover-demo-server.yml':
+        'Prove demo transaction / Native demo systemd/Caddy proof',
+}
 
 
 def require_native(environ=os.environ):
-    """Fail closed before SSH; a metadata/component pass is not native proof."""
+    """Require the same attempt's secret-free native prerequisite before SSH.
+
+    Path-filtered main history can be empty and is not a production prerequisite
+    scheduler. Both consumers now run the reviewed native workflow themselves;
+    a previous attempt, another source or a component pass cannot admit mutation.
+    """
     sha, repository = environ['GITHUB_SHA'], environ['GITHUB_REPOSITORY']
-    if not re.fullmatch(r'[0-9a-f]{40}', sha) or repository != 'rcourtman/Pulse':
+    run_id, attempt = environ['GITHUB_RUN_ID'], environ['GITHUB_RUN_ATTEMPT']
+    if (not re.fullmatch(r'[0-9a-f]{40}', sha) or repository != 'rcourtman/Pulse'
+            or not re.fullmatch(r'[1-9][0-9]*', run_id)
+            or not re.fullmatch(r'[1-9][0-9]*', attempt)):
         raise ValueError('native-source-identity')
-    since = (datetime.datetime.now(datetime.timezone.utc).date() - datetime.timedelta(days=6)).isoformat()
-    base = f'repos/{repository}/actions/workflows/demo-runtime-native.yml/runs?branch=main&event=push&per_page=5'
 
     def read(query):
         result = subprocess.run(['gh', 'api', query], capture_output=True, timeout=30, check=False)
         if result.returncode:
             raise ValueError('native-evidence-unavailable')
-        rows = json.loads(result.stdout)['workflow_runs']
-        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        value = json.loads(result.stdout)
+        if not isinstance(value, dict):
             raise ValueError('native-evidence-malformed')
-        for row in rows:
-            if (type(row.get('id')) is not int or not re.fullmatch(r'[0-9a-f]{40}', str(row.get('head_sha')))
-                    or type(row.get('run_attempt')) is not int or not isinstance(row.get('updated_at'), str)
-                    or not isinstance(row.get('created_at'), str)):
-                raise ValueError('native-evidence-malformed')
-        return rows
+        return value
 
-    rows = read(base + '&created=' + since + '..*')
-    if len(rows) < 5:
-        rows += read(base)
-    merged = {}
-    for row in rows:
-        old = merged.get(row['id'])
-        if old is None or (row['run_attempt'], row['updated_at']) > (old['run_attempt'], old['updated_at']):
-            merged[row['id']] = row
-    for row in sorted(merged.values(), key=lambda r: (r['created_at'], r['id']), reverse=True):
-        head = row['head_sha']
-        if (row.get('event') != 'push' or row.get('head_branch') != 'main'
-                or row.get('path') != '.github/workflows/demo-runtime-native.yml'):
-            raise ValueError('native-run-identity')
-        ancestor = subprocess.run(['git', 'merge-base', '--is-ancestor', head, sha], capture_output=True)
-        if ancestor.returncode != 0:
-            continue
-        matching = subprocess.run(['git', 'diff', '--quiet', head, sha, '--', *NATIVE_PATHS], capture_output=True)
-        if matching.returncode == 1:
-            continue
-        if matching.returncode != 0:
-            raise ValueError('native-source-unavailable')
-        # Never select an older green sample over a newer matching failure or
-        # pending run. The native driver exits success only with full cleanup.
-        if row.get('status') != 'completed' or row.get('conclusion') != 'success':
-            raise ValueError('native-acceptance-not-passed')
-        return {'run_id': row['id'], 'run_attempt': row['run_attempt'], 'source_sha': head}
-    raise ValueError('native-acceptance-missing')
+    base = f'repos/{repository}/actions/runs/{run_id}'
+    run = read(base)
+    if (type(run.get('id')) is not int or run['id'] != int(run_id)
+            or type(run.get('run_attempt')) is not int or run['run_attempt'] != int(attempt)
+            or run.get('head_sha') != sha or run.get('head_branch') != 'main'
+            or run.get('event') != 'workflow_dispatch'
+            or not isinstance(run.get('path'), str) or run['path'] not in NATIVE_JOBS
+            or not isinstance(run.get('repository'), dict)
+            or run['repository'].get('full_name') != repository):
+        raise ValueError('native-run-identity')
+    # The attempt-specific endpoint cannot borrow a successful job from a prior
+    # rerun. Refuse incomplete pagination rather than infer an absent proof.
+    result = read(base + f'/attempts/{attempt}/jobs?per_page=100')
+    jobs = result.get('jobs')
+    if (not isinstance(jobs, list) or type(result.get('total_count')) is not int
+            or result['total_count'] != len(jobs) or len(jobs) > 100
+            or any(not isinstance(job, dict) for job in jobs)):
+        raise ValueError('native-evidence-malformed')
+    matches = [job for job in jobs if job.get('name') == NATIVE_JOBS[run['path']]]
+    if len(matches) != 1:
+        raise ValueError('native-acceptance-missing')
+    job = matches[0]
+    if (type(job.get('id')) is not int or job['id'] <= 0
+            or type(job.get('run_id')) is not int or job['run_id'] != int(run_id)
+            or type(job.get('run_attempt')) is not int or job['run_attempt'] != int(attempt)
+            or job.get('head_sha') != sha):
+        raise ValueError('native-job-identity')
+    if job.get('status') != 'completed' or job.get('conclusion') != 'success':
+        raise ValueError('native-acceptance-not-passed')
+    return {'run_id': int(run_id), 'run_attempt': int(attempt), 'source_sha': sha,
+            'job_id': job['id']}
 
 
 def prepare_runtime():
