@@ -1,7 +1,8 @@
 # Pulse Pro - Terms of Service & Software License Agreement
 
-**Version 1.0**  
-**Effective Date: January 1, 2026**
+**Version 1.1**  
+**Effective Date: January 1, 2026**  
+**Last Updated: November 2, 2026**
 
 **Scope**: This agreement applies only to the commercial Pulse Pro distribution obtained from Pulse Monitoring Ltd. It does not apply to, and does not modify the license of, any code in the open-source Pulse repository (github.com/rcourtman/Pulse). Everything in that repository is licensed under the MIT License.
 
@@ -18,10 +19,10 @@ IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW WILL THE AUTHOR, OR ANY OTHER PART
 
 **OUR TOTAL LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATED TO THIS AGREEMENT SHALL NOT EXCEED THE TOTAL AMOUNT PAID BY YOU FOR THE SOFTWARE DURING THE TWELVE (12) MONTHS PRIOR TO THE ACCRUAL OF THE FIRST CLAIM.**
 
-## 4. AI AUTOMATION & AUTONOMOUS MODE
-The Software includes features ("AI Patrol", "safe remediation workflows", "Autonomous Mode") that use Artificial Intelligence to execute commands on your infrastructure.
+## 4. AI AUTOMATION & AUTOPILOT
+The Software includes features that use Artificial Intelligence to investigate your infrastructure and execute commands on it. These include Pulse Patrol, whose "Ask first", "Safe auto-fix" and "Autopilot" modes can propose or run fixes, and governed actions requested by external AI agents you connect to Pulse.
 *   **User Responsibility**: You acknowledge that AI models can hallucinate or produce incorrect commands. You are solely responsible for verifying the actions recommended or taken by the Software.
-*   **High-Risk Environments**: Use in production or mission-critical environments is at your own risk. We strongly recommend using "Approval Mode" rather than "Autonomous Mode".
+*   **High-Risk Environments**: Use in production or mission-critical environments is at your own risk. We strongly recommend using "Ask first", which requires your approval before any fix runs, rather than "Safe auto-fix" or "Autopilot".
 
 ## 5. INDEMNIFICATION
 You agree to indemnify and hold harmless the Author from and against all claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Software.
