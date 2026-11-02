@@ -20791,7 +20791,7 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`Manifest:                     manifest`,
 		`agentcapabilities.FetchManifest(context.Background(), manifestClient, *baseURL)`,
 		`agentcapabilities.StreamMCPEventNotifications(ctx, pulseMCPAgentSurfaceHTTPDoer{}, s.baseURL, path, s.token, func(notification agentcapabilities.JSONRPCRequest) error`,
-		`agentcapabilities.DoAgentHTTPRequest(client, req)`,
+		`agentcapabilities.DoAgentHTTPRequest(d.next, req)`,
 	}
 	for _, fragment := range required {
 		if !strings.Contains(src, fragment) {
