@@ -75,7 +75,13 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
   // reader must never inherit destination credentials or an in-flight editor.
   const configurationReader = createMemo(() => {
     const status = props.securityStatus;
-    if (!status || status.requiresAuth !== false || readOnlySession()) return undefined;
+    // requiresAuth describes the install's login configuration, not whether
+    // this request authenticated. Signed-in installs still return true.
+    const readerKnown =
+      status?.requiresAuth === false ||
+      status?.detailLevel === 'authenticated' ||
+      status?.detailLevel === 'privileged';
+    if (!status || !readerKnown || readOnlySession()) return undefined;
     return JSON.stringify([
       workspaceRevision(),
       getOrgID() || 'default',

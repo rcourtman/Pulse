@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "0aaaa39684c8f494ef06eff043bb883f6f65630e",
+  "verified_at": "2026-11-02T20:37:30.067103Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/pages/Alerts.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/pages/Alerts.tsx": "e7ed8e2e8a865ddd3858259ae13339e20534c4b13ed30ed316f637d90a3fa792"
+  },
+  "routes": [
+    "/alerts/thresholds/infrastructure",
+    "/alerts/thresholds/truenas",
+    "/alerts/destinations",
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 393,
+      "height": 727
+    }
+  ],
+  "states": [
+    "Actual App with safe HTTP fixtures: security status detailLevel=privileged and requiresAuth=true, matching the native producer semantics rather than granting new scopes. Chromium desktop and mobile Chrome/Pixel 5; Playwright 1.56.1.",
+    "Complete registered TrueNAS/Ceph threshold, VMware/TrueNAS/Apprise TLS-warning and powered-off tolerance cases on desktop; the five applicable cases also pass on mobile Chrome. Desktop-only TrueNAS threshold case is skipped on mobile as registered."
+  ],
+  "interactions": [
+    "Live threshold tabs and Ceph row controls render; keyboard expansion excludes collapsed controls from focus. Apprise warning checkbox works and retains its persistent warning. Powered-off policy preserves inheritance, explicit zero and strict validation. No server permission, grant or production TLS change.",
+    "Desktop Apprise and narrow Notifications captures opened natively with view_image: readable existing controls after authenticated admission. The narrow capture depicts the external-watchdog card rather than the offscreen Apprise warning; TLS-warning visibility is separately asserted in the registered browser test.",
+    "Initial desktop batch: five passes and one evidence-fixture error boundary caused by an empty external-watchdog state object; adding the native disabled-state discriminator permits only the unfinished Apprise case to pass. No source relaxation. WebKit launch-flag error and subsequent remaining cases are retained separately; neither is represented as a product pass. Full source execution and native/account recovery remain separate."
+  ]
+}
