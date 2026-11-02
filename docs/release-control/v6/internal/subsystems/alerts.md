@@ -33,6 +33,14 @@ cover the admitted disk alerts, the excluded guest and sibling-node alerts,
 and the row accent. No alert evaluation, identity, history or notification
 behaviour changes.
 
+The matcher also admits a node's own storage alerts (usage, offline and ZFS on
+`local`, `local-zfs` and the like): alerts whose `metadata.resourceType` is
+`storage`, whose `node` is the node's `proxmox.nodeName` and whose `instance`
+matches its `proxmox.instance`. Storage sits on its own Proxmox tab, so the
+node row is the Overview's only sign that its local pool is filling. Storage
+shared across a cluster is recorded under the node `cluster` and never tints a
+single node.
+
 ### Runtime alert controls describe only supported scope (28 October 2026)
 
 Container Runtime rows expose their existing Offline Alerts control, not an
