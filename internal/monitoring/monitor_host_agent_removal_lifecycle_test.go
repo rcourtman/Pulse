@@ -233,15 +233,26 @@ func TestCollectorUninstallHostAgentTransactionRollsBackAndRetries(t *testing.T)
 		t.Fatalf("initial ApplyHostReport: %v", err)
 	}
 
-	// Block only the credential inventory's atomic replacement. The removal
-	// tombstone can still be written first, so this exercises the rollback
-	// half of the durable uninstall transaction rather than a preflight error.
-	credentialBlocker := filepath.Join(dataPath, "api_tokens.json.tmp")
+	// Block the final replacement, not a temporary filename: credential writes
+	// now own an unpredictable temporary file. Retain the original inventory
+	// so recovery never needs to reconstruct it from the failed transaction.
+	// The separate continuity file remains writable, exercising rollback after
+	// the removal tombstone has been persisted rather than a preflight error.
+	credentialBlocker := filepath.Join(dataPath, "api_tokens.json")
+	retainedCredentials := filepath.Join(dataPath, "api_tokens.fixture-retained")
+	if err := os.Rename(credentialBlocker, retainedCredentials); err != nil {
+		t.Fatalf("retain original credential inventory: %v", err)
+	}
 	if err := os.Mkdir(credentialBlocker, 0o700); err != nil {
 		t.Fatalf("create credential persistence blocker: %v", err)
 	}
-	if _, err := monitor.UninstallHostAgent(host.ID, token.ID); err == nil {
-		t.Fatal("UninstallHostAgent authorized teardown without durable credential revocation")
+	_, uninstallErr := monitor.UninstallHostAgent(host.ID, token.ID)
+	var renameErr *os.LinkError
+	if !errors.As(uninstallErr, &renameErr) || renameErr.Op != "rename" || renameErr.New != credentialBlocker {
+		t.Fatalf("UninstallHostAgent error = %v, want credential publication rename failure", uninstallErr)
+	}
+	if leftovers, err := filepath.Glob(filepath.Join(dataPath, ".api_tokens.json.*.tmp")); err != nil || len(leftovers) != 0 {
+		t.Fatalf("failed publication left temporary credentials: %v (glob error: %v)", leftovers, err)
 	}
 	if hosts := monitor.GetLiveHostsSnapshot(); len(hosts) != 1 || hosts[0].ID != host.ID {
 		t.Fatalf("failed uninstall changed live host state: %+v", hosts)
@@ -256,6 +267,13 @@ func TestCollectorUninstallHostAgentTransactionRollsBackAndRetries(t *testing.T)
 
 	if err := os.Remove(credentialBlocker); err != nil {
 		t.Fatalf("remove credential persistence blocker: %v", err)
+	}
+	if err := os.Rename(retainedCredentials, credentialBlocker); err != nil {
+		t.Fatalf("restore original credential inventory: %v", err)
+	}
+	persistedBeforeRetry, err := monitor.persistence.LoadAPITokens()
+	if err != nil || len(persistedBeforeRetry) != 1 || persistedBeforeRetry[0].ID != token.ID {
+		t.Fatalf("failed uninstall did not retain durable retry credential: %+v (error: %v)", persistedBeforeRetry, err)
 	}
 	removed, err := monitor.UninstallHostAgent(host.ID, token.ID)
 	if err != nil {
