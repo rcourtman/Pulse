@@ -146,6 +146,9 @@ describe('Reporting reader lifetime', () => {
     await screen.findByRole('alert');
     expect(screen.getByRole('textbox', { name: 'Schedule name' })).toHaveValue('Private draft');
     expect(api.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    await fireEvent.click(screen.getByRole('button', { name: 'Dismiss reporting feedback' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Schedule name' })).toHaveValue('Private draft');
     await fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
     await waitFor(() =>
       expect(api.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2),

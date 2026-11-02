@@ -2,6 +2,8 @@ import { For, Show, Suspense, createMemo, createSignal, lazy, onCleanup } from '
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { Portal } from 'solid-js/web';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
@@ -99,6 +101,7 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
   const {
     actionError,
     successNotice,
+    clearFeedback,
     canEditSchedules,
     deleteReportSchedule,
     deletingScheduleID,
@@ -180,15 +183,21 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
 
   return (
     <div class="space-y-6">
-      <Show when={actionError()}>
-        <p role="alert" class="text-sm text-warning">
-          {actionError()}
-        </p>
-      </Show>
-      <Show when={successNotice()}>
-        <p role="status" class="text-sm text-success">
-          {successNotice()}
-        </p>
+      <Show when={actionError() || successNotice()}>
+        <Portal>
+          <div class="fixed inset-x-3 top-28 z-50 sm:left-auto sm:right-4 sm:w-96">
+            <InlineNotice
+              role={actionError() ? 'alert' : 'status'}
+              aria-live={actionError() ? 'assertive' : 'polite'}
+              tone={actionError() ? 'warning' : 'success'}
+              class="shadow-lg"
+              onDismiss={clearFeedback}
+              dismissLabel="Dismiss reporting feedback"
+            >
+              {actionError() || successNotice()}
+            </InlineNotice>
+          </div>
+        </Portal>
       </Show>
       <Show when={reportingCatalogLoading() && !catalogReady()}>
         <OperationsPanel title="Reporting" description="Loading reporting surfaces...">

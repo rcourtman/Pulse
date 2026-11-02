@@ -596,6 +596,7 @@ export const useReportingPanelState = (isCurrentReader: () => boolean = () => tr
   return {
     actionError,
     successNotice,
+    clearFeedback,
     canEditSchedules,
     closeScheduleForm,
     deleteReportSchedule,
