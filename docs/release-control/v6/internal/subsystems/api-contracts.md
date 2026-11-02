@@ -110,7 +110,8 @@ routes admits only `application/json` or `text/plain; charset=utf-8`, with
 media parameters are normalized to the JSON type. Missing, malformed or other
 handler types fall back to plain text; none may turn a result into HTML, SVG or
 JavaScript. Alternate-case media headers are discarded before the canonical
-headers are set. Payload bytes, status and other admitted headers are preserved:
+headers are set directly at each transport commit or body-write boundary.
+Payload bytes, status and other admitted headers are preserved:
 JSON is not HTML-escaped twice, parsed or buffered by this boundary.
 
 This does not change admission, withdrawal checks, request cancellation or the
@@ -140,6 +141,13 @@ Revocation, expiry, invalid runtime role, identity/principal replacement, lost
 scope or organisation/instance authority suppress subsequent output. No HTTP
 error or invented terminal success is appended to an admitted SSE response.
 A frame admitted before concurrent withdrawal can already be in flight.
+
+The shared guarded stream writer pins `text/event-stream; charset=utf-8` for
+SSE or `application/json` for structured errors. Missing, malformed or other
+media types fall back to plain text with `nosniff`; alternate-case media
+headers cannot escape the boundary. Explicit status, implicit body writes and
+flush-only commits use the same closed media policy, with original payload
+bytes preserved. Informational headers do not commit the final response.
 
 The guard exposes deadline setters, not an unguarded response-writer escape:
 Assistant handlers still clear the initial server deadlines and bound each
@@ -444,8 +452,11 @@ nor a reload is repeated, and a cached success cannot imply that a newer edit
 was restored. Different archives can be imported after the active import ends;
 uncommitted failures can retry after their cause is corrected.
 
-Admission stores only scoped full-request digests and completion times, never
-archives, passphrases or response bodies. Empty/default scope aliases share
+Admission stores only scoped HMAC-SHA-256 request fingerprints and completion
+times, never archives, passphrases or response bodies. Each guard uses its own
+cryptographically random, process-local key, so retained fingerprints cannot be
+used as unkeyed passphrase verifiers. Length-prefixed input preserves archive
+and passphrase field boundaries. Empty/default scope aliases share
 one admission; different tenants do not. The process-local registry holds at
 most 128 active/recent attempts and fails closed with HTTP 503 rather than
 evict an unexpired attempt. Active imports never expire; completed entries

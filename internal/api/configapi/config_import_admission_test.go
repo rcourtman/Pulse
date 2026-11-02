@@ -107,3 +107,40 @@ func TestConfigImportAdmissionConcurrentRequestsHaveOneOwner(t *testing.T) {
 		t.Fatalf("concurrent owners = %d, want one", admitted.Load())
 	}
 }
+
+func TestConfigImportAdmissionFingerprintsAreGuardScoped(t *testing.T) {
+	now := time.Now()
+	req := ImportConfigRequest{Data: "synthetic-ciphertext", Passphrase: "synthetic-passphrase"}
+	var firstGuard, secondGuard configImportRequests
+	first, rejection := firstGuard.begin("default", req, now)
+	if rejection != nil {
+		t.Fatal(rejection)
+	}
+	second, rejection := secondGuard.begin("default", req, now)
+	if rejection != nil {
+		t.Fatal(rejection)
+	}
+	if first.key.fingerprint == second.key.fingerprint {
+		t.Fatal("independent guards retained the same request fingerprint")
+	}
+	firstGuard.finish(first, true, now)
+	if _, rejection := firstGuard.begin("default", req, now); rejection == nil || rejection.status != http.StatusConflict {
+		t.Fatal("keyed fingerprint did not recognise a completed request")
+	}
+}
+
+func TestConfigImportAdmissionFingerprintsPreserveFieldBoundaries(t *testing.T) {
+	now := time.Now()
+	var guard configImportRequests
+	// The concatenated bytes are equal, but archive and passphrase differ.
+	for _, req := range []ImportConfigRequest{
+		{Data: "synthetic-a", Passphrase: "bc"},
+		{Data: "synthetic-ab", Passphrase: "c"},
+	} {
+		attempt, rejection := guard.begin("default", req, now)
+		if rejection != nil {
+			t.Fatal("distinct fields reused a completed request fingerprint", rejection)
+		}
+		guard.finish(attempt, true, now)
+	}
+}

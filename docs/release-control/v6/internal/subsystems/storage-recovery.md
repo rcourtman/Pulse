@@ -2292,6 +2292,11 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 
 ## Shared Boundaries
 
+Protected progress and synchronous reads use the API-owned non-executable media
+policy. Configuration-import replay admission retains guard-keyed request
+fingerprints without retaining archives or passphrases. These transport guards
+do not cancel independent agent work or establish durable recovery idempotency.
+
 The shared OIDC Test diagnostic's failed-discovery response carries only a
 numeric HTTP status and fixed guidance, not provider/proxy reason phrases,
 headers or bodies. Testing does not save settings or replace credentials and
