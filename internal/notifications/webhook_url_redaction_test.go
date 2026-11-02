@@ -128,6 +128,26 @@ func TestRedactWebhookDiagnosticSecrets(t *testing.T) {
 			input: "post https://hook-user:hook-password@example.test/%zz failed",
 			want:  invalidWebhookURLDiagnostic,
 		},
+		"apprise CLI prose": {
+			input: `process queued apprise notification "apprise-1" (alert): apprise CLI send failed: execute apprise CLI: executable file not found in PATH`,
+			want:  `process queued apprise notification "apprise-1" (alert): apprise CLI send failed: execute apprise CLI: executable file not found in PATH`,
+		},
+		"smtp prose": {
+			input: `process queued email notification "email-1" (alert): smtp: 535 5.7.8 authentication failed`,
+			want:  `process queued email notification "email-1" (alert): smtp: 535 5.7.8 authentication failed`,
+		},
+		"schemeless query credential in prose": {
+			input: "send failed: hooks.example.test/notify?token=supersecret refused",
+			want:  "send failed: hooks.example.test/notify?token=REDACTED refused",
+		},
+		"schemeless bot path in prose": {
+			input: "send failed: api.telegram.org/bot123:telegram-secret/sendMessage refused",
+			want:  "send failed: api.telegram.org/botREDACTED/sendMessage refused",
+		},
+		"malformed schemeless word": {
+			input: "send failed: hooks.example.test/notify?%zz=secret refused",
+			want:  invalidWebhookURLDiagnostic,
+		},
 	}
 
 	for name, test := range tests {

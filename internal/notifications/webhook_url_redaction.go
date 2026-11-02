@@ -125,10 +125,40 @@ func RedactWebhookDiagnosticSecrets(message string) string {
 	}
 
 	if !foundURL {
-		return RedactWebhookURLSecrets(message)
+		return redactSchemelessDiagnosticSecrets(message)
 	}
 	redacted.WriteString(message[cursor:])
 	return redacted.String()
+}
+
+// redactSchemelessDiagnosticSecrets handles text with no http(s) URL. Only
+// words that could hold a path or query credential are parsed, and a
+// malformed one still fails closed. Parsing the whole message as one URL
+// replaced ordinary error prose such as "execute apprise CLI: executable file
+// not found in PATH" with the invalid-URL marker, because a colon before the
+// first slash is not a valid relative URL.
+func redactSchemelessDiagnosticSecrets(message string) string {
+	var redacted strings.Builder
+	rest := message
+	for {
+		end := strings.IndexAny(rest, " \t\r\n")
+		if end == -1 {
+			end = len(rest)
+		}
+		word := rest[:end]
+		if strings.ContainsAny(word, "/?") {
+			word = RedactWebhookURLSecrets(word)
+			if word == invalidWebhookURLDiagnostic {
+				return invalidWebhookURLDiagnostic
+			}
+		}
+		redacted.WriteString(word)
+		if end == len(rest) {
+			return redacted.String()
+		}
+		redacted.WriteByte(rest[end])
+		rest = rest[end+1:]
+	}
 }
 
 func redactWebhookTransportError(err error) error {
