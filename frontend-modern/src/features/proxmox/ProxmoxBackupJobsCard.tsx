@@ -34,13 +34,13 @@ const OUTCOMES: readonly {
     key: 'failed',
     label: 'failed',
     pill: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    segment: 'bg-red-500',
+    segment: 'bg-metric-critical-bg',
   },
   {
     key: 'warning',
     label: 'warnings',
     pill: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-    segment: 'bg-amber-500',
+    segment: 'bg-metric-warning-bg',
   },
   {
     key: 'running',
@@ -58,7 +58,7 @@ const OUTCOMES: readonly {
     key: 'success',
     label: 'ok',
     pill: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    segment: 'bg-emerald-500',
+    segment: 'bg-metric-normal-bg',
   },
 ];
 

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "4a1b33ed04866f9ecb9eab6fee5a0a42ca9b7570",
+  "verified_at": "2026-11-02T22:12:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "c0affcbac1aea8cd2d4e7e427c795a22603688ccb40b422010a3298c01316cfd",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "6ae7626ce43896d092cde772ed57350d771cc3c828a7a5467c6f4b3441cf4e9d"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode built from this branch on pulse-dev, dark theme",
+    "Backup health rows in protected, attention, unprotected and unknown tones; Backup jobs chart with ok and failed segments"
+  ],
+  "interactions": [
+    "read computed backgrounds on Proxmox > Overview: node CPU, memory and disk bar fills are rgba(34, 197, 94, 0.6)",
+    "read computed backgrounds on Proxmox > Backups: the Protected bar and the Backup jobs ok segments are now rgba(34, 197, 94, 0.6), warning bars rgba(234, 179, 8, 0.6), critical bars rgba(239, 68, 68, 0.6), matching Overview; before this change they were emerald-500 at 80% and solid emerald-500",
+    "at 375x812 the same fills apply with no horizontal page overflow"
+  ]
+}

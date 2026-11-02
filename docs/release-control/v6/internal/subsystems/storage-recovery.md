@@ -5092,6 +5092,13 @@ datastore; a storeless partial read or failed task-history run still yields
 the fuller fix, but older runs of a configured job would then need to defer to
 its latest result.
 
+### Backup health and jobs bars match the rest of Pulse (2 November 2026)
+
+The Backup health bars and the Backup jobs chart now fill with the same green,
+amber and red as the Overview CPU, memory and disk bars. They had their own
+shades, so the Backups page looked inconsistent beside every other page. What
+each bar counts is unchanged.
+
 ### Backup servers rows are named by their datastore (2 November 2026)
 
 The Backup servers table keeps one row per datastore, but each row is now

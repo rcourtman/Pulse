@@ -935,6 +935,8 @@ describe('ProxmoxBackupsTable', () => {
       name: '1 backup source reported a failure',
     });
     expect(group).toHaveAttribute('aria-pressed', 'false');
+    // Health bars fill with the metric bar colours every other Pulse bar uses.
+    expect(group.querySelector('.progress-fill')).toHaveClass('bg-metric-warning-bg');
 
     await fireEvent.click(group);
     await waitFor(() => {
