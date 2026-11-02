@@ -3481,6 +3481,36 @@ else:
         login = read("frontend-modern/src/utils/localStorage.ts")
         self.assertIn("DEMO_AUTO_LOGIN: 'pulse-demo-auto-login'", login)
 
+    def test_demo_mutation_waits_for_same_attempt_native_prerequisite(self) -> None:
+        native = yaml.safe_load(read('.github/workflows/demo-runtime-native.yml'))
+        triggers = native.get('on', native.get(True))
+        self.assertIn('workflow_call', triggers)
+        self.assertEqual(native['permissions'], {'contents': 'read'})
+        self.assertEqual(native['jobs']['native']['name'], 'Native demo systemd/Caddy proof')
+        self.assertEqual(native['concurrency']['group'], 'demo-native-${{ github.run_id }}-${{ github.run_attempt }}')
+        for path, consumer in (('update-demo-server.yml', 'update-demo'),
+                               ('recover-demo-server.yml', 'recover')):
+            with self.subTest(workflow=path):
+                jobs = yaml.safe_load(read('.github/workflows/' + path))['jobs']
+                proof = jobs['native_acceptance']
+                self.assertEqual(proof['name'], 'Prove demo transaction')
+                self.assertEqual(proof['uses'], './.github/workflows/demo-runtime-native.yml')
+                self.assertEqual(proof['permissions'], {'contents': 'read'})
+                self.assertNotIn('secrets', proof)
+                self.assertNotIn('with', proof)
+                self.assertNotIn('continue-on-error', proof)
+                needs = jobs[consumer]['needs']
+                self.assertIn('native_acceptance', [needs] if isinstance(needs, str) else needs)
+                self.assertNotIn('continue-on-error', jobs[consumer])
+                if path == 'update-demo-server.yml':
+                    self.assertEqual(proof['needs'], 'resolve')
+                    self.assertEqual(proof['if'], "inputs.verify_only != true && needs.resolve.outputs.skip != 'true'")
+                    self.assertEqual(jobs[consumer]['if'],
+                                     "${{ !cancelled() && needs.resolve.result == 'success' && needs.resolve.outputs.skip != 'true' && (inputs.verify_only == true || needs.native_acceptance.result == 'success') }}")
+                else:
+                    self.assertNotIn('if', proof)
+                    self.assertNotIn('if', jobs[consumer])
+
     def test_stable_demo_recovery_is_fixed_current_bits_only(self) -> None:
         workflow = read(".github/workflows/recover-demo-server.yml")
         recovery = read(".github/scripts/recover-demo-runtime.sh")

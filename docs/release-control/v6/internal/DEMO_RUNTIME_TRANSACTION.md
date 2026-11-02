@@ -108,7 +108,7 @@ job and artifact before judging that result.
 Before treating this route as restored, the exact reviewed source must return
 native disposable systemd/SSH-loss receipts and signed published-runtime
 forward/reverse data/identity results. Then reconcile actual demo workflow and
-public browser readback through the release owner; source tests do not establish
+public browser readback through Delivery; source tests do not establish
 an installed recovery. Delivery owns that continuation and the remaining ingress
 migration. Unrestricted root/Tailscale administration can still bypass a source
 transaction; this candidate is not host enforcement. Workers neither install
@@ -118,7 +118,7 @@ Retained failed/unknown estates require the operational owner's reconciliation;
 do not remove a lock, intent or snapshot merely to permit a fresh sample. A
 later frontend/network failure is not authority for a second SSH session to
 stop a committed or unrelated service. Keep the signed packet, failure and
-native/browser acceptance distinct in the release judgment.
+native/browser acceptance distinct in the operational record.
 
 ## Returned footprint defect and chosen correction (3 October 2026)
 
@@ -145,10 +145,30 @@ snapshot and both runtime file identities are checked through forward/recovery
 watches. Data rollback remains quiescent and retained; startup may naturally
 write new data. This is not a claim to restore every general-installer effect.
 
-The CI dispatcher refuses production SSH mutation until the newest matching
-main native run passes. It checks ancestry and final content of the engine,
-dispatcher, native driver and workflow; an unrelated later main commit does not
-invalidate unchanged proof. A matching failure/pending run cannot select an
-older favourable sample. Refused/malformed reads have no fallback. Only the
-normal recent-first/history-fill inventory rule is used for successful reads.
-Native and signed installed acceptance are still separate; absence fails closed.
+## Same-attempt native prerequisite (2 November 2026)
+
+The path-filtered native workflow is not an on-demand prerequisite scheduler.
+Convergence run 41389692448 at 977719a1 refused before mutation with
+`native-acceptance-unavailable`; both live main-push inventories were empty.
+No production transaction or native pass follows from the other green jobs.
+
+Both mutating consumers now call the same secret-free native workflow as a job
+dependency, without inheriting secrets, inputs or write permission. Only after
+its successful completion may their production environment job start. The
+verification-only route skips native execution and still never submits a
+transaction; the explicit consumer condition admits that skipped prerequisite
+only for verification, never for mutation. Native concurrency is bound to the
+caller run and attempt so another main or PR proof cannot cancel it.
+
+Before SSH submission, the dispatcher reads the current run and its exact
+attempt's jobs. It requires the fixed main/workflow-dispatch consumer, exact
+control SHA, repository/run/attempt identities and one successful named native
+job from that consumer. Truncated, malformed, failed, pending, skipped,
+duplicate, unrelated-source or old-attempt evidence refuses. There is no history
+lookup, older-green fallback, rerun, dispatch or token expansion. The native
+job's success still requires full real-clock forward/recovery and cleanup and
+its separate source/command receipts; a component pass cannot stand in for it.
+The signed archive, actual retained transaction, cohost state and consuming
+public browser checks remain separate operational evidence. Delivery owns
+that follow-through after protected publication; this source change is not
+an installed update or an assertion that the missing native result passed.

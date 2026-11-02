@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -948,54 +949,119 @@ class PortableTransactionFixtureTest(unittest.TestCase):
 
 
 class NativeGateTest(unittest.TestCase):
-    def row(self, run_id=10, **fields):
-        return {'id': run_id, 'head_sha': 'a' * 40, 'run_attempt': 1,
-                'created_at': '2026-10-03T01:00:00Z', 'updated_at': '2026-10-03T01:10:00Z',
-                'path': '.github/workflows/demo-runtime-native.yml', 'event': 'push', 'head_branch': 'main',
+    def environment(self):
+        return {'GITHUB_SHA': 'b' * 40, 'GITHUB_REPOSITORY': 'rcourtman/Pulse',
+                'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2'}
+
+    def run_record(self, **fields):
+        return {'id': 123, 'run_attempt': 2, 'head_sha': 'b' * 40,
+                'head_branch': 'main', 'event': 'workflow_dispatch',
+                'path': '.github/workflows/release-convergence.yml',
+                'repository': {'full_name': 'rcourtman/Pulse'}, **fields}
+
+    def job(self, **fields):
+        return {'id': 10, 'run_id': 123, 'run_attempt': 2, 'head_sha': 'b' * 40,
+                'name': dispatcher.NATIVE_JOBS['.github/workflows/release-convergence.yml'],
                 'status': 'completed', 'conclusion': 'success', **fields}
 
-    def check(self, rows, history=None, read_exit=0, same=True):
+    def check(self, *, run=None, jobs=None, listing=None, read_exit=0, environ=None):
         calls = []
+        run = self.run_record() if run is None else run
+        jobs = [self.job()] if jobs is None else jobs
+        listing = {'total_count': len(jobs), 'jobs': jobs} if listing is None else listing
         def command(argv, **kwargs):
             calls.append(argv)
-            if argv[0] == 'gh':
-                payload = rows if 'created=' in argv[-1] else (history if history is not None else rows)
-                return subprocess.CompletedProcess(argv, read_exit, json.dumps({'workflow_runs': payload}).encode())
-            return subprocess.CompletedProcess(argv, 0 if argv[1] == 'merge-base' or same else 1)
+            self.assertEqual(argv[:2], ['gh', 'api'])
+            self.assertEqual(kwargs, {'capture_output': True, 'timeout': 30, 'check': False})
+            body = run if len(calls) == 1 else listing
+            return subprocess.CompletedProcess(argv, read_exit, json.dumps(body).encode())
         with patch.object(dispatcher.subprocess, 'run', side_effect=command):
-            result = dispatcher.require_native({'GITHUB_SHA': 'b' * 40, 'GITHUB_REPOSITORY': 'rcourtman/Pulse'})
+            result = dispatcher.require_native(self.environment() if environ is None else environ)
         return result, calls
 
-    def test_matching_reviewed_native_source_passes_with_current_first_inventory(self):
-        result, calls = self.check([self.row()])
-        self.assertEqual(result['run_id'], 10)
-        reads = [c for c in calls if c[0] == 'gh']
-        self.assertEqual(len(reads), 2)
-        self.assertIn('created=', reads[0][-1]); self.assertNotIn('created=', reads[1][-1])
-        self.assertEqual(set(calls[-1][6:]), set(dispatcher.NATIVE_PATHS))
+    def test_same_run_current_attempt_native_job_passes_without_history_or_git(self):
+        result, calls = self.check()
+        self.assertEqual(result, {'run_id': 123, 'run_attempt': 2, 'source_sha': 'b' * 40, 'job_id': 10})
+        self.assertEqual([call[-1] for call in calls], [
+            'repos/rcourtman/Pulse/actions/runs/123',
+            'repos/rcourtman/Pulse/actions/runs/123/attempts/2/jobs?per_page=100'])
 
-    def test_newer_matching_failure_or_pending_run_cannot_use_older_green(self):
-        for fields in ({'conclusion': 'failure'}, {'status': 'in_progress', 'conclusion': None}):
+    def test_fixed_recovery_consumer_requires_its_own_native_job(self):
+        path = '.github/workflows/recover-demo-server.yml'
+        result, _ = self.check(run=self.run_record(path=path),
+                               jobs=[self.job(name=dispatcher.NATIVE_JOBS[path])])
+        self.assertEqual(result['job_id'], 10)
+        with self.assertRaisesRegex(ValueError, 'missing'):
+            self.check(run=self.run_record(path=path))
+
+    def test_prior_attempt_or_other_source_run_cannot_enable_mutation(self):
+        for fields in ({'id': 122}, {'run_attempt': 1}, {'head_sha': 'a' * 40},
+                       {'head_branch': 'release-candidate/fixture'}, {'event': 'pull_request'},
+                       {'path': '.github/workflows/build-and-test.yml'}, {'path': []},
+                       {'repository': {'full_name': 'rcourtman/pulse-pro'}},
+                       {'repository': []}, {'id': True}):
+            with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, 'run-identity'):
+                self.check(run=self.run_record(**fields))
+
+    def test_prior_attempt_or_other_source_job_cannot_enable_mutation(self):
+        for fields in ({'run_id': 122}, {'run_attempt': 1}, {'head_sha': 'a' * 40},
+                       {'id': True}, {'id': 0}, {'run_attempt': True}, {'run_id': True}):
+            with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, 'job-identity'):
+                self.check(jobs=[self.job(**fields)])
+
+    def test_failed_pending_or_skipped_native_proof_never_admits_mutation(self):
+        for fields in ({'conclusion': 'failure'}, {'status': 'in_progress', 'conclusion': None},
+                       {'conclusion': 'skipped'}, {'conclusion': 'cancelled'},
+                       {'conclusion': 'timed_out'}, {'conclusion': 'neutral'}):
             with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, 'not-passed'):
-                self.check([self.row(11, **fields), self.row(10)])
+                self.check(jobs=[self.job(**fields)])
 
-    def test_latest_duplicate_attempt_retains_failure(self):
-        with self.assertRaisesRegex(ValueError, 'not-passed'):
-            self.check([self.row()], [self.row(run_attempt=2, conclusion='failure')])
+    def test_missing_component_only_or_duplicate_proof_never_admits_mutation(self):
+        for jobs in ([], [self.job(name='Script smoke tests & backend build')],
+                     [self.job(), self.job(id=11)]):
+            with self.subTest(jobs=jobs), self.assertRaisesRegex(ValueError, 'missing'):
+                self.check(jobs=jobs)
 
-    def test_missing_changed_or_misidentified_proof_cannot_enable_mutation(self):
-        for rows, same in (([], True), ([self.row()], False), ([self.row(event='workflow_dispatch')], True)):
-            with self.subTest(rows=rows, same=same), self.assertRaises(ValueError):
-                self.check(rows, same=same)
+    def test_truncated_or_malformed_job_collection_is_not_proof(self):
+        for listing in ({'total_count': 101, 'jobs': [self.job()]},
+                        {'total_count': 0, 'jobs': {}},
+                        {'total_count': True, 'jobs': [self.job()]},
+                        {'total_count': 1, 'jobs': [None]}, {}):
+            with self.subTest(listing=listing), self.assertRaisesRegex(ValueError, 'malformed'):
+                self.check(listing=listing)
+
+    def test_invalid_launch_identity_stops_before_any_read(self):
+        for fields in ({'GITHUB_SHA': 'main'}, {'GITHUB_REPOSITORY': 'rcourtman/pulse-pro'},
+                       {'GITHUB_RUN_ID': '0'}, {'GITHUB_RUN_ATTEMPT': '../1'}):
+            with self.subTest(fields=fields), patch.object(dispatcher.subprocess, 'run') as child:
+                with self.assertRaisesRegex(ValueError, 'source-identity'):
+                    dispatcher.require_native({**self.environment(), **fields})
+                child.assert_not_called()
 
     def test_refused_read_has_no_history_fallback_or_ssh(self):
-        calls = []
-        def denied(argv, **kwargs):
-            calls.append(argv); return subprocess.CompletedProcess(argv, 1, b'')
-        with patch.object(dispatcher.subprocess, 'run', side_effect=denied), self.assertRaises(ValueError):
-            dispatcher.require_native({'GITHUB_SHA': 'b' * 40, 'GITHUB_REPOSITORY': 'rcourtman/Pulse'})
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0:2], ['gh', 'api'])
+        for fail_on in (1, 2):
+            calls = []
+            def denied(argv, **kwargs):
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 1 if len(calls) == fail_on else 0,
+                                                    json.dumps(self.run_record()).encode())
+            with self.subTest(fail_on=fail_on), patch.object(dispatcher.subprocess, 'run', side_effect=denied):
+                with self.assertRaisesRegex(ValueError, 'evidence-unavailable'):
+                    dispatcher.require_native(self.environment())
+            self.assertEqual(len(calls), fail_on)
+            self.assertTrue(all(call[:2] == ['gh', 'api'] for call in calls))
+
+    def test_main_refuses_before_payload_or_production_ssh(self):
+        with patch.object(dispatcher, 'require_native', side_effect=ValueError('native-acceptance-missing')), \
+                patch.object(dispatcher, 'payload') as payload, \
+                patch.object(dispatcher.subprocess, 'run') as child, \
+                patch.object(sys, 'argv', ['dispatch-demo-runtime.py', 'update']), \
+                patch('sys.stdout', new_callable=io.StringIO) as output:
+            self.assertEqual(dispatcher.main(), 1)
+        self.assertEqual(json.loads(output.getvalue()), {
+            'schema_version': 2, 'status': 'refused', 'mutated': False,
+            'failure': 'native-acceptance-unavailable'})
+        payload.assert_not_called(); child.assert_not_called()
 
 
 if __name__ == "__main__":

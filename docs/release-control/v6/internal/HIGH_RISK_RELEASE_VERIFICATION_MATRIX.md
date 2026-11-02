@@ -1394,3 +1394,19 @@ as verification progresses:
 - Source reconstruction is not private payload compatibility, successful signing,
   a published patch or installed forward/reverse recovery. The infrastructure
   train's no-publication rehearsal and independent exact-head CI are separate.
+
+
+## Demo native proof belongs to the consuming attempt
+
+- Both update and recovery require the secret-free reusable native job before
+  their production environment job. Verification-only skips it without gaining
+  a transaction path. The promotion-policy suite checks those exact graphs,
+  the read-only permission ceiling and absence of inherited secrets or inputs.
+- `NativeGateTest` exercises successful same-run/attempt identities and refusal
+  for old attempts, changed source/repository/consumer, component-only, duplicate,
+  failed/pending/skipped jobs, malformed/truncated lists and read failure. The
+  actual CLI refusal creates no payload and makes no production SSH call.
+- Native fixtures retain their full real-clock forward/recovery and cleanup;
+  source checks do not replace their terminal artifact or the subsequent signed
+  installed transaction and public-browser evidence. No workflow retry, release
+  decision or worker production authority is added.

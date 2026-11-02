@@ -1,5 +1,6 @@
 name: Demo transaction native acceptance
 on:
+  workflow_call:
   pull_request:
     paths:
       - '.github/scripts/demo-runtime-transaction.py'
@@ -16,10 +17,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: demo-native-${{ github.event.pull_request.number || github.ref }}
+  group: demo-native-${{ github.run_id }}-${{ github.run_attempt }}
   cancel-in-progress: true
 jobs:
   native:
+    name: Native demo systemd/Caddy proof
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:

@@ -14,7 +14,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  native_acceptance:
+    name: Prove demo transaction
+    permissions:
+      contents: read
+    uses: ./.github/workflows/demo-runtime-native.yml
+
   recover:
+    needs: native_acceptance
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: demo-stable

@@ -66,7 +66,7 @@ func TestDemoNativeAcceptanceIsSecretFreeDisposableAndKeepsRealWindows(t *testin
 	}
 	text := string(data)
 	for _, required := range []string{
-		"pull_request:", "branches: [main]", "contents: read", "runs-on: ubuntu-24.04", "timeout-minutes: 35",
+		"pull_request:", "workflow_call:", "branches: [main]", "contents: read", "runs-on: ubuntu-24.04", "timeout-minutes: 35",
 		"persist-credentials: false", "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
 		"demo_runtime_native.py", "if: always()", "demo-native-result.json", "if-no-files-found: error",
 	} {
