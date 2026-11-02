@@ -1466,6 +1466,23 @@ show `message`.
 
 ## Shared Boundaries
 
+### CLI API redirects retain their configured authority
+
+The existing authenticated `pulse fleet connections` and `pulse actions`
+commands reuse `agentcapabilities.DoAgentHTTPRequest` for standard HTTP
+clients. A redirect cannot widen the initial request's scheme, hostname,
+effective port or userinfo authority, including for replayable plan, decision
+and execution bodies. Same-origin proxy paths remain usable. The caller's TLS,
+timeout, cookie jar and stricter redirect policy are retained without mutation;
+custom HTTPDoers continue to own their transport policy. Off-origin refusal
+uses the fixed final-base-URL diagnostic, not destination paths or queries.
+
+Registered `api_redirect_test.go` exercises all seven commands across the five
+redirect statuses with default and supplied clients, and same-origin TLS
+reads/writes. `actions_test.go` retains stricter caller refusals and the original
+last-response behaviour. This does not change server-owned approval, execution,
+scopes, grants, API payloads or the rendered web interface.
+
 Scheduled reporting owns report generation, persisted attempts and scheduling.
 Notifications owns SMTP configuration validation, MIME construction, structured
 failure classification and the completed-message acceptance boundary. Report

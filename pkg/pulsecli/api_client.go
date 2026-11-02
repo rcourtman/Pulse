@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 const (
@@ -22,10 +24,17 @@ type HTTPDoer interface {
 }
 
 func cliHTTPClient(client HTTPDoer) HTTPDoer {
-	if client != nil {
-		return client
-	}
-	return http.DefaultClient
+	return cliAPIClient{next: client}
+}
+
+type cliAPIClient struct{ next HTTPDoer }
+
+func (c cliAPIClient) Do(req *http.Request) (*http.Response, error) {
+	// Fleet and action commands have the same token/body authority boundary
+	// as MCP. Reuse that guard rather than maintaining a second redirect
+	// policy. Standard clients keep their TLS, timeout and stricter policy;
+	// custom HTTPDoers continue to own their transport/redirect handling.
+	return agentcapabilities.DoAgentHTTPRequest(c.next, req)
 }
 
 func cliGetenv(getenv func(string) string, key string) string {
