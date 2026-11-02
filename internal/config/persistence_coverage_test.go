@@ -28,6 +28,26 @@ func (m *mockFSError) WriteFile(name string, data []byte, perm os.FileMode) erro
 	return m.FileSystem.WriteFile(name, data, perm)
 }
 
+func (m *mockFSError) CreateTemp(dir, pattern string) (TemporaryFile, error) {
+	f, err := m.FileSystem.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	return &configWriteErrorFile{TemporaryFile: f, writeError: m.writeError}, nil
+}
+
+type configWriteErrorFile struct {
+	TemporaryFile
+	writeError error
+}
+
+func (f *configWriteErrorFile) Write(data []byte) (int, error) {
+	if f.writeError != nil {
+		return 0, f.writeError
+	}
+	return f.TemporaryFile.Write(data)
+}
+
 func (m *mockFSError) Rename(oldpath, newpath string) error {
 	if m.renameError != nil {
 		return m.renameError
@@ -201,4 +221,15 @@ func (m *mockFSWriteSpecific) WriteFile(name string, data []byte, perm os.FileMo
 		return os.ErrPermission
 	}
 	return m.FileSystem.WriteFile(name, data, perm)
+}
+
+func (m *mockFSWriteSpecific) CreateTemp(dir, pattern string) (TemporaryFile, error) {
+	f, err := m.FileSystem.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	if strings.Contains(filepath.Join(dir, pattern), m.failPattern) {
+		return &configWriteErrorFile{TemporaryFile: f, writeError: os.ErrPermission}, nil
+	}
+	return f, nil
 }

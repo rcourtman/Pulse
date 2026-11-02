@@ -23,8 +23,13 @@ type guestPublicationMetadataFS struct {
 	once    sync.Once
 }
 
+var _ config.FileSystem = (*guestPublicationMetadataFS)(nil)
+
 func (fs *guestPublicationMetadataFS) ReadFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
+}
+func (fs *guestPublicationMetadataFS) CreateTemp(dir, pattern string) (config.TemporaryFile, error) {
+	return os.CreateTemp(dir, pattern)
 }
 func (fs *guestPublicationMetadataFS) WriteFile(path string, data []byte, mode os.FileMode) error {
 	if fs.blocked.Load() {
