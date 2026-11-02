@@ -518,6 +518,7 @@ export interface ConnectionsLedger {
   reload: () => void;
   loading: () => boolean;
   error: () => unknown;
+  resolvedOnce: () => boolean;
 }
 
 interface ConnectionsLedgerSnapshot {
@@ -663,5 +664,6 @@ export const useConnectionsLedger = (): ConnectionsLedger => {
     },
     loading: ledgerSnapshot.loading,
     error: ledgerSnapshot.error,
+    resolvedOnce: ledgerSnapshot.resolvedOnce,
   };
 };

@@ -987,6 +987,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <div class="space-y-6">
         <InfrastructureSourceManager
           rows={rows}
+          inventoryLoading={!ledger.resolvedOnce() || ledger.loading()}
+          inventoryError={ledger.error()}
+          onRetryInventory={() => ledger.reload()}
           discoveredNodes={visibleDiscoveredNodes}
           discoveryEnabled={props.discoveryEnabled()}
           discoveryScanStatus={props.discoveryScanStatus}

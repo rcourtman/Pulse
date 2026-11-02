@@ -22,6 +22,7 @@ import {
   type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import type { Connection } from '@/api/connections';
+import { eventBus } from '@/stores/events';
 import { ConnectionsAPI } from '@/api/connections';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { useConnectionsLedger } from '../useConnectionsLedger';
@@ -126,6 +127,151 @@ describe('InfrastructureSourceManager setup summary', () => {
     resetCreateNonSuspendingQueryCacheForTest();
     vi.restoreAllMocks();
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+  });
+
+  const renderReadState = (readOnly = false, withCandidate = false) => {
+    const { result: ledger } = renderHook(() => useConnectionsLedger());
+    const onOpenConnection = vi.fn();
+    render(() => (
+      <InfrastructureSourceManager
+        rows={ledger.rows}
+        inventoryLoading={!ledger.resolvedOnce() || ledger.loading()}
+        inventoryError={ledger.error()}
+        onRetryInventory={ledger.reload}
+        discoveredNodes={() =>
+          withCandidate ? [{ ip: '192.0.2.1', port: 8006, type: 'pve' }] : []
+        }
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={readOnly}
+        onOpenConnection={onOpenConnection}
+      />
+    ));
+    return { ledger, onOpenConnection };
+  };
+
+  it('distinguishes an unread list from empty and keeps a failed read visible during retry', async () => {
+    let failFirst!: (error: unknown) => void;
+    let recover!: (value: Awaited<ReturnType<typeof ConnectionsAPI.list>>) => void;
+    const list = vi
+      .spyOn(ConnectionsAPI, 'list')
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            failFirst = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            recover = resolve;
+          }),
+      );
+    const { onOpenConnection } = renderReadState(false, true);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading connected systems...');
+    expect(screen.queryByText('0 systems connected')).toBeNull();
+    expect(screen.queryByText('Start monitoring infrastructure')).toBeNull();
+
+    failFirst({ status: 503 });
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Connected systems unavailable'),
+    );
+    expect(screen.queryByText('0 systems connected')).toBeNull();
+    expect(screen.queryByText('Start monitoring infrastructure')).toBeNull();
+    // Discovery cannot safely deduplicate candidates against unread inventory.
+    expect(screen.queryByText('192.0.2.1')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(screen.getByRole('button', { name: 'Retrying...' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Connected systems unavailable');
+    expect(list).toHaveBeenCalledTimes(2);
+
+    const saved = connectionFixture({
+      id: 'pve:saved',
+      type: 'pve',
+      name: 'Saved scoped PVE',
+      state: 'paused',
+      enabled: false,
+      address: 'https://saved.invalid:8006',
+      scope: { vms: false, storage: true },
+    });
+    recover({ connections: [saved], systems: [] });
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.getByText('Saved scoped PVE')).toBeInTheDocument();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+    expect(onOpenConnection.mock.calls[0][0].connection).toEqual(saved);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('labels retained rows as old after a transient failure and restores posture only on success', async () => {
+    const saved = connectionFixture({ name: 'Last saved host' });
+    const list = vi
+      .spyOn(ConnectionsAPI, 'list')
+      .mockResolvedValue({ connections: [saved], systems: [] });
+    const { ledger } = renderReadState();
+    await waitFor(() => expect(screen.getByText('1 system connected')).toBeInTheDocument());
+    list.mockRejectedValueOnce({ status: 503 });
+    ledger.reload();
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Showing the last loaded list. Connection status may be out of date.',
+      ),
+    );
+    expect(screen.getByText('Last saved host')).toBeInTheDocument();
+    expect(screen.queryByText('All active')).toBeNull();
+    expect(screen.queryByText('1 system connected')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.getByText('1 system connected')).toBeInTheDocument());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(list).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([401, 403])(
+    'withdraws retained rows on HTTP %s without claiming absence',
+    async (status) => {
+      const list = vi
+        .spyOn(ConnectionsAPI, 'list')
+        .mockResolvedValue({
+          connections: [connectionFixture({ name: 'Private host' })],
+          systems: [],
+        });
+      const { ledger } = renderReadState(true);
+      await waitFor(() => expect(screen.getByText('Private host')).toBeInTheDocument());
+      list.mockRejectedValueOnce({ status });
+      ledger.reload();
+      await waitFor(() =>
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          status === 401 ? 'Sign in again' : 'Access denied',
+        ),
+      );
+      expect(screen.queryByText('Private host')).toBeNull();
+      expect(screen.queryByText('0 systems connected')).toBeNull();
+      expect(screen.queryByText('Start monitoring infrastructure')).toBeNull();
+      // Reading is still available without a configuration-write grant.
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    },
+  );
+
+  it('withdraws the old organisation while its replacement is unread, then permits genuine empty onboarding', async () => {
+    const list = vi
+      .spyOn(ConnectionsAPI, 'list')
+      .mockResolvedValueOnce({
+        connections: [connectionFixture({ name: 'Old org host' })],
+        systems: [],
+      });
+    const { ledger } = renderReadState();
+    await waitFor(() => expect(screen.getByText('Old org host')).toBeInTheDocument());
+    list.mockRejectedValueOnce({ status: 503 });
+    eventBus.emit('org_switched', 'org-b');
+    expect(screen.queryByText('Old org host')).toBeNull();
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(ledger.rows()).toEqual([]);
+    expect(screen.queryByText('0 systems connected')).toBeNull();
+    list.mockResolvedValueOnce({ connections: [], systems: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.getByText('0 systems connected')).toBeInTheDocument());
+    expect(screen.getByText('Start monitoring infrastructure')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('renders the canonical first-report label through the real connection ledger', async () => {
