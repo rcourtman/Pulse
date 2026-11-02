@@ -272,7 +272,7 @@ func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
 					"endtime":     1700000100,
 				},
 			}})
-		case "/api2/json/config/sync":
+		case "/api2/json/admin/sync":
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
 				"id":               "sync-remote-a",
 				"store":            "fast",
@@ -283,13 +283,13 @@ func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
 				"last-run-endtime": 1700000060,
 				"next-run":         1700003600,
 			}}})
-		case "/api2/json/config/verify":
+		case "/api2/json/admin/verify":
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
 				"id":             "verify-fast",
 				"store":          "fast",
 				"last-run-state": "OK",
 			}}})
-		case "/api2/json/config/prune":
+		case "/api2/json/admin/prune":
 			w.WriteHeader(http.StatusForbidden)
 			_, _ = w.Write([]byte("permission denied"))
 		case "/api2/json/admin/datastore/fast/gc":
@@ -338,6 +338,87 @@ func TestClient_GetJobHealthEvidence_MergesConfigAndTaskFacts(t *testing.T) {
 	}
 	if got := byID["garbage:fast"]; got.Confidence != "direct-config-last-run" || got.Store != "fast" {
 		t.Fatalf("expected garbage config evidence, got %+v", got)
+	}
+}
+
+// A real PBS returns run results only from /admin/{family}; /config/{family}
+// lists the same jobs with schedules and retention but no last-run fields.
+// Reading /config made every successful prune, verify and sync job look as if
+// it had never run.
+func TestClient_GetJobHealthEvidence_ReadsRunStatusFromAdminEndpoints(t *testing.T) {
+	var configReads []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes/localhost/tasks":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{}})
+		case "/api2/json/admin/prune":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+				"id":               "prune-main-delly",
+				"store":            "main",
+				"ns":               "delly",
+				"schedule":         "07:10",
+				"keep-daily":       3,
+				"last-run-state":   "OK",
+				"last-run-upid":    "UPID:pbs:prunejob:main:delly",
+				"last-run-endtime": 1793603400,
+				"next-run":         1793689800,
+			}}})
+		case "/api2/json/admin/verify":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+				"id":               "verify-main",
+				"store":            "main",
+				"schedule":         "sun 05:00",
+				"last-run-state":   "OK",
+				"last-run-endtime": 1793509200,
+				"next-run":         1794114000,
+			}}})
+		case "/api2/json/admin/sync":
+			// An older PBS without the status endpoint falls back to /config.
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("Path '/api2/json/admin/sync' not found."))
+		case "/api2/json/config/sync":
+			configReads = append(configReads, r.URL.Path)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+				"id":       "sync-offsite",
+				"store":    "main",
+				"schedule": "hourly",
+			}}})
+		case "/api2/json/config/prune", "/api2/json/config/verify":
+			configReads = append(configReads, r.URL.Path)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{}})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "root@pam!token", TokenValue: "secret"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	evidence, err := client.GetJobHealthEvidence(context.Background(), []string{"main"}, JobHealthOptions{
+		MonitorSyncJobs:   true,
+		MonitorVerifyJobs: true,
+		MonitorPruneJobs:  true,
+	})
+	if err != nil {
+		t.Fatalf("GetJobHealthEvidence: %v", err)
+	}
+	byID := make(map[string]JobHealthEvidence)
+	for _, item := range evidence {
+		byID[item.ID] = item
+	}
+	if got := byID["prune-main-delly"]; got.LastRunState != "OK" || got.LastRunEndtime != 1793603400 || got.NextRun != 1793689800 || got.Confidence != JobEvidenceConfidenceConfigLastRun {
+		t.Fatalf("expected prune run status from /admin/prune, got %+v", got)
+	}
+	if got := byID["verify-main"]; got.LastRunState != "OK" || got.Confidence != JobEvidenceConfidenceConfigLastRun {
+		t.Fatalf("expected verify run status from /admin/verify, got %+v", got)
+	}
+	if got := byID["sync-offsite"]; got.Schedule != "hourly" || got.LastRunState != "" || got.Confidence != JobEvidenceConfidenceConfigOnly {
+		t.Fatalf("expected config-only sync evidence after /admin/sync was not found, got %+v", got)
+	}
+	if len(configReads) != 1 || configReads[0] != "/api2/json/config/sync" {
+		t.Fatalf("expected /config to be read only for the family without /admin, got %v", configReads)
 	}
 }
 
