@@ -147,6 +147,62 @@ verbose/trace output when sharing a result. Share only the relevant redacted
 error, not the whole infrastructure response. Revoke tokens that are no longer
 needed in Pulse's API Access settings.
 
+### Private JSON request bodies
+
+A private authentication header does **not** protect a secret copied into a
+request body on the command line. Keep passwords, client secrets and tokens out
+of shell arguments, `echo`, pasted here-documents and shared terminal recordings.
+The JSON examples on this page describe fields; do not replace their placeholders
+with real credentials in a shell command. Prefer the signed-in settings UI for
+one-off credential changes.
+
+If you deliberately need the existing [token validation endpoint](#validate-api-token-admin-session-or-settingswrite-token),
+define `pulse_api` above in the same Bash session and use a **separate, already
+authorised** `settings:write` header file. Put the token to check in a new private
+JSON file using an editor, then redirect that file into the helper:
+
+```bash
+(
+  set -eu
+  umask 077
+  body_dir="$HOME/.config/pulse"
+  if [ -L "$HOME/.config" ] || [ -L "$body_dir" ]; then
+    printf 'Refusing a symlinked request directory.\n' >&2
+    exit 1
+  fi
+  mkdir -p "$body_dir"
+  chmod 700 "$body_dir"
+  body_file=$(mktemp "$body_dir/api-body.XXXXXX")
+  printf 'Private request body: %s\n' "$body_file"
+  vi "$body_file"
+  if [ -L "$body_file" ] || [ ! -f "$body_file" ]; then
+    printf 'Request body must remain a regular file.\n' >&2
+    exit 1
+  fi
+  chmod 600 "$body_file"
+  pulse_api POST /api/security/validate-token < "$body_file"
+)
+```
+
+In the editor, save this JSON with the token you intend to check:
+
+```json
+{ "token": "<token-to-check>" }
+```
+
+The token being checked is **not** the header credential authorising validation.
+Do not widen a monitoring token merely to run this example; an ordinary protected
+read with that token checks its own access. Validation returns HTTP 200 for both
+`valid: true` and `valid: false`; inspect the saved private response, not just the
+status. A valid result updates last-used time but does not prove permission for
+another endpoint, an agent's connection or a completed operation.
+
+Preparation or editor failure stops before sending; the request is not retried.
+The body and response files remain private even after failure, and each new body
+gets a fresh filename rather than overwriting an earlier one. Keep them and any
+editor swap/backup files outside shared repositories and diagnostics, and dispose
+of them under your normal secret-retention policy. Do not print or attach them.
+
 ### Bearer Token
 
 The same API token can use a Bearer header instead. Replace the header file's
@@ -1180,9 +1236,10 @@ API-token callers must hold every scope on the target token.
 
 ### Validate API Token (admin session or `settings:write` token)
 `POST /api/security/validate-token`
-```json
-{ "token": "raw-token" }
-```
+
+The request body contains a secret. Use the [private JSON body recipe](#private-json-request-bodies)
+above; do not paste the token into a shell command.
+
 Returns `{ "valid": true, "message": "Token is valid" }` for a known, unexpired token. An unknown or expired token returns HTTP 200 with `"valid": false` and `"message": "Token is invalid"`. An empty `token` returns HTTP 400 with `"valid": false` and `"message": "Token is required"`. When no API tokens are configured, the response is HTTP 200 with `"valid": false` and `"message": "API token authentication is not configured"`. API-token callers need the `settings:write` scope; a token without it gets HTTP 403. Non-admin proxy-auth callers get HTTP 403. Requests over the rate limit get HTTP 429. A successful validation updates the token's last-used time. This endpoint is not gated by the Pro audit licence.
 
 ### Recovery sessions (direct loopback)
