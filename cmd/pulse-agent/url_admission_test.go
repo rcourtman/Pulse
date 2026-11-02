@@ -31,14 +31,28 @@ func TestRunValidateURLIsReadOnly(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stateDir := t.TempDir()
 			files := map[string]string{"agent-id": "existing-id\n", "token": "existing-token\n", "runtime.token": "existing-runtime\n", "connection.env": "existing-connection\n", "install.sh": "existing-recovery\n"}
+			fileModes := make(map[string]os.FileMode, len(files))
 			for name, value := range files {
-				if err := os.WriteFile(filepath.Join(stateDir, name), []byte(value), 0600); err != nil {
+				path := filepath.Join(stateDir, name)
+				if err := os.WriteFile(path, []byte(value), 0600); err != nil {
 					t.Fatal(err)
 				}
+				info, err := os.Stat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fileModes[name] = info.Mode()
 			}
 			if err := os.Chmod(stateDir, 0750); err != nil {
 				t.Fatal(err)
 			}
+			stateBefore, err := os.Stat(stateDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Compare the actual filesystem modes before and after admission.
+			// Windows Chmod only controls the read-only bit, not Unix 0750/0600.
+			// Keep the read-only assertion on every platform rather than skipping it.
 			getenv := func(key string) string {
 				if key == "PULSE_INSECURE_SKIP_VERIFY" && tc.insecure {
 					return "true"
@@ -47,7 +61,7 @@ func TestRunValidateURLIsReadOnly(t *testing.T) {
 			}
 			// Missing credential/observer files and enrollment must not be read or
 			// run. A configured log must not be created even on invalid input.
-			err := run(context.Background(), []string{"--validate-url", "--url", tc.url, "--state-dir", stateDir,
+			err = run(context.Background(), []string{"--validate-url", "--url", tc.url, "--state-dir", stateDir,
 				"--token-file", filepath.Join(stateDir, "absent-token"), "--observers-file", filepath.Join(stateDir, "absent-observers"),
 				"--log-file", filepath.Join(stateDir, "absent-log"), "--enroll"}, getenv)
 			if (err != nil) != tc.wantError || (err != nil && !strings.Contains(err.Error(), "invalid pulse URL")) {
@@ -58,14 +72,14 @@ func TestRunValidateURLIsReadOnly(t *testing.T) {
 				t.Fatalf("URL check added state/log files: %v, %v", entries, err)
 			}
 			info, err := os.Stat(stateDir)
-			if err != nil || info.Mode().Perm() != 0750 {
+			if err != nil || info.Mode() != stateBefore.Mode() {
 				t.Fatalf("URL check changed state directory permissions: %v, %v", info, err)
 			}
 			for name, value := range files {
 				path := filepath.Join(stateDir, name)
 				got, err := os.ReadFile(path)
 				info, statErr := os.Stat(path)
-				if err != nil || statErr != nil || string(got) != value || info.Mode().Perm() != 0600 {
+				if err != nil || statErr != nil || string(got) != value || info.Mode() != fileModes[name] {
 					t.Fatalf("URL check changed %s: %q, %v, %v", name, got, err, statErr)
 				}
 			}
