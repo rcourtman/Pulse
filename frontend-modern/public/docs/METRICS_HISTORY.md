@@ -164,8 +164,9 @@ retention as a diagnostic workaround.
 
 `PULSE_METRICS_DB_PATH` remains a supported storage-location override for only
 the default organization's `metrics.db`; it does not move secrets or general
-configuration. **Changing the path opens a different history store; it does not
-migrate or merge the existing history.** An empty chart after a path change is
+configuration. This is not a repair for missing history or unexplained writes.
+**Changing the path opens a different history store; it does not migrate the
+existing history or merge stores.** An empty chart after a path change is
 not proof that the original data was deleted or that collection recovered.
 Keep the original store intact.
 

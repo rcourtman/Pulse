@@ -56,7 +56,7 @@ class MetricsStorageDocsTest(unittest.TestCase):
         self.assertIn("service restart alone is not guaranteed", ram)
         normal = " ".join(text.split())
         for boundary in ("supported storage-location override", "default organization",
-                         "does not migrate or merge", "Keep the original store intact",
+                         "does not migrate the existing history or merge stores", "Keep the original store intact",
                          "Do not restart, recreate a container, switch paths again",
                          "copy an open database", "Do not post configuration",
                          "cannot recover observations lost"):
