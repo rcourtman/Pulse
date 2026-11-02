@@ -81,9 +81,9 @@ class AgentDocsTest(unittest.TestCase):
                     with self.subTest(name=name, command=block):
                         subprocess.run(["bash", "-n", "-c", block], check=True, capture_output=True)
                     count += 1
-        # Include the separate runner-only removal command, not just the
-        # collector uninstall and the existing setup/cleanup recipes.
-        self.assertEqual(count, 17)
+        # Include runner-only removal and both saved-state helper maintenance
+        # commands (preflight, then update), as well as setup/cleanup recipes.
+        self.assertEqual(count, 19)
 
     def test_private_file_preparation_preserves_existing_token(self):
         command = recipe(NAMES[0], 'credential_file="$config_dir/agent-token"')

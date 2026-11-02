@@ -82,6 +82,17 @@ class AgentHelperUpdateDocsTest(unittest.TestCase):
         self.assertIn('verify_download_signature "$TMP_HELPER_BIN" "$helper_signature"', installer)
         self.assertIn('provision_typed_privileged_helper', installer)
 
+    def test_runtime_guide_links_to_the_immutable_documented_procedure(self):
+        source = (ROOT / "internal/agentupdate/update.go").read_text()
+        link = re.search(r'Str\("helper_update_guide", "([^"]+)"\)', source)
+        self.assertIsNotNone(link)
+        # This ancestor contains the guide itself. Runtime help must not drift
+        # to a different main-branch procedure after the agent was installed.
+        self.assertEqual(link.group(1),
+                         "https://github.com/rcourtman/Pulse/blob/"
+                         "b87c182407ef54a0503c19c06a1157a49e20b65e/"
+                         "docs/UNIFIED_AGENT.md#updating-the-typed-helper")
+
 
 if __name__ == "__main__":
     unittest.main()

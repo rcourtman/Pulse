@@ -321,7 +321,7 @@ func (u *Updater) RunLoop(ctx context.Context) {
 		// without treating an unmeasured helper version as a health failure.
 		u.logger.Info().
 			Str("update_scope", "collector-only").
-			Str("helper_update_guide", "https://github.com/rcourtman/Pulse/blob/main/docs/UNIFIED_AGENT.md#updating-the-typed-helper").
+			Str("helper_update_guide", "https://github.com/rcourtman/Pulse/blob/b87c182407ef54a0503c19c06a1157a49e20b65e/docs/UNIFIED_AGENT.md#updating-the-typed-helper").
 			Msg("Automatic updates replace pulse-agent only, not the typed privilege helper; use the agent installer --update for a separate helper update")
 	}
 

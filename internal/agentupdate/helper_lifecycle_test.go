@@ -56,7 +56,7 @@ func TestRunLoopExplainsSeparateHelperLifecycleWithoutChangingHealth(t *testing.
 				notes++
 				message, _ := event["message"].(string)
 				if event["level"] != "info" || !strings.Contains(message, "agent installer --update") ||
-					event["helper_update_guide"] != "https://github.com/rcourtman/Pulse/blob/main/docs/UNIFIED_AGENT.md#updating-the-typed-helper" {
+					event["helper_update_guide"] != "https://github.com/rcourtman/Pulse/blob/b87c182407ef54a0503c19c06a1157a49e20b65e/docs/UNIFIED_AGENT.md#updating-the-typed-helper" {
 					t.Fatalf("missing actionable helper lifecycle: %+v", event)
 				}
 			}
