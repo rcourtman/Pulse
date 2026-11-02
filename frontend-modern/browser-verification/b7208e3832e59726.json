@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "d07461dbbf5bd7f4306ece1dd6f760d3576f1683",
+  "verified_at": "2026-11-02T10:14:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "e6b82c648c0a9dc4154d58fdd2fe99e43f033e7c163c62557d855a33428d16dc",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "5c60e8e33037546475f2faa4b529627f39251aa26acf29c8e56bd33caad19cf6",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "c75ba11cbb2c665b6d2fafa618bd3fc53cce71b3d241a4d7af1dd2d580073d8f"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/standalone/machines",
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "production vite build of this change served by vite preview on pulse-dev against a mock backend built from origin/main (4 Proxmox nodes, 3 machines, 2 Docker hosts, dark theme)",
+    "multi-disk Proxmox nodes and machines, single-disk Proxmox node and Docker hosts",
+    "View preferences open with Grouped, Bars, History, Guest and Show selected",
+    "Mac in-app preview (dark and light themes) for the toggle colours before the pulse-dev pass"
+  ],
+  "interactions": [
+    "read every host Disk cell at 1440 and 390: one horizontal bar per row, no vertical micro-bars, multi-disk rows labelled 'NN% max' on desktop and 'NN%' on phone, single-disk rows keep used/total on desktop",
+    "measured disk labels for clipping (scrollWidth vs clientWidth): none clipped at either width; row heights 33px desktop, 32px phone; no horizontal page overflow",
+    "hovered a multi-disk machine's disk bar: the Disk Breakdown tooltip lists each mount with its percentage and capacity",
+    "opened View preferences: selected toggles render blue text with a blue ring, unselected stay muted; Layout and Metrics icons sit on the label's line (button height 28px)",
+    "no page errors in any route at either width"
+  ]
+}

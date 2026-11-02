@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Host rows show their own alerts, including Proxmox physical disks (2 November 2026)
+
+The Proxmox node row's alert stripe and tint read the node's own alerts
+through `getUnifiedResourceAlertStyles`, the matcher the Docker, Machines and
+Kubernetes host tables already use, instead of every alert whose `node` field
+equals the node name. A guest's alert marks its guest row, not its host's, so
+a tinted host row is explained by something on that host. The unified matcher
+(`getAlertsForUnifiedResource` in `frontend-modern/src/utils/alerts.ts`) now
+also admits a Proxmox node's physical-disk health and wearout alerts, raised on
+`<instance>:<node>:disk:<device>` (`ProxmoxPhysicalDiskAlertResourceID`), which
+only the name match used to catch; it builds that prefix from the node's
+`proxmox.instance` and `proxmox.nodeName`, as the backend does. Node metric
+alerts keyed on the node source id and agent component alerts under
+`agent:<id>/` are unchanged. `alerts.test.ts` and `ProxmoxNodesTable.test.tsx`
+cover the admitted disk alerts, the excluded guest and sibling-node alerts,
+and the row accent. No alert evaluation, identity, history or notification
+behaviour changes.
+
 ### Runtime alert controls describe only supported scope (28 October 2026)
 
 Container Runtime rows expose their existing Offline Alerts control, not an

@@ -48,8 +48,11 @@ const labelClassByVariant: Partial<Record<FilterButtonGroupVariant, string>> = {
   default: 'px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted',
 };
 
+// The compact track is surface-hover, which in dark mode is lighter than the
+// active surface, so the selected button cannot rely on its fill to stand out.
+// Default selection carries the accent colour, as the other variants do.
 const activeToneClassByOptionTone: Record<FilterButtonGroupOptionTone, string> = {
-  default: 'text-base-content ring-border-subtle',
+  default: 'text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-800',
   info: 'text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-800',
   success: 'text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800',
   warning: 'text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-800',

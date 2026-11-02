@@ -341,8 +341,10 @@ export function buildStackedDiskBarPresentation(
       : (aggregatePercent ?? 0);
   const anomalyRatio = formatAnomalyRatio(anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
+  // A reported disk without a usable reading must not drop a multi-disk host
+  // back to its aggregate: the measured disk may be the one that is full.
   const useMaxSummary =
-    aggregateMode && hasMultipleDisks && summaryStrategy === 'max' && maxInfo !== null;
+    aggregateMode && allDisks.length > 1 && summaryStrategy === 'max' && maxInfo !== null;
   const displayPercentValue = useMaxSummary && maxInfo ? maxInfo.percent : overallPercent;
   const barPercent = Math.min(displayPercentValue, 100);
   const maxLabelShort = maxInfo
@@ -374,13 +376,13 @@ export function buildStackedDiskBarPresentation(
     ? `${disks.length} ${current ? 'operational' : 'last known'} disks in breakdown`
     : '';
   const showDiskCount = Boolean(props.showDiskCount && hasMultipleDisks);
+  // The max marker is a hint, never worth clipping the percentage for: on a
+  // narrow cell it drops and the tooltip still names the fullest disk.
   const showMaxLabel =
-    useMaxSummary ||
-    (aggregateMode &&
-      hasMultipleDisks &&
-      maxLabelShort.length > 0 &&
-      containerWidth >=
-        estimateTextWidth(displayLabel, { detail: ` ${maxLabelShort}` }) + LABEL_PADDING_PX);
+    (useMaxSummary || (aggregateMode && hasMultipleDisks)) &&
+    maxLabelShort.length > 0 &&
+    containerWidth >=
+      estimateTextWidth(displayLabel, { detail: ` ${maxLabelShort}` }) + LABEL_PADDING_PX;
   // The anomaly marker shares the label's line whenever it renders.
   const anomalyMarker = anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
   const showSublabel =
@@ -394,7 +396,7 @@ export function buildStackedDiskBarPresentation(
         LABEL_PADDING_PX;
   const barColor = !current
     ? UNKNOWN_DISK_COLOR
-    : aggregateMode && hasMultipleDisks && maxInfo
+    : (useMaxSummary || (aggregateMode && hasMultipleDisks)) && maxInfo
       ? getMetricColorRgba(maxInfo.percent, 'disk', props.thresholds)
       : getMetricColorRgba(overallPercent, 'disk', props.thresholds);
   const segments =

@@ -23,6 +23,21 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Compact Proxmox node Disk cells show the fullest disk (2 November 2026)
+
+A compact Proxmox node row (phone width or compact metrics) has no room for
+the per-disk `vertical-bars` micro-bars, so a node with more than one
+agent-reported disk draws the `StackedDiskBar` `aggregate` bar. It used the
+average across disks, which hid a nearly full disk behind a half-empty one;
+it now passes `summaryStrategy="max"` and is sized and coloured by the
+fullest measured disk, and the max summary holds while any reported disk is
+unmeasured. Wide rows keep one micro-bar per disk, and Machines and Docker
+host tables are unchanged. The Proxmox node row's alert accent reads the
+node's own alerts through `getUnifiedResourceAlertStyles`, like the other
+host tables, and no longer tints for a guest's alert. `StackedDiskBar.test.tsx`
+covers the compact summary and `ProxmoxNodesTable.test.tsx` the accent. No
+resource identity, projection or metric change.
+
 ### Backup views share bounded owned-focus restoration
 
 Coverage posture sorting and By date regrouping use the same existing backups

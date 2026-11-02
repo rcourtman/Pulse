@@ -320,6 +320,24 @@ describe('getAlertsForUnifiedResource', () => {
     expect(getAlertsForUnifiedResource(host, active, false)).toEqual([]);
   });
 
+  it("matches a Proxmox node's physical-disk alerts but not its guests' alerts", () => {
+    const node = resource({
+      id: 'agent:pve1',
+      proxmox: { sourceId: 'homelab-pve1', instance: 'homelab', nodeName: 'pve1' },
+    } as Partial<Resource>);
+    const active = byId(
+      alert('node-memory', 'homelab-pve1', { node: 'pve1' }),
+      alert('disk-health', 'homelab:pve1:disk:/dev/sda', { level: 'critical', node: 'pve1' }),
+      alert('guest-cpu', 'homelab:pve1:101', { node: 'pve1' }),
+      alert('other-node-disk', 'homelab:pve10:disk:/dev/sda', { node: 'pve10' }),
+    );
+
+    expect(ids(getAlertsForUnifiedResource(node, active, true))).toEqual([
+      'disk-health',
+      'node-memory',
+    ]);
+  });
+
   it("matches a Docker container's alerts on its host and container ID, or its name", () => {
     const container = resource({
       id: 'app-container-b858bc8f1caf601a',

@@ -619,6 +619,27 @@ describe('StackedDiskBar', () => {
       // Bar color should be critical (based on max disk at 92%)
       expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
     });
+
+    it('summarises a compact multi-disk cell by its fullest disk, not the average', () => {
+      const { container } = render(() => (
+        <StackedDiskBar
+          mode="aggregate"
+          summaryStrategy="max"
+          aggregateDisk={makeDisk({ usage: 20, used: 20, total: 100 })}
+          disks={[
+            makeDisk({ mountpoint: '/', usage: 24, used: 24, total: 100 }),
+            makeDisk({ mountpoint: '/data', usage: 93, used: 93, total: 100 }),
+            makeDisk({ mountpoint: '/scratch', usage: -1 }),
+          ]}
+        />
+      ));
+
+      // One fill, sized and coloured by /data rather than the 20% aggregate.
+      expect(container.querySelectorAll('[data-stacked-disk-fill="single"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[data-stacked-disk-fill="vertical"]')).toHaveLength(0);
+      expect(getSingleBarFill(container)?.getAttribute('fill')).toContain('239, 68, 68');
+      expect(screen.getByText('93%')).toBeInTheDocument();
+    });
   });
 
   describe('vertical-bars mode', () => {

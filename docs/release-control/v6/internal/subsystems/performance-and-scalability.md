@@ -3430,6 +3430,9 @@ in the model from the existing max-disk summary, so a multi-disk host answers
 "how close is this host to running out of space?" at a glance in Bars mode
 instead of only on hover or in Trends mode. The label names no disk in the
 row; the mount and the per-disk breakdown stay in the title and tooltip.
+A compact Proxmox node cell has no room for the micro-bars and draws the
+`aggregate` bar with `summaryStrategy="max"`, sized and coloured by the
+fullest measured disk, so a nearly full disk is not averaged away on a phone.
 The dashboard stacked memory bar now follows that same pattern: the shell
 stays in `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`,
 while memory-capacity math, balloon/swap tooltip derivation, anomaly label

@@ -238,9 +238,11 @@ describe('FilterButtonGroup', () => {
     const activeButton = within(group).getByRole('button', { name: 'All' });
     const inactiveButton = within(group).getByRole('button', { name: 'VMs' });
 
-    expect(activeButton.className).toContain('text-base-content');
+    expect(activeButton.className).toContain('text-blue-700');
+    expect(activeButton.className).toContain('dark:text-blue-300');
     expect(activeButton.className).toContain('shadow-xs');
     expect(inactiveButton.className).toContain('text-muted');
+    expect(inactiveButton.className).not.toContain('text-blue-700');
   });
 
   it('keeps every filter option touch-sized on phones and compact above the phone breakpoint', () => {
@@ -283,6 +285,34 @@ describe('FilterButtonGroup', () => {
 
     expect(visualLabel).toHaveClass('inline-flex');
     expect(visualLabel).toHaveClass('whitespace-nowrap');
+  });
+
+  it('lays an icon in a visual label beside its text, not above it', () => {
+    render(() => (
+      <FilterButtonGroup
+        ariaLabel="Layout"
+        options={[
+          {
+            value: 'grouped',
+            label: 'Grouped',
+            visualLabel: (
+              <>
+                <svg data-testid="layout-icon" />
+                Grouped
+              </>
+            ),
+          },
+          { value: 'flat', label: 'List' },
+        ]}
+        value="grouped"
+        onChange={() => undefined}
+        variant="compact"
+      />
+    ));
+
+    // Preflight makes an svg a block box; its wrapper must be a row.
+    const iconWrapper = screen.getByTestId('layout-icon').parentElement;
+    expect(iconWrapper).toHaveClass('inline-flex', 'items-center');
   });
 
   it('supports equal-width segmented controls for compact feature settings', () => {
