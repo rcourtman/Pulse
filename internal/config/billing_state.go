@@ -215,18 +215,7 @@ func (s *FileBillingStore) SaveBillingState(orgID string, state *pkglicensing.Bi
 		return fmt.Errorf("create billing directory for org %q: %w", orgID, err)
 	}
 
-	tmpPath := billingPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
-		return fmt.Errorf("write temp billing state for org %q: %w", orgID, err)
-	}
-	if err := os.Rename(tmpPath, billingPath); err != nil {
-		if removeErr := os.Remove(tmpPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			log.Warn().
-				Err(removeErr).
-				Str("tmp_path", tmpPath).
-				Str("org_id", orgID).
-				Msg("Failed to remove temporary billing state file after failed rename")
-		}
+	if err := writeConfigFileAtomic(defaultFileSystem{}, billingPath, data, 0o600); err != nil {
 		return fmt.Errorf("commit billing state for org %q: %w", orgID, err)
 	}
 
