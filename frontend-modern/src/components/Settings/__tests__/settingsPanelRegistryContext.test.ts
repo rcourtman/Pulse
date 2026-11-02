@@ -351,4 +351,30 @@ describe('buildSettingsPanelRegistryContext', () => {
       canRead: false,
     });
   });
+  it('binds System Logs to the current reader and explicit capability without treating scope order as a new reader', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    expect(context.getSystemLogsPanelProps()).toEqual({
+      currentUser: undefined,
+      accessKey: '[null,null]',
+      canRead: false,
+    });
+    setStatus({
+      currentUsername: 'reader',
+      apiTokenHint: 'hint-a',
+      tokenScopes: ['settings:read', 'settings:write'],
+      settingsCapabilities: { systemLogsRead: true },
+    } as SecurityStatus);
+    const accepted = context.getSystemLogsPanelProps();
+    expect(accepted).toMatchObject({ currentUser: 'reader', canRead: true });
+    setStatus({ ...status(), tokenScopes: ['settings:write', 'settings:read'] } as SecurityStatus);
+    expect(context.getSystemLogsPanelProps()).toEqual(accepted);
+    setStatus({ ...status(), apiTokenHint: 'hint-b' } as SecurityStatus);
+    expect(context.getSystemLogsPanelProps().accessKey).not.toBe(accepted.accessKey);
+    setStatus({ ...status(), settingsCapabilities: { systemLogsRead: false } } as SecurityStatus);
+    expect(context.getSystemLogsPanelProps().canRead).toBe(false);
+  });
 });
