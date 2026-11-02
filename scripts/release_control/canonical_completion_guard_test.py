@@ -1363,8 +1363,23 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         other = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])["api-contracts"]
         self.assertNotIn(proof, other["verification_requirements"][0]["exact_files"])
 
-    def test_unattended_reporting_proofs_do_not_satisfy_unrelated_runtime_changes(self):
+    def test_focused_backend_proofs_do_not_satisfy_unrelated_runtime_changes(self):
         cases = [
+            (
+                "api-contracts", "internal/api/token_response_authority.go",
+                "internal/api/token_response_media_test.go",
+                "internal/api/access_control_handlers.go",
+            ),
+            (
+                "api-contracts", "internal/api/token_stream_lifetime.go",
+                "internal/api/token_stream_lifetime_test.go",
+                "internal/api/access_control_handlers.go",
+            ),
+            (
+                "api-contracts", "internal/api/configapi/config_import_replay.go",
+                "internal/api/configapi/config_import_admission_test.go",
+                "internal/api/access_control_handlers.go",
+            ),
             (
                 "api-contracts", "internal/api/metrics_reporting_handlers.go",
                 "internal/api/report_schedule_inventory_test.go",

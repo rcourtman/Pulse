@@ -3369,6 +3369,47 @@
             ]
           },
           {
+            "id": "protected-response-authority",
+            "label": "protected synchronous response authority and media proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/token_response_authority.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/token_response_authority_test.go",
+              "internal/api/token_response_media_test.go"
+            ]
+          },
+          {
+            "id": "protected-stream-authority",
+            "label": "protected stream authority and media proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/token_stream_lifetime.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/token_stream_lifetime_test.go"
+            ]
+          },
+          {
+            "id": "configuration-import-replay",
+            "label": "bounded configuration import replay admission proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/configapi/config_import_replay.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/configapi/config_import_admission_test.go",
+              "internal/api/configapi/config_import_replay_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [
@@ -3393,7 +3434,6 @@
               "internal/api/availability_handlers_test.go",
               "internal/api/chartapi/history_activity_test.go",
               "internal/api/configapi/config_handlers_connection_test.go",
-              "internal/api/configapi/config_import_admission_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
               "internal/api/docker_container_action_executor_test.go",
@@ -3406,8 +3446,6 @@
               "internal/api/patrol_autopilot_test.go",
               "internal/api/runtime_inventory_sources_test.go",
               "internal/api/telemetry_history_reads_test.go",
-              "internal/api/token_response_media_test.go",
-              "internal/api/token_stream_lifetime_test.go",
               "internal/api/truenas_disk_history_integration_test.go",
               "pulse-enterprise:test/extensions_contract_test.go"
             ]
