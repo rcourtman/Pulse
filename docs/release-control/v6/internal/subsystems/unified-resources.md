@@ -222,13 +222,14 @@ narrow browser proof exercises the same producer through the inventory consumer
 with native interactions and inspected pixels. No API, provider, guest, polling,
 auth, resource identity or protection-policy change, nor installed recovery claim.
 
-### Backup servers rows name a PBS resource once (2 November 2026)
+### Backup servers rows name the datastore, then its PBS resource (2 November 2026)
 
 `ProxmoxBackupServersTable` still renders one row per datastore of a `pbs`
-resource, but only the resource's first row shows its name and web-interface
-link; later rows carry the name for screen readers alone and keep their own
-detail toggle and drawer. The rows and their resource identity are unchanged;
-only the repeated visible label is gone.
+resource, keyed by resource and datastore. Each row now leads with the
+datastore name and shows the resource's name and web-interface link beside it,
+and every row's State cell reads the resource's connection status (or, on
+phones, a job problem or fill forecast that takes its place). The rows, their keys and
+their drawers are unchanged; `BackupServerRow.continuesServer` is removed.
 
 ### Backup empty states name only filters that exist (2 November 2026)
 
@@ -1025,10 +1026,10 @@ server health or the other source's artifacts. Fixed diagnostics expose no
 response body. The inventory parser, mounted table and
 `browser-tests/backup-inventory-format.cjs` exercise that combined boundary.
 
-`BackupServerRow.continuesServer` is presentation only: every row still
-carries the server's host readings and resource snapshot, and the model test
-pins the readings on every row while the flag is true only for a server's
-later datastore rows.
+Every `BackupServerRow` carries the server's host readings and resource
+snapshot, and the model test pins the readings on every row. (The former
+`continuesServer` presentation flag was removed on 2 November 2026, when rows
+began naming their datastore first.)
 
 `BackupServerRow.jobs` reads the PBS resource's existing `jobHealthEvidence`
 (the backend's per-job posture and reason) and binds each job to a datastore

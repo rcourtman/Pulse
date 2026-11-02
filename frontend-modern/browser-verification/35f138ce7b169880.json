@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "8254756f4a9cccf1f205cff8f3f6d6e3eeab6109",
+  "verified_at": "2026-11-02T17:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "09333b379010aea294ca0e1f552c4bffdbadf3128147a5bbd00fa5ddd071d9c8",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "62093b6925501024cd3ea046145cac3e29ca97952589f1d0641d880c842fff3c"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev",
+    "Backup servers table with a two-datastore server, closed and with the second row expanded",
+    "dark and light themes, desktop and phone layouts"
+  ],
+  "interactions": [
+    "built this branch and ran it in mock mode on pulse-dev, signed in and opened Proxmox > Backups > By date at 1440x1000 and 375x812 in dark and light themes",
+    "the Backup servers table's first column reads Datastore: rows read 'offsite-vault backup-vault', 'primary-vault backup-vault', 'primary-vault dr-vault', each with Healthy in State; no separate Datastore column",
+    "rows measured 33px on desktop and 32px on phone; no horizontal page overflow at either width",
+    "on phone the datastore names stay whole and the server name truncates; the datastore span computes max-width calc(100% - 32px), leaving room for the server's web link",
+    "opened the primary-vault row's drawer on desktop and tapped it on phone: the drawer reads Backup reader backup-vault, Datastore primary-vault",
+    "the same build also ran against a copy of the maintainer's real Proxmox and PBS config for the maintainer to inspect"
+  ]
+}

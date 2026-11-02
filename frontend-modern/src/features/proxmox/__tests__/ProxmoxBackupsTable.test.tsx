@@ -354,7 +354,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 
-  it('shows host cells once for a server with several datastores', async () => {
+  it('names each row by its datastore, with its server beside it', async () => {
     mockBackupAPIs();
     const twoStores = {
       ...pbsServerResource,
@@ -391,22 +391,25 @@ describe('ProxmoxBackupsTable', () => {
       return dataRows()[row].querySelectorAll('td')[columns.indexOf(column)].textContent?.trim();
     };
 
-    // Two datastores of one server read as one server, not two: its name and
-    // status sit on its first row, and the second row shows only its own
-    // datastore figures, naming the server for screen readers alone. Host CPU,
-    // memory, uptime and version are in the server's drawer, not the row.
+    // Two datastores of one server read as two datastores, not two servers:
+    // each row leads with its datastore name and carries its server and status,
+    // so every row reads on its own. There is no separate server column. Host
+    // CPU, memory, uptime and version are in the server's drawer, not the row.
     expect(dataRows()).toHaveLength(2);
-    const names = within(table).getAllByText('pbs-main');
-    expect(names).toHaveLength(2);
-    expect(names[0]).not.toHaveClass('sr-only');
-    expect(names[1]).toHaveClass('sr-only');
+    expect(columns[0]).toBe('datastore');
+    expect(columns).not.toContain('server');
+    const datastoreNames = Array.from(table.querySelectorAll('[data-backup-server-datastore]')).map(
+      (name) => name.textContent,
+    );
+    expect(datastoreNames).toEqual(['main', 'offsite']);
+    expect(within(table).getAllByText('pbs-main')).toHaveLength(2);
     expect(cellText(0, 'status')).not.toBe('');
-    expect(cellText(1, 'status')).toBe('');
+    expect(cellText(1, 'status')).toBe(cellText(0, 'status'));
     expect(
       columns.filter((column) => ['version', 'cpu', 'memory', 'uptime'].includes(column ?? '')),
     ).toEqual([]);
-    expect(cellText(0, 'datastore')).toBe('main');
-    expect(cellText(1, 'datastore')).toBe('offsite');
+    expect(cellText(0, 'datastore')).toBe('mainpbs-main');
+    expect(cellText(1, 'datastore')).toBe('offsitepbs-main');
     expect(cellText(1, 'used')).toContain('25');
     const offsite = within(table).getByRole('button', {
       name: 'Expand details for pbs-main · datastore offsite',
@@ -3456,17 +3459,17 @@ describe('PBS inventory state column', () => {
     const countColumn = table.querySelector<HTMLElement>(
       'col[data-proxmox-backups-column="backups"]',
     )!;
-    // Server, status, datastore, used, jobs, then the count.
+    // Datastore (with its server), status, used, jobs, then the count.
     const cells = table.querySelector('tbody tr')!.querySelectorAll('td');
     expect(countColumn.style.width).toBe('11%');
-    expect(cells[5]).toHaveTextContent(/^Loading$/);
+    expect(cells[4]).toHaveTextContent(/^Loading$/);
     setState('unavailable');
-    expect(cells[5]).toHaveTextContent(/^Unavailable$/);
+    expect(cells[4]).toHaveTextContent(/^Unavailable$/);
     expect(cells[1]).toHaveTextContent('Healthy');
-    expect(cells[3]).toHaveTextContent('40.0%');
-    expect(cells[3]).toHaveTextContent('400 B / 1000 B');
+    expect(cells[2]).toHaveTextContent('40.0%');
+    expect(cells[2]).toHaveTextContent('400 B / 1000 B');
     setState('available');
-    expect(cells[5]).toHaveTextContent(/^0$/);
+    expect(cells[4]).toHaveTextContent(/^0$/);
     expect(countColumn.style.width).toBe('11%');
   });
 });

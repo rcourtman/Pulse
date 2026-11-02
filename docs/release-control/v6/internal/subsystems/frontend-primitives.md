@@ -544,12 +544,14 @@ route, navigation, access or backup operation changes.
 and phone, so a filtering row looks clickable without adding height. Rows that
 open nothing leave the track empty, so every row's columns still line up.
 
-### Backup servers datastore rows name their server once (2 November 2026)
+### Backup servers rows lead with the datastore (2 November 2026)
 
-`ProxmoxBackupServersTable` renders `ResourceNameWithWebInterfaceLink` only on
-a server's first datastore row; rows with `continuesServer` leave the name cell
-to the detail toggle plus an `sr-only` server name, so the shared web-interface
-link appears once per server rather than once per datastore.
+`getBackupServerColumns` drops the `server` and separate `datastore` columns for
+one `datastore` identity column (`kind: 'name'`) that keeps the shared identity
+anchor (40% on phones, 30% in the basic band). `ProxmoxBackupServersTable`
+renders the datastore name in it, unshrinking up to the cell width, followed by
+`ResourceNameWithWebInterfaceLink` for the server in 10px muted text, which
+truncates first. The status cell renders on every row.
 
 ### Backups By date carries no activity chart (2 November 2026)
 
@@ -9745,11 +9747,11 @@ title because maintenance windows live elsewhere.
 ### Repeated parent cells show once per group
 
 When a table keeps one row per child so each child keeps its own figures,
-toggle and link (PBS datastores under a server), the parent's own readings
-render once, on the group's first row. Later rows keep the parent's name,
-muted, and leave the parent cells empty, so one parent never reads as several
-identical ones. The rows must already be grouped; the Backups "Backup server"
-table follows this through `BackupServerRow.continuesServer`.
+toggle and link, the parent's own readings render once, on the group's first
+row, and later rows leave the parent cells empty, so one parent never reads as
+several identical ones. The rows must already be grouped. The Backups servers
+table no longer uses this rule: since 2 November 2026 each row is named by its
+datastore with the server beside it, and carries the server's status itself.
 
 ### A narrow table folds a dropped column's problem into one it keeps
 
