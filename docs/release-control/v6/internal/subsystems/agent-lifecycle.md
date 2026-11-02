@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Uninstall errors report the service stage actually reached
+
+Missing saved-URL admission says that no service stop or disable was attempted.
+The later server-confirmation refusal instead explains that applicable
+stop/disable steps have already run, retained credentials/service files are
+not running monitoring, and no automatic restart was attempted. It requires
+trusted connectivity and same-instance registration/service-state reconciliation
+before retrying; it must not imply that retained files kept monitoring active.
+
+The existing Unix state fixture asserts both stages. The real-CLI/TLS removal
+controls assert the late message with quiescence-only events and unchanged
+saved bytes/modes on transport, identity and server refusals. These controls
+do not add restart, loosen trust, change teardown order or establish native
+service state or the cause of a reporter's removal failure.
+
 ### NAS utility compatibility preserves URL and lifecycle trust
 
 The Unix installer uses explicit ASCII alphabets and whitespace for `tr`, not

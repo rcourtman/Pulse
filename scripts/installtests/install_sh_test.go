@@ -5399,7 +5399,7 @@ func TestInstallSHOfflineInstallerAndUninstallUseAuthenticatedLifecycleTransport
 		`verify_download_signature "$installer_tmp" "$installer_signature"`,
 		`collector-uninstall`,
 		`run_collector_lifecycle_command "${uninstall_args[@]}"`,
-		`Pulse did not durably confirm collector removal; local credentials and services were retained.`,
+		`Pulse did not durably confirm collector removal; local credentials and service files were retained.`,
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("installer lifecycle transport contract missing %q", required)

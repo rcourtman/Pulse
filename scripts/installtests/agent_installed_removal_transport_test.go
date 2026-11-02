@@ -198,8 +198,24 @@ rm() {
 			} else {
 				// Quiescence may already have stopped and disabled services. It
 				// is not rolled back or described as an unchanged installation.
-				if string(events) != "quiesce\n" || !strings.Contains(string(out), "local credentials and services were retained") {
+				if string(events) != "quiesce\n" {
 					t.Fatalf("unconfirmed removal proceeded to erasure: %s\n%s", events, out)
+				}
+				for _, fact := range []string{
+					"local credentials and service files were retained",
+					"Service stop/disable steps have already run where applicable",
+					"retained files do not mean monitoring is running",
+					"No automatic restart was attempted",
+					"Restore trusted server connectivity",
+					"same-instance registration and stopped/disabled service state before retrying",
+				} {
+					if !strings.Contains(string(out), fact) {
+						t.Fatalf("unconfirmed removal omitted recovery fact %q:\n%s", fact, out)
+					}
+				}
+				if strings.Contains(string(out), "No service stop or disable was attempted") ||
+					strings.Contains(string(out), "credentials and services were retained") {
+					t.Fatalf("unconfirmed removal misrepresented service state:\n%s", out)
 				}
 				for name, want := range saved {
 					path := filepath.Join(state, name)

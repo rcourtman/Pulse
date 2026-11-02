@@ -176,7 +176,8 @@ class AgentUninstallDocsTest(unittest.TestCase):
         # Bind the help to production admission, not a hypothetical policy.
         admission = self.removal.split("if collector_credential_state_present; then", 1)[1]
         missing_url = admission.split('if [[ -z "$PULSE_URL" ]]; then', 1)[1].split("\n        fi", 1)[0]
-        self.assertIn("local credentials and services were retained", missing_url)
+        self.assertIn("local credentials and service files were retained", missing_url)
+        self.assertIn("No service stop or disable was attempted", missing_url)
         self.assertIn("same trusted Pulse instance", missing_url)
         self.assertLess(admission.index("uninstall_collector_registration"),
                         admission.index("teardown_action_runner_service"))
