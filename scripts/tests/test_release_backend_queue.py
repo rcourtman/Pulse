@@ -71,6 +71,10 @@ def record(event):
             data=os.environ["PULSE_DATA_DIR"], ignores_term=ignores_term,
             time=time.monotonic())) + "\n")
 record("start")
+if ignores_term:
+    # Signal readiness only after installing SIG_IGN and journalling the
+    # child's own start. The failure witness must not depend on weight order.
+    (root / "resistant-ready").touch()
 # A disposable VM may schedule the tiny fixture processes far apart. Use a
 # causal barrier, not a .6-second timing race, to prove that a short API shard
 # admits another package while both the prefix and first package remain live.
@@ -84,6 +88,12 @@ if os.environ["QUEUE_CPUS"] == "4":
             if time.monotonic() >= deadline:
                 sys.exit(97)
             time.sleep(.01)
+if os.environ.get("QUEUE_WAIT_FOR_RESISTANT") and name == os.environ.get("QUEUE_FAIL"):
+    deadline = time.monotonic() + 10
+    while not (root / "resistant-ready").exists():
+        if time.monotonic() >= deadline:
+            sys.exit(98)
+        time.sleep(.01)
 time.sleep(delay)
 if os.environ.get("QUEUE_ORPHAN") and name.endswith("internal/monitoring"):
     ready = root / "orphan-ready"
@@ -102,7 +112,7 @@ if os.environ.get("QUEUE_FAIL") in (name, "api" if selected else "other"):
 
 @unittest.skipUnless(sys.platform == "linux", "release backend runner uses Linux Bash job control")
 class ReleaseBackendQueueTest(unittest.TestCase):
-    def run_queue(self, cpus=4, packages=None, **extra):
+    def run_queue(self, cpus=4, packages=None, package_weights=None, **extra):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for name in ("scripts", ".github/scripts", "internal/api", "bin"):
@@ -111,6 +121,8 @@ class ReleaseBackendQueueTest(unittest.TestCase):
                          ".github/scripts/select-go-package-shard.py",
                          ".github/scripts/go-package-test-seconds.txt"):
                 shutil.copyfile(ROOT / name, root / name)
+            if package_weights is not None:
+                (root / ".github/scripts/go-package-test-seconds.txt").write_text(package_weights)
             assets = root / "scripts/ensure_test_assets.sh"
             assets.write_text("#!/bin/bash\nexit 0\n"); assets.chmod(0o755)
             for name, text in {
@@ -208,12 +220,22 @@ class ReleaseBackendQueueTest(unittest.TestCase):
                 self.assertNotIn("Race-enabled backend release tests passed", result.stdout)
 
     def test_failure_escalates_for_a_child_ignoring_term(self):
-        result, events, _, _ = self.run_queue(
-            QUEUE_FAIL=MODULE + "internal/monitoring", QUEUE_IGNORE_TERM="1")
-        self.assertEqual(result.returncode, 19, result.stdout + result.stderr)
-        resistant = [e for e in events if e["ignores_term"]]
-        self.assertEqual([e["event"] for e in resistant], ["start"])
-        self.assertNotIn("Race-enabled backend release tests passed", result.stdout)
+        # Exercise shipped hints plus both task orders. The monitored failure
+        # waits for the resistant child's readiness instead of racing the
+        # scheduler or relying on a particular historical estimate.
+        for first in (None, "scripts/installtests", "internal/monitoring"):
+            with self.subTest(first=first):
+                weights = None if first is None else f"DEFAULT_WEIGHT 1\n{MODULE}{first} 100\n"
+                result, events, _, _ = self.run_queue(
+                    package_weights=weights, QUEUE_WAIT_FOR_RESISTANT="1",
+                    QUEUE_FAIL=MODULE + "internal/monitoring", QUEUE_IGNORE_TERM="1")
+                self.assertEqual(result.returncode, 19, result.stdout + result.stderr)
+                resistant = [e for e in events if e["ignores_term"]]
+                self.assertEqual([e["event"] for e in resistant], ["start"])
+                failed = next(e for e in events if e["event"] == "finish"
+                              and e["name"] == MODULE + "internal/monitoring")
+                self.assertLess(resistant[0]["time"], failed["time"])
+                self.assertNotIn("Race-enabled backend release tests passed", result.stdout)
 
     def test_wait_preserves_already_completed_child_status(self):
         source = (ROOT / "scripts/run-release-backend-tests.sh").read_text()

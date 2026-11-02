@@ -1,38 +1,38 @@
-# Non-API Go package race-test seconds on GitHub ubuntu-24.04.
-# Median of complete successful rest shards in Build and Test runs 38004713400
-# (main 4b56e89c) and 38003223007 (actual PR checkout 0a79049f), 2026-10-09.
-# The latter run failed its separate advisory Benchmarks check; both rest
-# shards passed with complete, uncached reports in each run.
-# Package elapsed times overlap because go test runs packages concurrently;
-# these are scheduling weights, not predicted wall-clock durations.
-# Weights move whole packages between the two existing required checks and
-# start the heavier binaries first within each check. They cannot change
-# internal/api's separate contiguous, order-preserving test slices.
-# The checked-out go list supplies coverage, including new/unmeasured packages.
-# Stale entries cannot add, omit or duplicate a package. DEFAULT_WEIGHT is
-# the mean of measured test packages below 20 seconds in those same runs.
-# Refresh from complete passing rest-shard logs when imbalance/tails return.
-DEFAULT_WEIGHT 2.807
-github.com/rcourtman/pulse-go-rewrite/cmd/hashpw 22.610
-github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 35.516
-github.com/rcourtman/pulse-go-rewrite/internal/ai 25.178
-github.com/rcourtman/pulse-go-rewrite/internal/ai/tools 63.671
-github.com/rcourtman/pulse-go-rewrite/internal/alerts 79.691
-github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 28.785
-github.com/rcourtman/pulse-go-rewrite/internal/config 259.558
-github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 34.074
-github.com/rcourtman/pulse-go-rewrite/internal/hostagent 20.136
-github.com/rcourtman/pulse-go-rewrite/internal/mock 130.030
+# Scheduling hints from complete successful Build and Test backend receipts.
+# Runs 41369727329 (candidate 44904f79, checkout ae4c4f39) and
+# 41371985948 (candidate 4fc752b4, checkout 87ea1002), 2 November 2026.
+# Whole-package weights are median observed task wall times, including
+# per-package Go startup/compilation. The separate monitoring/installer
+# slice weights and their source-order boundaries are unchanged. Overlapping
+# times are not workflow wall-time forecasts. The shared release queue still
+# runs these two packages whole: retain their 9 October whole-package hints,
+# since the new sliced observations do not measure their complete binaries.
+# Checked-out go list alone defines coverage. Stale names cannot add or
+# remove packages; new packages use the mean measured sub-20s task cost.
+# Preserve both required checks, four slots per shard and race/time limits.
+# Refresh only from complete passing receipts when imbalance returns.
+DEFAULT_WEIGHT 3.631
+github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 36.330
+github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 49.260
+github.com/rcourtman/pulse-go-rewrite/internal/ai 31.026
+github.com/rcourtman/pulse-go-rewrite/internal/alerts 177.635
+github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 134.423
+github.com/rcourtman/pulse-go-rewrite/internal/config 275.333
+github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 123.752
+github.com/rcourtman/pulse-go-rewrite/internal/hostagent 22.885
+github.com/rcourtman/pulse-go-rewrite/internal/mock 130.077
 github.com/rcourtman/pulse-go-rewrite/internal/monitoring 314.522
-github.com/rcourtman/pulse-go-rewrite/internal/notifications 135.088
-github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 31.468
-github.com/rcourtman/pulse-go-rewrite/internal/relay 70.598
-github.com/rcourtman/pulse-go-rewrite/internal/telemetry 27.853
-github.com/rcourtman/pulse-go-rewrite/internal/truenas 47.732
-github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 112.878
-github.com/rcourtman/pulse-go-rewrite/internal/websocket 26.518
-github.com/rcourtman/pulse-go-rewrite/pkg/auth 27.024
-github.com/rcourtman/pulse-go-rewrite/pkg/metrics 254.154
-github.com/rcourtman/pulse-go-rewrite/pkg/server 27.454
+github.com/rcourtman/pulse-go-rewrite/internal/notifications 209.899
+github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 24.909
+github.com/rcourtman/pulse-go-rewrite/internal/relay 73.068
+github.com/rcourtman/pulse-go-rewrite/internal/telemetry 40.392
+github.com/rcourtman/pulse-go-rewrite/internal/truenas 54.375
+github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 202.120
+github.com/rcourtman/pulse-go-rewrite/internal/websocket 57.829
+github.com/rcourtman/pulse-go-rewrite/pkg/auth 26.084
+github.com/rcourtman/pulse-go-rewrite/pkg/db 52.639
+github.com/rcourtman/pulse-go-rewrite/pkg/metrics 514.654
+github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 39.225
+github.com/rcourtman/pulse-go-rewrite/pkg/server 57.043
 github.com/rcourtman/pulse-go-rewrite/scripts/installtests 360.228
-github.com/rcourtman/pulse-go-rewrite/tests/migration 81.948
+github.com/rcourtman/pulse-go-rewrite/tests/migration 84.480
