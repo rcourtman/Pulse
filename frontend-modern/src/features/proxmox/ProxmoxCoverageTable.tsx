@@ -594,7 +594,7 @@ export function ProxmoxCoverageTable(props: {
           description={
             !props.hasAnyRows
               ? props.emptyDescription
-              : 'Adjust the search, posture filter, or selected day to see more workloads.'
+              : 'Adjust the search or filters to see more workloads.'
           }
         />
       }

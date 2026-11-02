@@ -118,7 +118,7 @@ describe('malformed timestamp evidence through the parsed HTTP consumer', () => 
   });
 
   it.each([1200, 390, 320])(
-    'retains every undated restore point without chart activity at %ipx',
+    'retains every undated restore point with an unknown age at %ipx',
     async (width) => {
       window.history.replaceState({}, '', '/proxmox/backups/date');
       api.width = width;
@@ -133,7 +133,6 @@ describe('malformed timestamp evidence through the parsed HTTP consumer', () => 
       );
       for (const row of rows)
         expect(within(row).getByText('Unknown', { exact: true })).toBeInTheDocument();
-      expect(document.body).toHaveTextContent('No completed restore points with known dates');
       expect(document.body).toHaveTextContent('Their ages are unknown.');
       fireEvent.click(within(rows[0]).getByRole('button', { name: /Expand details/ }));
       const panel = await screen.findByTestId('proxmox-recoverable-detail');

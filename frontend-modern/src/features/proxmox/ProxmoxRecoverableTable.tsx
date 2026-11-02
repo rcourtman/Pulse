@@ -459,7 +459,7 @@ export function ProxmoxRecoverableTable(props: {
           description={
             !props.hasAnyArtifacts
               ? props.emptyDescription
-              : 'Adjust the search, source filter, or selected day to see more artifacts.'
+              : 'Adjust the search or filters to see more artifacts.'
           }
         />
       }

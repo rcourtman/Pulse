@@ -8518,8 +8518,6 @@
         "internal/recovery/"
       ],
       "owned_files": [
-        "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
-        "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
         "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
         "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
@@ -8629,8 +8627,6 @@
             "label": "proxmox backup product surface proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
-              "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
               "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
               "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
@@ -8644,7 +8640,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupActivityPresentation.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.branchcov.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSourcePresentation.test.ts",

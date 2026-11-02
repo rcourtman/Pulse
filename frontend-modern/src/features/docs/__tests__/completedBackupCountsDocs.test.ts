@@ -2,10 +2,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import {
-  buildBackupActivityTimeline,
-  getBackupActivityUnknownCount,
-} from '@/features/proxmox/proxmoxBackupActivityPresentation';
 import { COVERAGE_COLUMNS } from '@/features/proxmox/proxmoxBackupsTablePresentation';
 import {
   isCompletedRecoveryArtifact,
@@ -48,32 +44,30 @@ const point = (id: string, overrides: Partial<RecoverableArtifact> = {}): Recove
 });
 
 describe('completed backup count guidance', () => {
-  it('ships the current visible labels and separates inventory, chart and list scope', () => {
+  it('ships the current labels and separates inventory, job and list scope', () => {
     expect(read('frontend-modern/public/docs/RECOVERY.md')).toBe(read('docs/RECOVERY.md'));
     const copy = text();
     const tableSource = read('frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx');
+    // The restore points carry no per-day chart; the guide must not describe one.
+    expect(tableSource).not.toContain('BackupActivityChart');
     for (const label of ['Completed restore points per day', 'Known restore volume per day']) {
-      expect(copy).toContain(label);
-      expect(tableSource).toContain(label);
+      expect(copy).not.toContain(label);
     }
-    expect(copy).not.toContain('Completed restore volume per day');
-    expect(tableSource).toContain('aria-label="Clear date filter"');
     expect(copy).toContain(
       'covers the loaded inventory, not just the rows matching your list filters',
     );
     expect(copy).toContain(
-      "Both activity charts follow the By date list's search, Node, Backup location, Type and Source filters, including Verified or Unverified",
+      'Backup jobs counts the Proxmox backup tasks Pulse has retained for current workloads, including failed runs, and ignores the list filters',
     );
-    expect(copy).toContain('a non-zero total there can sit beside an empty filtered chart');
+    expect(copy).toContain('so the two need not agree for any day');
+    expect(copy).toContain(
+      'The list follows the By date search, Node, Backup location, Type and Source filters, including Verified or Unverified',
+    );
+    expect(copy).toContain('a non-zero total there can sit beside an empty filtered list');
     expect(copy).toContain(
       'An unresolved or ambiguous saved backup location shows no matching points',
     );
     expect(copy).toContain('choose the intended location again or clear that filter');
-    expect(copy).toContain('Selecting a chart day filters the list only');
-    expect(copy).toContain('the other scoped days remain available in the chart');
-    expect(copy).toContain("The chart's date range limits its activity columns, not the list");
-    expect(copy).toContain('Clear date filter removes only the selected day');
-    expect(copy).toContain('clear search and the other filter chips separately');
     expect(copy).toContain(
       'None of these display controls changes collection, permissions, retention or protection policy',
     );
@@ -91,30 +85,9 @@ describe('completed backup count guidance', () => {
     const completed = entries.filter(isCompletedRecoveryArtifact);
     expect(entries).toHaveLength(5);
     expect(completed.map((entry) => entry.id)).toEqual(['completed', 'undated', 'snapshot']);
-    const classify = (entry: RecoverableArtifact) =>
-      isCompletedRecoveryArtifact(entry) ? entry.sourceKind : null;
-    const dated = buildBackupActivityTimeline(7, entries, (entry) => entry.createdMs, classify, {
-      now,
-    });
-    const volume = buildBackupActivityTimeline(7, entries, (entry) => entry.createdMs, classify, {
-      now,
-      getValue: (entry) => entry.size ?? 0,
-    });
-    expect(dated.points.reduce((sum, day) => sum + day.total, 0)).toBe(2);
-    expect(volume.points.reduce((sum, day) => sum + day.total, 0)).toBe(100);
-    expect(volume.points.reduce((sum, day) => sum + getBackupActivityUnknownCount(day), 0)).toBe(1);
-    const copy = text();
-    expect(copy).toContain(
+    expect(text()).toContain(
       'excludes both, even when an incomplete entry has a size or a verification flag',
     );
-    expect(copy).toContain(
-      'An undated completed point can count in Backup health but not in a daily column',
-    );
-    expect(copy).toContain('no reported size can count as a point without contributing volume');
-    expect(copy).toContain('It remains selectable in Volume and counts normally in Count');
-    expect(copy).toContain('Amber marks days with unknown sizes, not zero volume');
-    expect(copy).toContain('its known volume is a lower bound, not a complete total');
-    expect(copy).toContain('not PBS datastore usage or deduplicated physical space');
   });
 
   it('does not substitute a snapshot or older backup when chronology is unknown', () => {
@@ -137,7 +110,7 @@ describe('completed backup count guidance', () => {
 
   it('keeps display checks passive and links to shipped safety and evidence sections', () => {
     const copy = text();
-    expect(copy).toContain('A blank chart is not proof that no backups exist');
+    expect(copy).toContain('An empty list is not proof that no backups exist');
     expect(copy).toContain('check any inventory loading or access warning first');
     expect(copy).toContain('Completed is not Verified, a tested restore or guest thaw');
     expect(copy).toContain(
