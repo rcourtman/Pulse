@@ -29150,3 +29150,46 @@ func TestContractReportDownloadWithdrawal(t *testing.T) {
 func TestContractAuditReadWithdrawal(t *testing.T) {
 	auditReadNativeWithdrawal(t)
 }
+
+// Pins the /api/backups/jobs payload the Backups page reads (BackupJobsCard).
+func TestContract_BackupJobsPayloadJSONSnapshot(t *testing.T) {
+	at := time.Date(2026, 11, 2, 1, 30, 0, 0, time.UTC)
+	payload := BackupJobsResponse{Data: BackupJobsPayload{
+		HistoryState: "partial",
+		Timezone:     "Europe/London",
+		Last24h: BackupJobsWindow{
+			Start:        at.Add(-24 * time.Hour),
+			End:          at,
+			HistoryState: "complete",
+			Counts:       BackupJobsCounts{Success: 3, Failed: 1},
+			Failures: []BackupJobsFailure{{
+				WorkloadID: "vm-100", WorkloadName: "web", Instance: "lab", At: at, Outcome: "failed",
+			}},
+		},
+		Days: []BackupJobsDay{{
+			Date:         "2026-11-02",
+			HistoryState: "not_observed",
+			Counts:       BackupJobsCounts{},
+		}},
+	}}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal backup jobs payload: %v", err)
+	}
+
+	const want = `{"data":{
+		"historyState":"partial",
+		"timezone":"Europe/London",
+		"last24h":{
+			"start":"2026-11-01T01:30:00Z",
+			"end":"2026-11-02T01:30:00Z",
+			"historyState":"complete",
+			"counts":{"success":3,"failed":1,"warning":0,"running":0,"unknown":0},
+			"failures":[{"workloadId":"vm-100","workloadName":"web","instance":"lab","at":"2026-11-02T01:30:00Z","outcome":"failed"}]
+		},
+		"days":[{"date":"2026-11-02","historyState":"not_observed","counts":{"success":0,"failed":0,"warning":0,"running":0,"unknown":0}}]
+	}}`
+
+	assertJSONSnapshot(t, got, want)
+}

@@ -786,6 +786,31 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByRole('button', { name: '1 attention' })).toBeNull();
   });
 
+  it('places a page-owned summary beside Backup health', async () => {
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        summaryAside={<section data-backup-jobs="complete">Backup jobs</section>}
+      />
+    ));
+
+    const verdict = await waitFor(() => {
+      const element = document.querySelector('[data-backup-verdict]');
+      expect(element).toHaveTextContent('0 of 1 protected');
+      return element!;
+    });
+    const aside = document.querySelector('[data-backup-jobs]')!;
+    const grid = aside.parentElement!;
+    // Same summary grid as the health card, which goes two-up from xl only
+    // while the jobs card renders.
+    expect(grid).toContainElement(verdict as HTMLElement);
+    expect(grid.className).toContain('xl:[&:has([data-backup-jobs])]:grid-cols-');
+  });
+
   it('lets a backup exception group filter Coverage to those workloads', async () => {
     // "17 attention" was text: finding which workloads it counted took the
     // Filters sheet on a phone. A group is one tap to exactly its workloads.

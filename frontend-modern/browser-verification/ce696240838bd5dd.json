@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "daa183bfda853796173c8f5f0a1e04b4ff084fcb",
+  "verified_at": "2026-11-02T00:37:45Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupJobs.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "dc9cb13ab26b4d41a10a5c32279b8569e7b351c26bdc38a7725bec4f2d33ea6c",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "4c253a21e3403932b177c485cab0f974838881c5736bce2e89e38f858bbd7387",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "6be3624ad2462702ca92f511ed92ab2d2d1004aa19e20ecb3c715dcefe9437b4",
+    "frontend-modern/src/features/proxmox/proxmoxBackupJobs.ts": "23ee639676869317424bacb3282d3e066161e7b6a23ff14ba60295aefa0171e6"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev, serving /api/backups/jobs from the fixture tasks",
+    "backup jobs card beside Backup health at desktop width, stacked below it on phone",
+    "dark theme, desktop and phone layouts"
+  ],
+  "interactions": [
+    "signed in to the private mock backend and opened Backups By date at 1440x1000 and 375x812",
+    "read the Backup jobs header strip: 619 ok, 33 running, 35 failed for the last 24 hours, with the 24h label from sm",
+    "checked 14 day bars against /api/backups/jobs: every day observed, stacked ok/running/failed on today, thin baseline on observed days without backups",
+    "confirmed the card sits beside Backup health at desktop width with equal height and stacks below it on phone, pills unwrapped",
+    "after review fixes, rechecked that a healthy install reads complete (windows end at the last poll) and the 24h window counts only tasks that started or finished inside it",
+    "before fixing mock coverage and the PVE-only guest filter, every day rendered outlined as not fully observed rather than clean",
+    "no horizontal page overflow at either width"
+  ]
+}

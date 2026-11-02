@@ -49,6 +49,7 @@ import {
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
+import { ProxmoxBackupJobsSection } from './ProxmoxBackupJobsCard';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
@@ -434,6 +435,7 @@ export function ProxmoxPageSurface() {
                 emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
                 workloads={model().guests}
                 servers={model().resources}
+                summaryAside={<ProxmoxBackupJobsSection />}
               />
             </Show>
             <Show when={activeTab() === 'ceph'}>

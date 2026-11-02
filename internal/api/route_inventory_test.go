@@ -57,6 +57,39 @@ func TestReleaseNoteImageRouteAuthorization(t *testing.T) {
 	}
 }
 
+// /api/backups/jobs is registered from backup_jobs.go, outside the parsed
+// router files, so its authentication and scope are pinned here.
+func TestBackupJobsRouteAuthorization(t *testing.T) {
+	const endpoint = "/api/backups/jobs"
+	for _, tc := range []struct {
+		name, token string
+		scope       string
+		status      int
+	}{
+		{name: "anonymous", status: http.StatusUnauthorized},
+		{name: "agent-only token", token: "jobs-agent-token.12345678", scope: config.ScopeAgentReport, status: http.StatusForbidden},
+		// Admitted: with no monitor wired the handler itself answers.
+		{name: "monitoring reader", token: "jobs-monitor-token.12345678", scope: config.ScopeMonitoringRead, status: http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newTestConfigWithTokens(t, newTokenRecord(t, "configured-token.12345678", []string{config.ScopeMonitoringRead}, nil))
+			if tc.token != "" {
+				cfg = newTestConfigWithTokens(t, newTokenRecord(t, tc.token, []string{tc.scope}, nil))
+			}
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			req := httptest.NewRequest(http.MethodGet, endpoint, nil)
+			if tc.token != "" {
+				req.Header.Set("X-API-Token", tc.token)
+			}
+			w := httptest.NewRecorder()
+			router.Handler().ServeHTTP(w, req)
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.status, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestRouterRouteInventory(t *testing.T) {
 	literalRoutes, dynamicRoutes, bareLiteralRoutes := parseRouterRoutes(t)
 

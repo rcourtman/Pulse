@@ -5041,6 +5041,27 @@ read "0 protected, 38 attention", which left the operator counting rows to
 find the cause; on the 932-guest mock it now reads as five lines. No posture,
 freshness or protection evaluation changes.
 
+### Backup jobs show 14 days of retained outcomes beside Backup health (2 November 2026)
+
+A Backup jobs card answers "did last night's backups run, and is that
+normal?": last-24-hour outcome pills ("456 ok", "35 failed", "33 running") in
+its header strip and one stacked bar per day for the last 14 local days. It
+reads `/api/backups/jobs`, which summarizes retained `pve-task:` history
+through `recovery.BuildBackupHealth`, so a multi-guest vzdump job counts
+through its attributed guest results, a stale running observation is not
+counted as running, and days Pulse did not fully observe are outlined rather
+than drawn as clean empty days. The live `/api/backups/pve` task list spans
+only the latest collection window and must not be used for this history.
+Unreadable history, malformed counts or a failed read after history was shown
+read "History unavailable", never zero failures. Failed and warning guests are
+named in their own pill's hover title.
+
+The card is a page-owned section passed into `ProxmoxBackupsTable` as
+`summaryAside`, so the table keeps exactly its PVE and PBS inventory reads. It
+renders nothing until a backup task is counted (a PVE install without vzdump
+jobs collects successfully and finds nothing), and sits beside Backup health
+from `xl` only when it renders.
+
 ### Backups page states its answer before its caveats (1 November 2026)
 
 The health strip's posture rule moved behind a collapsed "What the counts

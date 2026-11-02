@@ -508,6 +508,24 @@ desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
 day selection, metric switching, empty matches and recovery. No shared-filter,
 route, navigation, access or backup operation changes.
 
+### Backup jobs card composes the overview primitives (2 November 2026)
+
+`ProxmoxBackupJobsCard` is a `TableCard` with a `TableCardHeader` strip, like
+Backup health: last-24-hour outcome count pills in the header actions (they
+wrap rather than clip, and failed and warning guests are named in their own
+pill's title) and one stacked bar per calendar day. A day Pulse did not fully
+observe keeps a dashed outline and says so in its accessible text; it is never
+drawn as a clean empty day. Unavailable history replaces the pills with
+"History unavailable" rather than zero counts.
+
+`ProxmoxBackupsTable` takes the card through its `summaryAside` slot. The page
+surface owns that read, so the table's inventory reads stay PVE plus PBS and
+the slot renders identically in both route-backed views. The summary grid puts
+the card beside Backup health from `xl` only while it renders and stacks it on
+narrower screens. `ProxmoxBackupJobsCard.test.tsx` and
+`proxmoxBackupJobs.test.ts` cover pill order, failure names, outlined days and
+unavailable or malformed history.
+
 ### Backup activity uses calendar-day chart slots
 
 The Proxmox backup activity producer supplies one slot per consecutive local
