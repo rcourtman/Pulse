@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "3a27b125e7de84c58cb9107914171192ec301492",
+  "verified_at": "2026-11-02T18:57:50.197653Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "bc9cbd38a7a94815d48686f4a30feff8277d81843e21b7020f8154a595a29a3e"
+  },
+  "routes": [
+    "/settings/support/reporting"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App and Settings Reporting consumer with synthetic HTTP canonical inventory/schedule producers and real websocket server delivery through the existing Vite proxy, store, adapters and hook. Chromium desktop/light and WebKit phone/dark; Playwright 1.56.1 matches integration lock.",
+    "Canonical denial with live initial hydration; accepted inventory followed by failed revalidation and socket update; cached saved-scope picker remount, live update and real reconnect; pending explicit retry with socket delivery; failed retry and successful explicit empty REST recovery."
+  ],
+  "interactions": [
+    "65 checks: live socket frame is observed through the actual store; retained failure survives updates/reconnect/remount without a new REST request, hides choices and disables Select all. Explicit keyboard Retry and duplicate-safe pending state preserved; only accepted REST recovery clears error.",
+    "Saved report scope and draft stay intact. No generation or write from read/reconnect/retry; one explicit schedule PUT keeps the exact saved VM ID and workspace. Existing API-client two-request HTTP403 CSRF recovery and unrelated consumer defaults remain unchanged.",
+    "Eight final desktop/narrow screenshots opened with native view_image; warning, retry, recovered choices, saved chip/count and accepted-empty distinction reviewed. No body overflow; existing narrow type rail scrolls; captures are scrolled and do not show every control.",
+    "No uncaught page errors; both contexts/browsers, websocket server, Vite and local HTTP server close. Earlier browser script syntax failure is retained separately; it did not execute any journey."
+  ]
+}
