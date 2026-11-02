@@ -380,7 +380,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               install command with this selected.
             </p>
             <p id="install-token-replacement-description" class="ml-6 mt-2 text-xs text-muted">
-              Changing this choice prepares a new token and command; it does not reconfigure an
+              Changing this choice prepares a new token and command. It does not reconfigure an
               installed agent. Rerun the installer on the intended host with the new token. Earlier
               tokens remain valid. Revoke them from Settings → Infrastructure → Tokens only when no
               agent still uses them.
