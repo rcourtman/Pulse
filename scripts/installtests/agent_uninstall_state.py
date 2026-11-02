@@ -186,6 +186,9 @@ rm() {
                 result, events, before, after = self.exercise(kind)
                 self.assertEqual(result.returncode, 16, result.stderr)
                 self.assertIn("same trusted Pulse instance", result.stdout)
+                self.assertIn("No service stop or disable was attempted", result.stdout)
+                self.assertIn("local credentials and service files were retained", result.stdout)
+                self.assertNotIn("Service stop/disable steps have already run", result.stdout)
                 self.assertNotIn("synthetic-collector-credential", result.stdout + result.stderr)
                 self.assertEqual(events, "")
                 self.assertEqual(after, before)
@@ -197,6 +200,14 @@ rm() {
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertEqual(events, "request:collector-uninstall --agent-id owned-agent --hostname owned-host\n")
                 self.assertEqual(after, before)
+                for fact in ("Service stop/disable steps have already run where applicable",
+                             "retained files do not mean monitoring is running",
+                             "No automatic restart was attempted",
+                             "Restore trusted server connectivity",
+                             "same-instance registration and stopped/disabled service state before retrying"):
+                    self.assertIn(fact, result.stdout)
+                self.assertNotIn("No service stop or disable was attempted", result.stdout)
+                self.assertNotIn("credentials and services were retained", result.stdout)
 
     def test_systemd_refusal_precedes_remote_removal_and_every_local_mutation(self):
         for credential in ("runtime", "inline", "none"):

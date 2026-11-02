@@ -16,6 +16,23 @@
 
 ## Purpose
 
+### Removal refusals distinguish retained files from running services
+
+A missing saved URL with collector credentials refuses before stopping or
+disabling services, and says so. Failure to confirm server removal occurs after
+the applicable service stop/disable steps; its error must retain that ordering,
+state that retained credentials/service files do not establish running
+monitoring, and disclose that no automatic restart was attempted. Recovery
+requires trusted connectivity and reconciliation of the same-instance record
+and stopped/disabled service state before another removal attempt.
+
+The existing Unix state fixture checks both refusal stages without changing
+its synthetic files. `TestAgentInstalledRemovalSavedTransport` exercises the
+late error through the real collector CLI and TLS, preserving saved CA/pin,
+exact identity, credential bytes/modes and confined files on every refusal.
+Service/process observations remain doubles, not native or reporter recovery.
+No restart, erasure, trust or lifecycle ordering policy changes with this error.
+
 ### Unix agent preflight does not require character-class-aware NAS utilities
 
 Installer case-folding uses fixed ASCII alphabets, and whitespace handling uses

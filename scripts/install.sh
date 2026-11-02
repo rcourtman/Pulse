@@ -6548,7 +6548,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
     if collector_credential_state_present; then
         uninstall_has_credential="true"
         if [[ -z "$PULSE_URL" ]]; then
-            fail "The saved Pulse URL is missing; local credentials and services were retained. Restore saved connection state or provide --url for the same trusted Pulse instance and retry uninstall." "$EXIT_MISSING_ARGS"
+            fail "The saved Pulse URL is missing; local credentials and service files were retained. No service stop or disable was attempted. Restore saved connection state or provide --url for the same trusted Pulse instance before retrying uninstall." "$EXIT_MISSING_ARGS"
         fi
     fi
     uninstall_nas_platform=$(nas_agent_removal_platform || true)
@@ -6608,7 +6608,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
     if [[ "$uninstall_has_credential" == "true" ]]; then
         log_info "Authenticating Pulse server removal before local teardown..."
         if ! uninstall_collector_registration; then
-            fail "Pulse did not durably confirm collector removal; local credentials and services were retained. Restore trusted server connectivity and retry uninstall." "$EXIT_GENERAL"
+            fail "Pulse did not durably confirm collector removal; local credentials and service files were retained. Service stop/disable steps have already run where applicable; retained files do not mean monitoring is running. No automatic restart was attempted. Restore trusted server connectivity and reconcile the same-instance registration and stopped/disabled service state before retrying uninstall." "$EXIT_GENERAL"
         fi
         log_info "Pulse durably removed agent ID: ${AGENT_ID}."
     elif [[ -n "$PULSE_URL" ]]; then
