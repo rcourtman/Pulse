@@ -4,6 +4,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
 import { UserAssignmentsDialog } from './UserAssignmentsDialog';
 import { useUserAssignmentsPanelState } from './useUserAssignmentsPanelState';
+import type { UserAssignmentsPanelProps } from './useUserAssignmentsPanelState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import Users from 'lucide-solid/icons/users';
 import Shield from 'lucide-solid/icons/shield';
@@ -20,8 +21,8 @@ import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import { Dialog } from '@/components/shared/Dialog';
 
-export const UserAssignmentsPanel: Component = () => {
-  const state = useUserAssignmentsPanelState();
+export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props) => {
+  const state = useUserAssignmentsPanelState(props);
   const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
   let searchInputRef: HTMLInputElement | undefined;
 
@@ -37,7 +38,7 @@ export const UserAssignmentsPanel: Component = () => {
             placeholder="Search users..."
             value={state.searchQuery()}
             onChange={state.setSearchQuery}
-            disabled={!state.featureGate.rbacEnabled() || Boolean(state.loadError())}
+            disabled={!state.accessAllowed() || Boolean(state.loadError())}
             class="min-w-60"
             inputClass="min-h-10 sm:min-h-9 py-2.5"
           />
@@ -45,6 +46,14 @@ export const UserAssignmentsPanel: Component = () => {
         noPadding
         bodyClass="divide-y divide-border"
       >
+        <Show when={state.successNotice()}>
+          {(message) => (
+            <InlineNotice tone="success" role="status" aria-live="polite">
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+
         <Show when={state.featureGate.paywallVisible()}>
           <RBACFeatureGateSection
             copy={state.featureGate.featureGateCopy()}
@@ -59,7 +68,13 @@ export const UserAssignmentsPanel: Component = () => {
           </div>
         </Show>
 
-        <Show when={!state.loading() && state.featureGate.rbacEnabled() && state.loadError()}>
+        <Show when={!state.loading() && state.featureGate.rbacEnabled() && !state.accessAllowed()}>
+          <InlineNotice tone="warning" role="status">
+            User access is unavailable for this session.
+          </InlineNotice>
+        </Show>
+
+        <Show when={!state.loading() && state.accessAllowed() && state.loadError()}>
           {(message) => (
             <InlineNotice
               role="alert"
@@ -78,7 +93,7 @@ export const UserAssignmentsPanel: Component = () => {
         <Show
           when={
             !state.loading() &&
-            state.featureGate.rbacEnabled() &&
+            state.accessAllowed() &&
             !state.loadError() &&
             state.filteredAssignments().length === 0
           }
@@ -101,7 +116,7 @@ export const UserAssignmentsPanel: Component = () => {
         <Show
           when={
             !state.loading() &&
-            state.featureGate.rbacEnabled() &&
+            state.accessAllowed() &&
             !state.loadError() &&
             state.filteredAssignments().length > 0
           }
@@ -167,6 +182,7 @@ export const UserAssignmentsPanel: Component = () => {
                       class="min-h-11 min-w-11 gap-2 px-2 sm:min-h-9 sm:min-w-0"
                       aria-label={`Manage access for ${getUserIdentityDisplayName(assignment)}`}
                       title="Manage access"
+                      disabled={!state.canEdit()}
                       onClick={() => state.openManageAccess(assignment)}
                     >
                       <Pencil class="w-4 h-4" />
@@ -178,6 +194,7 @@ export const UserAssignmentsPanel: Component = () => {
                       class="min-h-11 min-w-11 gap-2 px-2 text-red-600 hover:text-red-700 sm:min-h-9 sm:min-w-0"
                       aria-label={`Remove ${getUserIdentityDisplayName(assignment)}`}
                       title="Remove user access"
+                      disabled={!state.canEdit()}
                       onClick={() => state.openDeleteUser(assignment)}
                     >
                       <Trash2 class="w-4 h-4" />
@@ -196,6 +213,7 @@ export const UserAssignmentsPanel: Component = () => {
       </SettingsPanel>
 
       <UserAssignmentsDialog
+        actionError={state.actionError()}
         editingUser={state.editingUser()}
         formRoleIds={state.formRoleIds()}
         isOpen={state.showModal()}
@@ -232,6 +250,13 @@ export const UserAssignmentsPanel: Component = () => {
                 This does not disable the account at the identity provider. A later authorized SSO
                 login will create the user record again.
               </div>
+              <Show when={state.actionError()}>
+                {(message) => (
+                  <InlineNotice tone="danger" role="alert" aria-live="polite">
+                    {message()}
+                  </InlineNotice>
+                )}
+              </Show>
               <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button onClick={state.closeDeleteUser} disabled={state.deletingUser()}>
                   Cancel

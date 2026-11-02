@@ -522,3 +522,40 @@ settings page. The old `system-ai-assistant` tab id and
 `/settings/pulse-intelligence/assistant` path redirect there, so saved links
 keep working. Organization-scoped settings ownership, RBAC gating, and the
 settings shell's organization presentation rules are unchanged.
+
+### User Access reader lifetime
+
+The existing User Access directory, role choices, saved-permission read, drafts
+and removal confirmations belong to one mounted authenticated reader and
+organisation. `useUserAssignmentsPanelState.ts` withdraws them on principal,
+users-capability, RBAC-entitlement or organisation changes and disposal, aborts
+pending requests and rejects obsolete completions even after leaving and
+returning to the same context. The next admitted reader loads a fresh directory.
+A failed or malformed directory/role list is unknown, not an empty configuration;
+Retry is read-only. Only current inventory rows may open a confirmation, and
+only one confirmed assignment/removal write may run. No obsolete completion may
+announce success, close a new reader's editor or reload old accounts. Server
+authorisation, IdP deprovisioning and existing self-modification protection remain
+unchanged. Registered reader-lifetime, paywall-panel and RBAC transport tests
+cover these rules; synthetic desktop/narrow browser proof is not installed
+administrator or native IdP recovery.
+
+User Access action feedback is owned by that same reader, not the global toast
+queue: success notices withdraw on context change or a new confirmation, and
+failures stay beside the current save/removal controls without discarding the
+draft. Directory failure has one persistent read-only Retry notice. Account
+principals must not survive an organisation switch in an old notification.
+Paired directory/role reads are aborted when their combined read settles so a
+failed sibling does not leave an unowned pending request. The registered
+reader-lifetime/paywall tests and actual App browser witness cover this bound.
+
+### User Access requests retain their confirmed context
+
+RBAC directory/role reads, saved-permission reads and user assignment/removal
+operations accept client-only `RBACAdminRequestOptions`. User Access supplies an
+abort signal, exact expected organisation and `retry: false` to the canonical
+API client, including its CSRF preparation boundary. A withdrawn confirmation
+must not dispatch into the default or a new organisation or automatically replay
+a refusal. Endpoint paths, encoded principal keys, JSON payloads, authentication
+and server permission checks are unchanged. `api/__tests__/rbac.test.ts` and
+`UserAccessReaderLifetime.test.tsx` pin forwarding and the consuming lifecycle.

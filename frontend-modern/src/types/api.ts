@@ -3,6 +3,13 @@
 import type { Resource, ResourceCapability, ResourcePolicy, ResourceChange } from './resource';
 import type { EvidenceEnvelope, LifecycleTransition, OperationalRecord } from './operationalTrust';
 
+/** Client-only binding for RBAC administration; these are not JSON payload fields. */
+export interface RBACAdminRequestOptions {
+  signal?: AbortSignal;
+  expectedOrgID?: string;
+  retry?: boolean;
+}
+
 export interface ResourceListFacetsPayload {
   byType?: Partial<Record<string, number>>;
   incidentCount?: number;
