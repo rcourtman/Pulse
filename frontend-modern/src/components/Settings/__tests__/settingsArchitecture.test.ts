@@ -977,6 +977,18 @@ describe('settings architecture guardrails', () => {
     expect(generalSettingsPanelSource).not.toContain('api_tokens');
   });
 
+  // Every supported locale is offered from the registry, and with four options
+  // the row must stack on phones or the last option is clipped at 375px.
+  it('keeps the language selector registry-driven and stacked on phones', () => {
+    expect(generalSettingsPanelSource).toContain('SUPPORTED_LOCALES.map((locale) => ({');
+    expect(generalSettingsPanelSource).toContain(
+      'class="flex flex-col items-start gap-2 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-6"',
+    );
+    expect(generalSettingsPanelSource).toContain(
+      'class="max-w-full shrink-0 [&_button]:px-1.5 sm:w-auto sm:[&_button]:px-3"',
+    );
+  });
+
   it('keeps panel-owned gated settings routes separate from sidebar visibility', () => {
     expect(settingsNavVisibilitySource).toContain('const PANEL_OWNED_FEATURE_GATE_TABS');
     expect(settingsNavVisibilitySource).toContain('shouldBlockSettingsRouteItem');

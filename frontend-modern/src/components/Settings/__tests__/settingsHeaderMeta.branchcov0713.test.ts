@@ -318,9 +318,9 @@ describe('getSettingsHeaderMeta', () => {
     });
 
     it('normalizes an unsupported locale string to DEFAULT_LOCALE (base-locale lookup misses -> DEFAULT_LOCALE arm)', () => {
-      // 'fr' is listed in NEXT_LOCALIZATION_LOCALES but is not a SupportedLocale,
+      // 'ko' is listed in NEXT_LOCALIZATION_LOCALES but is not a SupportedLocale,
       // so resolveSupportedLocale returns null and normalizeLocale falls back.
-      const unsupported = getSettingsHeaderMeta('fr' as unknown as SupportedLocale);
+      const unsupported = getSettingsHeaderMeta('ko' as unknown as SupportedLocale);
       expect(unsupported).toEqual(getSettingsHeaderMeta('en'));
     });
   });
@@ -808,8 +808,8 @@ describe('getInfrastructureReadOnlyHeaderDescription', () => {
   });
 
   it('normalizes an unsupported locale string to DEFAULT_LOCALE', () => {
-    // 'fr' is not yet a SupportedLocale, so normalizeLocale falls back to en.
-    expect(getInfrastructureReadOnlyHeaderDescription('fr' as unknown as SupportedLocale)).toBe(
+    // 'ko' is not yet a SupportedLocale, so normalizeLocale falls back to en.
+    expect(getInfrastructureReadOnlyHeaderDescription('ko' as unknown as SupportedLocale)).toBe(
       getInfrastructureReadOnlyHeaderDescription('en'),
     );
   });

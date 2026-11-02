@@ -3919,6 +3919,18 @@ presentation copy only: no API token name, scope preset, privacy disclosure,
 telemetry statement or security term changes, and no request, storage or
 authorization path moves.
 
+### French locale catalog
+
+French joins the first-wave locale catalogs for the already-localized
+settings, first-session setup, alerts overview and pricing handoff copy. The
+French telemetry and privacy disclosures state the same buckets, exclusions and
+"never sold" promise as English, and `PULSE_TELEMETRY`, API token names, scope
+presets, `Pulse Account`, product names and placeholders stay byte-identical;
+`frontend-modern/src/i18n/__tests__/i18n.test.ts` checks the French catalog
+against the same non-translatable token and disclosure rules as German and
+Spanish. The Settings > General language row only changes its phone layout; no
+request, storage, authentication or privacy path moves.
+
 ### Live temperature fallback uses the shared primary rule
 
 `router.go`'s live metrics fallback now picks node and agent CPU temperature

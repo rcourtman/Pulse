@@ -34,7 +34,7 @@ them locally and keep credentials and private details out.
   diagnostics, and operator questions.
 
 Localized getting started guides: [Deutsch](i18n/de/README.md) ·
-[Español](i18n/es/README.md)
+[Español](i18n/es/README.md) · [Français](i18n/fr/README.md)
 
 ## Platforms and agents
 

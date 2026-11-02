@@ -43,7 +43,9 @@ describe('i18n foundation', () => {
     expect(normalizeLocale('de-DE')).toBe('de');
     expect(normalizeLocale('es_MX')).toBe('es');
     expect(normalizeLocale('es_MX_traditional')).toBe('es');
-    expect(normalizeLocale('fr-FR')).toBe('en');
+    expect(normalizeLocale('fr-FR')).toBe('fr');
+    expect(normalizeLocale('fr_CA')).toBe('fr');
+    expect(normalizeLocale('pt-BR')).toBe('en');
     expect(normalizeLocale(undefined)).toBe('en');
   });
 
@@ -73,9 +75,15 @@ describe('i18n foundation', () => {
         standalone: 'equipo independiente',
         availability: 'cuando estén disponibles',
       },
+      fr: {
+        installer: "Exécutez l'installateur",
+        supported: 'que là où ils sont pris en charge',
+        standalone: 'hôte autonome',
+        availability: 'si elles sont disponibles',
+      },
     } as const;
 
-    for (const locale of ['en', 'de', 'es'] as const) {
+    for (const locale of ['en', 'de', 'es', 'fr'] as const) {
       const messages = I18N_MESSAGES[locale];
       expect(messages['setup.completion.sourceOptions.agent.description']).toContain(
         expected[locale].installer,
@@ -111,11 +119,12 @@ describe('i18n foundation', () => {
   it('uses the first supported browser locale when no preference is stored', () => {
     localStorage.removeItem(STORAGE_KEYS.LOCALE_PREFERENCE);
 
-    expect(detectBrowserLocale(['fr-FR', 'es-ES', 'de-DE'])).toBe('es');
+    expect(detectBrowserLocale(['pt-BR', 'es-ES', 'de-DE'])).toBe('es');
+    expect(detectBrowserLocale(['ja-JP', 'fr-CA', 'de-DE'])).toBe('fr');
     expect(
       getInitialLocalePreference({
         storage: localStorage,
-        browserLocales: ['fr-FR', 'de-AT'],
+        browserLocales: ['pt-BR', 'de-AT'],
       }),
     ).toBe('de');
   });
@@ -131,7 +140,8 @@ describe('i18n foundation', () => {
 
   it('falls back to the English catalog for unsupported locales and interpolates params', () => {
     expect(getLocaleFallbackChain('de-DE')).toEqual(['de', 'en']);
-    expect(getLocaleFallbackChain('fr-FR')).toEqual(['en']);
+    expect(getLocaleFallbackChain('fr-FR')).toEqual(['fr', 'en']);
+    expect(getLocaleFallbackChain('pt-BR')).toEqual(['en']);
     expect(t('settings.shell.searchEmpty', { query: 'alerts' }, 'pt-BR')).toBe(
       'No settings found for "alerts"',
     );
@@ -151,6 +161,8 @@ describe('i18n foundation', () => {
     expect(t('alerts.overview.action.snooze', undefined, 'es')).toBe('Posponer');
     expect(t('alerts.overview.action.resume', undefined, 'de')).toBe('Fortsetzen');
     expect(t('alerts.overview.action.resume', undefined, 'es')).toBe('Reanudar');
+    expect(t('alerts.overview.action.snooze', undefined, 'fr')).toBe('Reporter');
+    expect(t('alerts.overview.action.resume', undefined, 'fr')).toBe('Reprendre');
     for (const locale of SUPPORTED_LOCALES) {
       expect(t('alerts.overview.snooze.description', undefined, locale)).toBeTruthy();
       expect(t('alerts.timeline.event.alertSnoozed', undefined, locale)).toBeTruthy();
@@ -194,6 +206,7 @@ describe('i18n foundation', () => {
       '+1 verknuepftes Signal',
     );
     expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'es')).toBe('+1 senal vinculada');
+    expect(t('alerts.overview.group.linkedSignal', { count: 1 }, 'fr')).toBe('+1 signal lié');
     for (const locale of SUPPORTED_LOCALES) {
       expect(t('alerts.overview.group.linkedSignals', { count: 2 }, locale)).toBeTruthy();
       expect(t('alerts.overview.group.acknowledge', { count: 3 }, locale)).toBeTruthy();
@@ -207,9 +220,15 @@ describe('i18n foundation', () => {
   });
 
   it('captures the first and next localization waves without enabling unsupported locales', () => {
-    expect(FIRST_LOCALIZATION_LOCALES).toEqual(['de', 'es']);
-    expect(NEXT_LOCALIZATION_LOCALES).toEqual(['fr', 'pt-BR', 'ja', 'zh-Hans', 'ko']);
-    expect(SUPPORTED_LOCALES).toEqual(['en', 'de', 'es']);
+    expect(FIRST_LOCALIZATION_LOCALES).toEqual(['de', 'es', 'fr']);
+    expect(NEXT_LOCALIZATION_LOCALES).toEqual(['pt-BR', 'ja', 'zh-Hans', 'ko']);
+    expect(SUPPORTED_LOCALES).toEqual(['en', 'de', 'es', 'fr']);
+    expect(SUPPORTED_LOCALE_REGISTRY.fr).toMatchObject({
+      label: 'Français',
+      englishLabel: 'French',
+      fallbackLocale: 'en',
+      rolloutStage: 'first-wave',
+    });
     expect(SUPPORTED_LOCALE_REGISTRY.de).toMatchObject({
       label: 'Deutsch',
       englishLabel: 'German',
@@ -222,7 +241,7 @@ describe('i18n foundation', () => {
     expect(LOCALIZATION_FOUNDATION).toMatchObject({
       ownerLayer: 'frontend-modern/src/i18n',
       defaultLocale: 'en',
-      firstWaveLocales: ['de', 'es'],
+      firstWaveLocales: ['de', 'es', 'fr'],
     });
     expect(NEVER_TRANSLATE_COPY_RULES.join(' ')).toContain('environment variable names');
     expect(NEVER_TRANSLATE_COPY_RULES.join(' ')).toContain('Resource names');
@@ -299,6 +318,7 @@ describe('i18n foundation', () => {
     const telemetryPrivacyTerms = {
       de: ['Lebenszyklus', 'Ergebniszahlen', 'URLs', 'Pfade', 'Browser-Ereignisse'],
       es: ['ciclo de vida', 'resultados', 'URLs', 'rutas', 'eventos del navegador'],
+      fr: ['cycle de vie', 'résultats', 'URL', 'chemins', 'événements bruts du navigateur'],
     } as const;
 
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
@@ -375,12 +395,12 @@ describe('i18n foundation', () => {
       // Both setup surfaces say what the summary is for before what it holds,
       // and neither tells the reader how to turn it off: the toggle is the
       // control, and the how-to-disable copy lives in Full details and Settings.
-      const purposeWording = { de: 'Prioritaet', es: 'prioridad' } as const;
+      const purposeWording = { de: 'Prioritaet', es: 'prioridad', fr: 'priorité' } as const;
       expect(setupTelemetryChoice).toContain(purposeWording[locale]);
-      expect(telemetryNotice).not.toMatch(/ausschalten|desactivarl/i);
+      expect(telemetryNotice).not.toMatch(/ausschalten|desactivarl|désactiver/i);
       // Every locale states what the summary is never used for, because
       // "sold to someone" is the fear that turns a default-on switch off.
-      const neverSold = { de: 'verkauft', es: 'se vende' } as const;
+      const neverSold = { de: 'verkauft', es: 'se vende', fr: 'jamais vendu' } as const;
       expect(telemetryNotice).toContain(neverSold[locale]);
       expect(setupTelemetryChoice).toContain(neverSold[locale]);
       expect(I18N_MESSAGES[locale]['settings.general.telemetry.description']).toContain(
@@ -468,9 +488,9 @@ describe('i18n foundation', () => {
     // The delivery switch has one name in every state, so an off switch is
     // never labelled with a word that reads as its opposite.
     expect(I18N_MESSAGES.en['alerts.activation.switchLabel']).toBe('Send notifications');
-    for (const locale of ['en', 'de', 'es'] as const) {
+    for (const locale of ['en', 'de', 'es', 'fr'] as const) {
       expect(I18N_MESSAGES[locale]['alerts.activation.switchLabel']).not.toMatch(
-        /paus|enabled|aktiviert|activad/i,
+        /paus|enabled|aktiviert|activad|activé/i,
       );
     }
     expect(I18N_MESSAGES.en['alerts.activation.toast.deactivated']).toContain(
@@ -482,6 +502,9 @@ describe('i18n foundation', () => {
 
     expect(I18N_MESSAGES.es['alerts.activation.switchLabel']).toBe('Enviar notificaciones');
     expect(I18N_MESSAGES.es['alerts.activation.toast.deactivated']).toContain('seguira');
+
+    expect(I18N_MESSAGES.fr['alerts.activation.switchLabel']).toBe('Envoyer les notifications');
+    expect(I18N_MESSAGES.fr['alerts.activation.toast.deactivated']).toContain('continuera');
   });
 
   // The Schedule page sets how alerts are delivered; maintenance windows are a
@@ -490,7 +513,7 @@ describe('i18n foundation', () => {
     expect(I18N_MESSAGES.en['alerts.page.schedule.title']).toBe('Delivery Schedule');
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       expect(I18N_MESSAGES[locale]['alerts.page.schedule.title']).not.toMatch(
-        /maintenance|wartung|mantenimiento/i,
+        /maintenance|wartung|mantenimiento|entretien/i,
       );
     }
   });
