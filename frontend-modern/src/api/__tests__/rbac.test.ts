@@ -213,4 +213,30 @@ describe('RBACAPI', () => {
       },
     );
   });
+  it('forwards an exact abortable organisation and no-retry binding for User Access', async () => {
+    const controller = new AbortController();
+    const options = { signal: controller.signal, expectedOrgID: 'selected-org', retry: false };
+    vi.mocked(apiFetchJSON).mockResolvedValue([]);
+    await RBACAPI.getUsers(options);
+    await RBACAPI.getRoles(options);
+    await RBACAPI.getUserPermissions('sso:user/a', options);
+    await RBACAPI.updateUserRoles('sso:user/a', ['viewer'], options);
+    await RBACAPI.deleteUser('sso:user/a', options);
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(1, '/api/admin/users', options);
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(2, '/api/admin/roles', options);
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(
+      3,
+      '/api/admin/users/sso%3Auser%2Fa/permissions',
+      options,
+    );
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(4, '/api/admin/users/sso%3Auser%2Fa/roles', {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify({ roleIds: ['viewer'] }),
+    });
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(5, '/api/admin/users/sso%3Auser%2Fa', {
+      ...options,
+      method: 'DELETE',
+    });
+  });
 });

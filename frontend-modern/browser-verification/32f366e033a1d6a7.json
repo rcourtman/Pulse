@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "0434ccb9eee1c995f83c3e82933173b64d7aa982",
+  "verified_at": "2026-11-01T22:57:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/rbac.ts",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/rbac.ts": "45b6a64e704de528987735503b6cb678fc325dfab95ffc419a6f63a47b397fd0",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "eb0c70c4d3d0db2e2d6917ca6f95369d6d5051de33886a6deb8cca91eec82286",
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "85b95ad0a03ac55ecf9fc72a6394ecc58db18a0c7946865b3c0ccd6d8ecfe3a2",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts": "feee33f24c3c6857ea91d7bae2391efecb6b8216614bc21d1c2a6d71a3e550e8",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "6b4be01f16106888ac6a644031e94a6dedad190cc565acd38a55a3385d99d443",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "d8307db008cf9e8243496a44e22b0d2cfecab4d187e992237ddc0f5c8dd10c7a",
+    "frontend-modern/src/types/api.ts": "0a1ae926cb64f4c1f1d249757f30cd538f952f9f8a1b8443a168974cd9dfede5"
+  },
+  "routes": [
+    "/settings/security-users",
+    "/settings/security-sso (ordinary Settings status-refresh precursor)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App and Settings registry, User Access panel/dialog/state, canonical RBAC API client and application CSS served from committed source with unchanged dependency manifests. Safe synthetic session cookies, CSRF, roles, users and HTTP responses; not a native IdP, installed administrator or persisted deprovisioning acceptance.",
+    "39 checks across six journeys in light desktop Chromium 1280x900 and dark narrow WebKit 390x844. All 12 retained captures received native image-tool pixel inspection. Current identity, role choices, saved-permission labels and enabled confirmation controls are legible at both widths; refused save feedback stays beside the draft, not in a global identity-bearing toast.",
+    "Directory refusal remains unknown with one persistent Retry notice and no editable rows. Private response canaries do not reach rendered feedback. Expected synthetic HTTP403 browser-console entries are retained; User Access no longer duplicates its bounded visible errors as generic console messages; there are no uncaught page exceptions or document-wide directory overflow."
+  ],
+  "interactions": [
+    "Submit the actual role form: one refused PUT preserves the selected draft with no automatic replay; explicit retry alone sends the second identical payload. Writes retain the ordinary synthetic session, API token, CSRF and exact confirmed organisation.",
+    "Change organisation through the real selector while its new inventory is held. The old directory withdraws immediately, the pending read is Loading rather than empty, and the new organisation retains neither the old account nor its successful or failed action feedback. Its fresh saved-permission editor remains usable.",
+    "Retry a refused directory through the actual persistent notice: exactly one further read, no User Access write. An ordinary synthetic SSO save starts the containing Settings status refresh; navigate normally to Users before releasing its changed-principal response. The mounted old editor withdraws, the obsolete permission read cannot reopen it, and the next admitted reader receives a fresh draft.",
+    "Open the actual user-removal confirmation, read the upstream-IdP limit and cancel without writing. Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 and WebKit26.0, all contexts, browsers, Vite preview and HTTP fixture server close normally. No external, production, original stopped recovery or Back/reload job is exercised.",
+    "Repeat the consuming journeys after the logging-only lazy-chunk correction: current error notices and draft recovery remain intact, while duplicate generic User Access console messages are absent. The existing bundle budget and assertions are unchanged; this browser result is not a production bundle-size measurement."
+  ]
+}
