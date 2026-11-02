@@ -54,7 +54,7 @@ const host: Resource = {
 
 describe('PBS Backups web-interface parity', () => {
   it.each([320, 390, 768, 1365])(
-    'uses the service-owned URL on every datastore at width %s without opening details',
+    'uses the service-owned URL once per server at width %s without opening details',
     (width) => {
       const ancestorKeydown = vi.fn();
       const { container } = render(() => (
@@ -65,7 +65,13 @@ describe('PBS Backups web-interface parity', () => {
       const links = within(container).getAllByRole('link', {
         name: 'Open web interface for pbs-main',
       });
-      expect(links).toHaveLength(2);
+      // The second datastore row names no server and repeats no link, so the
+      // two datastores never read as two servers.
+      expect(links).toHaveLength(1);
+      const names = within(container).getAllByText('pbs-main');
+      expect(names).toHaveLength(2);
+      expect(names[0]).not.toHaveClass('sr-only');
+      expect(names[1]).toHaveClass('sr-only');
       for (const link of links) {
         expect(link).toHaveAttribute('href', 'https://pbs-east.example:8007');
         expect(link).toHaveAttribute('target', '_blank');
@@ -100,14 +106,12 @@ describe('PBS Backups web-interface parity', () => {
       within(container)
         .getAllByRole('link')
         .map((a) => a.getAttribute('href'));
-    expect(hrefs()).toEqual([east.customUrl, east.customUrl, west.customUrl, west.customUrl]);
+    expect(hrefs()).toEqual([east.customUrl, west.customUrl]);
     setServers([
       { ...west, pbs: { ...west.pbs!, datastores: [...west.pbs!.datastores!].reverse() } },
       east,
     ]);
-    await waitFor(() =>
-      expect(hrefs()).toEqual([east.customUrl, east.customUrl, west.customUrl, west.customUrl]),
-    );
+    await waitFor(() => expect(hrefs()).toEqual([east.customUrl, west.customUrl]));
   });
 
   it.each([
@@ -123,7 +127,7 @@ describe('PBS Backups web-interface parity', () => {
     expect(within(container).queryByRole('link')).not.toBeInTheDocument();
     expect(
       within(container).getAllByRole('img', { name: 'Web interface URL for pbs-main is invalid' }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(within(container).getAllByText('pbs-main')).toHaveLength(2);
   });
 
@@ -131,7 +135,7 @@ describe('PBS Backups web-interface parity', () => {
     const pbs = server();
     const [servers, setServers] = createSignal([pbs, host]);
     const { container } = render(() => <ProxmoxBackupServersTable servers={servers()} />);
-    expect(within(container).getAllByRole('link')).toHaveLength(2);
+    expect(within(container).getAllByRole('link')).toHaveLength(1);
     setServers([{ ...pbs, customUrl: 'javascript:alert(1)' }, host]);
     await waitFor(() => expect(within(container).queryByRole('link')).not.toBeInTheDocument());
     setServers([{ ...pbs, customUrl: '' }, host]);

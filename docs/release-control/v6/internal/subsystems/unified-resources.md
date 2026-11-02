@@ -222,6 +222,14 @@ narrow browser proof exercises the same producer through the inventory consumer
 with native interactions and inspected pixels. No API, provider, guest, polling,
 auth, resource identity or protection-policy change, nor installed recovery claim.
 
+### Backup servers rows name a PBS resource once (2 November 2026)
+
+`ProxmoxBackupServersTable` still renders one row per datastore of a `pbs`
+resource, but only the resource's first row shows its name and web-interface
+link; later rows carry the name for screen readers alone and keep their own
+detail toggle and drawer. The rows and their resource identity are unchanged;
+only the repeated visible label is gone.
+
 ### Backup empty states name only filters that exist (2 November 2026)
 
 With the per-day restore point chart removed from Backups By date, no control

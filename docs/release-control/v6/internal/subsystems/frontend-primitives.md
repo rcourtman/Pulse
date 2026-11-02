@@ -544,6 +544,13 @@ route, navigation, access or backup operation changes.
 and phone, so a filtering row looks clickable without adding height. Rows that
 open nothing leave the track empty, so every row's columns still line up.
 
+### Backup servers datastore rows name their server once (2 November 2026)
+
+`ProxmoxBackupServersTable` renders `ResourceNameWithWebInterfaceLink` only on
+a server's first datastore row; rows with `continuesServer` leave the name cell
+to the detail toggle plus an `sr-only` server name, so the shared web-interface
+link appears once per server rather than once per datastore.
+
 ### Backups By date carries no activity chart (2 November 2026)
 
 The restore points no longer render `BackupActivityChart`; the component and

@@ -391,12 +391,15 @@ describe('ProxmoxBackupsTable', () => {
       return dataRows()[row].querySelectorAll('td')[columns.indexOf(column)].textContent?.trim();
     };
 
-    // Two datastores of one server read as one server, not two identical ones:
-    // status sits on its first row, and the second row keeps its name and its
-    // own datastore figures. Host CPU, memory, uptime and version are in the
-    // server's drawer, not the row.
+    // Two datastores of one server read as one server, not two: its name and
+    // status sit on its first row, and the second row shows only its own
+    // datastore figures, naming the server for screen readers alone. Host CPU,
+    // memory, uptime and version are in the server's drawer, not the row.
     expect(dataRows()).toHaveLength(2);
-    expect(within(table).getAllByText('pbs-main')).toHaveLength(2);
+    const names = within(table).getAllByText('pbs-main');
+    expect(names).toHaveLength(2);
+    expect(names[0]).not.toHaveClass('sr-only');
+    expect(names[1]).toHaveClass('sr-only');
     expect(cellText(0, 'status')).not.toBe('');
     expect(cellText(1, 'status')).toBe('');
     expect(

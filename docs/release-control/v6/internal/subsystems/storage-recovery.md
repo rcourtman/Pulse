@@ -5078,6 +5078,17 @@ keeps its columns aligned. Rows stay 32px, the accessible names are unchanged,
 and the phone bar narrows from 5rem to 4rem to make room. Which workloads each
 reason selects is unchanged.
 
+### A server's later datastore rows stop repeating its name (2 November 2026)
+
+The Backup servers table keeps one row per datastore, but a server's later
+datastore rows no longer show its name or web-interface link. A muted repeated
+name still read as a second PBS server on a real two-datastore install. The
+name, status and link now appear once, on the server's first row; later rows
+keep their toggle (whose accessible name still names the server and datastore)
+and a screen-reader-only server name, and their drawer still reads the server.
+Earlier notes here that later rows keep the muted name and a link per datastore
+are historical.
+
 ### Restore points drop the per-day chart (2 November 2026)
 
 By date no longer draws "Completed restore points per day" (or its Volume

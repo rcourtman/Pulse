@@ -59,10 +59,10 @@ import {
 // gets a reachability row.
 // PBS hosts left the v5 nodes table in the v6 IA, so this is where their health
 // lives. The row says whether the server is reachable; its CPU, memory, uptime,
-// version and their history are in the server's drawer, one click away. Status
-// shows once, on the server's first datastore row; its later rows keep the
-// server name (muted), toggle and web link, so two datastores never read as two
-// identical servers.
+// version and their history are in the server's drawer, one click away. The
+// server's name, status and web link show once, on its first datastore row; its
+// later rows keep only their toggle, so two datastores never read as two
+// servers. A muted repeated name still read as a second server.
 
 interface BackupServerRow {
   key: string;
@@ -677,9 +677,7 @@ export function ProxmoxBackupServersTable(props: {
                         })}
                       >
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('name')} truncate ${
-                            row.continuesServer ? 'text-muted' : 'text-base-content font-medium'
-                          }`}
+                          class={`${getPlatformTableCellClassForKind('name')} truncate text-base-content font-medium`}
                           title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}
                         >
                           <div class="flex min-w-0 items-center gap-1">
@@ -693,12 +691,17 @@ export function ProxmoxBackupServersTable(props: {
                               controlsId={detailRowId()}
                               onToggle={() => detail.toggle(rowIdentity)}
                             />
-                            <ResourceNameWithWebInterfaceLink
-                              name={row.serverName}
-                              url={row.resource.customUrl}
-                              class="min-w-0 flex-1"
-                              nameClass="block min-w-0 flex-1 truncate"
-                            />
+                            <Show
+                              when={!row.continuesServer}
+                              fallback={<span class="sr-only">{row.serverName}</span>}
+                            >
+                              <ResourceNameWithWebInterfaceLink
+                                name={row.serverName}
+                                url={row.resource.customUrl}
+                                class="min-w-0 flex-1"
+                                nameClass="block min-w-0 flex-1 truncate"
+                              />
+                            </Show>
                           </div>
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
