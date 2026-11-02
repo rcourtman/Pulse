@@ -163,11 +163,7 @@ func (d pulseMCPAgentSurfaceHTTPDoer) Do(req *http.Request) (*http.Response, err
 		req.Header = req.Header.Clone()
 		req.Header.Set(agentcapabilities.AgentSurfaceHeader, agentcapabilities.AgentSurfacePulseMCP)
 	}
-	next := d.next
-	if next == nil {
-		next = http.DefaultClient
-	}
-	return next.Do(req)
+	return agentcapabilities.DoAgentHTTPRequest(d.next, req)
 }
 
 // serve is the stdio loop: read line-delimited JSON-RPC requests

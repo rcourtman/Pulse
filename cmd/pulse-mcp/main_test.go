@@ -120,6 +120,32 @@ func TestMCPSameOriginRedirectPreservesWriteAndEventConsumer(t *testing.T) {
 	}
 }
 
+func TestMCPHTTPRedirectBoundaryCoversDefaultClientWithoutMutatingRequest(t *testing.T) {
+	var destinationRequests atomic.Int32
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		destinationRequests.Add(1)
+	}))
+	defer destination.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, destination.URL+"/target", http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+	req, err := agentcapabilities.NewAgentHTTPRequest(context.Background(), http.MethodGet, origin.URL, "/api/example", "synthetic-token", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := (pulseMCPAgentSurfaceHTTPDoer{}).Do(req)
+	if err == nil || resp != nil || !strings.Contains(err.Error(), "configured origin") {
+		t.Fatalf("default-client redirect response = %v, error = %v", resp, err)
+	}
+	if destinationRequests.Load() != 0 {
+		t.Fatal("default client contacted the other origin")
+	}
+	if req.Header.Get(agentcapabilities.AgentSurfaceHeader) != "" || req.Header.Get(agentcapabilities.AgentAPITokenHeader) != "synthetic-token" {
+		t.Fatal("adapter mutated the caller's original request headers")
+	}
+}
+
 type httpDoerFunc func(*http.Request) (*http.Response, error)
 
 func (f httpDoerFunc) Do(req *http.Request) (*http.Response, error) {

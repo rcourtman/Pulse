@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -144,6 +145,59 @@ func TestAgentHTTPRedirectsRetainDefaultLimit(t *testing.T) {
 	}
 	if requests.Load() != 10 {
 		t.Fatalf("redirect requests = %d, want 10", requests.Load())
+	}
+}
+
+func TestAgentHTTPRedirectCallbackCannotWidenOrigin(t *testing.T) {
+	var foreignRequests, callbackCalls atomic.Int32
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { foreignRequests.Add(1) }))
+	defer foreign.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/accepted", http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+	client := origin.Client()
+	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+		callbackCalls.Add(1)
+		next.URL, _ = url.Parse(foreign.URL + "/elsewhere")
+		return nil
+	}
+	_, err := FetchManifest(context.Background(), client, origin.URL)
+	if !errors.Is(err, errAgentRedirectOrigin) || callbackCalls.Load() != 1 || foreignRequests.Load() != 0 {
+		t.Fatalf("callback escaped boundary: err=%v callbacks=%d foreign=%d", err, callbackCalls.Load(), foreignRequests.Load())
+	}
+}
+
+func TestAgentHTTPRedirectsPreserveTLSAndCancellation(t *testing.T) {
+	var foreignRequests atomic.Int32
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { foreignRequests.Add(1) }))
+	defer foreign.Close()
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/accepted":
+			_, _ = io.WriteString(w, `{"version":"v1"}`)
+		case "/downgrade":
+			http.Redirect(w, r, foreign.URL, http.StatusTemporaryRedirect)
+		default:
+			http.Redirect(w, r, "/accepted", http.StatusTemporaryRedirect)
+		}
+	}))
+	defer origin.Close()
+	client := origin.Client() // Includes this fixture's trusted TLS certificate.
+	if _, err := FetchManifest(context.Background(), client, origin.URL); err != nil {
+		t.Fatalf("configured TLS transport lost: %v", err)
+	}
+	response, err := CallCapabilityHTTP(context.Background(), client, origin.URL, "synthetic-token", Capability{Method: http.MethodGet, Path: "/downgrade"}, nil)
+	if !errors.Is(err, errAgentRedirectOrigin) || response.StatusCode != 0 || foreignRequests.Load() != 0 {
+		t.Fatalf("TLS downgrade escaped boundary: err=%v status=%d foreign=%d", err, response.StatusCode, foreignRequests.Load())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := FetchManifest(ctx, client, origin.URL); !errors.Is(err, context.Canceled) {
+		t.Fatalf("request cancellation lost: %v", err)
+	}
+	if client.CheckRedirect != nil {
+		t.Fatal("caller TLS client was mutated")
 	}
 }
 

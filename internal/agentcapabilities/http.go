@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -127,7 +128,7 @@ func FetchManifest(ctx context.Context, client HTTPDoer, baseURL string) (*Manif
 	if err != nil {
 		return nil, err
 	}
-	resp, err := httpClient(client).Do(req)
+	resp, err := DoAgentHTTPRequest(client, req)
 	if err != nil {
 		return nil, fmt.Errorf("GET %s: %w", AgentCapabilitiesPath, err)
 	}
@@ -178,7 +179,7 @@ func CallCapabilityHTTP(ctx context.Context, client HTTPDoer, baseURL, token str
 	if err != nil {
 		return HTTPCallResponse{}, err
 	}
-	resp, err := httpClient(client).Do(req)
+	resp, err := DoAgentHTTPRequest(client, req)
 	if err != nil {
 		return HTTPCallResponse{}, fmt.Errorf("%s %s: %w", cap.Method, projected.Path, err)
 	}
@@ -240,9 +241,65 @@ func CallRequestResponseCapabilityHTTPBodyByName(ctx context.Context, client HTT
 	return append([]byte(nil), resp.Body...), nil
 }
 
-func httpClient(client HTTPDoer) HTTPDoer {
-	if client != nil {
-		return client
+var errAgentRedirectOrigin = errors.New("agent HTTP redirect left the configured origin; set the final Pulse base URL")
+
+// DoAgentHTTPRequest keeps standard HTTP clients within the original request's
+// origin. Go's default redirect rules do not protect our custom API-token
+// header or replayable request bodies. Copy the client so callers retain their
+// transport, timeout, cookie jar and stricter redirect policy without mutation.
+// Custom HTTPDoers own their transport policy (including any redirect handling).
+func DoAgentHTTPRequest(client HTTPDoer, req *http.Request) (*http.Response, error) {
+	if client == nil {
+		client = http.DefaultClient
 	}
-	return http.DefaultClient
+	standard, ok := client.(*http.Client)
+	if !ok {
+		return client.Do(req)
+	}
+	guarded := *standard
+	previousRedirectPolicy := guarded.CheckRedirect
+	guarded.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if len(via) == 0 || !sameAgentHTTPOrigin(via[0].URL, next.URL) {
+			return errAgentRedirectOrigin
+		}
+		if previousRedirectPolicy != nil {
+			if err := previousRedirectPolicy(next, via); err != nil {
+				return err
+			}
+			// A caller's callback may edit the proposed request.
+			if !sameAgentHTTPOrigin(via[0].URL, next.URL) {
+				return errAgentRedirectOrigin
+			}
+		} else if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
+	resp, err := guarded.Do(req)
+	if errors.Is(err, errAgentRedirectOrigin) {
+		// net/http wraps redirect errors with the destination URL. Do not expose
+		// its userinfo, path or query through MCP results or adapter logs.
+		return nil, errAgentRedirectOrigin
+	}
+	return resp, err
+}
+
+func sameAgentHTTPOrigin(from, to *url.URL) bool {
+	if from == nil || to == nil || from.Hostname() == "" || to.Hostname() == "" || from.Opaque != "" || to.Opaque != "" {
+		return false
+	}
+	if !strings.EqualFold(from.Scheme, to.Scheme) || !strings.EqualFold(from.Hostname(), to.Hostname()) {
+		return false
+	}
+	port := func(u *url.URL) string {
+		if p := u.Port(); p != "" {
+			return p
+		}
+		if strings.EqualFold(u.Scheme, "https") {
+			return "443"
+		}
+		return "80"
+	}
+	return (strings.EqualFold(from.Scheme, "http") || strings.EqualFold(from.Scheme, "https")) &&
+		port(from) == port(to) && from.User.String() == to.User.String()
 }
