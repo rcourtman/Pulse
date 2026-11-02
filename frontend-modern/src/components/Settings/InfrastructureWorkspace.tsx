@@ -340,6 +340,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   };
 
+  const handleRetryInventory = () => {
+    ledger.reload();
+    // The editor reads saved node settings separately from the ledger.
+    // Recover that read too after an outage, without a page reload.
+    if (!readOnly()) eventBus.emit('refresh_nodes');
+  };
+
   const handleAddSaved = () => {
     ledger.reload();
     void props.loadDiscoveredNodes();
@@ -759,12 +766,23 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             <Show
               when={findEditableNode(connection)}
               fallback={
-                <div
-                  role="alert"
-                  class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
-                >
-                  Couldn't find the saved configuration for {connection.name}. It may have already
-                  been removed.
+                <div class="space-y-3">
+                  <div
+                    role="alert"
+                    class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/25 dark:bg-amber-950/25 dark:text-amber-200"
+                  >
+                    Saved configuration for {connection.name} is unavailable. Retry to read it again
+                    before editing.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="mdCompact"
+                    disabled={ledger.loading()}
+                    onClick={handleRetryInventory}
+                  >
+                    Retry saved configuration
+                  </Button>
                 </div>
               }
             >
@@ -990,12 +1008,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           rows={rows}
           inventoryLoading={!ledger.resolvedOnce() || ledger.loading()}
           inventoryError={ledger.error()}
-          onRetryInventory={() => {
-            ledger.reload();
-            // The editor reads saved node settings separately from the ledger.
-            // Recover that read too after a cold outage, without a page reload.
-            if (!readOnly()) eventBus.emit('refresh_nodes');
-          }}
+          onRetryInventory={handleRetryInventory}
           discoveredNodes={visibleDiscoveredNodes}
           discoveryEnabled={props.discoveryEnabled()}
           discoveryScanStatus={props.discoveryScanStatus}

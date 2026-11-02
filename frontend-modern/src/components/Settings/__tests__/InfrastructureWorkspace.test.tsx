@@ -1212,6 +1212,32 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('recovers unavailable saved node settings inside the existing manage dialog', async () => {
+    const [savedNodes, setSavedNodes] = createSignal<any[]>([]);
+    const refresh = vi.fn(() => setSavedNodes([{ name: 'zeus', host: 'https://10.0.0.1:8006' }]));
+    const unsubscribe = eventBus.on('refresh_nodes', refresh);
+    try {
+      renderWorkspace({ pveNodes: savedNodes });
+      fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        'Saved configuration for zeus is unavailable',
+      );
+      expect(dialog).not.toHaveTextContent('removed');
+      expect(within(dialog).queryByTestId('proxmox-section')).toBeNull();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Retry saved configuration' }));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(ledgerReadState.reload).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(within(dialog).getByTestId('proxmox-section')).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('dialog')).toBe(dialog);
+      expect(dialog).toHaveAccessibleName('Manage zeus');
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it('opens the manage dialog directly from an existing source card', async () => {
     renderWorkspace({
       pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
