@@ -199,11 +199,12 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
           when={activeSettingsPanelEntry()}
           fallback={securityStatusLoading() ? <SettingsPanelLoadingFallback /> : null}
         >
-          {(entry) => (
-            <Suspense fallback={<SettingsPanelLoadingFallback />}>
-              <Dynamic component={entry().component} {...(entry().getProps?.() ?? {})} />
-            </Suspense>
-          )}
+          <Suspense fallback={<SettingsPanelLoadingFallback />}>
+            <Dynamic
+              component={activeSettingsPanelEntry()?.component}
+              {...(activeSettingsPanelEntry()?.getProps?.() ?? {})}
+            />
+          </Suspense>
         </Show>
       </SettingsPageShell>
 

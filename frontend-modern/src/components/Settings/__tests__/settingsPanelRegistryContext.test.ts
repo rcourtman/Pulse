@@ -53,6 +53,7 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationOverviewPanelProps().currentUser).toBe('org-owner');
     expect(context.getApiAccessPanelProps().currentUser).toBe('org-owner');
     expect(context.getUserAssignmentsPanelProps().currentUser).toBe('org-owner');
+    expect(context.getRolesPanelProps().currentUser).toBe('org-owner');
   });
 
   it('does not replace an explicitly empty principal with the configured admin', () => {
@@ -148,6 +149,24 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationAccessPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getOrganizationSharingPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getApiAccessPanelProps()).toMatchObject({ currentUser: undefined });
+  });
+  it('binds Roles to the live principal and explicit roles capability', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    expect(context.getRolesPanelProps()).toEqual({ currentUser: undefined, canManage: false });
+    setStatus({
+      currentUsername: 'role-reader',
+      settingsCapabilities: { roles: true, users: false },
+    } as SecurityStatus);
+    expect(context.getRolesPanelProps()).toEqual({ currentUser: 'role-reader', canManage: true });
+    setStatus({
+      currentUsername: 'other-reader',
+      settingsCapabilities: { roles: false, users: true },
+    } as SecurityStatus);
+    expect(context.getRolesPanelProps()).toEqual({ currentUser: 'other-reader', canManage: false });
   });
   it('binds User Access to the live principal and explicit users capability', () => {
     const [status, setStatus] = createSignal<SecurityStatus | null>(null);

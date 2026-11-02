@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "09084eb90cf3deb07cba8a07fe866d8286f9b95e",
+  "verified_at": "2026-11-02T01:50:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/rbac.ts",
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/rbac.ts": "54282a4fb5815f8ae54e2847c55d2e342aa6daefa42054039e9be037d887fc4e",
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "6a271ccca27f393a642fb0aaf69835a114dec34fe9b3a997fd16b2c5357e5a4d",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "cd712eaea94de994687cf7b004a38d77e820d9673247016cdfc0395b03104f22",
+    "frontend-modern/src/components/Settings/Settings.tsx": "448156d822e5bd68f3946dbd8a575f188418fbb1e140a37203ffa78bcbb9990d",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts": "57adb76996d570cedf52eaede1396d7dc61a78e94d86c2754442da3e9a0e7e5b",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "c2a7ae05a220062086ba84fd6d87e3ba23368276cba08aa066a4df36a47eb113",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "42e5eac85d2d91b7803ec25f479c109cfed1b651274c7f22a3d6015f7a1d8ca4"
+  },
+  "routes": [
+    "/settings/security-roles",
+    "/settings/security-sso (ordinary safe status-refresh precursor)",
+    "/settings/system-general (existing capability-withdrawal fallback)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App, Settings capability gate and registry, Roles panel/editor/deletion dialog/state, RBAC API client and application CSS from committed source. Safe synthetic HTTP session/CSRF/token/organisation fixtures, not a native IdP, installed tenant, persisted authorisation or original recovery acceptance.",
+    "60 checks across ten contexts in light desktop Chromium 1280x900 and dark narrow WebKit 390x844. All 14 final captures received native view_image pixel inspection. Current role names and unlisted saved permission resource are legible. Inline save/delete errors preserve the live draft/confirmation, and current reader controls remain usable after recovery.",
+    "A refused inventory is unavailable with one read-only Retry, not empty roles. Capability withdrawal closes the confirmation, erases former-reader roles and reaches the existing General fallback with no caught/uncaught page errors. Same-reader status refresh retains its mounted unsaved draft. Six expected synthetic HTTP403 console entries are retained."
+  ],
+  "interactions": [
+    "One deliberately refused PUT preserves draft and permissions without automatic retry. Only explicit retry repeats the identical exact-role payload; confirmed current-reader POST and DELETE remain usable and bind the selected organisation. All 12 role writes retain ordinary session, token, CSRF and exact organisation.",
+    "Switch through the real organisation selector while its new role inventory is held. Old roles, feedback and confirmation withdraw immediately; loading is not false empty, and actions wait for accepted inventory. A new editor has no old draft.",
+    "An ordinary synthetic SSO save starts a held containing Settings status refresh. An old pending role write is then withdrawn by a changed principal; its completion cannot refetch or announce the old role. A separate unchanged-reader control retains the draft. Revoking the roles capability closes an unsubmitted deletion and follows the existing safe General route without a stale-Show error.",
+    "Playwright 1.56.1 matches the committed integration lock. Chromium 141.0.7390.37 and WebKit26.0; ten contexts, two browsers, Vite and HTTP server close normally. Earlier functional-only passes were rejected by native pixels/stronger assertions and remain adverse evidence. No original stopped Back/reload or installed recovery is exercised."
+  ]
+}

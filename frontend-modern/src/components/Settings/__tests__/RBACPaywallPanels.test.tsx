@@ -224,7 +224,7 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Failed to load roles');
     });
     expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
-    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to load roles');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => {

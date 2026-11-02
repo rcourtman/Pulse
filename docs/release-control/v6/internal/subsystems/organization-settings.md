@@ -15,6 +15,40 @@
 
 ## Purpose
 
+### Role administration belongs to the current reader
+
+The existing Roles screen binds its accepted role inventory, unsaved permissions,
+editor, deletion confirmation and local action feedback to the selected
+organisation, authenticated principal and explicit Roles capability. Losing any
+of them, losing RBAC or disposing the panel aborts outstanding requests and
+withdraws that state. Returning to the same organisation or role ID does not
+readmit an earlier response. Obsolete successes, refusals and completions cannot
+replace current data, finish a newer loading state, refetch or announce an old
+role name to the next reader.
+
+Reads and writes use the existing API client with an expected organisation,
+cancellation signal and automatic retries disabled. Only accepted, structurally
+valid inventory enables actions. An unread or malformed response is unavailable,
+not an empty role list, and its inline Retry performs only a read. Built-in and
+obsolete row objects remain uneditable. Save and delete are serialised; deletion
+requires the current in-page confirmation, which is withdrawn on context loss.
+A failed save preserves the live draft with fixed inline feedback. Closing an
+editor erases its draft. Saved permission strings outside the editor's shortcut
+list remain visible and unchanged unless explicitly edited. Success feedback
+belongs to this panel rather than a global identity-bearing notification. The
+containing Settings renderer reads optional current entry props rather than
+retaining a conditional accessor after a panel is withdrawn. Revocation keeps
+the existing safe navigation fallback usable instead of raising the route error
+boundary; a same-reader status refresh does not remount the panel or lose its
+draft. Backend authorisation, endpoints and permission semantics remain unchanged.
+
+Normal `RolesReaderLifetime`, RBAC API, paywall and registry tests cover
+read/write races, revoked authority, licence loss, disposal, stale row IDs,
+malformed reads, exact request binding and explicit recovery. Browser proof
+exercises actual App/Settings/Role consumers at desktop and narrow widths using
+safe synthetic HTTP producers; it is not installed administrator or IdP recovery.
+
+
 ### Overview reads and name changes belong to the selected organization
 
 Overview clears its accepted metadata, member list and unsaved name when a

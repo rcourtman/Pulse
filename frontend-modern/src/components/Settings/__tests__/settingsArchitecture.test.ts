@@ -357,6 +357,9 @@ describe('settings architecture guardrails', () => {
   it('keeps allowed organization deep links on the canonical settings shell', () => {
     expect(settingsSource).toContain("import { useSettingsAccess } from './useSettingsAccess';");
     expect(settingsSource).toContain('const activeSettingsPanelEntry = createMemo(() => {');
+    expect(settingsSource).toContain('component={activeSettingsPanelEntry()?.component}');
+    expect(settingsSource).toContain('...(activeSettingsPanelEntry()?.getProps?.() ?? {})');
+    expect(settingsSource).not.toContain('entry().getProps');
     expect(settingsSource).toContain('if (!flatTabs().some((tab) => tab.id === currentTab)) {');
     expect(settingsSource).toContain('return settingsPanelRegistry()[currentTab];');
     expect(settingsPanelRegistryContextSource).toContain(
@@ -2285,6 +2288,7 @@ describe('User Access reader projection', () => {
   it('supplies live reader props through the canonical registry instead of an unscoped mount', async () => {
     const { default: registry } = await import('../settingsPanelRegistry.ts?raw');
     const { default: context } = await import('../settingsPanelRegistryContext.tsx?raw');
+    expect(registry).toMatch(/'security-roles':\s*\{[^}]*getProps: context.getRolesPanelProps/s);
     expect(registry).toMatch(
       /'security-users':\s*\{[^}]*getProps: context.getUserAssignmentsPanelProps/s,
     );
