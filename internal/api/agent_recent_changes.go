@@ -8,8 +8,27 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// History can wait for its store and current inventory after authentication.
+// Keep both the read authority and any command-disclosure authority used by
+// that projection until the response is written. Do not refresh an old request
+// into a different reader or retry its lookup with wider/different authority.
+func retainAgentHistoryResponseAuthority(cfg *config.Config, next http.HandlerFunc) http.HandlerFunc {
+	read := retainTokenResponseAuthority(cfg, config.ScopeMonitoringRead, false, next)
+	// Compose the existing synchronous guards: these scopes are BOTH required
+	// for a command-bearing projection, not interchangeable alternatives.
+	commandRead := retainTokenResponseAuthority(cfg, config.ScopeAIExecute, false, read)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if token := getAPITokenRecordFromRequest(r); token != nil && token.HasScope(config.ScopeAIExecute) {
+			commandRead(w, r)
+			return
+		}
+		read(w, r)
+	}
+}
 
 // AgentRecentChange is one observed resource change as an agent reads it:
 // the canonical change record plus the resource's current name and type,

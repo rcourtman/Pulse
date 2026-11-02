@@ -6730,6 +6730,16 @@ if [[ "$UNINSTALL" == "true" ]]; then
 fi
 
 # --- Validation ---
+# Invoke only a checksum/signature-verified staged binary. This is deliberately
+# not --self-test (older agents return before their URL policy is checked).
+validate_staged_agent_url() {
+    local staged_binary="$1"
+    if ! "$staged_binary" --validate-url --url "$PULSE_URL" --allow-plaintext-http=false >/dev/null 2>&1; then
+        fail "Could not validate the Pulse URL with the downloaded agent. Use the exact HTTPS server address; --insecure does not permit HTTP. Check DNS and that the downloaded agent can run. The installed service and saved credentials have not been changed." "$EXIT_PREFLIGHT_FAILED"
+    fi
+    json_event "preflight" "agent_url_validated" "Downloaded agent accepted the Pulse URL"
+}
+
 if [[ -z "$PULSE_URL" ]]; then
     fail "Missing required argument: --url (or --pulse-url)" "$EXIT_MISSING_ARGS"
 fi
@@ -7378,6 +7388,7 @@ if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
 fi
 
 chmod 0755 "$TMP_BIN"
+validate_staged_agent_url "$TMP_BIN"
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     # The irreversible server-side reduction must run only through the staged
     # binary whose checksum/signature have just been verified. The installed

@@ -1723,6 +1723,35 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+### Requested change history retains its disclosure authority
+
+`GET /api/agent/changes` retains the admitted token identity, principal,
+selected organisation and `monitoring:read` scope until each response write.
+A projection admitted with command-reading authority must also retain
+`ai:execute`; these are cumulative requirements, not scope alternatives.
+Before any result is committed, withdrawal produces generic `401`, not history,
+handler-specific headers or successful empty JSON. After an admitted prefix,
+withdrawal only stops later bytes. An already-admitted write may be in flight.
+
+The existing synchronous response guards retain session-instance withdrawal
+checks and non-executable JSON/plain-text transport without buffering payloads,
+replacing the request context, cancelling independent work or retrying reads.
+A fresh monitoring-only read remains valid and command-redacted; adding command
+scope during an old read does not unredact that read. Unrelated scope changes,
+explicit required scopes replacing wildcard, and unchanged session/proxy reads
+remain valid. Stored history, retention, event kinds, collection, the capability
+manifest and all other routes are unchanged. The history-success activity
+observer remains outside the disclosure guard so a refused response is not
+counted as a successful history read.
+
+Registered `agent_recent_changes_authority_test.go` suspends the normal inventory
+lookup on the full authenticated HTTP route, with real history store reads,
+independent controls, both token headers, token/scope/organisation/principal
+withdrawal, actual persisted logout, session replacement/expiry and intact
+canonical evidence. This external-agent endpoint has no frontend API consumer;
+no rendered fields or first-party journeys change.
+
+
 ### Synchronous audit recovery reads have an actual row ceiling
 
 The canonical audit exporter and summary reader request at most 10,001 matching
