@@ -2665,6 +2665,10 @@ lifecycle observation without renaming the wire field. Its deployment-method
 projection must preserve the closed wire buckets while clearly marking the
 signal as best effort. Unknown `container_other` and `binary_other` fallbacks
 must not be interpreted as precise original installation provenance.
+`community_scripts` is a closed value that only an explicit
+`PULSE_DEPLOYMENT_METHOD` in the Proxmox VE community-scripts LXC service sets;
+installs from that route on an older unit or older Pulse release still report
+`binary_other`, so the two buckets must be read together for that route.
 Schema v3 preserves that field/type allowlist but corrects
 `notification_failures_7d` from all unsuccessful attempts to terminal
 failed/dead-letter outcomes; `notification_attempts_7d` still includes retry

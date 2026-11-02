@@ -1162,8 +1162,10 @@ type Config struct {
 	DataDir  string
 	IsDocker bool
 	// DeploymentMethod may be one of docker_compose, docker_run,
-	// container_other, systemd, binary_other, or other. Empty/invalid values
-	// fall back to container_other or binary_other without exporting raw input.
+	// container_other, systemd, community_scripts, binary_other, or other.
+	// Empty/invalid values fall back to container_other or binary_other
+	// without exporting raw input. community_scripts is set by the Proxmox VE
+	// community-scripts LXC unit, which otherwise reports binary_other.
 	DeploymentMethod string
 	Enabled          bool // From cfg.TelemetryEnabled (system settings or env var)
 	GetSnapshot      SnapshotFunc
@@ -1328,7 +1330,7 @@ func deploymentMethod(cfg Config) string {
 		raw = strings.ToLower(strings.TrimSpace(os.Getenv("PULSE_DEPLOYMENT_METHOD")))
 	}
 	switch raw {
-	case "docker_compose", "docker_run", "container_other", "systemd", "binary_other", "other":
+	case "docker_compose", "docker_run", "container_other", "systemd", "community_scripts", "binary_other", "other":
 		return raw
 	}
 	if cfg.IsDocker {

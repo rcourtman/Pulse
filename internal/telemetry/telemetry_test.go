@@ -1068,6 +1068,21 @@ func TestDeploymentMethodRejectsFreeFormValues(t *testing.T) {
 	}
 }
 
+// The Proxmox VE community-scripts LXC unit sets PULSE_DEPLOYMENT_METHOD so
+// its installs separate from binary_other; near-miss spellings must still fall
+// back rather than export raw input.
+func TestDeploymentMethodAcceptsCommunityScripts(t *testing.T) {
+	t.Setenv("PULSE_DEPLOYMENT_METHOD", " Community_Scripts ")
+	if got := deploymentMethod(Config{}); got != "community_scripts" {
+		t.Fatalf("community-scripts deployment value = %q, want community_scripts", got)
+	}
+
+	t.Setenv("PULSE_DEPLOYMENT_METHOD", "community-scripts")
+	if got := deploymentMethod(Config{}); got != "binary_other" {
+		t.Fatalf("near-miss deployment value = %q, want binary_other", got)
+	}
+}
+
 func TestBuildPingAt_PersistsOnlyCoarseLifecycleMilestones(t *testing.T) {
 	dir := t.TempDir()
 	start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
