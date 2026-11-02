@@ -5428,8 +5428,9 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 	var workflow struct {
 		Jobs map[string]struct {
 			Steps []struct {
-				ID  string `yaml:"id"`
-				Run string `yaml:"run"`
+				ID  string            `yaml:"id"`
+				Run string            `yaml:"run"`
+				Env map[string]string `yaml:"env"`
 			} `yaml:"steps"`
 		} `yaml:"jobs"`
 	}
@@ -5437,9 +5438,11 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	script := ""
+	var stepEnv map[string]string
 	for _, step := range workflow.Jobs["changes"].Steps {
 		if step.ID == "filter" {
 			script = step.Run
+			stepEnv = step.Env
 		}
 	}
 	if script == "" {
@@ -5455,6 +5458,7 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 	}
 	cases := []struct {
 		name, files, event, base string
+		baseRef, refName         string
 		missingBase              bool
 		diffStatus               int
 		code, dependencies       string
@@ -5478,6 +5482,14 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 		{name: "large_unrelated_code", goCompile: true, files: docs + "internal/config/config.go\n", code: "true", dependencies: "false"},
 		{name: "exact_path_lookalikes", files: "frontend-modern/package.json.extra\nother/frontend-modern/package-lock.json\nscripts/npm-audit-retry.sh.extra\nscripts/npm_audit_process.py.extra\n", code: "true", dependencies: "false"},
 		{name: "pull_request_docs", files: "docs/FAQ.md\n", event: "pull_request", code: "false", dependencies: "false"},
+		{name: "completion_push_main", files: "scripts/release_control/canonical_completion_guard.py\n", code: "false", dependencies: "false"},
+		{name: "completion_pr_main", files: "scripts/release_control/canonical_completion_history_test.py\n", event: "pull_request", refName: "3725/merge", code: "false", dependencies: "false"},
+		{name: "completion_push_release", files: "scripts/release_control/canonical_completion_guard_test.py\n", refName: "release/v6.7", code: "false", dependencies: "false"},
+		{name: "completion_pr_release", files: "scripts/release_control/canonical_completion_history.py\n", event: "pull_request", baseRef: "release/v6.7", refName: "3725/merge", code: "false", dependencies: "false"},
+		{name: "completion_push_legacy", files: "scripts/release_control/canonical_completion_guard.py\n", refName: "pulse/v6-release", code: "true", dependencies: "false"},
+		{name: "completion_pr_legacy", files: "scripts/release_control/canonical_completion_guard.py\n", event: "pull_request", baseRef: "pulse/v6-release", code: "true", dependencies: "false"},
+		{name: "completion_unknown_target", files: "scripts/release_control/canonical_completion_guard.py\n", refName: "unknown", code: "true", dependencies: "false"},
+		{name: "completion_mixed_go", files: "scripts/release_control/canonical_completion_guard.py\ninternal/config/config.go\n", goCompile: true, code: "true", dependencies: "false"},
 		{name: "zero_push_base", goCompile: true, base: strings.Repeat("0", 40), code: "true", dependencies: "true"},
 		{name: "missing_base", goCompile: true, missingBase: true, code: "true", dependencies: "true"},
 		{name: "manual_dispatch", goCompile: true, event: "workflow_dispatch", base: "empty", code: "true", dependencies: "true"},
@@ -5498,7 +5510,7 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 			if err := os.WriteFile(files, []byte(tc.files), 0600); err != nil {
 				t.Fatal(err)
 			}
-			git := "#!/bin/sh\ncase \"$1\" in\ncat-file) test \"$BASE_MISSING\" != true ;;\ndiff) cat \"$CHANGED_FIXTURE\"; exit \"$DIFF_STATUS\" ;;\n*) exit 97 ;;\nesac\n"
+			git := "#!/bin/sh\ncase \"$1\" in\ncat-file) test \"$BASE_MISSING\" != true ;;\ndiff) case \" $* \" in *\" -z \"*) tr '\\n' '\\000' < \"$CHANGED_FIXTURE\" ;; *) cat \"$CHANGED_FIXTURE\" ;; esac; exit \"$DIFF_STATUS\" ;;\n*) exit 97 ;;\nesac\n"
 			if err := os.WriteFile(filepath.Join(bin, "git"), []byte(git), 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -5513,18 +5525,41 @@ func TestFrontendChangeClassificationPreservesStrictAudit(t *testing.T) {
 			if base == "empty" {
 				base = ""
 			}
-			run := strings.NewReplacer(
+			baseRef, refName := tc.baseRef, tc.refName
+			if baseRef == "" {
+				baseRef = "main"
+			}
+			if refName == "" {
+				refName = "main"
+			}
+			targetBranch := refName
+			if event == "pull_request" {
+				targetBranch = baseRef
+			}
+			replace := strings.NewReplacer(
+				"${{ github.event_name == 'pull_request' && github.base_ref || github.ref_name }}", targetBranch,
 				"${{ github.event_name }}", event,
 				"${{ github.event.pull_request.base.sha }}", base,
 				"${{ github.event.before }}", base,
 				"${{ github.sha }}", strings.Repeat("b", 40),
-			).Replace(script)
+			)
+			run := replace.Replace(script)
 			if strings.Contains(run, "${{") {
 				t.Fatal("unresolved workflow expression")
 			}
 			env := append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"),
 				"CHANGED_FIXTURE="+files, "GITHUB_OUTPUT="+output,
 				"BASE_MISSING="+strconv.FormatBool(tc.missingBase), "DIFF_STATUS="+strconv.Itoa(tc.diffStatus))
+			// Actions supplies the step environment as well as the run scalar.
+			// Execute the declared values so a new shell input cannot silently
+			// diverge from this consuming audit-policy test again.
+			for key, value := range stepEnv {
+				value = replace.Replace(value)
+				if strings.Contains(value, "${{") {
+					t.Fatalf("unresolved workflow environment expression for %s", key)
+				}
+				env = append(env, key+"="+value)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "bash", "-c", run)
