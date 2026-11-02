@@ -1,4 +1,4 @@
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, type APIContextOptions } from '@/utils/apiClient';
 import {
   arrayOrEmpty,
   finiteNumberOrUndefined,
@@ -258,12 +258,12 @@ function normalizeFailureClassCounts(value: unknown): NotificationFailureClassCo
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
 
-  static async getAppriseConfig(): Promise<AppriseConfig> {
-    return apiFetchJSON(`${this.baseUrl}/apprise`);
+  static async getAppriseConfig(options?: APIContextOptions): Promise<AppriseConfig> {
+    return apiFetchJSON(`${this.baseUrl}/apprise`, options);
   }
 
-  static async getHealth(): Promise<NotificationHealth> {
-    const payload = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/health`);
+  static async getHealth(options?: APIContextOptions): Promise<NotificationHealth> {
+    const payload = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/health`, options);
     const queue = apiRecord(payload.queue);
     const pending = nonNegativeCount(queue.pending);
     const sending = nonNegativeCount(queue.sending);
@@ -351,10 +351,14 @@ export class NotificationsAPI {
     };
   }
 
-  static async getDeliveryLog(limit?: number): Promise<NotificationDeliveryLog> {
+  static async getDeliveryLog(
+    limit?: number,
+    options?: APIContextOptions,
+  ): Promise<NotificationDeliveryLog> {
     const query = limit && limit > 0 ? `?limit=${limit}` : '';
     const payload = await apiFetchJSON<Record<string, unknown>>(
       `${this.baseUrl}/delivery-log${query}`,
+      options,
     );
     const rawEntries = arrayOrEmpty<unknown>(payload.entries);
     const entries: NotificationDeliveryLogEntry[] = [];
@@ -383,10 +387,12 @@ export class NotificationsAPI {
     };
   }
 
-  static async retryTerminalFailures(): Promise<NotificationTerminalFailureActionResult> {
+  static async retryTerminalFailures(
+    options?: APIContextOptions,
+  ): Promise<NotificationTerminalFailureActionResult> {
     const payload = await apiFetchJSON<Record<string, unknown>>(
       `${this.baseUrl}/terminal-failures/retry`,
-      { method: 'POST' },
+      { ...options, method: 'POST' },
     );
     return {
       success: strictBoolean(payload.success),
@@ -394,10 +400,12 @@ export class NotificationsAPI {
     };
   }
 
-  static async dismissTerminalFailures(): Promise<NotificationTerminalFailureActionResult> {
+  static async dismissTerminalFailures(
+    options?: APIContextOptions,
+  ): Promise<NotificationTerminalFailureActionResult> {
     const payload = await apiFetchJSON<Record<string, unknown>>(
       `${this.baseUrl}/terminal-failures/dismiss`,
-      { method: 'POST' },
+      { ...options, method: 'POST' },
     );
     return {
       success: strictBoolean(payload.success),
@@ -405,16 +413,23 @@ export class NotificationsAPI {
     };
   }
 
-  static async updateAppriseConfig(config: AppriseConfig): Promise<AppriseConfig> {
+  static async updateAppriseConfig(
+    config: AppriseConfig,
+    options?: APIContextOptions,
+  ): Promise<AppriseConfig> {
     return apiFetchJSON(`${this.baseUrl}/apprise`, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify(config),
     });
   }
 
   // Email configuration
-  static async getEmailConfig(): Promise<EmailConfig> {
-    const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
+  static async getEmailConfig(options?: APIContextOptions): Promise<EmailConfig> {
+    const backendConfig = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/email`,
+      options,
+    );
     const port = finiteNumberOrUndefined(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
@@ -444,7 +459,10 @@ export class NotificationsAPI {
     return config;
   }
 
-  static async updateEmailConfig(config: EmailConfig): Promise<{ success: boolean }> {
+  static async updateEmailConfig(
+    config: EmailConfig,
+    options?: APIContextOptions,
+  ): Promise<{ success: boolean }> {
     // Backend expects fields with these names (server, port)
     const backendConfig: Record<string, unknown> = {
       enabled: config.enabled,
@@ -477,33 +495,47 @@ export class NotificationsAPI {
     }
 
     return apiFetchJSON(`${this.baseUrl}/email`, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify(backendConfig),
     });
   }
 
   // Webhook management
-  static async getWebhooks(): Promise<Webhook[]> {
-    const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`);
+  static async getWebhooks(options?: APIContextOptions): Promise<Webhook[]> {
+    const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`, options);
     return arrayOrEmpty<Webhook>(data);
   }
 
-  static async createWebhook(webhook: Omit<Webhook, 'id'>): Promise<Webhook> {
+  static async createWebhook(
+    webhook: Omit<Webhook, 'id'>,
+    options?: APIContextOptions,
+  ): Promise<Webhook> {
     return apiFetchJSON(`${this.baseUrl}/webhooks`, {
+      ...options,
       method: 'POST',
       body: JSON.stringify(webhook),
     });
   }
 
-  static async updateWebhook(id: string, webhook: Partial<Webhook>): Promise<Webhook> {
+  static async updateWebhook(
+    id: string,
+    webhook: Partial<Webhook>,
+    options?: APIContextOptions,
+  ): Promise<Webhook> {
     return apiFetchJSON(`${this.baseUrl}/webhooks/${encodeURIComponent(id)}`, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify(webhook),
     });
   }
 
-  static async deleteWebhook(id: string): Promise<{ success: boolean }> {
+  static async deleteWebhook(
+    id: string,
+    options?: APIContextOptions,
+  ): Promise<{ success: boolean }> {
     return apiFetchJSON(`${this.baseUrl}/webhooks/${encodeURIComponent(id)}`, {
+      ...options,
       method: 'DELETE',
     });
   }
@@ -518,7 +550,10 @@ export class NotificationsAPI {
   }
 
   // Testing
-  static async testNotification(request: NotificationTestRequest): Promise<NotificationTestResult> {
+  static async testNotification(
+    request: NotificationTestRequest,
+    options?: APIContextOptions,
+  ): Promise<NotificationTestResult> {
     const body: {
       method: string;
       config?: Record<string, unknown> | AppriseConfig;
@@ -538,6 +573,7 @@ export class NotificationsAPI {
     }
 
     return apiFetchJSON(`${this.baseUrl}/test`, {
+      ...options,
       method: 'POST',
       body: JSON.stringify(body),
     });
@@ -545,8 +581,10 @@ export class NotificationsAPI {
 
   static async testWebhook(
     webhook: Omit<Webhook, 'id'>,
+    options?: APIContextOptions,
   ): Promise<{ success?: boolean; message?: string; deliveryPaused?: boolean }> {
     return apiFetchJSON(`${this.baseUrl}/webhooks/test`, {
+      ...options,
       method: 'POST',
       body: JSON.stringify(webhook),
     });

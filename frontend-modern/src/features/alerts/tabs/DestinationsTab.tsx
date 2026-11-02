@@ -28,6 +28,28 @@ export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
 }
 
 export function DestinationsTab(props: DestinationsTabProps) {
+  return (
+    <Show
+      when={!props.isLoadingDestinations() && !props.isRetrying()}
+      fallback={<AlertDestinationsLoadingState />}
+    >
+      <Show
+        when={!props.configLoadError()}
+        fallback={
+          <AlertDestinationsLoadErrorCard
+            error={props.configLoadError() || ''}
+            isRetrying={props.isRetrying()}
+            onRetry={props.onRetryLoad}
+          />
+        }
+      >
+        <LoadedDestinationsTab {...props} />
+      </Show>
+    </Show>
+  );
+}
+
+function LoadedDestinationsTab(props: DestinationsTabProps) {
   const state = useAlertDestinationsTabState(props);
   // Destinations configured here are inert while delivery is gated off, so the
   // pause has to be visible on this surface rather than only on the overview.
@@ -91,47 +113,51 @@ export function DestinationsTab(props: DestinationsTabProps) {
           Teams, Slack) come first because they are what most installs use, and
           delivery activity follows the destinations.
         */}
-        <AlertWebhookDestinationsSection
-          webhooks={state.webhooks()}
-          addWebhook={state.addWebhook}
-          updateWebhook={state.updateWebhook}
-          deleteWebhook={state.deleteWebhook}
-          testWebhook={state.testWebhook}
-          testingWebhook={state.testingWebhook()}
-        />
+        <Show when={!state.hasLoadError()}>
+          <AlertWebhookDestinationsSection
+            webhooks={state.webhooks()}
+            addWebhook={state.addWebhook}
+            updateWebhook={state.updateWebhook}
+            deleteWebhook={state.deleteWebhook}
+            testWebhook={state.testWebhook}
+            testingWebhook={state.testingWebhook()}
+          />
 
-        <AlertEmailDestinationsSection
-          config={props.emailConfig()}
-          setConfig={props.setEmailConfig}
-          setHasUnsavedChanges={props.setHasUnsavedChanges}
-          onTest={state.testEmailConfig}
-          testing={state.testingEmail()}
-        />
+          <AlertEmailDestinationsSection
+            config={props.emailConfig()}
+            setConfig={props.setEmailConfig}
+            setHasUnsavedChanges={props.setHasUnsavedChanges}
+            onTest={state.testEmailConfig}
+            testing={state.testingEmail()}
+          />
 
-        <AlertAppriseDestinationsSection
-          config={state.appriseState()}
-          updateApprise={state.updateApprise}
-          setHasUnsavedChanges={props.setHasUnsavedChanges}
-          onTest={state.testApprise}
-          testing={state.testingApprise()}
-        />
+          <AlertAppriseDestinationsSection
+            config={state.appriseState()}
+            updateApprise={state.updateApprise}
+            setHasUnsavedChanges={props.setHasUnsavedChanges}
+            onTest={state.testApprise}
+            testing={state.testingApprise()}
+          />
+        </Show>
 
         <Show when={!state.deliveryNeedsAttention()}>{deliveryLog()}</Show>
 
-        <AlertDeadManDestinationSection
-          pingUrl={props.deadManPingUrl}
-          setPingUrl={props.setDeadManPingUrl}
-          setHasUnsavedChanges={props.setHasUnsavedChanges}
-        />
+        <Show when={!state.hasLoadError()}>
+          <AlertDeadManDestinationSection
+            pingUrl={props.deadManPingUrl}
+            setPingUrl={props.setDeadManPingUrl}
+            setHasUnsavedChanges={props.setHasUnsavedChanges}
+          />
 
-        <AlertPushDestinationsSection
-          relayLicensed={hasFeature('relay')}
-          minimumSeverity={props.pushMinimumSeverity()}
-          onMinimumSeverityChange={(minimumSeverity) => {
-            props.setPushMinimumSeverity(minimumSeverity);
-            props.setHasUnsavedChanges(true);
-          }}
-        />
+          <AlertPushDestinationsSection
+            relayLicensed={hasFeature('relay')}
+            minimumSeverity={props.pushMinimumSeverity()}
+            onMinimumSeverityChange={(minimumSeverity) => {
+              props.setPushMinimumSeverity(minimumSeverity);
+              props.setHasUnsavedChanges(true);
+            }}
+          />
+        </Show>
       </Show>
     </div>
   );

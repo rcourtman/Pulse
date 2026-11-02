@@ -1,10 +1,11 @@
-import { createMemo, createSignal, onMount, type Accessor } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount, type Accessor } from 'solid-js';
 
 import { NotificationsAPI, type AppriseConfig, type Webhook } from '@/api/notifications';
 import type { Setter } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { showErrorWithDetail } from '@/utils/toast';
+import { getOrgID } from '@/utils/apiClient';
 import {
   getAlertDestinationsAppriseTestFailure,
   getAlertDestinationsAppriseTestSuccess,
@@ -33,6 +34,13 @@ export interface AlertDestinationsTabStateProps {
 }
 
 export function useAlertDestinationsTabState(props: AlertDestinationsTabStateProps) {
+  const org = getOrgID() || 'default';
+  const requestOptions = { expectedOrgID: org, retry: false } as const;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  const isCurrentReader = () => !disposed && (getOrgID() || 'default') === org;
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingApprise, setTestingApprise] = createSignal(false);
   const {
@@ -47,7 +55,11 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     retryingTerminalFailures,
     dismissTerminalFailures,
     dismissingTerminalFailures,
-  } = useNotificationDeliveryHealth({ onAfterQueueAction: () => loadDeliveryLog() });
+  } = useNotificationDeliveryHealth({
+    requestOptions,
+    isCurrentReader,
+    onAfterQueueAction: () => loadDeliveryLog(),
+  });
   const {
     deliveryLog,
     deliveryLogUnavailable,
@@ -56,7 +68,7 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
     heldEventsUnavailable,
     refreshingHeldEvents,
     loadDeliveryLog,
-  } = useNotificationDeliveryLog();
+  } = useNotificationDeliveryLog({ requestOptions, isCurrentReader });
   const webhookState = useAlertWebhookDestinationsState({
     webhooks: props.webhooks,
     setWebhooks: props.setWebhooks,
@@ -92,29 +104,36 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
   };
 
   const testEmailConfig = async () => {
+    if (!isCurrentReader() || hasLoadError() || isLoading() || testingEmail()) return;
     setTestingEmail(true);
     try {
-      const result = await NotificationsAPI.testNotification({
-        type: 'email',
-        config: { ...props.emailConfig() } as Record<string, unknown>,
-      });
+      const result = await NotificationsAPI.testNotification(
+        {
+          type: 'email',
+          config: { ...props.emailConfig() } as Record<string, unknown>,
+        },
+        requestOptions,
+      );
+      if (!isCurrentReader()) return;
       if (result.deliveryPaused) {
         notificationStore.warning(getAlertDestinationsTestPausedWarning());
       } else {
         notificationStore.success(getAlertDestinationsEmailTestSuccess());
       }
     } catch (error) {
+      if (!isCurrentReader()) return;
       logger.error(getAlertDestinationsEmailTestFailure(), error);
       const message =
         error instanceof Error ? error.message : getAlertDestinationsEmailTestFailure();
       const detail = (error as Error & { detail?: string })?.detail;
       showErrorWithDetail(message, detail);
     } finally {
-      setTestingEmail(false);
+      if (isCurrentReader()) setTestingEmail(false);
     }
   };
 
   const testApprise = async () => {
+    if (!isCurrentReader() || hasLoadError() || isLoading() || testingApprise()) return;
     setTestingApprise(true);
     try {
       const config = buildAppriseRequestConfig();
@@ -131,27 +150,33 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
         throw new Error(getAlertDestinationsAppriseValidationError('missingServerUrl'));
       }
 
-      const result = await NotificationsAPI.testNotification({
-        type: 'apprise',
-        config,
-      });
+      const result = await NotificationsAPI.testNotification(
+        {
+          type: 'apprise',
+          config,
+        },
+        requestOptions,
+      );
+      if (!isCurrentReader()) return;
       if (result.deliveryPaused) {
         notificationStore.warning(getAlertDestinationsTestPausedWarning());
       } else {
         notificationStore.success(getAlertDestinationsAppriseTestSuccess());
       }
     } catch (error) {
+      if (!isCurrentReader()) return;
       logger.error(getAlertDestinationsAppriseTestFailure(), error);
       const message =
         error instanceof Error ? error.message : getAlertDestinationsAppriseTestFailure();
       const detail = (error as Error & { detail?: string })?.detail;
       showErrorWithDetail(message, detail);
     } finally {
-      setTestingApprise(false);
+      if (isCurrentReader()) setTestingApprise(false);
     }
   };
 
   const handleRetry = () => {
+    if (!isCurrentReader()) return;
     props.onRetryLoad();
     if (props.webhooks === undefined) {
       void webhookState.loadWebhooks();

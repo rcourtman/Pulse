@@ -2,11 +2,14 @@ import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@solidj
 import { Show, createSignal, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, setOrgID } from '@/utils/apiClient';
 import { AlertEmailDestinationsSection } from '../AlertEmailDestinationsSection';
 import { useAlertDestinationsState } from '../useAlertDestinationsState';
 
-vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: vi.fn() }));
+vi.mock('@/utils/apiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/apiClient')>()),
+  apiFetchJSON: vi.fn(),
+}));
 vi.mock('@/stores/license', () => ({ hasFeature: () => false }));
 vi.mock('@/api/alerts', () => ({
   AlertsAPI: {
@@ -47,6 +50,7 @@ describe('email rate-limit persistence', () => {
   let loadedEnabled: boolean;
 
   beforeEach(() => {
+    setOrgID('default');
     loadedRateLimit = 17;
     loadedEnabled = true;
     vi.mocked(apiFetchJSON).mockReset();

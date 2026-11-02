@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Alerts } from '@/pages/Alerts';
 import { createAlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
+import { createSignal, onCleanup } from 'solid-js';
+import type { SecurityStatus } from '@/types/config';
+import { eventBus } from '@/stores/events';
+import { setOrgID } from '@/utils/apiClient';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 
@@ -108,9 +112,17 @@ vi.mock('@/features/alerts/AlertsConfigurationSurface', () => ({
   AlertsConfigurationSurface: configurationSurfaceSpy,
 }));
 
+const admittedStatus = {
+  requiresAuth: false,
+  currentUsername: 'alice',
+  apiTokenHint: 'hint-a',
+  tokenScopes: ['settings:read', 'settings:write'],
+} as SecurityStatus;
+
 describe('Alerts read-only presentation', () => {
   beforeEach(() => {
     cleanup();
+    setOrgID('default');
     navigateSpy.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
@@ -127,8 +139,49 @@ describe('Alerts read-only presentation', () => {
 
   afterEach(() => cleanup());
 
+  it('withholds configuration until the current security status is known', () => {
+    locationState.pathname = '/alerts/destinations';
+    render(() => <Alerts securityStatus={null} />);
+    expect(screen.queryByTestId('alerts-config-surface')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Alert settings access is unavailable');
+    expect(configurationSurfaceSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps equivalent reader facts mounted, but retires user, token, scope and workspace lifetimes', async () => {
+    const retired = vi.fn();
+    configurationSurfaceSpy.mockImplementation(() => {
+      onCleanup(retired);
+      return <div data-testid="alerts-config-surface">Config</div>;
+    });
+    const [status, setStatus] = createSignal<SecurityStatus | null>(admittedStatus);
+    render(() => <Alerts securityStatus={status()} />);
+    await screen.findByTestId('alerts-config-surface');
+    expect(configurationSurfaceSpy).toHaveBeenCalledTimes(1);
+    setStatus({ ...admittedStatus, tokenScopes: admittedStatus.tokenScopes!.slice().reverse() });
+    await Promise.resolve();
+    expect(retired).not.toHaveBeenCalled();
+    expect(configurationSurfaceSpy).toHaveBeenCalledTimes(1);
+    for (const delta of [
+      { currentUsername: 'bob' },
+      { apiTokenHint: 'hint-b' },
+      { tokenScopes: ['settings:read'] },
+    ]) {
+      const previous = retired.mock.calls.length;
+      setStatus({ ...status()!, ...delta });
+      await waitFor(() => expect(retired).toHaveBeenCalledTimes(previous + 1));
+    }
+    const previous = retired.mock.calls.length;
+    setOrgID('tenant-b');
+    eventBus.emit('org_switched', 'tenant-b');
+    await waitFor(() => expect(retired).toHaveBeenCalledTimes(previous + 1));
+    setStatus(null);
+    await waitFor(() =>
+      expect(screen.queryByTestId('alerts-config-surface')).not.toBeInTheDocument(),
+    );
+  });
+
   it('hands the store acknowledgement requests to the overview', async () => {
-    render(() => <Alerts />);
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
     expect(await screen.findByTestId('overview-tab')).toBeInTheDocument();
     expect(overviewTabSpy.mock.calls.at(-1)?.[0].acknowledgementRequests).toBe(
@@ -153,7 +206,7 @@ describe('Alerts read-only presentation', () => {
   it('keeps the active mobile destination visible when the tab rail narrows', async () => {
     locationState.pathname = '/alerts/schedule';
 
-    render(() => <Alerts />);
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
     const navigation = document.querySelector<HTMLElement>('nav.touch-scroll');
     expect(navigation).not.toBeNull();
@@ -182,7 +235,7 @@ describe('Alerts read-only presentation', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     activationStateMock.mockReturnValue('pending_review');
 
-    render(() => <Alerts />);
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('overview-tab')).toBeInTheDocument();
@@ -204,7 +257,7 @@ describe('Alerts read-only presentation', () => {
     activationStateMock.mockReturnValue('pending_review');
     locationState.pathname = '/alerts/thresholds';
 
-    render(() => <Alerts />);
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith('/alerts/overview', { replace: true });
@@ -217,7 +270,7 @@ describe('Alerts read-only presentation', () => {
     activationStateMock.mockReturnValue('active');
     locationState.pathname = '/alerts/thresholds';
 
-    render(() => <Alerts />);
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
@@ -231,7 +284,7 @@ describe('Alerts read-only presentation', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     activationStateMock.mockReturnValue('pending_review');
 
-    render(() => <Alerts />);
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
     expect(await screen.findByTestId('overview-tab')).toBeInTheDocument();
     expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
@@ -248,7 +301,7 @@ describe('Alerts read-only presentation', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     activationStateMock.mockReturnValue('active');
 
-    render(() => <Alerts />);
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
     expect(await screen.findByTestId('overview-tab')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Send notifications' })).toBeChecked();

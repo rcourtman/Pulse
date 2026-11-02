@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@solidj
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationsAPI, type Webhook } from '@/api/notifications';
+import { setOrgID } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
 import { useAlertWebhookDestinationsState } from '@/features/alerts/useAlertWebhookDestinationsState';
 import { WebhookConfig } from './WebhookConfig';
@@ -73,6 +74,7 @@ function openNewDraft() {
 describe('webhook persistence acknowledgement', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    setOrgID('default');
     vi.mocked(NotificationsAPI.getWebhookTemplates).mockResolvedValue([]);
   });
   afterEach(cleanup);
@@ -156,8 +158,9 @@ describe('webhook persistence acknowledgement', () => {
     expect(draft).toHaveValue('Edited destination');
     expect(screen.getByLabelText('Custom header 1 value')).toHaveValue('********');
     expect(owner.webhooks()).toEqual([savedWebhook]);
-    const [id, payload] = vi.mocked(NotificationsAPI.updateWebhook).mock.calls[0];
+    const [id, payload, requestOptions] = vi.mocked(NotificationsAPI.updateWebhook).mock.calls[0];
     expect(id).toBe(savedWebhook.id);
+    expect(requestOptions).toEqual({ expectedOrgID: 'default', retry: false });
     expect(payload).toMatchObject({
       ...savedWebhook,
       name: 'Edited destination',
@@ -171,7 +174,11 @@ describe('webhook persistence acknowledgement', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Update Webhook' }));
     await waitFor(() => expect(screen.queryByLabelText('Name')).not.toBeInTheDocument());
     expect(owner.webhooks()[0]).toEqual({ ...savedWebhook, name: 'Accepted edit', enabled: false });
-    expect(vi.mocked(NotificationsAPI.updateWebhook).mock.calls[1]).toEqual([id, payload]);
+    expect(vi.mocked(NotificationsAPI.updateWebhook).mock.calls[1]).toEqual([
+      id,
+      payload,
+      requestOptions,
+    ]);
   });
 
   it('allows cancellation after a failure without an automatic save or stale error on reopening', async () => {

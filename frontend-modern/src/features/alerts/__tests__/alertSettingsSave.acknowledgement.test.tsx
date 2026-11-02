@@ -125,12 +125,15 @@ describe('alert settings save acknowledgement', () => {
 
     expect(NotificationsAPI.updateEmailConfig).toHaveBeenCalledWith(
       expect.objectContaining({ server: 'smtp.first.example.test' }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(NotificationsAPI.updateAppriseConfig).toHaveBeenCalledWith(
       expect.objectContaining({ serverUrl: 'https://apprise.first.example.test' }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(AlertsAPI.updateDeadManConfig).toHaveBeenCalledWith(
       'https://watchdog.example.test/first',
+      { expectedOrgID: 'default', retry: false },
     );
     expect(result.emailConfig().server).toBe('smtp.newer.example.test');
     expect(result.appriseConfig().serverUrl).toBe('https://apprise.newer.example.test');
@@ -160,6 +163,7 @@ describe('alert settings save acknowledgement', () => {
     await result.saveAlertConfiguration();
     expect(NotificationsAPI.updateEmailConfig).toHaveBeenCalledWith(
       expect.objectContaining({ server: 'smtp.loaded.example.test' }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(result.dirty()).toBe(false);
   });
@@ -226,6 +230,7 @@ describe('alert settings save acknowledgement', () => {
     await result.saveAlertConfiguration();
     expect(NotificationsAPI.updateEmailConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({ server: 'smtp.newer.example.test' }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(result.dirty()).toBe(false);
   });

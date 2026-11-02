@@ -315,6 +315,8 @@ function App() {
     />
   );
 
+  const AlertsRoute = () => <AlertsPage securityStatus={runtime.securityStatus()} />;
+
   // Root layout component for Router
   const RootLayout = (props: { children?: JSX.Element }) => {
     const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
@@ -607,7 +609,7 @@ function App() {
       <Route path={STANDALONE_PATH} component={StandalonePage} />
       <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
 
-      <Route path="/alerts/*" component={AlertsPage} />
+      <Route path="/alerts/*" component={AlertsRoute} />
       <Route path="/actions/*" component={ActionsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />

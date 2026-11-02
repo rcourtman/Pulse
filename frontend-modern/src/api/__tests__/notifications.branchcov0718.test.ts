@@ -41,7 +41,7 @@ describe('NotificationsAPI — branch coverage (0718)', () => {
       const result = await NotificationsAPI.getAppriseConfig();
 
       expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
-      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/apprise');
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/apprise', undefined);
       expect(result).toEqual(payload);
     });
   });
