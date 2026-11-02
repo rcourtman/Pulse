@@ -10671,6 +10671,17 @@ through both monitor initialization paths, including explicit and legacy
 default organizations. These notifications refresh inventory presentation;
 they do not grant enrollment, removal, re-enrollment or command authority.
 
+### Backup jobs history preserves lifecycle authority (2 November 2026)
+
+`GET /api/backups/jobs` reads current tenant inventory and retained `pve-task:`
+recovery evidence through `recovery.BuildBackupHealth`, behind the existing
+authentication and `monitoring:read` scope. It summarizes outcomes only and adds
+no agent enrollment, credential, command, collection or remediation authority;
+it never triggers a poll or a backup. `backup_jobs_test.go` covers retained
+history beyond the live window, unobserved and unavailable history, the
+viewer's zone and method rejection. Collection and persistence proofs remain
+owned by monitoring and storage-recovery.
+
 ### Backup health reporting preserves lifecycle authority
 
 The reporting API's `backup_health` schedule kind reads current tenant inventory

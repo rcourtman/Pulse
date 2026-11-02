@@ -2095,6 +2095,23 @@ files, owner, and comment. Recovery history may index those artifacts, but it
 must not be the only API path for PBS protection or verification state when a
 platform page needs source-native backup columns.
 
+`/api/backups/jobs` owns summarized PVE backup job outcomes for the Backups
+page: counts for the last 24 hours and for each of the last 14 days in the
+viewer's `timezone` (an IANA name; anything unreadable is UTC), with a
+`historyState` of `complete`, `partial`, `not_observed` or `unavailable` on the
+window and on every day. It is built by `recovery.BuildBackupHealth` from
+retained `pve-task:` history and its collection coverage, the authority behind
+the backup health report, never from the live `/api/backups/pve` task list,
+which spans only the latest collection window. Failures name the workload and
+outcome only; provider error text stays out of this summary. Unreadable history
+reports `unavailable` and zero counts, never a clean window. Only Proxmox VE
+guests are rated, so another platform's VMs cannot mark every day partial.
+Windows end at the oldest latest observation when every rated instance was
+polled within 30 minutes (coverage ends at the last completed poll, so "now"
+would read partial on every healthy install), and only tasks that started or
+finished inside a window count there. Mock mode maps the fixture tasks the
+same way and treats every rated instance as observed.
+
 Hosted workspace handoff exchange is a canonical API/session payload boundary.
 `/api/cloud/handoff/exchange` may redirect to a tenant-local target path only
 when that path is carried in the signed control-plane JWT as `target_path`.

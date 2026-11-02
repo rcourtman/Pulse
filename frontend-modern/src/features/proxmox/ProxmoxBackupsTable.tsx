@@ -141,6 +141,9 @@ export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
   workloads?: readonly Resource[];
   servers?: readonly Resource[];
+  // A page-owned summary beside Backup health (the backup jobs card). It owns
+  // its own read, so the table's inventory reads stay PVE plus PBS.
+  summaryAside?: JSX.Element;
 }> = (props) => {
   let inspection: HTMLDivElement | undefined;
   // Recovering a read removes its notice (or the whole-inventory error).
@@ -891,42 +894,48 @@ export const ProxmoxBackupsTable: Component<{
               </div>
             </Show>
 
-            {/* The health strip renders identically in both route-backed views. */}
-            <ProxmoxBackupsCoverageStrip
-              title="Backup health"
-              rule={
-                <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
-                  {(rule) => <span data-coverage-posture-rule>{rule()}</span>}
-                </Show>
-              }
-              tail={
-                <span>
-                  {recoveryModel().coverageSummary.recoverableArtifacts} completed restore{' '}
-                  {recoveryModel().coverageSummary.recoverableArtifacts === 1 ? 'point' : 'points'}
-                  {inventoryIncomplete() ? ' read' : ''}
-                  <Show when={recoveryModel().coverageSummary.runningArtifacts > 0}>
-                    {' · '}
-                    {recoveryModel().coverageSummary.runningArtifacts} running
+            {/* The health and backup-job cards render identically in both
+                route-backed views, side by side once there is room. */}
+            <div class="grid gap-3 xl:[&:has([data-backup-jobs])]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+              <ProxmoxBackupsCoverageStrip
+                title="Backup health"
+                rule={
+                  <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
+                    {(rule) => <span data-coverage-posture-rule>{rule()}</span>}
                   </Show>
-                  <Show when={recoveryModel().coverageSummary.failedArtifacts > 0}>
-                    {' · '}
-                    {recoveryModel().coverageSummary.failedArtifacts} failed
-                  </Show>
-                  <Show when={recoveryModel().coverageSummary.withPBS > 0}>
-                    {' · '}
-                    {recoveryModel().coverageSummary.withPBS} with{' '}
-                    {getProxmoxBackupSourcePresentation('pbs').filterLabel}
-                  </Show>
-                  <Show when={orphanedTotalCount() > 0}>
-                    {' · '}
-                    {orphanedTotalCount()} unmatched
-                  </Show>
-                </span>
-              }
-              verdict={backupVerdict()}
-              isGroupPressed={exceptionGroupPressed}
-              onSelectGroup={selectExceptionGroup}
-            />
+                }
+                tail={
+                  <span>
+                    {recoveryModel().coverageSummary.recoverableArtifacts} completed restore{' '}
+                    {recoveryModel().coverageSummary.recoverableArtifacts === 1
+                      ? 'point'
+                      : 'points'}
+                    {inventoryIncomplete() ? ' read' : ''}
+                    <Show when={recoveryModel().coverageSummary.runningArtifacts > 0}>
+                      {' · '}
+                      {recoveryModel().coverageSummary.runningArtifacts} running
+                    </Show>
+                    <Show when={recoveryModel().coverageSummary.failedArtifacts > 0}>
+                      {' · '}
+                      {recoveryModel().coverageSummary.failedArtifacts} failed
+                    </Show>
+                    <Show when={recoveryModel().coverageSummary.withPBS > 0}>
+                      {' · '}
+                      {recoveryModel().coverageSummary.withPBS} with{' '}
+                      {getProxmoxBackupSourcePresentation('pbs').filterLabel}
+                    </Show>
+                    <Show when={orphanedTotalCount() > 0}>
+                      {' · '}
+                      {orphanedTotalCount()} unmatched
+                    </Show>
+                  </span>
+                }
+                verdict={backupVerdict()}
+                isGroupPressed={exceptionGroupPressed}
+                onSelectGroup={selectExceptionGroup}
+              />
+              {props.summaryAside}
+            </div>
 
             <Show when={unreadBackupSourcesNotice()}>
               {(notice) => (

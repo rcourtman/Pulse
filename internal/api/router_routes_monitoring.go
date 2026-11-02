@@ -31,6 +31,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/recovery/postures", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.recoveryHandlers.HandleListProtectionPostures)))
 	r.registerReplicationRoutes()
 	r.registerPVEBackupsRoutes()
+	r.registerBackupJobsRoutes()
 	r.registerPBSBackupsRoutes()
 	r.registerPMGRoutes()
 
