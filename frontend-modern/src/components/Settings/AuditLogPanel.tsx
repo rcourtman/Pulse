@@ -88,6 +88,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
     verification,
     verificationFilter,
     verificationSummary,
+    verificationNotice,
     verifyAll,
     verifyAllLabel,
     verifyCanceled,
@@ -329,6 +330,14 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
         <InlineNotice tone="warning" role="status">
           Audit log is unavailable for this session.
         </InlineNotice>
+      </Show>
+
+      <Show when={verificationNotice()}>
+        {(notice) => (
+          <InlineNotice tone={notice().tone} role="status" aria-live="polite">
+            {notice().message}
+          </InlineNotice>
+        )}
       </Show>
 
       <Show when={error()}>

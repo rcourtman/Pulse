@@ -18,7 +18,7 @@ import {
 } from '@/utils/localStorage';
 import { apiErrorFromResponse, apiFetch, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
-import { showSuccess, showToast, showWarning } from '@/utils/toast';
+import { showSuccess } from '@/utils/toast';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
@@ -156,6 +156,10 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     0,
   );
   const [verification, setVerification] = createSignal<Record<string, VerificationState>>({});
+  const [verificationNotice, setVerificationNotice] = createSignal<{
+    tone: 'success' | 'warning';
+    message: string;
+  } | null>(null);
   const [verifying, setVerifying] = createSignal<Record<string, boolean>>({});
   const [verifyingAll, setVerifyingAll] = createSignal(false);
   const [verifyAllTotal, setVerifyAllTotal] = createSignal(0);
@@ -244,6 +248,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       setVerifyControllers({});
       setVerifying({});
       setVerifyingAll(false);
+      setVerificationNotice(null);
       if (clearResults) {
         setVerification({});
         setVerifyAllTotal(0);
@@ -410,6 +415,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       verifyControllers()[event.id] === controller &&
       isCurrentEvent(event);
     batch(() => {
+      setVerificationNotice(null);
       setVerifying((prev) => ({ ...prev, [event.id]: true }));
       setVerifyControllers((prev) => ({ ...prev, [event.id]: controller }));
     });
@@ -533,14 +539,10 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
         }
       }
 
-      if (failed > 0 || errors > 0) {
-        showWarning(
-          'Signature verification completed',
-          `Verified ${verified}, failed ${failed}, errors ${errors}, unavailable ${unavailable}.`,
-        );
-      } else {
-        showSuccess('Signature verification completed', `Verified ${verified} events.`);
-      }
+      setVerificationNotice({
+        tone: failed > 0 || errors > 0 ? 'warning' : 'success',
+        message: `Signature verification completed. Verified ${verified}, failed ${failed}, errors ${errors}, unavailable ${unavailable}.`,
+      });
     }
   };
 
@@ -719,7 +721,6 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       stopVerification();
       setVerifyCanceled(true);
     });
-    showToast('info', 'Signature verification canceled');
   };
 
   const goToFirstPage = () => goToOffset(0);
@@ -904,6 +905,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     verification,
     verificationFilter,
     verificationSummary,
+    verificationNotice,
     verifyAll,
     verifyAllDone,
     verifyAllLabel,

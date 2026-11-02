@@ -465,4 +465,30 @@ describe('Audit log reader lifetime', () => {
       cleanup();
     }
   });
+  it('keeps completed batch feedback in the current panel and withdraws it on reader change', async () => {
+    let denyRead = false;
+    vi.mocked(apiFetch).mockImplementation(async (url) =>
+      String(url).includes('/verify')
+        ? verified()
+        : denyRead
+          ? json({ error: 'private-denial' }, 403)
+          : list(['a', 'b']),
+    );
+    const { result, cleanup } = mount();
+    try {
+      await waitFor(() => expect(result.events()).toHaveLength(2));
+      result.verifyAll();
+      await waitFor(() => expect(result.verificationNotice()?.message).toContain('Verified 2'));
+      expect(showSuccess).not.toHaveBeenCalled();
+      expect(showWarning).not.toHaveBeenCalled();
+      denyRead = true;
+      setOrgID('org-b');
+      eventBus.emit('org_switched', 'org-b');
+      expect(result.verificationNotice()).toBeNull();
+      await waitFor(() => expect(result.error()).toContain('access could not be confirmed'));
+      expect(result.verificationNotice()).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
 });
