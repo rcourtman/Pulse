@@ -25,10 +25,12 @@
 
 The existing `/api/metrics-store/history` chart read and canonical agent
 `get_metric_history` read retain the admitted API token or local browser session
-through the complete synchronous lookup and response. Current monitoring-read
-scope, credential identity, principal and organisation authority are checked at
-output, including after the agent's inventory lookup. Withdrawal before output
-returns the fixed 401 rather than metric values or a successful empty series;
+through the complete synchronous lookup and response. For API tokens, current
+monitoring-read scope, credential identity, principal and organisation authority
+are checked at output, including after the agent's inventory lookup. Local
+sessions retain the admitted session instance, validity, principal and store.
+Withdrawal before output returns the fixed 401 rather than metric values or a
+successful empty series;
 after an admitted prefix it only stops further writes. Handler-specific headers
 remain undisclosed until an authorised write.
 
@@ -50,7 +52,6 @@ Route-inventory controls retain monitoring-only, wildcard, session and proxy
 reads and unrelated-scope removal. Existing history query/entitlement/fallback
 and shared response-writer tests remain applicable. Consuming browser proof must
 use actual producer responses at desktop and narrow sizes, not a guard skip.
-
 
 ### Agent HTTP redirects retain their configured origin
 
