@@ -139,7 +139,7 @@ describe('InfrastructureSourceManager setup summary', () => {
         inventoryError={ledger.error()}
         onRetryInventory={ledger.reload}
         discoveredNodes={() =>
-          withCandidate ? [{ ip: '192.0.2.1', port: 8006, type: 'pve' }] : []
+          withCandidate ? [{ ip: '192.0.2.1', port: 8006, type: 'pve', version: '8.4' }] : []
         }
         discoveryEnabled={false}
         discoveryScanStatus={() => ({ scanning: false })}
@@ -229,12 +229,10 @@ describe('InfrastructureSourceManager setup summary', () => {
   it.each([401, 403])(
     'withdraws retained rows on HTTP %s without claiming absence',
     async (status) => {
-      const list = vi
-        .spyOn(ConnectionsAPI, 'list')
-        .mockResolvedValue({
-          connections: [connectionFixture({ name: 'Private host' })],
-          systems: [],
-        });
+      const list = vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({
+        connections: [connectionFixture({ name: 'Private host' })],
+        systems: [],
+      });
       const { ledger } = renderReadState(true);
       await waitFor(() => expect(screen.getByText('Private host')).toBeInTheDocument());
       list.mockRejectedValueOnce({ status });
@@ -253,12 +251,10 @@ describe('InfrastructureSourceManager setup summary', () => {
   );
 
   it('withdraws the old organisation while its replacement is unread, then permits genuine empty onboarding', async () => {
-    const list = vi
-      .spyOn(ConnectionsAPI, 'list')
-      .mockResolvedValueOnce({
-        connections: [connectionFixture({ name: 'Old org host' })],
-        systems: [],
-      });
+    const list = vi.spyOn(ConnectionsAPI, 'list').mockResolvedValueOnce({
+      connections: [connectionFixture({ name: 'Old org host' })],
+      systems: [],
+    });
     const { ledger } = renderReadState();
     await waitFor(() => expect(screen.getByText('Old org host')).toBeInTheDocument());
     list.mockRejectedValueOnce({ status: 503 });
