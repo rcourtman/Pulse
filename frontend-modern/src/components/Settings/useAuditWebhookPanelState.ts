@@ -1,12 +1,9 @@
 import { batch, createEffect, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
-import { logger } from '@/utils/logger';
-import { showSuccess, showWarning } from '@/utils/toast';
-import { getRuntimeCapabilityBlock, hasFeature } from '@/stores/license';
+import { getRuntimeCapabilityBlock, hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { loadRuntimeCapabilities } from '@/stores/license';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
   getAuditWebhookDuplicateUrlMessage,
@@ -15,79 +12,123 @@ import {
   getAuditWebhookSaveSuccessMessage,
 } from '@/utils/auditWebhookPresentation';
 
-export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
+export interface AuditWebhookPanelProps {
+  currentUser?: string;
+  canRead?: boolean;
+  canManage?: boolean;
+}
+
+export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
   const [webhookUrls, setWebhookUrls] = createSignal<string[]>([]);
   const [newUrl, setNewUrl] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal(false);
+  const [actionError, setActionError] = createSignal<string | null>(null);
+  const [successNotice, setSuccessNotice] = createSignal<string | null>(null);
   const [hasLoadedConfiguration, setHasLoadedConfiguration] = createSignal(false);
+  const [pendingRemoval, setPendingRemoval] = createSignal<string | null>(null);
   const currentOrg = () => getOrgID() || 'default';
-  let selectedOrg = currentOrg();
-  let request = 0;
+  const canRead = () => props.canRead !== false;
+  const canManage = () => canRead() && props.canManage !== false;
+  const isAuditLoggingEnabled = () => hasFeature('audit_logging');
+  const snapshot = () => ({
+    org: currentOrg(),
+    user: props.currentUser,
+    read: canRead(),
+    write: canManage(),
+    enabled: isAuditLoggingEnabled(),
+  });
+  const [context, setContext] = createSignal(snapshot());
   let disposed = false;
   let readController: AbortController | undefined;
   let saveController: AbortController | undefined;
+  const contextIsCurrent = () => {
+    const current = snapshot();
+    const accepted = context();
+    return (
+      !disposed &&
+      current.org === accepted.org &&
+      current.user === accepted.user &&
+      current.read === accepted.read &&
+      current.write === accepted.write &&
+      current.enabled === accepted.enabled
+    );
+  };
 
-  const canManage = () => canManageOverride !== false;
   const auditLoggingRuntimeBlock = () => getRuntimeCapabilityBlock('audit_logging');
   const paidRuntimeRequired = () => auditLoggingRuntimeBlock()?.reason === 'paid_runtime_required';
   const showUpgradePrompts = () =>
     !paidRuntimeRequired() && !presentationPolicyHidesUpgradePrompts();
   const showFeatureGateAction = () => paidRuntimeRequired() || showUpgradePrompts();
-  const isAuditLoggingEnabled = () => hasFeature('audit_logging');
   const upgradeDestination = () =>
     paidRuntimeRequired()
       ? resolveUpgradeDestination(auditLoggingRuntimeBlock()?.action_url)
       : getUpgradeActionDestination('audit_logging');
   const upgradeActionLabel = () => (paidRuntimeRequired() ? 'Download Pulse Pro' : 'View plans');
   const canEdit = () =>
+    contextIsCurrent() &&
     canManage() &&
     isAuditLoggingEnabled() &&
     hasLoadedConfiguration() &&
     !loading() &&
     !loadError() &&
-    selectedOrg === currentOrg();
+    !saving();
 
-  const invalidateRequests = () => {
-    request += 1;
+  const resetContext = () => {
     readController?.abort();
-    readController = undefined;
     saveController?.abort();
-  };
-
-  const selectCurrentOrg = () => {
-    if (selectedOrg === currentOrg()) return;
-    invalidateRequests();
-    selectedOrg = currentOrg();
+    readController = saveController = undefined;
     batch(() => {
+      // Replacing the snapshot invalidates old completions even if an ID is reused.
+      setContext(snapshot());
       setWebhookUrls([]);
       setHasLoadedConfiguration(false);
       setNewUrl('');
-      setLoadError(true);
+      setPendingRemoval(null);
+      setActionError(null);
+      setSuccessNotice(null);
+      setSaving(false);
+      setLoadError(false);
       setLoading(false);
     });
   };
+  const ensureCurrentContext = () => {
+    if (contextIsCurrent()) return true;
+    if (!disposed) {
+      resetContext();
+      // Storage can change without an org event. Withdraw first; require a read,
+      // never turn the interrupted action into a replacement in another org.
+      setLoadError(true);
+    }
+    return false;
+  };
 
   const fetchWebhooks = async () => {
-    selectCurrentOrg();
-    if (disposed || !isAuditLoggingEnabled() || readController || saving()) return;
-    const org = selectedOrg;
-    const thisRequest = ++request;
+    if (disposed) return;
+    ensureCurrentContext();
+    if (!canRead() || !isAuditLoggingEnabled() || readController || saveController) return;
+    const reader = context();
+    const controller = new AbortController();
+    readController = controller;
     const isCurrent = () =>
-      !disposed && thisRequest === request && org === currentOrg() && isAuditLoggingEnabled();
-    readController = new AbortController();
-    setLoading(true);
-    setLoadError(false);
+      contextIsCurrent() && reader === context() && readController === controller;
+    batch(() => {
+      setPendingRemoval(null);
+      setActionError(null);
+      setSuccessNotice(null);
+      setLoading(true);
+      setLoadError(false);
+    });
     try {
       const data = await apiFetchJSON<{ urls: string[] | null }>('/api/admin/webhooks/audit', {
-        expectedOrgID: org,
+        expectedOrgID: reader.org,
         retry: false,
-        signal: readController.signal,
+        signal: controller.signal,
       });
       if (!isCurrent()) return;
-      // The server can encode a nil slice as null. Only an explicit empty
-      // selection is empty; an unexpected payload must not enable replacement.
+      // Only a known empty selection is empty. Unknown configuration must not
+      // enable replacing destinations; the server encodes a nil slice as null.
       if (
         !data ||
         (data.urls !== null &&
@@ -95,122 +136,141 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
       ) {
         throw new Error('Invalid audit webhook configuration');
       }
-      setWebhookUrls(data.urls ?? []);
-      setHasLoadedConfiguration(true);
-    } catch (error) {
-      if (!isCurrent()) return;
-      setLoadError(true);
-      logger.error('[AuditWebhookPanel] Failed to fetch audit webhooks', error);
+      batch(() => {
+        setWebhookUrls(data.urls ?? []);
+        setHasLoadedConfiguration(true);
+      });
+    } catch {
+      if (isCurrent()) setLoadError(true);
     } finally {
-      if (!disposed && thisRequest === request) {
+      if (isCurrent()) {
         readController = undefined;
         setLoading(false);
-        selectCurrentOrg();
+      } else if (!disposed && reader === context() && !contextIsCurrent()) {
+        ensureCurrentContext();
       }
     }
   };
 
   const saveWebhooks = async (urls: string[]) => {
-    selectCurrentOrg();
-    if (!canEdit() || saving() || disposed) return false;
-    const org = selectedOrg;
-    const thisRequest = request;
+    if (!ensureCurrentContext() || !canEdit()) return false;
+    const reader = context();
+    const controller = new AbortController();
+    saveController = controller;
     const isCurrent = () =>
-      !disposed && thisRequest === request && org === currentOrg() && isAuditLoggingEnabled();
-    saveController = new AbortController();
-    setSaving(true);
+      contextIsCurrent() && reader === context() && saveController === controller;
+    batch(() => {
+      setSaving(true);
+      setActionError(null);
+      setSuccessNotice(null);
+    });
     try {
       await apiFetchJSON('/api/admin/webhooks/audit', {
         method: 'POST',
         body: JSON.stringify({ urls }),
-        expectedOrgID: org,
+        expectedOrgID: reader.org,
         retry: false,
-        signal: saveController.signal,
+        signal: controller.signal,
       });
       if (!isCurrent()) return false;
-      setWebhookUrls(urls);
-      showSuccess(getAuditWebhookSaveSuccessMessage());
+      batch(() => {
+        setWebhookUrls(urls);
+        setSuccessNotice(getAuditWebhookSaveSuccessMessage());
+      });
       return true;
-    } catch (error) {
-      if (!isCurrent()) return false;
-      logger.error('[AuditWebhookPanel] Failed to save audit webhooks', error);
-      showWarning(getAuditWebhookSaveErrorMessage());
+    } catch {
+      if (isCurrent()) setActionError(getAuditWebhookSaveErrorMessage());
       return false;
     } finally {
-      saveController = undefined;
-      if (!disposed) {
+      if (isCurrent()) {
+        saveController = undefined;
         setSaving(false);
-        selectCurrentOrg();
+      } else if (!disposed && reader === context() && !contextIsCurrent()) {
+        ensureCurrentContext();
       }
     }
   };
 
   const handleAddWebhook = async () => {
-    selectCurrentOrg();
-    if (!canEdit() || saving() || disposed) return;
+    if (!ensureCurrentContext() || !canEdit()) return;
     const draft = newUrl();
     const url = draft.trim();
     if (!url) return;
-
+    setSuccessNotice(null);
     try {
       new URL(url);
     } catch {
-      showWarning(getAuditWebhookInvalidUrlMessage());
+      setActionError(getAuditWebhookInvalidUrlMessage());
       return;
     }
-
     if (webhookUrls().includes(url)) {
-      showWarning(getAuditWebhookDuplicateUrlMessage());
+      setActionError(getAuditWebhookDuplicateUrlMessage());
       return;
     }
-
+    const reader = context();
     const saved = await saveWebhooks([...webhookUrls(), url]);
-    // Leave failed entries available for correction/retry, and do not erase
-    // a different draft typed while the submitted entry was saving.
-    if (saved && newUrl() === draft) setNewUrl('');
+    // An obsolete completion cannot erase a later reader's matching draft.
+    if (saved && contextIsCurrent() && context() === reader && newUrl() === draft) setNewUrl('');
   };
 
-  const handleRemoveWebhook = async (url: string) => {
-    selectCurrentOrg();
-    if (!canEdit() || saving() || disposed || !webhookUrls().includes(url)) return;
-    await saveWebhooks(webhookUrls().filter((existingUrl) => existingUrl !== url));
+  const openRemoveWebhook = (url: string) => {
+    if (!ensureCurrentContext() || !canEdit() || !webhookUrls().includes(url)) return;
+    batch(() => {
+      setActionError(null);
+      setSuccessNotice(null);
+      setPendingRemoval(url);
+    });
+  };
+  const closeRemoveWebhook = () => {
+    if (saving()) return;
+    setPendingRemoval(null);
+    setActionError(null);
+  };
+  const handleRemoveWebhook = async () => {
+    if (!ensureCurrentContext() || !canEdit()) return;
+    const url = pendingRemoval();
+    if (!url || !webhookUrls().includes(url)) return;
+    const reader = context();
+    const saved = await saveWebhooks(webhookUrls().filter((existingUrl) => existingUrl !== url));
+    if (saved && contextIsCurrent() && context() === reader) setPendingRemoval(null);
+  };
+  const updateNewUrl = (url: string) => {
+    if (!ensureCurrentContext() || !canManage() || !isAuditLoggingEnabled()) return;
+    setNewUrl(url);
+    if (!pendingRemoval() && !saving()) setActionError(null);
   };
 
   onMount(() => {
-    loadRuntimeCapabilities();
+    void loadRuntimeCapabilities();
   });
-
+  createEffect(
+    on(
+      [isAuditLoggingEnabled, canRead, canManage, () => props.currentUser],
+      (current, previous) => {
+        // A copied status object is not a new reader: keep their current draft.
+        if (previous && current.every((value, index) => value === previous[index])) return;
+        resetContext();
+        void fetchWebhooks();
+      },
+    ),
+  );
   const unsubscribeOrg = eventBus.on('org_switched', () => {
-    selectCurrentOrg();
-    // Read the new selection, never replay an interrupted save.
+    if (!contextIsCurrent()) resetContext();
+    // A same-reader refresh retains accepted destinations/draft on failure.
     void fetchWebhooks();
   });
-
-  createEffect(
-    on(isAuditLoggingEnabled, (enabled) => {
-      if (enabled) {
-        void fetchWebhooks();
-      } else {
-        invalidateRequests();
-        // A capability refresh is not an empty configuration. Keep this
-        // selection's last accepted data hidden behind the feature gate.
-        // An interrupted save may have reached the server. Require a read
-        // before another replacement, even when the selection is unchanged.
-        if (saving()) setLoadError(true);
-        setLoading(false);
-      }
-    }),
-  );
-
   onCleanup(() => {
     disposed = true;
-    invalidateRequests();
     unsubscribeOrg();
+    resetContext();
   });
 
   return {
+    actionError,
     canEdit,
     canManage,
+    canRead,
+    closeRemoveWebhook,
     fetchWebhooks,
     handleAddWebhook,
     handleRemoveWebhook,
@@ -219,10 +279,13 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
     loadError,
     hasLoadedConfiguration,
     newUrl,
+    openRemoveWebhook,
+    pendingRemoval,
     saving,
-    setNewUrl,
+    setNewUrl: updateNewUrl,
     showUpgradePrompts,
     showFeatureGateAction,
+    successNotice,
     upgradeDestination,
     upgradeActionLabel,
     paidRuntimeRequired,

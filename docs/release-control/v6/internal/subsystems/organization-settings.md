@@ -15,6 +15,39 @@
 
 ## Purpose
 
+### Audit destinations belong to their current reader
+
+The existing Audit Webhooks panel receives the live principal and explicit
+read/write capabilities from Settings. Accepted endpoint URLs, unsaved entries,
+removal confirmation and inline feedback belong to that reader, selected
+organisation and audit-logging entitlement. A principal, read/write authority
+or entitlement change, organisation switch or disposal aborts outstanding work
+and erases that state. Returning to the same principal or organisation does not
+readmit an old response. Equal-reader status refreshes retain the current draft.
+
+A new admitted reader loads configuration before any replacement. Failed and
+malformed reads remain unknown, not an empty destination list. A failed refresh
+within the same reader retains their last accepted destinations and draft, but
+blocks edits until an explicit read-only Retry succeeds. Read-only readers can
+recover without acquiring write access. Storage drift noticed at an action or
+completion withdraws old state rather than dispatching that action in another
+organisation. Reads and writes keep the existing expected-organisation, abort
+signal and no-automatic-retry client contract; backend enforcement is unchanged.
+
+Only accepted current inventory enables add/removal. Mutations are serialised,
+and removal requires the current in-page confirmation. Refused additions retain
+the draft; refused removals retain the confirmation with fixed inline feedback.
+Only explicit retry repeats a write. An obsolete success/refusal/completion
+cannot finish a newer read or write, restore old URLs, clear a later draft,
+close another confirmation or publish global feedback. Client cancellation
+cannot undo a server-applied change; recovery reads its actual configuration.
+
+Registered `AuditWebhookPanel` and registry-context tests cover reader changes,
+authority loss/recovery, malformed/refused reads, storage drift, disposal and
+late read/write results. Actual App browser proof at desktop and narrow widths
+exercises the producer through Settings, its registry, API client and dialogs.
+Synthetic proof is not native receiver delivery, IdP or original tenant recovery.
+
 ### Role administration belongs to the current reader
 
 The existing Roles screen binds its accepted role inventory, unsaved permissions,

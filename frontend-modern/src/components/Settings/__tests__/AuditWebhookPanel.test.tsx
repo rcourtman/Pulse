@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { eventBus } from '@/stores/events';
 import { AuditWebhookPanel } from '../AuditWebhookPanel';
+import { useAuditWebhookPanelState } from '../useAuditWebhookPanelState';
 
 const apiFetchJSON = vi.fn();
 const showSuccess = vi.fn();
@@ -226,18 +227,17 @@ describe('audit webhook read admission', () => {
     fireEvent.input(input, { target: { value: addedUrl } });
     fireEvent.keyDown(input, { key: 'Enter' });
     selectedOrg = 'tenant-b';
+    apiFetchJSON.mockResolvedValueOnce({ urls: [] });
     eventBus.emit('org_switched', 'tenant-b');
     save.resolve({});
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Retry loading' })).toBeEnabled(),
-    );
+    await screen.findByText(emptyMessage);
     expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
     expect(screen.queryByText(addedUrl)).not.toBeInTheDocument();
     expect(input).toHaveValue('');
     expect(showSuccess).not.toHaveBeenCalled();
     expect(writeCalls()).toHaveLength(1);
     expect(writeCalls()[0][1].signal.aborted).toBe(true);
-    expect(apiFetchJSON).toHaveBeenCalledTimes(2);
+    expect(apiFetchJSON).toHaveBeenCalledTimes(3);
   });
 
   it('invalidates a read on capability loss and does not admit its late result', async () => {
@@ -256,7 +256,7 @@ describe('audit webhook read admission', () => {
     expect(apiFetchJSON).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps same-selection data and draft hidden during capability refresh, then revalidates them', async () => {
+  it('withdraws same-selection data and draft on capability loss and requires a fresh read', async () => {
     const input = await openPanel();
     fireEvent.input(input, { target: { value: addedUrl } });
     setEnabled(false);
@@ -265,9 +265,9 @@ describe('audit webhook read admission', () => {
     apiFetchJSON.mockRejectedValueOnce(new Error('read failed after capability refresh'));
     setEnabled(true);
     await screen.findByText(readErrorMessage);
-    expect(screen.getByText(existingUrl)).toBeInTheDocument();
-    expect(screen.getByText(/Last loaded destinations/)).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toHaveValue(addedUrl);
+    expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
+    expect(screen.getByText(/Existing destinations are unknown/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
     expect(writeCalls()).toHaveLength(0);
   });
@@ -279,20 +279,23 @@ describe('audit webhook read admission', () => {
     fireEvent.input(input, { target: { value: addedUrl } });
     fireEvent.keyDown(input, { key: 'Enter' });
     setEnabled(false);
+    apiFetchJSON.mockRejectedValueOnce(new Error('fresh read unavailable'));
     setEnabled(true);
     save.resolve({});
     await screen.findByText(readErrorMessage);
-    expect(screen.getByText(existingUrl)).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toHaveValue(addedUrl);
+    expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Remove webhook endpoint' }),
+    ).not.toBeInTheDocument();
     expect(showSuccess).not.toHaveBeenCalled();
-    expect(apiFetchJSON).toHaveBeenCalledTimes(2);
+    expect(apiFetchJSON).toHaveBeenCalledTimes(3);
     apiFetchJSON.mockResolvedValueOnce({ urls: [existingUrl, addedUrl] });
     fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
     await screen.findByText(addedUrl);
     expect(writeCalls()).toHaveLength(1);
-    expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toHaveValue(addedUrl);
+    expect(screen.getByRole('textbox', { name: 'Audit webhook URL' })).toHaveValue('');
     expect(showSuccess).not.toHaveBeenCalled();
   });
 
@@ -331,9 +334,8 @@ describe('audit webhook entry recovery', () => {
     apiFetchJSON.mockRejectedValueOnce(new Error('save refused')).mockResolvedValueOnce({});
     fireEvent.input(input, { target: { value: `  ${addedUrl}  ` } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    await waitFor(() =>
-      expect(showWarning).toHaveBeenCalledWith('Failed to save webhook configuration'),
-    );
+    await screen.findByRole('alert');
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to save webhook configuration');
     expect(input).toHaveValue(`  ${addedUrl}  `);
     expect(screen.getByText(existingUrl)).toBeInTheDocument();
     expect(screen.queryByText(addedUrl)).not.toBeInTheDocument();
@@ -342,7 +344,8 @@ describe('audit webhook entry recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add Endpoint' }));
     await screen.findByText(addedUrl);
     expect(input).toHaveValue('');
-    expect(showSuccess).toHaveBeenCalledOnce();
+    await screen.findByText('Audit webhooks updated');
+    expect(showSuccess).not.toHaveBeenCalled();
     expect(writeCalls().map(([, options]) => JSON.parse(options.body))).toEqual([
       { urls: [existingUrl, addedUrl] },
       { urls: [existingUrl, addedUrl] },
@@ -383,10 +386,10 @@ describe('audit webhook entry recovery', () => {
     apiFetchJSON.mockRejectedValueOnce(new Error('save refused')).mockResolvedValueOnce({});
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
-    await waitFor(() => expect(showWarning).toHaveBeenCalledOnce());
-    expect(screen.getByText(existingUrl)).toBeInTheDocument();
+    await screen.findByRole('alert');
+    expect(screen.getByRole('dialog', { name: 'Remove audit webhook' })).toBeInTheDocument();
+    expect(screen.getAllByText(existingUrl)).toHaveLength(2);
     expect(input).toHaveValue(addedUrl);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
     await waitFor(() => expect(screen.queryByText(existingUrl)).not.toBeInTheDocument());
     expect(input).toHaveValue(addedUrl);
@@ -402,7 +405,10 @@ describe('audit webhook entry recovery', () => {
       const input = await openPanel();
       fireEvent.input(input, { target: { value: draft } });
       fireEvent.keyDown(input, { key: 'Enter' });
-      expect(showWarning).toHaveBeenCalledOnce();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        draft === existingUrl ? 'This URL is already configured' : 'Please enter a valid URL',
+      );
+      expect(showWarning).not.toHaveBeenCalled();
       expect(writeCalls()).toHaveLength(0);
       expect(input).toHaveValue(draft);
     },
@@ -415,5 +421,218 @@ describe('audit webhook entry recovery', () => {
     expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(writeCalls()).toHaveLength(0);
+  });
+});
+
+describe('audit webhook reader lifetime', () => {
+  it('never reads or exposes configuration without read admission, and recovers read-only', async () => {
+    const [read, setRead] = createSignal(false);
+    render(() => <AuditWebhookPanel currentUser="reader" canRead={read()} canManage={false} />);
+    expect(
+      screen.getByText('Audit webhook access is unavailable for this account.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(apiFetchJSON).not.toHaveBeenCalled();
+    setRead(true);
+    await screen.findByText(existingUrl);
+    const input = screen.getByRole('textbox', { name: 'Audit webhook URL' });
+    expect(input).toBeDisabled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(writeCalls()).toHaveLength(0);
+    setRead(false);
+    expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(apiFetchJSON).toHaveBeenCalledOnce();
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'rejects an old principal read %s even after that name returns',
+    async (finish) => {
+      const oldRead = defer<{ urls: string[] }>();
+      const currentRead = defer<{ urls: string[] }>();
+      const [user, setUser] = createSignal<string | undefined>('first');
+      apiFetchJSON.mockReturnValueOnce(oldRead.promise);
+      render(() => <AuditWebhookPanel currentUser={user()} />);
+      apiFetchJSON.mockResolvedValueOnce({ urls: ['https://second.example.test/events'] });
+      setUser('second');
+      await screen.findByText('https://second.example.test/events');
+      apiFetchJSON.mockReturnValueOnce(currentRead.promise);
+      setUser('first');
+      expect(screen.queryByText('https://second.example.test/events')).not.toBeInTheDocument();
+      if (finish === 'resolve') oldRead.resolve({ urls: [existingUrl] });
+      else oldRead.reject(new Error('private obsolete read error'));
+      await Promise.resolve();
+      expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
+      expect(screen.getByText('Loading audit webhooks…')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(apiFetchJSON.mock.calls[0][1].signal.aborted).toBe(true);
+      currentRead.resolve({ urls: [] });
+      await screen.findByText(emptyMessage);
+      expect(apiFetchJSON).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it('withdraws a draft, confirmation and endpoint on write withdrawal before read-only recovery', async () => {
+    const [manage, setManage] = createSignal(true);
+    render(() => <AuditWebhookPanel currentUser="reader" canManage={manage()} />);
+    await screen.findByText(existingUrl);
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: addedUrl } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
+    const read = defer<{ urls: string[] }>();
+    apiFetchJSON.mockReturnValueOnce(read.promise);
+    setManage(false);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(screen.getByRole('textbox')).toBeDisabled();
+    read.resolve({ urls: [existingUrl] });
+    await screen.findByText(existingUrl);
+    expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+    expect(writeCalls()).toHaveLength(0);
+    setManage(true);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeEnabled(),
+    );
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(apiFetchJSON).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'ignores an obsolete save %s without finishing a new reader read or erasing their draft',
+    async (finish) => {
+      const [user, setUser] = createSignal('first');
+      render(() => <AuditWebhookPanel currentUser={user()} />);
+      await screen.findByText(existingUrl);
+      const save = defer<object>();
+      apiFetchJSON.mockReturnValueOnce(save.promise);
+      fireEvent.input(screen.getByRole('textbox'), { target: { value: addedUrl } });
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+      expect(writeCalls()).toHaveLength(1);
+      const nextRead = defer<{ urls: string[] }>();
+      apiFetchJSON.mockReturnValueOnce(nextRead.promise);
+      setUser('second');
+      expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
+      expect(screen.getByRole('textbox')).toHaveValue('');
+      fireEvent.input(screen.getByRole('textbox'), { target: { value: addedUrl } });
+      if (finish === 'resolve') save.resolve({});
+      else save.reject(new Error('private obsolete write refusal'));
+      await Promise.resolve();
+      expect(screen.getByText('Loading audit webhooks…')).toBeInTheDocument();
+      expect(screen.getByRole('textbox')).toHaveValue(addedUrl);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByText('Audit webhooks updated')).not.toBeInTheDocument();
+      nextRead.resolve({ urls: [] });
+      await screen.findByText(emptyMessage);
+      expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeEnabled();
+      expect(writeCalls()[0][1].signal.aborted).toBe(true);
+      expect(apiFetchJSON).toHaveBeenCalledTimes(3);
+      expect(showSuccess).not.toHaveBeenCalled();
+      expect(showWarning).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['resolve', 'reject'] as const)(
+    'withdraws an obsolete save %s when org storage drifts without an event',
+    async (finish) => {
+      const input = await openPanel();
+      const save = defer<object>();
+      apiFetchJSON.mockReturnValueOnce(save.promise);
+      fireEvent.input(input, { target: { value: addedUrl } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      selectedOrg = 'tenant-b';
+      if (finish === 'resolve') save.resolve({});
+      else save.reject(new Error('private stale save failure'));
+      await screen.findByText(readErrorMessage);
+      expect(screen.queryByText(existingUrl)).not.toBeInTheDocument();
+      expect(input).toHaveValue('');
+      expect(screen.queryByText('Audit webhooks updated')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled();
+      expect(apiFetchJSON).toHaveBeenCalledTimes(2);
+      expect(showSuccess).not.toHaveBeenCalled();
+      expect(showWarning).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps an unchanged-reader draft and confirmation through copied status props', async () => {
+    const [reader, setReader] = createSignal({
+      currentUser: 'reader',
+      canRead: true,
+      canManage: true,
+    });
+    render(() => <AuditWebhookPanel {...reader()} />);
+    await screen.findByText(existingUrl);
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: addedUrl } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove webhook endpoint' }));
+    setReader({ ...reader() });
+    expect(screen.getByRole('dialog', { name: 'Remove audit webhook' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue(addedUrl);
+    expect(apiFetchJSON).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(writeCalls()).toHaveLength(0);
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'erases owned state on disposal and ignores a late save %s',
+    async (finish) => {
+      let state!: ReturnType<typeof useAuditWebhookPanelState>;
+      const panel = render(() => {
+        state = useAuditWebhookPanelState({ currentUser: 'reader' });
+        return null;
+      });
+      await waitFor(() => expect(state.webhookUrls()).toEqual([existingUrl]));
+      state.setNewUrl(addedUrl);
+      state.openRemoveWebhook(existingUrl);
+      const save = defer<object>();
+      apiFetchJSON.mockReturnValueOnce(save.promise);
+      const pending = state.handleRemoveWebhook();
+      panel.unmount();
+      expect(state.webhookUrls()).toEqual([]);
+      expect(state.newUrl()).toBe('');
+      expect(state.pendingRemoval()).toBeNull();
+      expect(state.actionError()).toBeNull();
+      expect(state.successNotice()).toBeNull();
+      expect(state.saving()).toBe(false);
+      expect(state.hasLoadedConfiguration()).toBe(false);
+      expect(state.canEdit()).toBe(false);
+      expect(writeCalls()[0][1].signal.aborted).toBe(true);
+      if (finish === 'resolve') save.resolve({});
+      else save.reject(new Error('disposed write refusal'));
+      await pending;
+      state.setNewUrl(addedUrl);
+      state.openRemoveWebhook(existingUrl);
+      await state.handleAddWebhook();
+      await state.fetchWebhooks();
+      eventBus.emit('org_switched', 'tenant-b');
+      expect(state.webhookUrls()).toEqual([]);
+      expect(state.newUrl()).toBe('');
+      expect(state.successNotice()).toBeNull();
+      expect(state.actionError()).toBeNull();
+      expect(apiFetchJSON).toHaveBeenCalledTimes(2);
+      expect(showSuccess).not.toHaveBeenCalled();
+      expect(showWarning).not.toHaveBeenCalled();
+    },
+  );
+
+  it('withdraws local validation and success feedback with the principal', async () => {
+    const [user, setUser] = createSignal('first');
+    render(() => <AuditWebhookPanel currentUser={user()} />);
+    await screen.findByText(existingUrl);
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: existingUrl } });
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+    expect(screen.getByRole('alert')).toHaveTextContent('This URL is already configured');
+    setUser('second');
+    await screen.findByText(existingUrl);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: addedUrl } });
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+    await screen.findByText('Audit webhooks updated');
+    setUser('third');
+    await screen.findByText(existingUrl);
+    expect(screen.queryByText('Audit webhooks updated')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(showSuccess).not.toHaveBeenCalled();
+    expect(showWarning).not.toHaveBeenCalled();
   });
 });

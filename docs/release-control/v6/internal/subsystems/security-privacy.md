@@ -18,6 +18,26 @@
 
 ## Purpose
 
+### Audit webhook configuration withdraws with its reader
+
+The Settings Audit Webhooks consumer treats endpoint addresses and new URL
+drafts as reader-owned data. Changes of principal, selected organisation,
+read/write authority or audit entitlement, and panel disposal, cancel requests
+and erase inventory, draft, confirmation and local feedback. Old completions
+cannot enter a later reader, including after the same identifiers return.
+The registry passes explicit current read/write capabilities; read withdrawal
+permits no configuration read or mutation. Read-only recovery never grants write
+access. Unchanged-reader status refreshes preserve their current draft.
+
+This tightens consumer lifetime, not backend authentication, tenant boundaries,
+audit event redaction, SSRF validation or delivery. The existing API client still
+binds expected organisation, cancellation and disabled automatic retries. Failed
+reads do not imply no destinations; failed mutations remain explicit and locally
+recoverable. No response error payload or endpoint address enters global action
+feedback. Registered `AuditWebhookPanel`/registry tests and actual-App browser
+proof cover withdrawal and current-reader recovery; they are not evidence of
+installed recipient delivery or original administrator/IdP recovery.
+
 ### Configuration writes own their temporary files
 
 Ordinary shared configuration writes, their retained credential backups and
