@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "802f618c9796d8dfc3f3d55608f5a179a785d6c7",
+  "source_sha": "802f618c9796d8dfc3f3d55608f5a179a785d6c7",
+  "verified_at": "2026-11-02T07:31:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "da894d968e8f7626dbd2099bc2120f7864da3bc3f0c410b644a658a2638ca9b0",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts": "dc46d8e741cd71c09cc565f5e6d3361ff5c974bd8c5385599177efe847cefbf5",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "01c983bfdbcab38d048241d1ed56678fd2cf4715fc64769d433b718e59af40da",
+    "frontend-modern/src/components/Settings/useAuditLogPanelState.ts": "00a8d8117fc3f1b59b383f93542459b903e5988ab8579a386594653e849f0625"
+  },
+  "routes": [
+    "/settings/security-audit",
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App and Settings registry consume safe synthetic audit, security-status and runtime HTTP producers with the normal API client. Chromium 141.0.7390.37/light desktop and WebKit 26.0/dark narrow use Playwright 1.56.1.",
+    "Current accepted grid rows verify successfully. Refresh withdraws prior inventory and pending verification before a replacement; reused IDs are unchecked. Cancel is immediate and Resume explicitly checks the current page.",
+    "Real organisation selection binds the new read header and withdraws old rows, verification and completed feedback. A fresh verification 403 clears inventory without client retry; explicit Refresh recovers it. Malformed reads and 402 remain unavailable rather than empty.",
+    "An equal-reader Settings status refresh preserves a pending batch; a changed principal withdraws it and accepts only the fresh unchecked page. Unit tests separately cover read authority/entitlement withdrawal, ignored aborts, response-body races, stale row copies, storage drift and disposal.",
+    "29 final browser checks and four bounded stable-paint checks passed; eight plus one contexts, two plus one browsers and both server lifetimes closed. All 15 final captures were opened with native view_image. One immediate narrow capture had an unpainted row; the retained 200ms/two-frame scrolled capture visibly confirms the new reader.",
+    "Local batch feedback is readable and withdraws with its page. Existing inner-grid horizontal scrolling remains at narrow widths; the document itself does not overflow. No installed audit/IdP recovery or publication is inferred."
+  ],
+  "interactions": [
+    "Verify an accepted data-grid row; hold a batch, Refresh into reused IDs, and release the obsolete response without inheriting its badge.",
+    "Cancel a held check, then explicitly Resume and observe current-page completion; switch the real organisation selector and observe summary withdrawal.",
+    "Refuse verification once with 403, then explicitly Refresh; reject malformed and 402 inventory without displaying a false-empty success.",
+    "Use the existing synthetic SSO save flow to hold actual Settings status refreshes, return to Audit, then release equal or changed-principal status while signature work is pending."
+  ]
+}
