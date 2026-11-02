@@ -177,20 +177,20 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
         onSave={state.handleSaveRole}
         onUpdatePermission={state.updatePermission}
       />
-      <Show when={state.rolePendingDeletion()}>
+      <Show keyed when={state.rolePendingDeletion()}>
         {(role) => (
           <Dialog
             isOpen={true}
             onClose={state.closeDeleteRole}
             closeOnBackdrop={false}
             panelClass="max-w-lg"
-            ariaLabel={`Delete role: ${role().name}`}
+            ariaLabel={`Delete role: ${role.name}`}
           >
             <div class="space-y-5 p-6">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Delete role?</h3>
                 <p class="mt-2 text-sm text-muted">
-                  Are you sure you want to delete the role "{role().name}"?
+                  Are you sure you want to delete the role "{role.name}"?
                 </p>
               </div>
               <Show when={state.actionError()}>

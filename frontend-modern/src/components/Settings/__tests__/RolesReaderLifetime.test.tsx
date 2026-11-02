@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, ErrorBoundary, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { eventBus } from '@/stores/events';
 import { useRolesPanelState } from '../useRolesPanelState';
@@ -346,6 +346,32 @@ describe('Roles reader lifetime', () => {
     expect(state.formName()).toBe('');
     expect(mocks.getRoles).toHaveBeenCalledTimes(reads);
     expect(mocks.error).not.toHaveBeenCalled();
+  });
+
+  it('disposes an open confirmation without reading a stale Show accessor', async () => {
+    const [visible, setVisible] = createSignal(true);
+    const errors = vi.fn();
+    render(() => (
+      <ErrorBoundary
+        fallback={(error) => {
+          errors(error);
+          return <p>Boundary failure</p>;
+        }}
+      >
+        <Show when={visible()}>
+          <RolesPanel currentUser="reader-a" canManage={visible()} />
+        </Show>
+      </ErrorBoundary>
+    ));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete role' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Delete role: North private role' }),
+    ).toBeInTheDocument();
+    setVisible(false);
+    await pause();
+    expect(errors).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.deleteRole).not.toHaveBeenCalled();
   });
 
   it('keeps unlisted saved permission strings visible and unchanged in the real editor', async () => {

@@ -153,8 +153,8 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     mutationController?.abort();
     readController = mutationController = undefined;
     // A new object also invalidates operations when returning to the same reader.
-    setContext({ org: currentOrg(), user: props.currentUser, allowed: accessAllowed() });
     batch(() => {
+      setContext({ org: currentOrg(), user: props.currentUser, allowed: accessAllowed() });
       clearEditor();
       setRoles([]);
       setRolePendingDeletion(null);
