@@ -1300,9 +1300,15 @@ type JobHealthEvidence struct {
 	Error          string `json:"error,omitempty"`
 }
 
-// GetJobHealthEvidence collects PBS job health facts from job configuration
-// and bounded task history. Permission failures are represented as
+// GetJobHealthEvidence collects PBS job health facts from job status and
+// bounded task history. Permission failures are represented as
 // partial-permission evidence instead of failing the whole ledger.
+//
+// Sync, verify and prune jobs are read from /admin/{family}, which returns each
+// configured job with its last-run-state, last-run-upid, last-run-endtime and
+// next-run. /config/{family} returns the same jobs without any of those fields,
+// so reading it alone left every job with no observed run. /config is read
+// only when a PBS has no /admin endpoint for the family.
 func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, opts JobHealthOptions) ([]JobHealthEvidence, error) {
 	taskHistory, taskPartials, tasksErr := c.listTaskHistory(ctx, datastores, opts)
 	taskByUPID := make(map[string]JobHealthEvidence, len(taskHistory))
@@ -1314,11 +1320,16 @@ func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, 
 
 	evidence := make([]JobHealthEvidence, 0)
 	matchedTasks := make(map[string]struct{})
-	collectConfigs := func(family string, enabled bool, path string) {
+	collectConfigs := func(family string, enabled bool) {
 		if !enabled {
 			return
 		}
+		path := "/admin/" + family
 		configs, err := c.listJobConfigMaps(ctx, path)
+		if err != nil && isPBSNotFoundError(err) {
+			path = "/config/" + family
+			configs, err = c.listJobConfigMaps(ctx, path)
+		}
 		if err != nil {
 			if isPBSNotFoundError(err) {
 				return
@@ -1349,9 +1360,9 @@ func (c *Client) GetJobHealthEvidence(ctx context.Context, datastores []string, 
 		}
 	}
 
-	collectConfigs("sync", opts.MonitorSyncJobs, "/config/sync")
-	collectConfigs("verify", opts.MonitorVerifyJobs, "/config/verify")
-	collectConfigs("prune", opts.MonitorPruneJobs, "/config/prune")
+	collectConfigs("sync", opts.MonitorSyncJobs)
+	collectConfigs("verify", opts.MonitorVerifyJobs)
+	collectConfigs("prune", opts.MonitorPruneJobs)
 
 	if opts.MonitorGarbageJobs {
 		for _, datastore := range datastores {

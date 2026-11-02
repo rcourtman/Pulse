@@ -120,6 +120,22 @@ admission, cancellation, runtime/client replacement and old-worker completion.
 Source-bound desktop/narrow Backups proof consumes produced partial/recovery
 frames. This is truthful collection, not original frozen-guest recovery.
 
+### PBS job run status comes from the admin endpoints (2 November 2026)
+
+`pkg/pbs.Client.GetJobHealthEvidence` reads configured sync, verify and prune
+jobs from `/admin/sync`, `/admin/verify` and `/admin/prune`. Those return each
+job with `last-run-state`, `last-run-upid`, `last-run-endtime` and
+`next-run`; `/config/{family}` returns the same jobs with none of them, so
+reading it made every successful job report `no-run-observed` and the Backups
+servers table show "Prune not run" or "Verify not run". `/config/{family}` is
+read only when `/admin/{family}` is not found; a permission or other error on
+`/admin` stays partial evidence for that path rather than silently degrading
+to schedule-only facts. Garbage collection already read
+`/admin/datastore/{store}/gc`. Against a real PBS 3 the change took eight
+configured prune and verify jobs from config-only with no run state to
+`last-run-state` OK matched to their tasks; `TestClient_GetJobHealthEvidence_ReadsRunStatusFromAdminEndpoints`
+fails against the old reads.
+
 ### Docker image replacements invalidate older tag comparisons
 
 Successful tag/platform results are cached for six hours. If an unseen local
