@@ -160,6 +160,11 @@ describe('useTrueNASSettingsPanelState', () => {
         pollIntervalSeconds: 90,
         username: 'pulse-readonly',
       }),
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
     );
     expect(TrueNASAPI.updateConnection).toHaveBeenCalledWith(
       'conn-1',
@@ -170,6 +175,11 @@ describe('useTrueNASSettingsPanelState', () => {
         username: 'pulse-readonly',
         password: '',
         fingerprint: '',
+      }),
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(result.dialogOpen()).toBe(false);
@@ -215,7 +225,15 @@ describe('useTrueNASSettingsPanelState', () => {
 
     await result.testSavedConnection(result.connections()[0]);
 
-    expect(TrueNASAPI.testSavedConnection).toHaveBeenCalledWith('conn-1');
+    expect(TrueNASAPI.testSavedConnection).toHaveBeenCalledWith(
+      'conn-1',
+      undefined,
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith(
       'TrueNAS connection successful for tower',
@@ -255,6 +273,11 @@ describe('useTrueNASSettingsPanelState', () => {
         apiKey: '********',
         pollIntervalSeconds: 120,
       }),
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
     );
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection successful');
@@ -282,6 +305,11 @@ describe('useTrueNASSettingsPanelState', () => {
       expect.objectContaining({
         host: 'tower.local',
         apiKey: 'secret',
+      }),
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection added');
@@ -351,6 +379,11 @@ describe('useTrueNASSettingsPanelState', () => {
       expect.objectContaining({
         host: 'tower.local',
         apiKey: 'secret',
+      }),
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
       }),
     );
     expect(preview?.additional_count).toBe(0);

@@ -17,6 +17,7 @@ interface UseInfrastructureSettingsStateParams {
   // whole bootstrap (nodes, discovery, system settings, TrueNAS, VMware) on any
   // settings page and then keeps polling discovery.
   canReadInfrastructure: Accessor<boolean>;
+  currentUser?: Accessor<string | undefined>;
   discoveryEnabled: Accessor<boolean>;
   setDiscoveryEnabled: Setter<boolean>;
   discoverySubnet: Accessor<string>;
@@ -44,6 +45,7 @@ interface UseInfrastructureSettingsStateParams {
 export function useInfrastructureSettingsState({
   eventBus,
   canReadInfrastructure,
+  currentUser,
   discoveryEnabled,
   setDiscoveryEnabled,
   discoverySubnet,
@@ -75,7 +77,10 @@ export function useInfrastructureSettingsState({
     savingTemperatureSetting,
     setSavingTemperatureSetting,
   });
-  const trueNASSettings = useTrueNASSettingsPanelState({ canLoad: canReadInfrastructure });
+  const trueNASSettings = useTrueNASSettingsPanelState({
+    canLoad: canReadInfrastructure,
+    currentUser,
+  });
   const vmwareSettings = useVMwareSettingsPanelState({ canLoad: canReadInfrastructure });
 
   const discoveryRuntime = useInfrastructureDiscoveryRuntimeState({

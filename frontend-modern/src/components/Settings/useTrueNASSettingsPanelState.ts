@@ -1,4 +1,7 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
+import { unwrap } from 'solid-js/store';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
@@ -182,11 +185,17 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
   return input;
 };
 
-// `canLoad` gates the mount fetch: /api/truenas/connections is RequireAdmin and
+// `canLoad` gates the reader lifetime: /api/truenas/connections is RequireAdmin and
 // this hook is constructed for every settings tab, so a non-admin session would
 // otherwise 403 on any settings page. Defaults to enabled for callers (tests,
 // stories) that have no capability to hand it.
-export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => boolean } = {}) {
+export function useTrueNASSettingsPanelState({
+  canLoad,
+  currentUser,
+}: {
+  canLoad?: () => boolean;
+  currentUser?: () => string | undefined;
+} = {}) {
   const [connections, setConnections] = createSignal<TrueNASConnection[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [loadingError, setLoadingError] = createSignal<string | null>(null);
@@ -219,207 +228,349 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
     () => connections().find((connection) => connection.id === editingConnectionId()) ?? null,
   );
 
-  const loadConnections = async () => {
-    setLoading(true);
-    setLoadingError(null);
-    try {
-      const nextConnections = await TrueNASAPI.listConnections();
-      setConnections(nextConnections);
+  const accessAllowed = () => canLoad?.() ?? true;
+  const currentOrg = () => getOrgID() || 'default';
+  const snapshot = () => ({
+    org: currentOrg(),
+    user: currentUser?.(),
+    allowed: accessAllowed(),
+    controller: new AbortController(),
+  });
+  const [reader, setReader] = createSignal(snapshot());
+  const [accessRejected, setAccessRejected] = createSignal(false);
+  let disposed = false;
+  let readController: AbortController | undefined;
+  let dialogVersion = 0;
+  const isCurrentReader = (accepted = reader()) =>
+    !disposed &&
+    accepted === reader() &&
+    !accepted.controller.signal.aborted &&
+    accepted.org === currentOrg() &&
+    accepted.user === currentUser?.() &&
+    accepted.allowed === accessAllowed();
+  const requestOptions = (accepted = reader(), signal = accepted.controller.signal) => ({
+    expectedOrgID: accepted.org,
+    signal,
+    retry: false,
+  });
+  const busy = () => saving() || testing() || deleting() || previewing();
+  const isCurrentConnection = (connection: TrueNASConnection) =>
+    connections().some((current) => unwrap(current) === unwrap(connection));
+
+  const clearPreview = () => {
+    setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableState(null);
+    setMonitoredSystemPreviewGenericError(null);
+  };
+  const resetDialogState = () => {
+    dialogVersion += 1;
+    setDialogOpen(false);
+    setEditingConnectionId(null);
+    setForm(createEmptyFormState());
+    clearPreview();
+  };
+  const resetDeleteDialogState = () => {
+    setDeleteDialogOpen(false);
+    setPendingDeleteConnection(null);
+  };
+  const resetReader = (reload = true) => {
+    reader().controller.abort();
+    readController?.abort();
+    readController = undefined;
+    batch(() => {
+      // Object identity prevents a late completion being accepted on A -> B -> A.
+      setReader(snapshot());
+      resetDialogState();
+      resetDeleteDialogState();
+      setConnections([]);
+      setLoadingError(null);
       setFeatureDisabled(false);
       setFeatureDisabledMessage('');
+      setAccessRejected(false);
+      setSaving(false);
+      setTesting(false);
+      setDeleting(false);
+      setPreviewing(false);
+      setLoading(false);
+    });
+    if (!disposed && reload) void loadConnections();
+  };
+  const ensureReader = () => {
+    if (isCurrentReader()) return true;
+    // A storage change without an org event also withdraws before any action.
+    if (!disposed) resetReader();
+    return false;
+  };
+  const canAct = () =>
+    ensureReader() && accessAllowed() && !accessRejected() && !featureDisabled() && !busy();
+  const withdrawOnDenial = (error: unknown) => {
+    if (![401, 403].includes(apiErrorStatus(error) ?? 0)) return false;
+    resetReader(false);
+    setAccessRejected(true);
+    setLoadingError('TrueNAS settings access could not be verified. Reload before making changes.');
+    return true;
+  };
+
+  const loadConnections = async () => {
+    if (!ensureReader() || !accessAllowed() || readController || busy()) return;
+    const accepted = reader();
+    const controller = new AbortController();
+    readController = controller;
+    const isCurrent = () => isCurrentReader(accepted) && readController === controller;
+    batch(() => {
+      setLoading(true);
+      setLoadingError(null);
+    });
+    try {
+      const nextConnections = await TrueNASAPI.listConnections(
+        requestOptions(accepted, controller.signal),
+      );
+      if (!isCurrent()) return;
+      batch(() => {
+        setConnections(nextConnections);
+        setAccessRejected(false);
+        setFeatureDisabled(false);
+        setFeatureDisabledMessage('');
+      });
     } catch (error) {
+      if (!isCurrent()) return;
+      if (withdrawOnDenial(error)) return;
+      setConnections([]);
       if (apiErrorStatus(error) === 404) {
         setFeatureDisabled(true);
         setFeatureDisabledMessage(
           getErrorMessage(error, 'TrueNAS integration has been explicitly disabled'),
         );
-        setConnections([]);
         return;
       }
-      const message = getErrorMessage(error, 'Failed to load TrueNAS connections');
-      setLoadingError(message);
+      setLoadingError(getErrorMessage(error, 'Failed to load TrueNAS connections'));
       logger.error('[TrueNAS Settings] Failed to load connections', error);
     } finally {
-      setLoading(false);
+      if (isCurrent()) {
+        readController = undefined;
+        setLoading(false);
+      }
     }
   };
 
-  // The capability resolves asynchronously (Settings awaits /api/security/status
-  // after mount), so this waits for it rather than reading it once at mount —
-  // an onMount check would see `false` for admins too and never load.
-  let connectionsRequested = false;
-  createEffect(() => {
-    if (connectionsRequested) return;
-    if (canLoad && !canLoad()) {
-      setLoading(false);
-      return;
-    }
-    connectionsRequested = true;
-    void loadConnections();
+  createEffect(
+    on([accessAllowed, () => currentUser?.()], (current, previous) => {
+      // Copied security status objects must not erase a same-reader draft.
+      if (!previous || current.some((value, index) => value !== previous[index])) resetReader();
+    }),
+  );
+  const unsubscribeOrg = eventBus.on('org_switched', () => {
+    if (!isCurrentReader()) resetReader();
+  });
+  onCleanup(() => {
+    disposed = true;
+    unsubscribeOrg();
+    resetReader(false);
   });
 
   const openCreateDialog = () => {
-    setEditingConnectionId(null);
-    setForm(createEmptyFormState());
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
-    setDialogOpen(true);
+    if (!canAct()) return;
+    batch(() => {
+      resetDialogState();
+      resetDeleteDialogState();
+      setDialogOpen(true);
+    });
   };
-
   const openEditDialog = (connection: TrueNASConnection) => {
-    setEditingConnectionId(connection.id);
-    setForm(buildFormStateFromConnection(connection));
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
-    setDialogOpen(true);
+    if (!canAct() || !isCurrentConnection(connection)) return;
+    batch(() => {
+      resetDialogState();
+      resetDeleteDialogState();
+      setEditingConnectionId(connection.id);
+      setForm(buildFormStateFromConnection(connection));
+      setDialogOpen(true);
+    });
   };
-
-  const resetDialogState = () => {
-    setDialogOpen(false);
-    setEditingConnectionId(null);
-    setForm(createEmptyFormState());
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
-  };
-
   const closeDialog = () => {
     if (saving() || testing()) return;
-    resetDialogState();
+    batch(resetDialogState);
   };
-
   const openDeleteDialog = (connection: TrueNASConnection) => {
-    setPendingDeleteConnection(connection);
-    setDeleteDialogOpen(true);
+    if (!canAct() || !isCurrentConnection(connection)) return;
+    batch(() => {
+      resetDialogState();
+      setPendingDeleteConnection(connection);
+      setDeleteDialogOpen(true);
+    });
   };
-
-  const resetDeleteDialogState = () => {
-    setDeleteDialogOpen(false);
-    setPendingDeleteConnection(null);
-  };
-
   const closeDeleteDialog = () => {
-    if (deleting()) return;
-    resetDeleteDialogState();
+    if (!deleting()) resetDeleteDialogState();
   };
-
   const updateForm = (patch: Partial<TrueNASConnectionFormState>) => {
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
-    setForm((current) => ({ ...current, ...patch }));
+    if (!ensureReader() || !accessAllowed() || accessRejected() || !dialogOpen() || saving())
+      return;
+    dialogVersion += 1;
+    batch(() => {
+      clearPreview();
+      setForm((current) => ({ ...current, ...patch }));
+    });
+  };
+  const handleActionError = (error: unknown, fallback: string, log: string) => {
+    if (withdrawOnDenial(error)) {
+      notificationStore.error(loadingError()!);
+      return;
+    }
+    notificationStore.error(getTrueNASErrorMessage(error, fallback));
+    logger.error(log, error);
   };
 
   const testCurrentForm = async () => {
+    if (!canAct() || !dialogOpen()) return false;
+    const accepted = reader();
+    const version = dialogVersion;
+    const isCurrent = () => isCurrentReader(accepted) && version === dialogVersion;
     setTesting(true);
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
-        await TrueNASAPI.testSavedConnection(editingConnectionId()!, payload);
+        await TrueNASAPI.testSavedConnection(
+          editingConnectionId()!,
+          payload,
+          requestOptions(accepted),
+        );
       } else {
-        await TrueNASAPI.testConnection(payload);
+        await TrueNASAPI.testConnection(payload, requestOptions(accepted));
       }
+      if (!isCurrent()) return false;
       notificationStore.success('TrueNAS connection successful');
       return true;
     } catch (error) {
-      const message = getTrueNASErrorMessage(error, 'TrueNAS connection failed');
-      notificationStore.error(message);
-      logger.error('[TrueNAS Settings] Connection test failed', error);
+      if (isCurrent())
+        handleActionError(
+          error,
+          'TrueNAS connection failed',
+          '[TrueNAS Settings] Connection test failed',
+        );
       return false;
     } finally {
-      setTesting(false);
+      if (isCurrentReader(accepted)) setTesting(false);
     }
   };
 
   const testSavedConnection = async (connection: TrueNASConnection) => {
+    if (!canAct() || !isCurrentConnection(connection)) return;
+    const accepted = reader();
     setTesting(true);
     try {
-      await TrueNASAPI.testSavedConnection(connection.id);
+      await TrueNASAPI.testSavedConnection(connection.id, undefined, requestOptions(accepted));
+      if (!isCurrentReader(accepted)) return;
       notificationStore.success(
         `TrueNAS connection successful for ${connection.name || connection.host}`,
       );
     } catch (error) {
-      const message = getTrueNASErrorMessage(error, 'TrueNAS connection failed');
-      notificationStore.error(message);
-      logger.error('[TrueNAS Settings] Saved connection test failed', error);
+      if (isCurrentReader(accepted))
+        handleActionError(
+          error,
+          'TrueNAS connection failed',
+          '[TrueNAS Settings] Saved connection test failed',
+        );
     } finally {
-      setTesting(false);
-      await loadConnections();
+      if (isCurrentReader(accepted)) {
+        setTesting(false);
+        await loadConnections();
+      }
     }
   };
 
   const previewCurrentForm = async () => {
-    setPreviewing(true);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
+    if (!canAct() || !dialogOpen()) return null;
+    const accepted = reader();
+    const version = dialogVersion;
+    const isCurrent = () => isCurrentReader(accepted) && version === dialogVersion;
+    batch(() => {
+      setPreviewing(true);
+      clearPreview();
+    });
     try {
       const payload = buildConnectionInput(form());
       const preview = editingConnectionId()
-        ? await TrueNASAPI.previewSavedConnection(editingConnectionId()!, payload)
-        : await TrueNASAPI.previewConnection(payload);
+        ? await TrueNASAPI.previewSavedConnection(
+            editingConnectionId()!,
+            payload,
+            requestOptions(accepted),
+          )
+        : await TrueNASAPI.previewConnection(payload, requestOptions(accepted));
+      if (!isCurrent()) return null;
       setMonitoredSystemPreview(preview);
-      setMonitoredSystemPreviewUnavailableState(null);
-      setMonitoredSystemPreviewGenericError(null);
       return preview;
     } catch (error) {
+      if (!isCurrent()) return null;
+      if (withdrawOnDenial(error)) return null;
       const unavailableState = monitoredSystemImpactPreviewUnavailableStateFromError(error);
-      setMonitoredSystemPreview(null);
-      if (unavailableState) {
-        setMonitoredSystemPreviewUnavailableState(unavailableState);
-        setMonitoredSystemPreviewGenericError(null);
-      } else {
-        setMonitoredSystemPreviewUnavailableState(null);
+      if (unavailableState) setMonitoredSystemPreviewUnavailableState(unavailableState);
+      else
         setMonitoredSystemPreviewGenericError(
           getTrueNASErrorMessage(error, 'Could not preview monitored-system impact'),
         );
-      }
       logger.error('[TrueNAS Settings] Preview failed', error);
       return null;
     } finally {
-      setPreviewing(false);
+      if (isCurrentReader(accepted)) setPreviewing(false);
     }
   };
 
   const saveCurrentForm = async () => {
+    if (!canAct() || !dialogOpen()) return;
+    const accepted = reader();
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
-        await TrueNASAPI.updateConnection(editingConnectionId()!, payload);
-        notificationStore.success('TrueNAS connection updated');
+        await TrueNASAPI.updateConnection(
+          editingConnectionId()!,
+          payload,
+          requestOptions(accepted),
+        );
       } else {
-        await TrueNASAPI.createConnection(payload);
-        notificationStore.success('TrueNAS connection added');
+        await TrueNASAPI.createConnection(payload, requestOptions(accepted));
       }
-      resetDialogState();
+      if (!isCurrentReader(accepted)) return;
+      notificationStore.success(
+        editingConnectionId() ? 'TrueNAS connection updated' : 'TrueNAS connection added',
+      );
+      batch(resetDialogState);
+      setSaving(false);
       await loadConnections();
     } catch (error) {
+      if (!isCurrentReader(accepted)) return;
       setMonitoredSystemPreviewUnavailableState(null);
-      const message = getErrorMessage(error, 'Failed to save TrueNAS connection');
-      notificationStore.error(message);
-      logger.error('[TrueNAS Settings] Save failed', error);
+      handleActionError(
+        error,
+        'Failed to save TrueNAS connection',
+        '[TrueNAS Settings] Save failed',
+      );
     } finally {
-      setSaving(false);
+      if (isCurrentReader(accepted)) setSaving(false);
     }
   };
 
   const deletePendingConnection = async () => {
+    if (!canAct()) return;
     const connection = pendingDeleteConnection();
-    if (!connection) return;
+    if (!connection || !isCurrentConnection(connection)) return;
+    const accepted = reader();
     setDeleting(true);
     try {
-      await TrueNASAPI.deleteConnection(connection.id);
+      await TrueNASAPI.deleteConnection(connection.id, requestOptions(accepted));
+      if (!isCurrentReader(accepted)) return;
       notificationStore.success(`Removed ${connection.name || connection.host}`);
       resetDeleteDialogState();
+      setDeleting(false);
       await loadConnections();
     } catch (error) {
-      const message = getErrorMessage(error, 'Failed to remove TrueNAS connection');
-      notificationStore.error(message);
-      logger.error('[TrueNAS Settings] Delete failed', error);
+      if (isCurrentReader(accepted))
+        handleActionError(
+          error,
+          'Failed to remove TrueNAS connection',
+          '[TrueNAS Settings] Delete failed',
+        );
     } finally {
-      setDeleting(false);
+      if (isCurrentReader(accepted)) setDeleting(false);
     }
   };
 
