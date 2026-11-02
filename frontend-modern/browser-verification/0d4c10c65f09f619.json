@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "base_sha": "99fd1ef50a9a68a526a961f12a309f6d1cefafbc",
+  "verified_at": "2026-11-02T21:03:10Z",
+  "result": "rendered-coverage-complete-with-adverse-runs",
+  "implementation_commit": "f2fb8a18ae4df0bceaaa7e4bea62e0330aaea08c",
+  "changed_paths": [
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md",
+    "frontend-modern/src/features/docs/__tests__/proxmoxTlsGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/TROUBLESHOOTING.md": "0c8e263131944bd65e8ac057965474c8b76a63745d5f7e2c0d1ab4928fca9e92",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "0c8e263131944bd65e8ac057965474c8b76a63745d5f7e2c0d1ab4928fca9e92",
+    "frontend-modern/src/features/docs/__tests__/proxmoxTlsGuide.test.ts": "3bf694bdb8604a3917243631611fd2bcb2b7c03a1addfd8a6f5e307c63631342",
+    "frontend-modern/src/pages/Docs.tsx": "7f71b04a62d05c0025e9a369ae9a8b0add3de394b0410ebb021dc934528ed405",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55",
+    "frontend-modern/src/index.css": "03c3054d36a58b6793e1fb821067f462f8a9abe79bedd9a974ac76a0bf9c0ff2",
+    "frontend-modern/package.json": "6d2672f35d70ea810c80923d304cda3483a4758c18ce06e9d1a6a346d523c325",
+    "frontend-modern/package-lock.json": "d429ad64b140471b8ee02cd6fbf52dabe7e970765f93a329d8ddce4273d9f2c8"
+  },
+  "source_proof": {
+    "receipt": "source-g7qvm_wi",
+    "exit": 0,
+    "snapshot": "452cb358c96488cc40489f4b3cdc148ddb73517a30e9c39980ccf072faae5630",
+    "source": "99fd1ef50a9a68a526a961f12a309f6d1cefafbc",
+    "artifact_sha256": "03c6cc967e092b2005d90d502c71e6e1717bb964d10b0f2124b21d93224ca3eb"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#proxmox-or-pbs-rejects-an-http-to-https-redirect",
+    "/docs/TROUBLESHOOTING#proxmox-or-pbs-certificate-validation-failed",
+    "/docs/TROUBLESHOOTING#test-connection-succeeds-but-cluster-polling-fails"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "scope": "Production Vite/esnext bundle of actual Docs/Markdown/CSS sources and shipped Markdown in an isolated Router shell, HTTP static producer. No whole App/auth/platform-runtime claim. No build in browser gateway.",
+  "versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "states": [
+    "Actual guide content: saved credentials, SSL verification and fingerprint preserved; direct HTTPS destination independently verified; primary Test distinguished from affected-member polling.",
+    "Desktop whole recovery section, narrow overlapping reading viewports and narrow polling destination: four native images inspected; text wraps within viewport, focus outline visible, certificate and polling links legible. No page overflow, page error or external request observed."
+  ],
+  "interactions": [
+    "At both widths, keyboard entry activates recovery anchor and focuses heading. Certificate guidance and direct fragment navigation focus their destinations.",
+    "Desktop polling link focuses destination in combined run. Narrow polling keyboard Enter and destination focus verified in a separate exact-source continuation of the missing step, with focused link, URL and H4 destination observations."
+  ],
+  "adverse_runs": [
+    {
+      "stage": "original compile-in-browser request",
+      "result": "Delivery readback: spawned, signal 9/output-bound, incomplete output, group kill/leader reaped; no pixels/raw cause/complete descendant cleanup recovered."
+    },
+    {
+      "stage": "source-6f471x_d",
+      "exit": 1,
+      "result": "Proof fixture omitted product esnext target; corrected to existing vite.config.ts setting. Raw and completed guest stop retained."
+    },
+    {
+      "stage": "browser1",
+      "exit": 1,
+      "checks": 27,
+      "captures": 0,
+      "result": "Page clip screenshot outside resulting viewport; script capture strategy corrected. Browser/server closed."
+    },
+    {
+      "stage": "browser2",
+      "exit": 1,
+      "checks": 42,
+      "captures": 3,
+      "result": "Final narrow polling-link focus wait timed out. Previous reading/links/pixels remain valid. No contention or product-cause diagnosis. Browser/server closed."
+    },
+    {
+      "stage": "browser3 targeted missing step",
+      "exit": 0,
+      "checks": 24,
+      "captures": 1,
+      "result": "Same source/prebuilt bytes, actual focused narrow link, Enter, URL and destination focus succeed; no aggregate browser2 pass inferred. Browser/server closed."
+    }
+  ],
+  "evidence": {
+    "candidate": "20261102T204605Z-product-intelligence",
+    "receipts": "RECEIPTS.md#https-recovery-guide",
+    "current": "CURRENT.json",
+    "captures": [
+      {
+        "file": "guide-1440-0.jpg",
+        "bytes": 153473,
+        "sha256": "f4ff584599af36d2c4b4e5d1bcfe86875d56277bd8e5051bbcd15618f05442b3",
+        "native_image_inspected": true
+      },
+      {
+        "file": "guide-390-0.jpg",
+        "bytes": 56568,
+        "sha256": "b6773e68cec3fff4f5168ccf44811a36e2275d4899920759a7ecb1ca227ef1ba",
+        "native_image_inspected": true
+      },
+      {
+        "file": "guide-390-1.jpg",
+        "bytes": 64664,
+        "sha256": "6bb3a81e47b0b9f5b47637c9128e7b523897d4435a31c3849b3c23e301feb254",
+        "native_image_inspected": true
+      },
+      {
+        "file": "guide-390-polling.jpg",
+        "bytes": 52778,
+        "sha256": "39d3e396a1298e6c169e3e3b3f8d28ba131652624975cda5fff08c740eaf4ea6",
+        "native_image_inspected": true
+      }
+    ]
+  },
+  "judgment": "Available stage-by-stage proof is adequate for this bounded guide-only change. Original failed aggregate source suite and browser matrix remain adverse, not passed. Ready for independent source review, not canonical integration, publication or installed recovery."
+}
