@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "8e001be0a20c2ec68ecc487ea381110214ad4929",
+  "verified_at": "2026-11-02T18:06:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ResourcePicker.tsx",
+    "frontend-modern/src/hooks/useResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ResourcePicker.tsx": "b0b55914b06b72eccbfd3c9aad5ec5bcbe5bf6f89e69eb63e805e72297ac9e39",
+    "frontend-modern/src/hooks/useResources.ts": "4fb41fa6777a570ddedbcba00b56ab0cbe3ccdfb9a607be96617b8f55489a9d9"
+  },
+  "routes": [
+    "/settings/support/reporting"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App, Settings registry, Reporting panel, shared picker, useResources/useUnifiedResources and existing API client consume only local synthetic HTTP status, resource and schedule endpoints. Chromium desktop/light and WebKit 390px/dark; Playwright1.56.1 matches integration lock.",
+    "HTTP403 inventory denial, held explicit retry, accepted recovery and filtered empty, later failed canonical refresh over retained rows, cached saved-schedule remount, denied retry and accepted empty inventory with unchanged selected scope."
+  ],
+  "interactions": [
+    "47 checks: explicit keyboard retry and duplicate activation while held; stale rows and Select all are unavailable after failure and during reads. Error feedback never renders provider details. Only accepted empty reads show No resources available.",
+    "Saved selections remain intact; no generation or mutation from reads/retries. One explicit schedule PUT retains exactly the saved resource ID and workspace, rather than widening the backup report scope. Existing API-client CSRF recovery sends two denied requests on HTTP403; this patch does not change that retry policy.",
+    "All eight retained desktop/narrow captures opened with native view_image and actual image content reviewed. Warning/Retry, recovered selection and saved-scope/empty states are readable without body overflow. Captures are scrolled and do not show every control; websocket handshake is intentionally absent and Sync reconnecting is not a health proof.",
+    "Contexts, browsers, Vite and local HTTP server closed; no uncaught page errors. Three failed fixture attempts remain retained: overbroad row selector, collapsed native details, and an incorrect one-network-request expectation for existing CSRF recovery. No runtime change between browser attempts."
+  ]
+}

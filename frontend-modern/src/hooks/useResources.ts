@@ -94,7 +94,10 @@ export interface UseResourcesReturn {
 /**
  * Hook for accessing unified resources with reactive filtering.
  */
-export function useResources(storeOverride?: ResourceStoreLike): UseResourcesReturn {
+export function useResources(
+  storeOverride?: ResourceStoreLike,
+  options?: { retainReadError?: boolean },
+): UseResourcesReturn {
   // Get the WebSocket store instance
   const wsStore = storeOverride ?? getGlobalWebSocketStore();
 
@@ -106,6 +109,9 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
         query: '',
         cacheKey: 'all-resources',
         initialHydration: 'prefer-ws-then-rest',
+        // Selection consumers must keep a failed canonical read across cached
+        // remounts and websocket paints until a successful read replaces it.
+        retainReadError: options?.retainReadError,
       });
 
   // All resources from the unified source.

@@ -7,12 +7,27 @@ import { ResourcePicker, type SelectedResource } from '../ResourcePicker';
 
 let mockResources: Resource[] = [];
 let mockLoading = false;
+let mockError: unknown;
+const [resourceVersion, setResourceVersion] = createSignal(0);
+const updateResourceRead = () => setResourceVersion((version) => version + 1);
+const refetchMock = vi.fn<() => Promise<Resource[]>>();
 const showWarningMock = vi.fn();
 
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
-    resources: () => mockResources,
-    loading: () => mockLoading,
+    resources: () => {
+      resourceVersion();
+      return mockResources;
+    },
+    loading: () => {
+      resourceVersion();
+      return mockLoading;
+    },
+    error: () => {
+      resourceVersion();
+      return mockError;
+    },
+    refetch: () => refetchMock(),
   }),
 }));
 
@@ -72,6 +87,8 @@ beforeEach(() => {
   showWarningMock.mockReset();
   mockResources = [];
   mockLoading = false;
+  mockError = undefined;
+  refetchMock.mockReset();
 });
 
 afterEach(() => {
@@ -79,6 +96,109 @@ afterEach(() => {
 });
 
 describe('ResourcePicker', () => {
+  it('reports a denied inventory as unavailable, not an empty estate or provider error', () => {
+    mockError = new Error('403: private endpoint https://internal.invalid/token');
+    const { onSelectionChange } = renderPicker(createSelectedResources(1));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Resources could not be loaded.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Existing selections are unchanged.');
+    expect(screen.queryByText('No resources available')).not.toBeInTheDocument();
+    expect(screen.queryByText(/private endpoint/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Select all visible/ })).toBeDisabled();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(refetchMock).not.toHaveBeenCalled();
+  });
+
+  it('withdraws retained rows after failure without clearing a saved report scope', async () => {
+    mockResources = [makeResource()];
+    const { onSelectionChange } = renderPicker(createSelectedResources(1));
+    const oldRow = screen.getByRole('button', { name: /Alpha VM/ });
+
+    mockError = new Error('Unavailable');
+    updateResourceRead();
+
+    expect(screen.queryByRole('button', { name: /Alpha VM/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    await fireEvent.click(oldRow);
+    await fireEvent.click(screen.getByRole('button', { name: /Select all visible/ }));
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(screen.getByText('Preselected 0')).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
+  it('keeps retained rows unselectable while a canonical read is pending', async () => {
+    mockResources = [makeResource()];
+    mockLoading = true;
+    const { onSelectionChange } = renderPicker();
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading resources…');
+    expect(screen.queryByText('Alpha VM')).not.toBeInTheDocument();
+    expect(screen.queryByText('No resources available')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: /Select all visible/ }));
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it('admits only recovered rows after one explicit, non-duplicating retry', async () => {
+    mockResources = [makeResource()];
+    mockError = new Error('Unavailable');
+    let finishRead!: () => void;
+    refetchMock.mockImplementation(async () => {
+      await new Promise<void>((resolve) => (finishRead = resolve));
+      mockResources = [
+        makeResource({ id: 'vm-new', name: 'Recovered VM', displayName: 'Recovered VM' }),
+      ];
+      mockError = undefined;
+      updateResourceRead();
+      return mockResources;
+    });
+    const { onSelectionChange } = renderPicker(createSelectedResources(1));
+
+    const retry = screen.getByRole('button', { name: 'Retry loading resources' });
+    await fireEvent.click(retry);
+    await fireEvent.click(retry);
+    expect(refetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Retrying resources…' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('No resources available')).not.toBeInTheDocument();
+    expect(onSelectionChange).not.toHaveBeenCalled();
+
+    finishRead();
+    const row = await screen.findByRole('button', { name: /Recovered VM/ });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('Alpha VM')).not.toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    await fireEvent.click(row);
+    expect(onSelectionChange).toHaveBeenLastCalledWith([
+      ...createSelectedResources(1),
+      { id: 'vm-new', type: 'vm', name: 'Recovered VM' },
+    ]);
+  });
+
+  it('keeps an unsuccessful retry recoverable and preserves the caller selection', async () => {
+    mockError = new Error('Unavailable');
+    refetchMock.mockRejectedValue(new Error('Still unavailable'));
+    const { onSelectionChange } = renderPicker(createSelectedResources(1));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry loading resources' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Retry loading resources' })).toBeEnabled(),
+    );
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('No resources available')).not.toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(refetchMock).toHaveBeenCalledTimes(1);
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it('reserves the empty-estate message for an accepted empty read', () => {
+    renderPicker();
+    expect(screen.getByText('No resources available')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Select all visible/ })).toBeDisabled();
+  });
+
   it('selects a whole client estate beyond the performance cap while excluding other resource types', async () => {
     mockResources = [
       ...Array.from({ length: 61 }, (_, index) =>

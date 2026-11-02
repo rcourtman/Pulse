@@ -3437,6 +3437,46 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('keeps picker read failures through the useResources adapter and cached remounts', async () => {
+    const { useResources } = await import('../useResources');
+    setWsConnected(false);
+    const disposals: (() => void)[] = [];
+    const mount = (retainReadError = true) => {
+      let result!: ReturnType<typeof useResources>;
+      createRoot((dispose) => {
+        disposals.push(dispose);
+        result = useResources(undefined, { retainReadError });
+      });
+      return result;
+    };
+    try {
+      const first = mount();
+      await waitForResourceCount(() => first.resources().length);
+      const failure = new Error('canonical picker inventory unavailable');
+      apiFetchMock.mockRejectedValueOnce(failure);
+      await expect(first.refetch()).rejects.toBe(failure);
+      expect(first.error()).toBe(failure);
+      expect(first.resources()).toHaveLength(1);
+      disposals.shift()!();
+
+      const calls = apiFetchMock.mock.calls.length;
+      const reopened = mount();
+      const defaultConsumer = mount(false);
+      await flushAsync();
+      expect(reopened.error()).toBe(failure);
+      expect(defaultConsumer.error()).toBeUndefined();
+      expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+
+      apiFetchMock.mockResolvedValueOnce(resourceResponse([]));
+      await reopened.refetch();
+      expect(reopened.error()).toBeUndefined();
+      expect(reopened.loading()).toBe(false);
+      expect(reopened.resources()).toHaveLength(0);
+    } finally {
+      disposals.forEach((dispose) => dispose());
+    }
+  });
+
   it('retains a scoped failed read across remounts until a real successful retry', async () => {
     const options = {
       query: 'type=physical_disk&parent=vm-alpha',
