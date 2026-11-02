@@ -14,6 +14,9 @@ import tempfile
 import textwrap
 import unittest
 
+import yaml
+
+from test_frontend_real_embed import recipe as real_embed_recipe
 from test_public_docs_workflow import job_body, step_body, workflow_fixture_environment
 
 
@@ -71,33 +74,72 @@ class SmokeWorkflowTest(unittest.TestCase):
 
     def test_existing_required_check_is_fail_closed(self):
         build = job_body(self.source, "scripts-and-build")
-        self.assertIn("    needs: [changes, script-smoke]\n", build)
+        self.assertIn("    needs: [changes, script-smoke, frontend-checks]\n", build)
         self.assertIn("    if: always() && needs.changes.outputs.code == 'true'\n", build)
         self.assertEqual(self.source.count(f"    name: {REQUIRED_NAME}\n"), 1)
         self.assertIn("          SMOKE_RESULT: ${{ needs.script-smoke.result }}\n", build)
-        for state in ("success", "failure", "cancelled", "skipped", "", "unknown"):
-            with self.subTest(state=state):
-                result = subprocess.run(
-                    ["bash", "-e", "-o", "pipefail", "-c", verdict_command(self.source)],
-                    env=dict(os.environ, SMOKE_RESULT=state), text=True,
-                    capture_output=True, timeout=5,
-                )
-                self.assertEqual(result.returncode == 0, state == "success",
-                                 result.stdout + result.stderr)
+        self.assertIn("          BACKEND_RESULT: ${{ needs.frontend-checks.result }}\n", build)
+        states = ("success", "failure", "cancelled", "skipped", "", "unknown")
+        for smoke_state in states:
+            for backend_state in states:
+                with self.subTest(smoke=smoke_state, backend=backend_state):
+                    result = subprocess.run(
+                        ["bash", "-e", "-u", "-o", "pipefail", "-c", verdict_command(self.source)],
+                        env=dict(os.environ, SMOKE_RESULT=smoke_state, BACKEND_RESULT=backend_state),
+                        text=True, capture_output=True, timeout=5,
+                    )
+                    self.assertEqual(result.returncode == 0,
+                                     smoke_state == backend_state == "success",
+                                     result.stdout + result.stderr)
+                    if result.returncode == 0:
+                        self.assertIn("this run's real-embed backend proof passed", result.stdout)
 
-    def test_backend_build_waits_for_gate_and_is_still_required(self):
-        build = job_body(self.source, "scripts-and-build")
-        self.assertLess(build.index(VERDICT_STEP), build.index("Checkout repository"))
-        self.assertLess(build.index(VERDICT_STEP), build.index("Build Pulse backend"))
-        self.assertIn("    runs-on: ubuntu-24.04\n", build)
-        self.assertIn("    timeout-minutes: 30\n", build)
-        self.assertIn("          go-version-file: go.mod\n", build)
-        self.assertIn("          persist-credentials: false\n", build)
-        self.assertIn("      - name: Provide frontend embed stub\n", build)
-        self.assertIn("        run: go build ./cmd/pulse\n",
-                      step_body(build, "Build Pulse backend"))
-        self.assertEqual(re.findall(r"(?m)^\s*if:.*$", build),
-                         ["    if: always() && needs.changes.outputs.code == 'true'"])
+    def test_missing_result_cannot_admit_the_required_check(self):
+        for missing in ("SMOKE_RESULT", "BACKEND_RESULT"):
+            with self.subTest(missing=missing):
+                env = dict(os.environ, SMOKE_RESULT="success", BACKEND_RESULT="success")
+                env.pop(missing)
+                result = subprocess.run(
+                    ["bash", "-e", "-u", "-o", "pipefail", "-c", verdict_command(self.source)],
+                    env=env, text=True, capture_output=True, timeout=5,
+                )
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_verdict_reuses_required_same_run_real_embed_build_without_another_compiler(self):
+        jobs = yaml.safe_load(self.source)["jobs"]
+        verdict = jobs["scripts-and-build"]
+        self.assertEqual(verdict["runs-on"], "ubuntu-24.04")
+        self.assertEqual(verdict["timeout-minutes"], 5)
+        self.assertEqual(verdict["needs"], ["changes", "script-smoke", "frontend-checks"])
+        self.assertEqual(verdict["if"], "always() && needs.changes.outputs.code == 'true'")
+        self.assertNotIn("continue-on-error", verdict)
+        self.assertEqual(len(verdict["steps"]), 1)
+        step = verdict["steps"][0]
+        self.assertEqual(step["env"], {
+            "SMOKE_RESULT": "${{ needs.script-smoke.result }}",
+            "BACKEND_RESULT": "${{ needs.frontend-checks.result }}",
+        })
+        self.assertNotIn("if", step)
+        self.assertNotIn("continue-on-error", step)
+        self.assertNotIn("uses", step)
+        self.assertNotRegex(step["run"], r"\b(?:go|npm|git)\b")
+
+        # The reused producer is in this same workflow/DAG, not a cached status
+        # or an unrelated successful job. Check its actual production-asset
+        # transfer, declared compiler, readonly build/vet recipe and ordering.
+        real_embed_recipe(self.source)
+        backend = jobs["frontend-checks"]
+        self.assertEqual(backend["if"], "${{ !cancelled() && needs.changes.outputs.code == 'true' && needs.frontend-build.outputs.unit_admitted == 'true' }}")
+        self.assertNotIn("continue-on-error", backend)
+        required = {"Verify backend with real frontend embed",
+                    "Check current-source unattended recovery on native systemd",
+                    "Check ordinary notification policy and restart"}
+        found = {step["name"] for step in backend["steps"] if step["name"] in required}
+        self.assertEqual(found, required)
+        for step in backend["steps"]:
+            if step["name"] in required:
+                self.assertNotIn("if", step)
+                self.assertNotIn("continue-on-error", step)
 
     def run_adapters(self, shard: int, failing: str = ""):
         """Run actual workflow/runner commands on every source-selected name.
@@ -164,7 +206,7 @@ class SmokeWorkflowTest(unittest.TestCase):
             self.assertIn(f"Summary: {len(names)-1}/{len(names)} passed", result.stdout)
             gate = subprocess.run(
                 ["bash", "-e", "-o", "pipefail", "-c", verdict_command(self.source)],
-                env=dict(os.environ, SMOKE_RESULT="failure"), text=True,
+                env=dict(os.environ, SMOKE_RESULT="failure", BACKEND_RESULT="success"), text=True,
                 capture_output=True, timeout=5,
             )
             self.assertNotEqual(gate.returncode, 0)

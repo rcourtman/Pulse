@@ -1057,40 +1057,28 @@ jobs:
 
   scripts-and-build:
     name: Script smoke tests & backend build
-    needs: [changes, script-smoke]
+    # The runtime job already compiles and vets this checkout with the verified
+    # production frontend. Require that stronger proof rather than starting
+    # another runner checkout/compiler/cache cycle to build a placeholder UI.
+    needs: [changes, script-smoke, frontend-checks]
     if: always() && needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - name: Require every script smoke shard
         env:
           SMOKE_RESULT: ${{ needs.script-smoke.result }}
+          BACKEND_RESULT: ${{ needs.frontend-checks.result }}
         run: |
           if [ "$SMOKE_RESULT" != success ]; then
             echo "::error::Script smoke shards did not all pass (result: ${SMOKE_RESULT})"
             exit 1
           fi
-          echo "Every script smoke shard passed."
-
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Provide frontend embed stub
-        run: |
-          mkdir -p internal/api/frontend-modern/dist
-          [ -f internal/api/frontend-modern/dist/index.html ] || \
-            printf '<!doctype html><title>ci embed stub</title>\n' > internal/api/frontend-modern/dist/index.html
-
-      - name: Build Pulse backend
-        run: go build ./cmd/pulse
+          if [ "$BACKEND_RESULT" != success ]; then
+            echo "::error::This run's real-embed backend proof did not pass (result: ${BACKEND_RESULT})"
+            exit 1
+          fi
+          echo "Every script smoke shard and this run's real-embed backend proof passed."
 
   chart-latency-slo:
     name: Workload chart SLO evidence
