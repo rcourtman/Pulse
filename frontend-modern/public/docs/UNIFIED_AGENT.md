@@ -1485,6 +1485,60 @@ including recovery already performed. Keep tokens, full copied commands,
 connection files and service environments private. No new update, Diagnostics
 run or full configuration export is required to ask for help.
 
+### Updating the typed helper
+
+**Automatic agent updates replace the collector only.** They do not replace or
+restart `pulse-agent-helper`. A successful collector update, including a fresh
+version in Agent Doctor, does not establish the helper's release version. The
+helper is shipped with Pulse, not on a separate release schedule, but its
+installation is managed separately by the agent installer.
+
+The helper's health check confirms the requested protocol, not release-version
+parity or support for every collector operation. The helper currently has no
+`--version` option. Do not infer its version from `pulse-agent --version`, or
+treat a healthy older helper as a monitoring failure solely because the
+collector updated. Existing LXC or SMART readings remain separate evidence.
+
+For a **planned helper update on a standard Linux systemd host**:
+
+1. Update the trusted Pulse instance first. On the **affected agent host**,
+   download and inspect its current `/install.sh` using the
+   [HTTPS preparation above](#private-file-installation-linux-macos-and-nas).
+   Keep any previous installer separately; do not execute a temporary failed
+   download or overwrite an existing copy blindly. No new token is needed for
+   an update using saved connection state. Do not substitute GitHub's top-level
+   `install.sh`, which updates the Pulse server instead.
+2. Run preflight with that inspected agent installer, then apply only if it
+   succeeds and the host is ready for a brief monitoring interruption:
+
+   ```bash
+   sudo bash "$HOME/.config/pulse/agent-install.sh" --preflight-only --update
+   ```
+
+   ```bash
+   sudo bash "$HOME/.config/pulse/agent-install.sh" --update
+   ```
+
+   `--update` recovers the saved connection, identity, collectors and existing
+   least-privilege/typed-helper profile; it does not require those profile flags
+   again. The installer verifies the collector and helper downloads, replaces
+   their binaries, checks the helper's effective isolated unit and socket, and
+   restarts the helper. Preflight is not installation or proof of recovery.
+3. Check the install result and fresh reporting from that same host, including
+   any LXC or SMART readings you rely on. Collector success alone still does
+   not prove the helper was replaced. If the helper release must be established,
+   compare its installed file's SHA-256 with the matching architecture's helper
+   entry in that release's verified `checksums.txt`; a file digest does not
+   establish which executable a pre-existing process is running.
+
+Do not uninstall, re-enrol, copy a helper binary by hand, remove
+`PrivateNetwork`, add sudo grants or change the collector's service user to
+force an update. If preflight or installation fails, retain its existing
+redacted error and reconcile installed state before another attempt. Never
+publish tokens, connection files or full service configuration. This procedure
+is a deliberate maintenance operation, not a diagnostic retest request for a
+healthy host.
+
 ### Duplicate Agents
 
 Cloning an installed agent can copy its saved identity and credentials. Different

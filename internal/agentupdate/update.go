@@ -315,6 +315,16 @@ func (u *Updater) RunLoop(ctx context.Context) {
 		return
 	}
 
+	if u.cfg.PrivilegedUpdate != nil {
+		// The closed helper protocol replaces the collector, not the root
+		// helper itself. State this once per loop, before any update check,
+		// without treating an unmeasured helper version as a health failure.
+		u.logger.Info().
+			Str("update_scope", "collector-only").
+			Str("helper_update_guide", "https://github.com/rcourtman/Pulse/blob/main/docs/UNIFIED_AGENT.md#updating-the-typed-helper").
+			Msg("Automatic updates replace pulse-agent only, not the typed privilege helper; use the agent installer --update for a separate helper update")
+	}
+
 	// Initial check after a short delay (5s to quickly update outdated agents)
 	initialDelayTimer := time.NewTimer(u.initialDelay)
 	defer func() {
