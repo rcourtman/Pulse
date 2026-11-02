@@ -228,6 +228,15 @@ func presentationMachineIDsOverlap(left, right []string) bool {
 // comparison concludes. Equal cluster names deliberately do not veto: the same
 // cluster added under two connections still describes the same machines.
 func presentationHostIdentitiesDistinct(left, right Resource) bool {
+	// Native TrueNAS systems carry the connection ID in AgentID, not a
+	// globally trustworthy machine ID. Their agent-shaped facet must not make
+	// hostname presentation undo the provider's connection-scoped identity.
+	if left.TrueNAS != nil && right.TrueNAS != nil && left.Agent != nil && right.Agent != nil {
+		leftConnection, rightConnection := strings.TrimSpace(left.Agent.AgentID), strings.TrimSpace(right.Agent.AgentID)
+		if leftConnection != "" && rightConnection != "" && leftConnection != rightConnection {
+			return true
+		}
+	}
 	leftIDs, rightIDs := presentationMachineIDs(left), presentationMachineIDs(right)
 	if len(leftIDs) > 0 && len(rightIDs) > 0 && !presentationMachineIDsOverlap(leftIDs, rightIDs) {
 		return true
