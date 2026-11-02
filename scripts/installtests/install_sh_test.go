@@ -2849,7 +2849,7 @@ func TestInstallSHFreeBSDRendererUsesDaemonSupervisorPidfile(t *testing.T) {
 	required := []string{
 		`child_pidfile="/var/run/\${name}.child.pid"`,
 		`pulse_agent_supervisor_pid()`,
-		`parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d '[:space:]')`,
+		`parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d ' \t\r\n\v\f')`,
 		`daemon:*)`,
 		`/usr/sbin/daemon -r -P \${pidfile} -p \${child_pidfile} -f "\${command}" \${command_args}`,
 		`kill -KILL "\${supervisor_pid}" 2>/dev/null || return 1`,

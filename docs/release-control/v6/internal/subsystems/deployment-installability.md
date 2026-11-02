@@ -16,6 +16,22 @@
 
 ## Purpose
 
+### Unix agent preflight does not require character-class-aware NAS utilities
+
+Installer case-folding uses fixed ASCII alphabets, and whitespace handling uses
+explicit characters rather than `tr` classes. Correctly copied HTTPS URLs must
+survive scheme, fingerprint and OS normalisation even with a classless NAS `tr`.
+The original endpoint is preserved. Mixed-case HTTPS with a pin selects the
+same authority; malformed URLs/fingerprints, wrong pins and HTTP with a pin
+remain rejected. Download metadata checks are still only preflight, not signed
+artifact execution, native installation or original-host recovery.
+
+The ordinary installer tests execute this preflight against real local TLS
+with the system utility and a deliberately classless model, assert the actual
+download architecture, and retain synthetic installed files unchanged. Separate
+real-CLI removal controls bind saved CA/pin and exact server confirmation to
+confined teardown; service/process doubles are not native acceptance.
+
 ### Agent installer completion retains failed startup
 
 The shared Unix agent completion path must return service-start failure exit
