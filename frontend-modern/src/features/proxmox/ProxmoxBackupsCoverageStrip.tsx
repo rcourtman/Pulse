@@ -14,7 +14,8 @@ import type {
 // Proxmox overview tables do: the protected count sits in the header strip,
 // and each posture reason is one single-line row with a count pill and a bar
 // for its share of rated targets. Each reason row toggles a Coverage filter
-// to exactly those workloads; the card owns no filter state itself.
+// to exactly those workloads, and a trailing chevron says the row opens
+// something; the card owns no filter state itself.
 
 export interface CoverageStripProps {
   title: string;
@@ -64,17 +65,21 @@ const ROW_TONE: Record<RowTone, { dot: string; pill: string; fill: string }> = {
   },
 };
 
+// The last track holds the clickable rows' chevron flush right; rows that
+// open nothing leave it empty so every row's columns still line up.
 const ROW_GRID =
-  'grid w-full min-w-0 grid-cols-[0.5rem_minmax(0,1fr)_auto_5rem] items-center gap-x-3 px-3 text-xs sm:grid-cols-[0.5rem_minmax(0,16rem)_3rem_minmax(0,22rem)] sm:justify-start';
+  'grid w-full min-w-0 grid-cols-[0.5rem_minmax(0,1fr)_auto_4rem_0.875rem] items-center gap-x-3 px-3 text-xs sm:grid-cols-[0.5rem_minmax(0,16rem)_3rem_minmax(0,22rem)_minmax(0.875rem,1fr)]';
 
 const PREVIEW_NAMES = 5;
 
-// Names stay out of the row: a hover title previews them, and the filtered
-// Coverage table lists them all.
-const previewNames = (group: BackupExceptionGroup): string => {
+// Names stay out of the row: a hover title says what a click does and
+// previews them, and the filtered Coverage table lists them all.
+const previewNames = (group: BackupExceptionGroup, pressed: boolean): string => {
+  if (pressed) return 'Clear this filter in Coverage';
   const names = group.rows.slice(0, PREVIEW_NAMES).map((row) => row.workload.label);
   const more = group.rows.length - names.length;
-  return more > 0 ? `${names.join(', ')} and ${more} more` : names.join(', ');
+  const listed = more > 0 ? `${names.join(', ')} and ${more} more` : names.join(', ');
+  return `Show in Coverage: ${listed}`;
 };
 
 const accessibleName = (group: BackupExceptionGroup): string =>
@@ -181,12 +186,12 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                     {(onSelect) => (
                       <button
                         type="button"
-                        class={`${ROW_GRID} h-8 hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                        class={`${ROW_GRID} group/reason h-8 hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
                           pressed() ? 'bg-blue-50 dark:bg-blue-900/30' : ''
                         }`}
                         aria-pressed={pressed()}
                         aria-label={accessibleName(group)}
-                        title={previewNames(group)}
+                        title={previewNames(group, pressed())}
                         onClick={() => onSelect()(group.key)}
                       >
                         <RowCells
@@ -194,6 +199,14 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                           label={group.label}
                           count={group.rows.length}
                           total={rated()}
+                        />
+                        <ChevronRightIcon
+                          class={`h-3.5 w-3.5 justify-self-end ${
+                            pressed()
+                              ? 'text-blue-600 dark:text-blue-400'
+                              : 'text-muted group-hover/reason:text-base-content'
+                          }`}
+                          aria-hidden="true"
                         />
                       </button>
                     )}

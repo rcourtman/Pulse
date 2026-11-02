@@ -537,6 +537,13 @@ desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
 day selection, metric switching, empty matches and recovery. No shared-filter,
 route, navigation, access or backup operation changes.
 
+### Backup health reason rows carry a trailing chevron (2 November 2026)
+
+`ProxmoxBackupsCoverageStrip`'s row grid gains a last track for a lucide
+`ChevronRightIcon` on the reason rows that are buttons, flush right on desktop
+and phone, so a filtering row looks clickable without adding height. Rows that
+open nothing leave the track empty, so every row's columns still line up.
+
 ### Backups By date carries no activity chart (2 November 2026)
 
 The restore points no longer render `BackupActivityChart`; the component and

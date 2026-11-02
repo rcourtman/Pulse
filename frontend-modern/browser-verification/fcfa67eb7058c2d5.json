@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "ca15b00d32e2515dc3618338d3d267670f17cffa",
+  "verified_at": "2026-11-02T16:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "77e5a6b1ee5104427d9119b363ba500d459c49e2c68de75717d427bb88c3b9ae"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev",
+    "Backup health reason rows resting, hovered and pressed at desktop and phone",
+    "dark and light themes, desktop and phone layouts"
+  ],
+  "interactions": [
+    "built this branch and ran it in mock mode on pulse-dev, signed in and opened Proxmox > Backups > By date at 1440x1000 and 375x812 in dark and light themes",
+    "every Backup health reason row ends in a chevron whose right edge sits 13px inside the card at both widths; the Protected row has none and its columns stay aligned with the reason rows",
+    "every row measured 32px tall before and after a click; no horizontal page overflow at either width",
+    "hovered the first reason row on desktop: the row highlights and its title reads 'Show in Coverage:' followed by the workload names",
+    "clicked 'No successful backup': the page moved to /proxmox/backups/coverage?reason=no-backup, the row turned blue with a blue chevron, and its title switched to the pressed wording",
+    "on phone only 'Backup source reported a failure' truncates, with the full name in the tooltip"
+  ]
+}
