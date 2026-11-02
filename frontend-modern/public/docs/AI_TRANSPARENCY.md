@@ -1,165 +1,68 @@
 # Development and Automation Transparency
 
-Pulse is maintained by me and developed with extensive automation, including
-coding agents. This page is the standing disclosure for that process, so the
-same explanation does not need to be repeated across every commit, release,
-or issue thread.
+I maintain Pulse, and I build it with heavy use of coding agents and
+automation. This page explains how, so it doesn't need repeating in every
+commit, release or issue.
 
-## The short version
+## Who does what
 
-Automation contributes to code, tests, documentation, release notes, issue
-triage, and routine repository maintenance. Routine changes may be
-investigated, implemented, tested, and merged to `main` without line-by-line
-human review. The continuously running maintainer does this within boundaries
-I define.
+- **I** maintain Pulse: I set direction, decide what gets built, and answer for
+  everything that ships. I don't claim to have written every line.
+- **Coding agents** write code, tests and documentation from requirements I set.
+- **Automation** handles routine triage and fixes within limits I set. Its issue
+  replies and commits come from `pulse-triage[bot]`; repository workflows appear
+  as `github-actions[bot]`. Each problem in a mixed report gets its own answer
+  under the [triage contract](ISSUE_TRIAGE.md).
 
-I set the product direction and remain responsible for everything that ships.
-The automated maintainer owns day-to-day maintenance and public issue replies;
-releases follow the fixed train described below. I do not claim to have
-personally written every line.
-Automated changes must pass the applicable project tests and audit gates, and
-released builds still go through Pulse's release qualification process.
-
-## How it is used
-
-- **Code and tests.** Coding agents implement and test changes from product,
-  architectural, issue, and operational requirements.
-- **Maintenance.** Automation monitors project signals, investigates defects,
-  prepares fixes, and performs bounded routine repository work continuously.
-- **Documentation and releases.** The maintainer prepares documentation and
-  changelogs. The release train builds, checks and publishes releases. Release
-  claims must stay consistent with the actual published source and checks.
-- **Issue triage.** Automated issue and discussion replies post
-  under the dedicated `pulse-triage` bot identity and link back to this page.
-  Automated issue state changes use that identity as well, except those made
-  by the repository's own GitHub Actions workflows, which appear as
-  `github-actions[bot]`: silent version and form labels, and the alert issues
-  that scheduled checks open, update and close. Mixed reports follow
-  the [topic-integrity triage contract](ISSUE_TRIAGE.md): automation can surface
-  declared secondary topics, but a maintainer or triage agent must give every
-  actionable topic a linked disposition. Private support email is handled by
-  Richard, not the automated maintainer: it does not read a support mailbox or
-  send email. Keep credentials and private diagnostics out of public threads.
-- **Change provenance.** Commits made by the continuously running maintainer
-  carry a dedicated bot author and committer identity. Issue-driven changes
-  link back to the originating report where applicable.
-
-The link on an automated reply is intentionally understated. It makes the
-process discoverable without turning every technical exchange into a banner
-about how the work was produced. Individual commits, fixes, and release notes
-are not given tool-specific labels.
+I handle private support email myself. Automation does not read a support
+mailbox or send email. Keep credentials and private diagnostics out of public
+threads.
 
 ## How changes land and ship
 
-Every change reaches `main` through a pull request, whoever or whatever wrote
-it. Maintainer changes receive independent review and must pass the
-repository's required checks before merging.
-The `main` branch ruleset requires that for every writer, with no bypass, so
-a red check blocks the maintainer and me alike. The maintainer's pull
-requests are opened by `pulse-triage[bot]` and state what changed, why it
-was needed, which reports or demand-ledger entries it answers, and what
-validation was used, so the record on GitHub is the record of the decision.
+Every change reaches `main` through a pull request. Automated changes receive
+independent review, and every change must pass the repository's required checks
+before merging. Nobody can bypass this, me included.
 
-Minor stable publication is targeted seven days after the last minor stable release. The
-next minor release candidate becomes eligible one day earlier, reserving its
-full 24-hour soak; preparation and qualification can move publication later.
-It is cut from the head of `main` and carries everything on `main` at that cut,
-not a selected set of fixes. Repairs go on `main`, not onto an older release
-line. A stable patch does not restart the weekly minor clock.
+Releases follow a fixed weekly train: daily betas, then a release candidate that
+soaks for 24 hours and is promoted unchanged to stable unless a `release-blocker`
+issue stops it. Stable patches are not yet available, so fixes reach stable in
+the next minor release; see [limited stable patches](RELEASE_PROCESS.md#limited-stable-patches).
+Full rules: [Releases and update channels](RELEASE_PROCESS.md).
 
-A limited stable-patch path is being added for regressions in the current
-stable release, security vulnerabilities and data loss. **As of 27 October 2026,
-stable patches are not yet available.** Until enabled, repairs reach stable users
-in a containing minor release. Once available, a patch starts from the current
-stable and adds only eligible repairs already merged to `main`, plus release
-metadata and publication support, not every unrelated change on `main`. It does
-not delay or replace the weekly minor cycle. The `stable-regression` label does
-not guarantee a patch or establish availability; see
-[limited stable patches](RELEASE_PROCESS.md#limited-stable-patches).
-
-Between stable releases, daily betas carry new changes from `main`; no beta is
-cut within a day of the candidate being due. An important fix ships in the next
-beta, not through an early candidate or stable release. Work merged during a
-candidate's soak waits for the next cycle unless a `release-blocker` requires
-a fresh candidate. A beta is not promoted to stable.
-
-The candidate soaks for 24 hours on the opt-in preview channel, then is promoted
-unchanged to stable unless an open issue labelled `release-blocker` stops
-promotion. A candidate regression from the previous stable release or a release
-failure is repaired on `main`; once the blockers are closed, the train cuts a
-fresh candidate that carries the repair. Product changes are not inserted into the frozen candidate.
-The promotion resolver in the release pipeline enforces the soak and the
-exact-content rule. [Releases and update channels](RELEASE_PROCESS.md) describes
-the train for users.
-
-A fix merged to `main` is not yet a published fix. A published beta or release
-candidate is available to preview users, not proof that stable users have it.
-Issue replies name the containing version only after checking its actual
-released source, and ask for a retest when appropriate. See the
-[published releases](https://github.com/rcourtman/Pulse/releases) for available
-versions; a source commit or a passing test alone does not establish availability.
+A fix merged to `main` is not yet a published fix. Replies name a version only
+after checking its released source.
 
 ## Issue resolution and retesting
 
-A bug is resolved when the reporter confirms recovery, or the maintainer
-reproduces the correction with no reported symptom left unresolved. A working
-workaround, one recovered screen or a merged fix does not settle every part of
-a mixed report. Other dispositions, such as a duplicate, need their own
-explanation; a feature request's demand-ledger entry is not an implemented feature.
+An issue is resolved when the reporter confirms the fix, or the fix is
+reproduced with no reported symptom left unresolved. A merged fix or a
+workaround alone is not enough.
 
-After a fix for every reported symptom ships in a stable release, the maintainer
-names that version and asks for a retest in the original issue. That reply says
-the issue will be closed after 14 days without a reply and can be reopened.
-Normally, the 14 days start with that stable-release retest reply. If an earlier
-retest request named a beta or release candidate carrying the same fix, and the
-limit on repeated unanswered contact prevents another reply, count from the
-later of that request and the stable release's publication. A beta or release
-candidate alone never starts the timeout, nor does a fix commit. Only retest
-when it is safe; do not repeat an outage, update or backup just to answer.
+Once the fix ships in a stable release, the issue gets a reply naming that
+version and asking for a retest. After 14 days with no reply, and nobody else
+reporting the same problem, the issue may be closed with the
+`closed-needs-retest-timeout` label. That is **not confirmed resolution**, and
+it can be reopened. Feature requests, `needs-human` issues and unexplained
+symptoms are never closed this way.
 
-Only after at least 14 days without any reply from the reporter, and with no
-other person reporting the same problem since that retest request, may the
-issue be closed with a note and the
-`closed-needs-retest-timeout` label. This is a retest timeout, **not confirmed
-resolution**. It does not apply to feature requests, issues labelled
-`needs-human`, or reports with an unfixed or unexplained symptom.
-
-If the problem persists, or a close missed part of the report, comment on the
-original issue rather than filing it again. Say which symptom remains and give
-the version already observed, with any relevant [locally reviewed, redacted
-evidence](TROUBLESHOOTING.md#collect-diagnostics-safely); unknown details are
-valid and credentials stay private. Credible continuing failures or a mistaken
-close are grounds to reopen the issue, not evidence to dismiss because it was closed.
+Still broken? Comment on the original issue rather than filing it again. Say
+which symptom remains and which version you're on; add
+[redacted diagnostics](TROUBLESHOOTING.md#collect-diagnostics-safely) if you
+have them. Don't repeat an outage, update or backup just to retest.
 
 ## Authority and responsibility
 
-The automated maintainer owns ordinary maintenance and public Pulse issue
-replies under standing authority. These actions do not require my approval for
-each change or comment. The release train publishes prereleases and stable
-releases without per-release approval; it follows the cycle above rather than
-having a model choose release scope, maturity or timing.
-
-Standing authority does not waive independent review, release qualification,
-exact-candidate promotion, required soak, or verification after publication.
-Public replies must follow the conversation and verified implementation and
-release evidence. The maintainer must avoid repetitive unsolicited follow-ups.
-I retain project ownership, product direction and the ability to revoke authority.
-
-My role is to direct the project, design and maintain those boundaries,
-monitor outcomes, and answer for the result. If an automated change is wrong,
-it is still my bug and my responsibility to correct it.
+Routine fixes and issue replies don't need my sign-off each time, and the
+release train publishes on schedule without per-release approval; no model
+chooses what goes in a release or when. None of this skips review, soak or
+release checks. I can switch any of it off, and if something automated is
+wrong, it's my bug to fix.
 
 ## How the work should be judged
 
-The relevant standard is the resulting software: whether a change is
-understandable, maintainable, secure, covered by appropriate tests, and borne
-out by real behaviour. Pulse's issue history, source, test gates, release
-process, and corrections remain visible so specific concerns can be evaluated
-on their merits.
+By the software: is it correct, secure, tested and maintainable? The source,
+issues, tests and releases are all public.
 
-This document describes the current standing policy. Older repository and
-issue activity may predate it and may not carry the same link or identity.
-
-For what Pulse itself does with AI as a product, including Pulse Patrol,
-Assistant, and MCP, see [AI.md](AI.md). Those features are separate from the
-development process described here.
+Older activity may predate this policy. For Pulse's own AI features, such as
+Patrol and MCP, see [AI.md](AI.md).
