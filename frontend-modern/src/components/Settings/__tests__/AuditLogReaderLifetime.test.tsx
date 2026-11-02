@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { renderHook, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch, setOrgID } from '@/utils/apiClient';
@@ -447,5 +448,21 @@ describe('Audit log reader lifetime', () => {
     expect(result.verification()).toEqual({});
     expect(showSuccess).not.toHaveBeenCalled();
     expect(showWarning).not.toHaveBeenCalled();
+  });
+  it('accepts the current data-grid row proxy without admitting a copied row', async () => {
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce(list(['a']))
+      .mockImplementation(async () => verified());
+    const { result, cleanup } = mount();
+    try {
+      await waitFor(() => expect(result.events()).toHaveLength(1));
+      const [row] = createStore(result.events()[0]);
+      await result.verifyEvent(row);
+      expect(result.verification().a?.status).toBe('verified');
+      await result.verifyEvent({ ...row });
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+    } finally {
+      cleanup();
+    }
   });
 });

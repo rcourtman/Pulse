@@ -9,6 +9,7 @@ import {
   untrack,
 } from 'solid-js';
 import type { Accessor } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createLocalStorageBooleanSignal,
@@ -385,13 +386,16 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     }
   };
 
+  const isCurrentEvent = (event: AuditEvent) =>
+    events().some((current) => unwrap(current) === unwrap(event));
+
   const verifyEvent = async (event: AuditEvent) => {
     if (
       !ensureCurrentReader() ||
       !accessAllowed() ||
       loading() ||
       error() ||
-      !events().includes(event) ||
+      !isCurrentEvent(event) ||
       !event.signature ||
       verifyControllers()[event.id]
     )
@@ -404,7 +408,7 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       acceptedReader === reader() &&
       generation === verificationGeneration &&
       verifyControllers()[event.id] === controller &&
-      events().includes(event);
+      isCurrentEvent(event);
     batch(() => {
       setVerifying((prev) => ({ ...prev, [event.id]: true }));
       setVerifyControllers((prev) => ({ ...prev, [event.id]: controller }));
