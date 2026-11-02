@@ -367,9 +367,17 @@ func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 	if monsRunning == 0 {
 		monsRunning = numMons
 	}
+	// A standby manager is a running ceph-mgr: every manager beacons the
+	// monitors, which drop a standby once its beacons stop, so all listed
+	// managers are running while one of them is available. Without an
+	// available manager none is serving.
+	mgrsRunning := 0
+	if raw.MgrMap.Available {
+		mgrsRunning = status.MgrMap.NumMgrs
+	}
 	status.Services = []CephServiceInfo{
 		{Type: "mon", Running: monsRunning, Total: numMons},
-		{Type: "mgr", Running: cephBoolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
+		{Type: "mgr", Running: mgrsRunning, Total: status.MgrMap.NumMgrs},
 		{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSDs},
 	}
 
@@ -413,13 +421,6 @@ func parseCephDF(data []byte) ([]CephPool, float64, error) {
 	}
 
 	return pools, normalizePercentUsed(raw.Stats.PercentUsed), nil
-}
-
-func cephBoolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 // normalizePercentUsed accepts Ceph values reported either as ratio (0-1) or percent (0-100).

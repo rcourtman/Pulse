@@ -2166,6 +2166,11 @@ the daemon tally as width shrinks, keeps one five-value phone projection
 (cluster, health, OSDs, pools, capacity) whose values each fit whole, and
 leaves quorum membership and the FSID to the cluster disclosure, where the
 FSID stays searchable and is shown in full.
+The Ceph table's shared health classification treats both native `HEALTH_ERR`
+and the server-normalized `ERR` as critical. Row status, status-filter counts,
+and the drawer header use that same classification, including when no manager
+daemons are reported. Missing service rows must not turn explicit critical
+provider health into a healthy table verdict.
 The Mail Gateway row reflects its open alerts, not only the provider status:
 a reachable gateway with an unacknowledged alert (mail queued past its age
 threshold, a backlog) renders and filters as needing attention, colours the

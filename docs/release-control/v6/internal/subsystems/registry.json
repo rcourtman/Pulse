@@ -6421,6 +6421,7 @@
         "internal/mock/integration.go",
         "internal/mock/platform_fixtures.go",
         "internal/mock/recovery_points.go",
+        "internal/models/ceph_cluster_identity.go",
         "internal/models/converters.go",
         "internal/models/deepcopy.go",
         "internal/models/metrics_types.go",
@@ -6789,6 +6790,7 @@
             "label": "runtime report model proof",
             "match_prefixes": [],
             "match_files": [
+              "internal/models/ceph_cluster_identity.go",
               "internal/models/converters.go",
               "internal/models/deepcopy.go",
               "internal/models/metrics_types.go",
@@ -9040,6 +9042,7 @@
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxCephTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxMailGatewayTable.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",

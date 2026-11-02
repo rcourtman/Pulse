@@ -5148,6 +5148,75 @@ func TestApplyHostReportMergesAgentCephWithProxmoxAPICluster(t *testing.T) {
 	t.Fatalf("expected canonical API Ceph pool alert using legacy agent override, got active alerts: %#v", active)
 }
 
+// Agents before the manager fix sent the Ceph mgr row as "1 of N running"
+// whenever a manager was available, counting standby managers as stopped.
+// Standbys are running ceph-mgr daemons, so ingest must publish every listed
+// manager as running while one is available, whichever agent sent the row, and
+// keep zero running when none is available. Other rows pass through unchanged.
+func TestApplyHostReportCountsStandbyCephManagersAsRunning(t *testing.T) {
+	cases := []struct {
+		name      string
+		available bool
+		mgr       agentshost.CephService
+		want      int
+	}{
+		{name: "older agent with an available manager", available: true, mgr: agentshost.CephService{Type: "mgr", Running: 1, Total: 3}, want: 3},
+		{name: "fixed agent with an available manager", available: true, mgr: agentshost.CephService{Type: "mgr", Running: 3, Total: 3}, want: 3},
+		{name: "no available manager", available: false, mgr: agentshost.CephService{Type: "mgr", Running: 0, Total: 2}, want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := &Monitor{
+				state:             models.NewState(),
+				alertManager:      alerts.NewManager(),
+				hostTokenBindings: make(map[string]string),
+				config:            &config.Config{},
+				rateTracker:       NewRateTracker(),
+			}
+			t.Cleanup(func() { monitor.alertManager.Stop() })
+
+			report := agentshost.Report{
+				Agent:     agentshost.AgentInfo{ID: "agent-ceph-mgr", Version: "1.0.0", IntervalSeconds: 30},
+				Host:      agentshost.HostInfo{ID: "pve1-host", Hostname: "pve1", Platform: "linux"},
+				Timestamp: time.Now().UTC(),
+				Ceph: &agentshost.CephCluster{
+					FSID:   "ceph-fsid-mgr",
+					Health: agentshost.CephHealth{Status: "HEALTH_OK"},
+					MgrMap: agentshost.CephManagerMap{Available: tc.available, NumMgrs: tc.mgr.Total, Standbys: 2},
+					Services: []agentshost.CephService{
+						{Type: "mon", Running: 2, Total: 3},
+						tc.mgr,
+						{Type: "osd", Running: 5, Total: 6},
+					},
+				},
+			}
+			if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+				t.Fatalf("ApplyHostReport: %v", err)
+			}
+
+			want := []models.CephServiceStatus{
+				{Type: "mon", Running: 2, Total: 3},
+				{Type: "mgr", Running: tc.want, Total: tc.mgr.Total},
+				{Type: "osd", Running: 5, Total: 6},
+			}
+			snapshot := monitor.state.GetSnapshot()
+			if len(snapshot.CephClusters) != 1 || !reflect.DeepEqual(snapshot.CephClusters[0].Services, want) {
+				t.Fatalf("Ceph cluster services = %+v, want %+v", snapshot.CephClusters, want)
+			}
+			if len(snapshot.Hosts) != 1 || snapshot.Hosts[0].Ceph == nil {
+				t.Fatalf("expected one host with Ceph data, got %+v", snapshot.Hosts)
+			}
+			hostRows := make([]models.CephServiceStatus, 0, len(snapshot.Hosts[0].Ceph.Services))
+			for _, svc := range snapshot.Hosts[0].Ceph.Services {
+				hostRows = append(hostRows, models.CephServiceStatus{Type: svc.Type, Running: svc.Running, Total: svc.Total})
+			}
+			if !reflect.DeepEqual(hostRows, want) {
+				t.Fatalf("host Ceph services = %+v, want %+v", hostRows, want)
+			}
+		})
+	}
+}
+
 func TestApplyHostReportMapsReclaimableMemoryCache(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),

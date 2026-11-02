@@ -116,7 +116,13 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
 function classify(resource: Resource): CephStatusFilter {
   const raw = (resource.ceph?.healthStatus ?? resource.status ?? '').toUpperCase();
   if (raw === 'HEALTH_OK' || raw === 'OK' || raw === 'ONLINE') return 'healthy';
-  if (raw === 'HEALTH_ERR' || raw === 'ERROR' || raw === 'CRITICAL' || raw === 'OFFLINE') {
+  if (
+    raw === 'HEALTH_ERR' ||
+    raw === 'ERR' ||
+    raw === 'ERROR' ||
+    raw === 'CRITICAL' ||
+    raw === 'OFFLINE'
+  ) {
     return 'critical';
   }
   if (raw === 'HEALTH_WARN' || raw === 'WARN' || raw === 'WARNING' || raw === 'DEGRADED') {

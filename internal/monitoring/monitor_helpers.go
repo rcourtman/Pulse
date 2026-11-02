@@ -933,13 +933,26 @@ func convertAgentCephToModels(ceph *agentshost.CephCluster) *models.HostCephClus
 	for _, svc := range ceph.Services {
 		result.Services = append(result.Services, models.HostCephService{
 			Type:    svc.Type,
-			Running: svc.Running,
+			Running: agentCephServiceRunning(ceph, svc),
 			Total:   svc.Total,
 			Daemons: svc.Daemons,
 		})
 	}
 
 	return result
+}
+
+// agentCephServiceRunning returns the running count for an agent service row.
+// Agents built before this fix counted only the active manager as running, so
+// a healthy cluster with two standby managers read "1 of 3 running". Standby
+// managers are running daemons that the monitors drop once their beacons stop,
+// so while a manager is available every listed manager counts as running,
+// whichever agent version sent the row.
+func agentCephServiceRunning(ceph *agentshost.CephCluster, svc agentshost.CephService) int {
+	if ceph.MgrMap.Available && strings.EqualFold(strings.TrimSpace(svc.Type), "mgr") {
+		return max(svc.Running, svc.Total)
+	}
+	return svc.Running
 }
 
 // convertAgentCephToGlobalCluster converts agent Ceph data to the global CephCluster format
@@ -1009,7 +1022,7 @@ func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hos
 	for _, svc := range ceph.Services {
 		cluster.Services = append(cluster.Services, models.CephServiceStatus{
 			Type:    svc.Type,
-			Running: svc.Running,
+			Running: agentCephServiceRunning(ceph, svc),
 			Total:   svc.Total,
 		})
 	}

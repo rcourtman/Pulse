@@ -339,6 +339,55 @@ func TestBuildReport(t *testing.T) {
 		mc.cephStatusFn = nil
 	})
 
+	// One active and two standby managers, in the Octopus+ `ceph status`
+	// summary and in the full mgr map of older releases. Standby managers are
+	// running daemons; only the absence of an available manager leaves the
+	// report's mgr row at zero running.
+	t.Run("Ceph standby managers count as running", func(t *testing.T) {
+		previousGOOS := mc.goos
+		t.Cleanup(func() {
+			mc.cephStatusFn = nil
+			mc.goos = previousGOOS
+		})
+		cases := []struct {
+			name           string
+			mgrmap         string
+			running, total int
+		}{
+			{name: "status summary", mgrmap: `{"available":true,"num_standbys":2,"modules":[],"services":{}}`, running: 3, total: 3},
+			{name: "full mgr map", mgrmap: `{"available":true,"active_name":"pve1","standbys":[{"name":"pve2"},{"name":"pve3"}]}`, running: 3, total: 3},
+			{name: "no available manager", mgrmap: `{"available":false,"num_standbys":2,"modules":[],"services":{}}`, running: 0, total: 2},
+		}
+		for _, tc := range cases {
+			status, err := parseCephStatus([]byte(`{"fsid":"ceph-fsid-mgr","health":{"status":"HEALTH_OK"},"mgrmap":` + tc.mgrmap + `}`))
+			if err != nil {
+				t.Fatalf("%s: parseCephStatus: %v", tc.name, err)
+			}
+			mc.cephStatusFn = func(ctx context.Context) (*CephClusterStatus, error) {
+				return status, nil
+			}
+			mc.goos = "linux"
+
+			report, err := agent.buildReport(context.Background())
+			if err != nil {
+				t.Fatalf("%s: buildReport failed: %v", tc.name, err)
+			}
+			if report.Ceph == nil {
+				t.Fatalf("%s: Ceph report is nil", tc.name)
+			}
+			var mgr *agentshost.CephService
+			for i := range report.Ceph.Services {
+				if report.Ceph.Services[i].Type == "mgr" {
+					mgr = &report.Ceph.Services[i]
+				}
+			}
+			if mgr == nil || mgr.Running != tc.running || mgr.Total != tc.total {
+				t.Errorf("%s: mgr service = %+v, want %d of %d running", tc.name, mgr, tc.running, tc.total)
+			}
+		}
+		mc.cephStatusFn = nil
+	})
+
 	// Test case 5: Unraid collection
 	t.Run("Unraid collection", func(t *testing.T) {
 		mc.unraidStorageFn = func(ctx context.Context) (*agentshost.UnraidStorage, error) {

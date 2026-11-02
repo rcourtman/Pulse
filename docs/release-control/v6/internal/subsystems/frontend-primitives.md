@@ -2548,6 +2548,16 @@ hover and as the accessible name. Grouped platform tables that already name
 the group in a shared grouped-table header row drop columns that would repeat
 the group's own value on every row.
 
+### Ceph health projections
+
+`ProxmoxCephTable` uses one health classification for the row, status-filter
+counts and drawer header. Native `HEALTH_ERR` and the server-normalized `ERR`
+both remain critical, including when no manager daemons are reported. A
+missing service tally must not turn explicit critical provider health into a
+healthy table verdict. Mounted regressions in `ProxmoxCephTable.test.tsx` pin
+the native/normalized vocabulary and selected/unselected critical filtering.
+
+
 ### Retained state in bounded platform windows
 
 `PlatformWindowedRows` and `PlatformWindowedList` keep one keyed renderer owner

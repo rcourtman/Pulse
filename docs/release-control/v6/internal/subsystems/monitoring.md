@@ -6124,6 +6124,21 @@ legacy Unraid raw-status normalization at host-agent ingest: when older agents s
 must derive the canonical disk status before storage-risk assessment runs so
 v5 aggregate counters do not override clearly healthy per-disk state during v6
 compatibility operation.
+Host-agent Ceph `mgr` service rows are normalized at the same ingest boundary
+in `internal/monitoring/monitor_helpers.go`. A standby manager is a running
+`ceph-mgr` that the monitors drop once its beacons stop, so while the reported
+mgr map is available every listed manager counts as running, and rows from
+agents that counted only the active manager never show a healthy cluster's
+standbys as stopped. Without an available manager the row keeps the agent's
+zero running. `internal/monitoring/monitor_host_agents_test.go` pins the cluster
+and host rows that ingest stores.
+Ceph health status, message and checks form one observation at the canonical
+state merge in `internal/models/ceph_cluster_identity.go`. An explicit status
+owns its details, including an empty message/check list, so healthy or changed
+reports cannot inherit an older or lower-priority incident. Only an absent
+status permits the existing health continuity fallback. Other topology/count
+fallbacks and source priority remain independent. `internal/models/state_host_test.go`
+checks recovery, source authority and missing-status continuity.
 Unraid long-running operation state uses the same authoritative transition
 boundary. A non-empty active sync action may carry progress; cancellation,
 completion, or idle state is represented by an empty action and normalized

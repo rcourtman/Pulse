@@ -467,12 +467,3 @@ func TestCollectCeph_UsagePercentFromDF(t *testing.T) {
 		t.Fatalf("expected collected timestamp set")
 	}
 }
-
-func TestCephBoolToInt(t *testing.T) {
-	if cephBoolToInt(true) != 1 {
-		t.Fatalf("expected cephBoolToInt(true)=1")
-	}
-	if cephBoolToInt(false) != 0 {
-		t.Fatalf("expected cephBoolToInt(false)=0")
-	}
-}

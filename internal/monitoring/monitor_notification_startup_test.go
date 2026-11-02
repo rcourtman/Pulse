@@ -305,21 +305,30 @@ func TestNewRestoresSharedWebhookPolicyBeforeQueueActivation(t *testing.T) {
 			}
 			defer m.Stop()
 			q := m.GetNotificationManager().GetQueue()
-			want := "dlq"
+			want := notifications.DeliveryOutcomeDeadLetter
 			if tc.allowed {
-				want = "sent"
+				want = notifications.DeliveryOutcomeSent
 			}
 			deadline := time.Now().Add(5 * time.Second)
 			for {
-				stats, err := q.GetQueueStats()
+				entries, err := q.GetDeliveryLog(time.Now().Add(-time.Hour), 10)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if stats[want] == 1 {
+				// A blocked destination can also queue a delivery-health alert.
+				// Observe the accepted row, not the total number of outcomes.
+				reached := false
+				for _, entry := range entries {
+					if entry.NotificationID == "accepted-before-restart" && entry.Outcome == want {
+						reached = true
+						break
+					}
+				}
+				if reached {
 					break
 				}
 				if time.Now().After(deadline) {
-					t.Fatalf("BOOTSTRAP_POLICY: accepted row did not reach %s before router construction: %v", want, stats)
+					t.Fatalf("BOOTSTRAP_POLICY: accepted row did not reach %s before router construction: %+v", want, entries)
 				}
 				time.Sleep(10 * time.Millisecond)
 			}
