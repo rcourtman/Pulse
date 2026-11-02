@@ -3,16 +3,49 @@ package pulsecli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/spf13/cobra"
 )
+
+func TestActionsRedirectPreservesStricterCallerPolicy(t *testing.T) {
+	for _, stop := range []error{errors.New("caller redirect denied"), http.ErrUseLastResponse} {
+		t.Run(stop.Error(), func(t *testing.T) {
+			var requests, callbacks atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				http.Redirect(w, r, "/accepted", http.StatusTemporaryRedirect)
+			}))
+			defer server.Close()
+			client := server.Client()
+			client.CheckRedirect = func(*http.Request, []*http.Request) error {
+				callbacks.Add(1)
+				return stop
+			}
+			_, _, err := executeCLIRedirectCommand(t, cliRedirectCommands()[3], server.URL, client)
+			if err == nil || (stop != http.ErrUseLastResponse && !errors.Is(err, stop)) {
+				t.Fatalf("caller refusal was lost: %v", err)
+			}
+			if stop == http.ErrUseLastResponse && !strings.Contains(err.Error(), "307 Temporary Redirect") {
+				t.Fatalf("last response was not handled as an HTTP refusal: %v", err)
+			}
+			if requests.Load() != 1 || callbacks.Load() != 1 {
+				t.Fatalf("requests=%d callbacks=%d, want one of each", requests.Load(), callbacks.Load())
+			}
+			if client.CheckRedirect(nil, nil) != stop {
+				t.Fatal("caller redirect policy was mutated")
+			}
+		})
+	}
+}
 
 func TestActionsPlanCommandPostsCanonicalRequest(t *testing.T) {
 	plannedAt := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
