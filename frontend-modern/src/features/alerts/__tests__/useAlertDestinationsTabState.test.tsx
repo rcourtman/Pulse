@@ -3,7 +3,7 @@ import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AlertsAPI } from '@/api/alerts';
-import { NotificationsAPI } from '@/api/notifications';
+import { NotificationsAPI, type NotificationTestResult } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { showErrorWithDetail } from '@/utils/toast';
 
@@ -87,9 +87,9 @@ describe('useAlertDestinationsTabState', () => {
       vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [] } as never);
       vi.mocked(AlertsAPI.getEvents).mockResolvedValue([]);
       const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
-      let accept!: (value: { success: boolean }) => void;
+      let accept!: (value: NotificationTestResult) => void;
       vi.mocked(NotificationsAPI.testNotification).mockReturnValueOnce(
-        new Promise((resolve) => {
+        new Promise<NotificationTestResult>((resolve) => {
           accept = resolve;
         }),
       );
@@ -111,7 +111,7 @@ describe('useAlertDestinationsTabState', () => {
       vi.mocked(notificationStore.success).mockClear();
       vi.mocked(notificationStore.warning).mockClear();
       vi.mocked(showErrorWithDetail).mockClear();
-      accept({ success: true });
+      accept({ status: 'success', message: 'Test notification sent', deliveryPaused: false });
       await pending;
       expect(notificationStore.success).not.toHaveBeenCalled();
       expect(notificationStore.warning).not.toHaveBeenCalled();

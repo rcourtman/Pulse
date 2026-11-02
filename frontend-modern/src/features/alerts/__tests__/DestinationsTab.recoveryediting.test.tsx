@@ -135,7 +135,7 @@ describe('DestinationsTab recovery while editing SMTP', () => {
     setLoading(false);
     expect(screen.queryByRole('textbox', { name: 'SMTP server' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Test/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Retry$/ }));
     expect(retry).toHaveBeenCalledOnce();
     expect(screen.getByText(/Destination details and controls stay hidden/)).toBeInTheDocument();
     setEmailConfig({ ...emailConfig(), server: 'smtp.current.example.test' });
