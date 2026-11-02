@@ -1075,6 +1075,20 @@ func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string,
 // GuestMetricHistory exposes native TrueNAS host history through the canonical
 // guest-chart boundary when local Pulse history is shallow.
 func (p *TrueNASPoller) GuestMetricHistory(_ *Monitor, orgID string, resourceType string, duration time.Duration) map[string]map[string][]MetricPoint {
+	return p.guestMetricHistory(orgID, resourceType, "", duration)
+}
+
+// GuestMetricHistoryForResource selects the exact tenant-local host before any
+// native read. A missing host must not turn a drawer request into a fleet scan.
+func (p *TrueNASPoller) GuestMetricHistoryForResource(_ *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return nil
+	}
+	return p.guestMetricHistory(orgID, resourceType, resourceID, duration)[resourceID]
+}
+
+func (p *TrueNASPoller) guestMetricHistory(orgID, resourceType, selectedID string, duration time.Duration) map[string]map[string][]MetricPoint {
 	if p == nil || !truenas.IsFeatureEnabled() || strings.TrimSpace(resourceType) != "agent" {
 		return nil
 	}
@@ -1094,6 +1108,9 @@ func (p *TrueNASPoller) GuestMetricHistory(_ *Monitor, orgID string, resourceTyp
 
 	history := make(map[string]map[string][]MetricPoint)
 	for _, entry := range entries {
+		if selectedID != "" && entry.provider.SystemMetricResourceID() != selectedID {
+			continue
+		}
 		resourceID, nativeHistory, err := entry.provider.SystemMetricHistory(ctx, duration)
 		if err != nil {
 			log.Warn().
@@ -1107,7 +1124,14 @@ func (p *TrueNASPoller) GuestMetricHistory(_ *Monitor, orgID string, resourceTyp
 			continue
 		}
 		resourceID = strings.TrimSpace(resourceID)
-		if resourceID == "" || len(nativeHistory) == 0 {
+		if resourceID == "" || len(nativeHistory) == 0 || (selectedID != "" && resourceID != selectedID) {
+			continue
+		}
+		// Do not return a provider removed or replaced while its read was in flight.
+		p.mu.Lock()
+		current := truenas.IsFeatureEnabled() && p.providersByOrg[orgID][entry.connectionID] == entry.provider
+		p.mu.Unlock()
+		if !current {
 			continue
 		}
 

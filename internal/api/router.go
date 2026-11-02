@@ -6816,7 +6816,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return points
 	}
 
-	guestChartMetrics := func() (map[string][]monitoring.MetricPoint, bool) {
+	guestChartMetrics := func(metricTypes ...string) (map[string][]monitoring.MetricPoint, bool) {
 		inMemoryKey := resourceID
 		sqlResourceType := ""
 		switch runtimeResourceType {
@@ -6838,7 +6838,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		default:
 			return nil, false
 		}
-		return monitor.GetGuestMetricsForChart(inMemoryKey, sqlResourceType, resourceID, duration), true
+		return monitor.GetGuestMetricsForChart(inMemoryKey, sqlResourceType, resourceID, duration, metricTypes...), true
 	}
 	guestChartSource := func() string {
 		if mock.IsMockEnabled() {
@@ -6893,7 +6893,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 		switch runtimeResourceType {
 		case "vm", "system-container", "oci-container":
-			metrics, _ := guestChartMetrics()
+			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -6904,7 +6904,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "docker-host":
-			metrics, _ := guestChartMetrics()
+			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -6915,7 +6915,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "agent":
-			metrics, _ := guestChartMetrics()
+			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				points = monitor.GetNodeMetrics(resourceID, metricType, duration)
@@ -6929,7 +6929,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "app-container":
-			metrics, _ := guestChartMetrics()
+			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -6940,7 +6940,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			return buildHistoryPoints(points, stepSecs), guestChartSource(), true
 		case "k8s":
-			metrics, _ := guestChartMetrics()
+			metrics, _ := guestChartMetrics(metricType)
 			points := metrics[metricType]
 			if len(points) == 0 {
 				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
@@ -7401,6 +7401,33 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				if points := supplementDiskTemperature(metricsMap["smart_temp"]); len(points) > 0 {
 					apiData["smart_temp"] = points
 					source = historySourceMemory
+				}
+			}
+
+			// A stored CPU/capacity row does not establish host I/O coverage.
+			// Ask only for missing directions; retain every stored series and
+			// the native parser's complete-member/coincident-time requirement.
+			if runtimeResourceType == "agent" && !mock.IsMockEnabled() {
+				var missing []string
+				for _, metric := range []string{"diskread", "diskwrite"} {
+					if len(apiData[metric]) == 0 {
+						missing = append(missing, metric)
+					}
+				}
+				if len(missing) > 0 {
+					fallback, _ := guestChartMetrics(missing...)
+					for _, metric := range missing {
+						var withinWindow []monitoring.MetricPoint
+						for _, point := range fallback[metric] {
+							if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
+								withinWindow = append(withinWindow, point)
+							}
+						}
+						if len(withinWindow) > 0 {
+							apiData[metric] = buildHistoryPoints(withinWindow, stepSecs)
+							source = historySourceMemory
+						}
+					}
 				}
 			}
 
