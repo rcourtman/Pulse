@@ -16,6 +16,24 @@
 
 ## Purpose
 
+### Agent installer completion retains failed startup
+
+The shared Unix agent completion path must return service-start failure exit
+13 when startup verification fails, including the reinstall/upgrade path.
+Its existing unhealthy JSON codes carry the same nonzero exitCode. The binary
+and service files having been written do not establish successful installation.
+Both paths retain saved state and display their platform's read-only log hint;
+neither suggests uninstalling as diagnosis or falls through to completion.
+Authentication rejection remains exit 18, and healthy/pending-registration
+behaviour is unchanged. No automatic rollback, privilege expansion or service
+mutation is added to the failure handler.
+
+`TestAgentInstallerStartupCompletion` in the ordinary installer test inventory
+checks the production verification/completion/JSON chain, caller exit, both
+health-check modes, existing authentication refusal and synthetic state
+preservation. Confined observation doubles are not native service acceptance
+or proof of the cause of a reported offline host.
+
 ### Served agent installers publish as a complete script bundle
 
 The archive and source server installers share one script-publication path.

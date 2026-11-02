@@ -3591,15 +3591,19 @@ complete_installation_flow() {
         exit "$EXIT_AUTH_REJECTED"
     else
         if [[ "$UPGRADE_MODE" == "true" ]]; then
-            log_warn "Upgrade complete, but the agent may not be running correctly."
-            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+            log_error "Agent binary was updated, but startup verification failed; upgrade is not complete."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding" "$EXIT_SERVICE_START_FAILED"
         else
-            log_warn "Installation complete, but the agent may not be running correctly."
-            if [[ -n "$unhealthy_log_hint" ]]; then
-                log_warn "Check logs: $unhealthy_log_hint"
-            fi
-            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+            log_error "Agent files were installed, but startup verification failed; installation is not complete."
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding" "$EXIT_SERVICE_START_FAILED"
         fi
+        if [[ -n "$unhealthy_log_hint" ]]; then
+            log_warn "Check logs: $unhealthy_log_hint"
+        else
+            log_warn "Check the agent service status and logs before attempting another update."
+        fi
+        log_warn "Do not uninstall the agent or delete its saved state to diagnose this failure."
+        exit "$EXIT_SERVICE_START_FAILED"
     fi
 
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then

@@ -15,6 +15,26 @@
 
 ## Purpose
 
+### Unix installer startup failure is not successful completion
+
+Fresh and upgrade callers of `complete_installation_flow` require successful
+startup verification before reporting success. A missing process or expired
+readiness window returns the existing service-start failure exit 13 and the
+matching `installed_unhealthy` or `updated_unhealthy` JSON event with exitCode
+13, rather than a successful completion. Authentication rejection remains exit
+18; a ready process whose registration is not yet confirmed keeps its existing
+warning and registration-retry behaviour.
+
+Both fresh and upgrade failures show the supplied platform-specific log command,
+or a service-status/log hint when none is available. They stop before success
+and uninstall guidance, without deleting saved state or automatically relaxing
+service isolation, changing credentials or retrying installation. This is not
+binary rollback, sustained native health or original-host recovery.
+
+`TestAgentInstallerStartupCompletion` exercises the production verification,
+JSON writer and completion chain with confined process/readiness/registration
+observations, including disabled health checks and retained synthetic state.
+
 ### Slow Assistant JSON reads do not own work cancellation
 
 The synchronous execute and Kubernetes-analysis routes retain current API-token

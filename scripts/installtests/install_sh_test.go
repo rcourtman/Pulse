@@ -9155,3 +9155,165 @@ func TestInstallSHNASRemovalTreatsLiveUnraidGoShellAsUnknownOwner(t *testing.T) 
 		})
 	}
 }
+
+// Exercise the production verification/completion chain, including its real
+// JSON writer and caller's unconditional exit 0. Only process/readiness and
+// server-registration observations are doubles: no service, installer download
+// or customer state is operated by these tests.
+func TestAgentInstallerStartupCompletion(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix installer startup completion")
+	}
+	functions := ""
+	for _, name := range []string{"json_event", "resolve_agent_health_url", "verify_agent_started", "complete_installation_flow"} {
+		functions += extractInstallShellFunction(t, name) + "\n"
+	}
+	for _, tc := range []struct {
+		name, hint, code                        string
+		upgrade, running, ready, healthDisabled bool
+		persisted                               bool
+		registration, exit                      int
+	}{
+		{name: "fresh-stopped", code: "installed_unhealthy", hint: "journalctl -u pulse-agent --no-pager -n 20", exit: 13},
+		{name: "upgrade-stopped", upgrade: true, persisted: true, code: "updated_unhealthy", hint: "journalctl -u pulse-agent --no-pager -n 20", exit: 13},
+		{name: "upgrade-alive-but-unready", upgrade: true, running: true, code: "updated_unhealthy", hint: "tail -f /fixture/agent.log", exit: 13},
+		{name: "disabled-health-stopped", upgrade: true, healthDisabled: true, code: "updated_unhealthy", exit: 13},
+		{name: "fresh-ready", running: true, ready: true, code: "installed"},
+		{name: "upgrade-ready", upgrade: true, running: true, ready: true, persisted: true, code: "updated"},
+		{name: "registration-pending", upgrade: true, running: true, ready: true, registration: 1, code: "updated"},
+		{name: "disabled-health-running", upgrade: true, running: true, healthDisabled: true, code: "updated"},
+		{name: "credential-rejected", upgrade: true, running: true, ready: true, registration: 2, code: "auth_rejected", exit: 18},
+		{name: "disabled-health-credential-rejected", upgrade: true, running: true, healthDisabled: true, registration: 2, code: "auth_rejected", exit: 18},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			// Failed completion must not propose deletion or mutate the already
+			// installed identity, credential, configuration or recovery script.
+			preserved := map[string]string{
+				"agent-id": "synthetic-existing-identity\n", "token": "synthetic-credential\n",
+				"connection.env": "synthetic-existing-configuration\n", "install.sh": "synthetic-retained-recovery-script\n",
+			}
+			for name, value := range preserved {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			health := "127.0.0.1:9191"
+			if tc.healthDisabled {
+				health = ""
+			}
+			script := fmt.Sprintf(`set -euo pipefail
+OUTPUT_FORMAT=json
+EXIT_AUTH_REJECTED=18
+EXIT_SERVICE_START_FAILED=13
+UPGRADE_MODE=%t
+CONNECTION_INFO_PERSISTED=%t
+SAVED_INSTALL_SCRIPT=%q
+HEALTH_ADDR_SET=%t
+HEALTH_ADDR=%q
+LOG_FILE=%q
+save_connection_info() { printf 'SAVE-CONNECTION\n'; }
+sleep() { :; }
+curl() { return %d; }
+agent_process_running() { return %d; }
+verify_agent_server_registration_with_retry() { return %d; }
+warn_agent_token_rejected() { printf 'CREDENTIAL-REJECTED\n'; }
+report_proxmox_registration_outcome() { printf 'PROXMOX-OUTCOME\n'; }
+log_info() { printf 'INFO:%%s\n' "$*"; }
+log_warn() { printf 'WARN:%%s\n' "$*"; }
+log_error() { printf 'ERROR:%%s\n' "$*"; }
+`, tc.upgrade, tc.persisted, filepath.Join(dir, "install.sh"), tc.healthDisabled, health,
+				filepath.Join(dir, "absent.log"), agentStartupObservationExit(tc.ready), agentStartupObservationExit(tc.running), tc.registration) + functions + fmt.Sprintf(`
+complete_installation_flow %q 'INSTALL-SUCCESS' 'UPGRADE-SUCCESS' %q
+printf 'AFTER-COMPLETION\n'
+exit 0
+`, dir, tc.hint)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			output, err := exec.CommandContext(ctx, "bash", "-c", script).CombinedOutput()
+			exit := 0
+			if err != nil {
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) {
+					t.Fatalf("completion command: %v\n%s", err, output)
+				}
+				exit = exitErr.ExitCode()
+			}
+			if ctx.Err() != nil || exit != tc.exit {
+				t.Fatalf("completion exit = %d (%v), want %d\n%s", exit, ctx.Err(), tc.exit, output)
+			}
+			text := string(output)
+			var events []struct {
+				Phase, Code string
+				ExitCode    int
+			}
+			for _, line := range strings.Split(text, "\n") {
+				if !strings.HasPrefix(line, "{") {
+					continue
+				}
+				var event struct {
+					Phase, Code string
+					ExitCode    int
+				}
+				if err := json.Unmarshal([]byte(line), &event); err != nil {
+					t.Fatalf("invalid production JSON: %v\n%s", err, output)
+				}
+				events = append(events, event)
+			}
+			if len(events) != 1 || events[0].Phase != "complete" || events[0].Code != tc.code || events[0].ExitCode != tc.exit {
+				t.Fatalf("completion event = %+v, want complete/%s/%d\n%s", events, tc.code, tc.exit, output)
+			}
+			wantSaves := 1
+			if tc.persisted {
+				wantSaves = 0
+			}
+			if strings.Count(text, "SAVE-CONNECTION\n") != wantSaves {
+				t.Fatalf("saved connection persistence changed:\n%s", output)
+			}
+			if tc.exit != 0 {
+				for _, forbidden := range []string{"INSTALL-SUCCESS", "UPGRADE-SUCCESS", "AFTER-COMPLETION", "PROXMOX-OUTCOME", "To uninstall later:", "Upgrade complete", "Installation complete"} {
+					if strings.Contains(text, forbidden) {
+						t.Fatalf("failed completion emitted %q:\n%s", forbidden, output)
+					}
+				}
+			} else {
+				want := "INSTALL-SUCCESS"
+				if tc.upgrade {
+					want = "UPGRADE-SUCCESS"
+				}
+				for _, required := range []string{want, "AFTER-COMPLETION", "PROXMOX-OUTCOME", "To uninstall later:"} {
+					if !strings.Contains(text, required) {
+						t.Fatalf("successful completion missing %q:\n%s", required, output)
+					}
+				}
+			}
+			if tc.exit == 13 {
+				for _, required := range []string{"startup verification failed", "not complete", "Do not uninstall the agent or delete its saved state"} {
+					if !strings.Contains(text, required) {
+						t.Fatalf("failed startup missing %q:\n%s", required, output)
+					}
+				}
+				if tc.hint != "" && !strings.Contains(text, "Check logs: "+tc.hint) {
+					t.Fatalf("failed startup omitted its platform-specific log command:\n%s", output)
+				}
+				if tc.hint == "" && !strings.Contains(text, "Check the agent service status and logs") {
+					t.Fatalf("failed startup without a platform hint lost its diagnostic guidance:\n%s", output)
+				}
+			}
+			for name, value := range preserved {
+				got, err := os.ReadFile(filepath.Join(dir, name))
+				info, statErr := os.Stat(filepath.Join(dir, name))
+				if err != nil || statErr != nil || string(got) != value || info.Mode().Perm() != 0600 {
+					t.Fatalf("completion changed saved %s: read=%v stat=%v", name, err, statErr)
+				}
+			}
+		})
+	}
+}
+
+func agentStartupObservationExit(ok bool) int {
+	if ok {
+		return 0
+	}
+	return 1
+}
