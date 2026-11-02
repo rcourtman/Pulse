@@ -576,10 +576,7 @@ function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number
   return (
     <tr class={getGroupedTableRowClass()} data-backup-server-group={props.group.serverName}>
       <td colspan={props.colSpan} class={getGroupedTableRowCellClass()}>
-        <div
-          class={`flex min-w-0 items-center gap-2 ${props.group.online ? '' : 'opacity-60'}`}
-          title={props.group.connectionLabel}
-        >
+        <div class="flex min-w-0 items-center gap-2" title={props.group.connectionLabel}>
           <StatusDot
             variant={props.group.online ? 'success' : 'danger'}
             title={props.group.connectionLabel}
@@ -597,6 +594,15 @@ function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number
           <Show when={count() > 0}>
             <span class={`shrink-0 ${GROUPED_TABLE_ROW_META_CLASS}`}>
               {count()} {count() === 1 ? 'datastore' : 'datastores'}
+            </span>
+          </Show>
+          {/* Connection health is the server's, so only its header says it. */}
+          <Show when={!props.group.online}>
+            <span
+              class="shrink-0 text-[10px] font-medium text-red-600 dark:text-red-400"
+              data-backup-server-connection
+            >
+              {props.group.connectionLabel}
             </span>
           </Show>
         </div>
@@ -631,9 +637,12 @@ export function ProxmoxBackupServersTable(props: {
   const detail = createPlatformResourceDetailState({ idPrefix: 'proxmox-backup-server-detail' });
   const columnVisible = (column: BackupServerColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
-  // The phone layout has no Jobs column. A reachable server whose datastore
-  // job failed or is overdue is not "OK", so State names the job instead;
-  // an unreachable server keeps its connection state, the bigger problem.
+  const serverCount = () => tableItems().filter((item) => item.kind === 'server').length;
+  // Only the phone layout has State, because it has no Jobs column and no
+  // room beside the percentage. State answers for the datastore: a fill
+  // forecast or a job problem, else its job result. Connection health is the
+  // server's and lives on its header, except that a datastore on an
+  // unreachable server cannot be read, so State says so.
   const showJobProblemAsState = (row: BackupServerRow) =>
     !columnVisible('jobs') &&
     row.online &&
@@ -647,6 +656,14 @@ export function ProxmoxBackupServersTable(props: {
         data-proxmox-backups-layout={layoutMode()}
       >
         <PlatformTableShell
+          title={
+            <span class="inline-flex items-center gap-1.5" data-backup-servers-title>
+              Backup servers
+              <span class="font-semibold tabular-nums text-base-content">
+                {formatPlatformTableIntegerValue(serverCount())}
+              </span>
+            </span>
+          }
           tableClass="min-w-0 table-fixed text-xs"
           colgroup={
             <colgroup>
@@ -663,9 +680,9 @@ export function ProxmoxBackupServersTable(props: {
           header={
             <>
               <TableHead class={`${getPlatformTableHeadClassForKind('name')}`}>Datastore</TableHead>
-              <TableHead class={`${getPlatformTableHeadClassForKind('text')}`}>
-                <PlatformResponsiveTableLabel compact="State" full="Status" />
-              </TableHead>
+              <Show when={columnVisible('status')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>State</TableHead>
+              </Show>
               <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')}`}>
                 Used
               </TableHead>
@@ -785,52 +802,57 @@ export function ProxmoxBackupServersTable(props: {
                             </Show>
                           </div>
                         </TableCell>
-                        <TableCell class={getPlatformTableCellClassForKind('text')}>
-                          <Show
-                            when={showForecastAsState() ? forecast() : null}
-                            fallback={
-                              <Show
-                                when={!showJobProblemAsState(row)}
-                                fallback={
-                                  <span
-                                    class={`block truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
-                                    title={describeDatastoreJobs(row.jobs)}
-                                    data-backup-server-jobs={row.jobs.state}
+                        <Show when={columnVisible('status')}>
+                          <TableCell class={getPlatformTableCellClassForKind('text')}>
+                            <Show
+                              when={showForecastAsState() ? forecast() : null}
+                              fallback={
+                                <Show
+                                  when={!showJobProblemAsState(row)}
+                                  fallback={
+                                    <span
+                                      class={`block truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
+                                      title={describeDatastoreJobs(row.jobs)}
+                                      data-backup-server-jobs={row.jobs.state}
+                                    >
+                                      {row.jobs.label}
+                                    </span>
+                                  }
+                                >
+                                  <Show
+                                    when={row.online}
+                                    fallback={
+                                      <span
+                                        class="block truncate text-[11px] text-red-600 dark:text-red-400"
+                                        title={`${row.serverName}: ${row.connectionLabel}`}
+                                      >
+                                        Unreachable
+                                      </span>
+                                    }
                                   >
-                                    {row.jobs.label}
-                                  </span>
-                                }
-                              >
-                                <div class="flex items-center gap-2">
-                                  <Show when={layoutMode() !== 'compact'}>
-                                    <StatusDot
-                                      size="sm"
-                                      variant={row.online ? 'success' : 'danger'}
-                                      title={row.connectionLabel}
-                                      ariaHidden
-                                    />
+                                    <span
+                                      class={`block truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
+                                      title={describeDatastoreJobs(row.jobs)}
+                                      data-backup-server-jobs={row.jobs.state}
+                                    >
+                                      {row.jobs.label}
+                                    </span>
                                   </Show>
-                                  <span
-                                    class="truncate text-[11px] text-base-content"
-                                    title={row.connectionLabel}
-                                  >
-                                    {row.connectionLabel}
-                                  </span>
-                                </div>
-                              </Show>
-                            }
-                          >
-                            {(fill) => (
-                              <span
-                                class={`block truncate text-[11px] font-medium ${forecastToneClass(fill())}`}
-                                title={fill().detail}
-                                data-backup-server-forecast={fill().level}
-                              >
-                                {fill().shortLabel}
-                              </span>
-                            )}
-                          </Show>
-                        </TableCell>
+                                </Show>
+                              }
+                            >
+                              {(fill) => (
+                                <span
+                                  class={`block truncate text-[11px] font-medium ${forecastToneClass(fill())}`}
+                                  title={fill().detail}
+                                  data-backup-server-forecast={fill().level}
+                                >
+                                  {fill().shortLabel}
+                                </span>
+                              )}
+                            </Show>
+                          </TableCell>
+                        </Show>
                         <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
                           <Show
                             when={row.datastore}

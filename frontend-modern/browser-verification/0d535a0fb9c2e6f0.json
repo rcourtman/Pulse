@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "d9af9b724b88a49f098acc3fb08bb574cb62a991",
+  "verified_at": "2026-11-02T22:58:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "93227af2230081f369cb85cc3df65b0f5262abbcad938451e260728274ddc71e",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "e671b11421a0b796237884ae0fea22fde17845d244730f2031ff1af2e4224ffb"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode built from this change on pulse-dev: two PBS servers, backup-vault with two datastores and dr-vault with one",
+    "real-config clone built from this change on pulse-dev, one PBS with two datastores",
+    "desktop and phone layouts, dark theme"
+  ],
+  "interactions": [
+    "opened Proxmox > Backups at 1440x1000: the table is titled BACKUP SERVERS 2, each server has a header row with status dot, name and datastore count, and datastore rows show Used, Jobs, Backups and Dedup with no per-row Healthy",
+    "at 375x812 the table shows Datastore, State and Used; State carries the datastore job result, header and datastore rows are 32px, and there is no horizontal page overflow",
+    "expanded a datastore drawer and a Coverage workload row: both still open under the grouped rows",
+    "unit coverage pins the title count, connection health on the header only, the compact State values, and widths for every layout"
+  ]
+}

@@ -115,7 +115,7 @@ describe('selected PBS datastore inspection', () => {
       expect(field('Capacity')).not.toHaveTextContent('0.0%');
       expect(field('Capacity')).not.toHaveTextContent('0 B');
       expect(field('Backup entries')).toHaveTextContent('0');
-      expect(screen.getAllByText('Healthy').length).toBeGreaterThan(0);
+      expect(screen.getAllByRole('img', { name: 'Healthy' }).length).toBeGreaterThan(0);
     },
   );
 

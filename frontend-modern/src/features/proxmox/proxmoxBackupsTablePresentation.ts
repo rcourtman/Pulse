@@ -57,7 +57,7 @@ export const getRecoverableLayoutForContainer = (width: number): ProxmoxBackupsT
 
 export const BACKUP_SERVER_COLUMNS: readonly BackupTableColumn<BackupServerColumnId>[] = [
   { id: 'datastore', label: 'Datastore', kind: 'name' },
-  { id: 'status', label: 'Status', kind: 'text' },
+  { id: 'status', label: 'State', kind: 'text' },
   { id: 'used', label: 'Used', kind: 'numeric-value' },
   { id: 'jobs', label: 'Jobs', kind: 'text' },
   { id: 'backups', label: 'Backups', kind: 'numeric-value' },
@@ -68,19 +68,18 @@ const BACKUP_SERVER_VISIBLE: Record<
   ProxmoxBackupsTableLayoutMode,
   readonly BackupServerColumnId[]
 > = {
-  // Reachability and datastore exhaustion are the two risks that can stop all
-  // future backups, so every layout keeps them whole ("Healthy", "33.6%"). Job
-  // results (GC, prune, verify, sync) are the next answer; on phones a job
-  // problem or a fill forecast takes State instead. The backup count and dedup
-  // follow as width allows; Coverage and By date already answer per guest.
-  // Host CPU, memory, uptime and version live in the server's drawer, with
-  // their history: they say whether the box is alive, which Status already
-  // answers, and took the row's room from the datastore answers.
+  // Datastore exhaustion can stop all future backups, so every layout keeps
+  // Used whole ("33.6%"). Server reachability is on each server's header row,
+  // not repeated on its datastores. Job results (GC, prune, verify, sync) are
+  // the next answer; phones have no Jobs column, so State carries a job
+  // result, a job problem or a fill forecast instead. The backup count and
+  // dedup follow as width allows; Coverage and By date already answer per
+  // guest. Host CPU, memory, uptime and version live in the server's drawer.
   compact: ['datastore', 'status', 'used'],
-  basic: ['datastore', 'status', 'used', 'jobs'],
-  operational: ['datastore', 'status', 'used', 'jobs', 'backups'],
-  expanded: BACKUP_SERVER_COLUMNS.map((column) => column.id),
-  full: BACKUP_SERVER_COLUMNS.map((column) => column.id),
+  basic: ['datastore', 'used', 'jobs'],
+  operational: ['datastore', 'used', 'jobs', 'backups'],
+  expanded: ['datastore', 'used', 'jobs', 'backups', 'dedup'],
+  full: ['datastore', 'used', 'jobs', 'backups', 'dedup'],
 };
 
 const BACKUP_SERVER_WEIGHTS: Record<
@@ -89,20 +88,19 @@ const BACKUP_SERVER_WEIGHTS: Record<
 > = {
   // State must fit a job problem ("Sync failed", "Verify late") or a fill
   // forecast ("Full in ~4d") because the phone layout has no Jobs column, and
-  // capacity must fit "Unavailable". The datastore name, with its server in
-  // muted text, keeps the shared 40% identity anchor and truncates the server
-  // first. The compact status omits its redundant dot.
+  // capacity must fit "Unavailable". The datastore name keeps the shared 40%
+  // identity anchor.
   compact: { datastore: 40, status: 30, used: 30 },
   // Jobs must fit "Verify failed" and Used must fit "Unavailable" or a fill
   // forecast pill, not just short values. The 30% identity anchor below still
   // owns the datastore column in this band.
-  basic: { datastore: 30, status: 17.6, used: 30.9, jobs: 21.5 },
+  basic: { datastore: 30, used: 39, jobs: 31 },
   // Used carries a percentage plus the used/total pair or the forecast pill,
   // the longest value in the row, so it keeps the widest share.
-  operational: { datastore: 34, status: 13, used: 22, jobs: 20, backups: 11 },
+  operational: { datastore: 36, used: 28, jobs: 23, backups: 13 },
   // At the 900px breakpoint Count needs 9% (81px) to fit "Unavailable".
-  expanded: { datastore: 34, status: 12, used: 21, jobs: 16, backups: 9, dedup: 8 },
-  full: { datastore: 34, status: 11, used: 20, jobs: 19, backups: 8, dedup: 8 },
+  expanded: { datastore: 36, used: 26, jobs: 20, backups: 10, dedup: 8 },
+  full: { datastore: 36, used: 26, jobs: 22, backups: 8, dedup: 8 },
 };
 
 export const getBackupServerColumns = (

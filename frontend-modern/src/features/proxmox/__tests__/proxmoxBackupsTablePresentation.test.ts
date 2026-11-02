@@ -40,17 +40,17 @@ describe('Proxmox backups responsive table presentation', () => {
     }
   });
 
-  it('keeps server reachability and datastore exhaustion risk visible first', () => {
-    // Each row is a datastore, named first with its server beside it, so there
-    // is no separate server or datastore column to read as a second server.
+  it('keeps datastore exhaustion risk visible first and reachability on the server header', () => {
+    // Each row is a datastore under its server's header row, which carries the
+    // server's reachability. Only phones keep State, for the datastore's jobs
+    // and fill forecast, because they have no Jobs column.
     expect(ids(getBackupServerColumns('compact'))).toEqual(['datastore', 'status', 'used']);
     expect(getBackupServerColumnWidthStyle('datastore', 'compact')).toEqual({ width: '40%' });
     expect(getBackupServerColumnWidthStyle('status', 'compact')).toEqual({ width: '30%' });
     expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '30%' });
-    expect(ids(getBackupServerColumns('basic'))).toEqual(['datastore', 'status', 'used', 'jobs']);
+    expect(ids(getBackupServerColumns('basic'))).toEqual(['datastore', 'used', 'jobs']);
     expect(ids(getBackupServerColumns('operational'))).toEqual([
       'datastore',
-      'status',
       'used',
       'jobs',
       'backups',
@@ -58,7 +58,6 @@ describe('Proxmox backups responsive table presentation', () => {
     // Host CPU, memory, uptime and version live in the server's drawer.
     expect(ids(getBackupServerColumns('full'))).toEqual([
       'datastore',
-      'status',
       'used',
       'jobs',
       'backups',
@@ -67,8 +66,8 @@ describe('Proxmox backups responsive table presentation', () => {
   });
 
   it.each([
-    ['operational', '11%'],
-    ['expanded', '9%'],
+    ['operational', '13%'],
+    ['expanded', '10%'],
     ['full', '8%'],
   ] as const)(
     'reserves room for nonnumeric inventory states in %s count cells',
@@ -85,10 +84,10 @@ describe('Proxmox backups responsive table presentation', () => {
   );
 
   it.each([
-    ['basic', '21.5%'],
-    ['operational', '20%'],
-    ['expanded', '16%'],
-    ['full', '19%'],
+    ['basic', '31%'],
+    ['operational', '23%'],
+    ['expanded', '20%'],
+    ['full', '22%'],
   ] as const)('fits a worded job result such as "Verify failed" in %s', (layout, width) => {
     expect(getBackupServerColumnWidthStyle('jobs', layout)).toEqual({ width });
     const total = getBackupServerColumns(layout).reduce(

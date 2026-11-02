@@ -236,7 +236,9 @@ status is merely unclear no longer does.
 resource, keyed by resource and datastore, with unchanged drawers. A header row
 per resource now carries the resource's name, web-interface link, connection
 status and datastore count, so datastore rows no longer repeat the resource
-name or link. The State cell still reads the resource's connection status.
+name or link. Connection status renders only on the header; datastore rows
+carry no connection cell, and the compact State cell reads the datastore's job
+summary or fill forecast, or "Unreachable" when the resource is not reachable.
 
 ### Backup servers rows name the datastore, then its PBS resource (2 November 2026)
 

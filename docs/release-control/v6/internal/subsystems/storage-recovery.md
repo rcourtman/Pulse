@@ -5115,7 +5115,11 @@ guest tables group by node. Datastore rows are named by the datastore alone. A
 server with no datastore data keeps its reachability row, and its header
 claims no count, because an empty read is not proof of no datastores. The
 earlier note that each row carries its server's name and web link is
-historical.
+historical. The table is titled "Backup servers" with the number of servers.
+Datastore rows no longer show "Healthy": that was the server's connection, and
+it read as the datastore and its backups being fine. Connection health is on
+the server header; phones keep a State column for the datastore's job result,
+a job problem or a fill forecast.
 
 ### Backup servers rows are named by their datastore (2 November 2026)
 

@@ -78,7 +78,8 @@ describe('PBS datastore capacity evidence', () => {
     );
     expect(container.textContent).not.toContain('2.0×');
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
-    expect(within(container).getByText('Healthy')).toBeInTheDocument();
+    // Connection health is on the server header, independent of capacity.
+    expect(within(container).getByRole('img', { name: 'Healthy' })).toBeInTheDocument();
   });
 
   it.each([NaN, -1, null, '0'])(
