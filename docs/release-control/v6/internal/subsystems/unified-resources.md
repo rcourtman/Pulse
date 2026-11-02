@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Resource memory and disk percentages validate their byte pair (2 November 2026)
+
+`getMemoryPercent` and `getDiskPercent` in `frontend-modern/src/types/resource.ts`
+use the used/total byte pair only when it is valid: finite non-negative used,
+positive total, used no more than total. A valid pair wins, including a
+measured zero; `used: 0` used to read as absent, so a stale 99% selection
+showed instead. Otherwise a finite 0-100 `current` stands in, and anything else
+returns `undefined` rather than NaN or a made-up 0, so the drawer shows no
+reading. Drawer callers already pass the value through `finiteMetric`; the
+unused `topByMemory` sort ranks no reading as 0. `resource.test.ts` and
+`ResourceDetailDrawer.history.test.tsx` cover measured zero, invalid pairs and
+percentage-only readings.
+
 ### Compact Proxmox node Disk cells show the fullest disk (2 November 2026)
 
 A compact Proxmox node row (phone width or compact metrics) has no room for

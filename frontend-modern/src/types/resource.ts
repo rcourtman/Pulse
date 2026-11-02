@@ -1744,24 +1744,31 @@ export function getCpuPercent(r: Resource): number {
   return r.cpu?.current ?? 0;
 }
 
-/**
- * Helper to get memory percentage
- */
-export function getMemoryPercent(r: Resource): number {
-  if (!r.memory) return 0;
-  if (r.memory.total && r.memory.used) {
-    return (r.memory.used / r.memory.total) * 100;
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+// A valid byte pair is the measurement, including a measured zero: `used: 0`
+// is not absence. Only when the pair is missing or invalid does the selected
+// percentage stand in, and only within 0-100. Anything else is no reading.
+const getResourceMetricPercent = (metric: ResourceMetric | undefined): number | undefined => {
+  if (!metric) return undefined;
+  const { used, total, current } = metric;
+  if (isFiniteNumber(used) && isFiniteNumber(total) && used >= 0 && total > 0 && used <= total) {
+    return (used / total) * 100;
   }
-  return r.memory.current;
+  return isFiniteNumber(current) && current >= 0 && current <= 100 ? current : undefined;
+};
+
+/**
+ * Helper to get memory percentage; undefined when the resource has no valid reading.
+ */
+export function getMemoryPercent(r: Resource): number | undefined {
+  return getResourceMetricPercent(r.memory);
 }
 
 /**
- * Helper to get disk percentage
+ * Helper to get disk percentage; undefined when the resource has no valid reading.
  */
-export function getDiskPercent(r: Resource): number {
-  if (!r.disk) return 0;
-  if (r.disk.total && r.disk.used) {
-    return (r.disk.used / r.disk.total) * 100;
-  }
-  return r.disk.current;
+export function getDiskPercent(r: Resource): number | undefined {
+  return getResourceMetricPercent(r.disk);
 }

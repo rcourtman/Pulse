@@ -242,7 +242,7 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
   const topByMemory = (limit: number = 10): Resource[] => {
     return [...resources()]
       .filter((r) => r.memory)
-      .sort((a, b) => getMemoryPercent(b) - getMemoryPercent(a))
+      .sort((a, b) => (getMemoryPercent(b) ?? 0) - (getMemoryPercent(a) ?? 0))
       .slice(0, limit);
   };
 

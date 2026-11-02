@@ -743,17 +743,42 @@ describe('Resource Helper Functions', () => {
       expect(getMemoryPercent(resource)).toBe(45.5);
     });
 
-    it('returns 0 when memory is undefined', () => {
+    it('returns undefined when memory is undefined', () => {
       const resource = createResource({});
-      expect(getMemoryPercent(resource)).toBe(0);
+      expect(getMemoryPercent(resource)).toBeUndefined();
     });
 
     it('handles zero total gracefully', () => {
       const resource = createResource({
         memory: { current: 50, total: 0, used: 0 },
       });
-      // When total is 0 (falsy), it should fall back to current
+      // A zero total is not a valid pair, so the percentage stands in.
       expect(getMemoryPercent(resource)).toBe(50);
+    });
+
+    it('reads a measured zero from a valid pair instead of the percentage', () => {
+      const resource = createResource({
+        memory: { current: 99, total: 1000, used: 0 },
+      });
+      expect(getMemoryPercent(resource)).toBe(0);
+    });
+
+    it.each([
+      ['used above total', { used: 2000, total: 1000 }],
+      ['negative used', { used: -1, total: 1000 }],
+      ['negative total', { used: 10, total: -1000 }],
+      ['non-finite used', { used: Number.NaN, total: 1000 }],
+      ['non-finite total', { used: 10, total: Number.POSITIVE_INFINITY }],
+    ])('keeps a valid percentage when the pair is invalid (%s)', (_label, pair) => {
+      const resource = createResource({ memory: { current: 42, ...pair } });
+      expect(getMemoryPercent(resource)).toBe(42);
+    });
+
+    it('returns undefined when neither the pair nor the percentage is valid', () => {
+      for (const current of [Number.NaN, -5, 101, Number.POSITIVE_INFINITY]) {
+        const resource = createResource({ memory: { current, total: 1000, used: 2000 } });
+        expect(getMemoryPercent(resource)).toBeUndefined();
+      }
     });
   });
 
@@ -772,9 +797,21 @@ describe('Resource Helper Functions', () => {
       expect(getDiskPercent(resource)).toBe(80.2);
     });
 
-    it('returns 0 when disk is undefined', () => {
+    it('returns undefined when disk is undefined', () => {
       const resource = createResource({});
-      expect(getDiskPercent(resource)).toBe(0);
+      expect(getDiskPercent(resource)).toBeUndefined();
+    });
+
+    it('reads a measured zero and ignores an invalid pair, as memory does', () => {
+      expect(getDiskPercent(createResource({ disk: { current: 70, total: 500, used: 0 } }))).toBe(
+        0,
+      );
+      expect(getDiskPercent(createResource({ disk: { current: 70, total: 500, used: 900 } }))).toBe(
+        70,
+      );
+      expect(
+        getDiskPercent(createResource({ disk: { current: 170, total: 500, used: 900 } })),
+      ).toBeUndefined();
     });
   });
 });

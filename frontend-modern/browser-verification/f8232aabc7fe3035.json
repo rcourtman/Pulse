@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "8918a53c3d2de7626e31bb2a847b20417c2e81b7",
+  "verified_at": "2026-11-02T12:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/hooks/useResources.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "b8ccd7bfb726e78ca6dc53788ee4a151105b85a7123452764c92442626024c00",
+    "frontend-modern/src/hooks/useResources.ts": "ef86bdae0804808adca09b0a539c1645b10ec35638812865f895379e6f65b670",
+    "frontend-modern/src/types/resource.ts": "bbff35284b99d04fd48b14f982ba2279853d3b1e2098b98732766195dd73a0bb"
+  },
+  "routes": [
+    "/proxmox/backups"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this exact source served by vite preview on pulse-dev, proxied to the :7699 mock-estate perf rig; headless Chromium from the rig's measurement tools. Every /api/metrics-store/history request answered HTTP 500.",
+    "PBS server drawer (backup-vault) Overview after the failed first history read: danger notice 'Failed to load history data', Retry history, no chart plots, and a 'Latest readings' strip with CPU 10.2% current and Memory 33.3% current, consistent with the drawer fact line 5.33 GB of 16.0 GB RAM.",
+    "Same state at 390x844: strip readable below the notice and range picker, no horizontal page overflow; the earlier capture that left the strip under the fixed bottom navigation was re-shot with the strip scrolled to centre.",
+    "Retry history issued a second request, which also failed; the strip stayed. Recovery to charts, locked-range, retained/freshness-unknown memory and 401/403 withdrawal are covered by the component and drawer tests, not by this browser pass."
+  ],
+  "interactions": [
+    "Signed in with the rig's documented dev login, opened /proxmox/backups, expanded the first Backup servers row (disclosure button at 1280, row tap at 390) to open the PBS server drawer.",
+    "Waited for the failure notice, counted plots and live-reading items with their qualifiers, checked document scroll width against the viewport, captured the history region and the viewport at both widths and inspected the images.",
+    "Clicked Retry history once per width and confirmed the second history request and the strip's persistence."
+  ]
+}

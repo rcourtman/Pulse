@@ -611,8 +611,10 @@ describe('DockerHostsTable', () => {
 
     fireEvent.click(screen.getByText('docker-01').closest('tr')!);
 
-    const drawer = screen.getByTestId('docker-host-drawer');
-    expect(within(drawer).getByText('76°C').closest('td')).toHaveClass(
+    // The History strip repeats the reading when no chart can be drawn; the
+    // threshold colour belongs to the Details row.
+    const details = screen.getByTestId('docker-host-technical-details');
+    expect(within(details).getByText('76°C').closest('td')).toHaveClass(
       'text-emerald-700',
       'dark:text-emerald-300',
     );
