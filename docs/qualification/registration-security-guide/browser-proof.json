@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "base_sha": "70fd9759224e33826ca3126ba0a31744b0459891",
+  "source_sha": "70fd9759224e33826ca3126ba0a31744b0459891",
+  "source_parent": "4dfd6699360ee52e71041a454fd56198c210492f",
+  "verified_at": "2026-11-02T22:11:34.009631Z",
+  "result": "passed",
+  "changed_paths": [
+    "SECURITY.md",
+    "frontend-modern/public/docs/SECURITY.md",
+    "frontend-modern/src/features/docs/__tests__/registrationSecurityGuide.test.ts"
+  ],
+  "content_sha256": {
+    "SECURITY.md": "029ebdf55ee5991221a1a24070d39ab4097bd5be39649c5d7c7170221ff2f4cb",
+    "frontend-modern/public/docs/SECURITY.md": "029ebdf55ee5991221a1a24070d39ab4097bd5be39649c5d7c7170221ff2f4cb",
+    "frontend-modern/src/features/docs/__tests__/registrationSecurityGuide.test.ts": "7aa72322e26eabf4696819451506ff183bbe74e489934703647afc266ab77ed5",
+    "frontend-modern/src/pages/Docs.tsx": "7f71b04a62d05c0025e9a369ae9a8b0add3de394b0410ebb021dc934528ed405",
+    "frontend-modern/src/index.css": "03c3054d36a58b6793e1fb821067f462f8a9abe79bedd9a974ac76a0bf9c0ff2",
+    "frontend-modern/src/components/shared/Button.tsx": "2264aa7ce7f047d9dd02e775d375f981cb73d28918bde051868b4e8aa36f9966",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "572a3b4bc5bc1114adef5aa64bb0ea833c0dbe5865bbd57d3dc767fd1965aa55",
+    "frontend-modern/src/hooks/useKioskMode.ts": "31a30251cb828b2a32977143707f5cc1b57d980aa2228d6e09b26b000162cc0b",
+    "frontend-modern/src/components/shared/buttonModel.ts": "d3d9341bd669e1823ae4566cb6c473c81269cd404ee0ddec79e0e60aeb028748",
+    "frontend-modern/src/components/shared/LoadingSpinner.tsx": "5a0a509635973ba35d2d7eaabad904f2b170bcd8de928a5184d0eaa42570ecf0",
+    "frontend-modern/src/utils/url.ts": "94c3a37354a53b38169ed41188f1c4d18d2d04c829b6c8f9573d2fb2d28a93dc",
+    "frontend-modern/public/docs/CONFIGURATION.md": "83d5a426c44d8ffa9e0f6041ddc6071679f8617b86afbe6bf10d9077f266e4da",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md": "8d5a00427207b30260533f0e215acd0866d677f51e1ff49520e24f273f0d557f",
+    "frontend-modern/public/docs/README.md": "32e1e6c6158fc1a4b86c6e55545c49f23eaa55f112ebe730dbdc18a0c6aa6e31",
+    "frontend-modern/package.json": "6d2672f35d70ea810c80923d304cda3483a4758c18ce06e9d1a6a346d523c325",
+    "frontend-modern/package-lock.json": "d429ad64b140471b8ee02cd6fbf52dabe7e970765f93a329d8ddce4273d9f2c8",
+    "frontend-modern/vite.config.ts": "de649c3466c8369b7ceff630b72f3733d1123417d6ef1964903450d64d796fb2"
+  },
+  "scope": "Corrected Security Markdown through the actual production Docs component, renderer, CSS and shipped HTTP guides in an isolated Router shell. No whole App/authentication/agent-runtime or installed-recovery claim. Browser fixture/build scripts remain evidence, not repository source. Receipt outside the human-claimed browser-verification directory; that directory and every claimed source file remain untouched.",
+  "source_proof": {
+    "receipt_id": "source-ubas7uqm",
+    "source_sha": "70fd9759224e33826ca3126ba0a31744b0459891",
+    "snapshot": "452cb358c96488cc40489f4b3cdc148ddb73517a30e9c39980ccf072faae5630",
+    "exitcode": 0,
+    "guest_ready": true,
+    "guest_stop_completed": true,
+    "inputs": {
+      "prepare.mjs": {
+        "sha256": "c2b33895431fac3a732ba219774a1e9e0436d799690b8cdf7b8abaf3df8ce921",
+        "size": 3221
+      }
+    },
+    "output_observation": {
+      "bytes": 210844,
+      "collection_complete": true,
+      "line_bound_exceeded": true,
+      "markers_truncated": false,
+      "raw_limit": 2097152,
+      "reported_events": [],
+      "reported_test_failures": [],
+      "retained_bytes": 210844,
+      "sha256": "dd9aa5e3b91de910a0bb0060d091660ee465cacb8acc5d13bbdc5dc2d4474b39",
+      "status": "complete"
+    }
+  },
+  "source_checks": "Offline npm install; exact changed-test Prettier; 61 registered tests across five files; complete type-check; 39-module production Vite Docs/renderer/CSS fixture build.",
+  "artifact": {
+    "encoded_artifact_bytes": 153660,
+    "encoded_artifact_sha256": "017efda7ec474d21ae49902d29bfe1723a6098667b2cf669cbdea173e7089cb1",
+    "files": {
+      "docs/CONFIGURATION.md": "83d5a426c44d8ffa9e0f6041ddc6071679f8617b86afbe6bf10d9077f266e4da",
+      "docs/SECURITY.md": "029ebdf55ee5991221a1a24070d39ab4097bd5be39649c5d7c7170221ff2f4cb",
+      "docs/UNIFIED_AGENT.md": "8d5a00427207b30260533f0e215acd0866d677f51e1ff49520e24f273f0d557f",
+      "docs/README.md": "32e1e6c6158fc1a4b86c6e55545c49f23eaa55f112ebe730dbdc18a0c6aa6e31",
+      "binding.json": "aea83ac76725bc482a39964300adfdd5c1237162a706ab887e4a6a9841fc4c39",
+      "index.html": "15e5a20e1c5ec5dd1f1595d2d1a2e901b4cfbf5c74fb14da9645b86608c76b2b",
+      "assets/index-BtBv89GB.css": "ba0889220ad2b63e39e8be3cc9a4aa1276f096173cd970143a998fc38e1ba4f4",
+      "assets/index-EtSY2OCg.js": "26718ca2dae42fcb3e925a73575b499593c95f6850ae71fd79567a73670330a3"
+    },
+    "source_proof_output_sha256": "fbcea6ebc460d0dd9d918ef7bf3895f9287f2c9e329afe0c46f6ea9b93dbcbc4"
+  },
+  "browser": {
+    "versions": {
+      "playwright": "1.56.1",
+      "chromium": "141.0.7390.37"
+    },
+    "checks": 49,
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "routes": [
+      "/docs",
+      "/docs/SECURITY",
+      "/docs/SECURITY#auto-registration-security",
+      "/docs/CONFIGURATION#-api-tokens",
+      "/docs/UNIFIED_AGENT#quick-start"
+    ],
+    "states": [
+      "Always-authenticated registration, consumed one-time setup, ordinary report credential versus limited Proxmox bootstrap, ignored legacy environment variables, preserved HTTPS/saved state."
+    ],
+    "interactions": [
+      "At each width, focused real documentation-index Security link and pressed Enter.",
+      "Direct registration fragment focuses heading; actual Tab and Enter traverse both token and private-file agent guide links and focus destination headings.",
+      "No page/HTTP/external-network error and no page horizontal overflow."
+    ],
+    "cleanup": {
+      "browser_closed": true,
+      "server_closed": true
+    }
+  },
+  "pixels": {
+    "native_tool": "view_image",
+    "all_four_contents_presented_to_model": true,
+    "observations": "Desktop shows the complete correction and both links; narrow text including endpoint and token names wraps inside the viewport, setup/reporting bullets remain distinct, and the ignored-variable warning and trust/state boundary are visible. Actual heading and each link have visible keyboard focus outlines.",
+    "captures": [
+      {
+        "file": "registration-1440-section.jpg",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "sha256": "9eddde2493d9f650aaea12fff2b684ebd75727b92172959c88ec247b82a90717",
+        "bytes": 86461
+      },
+      {
+        "file": "registration-390-section.jpg",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "sha256": "0f2d59e8a466814d672ea6157e1f7b4f30f0c9dd3806475b5ebfdb66ad18c656",
+        "bytes": 42274
+      },
+      {
+        "file": "registration-390-token-link.jpg",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "sha256": "5fb3dc2144096baa2529b0aa140d26c91cc9602cdd92c1ea3fc1e58e8bf6af11",
+        "bytes": 41130
+      },
+      {
+        "file": "registration-390-agent-link.jpg",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "sha256": "4cfacfa419f54bcd392e2f7db791c06120c234196719aa98e780b2ad53ef8e30",
+        "bytes": 41184
+      }
+    ]
+  },
+  "limits": [
+    "Local formatter access to the canonical dependency tree failed EACCES; no retry or permissions change. The supported offline VM used its assigned matching snapshot.",
+    "Source readiness records one initial connect transport error then ready on attempt 2; the guest command exits 0 and completed guest stop is recorded. No cause inferred.",
+    "The source proof reports line_bound_exceeded=true for bounded event parsing; full 210844-byte guest output is retained and hash-matched, collection_complete=true, markers_truncated=false.",
+    "Preview fixture binding parent is the assigned base, not the test-only source commit parent. This receipt records the actual source and source_parent separately.",
+    "This bounded guide verification does not replay or clear any earlier HTTPS-guide source/browser failures or other original investigations."
+  ],
+  "evidence": {
+    "candidate": "20261102T215610Z-product-intelligence",
+    "receipts": "RECEIPTS.md#registration-security-guide",
+    "source_output_sha256": "0b92c3435209893b0eb43af155f093918f6b0bbca1740e17a5d94c2875079cd2",
+    "browser_result_sha256": "9f1ce046d1d63fcf02538b0569d80e5df9441b688ff1bb59f389b4108411b320"
+  },
+  "judgment": "Implementation and available rendered verification complete for independent review. Not integrated or shipped; no runtime policy change."
+}
