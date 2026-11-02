@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "9964e03b5c627131fcd6db8895944402dcadcf7e",
+  "verified_at": "2026-11-02T19:10:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts": "05c355e254779a75e8ad22c79e517afa3d9310649dfa166f85ba36e2c24ff773"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "real-config clone built from this branch on pulse-dev, reading the maintainer PBS",
+    "Backup servers Jobs cell for a PBS whose task history holds one unclear prune run",
+    "desktop and phone layouts, mock mode for the phone check"
+  ],
+  "interactions": [
+    "read job health evidence from the maintainer's real PBS 3 through the fixed client: six configured prune jobs and two verify jobs report OK; the only storeless entry that is not OK is one prune task-history run with status unknown",
+    "rebuilt the maintainer's real-config clone from this branch on pulse-dev and opened Proxmox > Backups; before this change the Backup servers Jobs cell read 'Prune unknown' on both arr-secondary and main",
+    "unit coverage pins the three storeless cases: an unclear task-history run leaves the configured OK result, a failed task-history run still marks the family unknown, a partial read still marks it unknown",
+    "built the same branch in mock mode on pulse-dev and opened Proxmox > Backups at 1440x1000 and 375x812 in dark and light themes: the Backup servers table renders 33px and 32px rows with no horizontal page overflow at either width"
+  ]
+}

@@ -91,6 +91,68 @@ describe('summarizeDatastoreJobs', () => {
     expect(summary.label).toBe('GC unknown');
   });
 
+  it('does not let storeless task history mark a family unread', () => {
+    // A real PBS: configured prune jobs report OK, while bounded task history
+    // also returns every past run with no store, one of them with an unclear
+    // status. That history is not a failed read of the prune family.
+    const summary = summarizeDatastoreJobs(
+      [
+        job({ id: 'prune-main-delly', family: 'prune' }),
+        job({
+          id: 'prune:main:delly',
+          family: 'prune',
+          store: undefined,
+          confidence: 'task-history-only',
+          evidenceScope: 'observed-task',
+          posture: 'unknown',
+          postureReason: 'last-run-state-unknown',
+        }),
+      ],
+      'main',
+    );
+    expect(summary.state).toBe('ok');
+    expect(summary.label).toBe('OK');
+  });
+
+  it('keeps a failed run from storeless task history visible', () => {
+    const summary = summarizeDatastoreJobs(
+      [
+        job({ id: 'prune-main-delly', family: 'prune' }),
+        job({
+          id: 'prune:main:manual',
+          family: 'prune',
+          store: undefined,
+          confidence: 'task-history-only',
+          evidenceScope: 'observed-task',
+          posture: 'critical',
+          postureReason: 'last-run-failed',
+        }),
+      ],
+      'main',
+    );
+    expect(summary.state).toBe('unknown');
+    expect(summary.label).toBe('Prune unknown');
+  });
+
+  it('still treats a storeless partial read as an unread family', () => {
+    const summary = summarizeDatastoreJobs(
+      [
+        job({ id: 'prune-main-delly', family: 'prune' }),
+        job({
+          id: 'prune:partial',
+          family: 'prune',
+          store: undefined,
+          confidence: 'partial-permission',
+          evidenceScope: 'partial-read',
+          posture: 'unknown',
+        }),
+      ],
+      'main',
+    );
+    expect(summary.state).toBe('unknown');
+    expect(summary.label).toBe('Prune unknown');
+  });
+
   it('names a job that has not run yet without calling it healthy', () => {
     const summary = summarizeDatastoreJobs(
       [job({ id: 'v-1', posture: 'unknown', postureReason: 'no-run-observed' })],

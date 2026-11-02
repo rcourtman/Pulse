@@ -5078,6 +5078,20 @@ keeps its columns aligned. Rows stay 32px, the accessible names are unchanged,
 and the phone bar narrows from 5rem to 4rem to make room. Which workloads each
 reason selects is unchanged.
 
+### Task history no longer marks a datastore job family unknown (2 November 2026)
+
+`summarizeDatastoreJobs` treats a family as unread for every datastore only
+when a storeless entry that is not OK is a failed read (`evidenceScope`
+`partial-read` or an `error`) or a failed or warned run. PBS task history
+arrives with no store, one entry per past run,
+and on a real PBS one run with an unclear status turned the Jobs cell for every
+datastore to "Prune unknown" even though all six configured prune jobs reported
+OK from `/admin/prune`. Configured jobs with a store still speak for their
+datastore; a storeless partial read or failed task-history run still yields
+"unknown", never OK. Attaching task history to its datastore upstream would be
+the fuller fix, but older runs of a configured job would then need to defer to
+its latest result.
+
 ### Backup servers rows are named by their datastore (2 November 2026)
 
 The Backup servers table keeps one row per datastore, but each row is now
