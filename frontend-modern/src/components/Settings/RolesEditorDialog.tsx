@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
 import type { Permission, Role } from '@/types/rbac';
@@ -8,6 +9,7 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import X from 'lucide-solid/icons/x';
 
 interface RolesEditorDialogProps {
+  actionError?: string | null;
   editingRole: Role | null;
   formDescription: string;
   formId: string;
@@ -42,6 +44,7 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
           <button
             type="button"
             onClick={props.onClose}
+            disabled={props.saving}
             aria-label="Close role editor"
             title="Close"
             class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
@@ -50,7 +53,10 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
           </button>
         </div>
 
-        <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        <fieldset
+          disabled={props.saving}
+          class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto"
+        >
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-1">
               <label for="role-editor-id" class="block text-sm font-medium text-base-content">
@@ -157,12 +163,18 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
               </For>
             </div>
           </div>
-        </div>
+        </fieldset>
+        <Show when={props.actionError}>
+          <InlineNotice tone="danger" role="alert" aria-live="polite">
+            {props.actionError}
+          </InlineNotice>
+        </Show>
 
         <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
           <button
             type="button"
             onClick={props.onClose}
+            disabled={props.saving}
             class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover"
           >
             Cancel

@@ -9,17 +9,18 @@ export const RBACAPI = {
   // Roles
   getRoles: (options?: RBACAdminRequestOptions) => readRBAC<Role[]>('/api/admin/roles', options),
   getRole: (id: string) => apiFetchJSON<Role>(`/api/admin/roles/${encodeURIComponent(id)}`),
-  saveRole: (role: Role) => {
+  saveRole: (role: Role, options?: RBACAdminRequestOptions) => {
     const method = role.createdAt ? 'PUT' : 'POST';
     const url =
       method === 'PUT' ? `/api/admin/roles/${encodeURIComponent(role.id)}` : '/api/admin/roles';
     return apiFetchJSON<Role>(url, {
+      ...options,
       method,
       body: JSON.stringify(role),
     });
   },
-  deleteRole: (id: string) =>
-    apiFetchJSON(`/api/admin/roles/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  deleteRole: (id: string, options?: RBACAdminRequestOptions) =>
+    apiFetchJSON(`/api/admin/roles/${encodeURIComponent(id)}`, { ...options, method: 'DELETE' }),
 
   // User Assignments
   getUsers: (options?: RBACAdminRequestOptions) =>

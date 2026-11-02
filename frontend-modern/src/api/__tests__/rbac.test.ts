@@ -213,6 +213,28 @@ describe('RBACAPI', () => {
       },
     );
   });
+  it('binds role writes to the selected organisation without retries', async () => {
+    const controller = new AbortController();
+    const options = { signal: controller.signal, expectedOrgID: 'selected-org', retry: false };
+    const role = {
+      id: 'role/one',
+      name: 'One',
+      description: '',
+      permissions: [],
+      createdAt: '2026-01-01',
+    };
+    await RBACAPI.saveRole(role, options);
+    await RBACAPI.deleteRole(role.id, options);
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(1, '/api/admin/roles/role%2Fone', {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify(role),
+    });
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(2, '/api/admin/roles/role%2Fone', {
+      ...options,
+      method: 'DELETE',
+    });
+  });
   it('forwards an exact abortable organisation and no-retry binding for User Access', async () => {
     const controller = new AbortController();
     const options = { signal: controller.signal, expectedOrgID: 'selected-org', retry: false };

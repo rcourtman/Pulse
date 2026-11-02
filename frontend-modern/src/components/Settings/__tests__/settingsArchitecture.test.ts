@@ -2285,6 +2285,7 @@ describe('User Access reader projection', () => {
   it('supplies live reader props through the canonical registry instead of an unscoped mount', async () => {
     const { default: registry } = await import('../settingsPanelRegistry.ts?raw');
     const { default: context } = await import('../settingsPanelRegistryContext.tsx?raw');
+    expect(registry).toMatch(/'security-roles':\s*\{[^}]*getProps: context.getRolesPanelProps/s);
     expect(registry).toMatch(
       /'security-users':\s*\{[^}]*getProps: context.getUserAssignmentsPanelProps/s,
     );

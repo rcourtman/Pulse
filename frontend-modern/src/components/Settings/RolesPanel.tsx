@@ -3,7 +3,8 @@ import { ActionIconButton, Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
 import { RolesEditorDialog } from './RolesEditorDialog';
-import { useRolesPanelState } from './useRolesPanelState';
+import { useRolesPanelState, type RolesPanelProps } from './useRolesPanelState';
+import { Dialog } from '@/components/shared/Dialog';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { getRolesEmptyState } from '@/utils/rbacPresentation';
 import Plus from 'lucide-solid/icons/plus';
@@ -14,8 +15,8 @@ import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 
-export const RolesPanel: Component = () => {
-  const state = useRolesPanelState();
+export const RolesPanel: Component<RolesPanelProps> = (props) => {
+  const state = useRolesPanelState(props);
 
   return (
     <div class="space-y-6">
@@ -27,7 +28,7 @@ export const RolesPanel: Component = () => {
             size="settingsAction"
             class="w-full gap-2 sm:w-auto"
             onClick={state.openCreateRole}
-            disabled={!state.featureGate.rbacEnabled() || Boolean(state.loadError())}
+            disabled={!state.canEdit()}
           >
             <Plus class="w-4 h-4" />
             New Role
@@ -36,6 +37,14 @@ export const RolesPanel: Component = () => {
         noPadding
         bodyClass="divide-y divide-border"
       >
+        <Show when={state.successNotice()}>
+          {(message) => (
+            <InlineNotice tone="success" role="status" aria-live="polite">
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+
         <Show when={state.featureGate.paywallVisible()}>
           <RBACFeatureGateSection
             copy={state.featureGate.featureGateCopy()}
@@ -50,7 +59,13 @@ export const RolesPanel: Component = () => {
           </div>
         </Show>
 
-        <Show when={!state.loading() && state.featureGate.rbacEnabled() && state.loadError()}>
+        <Show when={!state.loading() && state.featureGate.rbacEnabled() && !state.accessAllowed()}>
+          <InlineNotice tone="warning" role="status">
+            Roles are unavailable for this session.
+          </InlineNotice>
+        </Show>
+
+        <Show when={!state.loading() && state.accessAllowed() && state.loadError()}>
           {(message) => (
             <InlineNotice
               role="alert"
@@ -66,7 +81,7 @@ export const RolesPanel: Component = () => {
           )}
         </Show>
 
-        <Show when={!state.loading() && state.featureGate.rbacEnabled() && !state.loadError()}>
+        <Show when={!state.loading() && state.accessAllowed() && !state.loadError()}>
           <PulseDataGrid
             data={state.roles()}
             columns={[
@@ -113,6 +128,7 @@ export const RolesPanel: Component = () => {
                         tone="accent"
                         size="sm"
                         class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
+                        disabled={!state.canEdit()}
                         onClick={() => state.openEditRole(role)}
                       >
                         <Pencil class="w-4 h-4" />
@@ -122,7 +138,8 @@ export const RolesPanel: Component = () => {
                         tone="danger"
                         size="sm"
                         class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
-                        onClick={() => state.handleDeleteRole(role)}
+                        disabled={!state.canEdit()}
+                        onClick={() => state.openDeleteRole(role)}
                       >
                         <Trash2 class="w-4 h-4" />
                       </ActionIconButton>
@@ -143,6 +160,7 @@ export const RolesPanel: Component = () => {
       </SettingsPanel>
 
       <RolesEditorDialog
+        actionError={state.actionError()}
         editingRole={state.editingRole()}
         formDescription={state.formDescription()}
         formId={state.formId()}
@@ -159,6 +177,45 @@ export const RolesPanel: Component = () => {
         onSave={state.handleSaveRole}
         onUpdatePermission={state.updatePermission}
       />
+      <Show when={state.rolePendingDeletion()}>
+        {(role) => (
+          <Dialog
+            isOpen={true}
+            onClose={state.closeDeleteRole}
+            closeOnBackdrop={false}
+            panelClass="max-w-lg"
+            ariaLabel={`Delete role: ${role().name}`}
+          >
+            <div class="space-y-5 p-6">
+              <div>
+                <h3 class="text-lg font-semibold text-base-content">Delete role?</h3>
+                <p class="mt-2 text-sm text-muted">
+                  Are you sure you want to delete the role "{role().name}"?
+                </p>
+              </div>
+              <Show when={state.actionError()}>
+                {(message) => (
+                  <InlineNotice tone="danger" role="alert" aria-live="polite">
+                    {message()}
+                  </InlineNotice>
+                )}
+              </Show>
+              <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button onClick={state.closeDeleteRole} disabled={state.deleting()}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  isLoading={state.deleting()}
+                  onClick={state.handleDeleteRole}
+                >
+                  Delete Role
+                </Button>
+              </div>
+            </div>
+          </Dialog>
+        )}
+      </Show>
     </div>
   );
 };
