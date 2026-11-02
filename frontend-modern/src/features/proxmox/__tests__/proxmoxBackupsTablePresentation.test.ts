@@ -61,18 +61,25 @@ describe('Proxmox backups responsive table presentation', () => {
     expect(ids(getBackupServerColumns('operational'))).toEqual([
       'server',
       'status',
-      'cpu',
-      'memory',
       'datastore',
       'used',
       'jobs',
       'backups',
     ]);
-    expect(ids(getBackupServerColumns('full'))).toHaveLength(11);
+    // Host CPU, memory, uptime and version live in the server's drawer.
+    expect(ids(getBackupServerColumns('full'))).toEqual([
+      'server',
+      'status',
+      'datastore',
+      'used',
+      'jobs',
+      'backups',
+      'dedup',
+    ]);
   });
 
   it.each([
-    ['operational', '12%'],
+    ['operational', '11%'],
     ['expanded', '9%'],
     ['full', '8%'],
   ] as const)(
@@ -91,9 +98,9 @@ describe('Proxmox backups responsive table presentation', () => {
 
   it.each([
     ['basic', '15.5%'],
-    ['operational', '11%'],
-    ['expanded', '10%'],
-    ['full', '10%'],
+    ['operational', '13%'],
+    ['expanded', '12%'],
+    ['full', '14%'],
   ] as const)('fits a worded job result such as "Verify failed" in %s', (layout, width) => {
     expect(getBackupServerColumnWidthStyle('jobs', layout)).toEqual({ width });
     const total = getBackupServerColumns(layout).reduce(

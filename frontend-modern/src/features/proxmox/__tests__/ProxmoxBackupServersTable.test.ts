@@ -49,16 +49,18 @@ describe('buildBackupServerRows', () => {
     expect(rows.find((row) => row.datastore?.name === 'offsite')?.datastore?.usagePercent).toBe(95);
   });
 
-  it('carries host CPU, memory, and uptime onto every datastore row of the server', () => {
+  it('leaves host figures to the drawer and keeps the host resource on every row', () => {
     const rows = buildBackupServerRows([makePbsResource()]);
 
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      expect(row.cpuPercent).toBeCloseTo(12.4);
-      expect(row.memoryPercent).toBeCloseTo(40);
-      expect(row.memoryUsed).toBe(3_200);
-      expect(row.memoryTotal).toBe(8_000);
-      expect(row.uptimeSeconds).toBe(1_036_800);
+      // CPU, memory and uptime are read by the server's drawer from the row's
+      // resource, not copied into datastore rows.
+      expect(row).not.toHaveProperty('cpuPercent');
+      expect(row).not.toHaveProperty('memoryPercent');
+      expect(row).not.toHaveProperty('uptimeSeconds');
+      expect(row.resource.cpu?.current).toBeCloseTo(12.4);
+      expect(row.resource.uptime).toBe(1_036_800);
     }
     expect(rows.map((row) => row.datastore?.name)).toEqual(['offsite', 'tank']);
     // The table shows host cells once per server: only later rows continue it.
@@ -145,9 +147,7 @@ describe('buildBackupServerRows', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0].online).toBe(false);
-    expect(rows[0].cpuPercent).toBeUndefined();
-    expect(rows[0].memoryPercent).toBeUndefined();
-    expect(rows[0].uptimeSeconds).toBeUndefined();
+    expect(rows[0].datastore).toBeUndefined();
   });
 });
 

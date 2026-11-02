@@ -47,14 +47,16 @@ const rows = (servers: Resource[], payload: unknown) =>
   buildBackupServerRows(servers, parsePBSBackupInventory(payload).backups);
 
 // No DOM marker dependency: the table's summary rows have count-column cells,
-// whereas a detail row has only its spanning cell.
-const displayedCounts = (table: HTMLElement) => {
-  const index = [...table.querySelectorAll('th')].findIndex(
+// whereas a detail row has only its spanning cell. Only the table's own body
+// rows count: an open drawer nests its own detail table inside a detail row.
+const displayedCounts = (owner: HTMLElement) => {
+  const table = owner.matches('table') ? owner : owner.querySelector('table')!;
+  const index = [...table.querySelectorAll(':scope > thead th')].findIndex(
     (cell) => cell.getAttribute('aria-label') === 'Backups',
   );
-  return [...table.querySelectorAll('tbody tr')]
-    .filter((row) => row.querySelectorAll('td').length > index)
-    .map((row) => row.querySelectorAll('td')[index].textContent?.trim());
+  return [...table.querySelectorAll(':scope > tbody > tr')]
+    .filter((row) => row.querySelectorAll(':scope > td').length > index)
+    .map((row) => row.querySelectorAll(':scope > td')[index].textContent?.trim());
 };
 
 afterEach(() => {

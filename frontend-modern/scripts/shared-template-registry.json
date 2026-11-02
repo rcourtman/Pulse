@@ -2256,7 +2256,6 @@
       "requiredConsumers": [
         { "path": "src/features/docker/DockerHostsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
         { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
         { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
         { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
@@ -2272,10 +2271,6 @@
         {
           "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
           "patterns": ["const formatUptime"]
-        },
-        {
-          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx",
-          "patterns": ["formatUptime(row.uptimeSeconds ?? 0)"]
         },
         {
           "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",

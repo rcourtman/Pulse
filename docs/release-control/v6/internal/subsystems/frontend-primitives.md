@@ -523,6 +523,17 @@ desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
 day selection, metric switching, empty matches and recovery. No shared-filter,
 route, navigation, access or backup operation changes.
 
+### Backup servers table drops its host columns (2 November 2026)
+
+`ProxmoxBackupServersTable` no longer renders Version, CPU, Memory or Uptime
+columns; `BACKUP_SERVER_COLUMNS` is server, status, datastore, used, jobs,
+backups and dedup, and every layout's weights were redistributed so Used, the
+longest value (percentage plus the used/total pair or the forecast pill), keeps
+the widest datastore share. The table therefore no longer consumes
+`formatPlatformTableUptimeValue`, and the shared-template registry drops it
+from that rule's required consumers. The memory cell's multi-line "Last known"
+qualifier went with it, so every row is now single-line by construction.
+
 ### Datastore fill forecast stays on one row line (2 November 2026)
 
 `ProxmoxBackupServersTable` shows a PBS datastore's fill forecast as the

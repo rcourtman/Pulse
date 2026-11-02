@@ -78,10 +78,13 @@ describe('ProxmoxBackupServersTable details', () => {
     expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
 
     const refreshed = makePbsResource();
-    refreshed.pbs = { ...refreshed.pbs!, version: '3.2.2' };
+    refreshed.pbs = {
+      ...refreshed.pbs!,
+      datastores: [{ name: 'tank', total: 1_000, used: 550, available: 450, usagePercent: 55 }],
+    };
     setServers([refreshed]);
 
-    await waitFor(() => expect(screen.getByText('3.2.2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('550 B / 1000 B')).toBeInTheDocument());
     expect(resourceDetailDrawerMount).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('pbs-resource-detail')).toBeInTheDocument();
   });
