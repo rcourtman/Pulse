@@ -204,7 +204,7 @@ describe('useReportingPanelState', () => {
     const createElement = vi.spyOn(document, 'createElement');
     try {
       await hookState.handleExportVMInventory();
-      expect(showWarningMock).toHaveBeenCalledExactlyOnceWith(message);
+      expect(hookState.actionError()).toBe(message);
       expect(showSuccessMock).not.toHaveBeenCalled();
       expect(createElement).not.toHaveBeenCalledWith('a');
       expect(hookState.exportingInventory()).toBe(false);
@@ -221,7 +221,14 @@ describe('useReportingPanelState', () => {
 
     expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
     expect(loadCommercialLicenseStatusMock).not.toHaveBeenCalled();
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/reports/catalog',
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(hookState.reportingCatalog()?.performanceReport.defaultFormat).toBe('csv');
     expect(hookState.format()).toBe('csv');
     expect(hookState.range()).toBe('7d');
@@ -235,7 +242,14 @@ describe('useReportingPanelState', () => {
 
     await settleMountLoads(hookState);
 
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/reports/catalog',
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
     expect(hookState.reportingCatalog()?.lockedState.title).toBe('Advanced Reporting');
     expect(hookState.isLocked()).toBe(true);
@@ -290,7 +304,14 @@ describe('useReportingPanelState', () => {
 
     expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
     expect(loadCommercialLicenseStatusMock).not.toHaveBeenCalled();
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/reports/catalog',
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
     expect(hookState.isLocked()).toBe(false);
     expect(hookState.isReportingEnabled()).toBe(false);
@@ -638,7 +659,7 @@ describe('useReportingPanelState', () => {
     hookState.updateScheduleForm({ name: 'Monthly clients' });
     await hookState.saveReportSchedule();
 
-    expect(showWarningMock).toHaveBeenCalledWith('Select resources or enter at least one tag');
+    expect(hookState.actionError()).toBe('Select resources or enter at least one tag');
     expect(
       apiFetchMock.mock.calls.some(
         ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
@@ -670,22 +691,31 @@ describe('useReportingPanelState', () => {
     });
     const { hookState, dispose } = mountHook();
     await settleMountLoads(hookState);
-    await hookState.runReportScheduleNow(failed);
+    await hookState.runReportScheduleNow(hookState.reportSchedules()[0]);
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/api/admin/reports/schedules/weekly/run?retry=true',
-      { method: 'POST' },
+      expect.objectContaining({ method: 'POST', expectedOrgID: 'default', retry: false }),
     );
-    expect(showWarningMock).toHaveBeenCalledWith(failed.last_error);
+    expect(hookState.actionError()).toBe(failed.last_error);
     expect(hookState.reportSchedules()[0].last_run_status).toBe('failed');
     dispose();
   });
 
   it('requires deliberate confirmation before retrying uncertain acceptance', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url.endsWith('/schedules')
+            ? { schedules: [deliverySchedule('unconfirmed')] }
+            : catalogPayload,
+        ),
+      ),
+    );
     const { hookState, dispose } = mountHook();
     await settleMountLoads(hookState);
     apiFetchMock.mockClear();
-    await hookState.runReportScheduleNow(deliverySchedule('unconfirmed'));
+    await hookState.runReportScheduleNow(hookState.reportSchedules()[0]);
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('risk of a duplicate'));
     expect(apiFetchMock).not.toHaveBeenCalled();
     confirm.mockRestore();
@@ -706,7 +736,10 @@ describe('useReportingPanelState', () => {
     apiFetchMock.mockClear();
     document.dispatchEvent(new Event('visibilitychange'));
     await vi.waitFor(() =>
-      expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/schedules'),
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/admin/reports/schedules',
+        expect.objectContaining({ retry: false }),
+      ),
     );
     await settleMountLoads(hookState);
     dispose();
@@ -758,7 +791,7 @@ describe('useReportingPanelState', () => {
     await settleMountLoads(hookState);
     await hookState.toggleReportSchedule(hookState.reportSchedules()[0]);
     expect(hookState.reportSchedules()[0].enabled).toBe(false);
-    expect(showSuccessMock).toHaveBeenCalledWith('Report schedule disabled');
+    expect(hookState.successNotice()).toBe('Report schedule disabled');
     dispose();
   });
 });
