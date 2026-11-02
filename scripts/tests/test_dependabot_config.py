@@ -144,18 +144,15 @@ class DependabotConfigTest(unittest.TestCase):
         # PR 3178 rebundled the deferred SQLite/libc pair with a new Prometheus
         # patch immediately after the non-storage refresh landed. Keep the
         # driver's transitives in its own reviewable proposal, in either order.
-        for dependency in (
-            "modernc.org/sqlite",
-            "modernc.org/libc",
-            "modernc.org/memory",
-            "modernc.org/mathutil",
-            "github.com/prometheus/common",
-            "github.com/klauspost/compress",
-            "golang.org/x/net",
+        for dependency, expected in (
+            ("modernc.org/sqlite", "go-storage-runtime"),
+            ("modernc.org/libc", "go-storage-runtime"),
+            ("modernc.org/memory", "go-storage-runtime"),
+            ("modernc.org/mathutil", "go-storage-runtime"),
+            ("github.com/prometheus/common", "go-minor-patch"),
+            ("github.com/klauspost/compress", "go-minor-patch"),
+            ("golang.org/x/net", "go-minor-patch"),
         ):
-            expected = (
-                "go-storage-runtime" if dependency.startswith("modernc.org/") else "go-minor-patch"
-            )
             for update_type in ("minor", "patch"):
                 with self.subTest(dependency=dependency, update_type=update_type):
                     self.assertEqual(

@@ -3,6 +3,7 @@
 
 import os
 from contextlib import contextmanager
+from http.client import HTTPSConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
@@ -56,7 +57,8 @@ def download_servers(root, mode):
                 self.send_response(302)
                 origin = (f"http://127.0.0.1:{plain.server_port}" if mode == "downgrade"
                           else f"https://127.0.0.1:{secure.server_port}")
-                self.send_header("Location", origin + "/final/" + self.path.rsplit("/", 1)[-1])
+                asset_name = "install.sh.sshsig" if self.path.endswith(".sshsig") else "install.sh"
+                self.send_header("Location", origin + "/final/" + asset_name)
                 self.end_headers()
                 return
             is_signature = self.path.endswith(".sshsig")
@@ -75,6 +77,7 @@ def download_servers(root, mode):
     plain = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     secure = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(root / "tls.crt", root / "tls.key")
     secure.socket = context.wrap_socket(secure.socket, server_side=True)
     # Poll only the fixture server more often so teardown need not wait 500 ms.
@@ -127,6 +130,27 @@ def run_local_recipe(root, block, secure_port, plain_port, *, trust=True):
 
 
 class SignedInstallerDocsTest(unittest.TestCase):
+    def test_redirects_cannot_reflect_request_paths(self):
+        for mode in ("redirect", "downgrade"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                with download_servers(root, mode) as (secure, plain, _requests):
+                    context = ssl.create_default_context(cafile=str(root / "tls.crt"))
+                    connection = HTTPSConnection("127.0.0.1", secure, context=context, timeout=5)
+                    try:
+                        for path, asset in (("/release/untrusted-name%0D%0AX-Injected:value", "install.sh"),
+                                            ("/release/untrusted-name.sshsig", "install.sh.sshsig")):
+                            connection.request("GET", path)
+                            response = connection.getresponse()
+                            origin = (f"http://127.0.0.1:{plain}" if mode == "downgrade"
+                                      else f"https://127.0.0.1:{secure}")
+                            self.assertEqual(response.status, 302)
+                            self.assertEqual(response.getheader("Location"), origin + "/final/" + asset)
+                            self.assertIsNone(response.getheader("X-Injected"))
+                            response.read()
+                    finally:
+                        connection.close()
+
     def test_fixture_signer_replacement_preserves_policy_and_requires_one_key(self):
         for block in recipes():
             with self.subTest(recipe=block.splitlines()[0]):

@@ -27,6 +27,7 @@ const (
 	responseMediaZIP
 	responseMediaReport
 	responseMediaAudit
+	responseMediaEventStream
 )
 
 // retainResponseAuthority serves slow synchronous results and private downloads.
@@ -92,65 +93,77 @@ func (w *tokenResponseWriter) permitLocked() bool {
 	return true
 }
 
-func (w *tokenResponseWriter) commitLocked(status int) {
-	if !w.started {
-		header := w.writer.Header()
-		clear(header)
-		for key, values := range w.header {
-			if strings.EqualFold(key, "Content-Type") || strings.EqualFold(key, "X-Content-Type-Options") {
-				continue
-			}
-			header[key] = append([]string(nil), values...)
+func (w *tokenResponseWriter) prepareHeaderLocked() string {
+	header := w.writer.Header()
+	clear(header)
+	for key, values := range w.header {
+		if strings.EqualFold(key, "Content-Type") || strings.EqualFold(key, "X-Content-Type-Options") {
+			continue
 		}
-		// Results serve only their pinned media type or plain-text errors, never HTML.
-		// Bind non-executable media to the actual transport, not just the
-		// handler's private header map. Missing, malformed or unexpected
-		// types must not allow HTTP sniffing or an extension to render HTML.
-		// Leave payload bytes alone: HTML-escaping JSON would corrupt data.
-		mediaType, _, err := mime.ParseMediaType(w.header.Get("Content-Type"))
-		pinnedType := "text/plain; charset=utf-8"
-		if err == nil {
-			switch w.media {
-			case responseMediaJSON:
-				if mediaType == "application/json" {
-					pinnedType = mediaType
-				}
-			case responseMediaZIP:
-				if mediaType == "application/zip" {
-					pinnedType = mediaType
-				}
-			case responseMediaAudit:
-				// Audit exports are structured evidence, never report PDFs.
-				switch mediaType {
-				case "application/json":
-					pinnedType = mediaType
-				case "text/csv":
-					pinnedType = "text/csv; charset=utf-8"
-				}
-			case responseMediaReport:
-				// Existing PDF/CSV attachments and structured API errors.
-				// CSV is UTF-8; never forward renderer-supplied parameters.
-				switch mediaType {
-				case "application/pdf", "application/json":
-					pinnedType = mediaType
-				case "text/csv":
-					pinnedType = "text/csv; charset=utf-8"
-				}
-			}
-		}
-		header.Set("Content-Type", pinnedType)
-		header.Set("X-Content-Type-Options", "nosniff")
-		w.writer.WriteHeader(status)
-		// Informational headers do not commit the final response.
-		w.started = status >= 200 || status == http.StatusSwitchingProtocols
+		header[key] = append([]string(nil), values...)
 	}
+	// Results serve only their pinned media type or plain-text errors, never HTML.
+	// Bind non-executable media to the actual transport, not just the
+	// handler's private header map. Missing, malformed or unexpected
+	// types must not allow HTTP sniffing or an extension to render HTML.
+	// Leave payload bytes alone: HTML-escaping JSON would corrupt data.
+	return responseContentType(w.header, w.media)
+}
+
+// responseContentType returns only fixed, non-executable transport types.
+// Keep the selection shared by synchronous results and streaming reads.
+func responseContentType(header http.Header, media responseMediaPolicy) string {
+	mediaType, _, err := mime.ParseMediaType(header.Get("Content-Type"))
+	pinnedType := "text/plain; charset=utf-8"
+	if err == nil {
+		switch media {
+		case responseMediaEventStream:
+			switch mediaType {
+			case "text/event-stream":
+				pinnedType = "text/event-stream; charset=utf-8"
+			case "application/json":
+				pinnedType = mediaType
+			}
+		case responseMediaJSON:
+			if mediaType == "application/json" {
+				pinnedType = mediaType
+			}
+		case responseMediaZIP:
+			if mediaType == "application/zip" {
+				pinnedType = mediaType
+			}
+		case responseMediaAudit:
+			// Audit exports are structured evidence, never report PDFs.
+			switch mediaType {
+			case "application/json":
+				pinnedType = mediaType
+			case "text/csv":
+				pinnedType = "text/csv; charset=utf-8"
+			}
+		case responseMediaReport:
+			// Existing PDF/CSV attachments and structured API errors.
+			// CSV is UTF-8; never forward renderer-supplied parameters.
+			switch mediaType {
+			case "application/pdf", "application/json":
+				pinnedType = mediaType
+			case "text/csv":
+				pinnedType = "text/csv; charset=utf-8"
+			}
+		}
+	}
+	return pinnedType
 }
 
 func (w *tokenResponseWriter) WriteHeader(status int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.permitLocked() {
-		w.commitLocked(status)
+	if w.permitLocked() && !w.started {
+		contentType := w.prepareHeaderLocked()
+		w.writer.Header().Set("Content-Type", contentType)
+		w.writer.Header().Set("X-Content-Type-Options", "nosniff")
+		w.writer.WriteHeader(status)
+		// Informational headers do not commit the final response.
+		w.started = status >= 200 || status == http.StatusSwitchingProtocols
 	}
 }
 
@@ -160,7 +173,12 @@ func (w *tokenResponseWriter) Write(p []byte) (int, error) {
 	if !w.permitLocked() {
 		return 0, io.ErrClosedPipe
 	}
-	w.commitLocked(http.StatusOK)
+	if !w.started {
+		contentType := w.prepareHeaderLocked()
+		w.writer.Header().Set("Content-Type", contentType)
+		w.writer.Header().Set("X-Content-Type-Options", "nosniff")
+		w.started = true
+	}
 	n, err := w.writer.Write(p)
 	if err != nil {
 		w.closed = true

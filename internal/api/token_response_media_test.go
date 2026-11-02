@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -33,7 +34,7 @@ var responseMediaCases = []responseMediaCase{
 // automatic HTML sniff when a downstream writer omits Content-Type.
 func requestResponseMedia(t *testing.T, media responseMediaCase, explicit bool) (http.Header, int, []byte) {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writer := &tokenResponseWriter{writer: w, header: w.Header().Clone(), allowed: func() bool { return true }}
 		defer writer.close()
 		if media.contentType != "" {
@@ -43,12 +44,13 @@ func requestResponseMedia(t *testing.T, media responseMediaCase, explicit bool) 
 		if explicit {
 			writer.WriteHeader(http.StatusAccepted)
 		}
-		if _, err := writer.Write([]byte(responseMediaMarkup)); err != nil {
+		writer.WriteHeader(http.StatusEarlyHints)
+		if _, err := writer.Write([]byte(r.URL.Query().Get("content"))); err != nil {
 			t.Error(err)
 		}
 	}))
 	defer server.Close()
-	response, err := server.Client().Get(server.URL)
+	response, err := server.Client().Get(server.URL + "?content=" + url.QueryEscape(responseMediaMarkup))
 	if err != nil {
 		t.Fatal(err)
 	}

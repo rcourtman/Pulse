@@ -1,6 +1,8 @@
 package configapi
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"io"
@@ -34,8 +36,10 @@ type configImportRejection struct {
 // bounded: one in-flight import per org and at most 128 attempts for ten minutes
 // after completion. Never evict an unexpired attempt to admit a new one.
 type configImportRequests struct {
-	mu       sync.Mutex
-	attempts map[configImportKey]*configImportAttempt
+	mu             sync.Mutex
+	attempts       map[configImportKey]*configImportAttempt
+	keyOnce        sync.Once
+	fingerprintKey [sha256.Size]byte
 }
 
 func (g *configImportRequests) begin(orgID string, req ImportConfigRequest, now time.Time) (*configImportAttempt, *configImportRejection) {
@@ -44,8 +48,13 @@ func (g *configImportRequests) begin(orgID string, req ImportConfigRequest, now 
 	}
 	// Length-prefix the data, including malformed input. Include the
 	// passphrase so a different password cannot reuse an earlier admission.
-	// Only this full-request digest survives the request, never either input.
-	hash := sha256.New()
+	// Key the fingerprint with a guard-local random secret so retained entries
+	// are not unkeyed passphrase hashes. Neither input is retained.
+	g.keyOnce.Do(func() {
+		// crypto/rand.Read terminates the process if secure randomness fails.
+		_, _ = rand.Read(g.fingerprintKey[:])
+	})
+	hash := hmac.New(sha256.New, g.fingerprintKey[:])
 	var length [8]byte
 	binary.BigEndian.PutUint64(length[:], uint64(len(req.Data)))
 	_, _ = hash.Write(length[:])

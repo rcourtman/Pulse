@@ -2030,6 +2030,11 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Shared Boundaries
 
+Protected progress and synchronous reads use the API-owned non-executable media
+policy. Configuration-import replay admission retains guard-keyed request
+fingerprints without retaining archives or passphrases. These transport guards
+do not cancel independent agent work or establish durable recovery idempotency.
+
 The shared OIDC Test diagnostic exposes only a numeric upstream HTTP status
 and fixed recovery guidance on failed discovery, never a provider/proxy reason
 phrase, header or body. It makes no agent credential, enrollment, lifecycle or

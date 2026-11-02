@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -91,6 +92,7 @@ type tokenStreamWriter struct {
 	allowed func() bool
 	mu      sync.Mutex
 	closed  bool
+	started bool
 }
 
 func (w *tokenStreamWriter) Header() http.Header { return w.writer.Header() }
@@ -134,11 +136,30 @@ func (w *tokenStreamWriter) check() bool {
 	return w.checkLocked()
 }
 
+// All guarded stream routes carry SSE data or structured/plain errors. Pin
+// their media before any operation can commit the transport, including Flush.
+func (w *tokenStreamWriter) prepareMediaLocked() string {
+	header := w.writer.Header()
+	contentType := responseContentType(header, responseMediaEventStream)
+	for key := range header {
+		if strings.EqualFold(key, "Content-Type") || strings.EqualFold(key, "X-Content-Type-Options") {
+			delete(header, key)
+		}
+	}
+	return contentType
+}
+
 func (w *tokenStreamWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if !w.checkLocked() {
 		return 0, io.ErrClosedPipe
+	}
+	if !w.started {
+		contentType := w.prepareMediaLocked()
+		w.writer.Header().Set("Content-Type", contentType)
+		w.writer.Header().Set("X-Content-Type-Options", "nosniff")
+		w.started = true
 	}
 	n, err := w.writer.Write(p)
 	if err != nil {
@@ -152,6 +173,12 @@ func (w *tokenStreamWriter) WriteHeader(status int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.checkLocked() {
+		if !w.started {
+			contentType := w.prepareMediaLocked()
+			w.writer.Header().Set("Content-Type", contentType)
+			w.writer.Header().Set("X-Content-Type-Options", "nosniff")
+			w.started = status >= 200 || status == http.StatusSwitchingProtocols
+		}
 		w.writer.WriteHeader(status)
 	}
 }
@@ -160,6 +187,12 @@ func (w *tokenStreamWriter) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.checkLocked() {
+		if !w.started {
+			contentType := w.prepareMediaLocked()
+			w.writer.Header().Set("Content-Type", contentType)
+			w.writer.Header().Set("X-Content-Type-Options", "nosniff")
+			w.started = true
+		}
 		w.flusher.Flush()
 	}
 }

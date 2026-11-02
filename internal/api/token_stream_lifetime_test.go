@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +24,57 @@ import (
 const scopedReadToken = "synthetic-scoped-stream.12345678"
 const scopedReadControl = "synthetic-scoped-control.12345678"
 const scopedReadMonitor = "synthetic-monitor-reader.12345678"
+
+func TestTokenStreamWriterNativeMedia(t *testing.T) {
+	cases := append(append([]responseMediaCase(nil), responseMediaCases...),
+		responseMediaCase{"sse", "text/event-stream", "text/event-stream; charset=utf-8"},
+		responseMediaCase{"sse_parameters", "Text/Event-Stream; charset=iso-8859-1", "text/event-stream; charset=utf-8"})
+	for _, media := range cases {
+		for _, commit := range []string{"write", "header", "flush", "informational"} {
+			t.Run(media.name+"/"+commit, func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx, cancel := context.WithCancel(r.Context())
+					writer := &tokenStreamWriter{writer: w, flusher: w.(http.Flusher), ctx: ctx, cancel: cancel, allowed: func() bool { return true }}
+					defer writer.close()
+					if media.contentType != "" {
+						writer.Header().Set("Content-Type", media.contentType)
+					}
+					writer.Header()["content-type"] = []string{"text/html"}
+					writer.Header()["x-content-type-options"] = []string{"invalid"}
+					writer.Header().Set("X-Synthetic-Result", "preserved")
+					switch commit {
+					case "header":
+						writer.WriteHeader(http.StatusAccepted)
+					case "flush":
+						writer.Flush()
+					case "informational":
+						writer.WriteHeader(http.StatusEarlyHints)
+					}
+					if _, err := writer.Write([]byte(r.URL.Query().Get("content"))); err != nil {
+						t.Error(err)
+					}
+				}))
+				defer server.Close()
+				response, err := server.Client().Get(server.URL + "?content=" + url.QueryEscape(responseMediaMarkup))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer response.Body.Close()
+				body, err := io.ReadAll(response.Body)
+				wantStatus := http.StatusOK
+				if commit == "header" {
+					wantStatus = http.StatusAccepted
+				}
+				if err != nil || response.StatusCode != wantStatus || string(body) != responseMediaMarkup || response.Header.Get("X-Synthetic-Result") != "preserved" {
+					t.Fatalf("response changed: status=%d headers=%v body=%q error=%v", response.StatusCode, response.Header, body, err)
+				}
+				if response.Header.Get("Content-Type") != media.wantType || len(response.Header.Values("Content-Type")) != 1 || response.Header.Get("X-Content-Type-Options") != "nosniff" || len(response.Header.Values("X-Content-Type-Options")) != 1 {
+					t.Fatalf("unsafe stream media: %v", response.Header)
+				}
+			})
+		}
+	}
+}
 
 var protectedReadKinds = []string{"updates", "patrol", "preflights", "jobs"}
 
