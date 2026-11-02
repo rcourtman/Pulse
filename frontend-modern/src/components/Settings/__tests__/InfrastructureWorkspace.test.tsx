@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
+import { eventBus } from '@/stores/events';
 import {
   agentAttachmentProblem,
   infrastructureRowMonitoringPath,
@@ -874,6 +875,22 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByText('Start monitoring infrastructure')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(ledgerReadState.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries saved node configuration alongside the connection list for an administrator', () => {
+    connectionState.connections = [];
+    connectionState.rows = [];
+    ledgerReadState.error = { status: 503 };
+    const refreshNodes = vi.fn();
+    const unsubscribe = eventBus.on('refresh_nodes', refreshNodes);
+    try {
+      renderWorkspace();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(ledgerReadState.reload).toHaveBeenCalledTimes(1);
+      expect(refreshNodes).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it('keeps onboarding copy visible in the empty infrastructure state', async () => {

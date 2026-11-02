@@ -16,6 +16,7 @@ import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { updateStore } from '@/stores/updates';
+import { eventBus } from '@/stores/events';
 import { Dialog } from '@/components/shared/Dialog';
 import { Button } from '@/components/shared/Button';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
@@ -989,7 +990,12 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           rows={rows}
           inventoryLoading={!ledger.resolvedOnce() || ledger.loading()}
           inventoryError={ledger.error()}
-          onRetryInventory={() => ledger.reload()}
+          onRetryInventory={() => {
+            ledger.reload();
+            // The editor reads saved node settings separately from the ledger.
+            // Recover that read too after a cold outage, without a page reload.
+            if (!readOnly()) eventBus.emit('refresh_nodes');
+          }}
           discoveredNodes={visibleDiscoveredNodes}
           discoveryEnabled={props.discoveryEnabled()}
           discoveryScanStatus={props.discoveryScanStatus}
