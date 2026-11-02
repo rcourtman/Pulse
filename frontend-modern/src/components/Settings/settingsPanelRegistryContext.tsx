@@ -124,6 +124,15 @@ export function buildSettingsPanelRegistryContext(
     getRelayPanelProps: () => ({
       canManage: settingsCapabilities()?.relayWrite === true,
     }),
+    getReportingPanelProps: () => ({
+      currentUser: currentUser(),
+      // Non-secret identity facts only; equal scope sets keep the same workspace.
+      accessKey: JSON.stringify([
+        params.securityStatus()?.apiTokenHint,
+        params.securityStatus()?.tokenScopes?.slice().sort(),
+      ]),
+      canRead: settingsCapabilities()?.reportingRead === true,
+    }),
     getAuditWebhookPanelProps: () => ({
       currentUser: currentUser(),
       canRead: settingsCapabilities()?.auditWebhooksRead === true,

@@ -4147,3 +4147,33 @@ earlier raw object; that current-read object remains usable for the same live
 ID. A later full read, context withdrawal or deletion invalidates the old
 confirmation. The registered sequential scope-edit/revoke consumer regression
 and earlier-read rejection test cover both sides without ID-only admission.
+
+
+### Reporting drafts and downloads cannot outlive their reader
+
+The existing Data & Reports panel keys its whole workspace, resource-picker
+searches and lazy schedule editor to the current organisation, authenticated
+principal, non-secret credential hint/sorted scope set, reporting-read admission
+and reporting entitlement/readiness. An equal security-status refresh preserves
+the reader's drafts. A changed reader withdraws schedules, recipients, selections,
+searches, titles and local feedback; restoring access requires fresh reads and
+never revives the old editor.
+
+Every reporting request retains its original `expectedOrgID`, abort signal and
+`retry: false`. Disposal and current-reader checks suppress late catalog/list/
+mutation results, follow-up requests, feedback and downloads, including a response
+whose blob finishes after withdrawal. Aborting a client does not undo a server
+write or recall an already downloaded file. Backend permission/scope checks,
+report generation, scheduled delivery and retention policy are unchanged; the
+client fingerprint is not a new authorisation grant or a write-capability promise.
+
+Schedule actions require an accepted current inventory and current row identity,
+are mutually excluded, and recheck admission after a confirmation. Failed or
+malformed reads are unknown, not an empty schedule directory; Refresh explicitly
+retries them. Refused saves retain the editor for deliberate retry, with feedback
+inside this reader rather than global toasts or duplicate raw console output.
+Registered `ReportingPanel.reader.test.tsx`, `useReportingPanelState.test.ts`,
+`ReportingPanel.test.tsx` and `settingsPanelRegistryContext.test.ts` cover lifetime,
+late body completion, same-reader refresh, refused-save retry, malformed inventory,
+confirmation, route props and existing reporting/delivery behaviour. Actual App
+Settings/API-client/browser proof remains required for the consuming surface.

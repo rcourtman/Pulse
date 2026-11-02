@@ -1,4 +1,9 @@
-import { For, Show, Suspense, lazy } from 'solid-js';
+import { For, Show, Suspense, createMemo, createSignal, lazy, onCleanup } from 'solid-js';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { Portal } from 'solid-js/web';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
@@ -37,9 +42,67 @@ const REPORTING_FORMAT_ICONS: Record<ReportingFormat, typeof FileText> = {
 
 const ReportScheduleEditor = lazy(() => import('./ReportScheduleEditor'));
 
-export function ReportingPanel() {
-  const state = useReportingPanelState();
+export interface ReportingPanelProps {
+  currentUser?: string;
+  accessKey?: string;
+  canRead?: boolean;
+}
+
+export function ReportingPanel(props: ReportingPanelProps) {
+  const [org, setOrg] = createSignal(getOrgID() || 'default');
+  const unsubscribe = eventBus.on('org_switched', () => setOrg(getOrgID() || 'default'));
+  onCleanup(unsubscribe);
+  // Key the whole workspace, including picker searches and lazy editors, by the
+  // actual reader facts. A copied security status is not a new reader.
+  const reader = createMemo(
+    (previous?: {
+      org: string;
+      user?: string;
+      access?: string;
+      read: boolean;
+      enabled: boolean;
+      resolved: boolean;
+    }) => {
+      org(); // Also refresh when the organization event has no capability delta.
+      const next = {
+        org: getOrgID() || 'default',
+        user: props.currentUser,
+        access: props.accessKey,
+        read: props.canRead !== false,
+        enabled: hasFeature('advanced_reporting'),
+        resolved: runtimeCapabilitiesLoaded(),
+      };
+      return previous &&
+        Object.keys(next).every(
+          (key) => next[key as keyof typeof next] === previous[key as keyof typeof next],
+        )
+        ? previous
+        : next;
+    },
+  );
+  return (
+    <Show
+      when={reader().read}
+      fallback={
+        <OperationsPanel title="Reporting">
+          <p class="p-4 text-sm text-muted">Reporting is not available to this session.</p>
+        </OperationsPanel>
+      }
+    >
+      <Show when={reader()} keyed>
+        {(accepted) => <ReportingWorkspace isCurrentReader={() => reader() === accepted} />}
+      </Show>
+    </Show>
+  );
+}
+
+function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
+  const state = useReportingPanelState(props.isCurrentReader);
   const {
+    actionError,
+    successNotice,
+    clearFeedback,
+    canEditSchedules,
     deleteReportSchedule,
     deletingScheduleID,
     exportingInventory,
@@ -120,6 +183,22 @@ export function ReportingPanel() {
 
   return (
     <div class="space-y-6">
+      <Show when={actionError() || successNotice()}>
+        <Portal>
+          <div class="fixed inset-x-3 top-28 z-50 rounded-lg bg-surface sm:left-auto sm:right-4 sm:w-96">
+            <InlineNotice
+              role={actionError() ? 'alert' : 'status'}
+              aria-live={actionError() ? 'assertive' : 'polite'}
+              tone={actionError() ? 'warning' : 'success'}
+              class="shadow-lg"
+              onDismiss={clearFeedback}
+              dismissLabel="Dismiss reporting feedback"
+            >
+              {actionError() || successNotice()}
+            </InlineNotice>
+          </div>
+        </Portal>
+      </Show>
       <Show when={reportingCatalogLoading() && !catalogReady()}>
         <OperationsPanel title="Reporting" description="Loading reporting surfaces...">
           <div class="p-4 sm:p-6">
@@ -300,7 +379,13 @@ export function ReportingPanel() {
                     <RefreshCw size={16} />
                     Refresh
                   </Button>
-                  <Button variant="primary" size="sm" class="gap-2" onClick={startCreateSchedule}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    class="gap-2"
+                    disabled={!canEditSchedules()}
+                    onClick={startCreateSchedule}
+                  >
                     <Plus size={16} />
                     Create schedule
                   </Button>
@@ -330,6 +415,7 @@ export function ReportingPanel() {
                         variant="secondary"
                         size="sm"
                         class="gap-2"
+                        disabled={!canEditSchedules()}
                         onClick={startCreateSchedule}
                       >
                         <Plus size={16} />
@@ -366,6 +452,7 @@ export function ReportingPanel() {
                             <input
                               type="checkbox"
                               class="h-4 w-4"
+                              disabled={!canEditSchedules()}
                               checked={schedule.enabled}
                               aria-label={`Enable ${schedule.name}`}
                               onChange={() => toggleReportSchedule(schedule)}
@@ -379,7 +466,9 @@ export function ReportingPanel() {
                               aria-label={`${reportScheduleRunActionLabel(schedule)} ${schedule.name} now`}
                               isLoading={runningScheduleID() === schedule.id}
                               disabled={
-                                runningScheduleID() !== '' || schedule.last_run_status === 'running'
+                                !canEditSchedules() ||
+                                runningScheduleID() !== '' ||
+                                schedule.last_run_status === 'running'
                               }
                               onClick={() => runReportScheduleNow(schedule)}
                             >
@@ -476,6 +565,7 @@ export function ReportingPanel() {
                                   size="sm"
                                   class="min-h-11 gap-2"
                                   aria-label={`Edit ${schedule.name}`}
+                                  disabled={!canEditSchedules()}
                                   onClick={() => startEditSchedule(schedule)}
                                 >
                                   <Pencil size={15} />
@@ -487,7 +577,7 @@ export function ReportingPanel() {
                                   class="min-h-11 gap-2"
                                   aria-label={`Delete ${schedule.name}`}
                                   isLoading={deletingScheduleID() === schedule.id}
-                                  disabled={deletingScheduleID() !== ''}
+                                  disabled={!canEditSchedules() || deletingScheduleID() !== ''}
                                   onClick={() => deleteReportSchedule(schedule)}
                                 >
                                   <Trash2 size={15} />

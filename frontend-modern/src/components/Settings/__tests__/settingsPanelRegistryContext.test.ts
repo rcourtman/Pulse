@@ -150,6 +150,58 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationSharingPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getApiAccessPanelProps()).toMatchObject({ currentUser: undefined });
   });
+  it('binds Reporting to the live reader and explicit read capability', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    expect(context.getReportingPanelProps()).toEqual({
+      currentUser: undefined,
+      accessKey: '[null,null]',
+      canRead: false,
+    });
+    setStatus({
+      currentUsername: 'report-reader',
+      settingsCapabilities: { reportingRead: true },
+    } as SecurityStatus);
+    expect(context.getReportingPanelProps()).toEqual({
+      currentUser: 'report-reader',
+      accessKey: '[null,null]',
+      canRead: true,
+    });
+    setStatus({
+      currentUsername: '',
+      settingsCapabilities: { reportingRead: false },
+    } as SecurityStatus);
+    expect(context.getReportingPanelProps()).toEqual({
+      currentUser: '',
+      accessKey: '[null,null]',
+      canRead: false,
+    });
+  });
+  it('normalizes Reporting scope order without hiding credential or scope changes', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>({
+      currentUsername: 'operator',
+      apiTokenHint: 'hint-a',
+      tokenScopes: ['settings:write', 'settings:read'],
+    } as SecurityStatus);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    const key = context.getReportingPanelProps().accessKey;
+    setStatus({ ...status(), tokenScopes: ['settings:read', 'settings:write'] } as SecurityStatus);
+    expect(context.getReportingPanelProps().accessKey).toBe(key);
+    setStatus({ ...status(), tokenScopes: ['settings:read'] } as SecurityStatus);
+    expect(context.getReportingPanelProps().accessKey).not.toBe(key);
+    setStatus({
+      ...status(),
+      apiTokenHint: 'hint-b',
+      tokenScopes: ['settings:read', 'settings:write'],
+    } as SecurityStatus);
+    expect(context.getReportingPanelProps().accessKey).not.toBe(key);
+  });
   it('binds audit webhooks to the live principal and explicit read/write capabilities', () => {
     const [status, setStatus] = createSignal<SecurityStatus | null>(null);
     const context = buildSettingsPanelRegistryContext({

@@ -1,7 +1,6 @@
 import { createEffect, createSignal, onMount, onCleanup, untrack } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
-import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
-import { showSuccess, showWarning } from '@/utils/toast';
+import { apiErrorFromResponse, apiFetch, getOrgID } from '@/utils/apiClient';
 import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
@@ -45,7 +44,52 @@ import {
   type ReportScheduleKind,
 } from '@/components/Settings/reportingSchedulesModel';
 
-export const useReportingPanelState = () => {
+export const useReportingPanelState = (isCurrentReader: () => boolean = () => true) => {
+  const org = getOrgID() || 'default';
+  let disposed = false;
+  const controller = new AbortController();
+  const isActive = () => !disposed && isCurrentReader() && (getOrgID() || 'default') === org;
+  const assertActive = () => {
+    if (!isActive()) throw new Error('Reporting reader changed');
+  };
+  const fetchForReader = async (...[url, init]: Parameters<typeof apiFetch>) => {
+    assertActive();
+    const response = await apiFetch(url, {
+      ...init,
+      expectedOrgID: org,
+      retry: false,
+      signal: controller.signal,
+    });
+    assertActive();
+    return response;
+  };
+  const readJSON = async (response: Response) => {
+    const body = await response.json();
+    assertActive();
+    return body;
+  };
+  const [actionError, setActionError] = createSignal('');
+  const [successNotice, setSuccessNotice] = createSignal('');
+  const showWarning = (message: string) => {
+    if (isActive()) {
+      setSuccessNotice('');
+      setActionError(message);
+    }
+  };
+  const showSuccess = (message: string) => {
+    if (isActive()) {
+      setActionError('');
+      setSuccessNotice(message);
+    }
+  };
+  const clearFeedback = () => {
+    setActionError('');
+    setSuccessNotice('');
+  };
+  onCleanup(() => {
+    disposed = true;
+    controller.abort();
+  });
   const [selectedResources, setSelectedResources] = createSignal<SelectedResource[]>([]);
   const [metricType, setMetricType] = createSignal('');
   const [format, setFormat] = createSignal<ReportingFormat | null>(null);
@@ -81,6 +125,7 @@ export const useReportingPanelState = () => {
   const [savingSchedule, setSavingSchedule] = createSignal(false);
   const [runningScheduleID, setRunningScheduleID] = createSignal('');
   const [deletingScheduleID, setDeletingScheduleID] = createSignal('');
+  const [updatingSchedule, setUpdatingSchedule] = createSignal(false);
   const reportingFeatureId = () => reportingCatalog()?.id ?? '';
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
 
@@ -98,7 +143,7 @@ export const useReportingPanelState = () => {
   });
 
   const loadReportingCatalog = async () => {
-    if (reportingCatalogLoading()) {
+    if (!isActive() || reportingCatalogLoading()) {
       return;
     }
 
@@ -107,7 +152,7 @@ export const useReportingPanelState = () => {
     setReportingCatalogError('');
     try {
       const request = buildReportingCatalogRequest();
-      const response = await apiFetch(request.url);
+      const response = await fetchForReader(request.url);
       if (!response.ok) {
         if (response.status === 404) {
           setReportingCatalog(buildLegacyReportingCatalogFallback());
@@ -116,14 +161,14 @@ export const useReportingPanelState = () => {
         throw await apiErrorFromResponse(response, getReportingCatalogErrorMessage());
       }
 
-      setReportingCatalog(parseReportingCatalog(await response.json()));
+      setReportingCatalog(parseReportingCatalog(await readJSON(response)));
     } catch (error) {
-      console.error('Reporting catalog error:', error);
+      if (!isActive()) return;
       setReportingCatalogError(
         error instanceof Error ? error.message : getReportingCatalogErrorMessage(),
       );
     } finally {
-      setReportingCatalogLoading(false);
+      if (isActive()) setReportingCatalogLoading(false);
     }
   };
 
@@ -135,24 +180,48 @@ export const useReportingPanelState = () => {
     void loadReportingCatalog();
   });
 
-  const loadReportSchedules = async () => {
-    if (reportSchedulesLoading()) return;
+  const loadReportSchedules = async (afterMutation = false) => {
+    if (
+      !afterMutation &&
+      (savingSchedule() || updatingSchedule() || runningScheduleID() || deletingScheduleID())
+    )
+      return;
+    if (!isActive() || reportSchedulesLoading()) return;
     setReportSchedulesAttempted(true);
     setReportSchedulesLoading(true);
     setReportSchedulesError('');
     try {
-      const response = await apiFetch('/api/admin/reports/schedules');
+      const response = await fetchForReader('/api/admin/reports/schedules');
       if (!response.ok) {
         throw await apiErrorFromResponse(response, 'Failed to load report schedules');
       }
-      setReportSchedules(parseReportSchedulesResponse(await response.json()));
+      const body = await readJSON(response);
+      // A malformed response is unknown, never evidence of an empty directory.
+      if (
+        !body ||
+        !('schedules' in body) ||
+        (body.schedules !== null &&
+          (!Array.isArray(body.schedules) ||
+            body.schedules.some(
+              (schedule: ReportSchedule) =>
+                !schedule ||
+                typeof schedule.id !== 'string' ||
+                !schedule.id ||
+                typeof schedule.name !== 'string',
+            ) ||
+            new Set(body.schedules.map((schedule: ReportSchedule) => schedule.id)).size !==
+              body.schedules.length))
+      ) {
+        throw new Error('Report schedules are unavailable. Refresh to try again.');
+      }
+      setReportSchedules(parseReportSchedulesResponse(body));
     } catch (error) {
-      console.error('Report schedules error:', error);
+      if (!isActive()) return;
       setReportSchedulesError(
         error instanceof Error ? error.message : 'Failed to load report schedules',
       );
     } finally {
-      setReportSchedulesLoading(false);
+      if (isActive()) setReportSchedulesLoading(false);
     }
   };
 
@@ -199,8 +268,22 @@ export const useReportingPanelState = () => {
     }
   });
 
+  const canEditSchedules = () =>
+    isActive() &&
+    isReportingEnabled() &&
+    reportSchedulesAttempted() &&
+    !reportSchedulesLoading() &&
+    !reportSchedulesError() &&
+    !savingSchedule() &&
+    !updatingSchedule() &&
+    !runningScheduleID() &&
+    !deletingScheduleID();
+  const isCurrentSchedule = (schedule: ReportSchedule) =>
+    reportSchedules().some((current) => unwrap(current) === unwrap(schedule));
+
   const downloadResponseBlob = async (filename: string, response: Response) => {
     const blob = await response.blob();
+    assertActive();
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -208,13 +291,18 @@ export const useReportingPanelState = () => {
       response.headers.get('Content-Disposition'),
       filename,
     );
-    document.body.appendChild(anchor);
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(anchor);
+    try {
+      document.body.appendChild(anchor);
+      anchor.click();
+    } finally {
+      window.URL.revokeObjectURL(url);
+      anchor.remove();
+    }
   };
 
   const handleGenerate = async () => {
+    if (!isActive() || !isReportingEnabled() || generating()) return;
+    clearFeedback();
     const resources = selectedResources();
     if (resources.length === 0) {
       showWarning(getReportingGenerateSelectionRequiredMessage());
@@ -244,7 +332,7 @@ export const useReportingPanelState = () => {
         performanceReport,
       );
 
-      const response = await apiFetch(request.request.url, request.request.init);
+      const response = await fetchForReader(request.request.url, request.request.init);
       if (!response.ok) {
         throw await apiErrorFromResponse(response, getReportingGenerateErrorMessage());
       }
@@ -253,15 +341,16 @@ export const useReportingPanelState = () => {
 
       showSuccess(getReportingGenerateSuccessMessage());
     } catch (error) {
-      console.error('Report generation error:', error);
+      if (!isActive()) return;
       showWarning(error instanceof Error ? error.message : getReportingGenerateErrorMessage());
     } finally {
-      setGenerating(false);
+      if (isActive()) setGenerating(false);
     }
   };
 
   const handleExportVMInventory = async () => {
-    if (exportingInventory()) return;
+    if (!isActive() || !isReportingEnabled() || exportingInventory()) return;
+    clearFeedback();
 
     setExportingInventory(true);
     try {
@@ -270,7 +359,7 @@ export const useReportingPanelState = () => {
         throw new Error(getReportingInventoryExportErrorMessage());
       }
       const request = buildVMInventoryExportRequest(new Date(), inventoryDefinition);
-      const response = await apiFetch(request.request.url);
+      const response = await fetchForReader(request.request.url);
       if (!response.ok) {
         throw await apiErrorFromResponse(response, getReportingInventoryExportErrorMessage());
       }
@@ -278,12 +367,12 @@ export const useReportingPanelState = () => {
       await downloadResponseBlob(request.filename, response);
       showSuccess(getReportingInventoryExportSuccessMessage());
     } catch (error) {
-      console.error('VM inventory export error:', error);
+      if (!isActive()) return;
       showWarning(
         error instanceof Error ? error.message : getReportingInventoryExportErrorMessage(),
       );
     } finally {
-      setExportingInventory(false);
+      if (isActive()) setExportingInventory(false);
     }
   };
 
@@ -310,12 +399,16 @@ export const useReportingPanelState = () => {
   };
 
   const startCreateSchedule = () => {
+    if (!canEditSchedules()) return;
+    clearFeedback();
     setScheduleForm(DEFAULT_REPORT_SCHEDULE_FORM());
     setScheduleResources([]);
     setScheduleFormOpen(true);
   };
 
   const startEditSchedule = (schedule: ReportSchedule) => {
+    if (!canEditSchedules() || !isCurrentSchedule(schedule)) return;
+    clearFeedback();
     const normalized = normalizeReportSchedule(schedule);
     setScheduleForm(scheduleToForm(normalized));
     setScheduleResources(scheduleToSelectedResources(normalized));
@@ -329,7 +422,8 @@ export const useReportingPanelState = () => {
   };
 
   const saveReportSchedule = async () => {
-    if (savingSchedule()) return;
+    if (!canEditSchedules() || !scheduleFormOpen()) return;
+    clearFeedback();
     const form = scheduleForm();
     const payload = buildReportSchedulePayload(form, scheduleResources());
     if (!payload.name) {
@@ -348,7 +442,7 @@ export const useReportingPanelState = () => {
     setSavingSchedule(true);
     try {
       const isUpdate = form.id !== '';
-      const response = await apiFetch(
+      const response = await fetchForReader(
         isUpdate
           ? `/api/admin/reports/schedules/${encodeURIComponent(form.id)}`
           : '/api/admin/reports/schedules',
@@ -361,7 +455,7 @@ export const useReportingPanelState = () => {
       if (!response.ok) {
         throw await apiErrorFromResponse(response, 'Failed to save report schedule');
       }
-      const saved = normalizeReportSchedule(await response.json());
+      const saved = normalizeReportSchedule(await readJSON(response));
       setReportSchedules((current) => {
         const index = current.findIndex((schedule) => schedule.id === saved.id);
         if (index < 0) return [...current, saved];
@@ -370,13 +464,13 @@ export const useReportingPanelState = () => {
         return next;
       });
       closeScheduleForm();
-      await loadReportSchedules();
+      await loadReportSchedules(true);
       showSuccess('Report schedule saved');
     } catch (error) {
-      console.error('Save report schedule error:', error);
+      if (!isActive()) return;
       showWarning(error instanceof Error ? error.message : 'Failed to save report schedule');
     } finally {
-      setSavingSchedule(false);
+      if (isActive()) setSavingSchedule(false);
     }
   };
 
@@ -384,7 +478,7 @@ export const useReportingPanelState = () => {
     const normalized = normalizeReportSchedule(schedule);
     const payload = { ...normalized };
     delete payload.delivery_check;
-    const response = await apiFetch(
+    const response = await fetchForReader(
       `/api/admin/reports/schedules/${encodeURIComponent(normalized.id)}`,
       {
         method: 'PUT',
@@ -395,26 +489,32 @@ export const useReportingPanelState = () => {
     if (!response.ok) {
       throw await apiErrorFromResponse(response, 'Failed to update report schedule');
     }
-    const saved = normalizeReportSchedule(await response.json());
+    const saved = normalizeReportSchedule(await readJSON(response));
     setReportSchedules((current) =>
       current.map((candidate) => (candidate.id === saved.id ? saved : candidate)),
     );
-    await loadReportSchedules();
+    await loadReportSchedules(true);
   };
 
   const toggleReportSchedule = async (schedule: ReportSchedule) => {
+    if (!canEditSchedules() || !isCurrentSchedule(schedule)) return;
+    clearFeedback();
     const enabled = !schedule.enabled;
+    setUpdatingSchedule(true);
     try {
       await updateReportSchedule({ ...schedule, enabled });
       showSuccess(enabled ? 'Report schedule enabled' : 'Report schedule disabled');
     } catch (error) {
-      console.error('Toggle report schedule error:', error);
+      if (!isActive()) return;
       showWarning(error instanceof Error ? error.message : 'Failed to update report schedule');
+    } finally {
+      if (isActive()) setUpdatingSchedule(false);
     }
   };
 
   const runReportScheduleNow = async (schedule: ReportSchedule) => {
-    if (runningScheduleID()) return;
+    if (!canEditSchedules() || !isCurrentSchedule(schedule) || runningScheduleID()) return;
+    clearFeedback();
     if (
       schedule.last_run_status === 'unconfirmed' &&
       !window.confirm(
@@ -422,10 +522,11 @@ export const useReportingPanelState = () => {
       )
     )
       return;
+    if (!canEditSchedules() || !isCurrentSchedule(schedule)) return;
     const retry = reportScheduleNeedsRetry(schedule);
     setRunningScheduleID(schedule.id);
     try {
-      const response = await apiFetch(
+      const response = await fetchForReader(
         `/api/admin/reports/schedules/${encodeURIComponent(schedule.id)}/run${retry ? '?retry=true' : ''}`,
         { method: 'POST' },
       );
@@ -433,13 +534,14 @@ export const useReportingPanelState = () => {
         .clone()
         .json()
         .catch(() => null);
+      assertActive();
       if (body?.schedule) {
         const updated = normalizeReportSchedule(body.schedule);
         setReportSchedules((current) =>
           current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
         );
       }
-      await loadReportSchedules();
+      await loadReportSchedules(true);
       if (!response.ok) {
         if (body?.schedule) {
           showWarning(body.schedule.last_error || reportScheduleLastRunLabel(body.schedule));
@@ -457,20 +559,22 @@ export const useReportingPanelState = () => {
           body?.schedule ? reportScheduleLastRunLabel(body.schedule) : 'Report schedule ran',
         );
     } catch (error) {
-      console.error('Run report schedule error:', error);
+      if (!isActive()) return;
       showWarning(error instanceof Error ? error.message : 'Failed to run report schedule');
-      await loadReportSchedules();
+      await loadReportSchedules(true);
     } finally {
-      setRunningScheduleID('');
+      if (isActive()) setRunningScheduleID('');
     }
   };
 
   const deleteReportSchedule = async (schedule: ReportSchedule) => {
-    if (deletingScheduleID()) return;
+    if (!canEditSchedules() || !isCurrentSchedule(schedule) || deletingScheduleID()) return;
+    clearFeedback();
     if (!window.confirm(`Delete ${schedule.name}?`)) return;
+    if (!canEditSchedules() || !isCurrentSchedule(schedule)) return;
     setDeletingScheduleID(schedule.id);
     try {
-      const response = await apiFetch(
+      const response = await fetchForReader(
         `/api/admin/reports/schedules/${encodeURIComponent(schedule.id)}`,
         {
           method: 'DELETE',
@@ -482,14 +586,18 @@ export const useReportingPanelState = () => {
       setReportSchedules((current) => current.filter((candidate) => candidate.id !== schedule.id));
       showSuccess('Report schedule deleted');
     } catch (error) {
-      console.error('Delete report schedule error:', error);
+      if (!isActive()) return;
       showWarning(error instanceof Error ? error.message : 'Failed to delete report schedule');
     } finally {
-      setDeletingScheduleID('');
+      if (isActive()) setDeletingScheduleID('');
     }
   };
 
   return {
+    actionError,
+    successNotice,
+    clearFeedback,
+    canEditSchedules,
     closeScheduleForm,
     deleteReportSchedule,
     deletingScheduleID,
@@ -510,13 +618,13 @@ export const useReportingPanelState = () => {
     reportingCatalogError,
     reportingCatalogLoading,
     reloadReportingCatalog: () => {
-      if (reportingCatalogLoading()) {
+      if (!isActive() || reportingCatalogLoading()) {
         return;
       }
       void loadReportingCatalog();
     },
     reloadReportSchedules: () => {
-      if (reportSchedulesLoading()) return;
+      if (!isActive() || reportSchedulesLoading()) return;
       void loadReportSchedules();
     },
     runReportScheduleNow,

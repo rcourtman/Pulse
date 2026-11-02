@@ -74,6 +74,10 @@ const baseCatalog = {
 
 function buildState(overrides: Record<string, unknown> = {}) {
   return {
+    clearFeedback: vi.fn(),
+    actionError: () => '',
+    successNotice: () => '',
+    canEditSchedules: () => true,
     closeScheduleForm: vi.fn(),
     deleteReportSchedule: vi.fn(),
     deletingScheduleID: () => '',

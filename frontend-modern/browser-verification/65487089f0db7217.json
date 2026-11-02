@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "17f10a87b06be70463d165ec174df53735182872",
+  "verified_at": "2026-11-02T04:44:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "1aab4460002369fce646feb063fb844ff3f62e68bd79c6f9afbf8566a3875c5c",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "cc506abf864cf6716628a08dadb17ce42d5b9509d16aa042845fc7b1adc7959e"
+  },
+  "routes": [
+    "/settings/support/reporting",
+    "/settings/security-sso (synthetic containing-status refresh precursor)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App/Settings/registry/ReportingPanel/editor/API client/CSS from committed 17f10a87. Final opaque feedback is visible at the saving viewport with no manual scroll or focus jump; it is dismissible and does not cover Save. All four final desktop/narrow captures received native view_image inspection.",
+    "The unchanged d81c2cb615 callback/lifetime implementation passed 18 actual-App feedback checks and four native captures. Native narrow review exposed text bleeding through its dark translucent tint, so the final one-class opaque-surface correction adds 10 focused actual-App checks and four fresh native captures. Intermediate pixels remain retained rather than counted as final visual acceptance.",
+    "One final-build browser attempt timed out at its 12-second load-event wait before any reporting assertion. Its startup capture/body and complete result remain retained; no application error or cause was established. The completed pass uses bounded DOM-content readiness (45 seconds) plus the actual route heading, with 30-second interaction bounds within the same 180-second browser limit. This is not a retrospective pass or startup-performance diagnosis."
+  ],
+  "interactions": [
+    "Refused Save keeps the current draft, reports the refusal in the actual viewport and sends no automatic retry. Dismissal only removes feedback. A deliberate retry alone saves and shows a current-reader success. Narrow dark notice backgrounds are opaque and labels no longer show through them.",
+    "The preceding unchanged callback matrix exercised a held real Settings status refresh via synthetic SSO save: reader change disposes both notice portal and editor, suppresses old feedback and recovers a new-reader save. Ordinary session/token/CSRF and exact-org write facts remain retained. No global toast store, new grant or endpoint.",
+    "The earlier own-parent 4edb4f3e7874f9cc receipt retains 34 reader-lifetime/catalog/selection/late-body checks and its actual App producer/consumer coverage. The two registry files remain byte-identical to those verified contents; only the changed panel/hook need this fresh receipt.",
+    "Playwright1.56.1 matches the committed integration lock; Chromium141.0.7390.37 desktop1280x900 and WebKit26.0 dark touch390x844. Browser contexts, browsers, Vite and synthetic API servers close. Expected synthetic HTTP403 console events remain. No installed generation/retention/email or original tenant/IdP recovery claim."
+  ]
+}

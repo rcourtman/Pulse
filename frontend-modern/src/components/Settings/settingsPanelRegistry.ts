@@ -10,6 +10,7 @@ import type { APIAccessPanel as APIAccessPanelType } from './APIAccessPanel';
 import type { SecurityOverviewPanel as SecurityOverviewPanelType } from './SecurityOverviewPanel';
 import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthPanel';
 import type { RelaySettingsPanel as RelaySettingsPanelType } from './RelaySettingsPanel';
+import type { ReportingPanel as ReportingPanelType } from './ReportingPanel';
 import type { AuditWebhookPanel as AuditWebhookPanelType } from './AuditWebhookPanel';
 import type { RolesPanel as RolesPanelType } from './RolesPanel';
 import type { UserAssignmentsPanel as UserAssignmentsPanelType } from './UserAssignmentsPanel';
@@ -45,6 +46,7 @@ export interface SettingsPanelRegistryContext {
   getSecurityOverviewPanelProps: () => Parameters<typeof SecurityOverviewPanelType>[0];
   getSecurityAuthPanelProps: () => Parameters<typeof SecurityAuthPanelType>[0];
   getRelayPanelProps: () => Parameters<typeof RelaySettingsPanelType>[0];
+  getReportingPanelProps: () => Parameters<typeof ReportingPanelType>[0];
   getAuditWebhookPanelProps: () => Parameters<typeof AuditWebhookPanelType>[0];
   getRolesPanelProps: () => Parameters<typeof RolesPanelType>[0];
   getUserAssignmentsPanelProps: () => Parameters<typeof UserAssignmentsPanelType>[0];
@@ -96,6 +98,7 @@ export const createSettingsPanelRegistry = (
   },
   'support-reporting': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.ReportingPanel,
+    getProps: context.getReportingPanelProps,
   },
   'support-logs': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.SystemLogsPanel,
