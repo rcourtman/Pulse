@@ -37,6 +37,9 @@ func (actionRunnerFailingPersistenceFS) ReadFile(name string) ([]byte, error) {
 func (actionRunnerFailingPersistenceFS) WriteFile(string, []byte, os.FileMode) error {
 	return errors.New("injected action-runner persistence failure")
 }
+func (fs actionRunnerFailingPersistenceFS) CreateTemp(dir, pattern string) (config.TemporaryFile, error) {
+	return newFailingPersistenceTempFile(dir, pattern, func() error { return fs.WriteFile("", nil, 0) })
+}
 func (actionRunnerFailingPersistenceFS) Rename(oldPath, newPath string) error {
 	return os.Rename(oldPath, newPath)
 }
@@ -57,6 +60,9 @@ func (fs *actionRunnerBlockingFailingPersistenceFS) WriteFile(string, []byte, os
 		<-fs.release
 	})
 	return errors.New("injected blocked action-runner persistence failure")
+}
+func (fs *actionRunnerBlockingFailingPersistenceFS) CreateTemp(dir, pattern string) (config.TemporaryFile, error) {
+	return newFailingPersistenceTempFile(dir, pattern, func() error { return fs.WriteFile("", nil, 0) })
 }
 func (fs *actionRunnerBlockingFailingPersistenceFS) Rename(oldPath, newPath string) error {
 	return os.Rename(oldPath, newPath)

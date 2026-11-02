@@ -50,6 +50,12 @@ func (fs *actionRunnerFailAfterWritesFS) ReadFile(name string) ([]byte, error) {
 	return os.ReadFile(name)
 }
 func (fs *actionRunnerFailAfterWritesFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	if err := fs.beforeWrite(); err != nil {
+		return err
+	}
+	return os.WriteFile(name, data, perm)
+}
+func (fs *actionRunnerFailAfterWritesFS) beforeWrite() error {
 	fs.mu.Lock()
 	fs.writes++
 	writes := fs.writes
@@ -57,7 +63,10 @@ func (fs *actionRunnerFailAfterWritesFS) WriteFile(name string, data []byte, per
 	if writes > fs.allowWrites {
 		return errors.New("injected rollback persistence failure")
 	}
-	return os.WriteFile(name, data, perm)
+	return nil
+}
+func (fs *actionRunnerFailAfterWritesFS) CreateTemp(dir, pattern string) (config.TemporaryFile, error) {
+	return newActionRunnerTempFile(dir, pattern, fs.beforeWrite)
 }
 func (fs *actionRunnerFailAfterWritesFS) Rename(oldPath, newPath string) error {
 	return os.Rename(oldPath, newPath)
@@ -72,6 +81,12 @@ func (fs *actionRunnerFailAfterWritesFS) MkdirAll(path string, perm os.FileMode)
 
 func (fs *actionRunnerTestFS) ReadFile(name string) ([]byte, error) { return os.ReadFile(name) }
 func (fs *actionRunnerTestFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	if err := fs.beforeWrite(); err != nil {
+		return err
+	}
+	return os.WriteFile(name, data, perm)
+}
+func (fs *actionRunnerTestFS) beforeWrite() error {
 	blocked := false
 	fs.blockOnce.Do(func() {
 		blocked = fs.entered != nil
@@ -82,10 +97,30 @@ func (fs *actionRunnerTestFS) WriteFile(name string, data []byte, perm os.FileMo
 	if blocked {
 		<-fs.release
 	}
-	if fs.writeErr != nil {
-		return fs.writeErr
+	return fs.writeErr
+}
+func (fs *actionRunnerTestFS) CreateTemp(dir, pattern string) (config.TemporaryFile, error) {
+	return newActionRunnerTempFile(dir, pattern, fs.beforeWrite)
+}
+
+type actionRunnerTempFile struct {
+	*os.File
+	beforeWrite func() error
+}
+
+func (f *actionRunnerTempFile) Write(data []byte) (int, error) {
+	if err := f.beforeWrite(); err != nil {
+		return 0, err
 	}
-	return os.WriteFile(name, data, perm)
+	return f.File.Write(data)
+}
+
+func newActionRunnerTempFile(dir, pattern string, beforeWrite func() error) (config.TemporaryFile, error) {
+	f, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	return &actionRunnerTempFile{File: f, beforeWrite: beforeWrite}, nil
 }
 func (fs *actionRunnerTestFS) Rename(oldPath, newPath string) error {
 	return os.Rename(oldPath, newPath)

@@ -349,7 +349,7 @@ func TestCollectorUninstallTransactionFailsClosedAndRetriesAfterRestart(t *testi
 			return filepath.Join(dataPath, "host_continuity.json.tmp")
 		}},
 		{name: "credential persistence", blockedPath: func(dataPath string) string {
-			return filepath.Join(dataPath, "api_tokens.json.tmp")
+			return filepath.Join(dataPath, "api_tokens.json")
 		}},
 	} {
 		credentialShapes := []struct {
@@ -395,6 +395,17 @@ func TestCollectorUninstallTransactionFailsClosedAndRetriesAfterRestart(t *testi
 				}
 
 				blocker := failure.blockedPath(dataPath)
+				// Credential writes use exclusively owned, unpredictable temporary
+				// files. Block their final rename while retaining the original
+				// inventory for restart, rather than guessing a temporary pathname.
+				retainedCredentials := ""
+				if failure.name == "credential persistence" {
+					retainedCredentials = filepath.Join(dataPath, "api_tokens.fixture-retained")
+					if err := os.Rename(blocker, retainedCredentials); err != nil {
+						runtime.stop()
+						t.Fatalf("retain original credential inventory: %v", err)
+					}
+				}
 				if err := os.Mkdir(blocker, 0o700); err != nil {
 					runtime.stop()
 					t.Fatalf("create persistence blocker: %v", err)
@@ -405,9 +416,13 @@ func TestCollectorUninstallTransactionFailsClosedAndRetriesAfterRestart(t *testi
 					t.Fatal(err)
 				}
 				failed := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/agent/uninstall", rawToken, uninstallBody)
-				if failed.Code == http.StatusOK {
+				if failed.Code != http.StatusInternalServerError || !strings.Contains(failed.Body.String(), "agent_uninstall_failed") {
 					runtime.stop()
-					t.Fatalf("persistence failure authorized teardown: %s", failed.Body.String())
+					t.Fatalf("persistence failure status = %d, want uninstall failure: %s", failed.Code, failed.Body.String())
+				}
+				if leftovers, err := filepath.Glob(filepath.Join(dataPath, ".api_tokens.json.*.tmp")); err != nil || len(leftovers) != 0 {
+					runtime.stop()
+					t.Fatalf("failed publication left temporary credentials: %v (glob error: %v)", leftovers, err)
 				}
 				if hosts := runtime.monitor.GetLiveHostsSnapshot(); len(hosts) != 1 || hosts[0].ID != hostID {
 					runtime.stop()
@@ -422,10 +437,19 @@ func TestCollectorUninstallTransactionFailsClosedAndRetriesAfterRestart(t *testi
 					runtime.stop()
 					t.Fatalf("remove persistence blocker: %v", err)
 				}
+				if retainedCredentials != "" {
+					if err := os.Rename(retainedCredentials, blocker); err != nil {
+						runtime.stop()
+						t.Fatalf("restore original credential inventory: %v", err)
+					}
+				}
 				runtime.stop()
 				reloaded, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
 				if err != nil {
 					t.Fatalf("LoadAPITokens after failed transaction: %v", err)
+				}
+				if len(reloaded) != 1 || reloaded[0].ID != record.ID {
+					t.Fatalf("failed uninstall did not retain durable retry credential: %+v", reloaded)
 				}
 				runtime = newHostRemovalLifecycleHTTPRuntime(t, dataPath, reloaded)
 				t.Cleanup(runtime.stop)
