@@ -135,6 +135,31 @@ describe('Roles reader lifetime', () => {
     },
   );
 
+  it('preserves the draft when reactive status props refresh without changing the reader', async () => {
+    const [status, setStatus] = createSignal({ user: 'reader-a', allowed: true });
+    let state!: ReturnType<typeof useRolesPanelState>;
+    render(() => {
+      state = useRolesPanelState({
+        get currentUser() {
+          return status().user;
+        },
+        get canManage() {
+          return status().allowed;
+        },
+      });
+      return <div />;
+    });
+    await loaded(state);
+    state.openEditRole(north);
+    state.setFormName('Unchanged reader draft');
+    const reads = mocks.getRoles.mock.calls.length;
+    setStatus({ user: 'reader-a', allowed: true });
+    await pause();
+    expect(state.showModal()).toBe(true);
+    expect(state.formName()).toBe('Unchanged reader draft');
+    expect(mocks.getRoles).toHaveBeenCalledTimes(reads);
+  });
+
   it('reactivates rendered controls after capability withdrawal and restoration', async () => {
     const [feature, setFeature] = createSignal(true);
     enabled = feature;

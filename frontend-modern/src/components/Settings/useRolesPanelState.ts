@@ -168,7 +168,10 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     if (!disposed) void loadRoles();
   };
   createEffect(
-    on([featureGate.licenseReady, accessAllowed, () => props.currentUser], resetContext),
+    on([featureGate.licenseReady, accessAllowed, () => props.currentUser], (current, previous) => {
+      // Dynamic props can refresh without changing the admitted reader.
+      if (!previous || current.some((value, index) => value !== previous[index])) resetContext();
+    }),
   );
   const unsubscribeOrg = eventBus.on('org_switched', resetContext);
   onCleanup(() => {
