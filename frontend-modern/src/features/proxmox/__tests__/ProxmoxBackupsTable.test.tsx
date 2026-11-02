@@ -395,14 +395,16 @@ describe('ProxmoxBackupsTable', () => {
     };
 
     // Two datastores of one server read as one server, not two identical ones:
-    // the host cells sit on its first row, and the second row keeps its name
-    // and its own datastore figures.
+    // status sits on its first row, and the second row keeps its name and its
+    // own datastore figures. Host CPU, memory, uptime and version are in the
+    // server's drawer, not the row.
     expect(dataRows()).toHaveLength(2);
     expect(within(table).getAllByText('pbs-main')).toHaveLength(2);
-    for (const column of ['status', 'version', 'cpu', 'memory', 'uptime']) {
-      expect(cellText(0, column)).not.toBe('');
-      expect(cellText(1, column)).toBe('');
-    }
+    expect(cellText(0, 'status')).not.toBe('');
+    expect(cellText(1, 'status')).toBe('');
+    expect(
+      columns.filter((column) => ['version', 'cpu', 'memory', 'uptime'].includes(column ?? '')),
+    ).toEqual([]);
     expect(cellText(0, 'datastore')).toBe('main');
     expect(cellText(1, 'datastore')).toBe('offsite');
     expect(cellText(1, 'used')).toContain('25');
@@ -1060,23 +1062,16 @@ describe('ProxmoxBackupsTable', () => {
     );
   });
 
-  it('keeps PBS backup count and uptime cells on shared platform primitives', () => {
+  it('keeps PBS backup count and capacity cells on shared platform primitives', () => {
     const directLocaleCountCall = 'row.backupCount.' + 'toLocale' + 'String()';
-    const directCpuPercentRound = 'Math.round(row.cpuPercent ?? 0)}' + '%';
-    const directMemoryPercentRound = 'Math.round(row.memoryPercent ?? 0)}' + '%';
     const directDatastorePercentRound = 'Math.round(pct() ?? 0)}' + '%';
-    const directUptimeCall = 'formatUptime(row.uptimeSeconds ?? 0)';
 
     expect(proxmoxBackupServersTableSource).toContain('PlatformTableNumberValue');
     expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableIntegerValue');
     expect(proxmoxBackupServersTableSource).toContain('PlatformTablePercentValue');
     expect(proxmoxBackupServersTableSource).toContain('formatPlatformTablePercentValue');
-    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableUptimeValue');
     expect(proxmoxBackupServersTableSource).not.toContain(directLocaleCountCall);
-    expect(proxmoxBackupServersTableSource).not.toContain(directCpuPercentRound);
-    expect(proxmoxBackupServersTableSource).not.toContain(directMemoryPercentRound);
     expect(proxmoxBackupServersTableSource).not.toContain(directDatastorePercentRound);
-    expect(proxmoxBackupServersTableSource).not.toContain(directUptimeCall);
   });
 
   it('routes PBS server expansion through the canonical resource drawer', () => {
@@ -3579,18 +3574,18 @@ describe('PBS inventory state column', () => {
     const countColumn = table.querySelector<HTMLElement>(
       'col[data-proxmox-backups-column="backups"]',
     )!;
-    // Server, status, CPU, memory, datastore, used, jobs, then the count.
+    // Server, status, datastore, used, jobs, then the count.
     const cells = table.querySelector('tbody tr')!.querySelectorAll('td');
-    expect(countColumn.style.width).toBe('12%');
-    expect(cells[7]).toHaveTextContent(/^Loading$/);
+    expect(countColumn.style.width).toBe('11%');
+    expect(cells[5]).toHaveTextContent(/^Loading$/);
     setState('unavailable');
-    expect(cells[7]).toHaveTextContent(/^Unavailable$/);
+    expect(cells[5]).toHaveTextContent(/^Unavailable$/);
     expect(cells[1]).toHaveTextContent('Healthy');
-    expect(cells[5]).toHaveTextContent('40.0%');
-    expect(cells[5]).toHaveTextContent('400 B / 1000 B');
+    expect(cells[3]).toHaveTextContent('40.0%');
+    expect(cells[3]).toHaveTextContent('400 B / 1000 B');
     setState('available');
-    expect(cells[7]).toHaveTextContent(/^0$/);
-    expect(countColumn.style.width).toBe('12%');
+    expect(cells[5]).toHaveTextContent(/^0$/);
+    expect(countColumn.style.width).toBe('11%');
   });
 });
 

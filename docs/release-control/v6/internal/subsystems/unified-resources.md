@@ -209,6 +209,15 @@ narrow browser proof exercises the same producer through the inventory consumer
 with native interactions and inspected pixels. No API, provider, guest, polling,
 auth, resource identity or protection-policy change, nor installed recovery claim.
 
+### Backup-server rows read host figures through the drawer resource (2 November 2026)
+
+Backup servers rows no longer copy the PBS host's CPU, memory or uptime out of
+the unified resource; the server's drawer reads them from the row's resource
+snapshot, which keeps the agent-merged presentation (`cpu`, `memory`, `uptime`
+from the uniquely correlated host agent when one exists). Correlation,
+retention and History targets are unchanged. `ProxmoxBackupServersTable.test.ts`
+pins that the row resource still carries the host readings.
+
 ### PBS datastore alerts join by instance id, not display name (2 November 2026)
 
 The Backup servers table finds a datastore's capacity alert from the unified

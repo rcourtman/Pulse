@@ -5725,7 +5725,6 @@ describe('shared primitive guardrails', () => {
     const platformUptimeConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
-      ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
       ['src/features/proxmox/ProxmoxMailGatewayDrawer.tsx', proxmoxMailGatewayDrawerSource],
       ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
       ['src/features/proxmox/ProxmoxNodesTable.tsx', proxmoxNodesTableSource],
@@ -5747,10 +5746,6 @@ describe('shared primitive guardrails', () => {
       {
         path: 'src/features/kubernetes/KubernetesNodesTable.tsx',
         patterns: ['const formatUptime'],
-      },
-      {
-        path: 'src/features/proxmox/ProxmoxBackupServersTable.tsx',
-        patterns: ['formatUptime(row.uptimeSeconds ?? 0)'],
       },
       {
         path: 'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
