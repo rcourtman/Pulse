@@ -177,7 +177,12 @@ describe('Settings capability refresh withdrawal', () => {
     apiFetchMock.mockResolvedValue(
       response({
         ...grantedStatus,
-        presentationPolicy: { readOnly: true },
+        presentationPolicy: {
+          readOnly: true,
+          demoMode: false,
+          hideCommercial: false,
+          hideUpgrade: true,
+        },
       }),
     );
     const { access } = mount();
