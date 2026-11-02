@@ -128,7 +128,7 @@ class TransparencyDocsTest(unittest.TestCase):
     def test_standing_authority_preserves_review_and_mechanical_releases(self):
         for path, text in self.documents():
             with self.subTest(document=path):
-                self.assertIn("Maintainer changes receive independent review", text)
+                self.assertIn("Automated changes receive independent review", text)
                 self.assertIn("must pass the repository's required checks before merging", text)
                 self.assertIn("without per-release approval", text)
                 self.assertIn("no model chooses what goes in a release or when", text)
