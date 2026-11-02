@@ -5069,6 +5069,30 @@ observed daily growth. The page owns the live alert store and passes a lookup
 through `ProxmoxBackupsTable`'s `datastoreAlerts`, so the table renders without
 an alerts provider and shows no forecast when none is given.
 
+### Backups page orders its answers: health, servers, restore points (2 November 2026)
+
+The Backups page now reads in the order people ask: Backup health beside
+Backup jobs (are my backups protected, did last night run), then the Backup
+servers table (is my PBS reachable, is its datastore filling), then the
+restore points: the By date / Coverage tabs, the activity chart, filters and
+list. The view tabs head the restore points only; health and jobs belong to the
+page and render the same in either view.
+
+The Backup servers table stays mounted through inventory loading, failure and
+retries, since it reads `/api/resources`, not either backup inventory. The
+single loading or all-sources-failed state sits above it in the summary's place,
+and the restore-point block appears only when an inventory is readable or a
+source failure needs explaining. The posture-unavailable and unread-sources
+notices stay with the health card they qualify; the unresolved saved-location
+notice moves with the list it empties.
+
+Tapping a health exception still lands on Coverage filtered to those guests.
+Because the list now sits below the servers, a tap scrolls the restore points
+into view when their top is below the fold (phones), honouring reduced motion,
+and leaves the page where it is when the list already shows; clearing a filter
+never scrolls. `ProxmoxBackupsTable.test.tsx` pins the section order and both
+scroll cases.
+
 ### Backup jobs show 14 days of retained outcomes beside Backup health (2 November 2026)
 
 A Backup jobs card answers "did last night's backups run, and is that

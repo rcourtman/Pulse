@@ -813,6 +813,102 @@ describe('ProxmoxBackupsTable', () => {
     expect(grid.className).toContain('xl:[&:has([data-backup-jobs])]:grid-cols-');
   });
 
+  it('answers health first, then the backup servers, then the restore points', async () => {
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={[pbsServerResource]}
+      />
+    ));
+
+    const verdict = await waitFor(() => {
+      const element = document.querySelector('[data-backup-verdict]');
+      expect(element).toHaveTextContent('0 of 1 protected');
+      return element!;
+    });
+    const servers = document.querySelector('[data-proxmox-backups-table="servers"]')!;
+    const restorePoints = document.querySelector<HTMLElement>('[data-backup-restore-points]')!;
+    const follows = (first: Node, second: Node) =>
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(verdict, servers)).toBe(true);
+    expect(follows(servers, restorePoints)).toBe(true);
+    // The view tabs head the restore points; health and jobs belong to the page.
+    expect(within(restorePoints).getByRole('navigation', { name: 'Backup views' })).toBeTruthy();
+    expect(restorePoints.contains(verdict)).toBe(false);
+    expect(restorePoints.contains(servers)).toBe(false);
+  });
+
+  it('brings the restore points into view after an exception tap only when they are below the fold', async () => {
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const scrollIntoView = vi.fn();
+    const prototype = HTMLElement.prototype as { scrollIntoView?: (arg?: unknown) => void };
+    const original = prototype.scrollIntoView;
+    prototype.scrollIntoView = scrollIntoView;
+    try {
+      renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      await waitFor(() =>
+        expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent(
+          '0 of 1 protected',
+        ),
+      );
+      const restorePoints = document.querySelector<HTMLElement>('[data-backup-restore-points]')!;
+      const top = vi.spyOn(restorePoints, 'getBoundingClientRect');
+      const group = () =>
+        within(screen.getByRole('list', { name: 'Backups that are not protected' })).getByRole(
+          'button',
+          { name: '1 backup source reported a failure' },
+        );
+      const reason = () => new URLSearchParams(window.location.search).get('reason');
+      const settle = async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      };
+      const belowFold = { top: window.innerHeight + 300 } as DOMRect;
+
+      // From By date, below the fold (phone): the tap lands on the filtered
+      // Coverage list and brings the restore points into view.
+      top.mockReturnValue(belowFold);
+      await fireEvent.click(group());
+      await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+      expect(reason()).toBe('source-failed');
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(scrollIntoView.mock.contexts[0]).toBe(restorePoints);
+      expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }));
+
+      // Clearing the filter never scrolls, even with the list below the fold.
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBeNull());
+      await settle();
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+      // On Coverage with the list already on screen (desktop): no scroll.
+      top.mockReturnValue({ top: 120 } as DOMRect);
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBe('source-failed'));
+      await settle();
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+      // On Coverage below the fold: selecting again reveals the list.
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBeNull());
+      top.mockReturnValue(belowFold);
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBe('source-failed'));
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2));
+      expect(scrollIntoView.mock.contexts[1]).toBe(restorePoints);
+    } finally {
+      if (original) prototype.scrollIntoView = original;
+      else delete prototype.scrollIntoView;
+    }
+  });
+
   it('lets a backup exception group filter Coverage to those workloads', async () => {
     // "17 attention" was text: finding which workloads it counted took the
     // Filters sheet on a phone. A group is one tap to exactly its workloads.

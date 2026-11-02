@@ -523,6 +523,15 @@ desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
 day selection, metric switching, empty matches and recovery. No shared-filter,
 route, navigation, access or backup operation changes.
 
+### Backup view tabs head the restore points, not the page (2 November 2026)
+
+On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,
+Coverage) now sit at the top of the restore-point block, below the Backup
+health and Backup jobs cards and the Backup servers table, so a tab reads as
+switching the list it heads rather than the whole page. The tabs keep their
+`nav` landmark and active-route state, so recovery focus that lands on the
+active view still finds it inside the inspection region.
+
 ### Backup servers table drops its host columns (2 November 2026)
 
 `ProxmoxBackupServersTable` no longer renders Version, CPU, Memory or Uptime
