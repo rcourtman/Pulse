@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SystemLogsPanel } from '../SystemLogsPanel';
 
 const apiFetchJSON = vi.hoisted(() => vi.fn());
-vi.mock('@/utils/apiClient', () => ({ apiFetchJSON }));
+vi.mock('@/utils/apiClient', () => ({ apiFetchJSON, getOrgID: () => 'default' }));
 vi.mock('@/utils/logger', () => ({ logger: { debug: vi.fn(), error: vi.fn() } }));
 vi.mock('@/stores/notifications', () => ({
   notificationStore: { success: vi.fn(), error: vi.fn() },
@@ -48,25 +48,56 @@ describe('SystemLogsPanel control safety', () => {
 
   it('does not call a disconnected or reconnecting native stream Streaming, even when the display is paused', async () => {
     const { stream } = await mountPanel();
-    expect(screen.getByRole('status')).toHaveTextContent('Connecting');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Connecting');
     stream.onopen?.();
-    expect(screen.getByRole('status')).toHaveTextContent('Streaming');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Streaming');
     stream.readyState = 0;
     stream.onerror?.();
-    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Reconnecting');
     fireEvent.click(screen.getByRole('button', { name: 'Pause Stream' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Reconnecting · paused');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Reconnecting · paused');
     stream.readyState = 2;
     stream.onerror?.();
-    expect(screen.getByRole('status')).toHaveTextContent('Disconnected · paused');
-    expect(screen.getByRole('status')).not.toHaveTextContent('Streaming');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Disconnected · paused');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).not.toHaveTextContent('Streaming');
     fireEvent.click(screen.getByRole('button', { name: 'Clear Log Output' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Disconnected · paused');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Disconnected · paused');
     stream.onopen?.();
-    expect(screen.getByRole('status')).toHaveTextContent('Paused');
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Disconnected');
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect logs' }));
+    await waitFor(() => expect(DisplayStream.instances).toHaveLength(2));
+    DisplayStream.instances[1].onopen?.();
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Paused');
     fireEvent.click(screen.getByRole('button', { name: 'Resume Stream' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Streaming');
-    expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
+    expect(
+      screen.getAllByRole('status').find((x) => x.querySelector('.rounded-full'))!,
+    ).toHaveTextContent('Streaming');
+    expect(
+      apiFetchJSON.mock.calls.every(
+        ([path, options]) =>
+          path === '/api/logs/level' &&
+          options.retry === false &&
+          options.expectedOrgID === 'default',
+      ),
+    ).toBe(true);
   });
 
   it('describes the server-wide threshold at the level control without changing it on mount', async () => {
@@ -77,7 +108,16 @@ describe('SystemLogsPanel control safety', () => {
     expect(select).toHaveAccessibleDescription(/Debug can include private guest names and paths/);
     const help = document.getElementById(select.getAttribute('aria-describedby')!);
     expect(help).toBeVisible();
-    expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
+    expect(apiFetchJSON.mock.calls).toEqual([
+      [
+        '/api/logs/level',
+        expect.objectContaining({
+          retry: false,
+          expectedOrgID: 'default',
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+    ]);
   });
 
   it('describes display-only pause and still receives later messages on the same stream', async () => {
@@ -101,7 +141,16 @@ describe('SystemLogsPanel control safety', () => {
     expect(screen.queryByText('INFO received while paused')).toBeNull();
     expect(DisplayStream.instances).toHaveLength(1);
     expect(stream.url).toBe('/api/logs/stream');
-    expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
+    expect(apiFetchJSON.mock.calls).toEqual([
+      [
+        '/api/logs/level',
+        expect.objectContaining({
+          retry: false,
+          expectedOrgID: 'default',
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+    ]);
   });
 
   it('describes view-only clear without changing the level or closing the stream', async () => {
@@ -117,7 +166,16 @@ describe('SystemLogsPanel control safety', () => {
     expect(screen.queryByText('INFO displayed before clear')).toBeNull();
     expect(stream.close).not.toHaveBeenCalled();
     expect(screen.getByRole('combobox', { name: 'Server Log Level:' })).toHaveValue('info');
-    expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
+    expect(apiFetchJSON.mock.calls).toEqual([
+      [
+        '/api/logs/level',
+        expect.objectContaining({
+          retry: false,
+          expectedOrgID: 'default',
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+    ]);
   });
 
   it('keeps the full archive privacy warning visible and attached after pause and clear', async () => {
@@ -139,7 +197,16 @@ describe('SystemLogsPanel control safety', () => {
     expect(warning).toBeVisible();
     expect(bundle).toHaveAccessibleDescription(/Keep the archive private/);
     expect(bundle).not.toHaveAccessibleDescription(/safe to (publish|share)/);
-    expect(apiFetchJSON.mock.calls).toEqual([['/api/logs/level']]);
+    expect(apiFetchJSON.mock.calls).toEqual([
+      [
+        '/api/logs/level',
+        expect.objectContaining({
+          retry: false,
+          expectedOrgID: 'default',
+          signal: expect.any(AbortSignal),
+        }),
+      ],
+    ]);
   });
 
   it('does not turn display actions into submission of a surrounding settings form', async () => {

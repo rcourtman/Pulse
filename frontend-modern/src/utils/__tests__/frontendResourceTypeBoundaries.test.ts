@@ -3554,8 +3554,13 @@ describe('frontend resource type boundaries', () => {
     expect(systemLogsPanelSource).not.toContain(
       "'bg-amber-100 text-amber-600 dark:bg-amber-900/25 dark:text-amber-400'",
     );
-    expect(systemLogsPanelStateSource).toContain("window.location.href = '/api/logs/download'");
-    expect(systemLogsPanelStateSource).toContain('notificationStore.success');
+    expect(systemLogsPanelStateSource).toContain("anchor.href = '/api/logs/download'");
+    expect(systemLogsPanelStateSource).toContain("anchor.download = ''");
+    expect(systemLogsPanelStateSource).not.toContain('window.location.href');
+    expect(systemLogsPanelStateSource).toContain('setNotice(`Log level set to ${newLevel}`)');
+    expect(systemLogsPanelStateSource).not.toContain('notificationStore');
+    expect(systemLogsPanelStateSource).toContain('expectedOrgID: acceptedReader.org');
+    expect(systemLogsPanelStateSource).toContain('retry: false');
     expect(systemLogsPanelStateSource).toContain('new EventSource');
     expect(systemLogsPresentationSource).toContain('export const SYSTEM_LOGS_PANEL_COPY');
     expect(systemLogsPresentationSource).toContain('export const SYSTEM_LOG_LEVEL_OPTIONS');

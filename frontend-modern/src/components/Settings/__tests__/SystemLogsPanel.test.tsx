@@ -12,6 +12,12 @@ vi.mock('../useSystemLogsPanelState', () => ({
     isPaused: () => false,
     connectionState: () => 'streaming',
     isLoading: () => false,
+    canUseControls: () => true,
+    changingLevel: () => false,
+    canReconnect: () => false,
+    reconnect: vi.fn(),
+    error: () => '',
+    notice: () => '',
     maxLogs: 1000,
     clearLogs: vi.fn(),
     togglePaused: vi.fn(),
@@ -31,8 +37,11 @@ describe('SystemLogsPanel architecture', () => {
     expect(systemLogsPanelSource).not.toContain("apiFetchJSON('/api/logs/level'");
     expect(systemLogsPanelStateSource).toContain('new EventSource');
     expect(systemLogsPanelStateSource).toContain("apiFetchJSON('/api/logs/level'");
-    expect(systemLogsPanelStateSource).toContain("window.location.href = '/api/logs/download'");
-    expect(systemLogsPanelStateSource).toContain('notificationStore.success');
+    expect(systemLogsPanelStateSource).toContain("anchor.href = '/api/logs/download'");
+    expect(systemLogsPanelStateSource).toContain('eventSource === source');
+    expect(systemLogsPanelStateSource).toContain('expectedOrgID: acceptedReader.org');
+    expect(systemLogsPanelStateSource).toContain('retry: false');
+    expect(systemLogsPanelStateSource).not.toContain('notificationStore');
   });
 
   it('keeps support-page controls touch-sized on phones', () => {

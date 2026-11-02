@@ -25,6 +25,15 @@ export const SYSTEM_LOGS_PANEL_COPY = {
   clearTitle: 'Clear Log Output',
   downloadLabel: 'Support Bundle',
   emptyState: 'Waiting for log output.',
+  unavailableState: 'No current log output.',
+  connectionError:
+    'Log access could not be confirmed. Buffered lines were cleared. Reconnect to try again.',
+  readerChanged:
+    'The reader or workspace changed. Buffered lines were cleared. Reconnect to read current logs.',
+  reconnecting:
+    'The log connection was interrupted. Buffered lines were cleared while the stream reconnects.',
+  levelError:
+    'The log level change could not be confirmed. Buffered lines were cleared. Reconnect to check the current level.',
   bufferHelp:
     'This view keeps only the latest 1,000 received lines. Paused lines are not collected. Clearing the view does not delete server logs.',
 } as const;

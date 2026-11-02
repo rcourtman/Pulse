@@ -16,6 +16,7 @@ import type AuditLogPanelType from './AuditLogPanel';
 import type { RolesPanel as RolesPanelType } from './RolesPanel';
 import type { UserAssignmentsPanel as UserAssignmentsPanelType } from './UserAssignmentsPanel';
 import type { InfrastructureWorkspace as InfrastructureWorkspaceType } from './InfrastructureWorkspace';
+import type { SystemLogsPanelProps } from './useSystemLogsPanelState';
 import type { DiagnosticsPanelProps } from './useDiagnosticsPanelState';
 import type { SettingsTab } from './settingsNavigationModel';
 import { SETTINGS_PANEL_REGISTRY_LOADERS } from './settingsPanelRegistryLoaders';
@@ -50,6 +51,7 @@ export interface SettingsPanelRegistryContext {
   getRelayPanelProps: () => Parameters<typeof RelaySettingsPanelType>[0];
   getReportingPanelProps: () => Parameters<typeof ReportingPanelType>[0];
   getDiagnosticsPanelProps: () => DiagnosticsPanelProps;
+  getSystemLogsPanelProps: () => SystemLogsPanelProps;
   getAuditWebhookPanelProps: () => Parameters<typeof AuditWebhookPanelType>[0];
   getAuditLogPanelProps: () => Parameters<typeof AuditLogPanelType>[0];
   getRolesPanelProps: () => Parameters<typeof RolesPanelType>[0];
@@ -107,6 +109,7 @@ export const createSettingsPanelRegistry = (
   },
   'support-logs': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.SystemLogsPanel,
+    getProps: context.getSystemLogsPanelProps,
   },
   'organization-overview': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.OrganizationOverviewPanel,

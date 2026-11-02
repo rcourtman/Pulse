@@ -734,20 +734,25 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
         # pending-work helper cannot hide behind unchanged button handlers.
         expected = {
             "togglePaused": "if (!isPaused()) flushPendingLogs(); setIsPaused((prev) => !prev);",
-            "clearLogs": "resetPending(); setLogs([]);",
+            "clearLogs": "resetPending(); setBuffer([]);",
             "resetPending": (
                 "pendingLogs = []; pendingCount = 0; pendingNext = 0; "
                 "if (renderFrame !== null) { cancelAnimationFrame(renderFrame); renderFrame = null; }"
             ),
             "flushPendingLogs": (
-                "if (disposed || pendingCount === 0) return; "
+                "if (!canUseControls() || pendingCount === 0) return; "
                 "const incoming = Array.from( { length: pendingCount }, "
                 "(_, index) => pendingLogs[(pendingNext - pendingCount + MAX_LOGS + index) % MAX_LOGS], ); "
-                "resetPending(); setLogs((prev) => [ "
+                "resetPending(); setBuffer((prev) => [ "
                 "...prev.slice(Math.max(0, prev.length + incoming.length - MAX_LOGS)), ...incoming, ]); "
-                "scrollToBottom();"
+                "if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;"
             ),
-            "scrollToBottom": "if (logContainer) { logContainer.scrollTop = logContainer.scrollHeight; }",
+            "isCurrentReader": (
+                "const current = reader(); const accepted = context(); return ( "
+                "!disposed && current.allowed && accepted.allowed && "
+                "current.org === accepted.org && current.user === accepted.user && "
+                "current.access === accepted.access );"
+            ),
         }
         for name, body in expected.items():
             marker = f"const {name} = () => {{"
@@ -755,8 +760,26 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
             actual = state.split(marker, 1)[1].split("\n  };", 1)[0]
             actual = " ".join(re.sub(r"//[^\n]*", "", actual).split())
             self.assertEqual(actual, body, name)
+        # Follow the new reader checks too: the display-only helper chain must
+        # not acquire a backend operation through an unchecked guard.
+        reader = re.findall(r"const reader = \(\) => \(\{(.*?)\n  \}\);", state, re.DOTALL)
+        self.assertEqual(len(reader), 1)
+        self.assertEqual(
+            " ".join(reader[0].split()),
+            "org: getOrgID() || 'default', user: props.currentUser, "
+            "access: props.accessKey, allowed: props.canRead !== false,",
+        )
+        usable = re.findall(r"const canUseControls = \(\) => ([^;]+);", state)
+        self.assertEqual(usable, ["isCurrentReader() && connectionState() === 'streaming'"])
+        stream = state.split("const connectStream = (acceptedReader: ReturnType<typeof reader>) => {", 1)[1]
+        stream = " ".join(re.sub(r"//[^\n]*", "", stream.split("\n  };", 1)[0]).split())
+        self.assertIn(
+            "const isCurrent = () => isCurrentReader() && context() === acceptedReader && "
+            "eventSource === source;",
+            stream,
+        )
         # Connection state must still track an open stream while the display
-        # is paused, but a disposed panel must not accept even that update.
+        # is paused, but an obsolete reader/source cannot accept even that update.
         # Check the receive prelude in its actual callback, not an obsolete
         # combined-guard substring elsewhere in the file (or in a comment).
         marker = "source.onmessage = (event) => {"
@@ -767,7 +790,7 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
         self.assertTrue(receive, "expected the actual bounded receive buffer")
         self.assertEqual(
             prelude.strip(),
-            "if (disposed) return; setConnectionState('streaming'); if (isPaused()) return;",
+            "if (!isCurrent()) return; setConnectionState('streaming'); if (isPaused()) return;",
         )
 
     def test_log_pause_cannot_substitute_for_the_backup_server_stop(self):
@@ -805,7 +828,7 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
             ("clearLogs", "apiFetchJSON('/api/logs', { method: 'DELETE' });"),
             ("resetPending", "handleLevelChange('warn');"),
             ("flushPendingLogs", "handleLevelChange('error');"),
-            ("scrollToBottom", "mutateServer();"),
+            ("isCurrentReader", "mutateServer();"),
         ):
             marker = f"const {name} = () => {{"
             mutated = state.replace(marker, marker + "\n    " + operation)
@@ -816,7 +839,14 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
         for before, after in (
             ("const clearLogs = () => {\n    resetPending();", "const clearLogs = () => {"),
             ("      if (isPaused()) return;", ""),
-            ("      if (disposed) return;\n      setConnectionState", "      setConnectionState"),
+            ("      if (!isCurrent()) return;\n      setConnectionState", "      setConnectionState"),
+            ("!disposed &&", ""),
+            (" && eventSource === source", ""),
+            (" && context() === acceptedReader", ""),
+            ("if (!canUseControls() || pendingCount === 0) return;", "if (pendingCount === 0) return;"),
+            ("if (logContainer) logContainer.scrollTop", "mutateServer(); if (logContainer) logContainer.scrollTop"),
+            ("org: getOrgID() || 'default',", "org: mutateServer(),"),
+            ("isCurrentReader() && connectionState() === 'streaming'", "mutateServer()"),
             ("setConnectionState('streaming');\n      if (isPaused()) return;",
              "if (isPaused()) return;\n      setConnectionState('streaming');"),
             ("setConnectionState('streaming');\n      if (isPaused()) return;",
@@ -828,6 +858,37 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
                 self.assertNotEqual(state, mutated, "negative control must change the source")
                 with self.assertRaises(AssertionError):
                     self.assert_display_only_controls(mutated)
+
+    def assert_native_bundle_download(self, state):
+        # Keep the real full-archive endpoint and native streaming. Top-level
+        # navigation cancels WebKit's log stream; exporting the display buffer
+        # would silently change the documented scope of a support bundle.
+        marker = "const handleDownload = () => {"
+        self.assertEqual(state.count(marker), 1)
+        body = state.split(marker, 1)[1].split("\n  };", 1)[0]
+        body = " ".join(re.sub(r"//[^\n]*", "", body).split())
+        self.assertEqual(body, (
+            "if (!canUseControls()) return; const anchor = document.createElement('a'); "
+            "anchor.href = '/api/logs/download'; anchor.download = ''; "
+            "document.body.appendChild(anchor); try { anchor.click(); } "
+            "finally { anchor.remove(); }"
+        ))
+
+    def test_bundle_download_rejects_navigation_buffer_only_exports_and_stale_readers(self):
+        state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
+        self.assert_native_bundle_download(state)
+        for before, after in (
+            ("    if (!canUseControls()) return;", ""),
+            ("anchor.href = '/api/logs/download';", "anchor.href = URL.createObjectURL(new Blob(logs()));"),
+            ("anchor.download = '';", ""),
+            ("anchor.click();", "window.location.href = '/api/logs/download';"),
+            ("anchor.remove();", ""),
+        ):
+            with self.subTest(missing=before):
+                mutated = state.replace(before, after)
+                self.assertNotEqual(state, mutated, "negative control must change the source")
+                with self.assertRaises(AssertionError):
+                    self.assert_native_bundle_download(mutated)
 
     def test_bundle_scope_matches_the_real_export_not_the_visible_lines(self):
         self.contains(self.log_help(), "complete configured log file", "retained server log buffer",
@@ -843,7 +904,7 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
         self.assertNotIn("h.config.DeepCopy()", handler)
         self.assertNotIn("*config.Config", handler)
         state = (ROOT / "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts").read_text()
-        self.assertIn("window.location.href = '/api/logs/download'", state)
+        self.assert_native_bundle_download(state)
         trouble = " ".join((ROOT / "docs/TROUBLESHOOTING.md").read_text().split("### Collect diagnostics safely\n", 1)[1].split("### Inspect Notification Logs", 1)[0].split())
         self.contains(trouble, "**Support Bundle**", "different export",
                       "not the **GitHub (review first)** diagnostics export",

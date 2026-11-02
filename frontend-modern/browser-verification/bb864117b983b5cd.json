@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "7bc1dd11583c4b393506d507f4e51af60c3204cf",
+  "verified_at": "2026-11-02T14:30:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
+    "frontend-modern/src/utils/systemLogsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "37339282dcffbd4b86cbb030e8738b09e0ffe890cee8fabf450cc91e39ee0eec",
+    "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts": "3fb2a30b220273fbbf37d58ff4c6bc79c4bb12a606a3430f3c3570235ebc7f5a",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts": "1fed9467c825e8339116197ebeb285d594affa42e522bd36097a1d0cdd2c3d37",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "11253aa870f3620558b8f74c97f4f18d3bda0d4c88b1d87665381256cac36579",
+    "frontend-modern/src/utils/systemLogsPresentation.ts": "5107b27035670add2f422d9ee96b3fc9ef40fe6dce56b9f943c2936a77b87176"
+  },
+  "routes": [
+    "/settings/support/logs"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App/Settings registry admits native SSE from synthetic local fixture through real apiClient. Playwright1.56.1 matches integration lock; desktop Chromium141.0.7390.37/light and narrow WebKit26.0/dark.",
+    "Live buffer, transient EOF/reconnecting with pause retained, terminal denied reconnect, denied and malformed level checks, workspace withdrawal, obsolete level-read cancellation, explicit current-reader recovery and level-change feedback. Principal/credential/capability lifetimes also have registered tests, not an installed IdP claim."
+  ],
+  "interactions": [
+    "61 checks; actual level read then SSE, synthetic support download without cancelling either engine's live stream, display-only pause/resume/clear. Native support streaming is kept; no browser memory buffering of large archives.",
+    "Any connection error withdraws pending/visible private lines and disables server actions. Transient loss preserves native reconnect. Terminal failure offers explicit Reconnect logs and does not auto-reopen. Denied/malformed level reads open no stream and have no API retry.",
+    "Existing workspace-change producer closes the previous stream and cancels obsolete level fetches. Released old completion cannot reopen logs; recovery requires a fresh explicit read. Current level changes submit once and feedback does not leak after page disposal.",
+    "All eight captures opened with native view_image. Readable private warnings and local reconnect/error/status at desktop and390px; disabled controls and removed old private line observed; new current lines only after recovery. Captures are viewport crops, not full terminal/status coverage.",
+    "Both contexts, browser engines, Vite and fixture HTTP server closed; zero uncaught page errors. Expected403 and cancelled-request evidence retained. Earlier browser failure from WebKit top-navigation stream cancellation is separately retained, not an overall pass."
+  ]
+}

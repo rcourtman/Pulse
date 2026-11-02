@@ -1,4 +1,4 @@
-import { Component, For, createUniqueId } from 'solid-js';
+import { Component, For, Show, createUniqueId } from 'solid-js';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
 import {
   getSystemLogBufferSummary,
@@ -14,10 +14,10 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import Terminal from 'lucide-solid/icons/terminal';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { Button } from '@/components/shared/Button';
-import { useSystemLogsPanelState } from './useSystemLogsPanelState';
+import { useSystemLogsPanelState, type SystemLogsPanelProps } from './useSystemLogsPanelState';
 
-export const SystemLogsPanel: Component = () => {
-  const state = useSystemLogsPanelState();
+export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
+  const state = useSystemLogsPanelState(props);
   const levelHelpId = createUniqueId();
   const displayHelpId = createUniqueId();
   const bundleHelpId = createUniqueId();
@@ -35,6 +35,7 @@ export const SystemLogsPanel: Component = () => {
               id={`system-log-level-${levelHelpId}`}
               label={SYSTEM_LOGS_PANEL_COPY.levelLabel}
               aria-describedby={levelHelpId}
+              disabled={!state.canUseControls() || state.changingLevel()}
               value={state.level()}
               onChange={(e) => void state.handleLevelChange(e.currentTarget.value)}
               fieldBaseClass="flex"
@@ -78,6 +79,7 @@ export const SystemLogsPanel: Component = () => {
               <div class="h-6 w-px bg-surface-hover mx-2"></div>
               <Button
                 type="button"
+                disabled={!state.canUseControls()}
                 onClick={state.handleDownload}
                 aria-describedby={bundleHelpId}
                 variant="primaryFlat"
@@ -94,6 +96,24 @@ export const SystemLogsPanel: Component = () => {
             <p id={displayHelpId}>{SYSTEM_LOGS_PANEL_COPY.displayHelp}</p>
             <p id={bundleHelpId}>{SYSTEM_LOGS_PANEL_COPY.bundleHelp}</p>
           </div>
+        </div>
+
+        <div class="px-4 sm:px-6 space-y-3">
+          <Show when={state.error()}>
+            <p role="alert" class="text-sm text-red-600 dark:text-red-400">
+              {state.error()}
+            </p>
+          </Show>
+          <Show when={state.notice()}>
+            <p role="status" class="text-sm text-muted">
+              {state.notice()}
+            </p>
+          </Show>
+          <Show when={state.canReconnect()}>
+            <Button type="button" size="settingsAction" onClick={() => void state.reconnect()}>
+              Reconnect logs
+            </Button>
+          </Show>
         </div>
 
         {/* Terminal View */}
@@ -113,7 +133,11 @@ export const SystemLogsPanel: Component = () => {
             {state.logs().length === 0 && !state.isLoading() && (
               <div class="h-full flex flex-col items-center justify-center ">
                 <Terminal size={48} class="mb-4 opacity-50" />
-                <p>{SYSTEM_LOGS_PANEL_COPY.emptyState}</p>
+                <p>
+                  {state.canUseControls()
+                    ? SYSTEM_LOGS_PANEL_COPY.emptyState
+                    : SYSTEM_LOGS_PANEL_COPY.unavailableState}
+                </p>
               </div>
             )}
           </div>

@@ -141,6 +141,14 @@ export function buildSettingsPanelRegistryContext(
       ]),
       canRead: settingsCapabilities()?.diagnosticsRead === true,
     }),
+    getSystemLogsPanelProps: () => ({
+      currentUser: currentUser(),
+      accessKey: JSON.stringify([
+        params.securityStatus()?.apiTokenHint,
+        params.securityStatus()?.tokenScopes?.slice().sort(),
+      ]),
+      canRead: settingsCapabilities()?.systemLogsRead === true,
+    }),
     getAuditLogPanelProps: () => ({
       currentUser: currentUser(),
       accessKey: JSON.stringify([
