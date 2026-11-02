@@ -39,12 +39,29 @@ func pulseAPIRequestContracts() []pulseAPIRequestContract {
 		{"audit", "pulse_api GET '/api/audit/actions?resourceId=vm%3A42&limit=10'", "GET", "/api/audit/actions?resourceId=vm%3A42&limit=10", ""},
 		{"events", "pulse_api GET /api/audit/actions/act_.../events", "GET", "/api/audit/actions/act_.../events", ""},
 		{"add-node", `pulse_api POST /api/config/nodes < "$node_request_file"`, "POST", "/api/config/nodes", "file"},
+		{"validate-token", `pulse_api POST /api/security/validate-token < "$body_file"`, "POST", "/api/security/validate-token", "editor"},
 	}
 }
 
 type pulseAPIRecipe struct {
 	contract pulseAPIRequestContract
 	command  string
+}
+
+// A private-body recipe prepares its input and calls the helper in one
+// subshell so preparation failure cannot fall through to a separate request.
+// Catalogue that actual call, not the opening parenthesis, and reject extra
+// calls rather than silently omitting them from the transport proof.
+func pulseAPIRecipeRequestLine(block string) (string, error) {
+	if strings.HasPrefix(block, "(\n") {
+		matches := regexp.MustCompile(`(?m)^  (pulse_api .+)$`).FindAllStringSubmatch(block, -1)
+		if len(matches) != 1 || strings.Count(block, "pulse_api ") != 1 {
+			return "", fmt.Errorf("compound request must contain exactly one private-response helper call")
+		}
+		return matches[0][1], nil
+	}
+	firstLine, _, _ := strings.Cut(block, "\n")
+	return firstLine, nil
 }
 
 func pulseAPIRecipes(doc string) (preparation, helper string, calls []pulseAPIRecipe, err error) {
@@ -66,8 +83,11 @@ func pulseAPIRecipes(doc string) (preparation, helper string, calls []pulseAPIRe
 				return "", "", nil, fmt.Errorf("duplicate private-response helper")
 			}
 			helper = block
-		case strings.HasPrefix(block, "pulse_api "):
-			firstLine, _, _ := strings.Cut(block, "\n")
+		case strings.HasPrefix(block, "pulse_api ") || strings.HasPrefix(block, "(\n"):
+			firstLine, lineErr := pulseAPIRecipeRequestLine(block)
+			if lineErr != nil {
+				return "", "", nil, lineErr
+			}
 			contract, ok := contracts[firstLine]
 			if !ok {
 				return "", "", nil, fmt.Errorf("request example lacks a transport fixture: %s", firstLine)
@@ -136,6 +156,10 @@ func TestPulseAPIGuidanceRecipeCatalogueIsCompleteAndOrderIndependent(t *testing
 		{"direct curl", doc + fence("curl --disable http://127.0.0.1:7655/api/state/summary\n"), "bypasses"},
 		{"changed method", strings.Replace(doc, "pulse_api GET /api/state/summary\n", "pulse_api PUT /api/state/summary\n", 1), "lacks a transport fixture"},
 		{"changed node input", strings.Replace(doc, `pulse_api POST /api/config/nodes < "$node_request_file"`, "pulse_api POST /api/config/nodes", 1), "lacks a transport fixture"},
+		{"changed validation method", strings.Replace(doc, "pulse_api POST /api/security/validate-token", "pulse_api GET /api/security/validate-token", 1), "lacks a transport fixture"},
+		{"changed validation input", strings.Replace(doc, `pulse_api POST /api/security/validate-token < "$body_file"`, "pulse_api POST /api/security/validate-token", 1), "lacks a transport fixture"},
+		{"extra compound request", strings.Replace(doc, "  pulse_api POST /api/security/validate-token", "  pulse_api GET /api/state/summary\n  pulse_api POST /api/security/validate-token", 1), "exactly one"},
+		{"missing compound request", strings.Replace(doc, `  pulse_api POST /api/security/validate-token < "$body_file"`, "  :", 1), "exactly one"},
 	}
 	for _, call := range calls {
 		cases = append(cases,
@@ -155,7 +179,8 @@ func TestPulseAPIGuidanceRecipeCatalogueIsCompleteAndOrderIndependent(t *testing
 				t.Fatalf("complete catalogue rejected: %v", err)
 			}
 			for _, call := range got {
-				if !strings.HasPrefix(call.command, call.contract.firstLine+"\n") {
+				line, lineErr := pulseAPIRecipeRequestLine(call.command)
+				if lineErr != nil || line != call.contract.firstLine {
 					t.Fatal("request was bound to another example's transport contract")
 				}
 			}
@@ -456,6 +481,18 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 					}
 					nodeInput = file.Name()
 					extra = append(extra, "node_request_file="+nodeInput)
+				case "editor":
+					contentType, body = "application/json", "{\"token\":\"synthetic-body-token\"}\n"
+					// Exercise the complete copied preparation, including its
+					// fresh private file, without opening an interactive editor.
+					editor := "#!/bin/sh\n[ \"$#\" -eq 1 ] || exit 7\n" +
+						"[ \"$(stat -c %a \"$1\")\" = 600 ] || exit 8\n" +
+						"[ ! -s \"$1\" ] || exit 9\n" +
+						"printf '%s' \"$API_BODY\" > \"$1\"\n"
+					if err := os.WriteFile(filepath.Join(bin, "vi"), []byte(editor), 0700); err != nil {
+						t.Fatal(err)
+					}
+					extra = append(extra, "API_BODY="+body)
 				}
 				if !strings.Contains(scenario, "HTTPS") {
 					// The local recipe must not send credentials to an ambient proxy.
@@ -470,7 +507,7 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 				if err != nil || !strings.HasPrefix(string(argv), "--disable\x00") {
 					t.Fatal("curl did not ignore configuration first")
 				}
-				for _, sensitive := range []string{token, "private-fixture-name", "private-fixture-event", "node-api-doc-fixture"} {
+				for _, sensitive := range []string{token, "private-fixture-name", "private-fixture-event", "node-api-doc-fixture", "synthetic-body-token"} {
 					if strings.Contains(output, sensitive) || strings.Contains(string(argv), sensitive) {
 						t.Fatal("request printed private credentials or response data")
 					}
@@ -496,6 +533,17 @@ func TestPulseAPIGuidanceCopiedRequestsKeepResponsesPrivateAndOneShot(t *testing
 					info, statErr := os.Stat(nodeInput)
 					if readErr != nil || statErr != nil || string(data) != body || info.Mode().Perm() != 0600 {
 						t.Fatal("request changed its private node input")
+					}
+				}
+				if call.contract.input == "editor" {
+					files, err := filepath.Glob(filepath.Join(dir, "api-body.??????"))
+					if err != nil || len(files) != 1 || !strings.Contains(output, files[0]) {
+						t.Fatal("secret body was not saved to one new, reported private file")
+					}
+					data, readErr := os.ReadFile(files[0])
+					info, statErr := os.Stat(files[0])
+					if readErr != nil || statErr != nil || string(data) != body || info.Mode().Perm() != 0600 {
+						t.Fatal("request changed or exposed its private validation input")
 					}
 				}
 				if scenario == "untrusted HTTPS" {
