@@ -3,7 +3,7 @@ export const ALERT_DESTINATIONS_CONFIG_LOAD_ERROR =
   'Unable to load notification settings. Your existing configuration could not be retrieved.';
 export const ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR = 'Unable to load webhook settings.';
 export const ALERT_DESTINATIONS_LOAD_ERROR_RISK_NOTICE =
-  'Saving now may overwrite your existing settings with defaults.';
+  'Destination details and controls stay hidden until saved settings can be read. Retry to check access.';
 export const ALERT_DESTINATIONS_RETRY_LABEL = 'Retry';
 export const ALERT_DESTINATIONS_RETRYING_LABEL = 'Retrying…';
 export const ALERT_DESTINATIONS_ENABLED_LABEL = 'Enabled';

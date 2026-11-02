@@ -112,10 +112,13 @@ describe('useAlertWebhookDestinationsState', () => {
     );
 
     await result.testWebhook('hook-2');
-    expect(NotificationsAPI.testNotification).toHaveBeenCalledWith({
-      type: 'webhook',
-      webhookId: 'hook-2',
-    });
+    expect(NotificationsAPI.testNotification).toHaveBeenCalledWith(
+      {
+        type: 'webhook',
+        webhookId: 'hook-2',
+      },
+      { expectedOrgID: 'default', retry: false },
+    );
 
     await result.deleteWebhook('hook-1');
     expect(result.webhooks().map((hook) => hook.id)).toEqual(['hook-2']);

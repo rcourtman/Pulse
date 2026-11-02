@@ -23,7 +23,7 @@ describe('AlertsAPI external watchdog', () => {
       pingUrl: '***REDACTED***',
       configured: true,
     });
-    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith('/api/alerts/deadman/config');
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith('/api/alerts/deadman/config', undefined);
 
     mockedApiFetchJSON.mockResolvedValueOnce({
       configured: true,

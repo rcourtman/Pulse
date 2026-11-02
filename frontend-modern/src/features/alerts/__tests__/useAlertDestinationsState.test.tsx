@@ -6,6 +6,7 @@ import { NotificationsAPI } from '@/api/notifications';
 import { AlertsAPI } from '@/api/alerts';
 import { RelayAPI } from '@/api/relay';
 import { hasFeature } from '@/stores/license';
+import { setOrgID } from '@/utils/apiClient';
 
 import { useAlertDestinationsState } from '../useAlertDestinationsState';
 
@@ -45,6 +46,7 @@ vi.mock('@/utils/logger', () => ({
 
 describe('useAlertDestinationsState', () => {
   beforeEach(() => {
+    setOrgID('default');
     vi.mocked(NotificationsAPI.getEmailConfig).mockReset();
     vi.mocked(NotificationsAPI.getAppriseConfig).mockReset();
     vi.mocked(NotificationsAPI.getWebhooks).mockReset();
@@ -56,6 +58,10 @@ describe('useAlertDestinationsState', () => {
     vi.mocked(RelayAPI.updateConfig).mockReset();
     vi.mocked(hasFeature).mockReset();
     vi.mocked(hasFeature).mockReturnValue(true);
+    vi.mocked(NotificationsAPI.getEmailConfig).mockResolvedValue({ enabled: false } as never);
+    vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({ enabled: false } as never);
+    vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+    vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
   });
 
   it('owns alert destinations reload and save behavior separately from alert policy config', async () => {
@@ -168,6 +174,7 @@ describe('useAlertDestinationsState', () => {
 
     expect(NotificationsAPI.updateEmailConfig).toHaveBeenCalledWith(
       expect.objectContaining({ server: 'smtp.internal', rateLimit: 17 }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(NotificationsAPI.updateAppriseConfig).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -175,11 +182,16 @@ describe('useAlertDestinationsState', () => {
         serverUrl: 'https://apprise.internal',
         targets: ['https://notify.internal'],
       }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(AlertsAPI.updateDeadManConfig).toHaveBeenCalledWith(
       'https://watchdog.example.test/ping/replacement-token',
+      { expectedOrgID: 'default', retry: false },
     );
-    expect(RelayAPI.updateConfig).toHaveBeenCalledWith({ alert_minimum_severity: 'all' });
+    expect(RelayAPI.updateConfig).toHaveBeenCalledWith(
+      { alert_minimum_severity: 'all' },
+      { expectedOrgID: 'default', retry: false },
+    );
     expect(result.appriseConfig().mode).toBe('http');
     expect(result.appriseConfig().serverUrl).toBe('https://apprise.example.test');
 
@@ -231,6 +243,7 @@ describe('useAlertDestinationsState', () => {
     }));
     vi.mocked(AlertsAPI.updateDeadManConfig).mockResolvedValue({ success: true, configured: true });
     const { result } = renderHook(() => useAlertDestinationsState({ activeTab: () => 'overview' }));
+    await result.loadDestinations();
     result.setAppriseConfig({
       ...result.appriseConfig(),
       serverUrl: 'https://first.example.test',
@@ -252,9 +265,11 @@ describe('useAlertDestinationsState', () => {
         serverUrl: 'https://first.example.test',
         apiKey: 'synthetic-first',
       }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(AlertsAPI.updateDeadManConfig).toHaveBeenCalledWith(
       'https://watchdog.example.test/first',
+      { expectedOrgID: 'default', retry: false },
     );
     expect(result.appriseConfig().serverUrl).toBe('https://newer.example.test');
     expect(result.appriseConfig().apiKey).toBe('synthetic-newer');
@@ -279,7 +294,11 @@ describe('useAlertDestinationsState', () => {
     const { result } = renderHook(() => useAlertDestinationsState({ activeTab: () => 'overview' }));
     const oldRead = result.loadDestinations({ indicateLoading: true });
     expect(result.isLoadingDestinations()).toBe(true);
+    const obsoleteSignal = vi.mocked(NotificationsAPI.getEmailConfig).mock.calls.at(-1)![0]!
+      .signal!;
+    expect(obsoleteSignal.aborted).toBe(false);
     result.resetDestinations();
+    expect(obsoleteSignal.aborted).toBe(true);
     expect(result.isLoadingDestinations()).toBe(false);
     await result.loadDestinations();
     acknowledgeOldRead({ enabled: true, server: 'smtp.old.example.test' } as never);
@@ -287,6 +306,97 @@ describe('useAlertDestinationsState', () => {
 
     expect(result.isLoadingDestinations()).toBe(false);
     expect(result.emailConfig().server).toBe('smtp.current.example.test');
+  });
+
+  it.each(['email', 'apprise', 'watchdog', 'webhooks', 'push'] as const)(
+    'withdraws the whole saved snapshot when the %s read fails, without writing defaults',
+    async (failed) => {
+      vi.mocked(NotificationsAPI.getEmailConfig).mockResolvedValue({
+        enabled: true,
+        server: 'smtp.private.example.test',
+      } as never);
+      vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({
+        enabled: true,
+        serverUrl: 'https://apprise.private.example.test',
+        apiKey: 'synthetic-private',
+      } as never);
+      vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({
+        pingUrl: 'https://watchdog.private.example.test',
+        configured: true,
+      });
+      vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([
+        { id: 'private-id', name: 'Private destination', url: 'https://private.example.test' },
+      ] as never);
+      vi.mocked(RelayAPI.getConfig).mockResolvedValue({
+        enabled: true,
+        server_url: 'wss://push.example.test',
+        alert_minimum_severity: 'critical',
+      });
+      const { result } = renderHook(() =>
+        useAlertDestinationsState({ activeTab: () => 'destinations' }),
+      );
+      await result.loadDestinations();
+      expect(result.emailConfig().server).toBe('smtp.private.example.test');
+      result.setAppriseConfig({ ...result.appriseConfig(), apiKey: 'synthetic-draft' });
+      const endpoints = {
+        email: NotificationsAPI.getEmailConfig,
+        apprise: NotificationsAPI.getAppriseConfig,
+        watchdog: AlertsAPI.getDeadManConfig,
+        webhooks: NotificationsAPI.getWebhooks,
+        push: RelayAPI.getConfig,
+      };
+      vi.mocked(endpoints[failed]).mockRejectedValueOnce(new Error('private-provider-response'));
+      const reload = result.loadDestinations();
+      expect(result.isLoadingDestinations()).toBe(true);
+      expect(result.emailConfig().server).toBe('');
+      expect(result.appriseConfig().apiKey).toBe('');
+      expect(result.webhooks()).toEqual([]);
+      expect(result.deadManPingUrl()).toBe('');
+      await reload;
+      expect(result.destConfigLoadError()).toContain('Unable to load notification settings');
+      expect(result.emailConfig().server).toBe('');
+      expect(result.appriseConfig().serverUrl).toBe('');
+      expect(result.webhooks()).toEqual([]);
+      expect(result.deadManPingUrl()).toBe('');
+      await result.saveDestinations();
+      expect(NotificationsAPI.updateEmailConfig).not.toHaveBeenCalled();
+      expect(NotificationsAPI.updateAppriseConfig).not.toHaveBeenCalled();
+      expect(AlertsAPI.updateDeadManConfig).not.toHaveBeenCalled();
+      await result.loadDestinations();
+      expect(result.destConfigLoadError()).toBeNull();
+      expect(result.emailConfig().server).toBe('smtp.private.example.test');
+      expect(NotificationsAPI.getEmailConfig).toHaveBeenLastCalledWith({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+        cache: 'no-store',
+      });
+    },
+  );
+
+  it('does not publish a late read or send downstream saves after a silent workspace change', async () => {
+    vi.mocked(hasFeature).mockReturnValue(false);
+    const { result } = renderHook(() => useAlertDestinationsState({ activeTab: () => 'overview' }));
+    await result.loadDestinations();
+    let accept!: (value: { success: boolean }) => void;
+    vi.mocked(NotificationsAPI.updateEmailConfig).mockReturnValueOnce(
+      new Promise((resolve) => {
+        accept = resolve;
+      }),
+    );
+    const save = result.saveDestinations();
+    setOrgID('tenant-b');
+    accept({ success: true });
+    await save;
+    expect(NotificationsAPI.updateEmailConfig).toHaveBeenCalledWith(expect.anything(), {
+      expectedOrgID: 'default',
+      retry: false,
+    });
+    expect(NotificationsAPI.updateAppriseConfig).not.toHaveBeenCalled();
+    expect(AlertsAPI.updateDeadManConfig).not.toHaveBeenCalled();
+    await result.loadDestinations();
+    expect(NotificationsAPI.getEmailConfig).toHaveBeenCalledTimes(1);
+    setOrgID('default');
   });
 
   it('does not refresh destinations before the policy owner admits a loaded context', async () => {

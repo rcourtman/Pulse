@@ -78,6 +78,50 @@ const buildAppriseConfig = (): UIAppriseConfig => ({
 });
 
 describe('useAlertDestinationsTabState', () => {
+  it.each(['email', 'apprise'] as const)(
+    'does not announce a late %s Test after the editor is withdrawn',
+    async (kind) => {
+      vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+        queue: { status: 'healthy' },
+      } as never);
+      vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [] } as never);
+      vi.mocked(AlertsAPI.getEvents).mockResolvedValue([]);
+      const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+      let accept!: (value: { success: boolean }) => void;
+      vi.mocked(NotificationsAPI.testNotification).mockReturnValueOnce(
+        new Promise((resolve) => {
+          accept = resolve;
+        }),
+      );
+      const { result, cleanup } = renderHook(() =>
+        useAlertDestinationsTabState({
+          appriseConfig,
+          setAppriseConfig,
+          emailConfig: () => buildEmailConfig(),
+          configLoadError: () => null,
+          isRetrying: () => false,
+          isLoadingDestinations: () => false,
+          onRetryLoad: vi.fn(),
+          webhooks: () => [],
+        }),
+      );
+      const pending = kind === 'email' ? result.testEmailConfig() : result.testApprise();
+      expect(NotificationsAPI.testNotification).toHaveBeenCalledOnce();
+      cleanup();
+      vi.mocked(notificationStore.success).mockClear();
+      vi.mocked(notificationStore.warning).mockClear();
+      vi.mocked(showErrorWithDetail).mockClear();
+      accept({ success: true });
+      await pending;
+      expect(notificationStore.success).not.toHaveBeenCalled();
+      expect(notificationStore.warning).not.toHaveBeenCalled();
+      expect(showErrorWithDetail).not.toHaveBeenCalled();
+      await result.testEmailConfig();
+      await result.testApprise();
+      expect(NotificationsAPI.testNotification).toHaveBeenCalledOnce();
+    },
+  );
+
   describe.each(['retryTerminalFailures', 'dismissTerminalFailures'] as const)(
     '%s view replacement',
     (action) => {
@@ -380,6 +424,7 @@ describe('useAlertDestinationsTabState', () => {
         types: ['notification_suppressed', 'notification_deferred'],
         limit: 100,
       }),
+      { expectedOrgID: 'default', retry: false },
     );
     expect(result.deliveryHealth()?.queue.status).toBe('healthy');
     expect(result.deliveryLog()?.entries).toHaveLength(1);
@@ -394,6 +439,7 @@ describe('useAlertDestinationsTabState', () => {
     await result.testEmailConfig();
     expect(NotificationsAPI.testNotification).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'email' }),
+      { expectedOrgID: 'default', retry: false },
     );
 
     await result.testApprise();
@@ -405,6 +451,7 @@ describe('useAlertDestinationsTabState', () => {
           targets: ['mailto://alerts@example.com'],
         }),
       }),
+      { expectedOrgID: 'default', retry: false },
     );
 
     expect(result.webhooks()).toEqual([

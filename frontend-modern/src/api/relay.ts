@@ -1,4 +1,4 @@
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, type APIContextOptions } from '@/utils/apiClient';
 
 export interface RelayConfig {
   enabled: boolean;
@@ -17,14 +17,16 @@ export interface RelayStatus {
 export class RelayAPI {
   private static baseUrl = '/api/settings/relay';
 
-  static async getConfig(): Promise<RelayConfig> {
-    return apiFetchJSON(this.baseUrl) as Promise<RelayConfig>;
+  static async getConfig(options?: APIContextOptions): Promise<RelayConfig> {
+    return apiFetchJSON(this.baseUrl, options) as Promise<RelayConfig>;
   }
 
   static async updateConfig(
     update: Partial<Pick<RelayConfig, 'enabled' | 'server_url' | 'alert_minimum_severity'>>,
+    options?: APIContextOptions,
   ): Promise<void> {
     await apiFetchJSON(this.baseUrl, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify(update),
     });

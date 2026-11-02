@@ -54,6 +54,14 @@ const makeResource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('App platform navigation admission', () => {
+  it('hands current authenticated reader facts to the existing Alerts route', () => {
+    expect(appSource).toContain(
+      'const AlertsRoute = () => <AlertsPage securityStatus={runtime.securityStatus()} />;',
+    );
+    expect(appSource).toContain('<Route path="/alerts/*" component={AlertsRoute} />');
+    expect(appSource).not.toContain('<Route path="/alerts/*" component={AlertsPage} />');
+  });
+
   const authenticatedResources = [
     makeResource({ id: 'machine-1', platformType: 'agent' }),
     makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),

@@ -8,6 +8,7 @@ import { RelayAPI } from '@/api/relay';
 import { hasFeature } from '@/stores/license';
 import { getAlertDestinationsConfigLoadError } from '@/utils/alertDestinationsPresentation';
 import { logger } from '@/utils/logger';
+import { getOrgID } from '@/utils/apiClient';
 
 import {
   buildAppriseConfigPayload,
@@ -21,9 +22,11 @@ import type { AlertTab, UIAppriseConfig, UIEmailConfig } from './types';
 interface AlertDestinationsStateOptions {
   activeTab: Accessor<AlertTab>;
   canReload?: Accessor<boolean>;
+  isCurrentReader?: Accessor<boolean>;
 }
 
 export function useAlertDestinationsState(options: AlertDestinationsStateOptions) {
+  let hasLoadedDestinations = false;
   const [isLoadingDestinations, setIsLoadingDestinations] = createSignal(false);
   const [destConfigLoadError, setDestConfigLoadError] = createSignal<string | null>(null);
   const [emailConfig, setEmailConfig] = createSignal<UIEmailConfig>(createDefaultEmailConfig());
@@ -36,12 +39,23 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
 
   let reloadVersion = 0;
   let lastActiveTab: AlertTab | null = null;
+  let disposed = false;
+  let readController: AbortController | undefined;
+  const org = getOrgID() || 'default';
+  const requestOptions = { expectedOrgID: org, retry: false } as const;
+  const isCurrentReader = () =>
+    !disposed && options.isCurrentReader?.() !== false && (getOrgID() || 'default') === org;
 
   onCleanup(() => {
+    disposed = true;
     ++reloadVersion;
+    readController?.abort();
   });
 
   const resetDestinations = () => {
+    readController?.abort();
+    readController = undefined;
+    hasLoadedDestinations = false;
     ++reloadVersion;
     setIsLoadingDestinations(false);
     setDestConfigLoadError(null);
@@ -52,23 +66,42 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     setWebhooks([]);
   };
 
-  const loadDestinations = async (options: { indicateLoading?: boolean } = {}) => {
-    const indicateLoading = options.indicateLoading ?? false;
+  const loadDestinations = async (_options: { indicateLoading?: boolean } = {}) => {
+    if (!isCurrentReader()) return;
+    // A refresh withdraws the previous snapshot, including unsaved private
+    // values. A partial read is not permission to edit or test empty defaults.
+    resetDestinations();
     const thisVersion = ++reloadVersion;
-
-    if (indicateLoading) {
-      setIsLoadingDestinations(true);
-    }
+    const controller = new AbortController();
+    readController = controller;
+    const readOptions = {
+      ...requestOptions,
+      cache: 'no-store' as const,
+      signal: controller.signal,
+    };
+    setIsLoadingDestinations(true);
 
     const results = await Promise.allSettled([
-      NotificationsAPI.getEmailConfig(),
-      NotificationsAPI.getAppriseConfig(),
-      AlertsAPI.getDeadManConfig(),
-      hasFeature('relay') ? RelayAPI.getConfig() : Promise.resolve(null),
-      NotificationsAPI.getWebhooks(),
+      NotificationsAPI.getEmailConfig(readOptions),
+      NotificationsAPI.getAppriseConfig(readOptions),
+      AlertsAPI.getDeadManConfig(readOptions),
+      hasFeature('relay') ? RelayAPI.getConfig(readOptions) : Promise.resolve(null),
+      NotificationsAPI.getWebhooks(readOptions),
     ]);
 
-    if (thisVersion !== reloadVersion) {
+    if (thisVersion !== reloadVersion || !isCurrentReader()) {
+      return;
+    }
+    readController = undefined;
+
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    if (failures.length > 0) {
+      // Do not put provider-controlled details (URLs or credentials) in feedback.
+      logger.error('Failed to load complete notification configuration');
+      setDestConfigLoadError(getAlertDestinationsConfigLoadError());
+      setIsLoadingDestinations(false);
       return;
     }
 
@@ -101,22 +134,9 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
       );
     }
 
-    const failures = results.filter(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
-    );
-
-    if (failures.length > 0) {
-      failures.forEach((result) => {
-        logger.error('Failed to load notification configuration:', result.reason);
-      });
-      setDestConfigLoadError(getAlertDestinationsConfigLoadError());
-    } else {
-      setDestConfigLoadError(null);
-    }
-
-    if (indicateLoading) {
-      setIsLoadingDestinations(false);
-    }
+    setDestConfigLoadError(null);
+    hasLoadedDestinations = true;
+    setIsLoadingDestinations(false);
   };
 
   // Capture every endpoint's payload before any write yields. The alert-policy
@@ -132,24 +152,35 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
   });
 
   const saveDestinations = async (snapshot = captureDestinations(), ownsSave = () => true) => {
-    if (!ownsSave()) return;
-    await NotificationsAPI.updateEmailConfig(snapshot.email);
-    if (!ownsSave()) return;
+    const ownsWrite = () =>
+      isCurrentReader() &&
+      hasLoadedDestinations &&
+      ownsSave() &&
+      snapshot.reloadVersion === reloadVersion;
+    if (!ownsWrite()) return;
+    await NotificationsAPI.updateEmailConfig(snapshot.email, requestOptions);
+    if (!ownsWrite()) return;
 
-    const updatedApprise = await NotificationsAPI.updateAppriseConfig(snapshot.apprise);
-    if (!ownsSave()) return;
+    const updatedApprise = await NotificationsAPI.updateAppriseConfig(
+      snapshot.apprise,
+      requestOptions,
+    );
+    if (!ownsWrite()) return;
 
-    await AlertsAPI.updateDeadManConfig(snapshot.pingUrl);
-    if (!ownsSave()) return;
+    await AlertsAPI.updateDeadManConfig(snapshot.pingUrl, requestOptions);
+    if (!ownsWrite()) return;
 
     if (snapshot.relayEnabled && hasFeature('relay')) {
-      await RelayAPI.updateConfig({ alert_minimum_severity: snapshot.pushMinimumSeverity });
+      await RelayAPI.updateConfig(
+        { alert_minimum_severity: snapshot.pushMinimumSeverity },
+        requestOptions,
+      );
     }
 
     // An acknowledgement is not a reload: it may replace the submitted draft
     // with masked fields, but must not overwrite edits or another context.
     if (
-      ownsSave() &&
+      ownsWrite() &&
       reloadVersion === snapshot.reloadVersion &&
       appriseConfig() === snapshot.appriseDraft
     ) {
