@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "b8a4ecc8eeed6ee899a8bac68e166d0b11ceb9d7",
+  "verified_at": "2026-11-02T13:20:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
+    "frontend-modern/src/utils/diagnosticsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx": "2a77027e35af5416a4461017c25944eac36095d64cfc8041635588970862f541",
+    "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts": "4dc6ba6950c137edfe1ce3956e499ab9466961f8ea04984647b919ded3d4b8a7",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts": "1051f011698c00c5f9f726dcf237744737203db8d234ff612cab10b402f7b142",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "0930d3feceb30bab150d7cfa5d3d7c58afd0bb439f070b35de36ec505d683810",
+    "frontend-modern/src/utils/diagnosticsPresentation.ts": "af4ad8052d0b21b2d4764bd6abea65fa785ad78c09fbfe98990379c3d2a87b9a"
+  },
+  "routes": [
+    "/settings/support/diagnostics"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App and Settings registry using synthetic supported diagnostics/security responses, exact runtime content hashes checked before execution; Chromium 141.0.7390.37/light and WebKit 26.0/dark, Playwright 1.56.1 matching integration lock.",
+    "Accepted current-reader results, held refresh with prior data withdrawn, disposed page, workspace change and return to same identifiers, denied refresh, malformed response, explicit recovery. Principal/token/capability prop lifetimes also have registered unit/component coverage, not an installed IdP claim."
+  ],
+  "interactions": [
+    "79 checks: no diagnostics on mount/workspace switch/remount; single explicit bound GET; full and sanitised downloads use accepted data and never probe again.",
+    "Real browser fetch cancellation after panel disposal and synthetic existing workspace-change event; old response release does not restore prior results or create a global toast. Disposal navigation used an unmatched synthetic route, not a verified General-page journey.",
+    "Denied response performs one GET without automatic retry, clears previous cards and both downloads, and displays local safe error without the response body. Malformed envelope is unknown rather than a successful empty inventory. Explicit Run restores only current workspace results.",
+    "All eight retained captures opened through native view_image: readable inline success/error, responsive touch controls and withdrawn old cards/downloads at desktop and narrow widths; no toast overlay or document-width overflow. Phone captures are viewport crops and do not display every result card.",
+    "Both browser contexts/engines, Vite and fixture HTTP server closed. Two expected synthetic 403 console entries and four expected browser-cancelled requests retained; zero uncaught page errors."
+  ]
+}

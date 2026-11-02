@@ -316,4 +316,39 @@ describe('buildSettingsPanelRegistryContext', () => {
     } as SecurityStatus);
     expect(context.getAuditLogPanelProps()).toMatchObject({ currentUser: '', canRead: false });
   });
+  it('binds Diagnostics to the live principal, explicit capability and stable credential scope facts', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    expect(context.getDiagnosticsPanelProps()).toEqual({
+      currentUser: undefined,
+      accessKey: '[null,null]',
+      canRead: false,
+    });
+    setStatus({
+      currentUsername: 'diagnostics-reader',
+      apiTokenHint: 'fixture-hint',
+      tokenScopes: ['settings:read', 'monitoring:read'],
+      settingsCapabilities: { diagnosticsRead: true },
+    } as SecurityStatus);
+    expect(context.getDiagnosticsPanelProps()).toMatchObject({
+      currentUser: 'diagnostics-reader',
+      canRead: true,
+    });
+    const key = context.getDiagnosticsPanelProps().accessKey;
+    setStatus({ ...status(), tokenScopes: ['monitoring:read', 'settings:read'] } as SecurityStatus);
+    expect(context.getDiagnosticsPanelProps().accessKey).toBe(key);
+    setStatus({ ...status(), tokenScopes: ['settings:read'] } as SecurityStatus);
+    expect(context.getDiagnosticsPanelProps().accessKey).not.toBe(key);
+    setStatus({
+      currentUsername: 'other-reader',
+      settingsCapabilities: { diagnosticsRead: false },
+    } as SecurityStatus);
+    expect(context.getDiagnosticsPanelProps()).toMatchObject({
+      currentUser: 'other-reader',
+      canRead: false,
+    });
+  });
 });

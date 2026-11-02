@@ -3296,7 +3296,10 @@ describe('frontend resource type boundaries', () => {
     expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_PBS_MESSAGE');
     expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_STATE_COPY');
     expect(diagnosticsStateSource).toContain('export const useDiagnosticsPanelState =');
-    expect(diagnosticsStateSource).toContain("apiFetchJSON('/api/diagnostics')");
+    expect(diagnosticsStateSource).toContain("apiFetchJSON('/api/diagnostics', {");
+    expect(diagnosticsStateSource).toContain('expectedOrgID: acceptedReader.org');
+    expect(diagnosticsStateSource).toContain('signal: request.signal');
+    expect(diagnosticsStateSource).toContain('retry: false');
     expect(diagnosticsStateSource).toContain('URL.createObjectURL');
     expect(diagnosticsModelSource).toContain('export function sanitizeDiagnosticsData');
     expect(diagnosticsPresentationSource).toContain('export const DIAGNOSTICS_PANEL_COPY');
