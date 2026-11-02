@@ -29241,3 +29241,41 @@ func TestAgentHistoryWithdrawnTokenCannotDisclose(t *testing.T) {
 		}
 	}
 }
+func TestMetricHistoryWithdrawnTokenCannotDisclose(t *testing.T) {
+	for _, entry := range []string{"chart", "agent"} {
+		for _, transport := range []string{"header", "bearer"} {
+			for _, change := range []string{"revoked", "expired", "monitoring_removed", "org_removed", "credential_replaced", "principal_replaced", "invalid_role"} {
+				t.Run(entry+"/"+transport+"/"+change, func(t *testing.T) {
+					f := newMetricAuthorityFixture(t, entry, []string{config.ScopeMonitoringRead, config.ScopeAIExecute})
+					control := f.begin(t, metricAuthorityControl, "header")
+					primary := f.begin(t, metricAuthorityToken, transport)
+					if change == "revoked" {
+						f.revokeThroughHTTP(t)
+					} else {
+						config.Mu.Lock()
+						record := &f.router.config.APITokens[0]
+						switch change {
+						case "expired":
+							past := time.Now().Add(-time.Second)
+							record.ExpiresAt = &past
+						case "monitoring_removed":
+							record.Scopes = []string{config.ScopeAIExecute}
+						case "org_removed":
+							record.OrgIDs = []string{"other-org"}
+						case "credential_replaced":
+							record.ID = "replacement-metric-credential"
+						case "principal_replaced":
+							record.Metadata = map[string]string{apiTokenMetadataOwnerUserID: "replacement-metric-principal"}
+						case "invalid_role":
+							record.Metadata = map[string]string{authpkg.RuntimeRoleMetadataKey: authpkg.RuntimeRoleActionRunner}
+						}
+						config.Mu.Unlock()
+					}
+					f.provider.unblock()
+					readMetricAuthorityResult(t, primary, http.StatusUnauthorized)
+					readMetricAuthorityResult(t, control, http.StatusOK)
+				})
+			}
+		}
+	}
+}

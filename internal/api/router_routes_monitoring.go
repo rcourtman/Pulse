@@ -22,7 +22,11 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/charts/workloads", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleWorkloadCharts)))
 	r.mux.HandleFunc("/api/charts/infrastructure", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
-	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))
+	// A history read can wait for inventory or its provider after admission.
+	// Both entry points retain monitoring-read authority until disclosure;
+	// the canonical agent lookup must be inside that lifetime too.
+	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.handleMetricsHistory))))
 	r.mux.HandleFunc("/api/availability-history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleAvailabilityHistory)))
 	r.mux.HandleFunc("/api/recovery/points", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.recoveryHandlers.HandleListPoints)))
 	r.mux.HandleFunc("/api/recovery/series", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.recoveryHandlers.HandleListSeries)))
@@ -132,7 +136,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// served by the same history read the charts use.
 	r.mux.HandleFunc(agentcapabilities.MetricHistoryCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.GetMetricHistoryCapabilityName,
-		r.handleAgentMetricHistory,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.handleAgentMetricHistory),
 	))))
 	// Content-safe Patrol control status: the shared Patrol, Assistant,
 	// governed action, verification, Patrol control proof, and optional MCP
