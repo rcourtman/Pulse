@@ -24,6 +24,7 @@
     "scripts/installtests/auto_update_intent_test.go",
     "scripts/installtests/backfill_release_assets_test.go",
     "scripts/installtests/build_release_assets_test.go",
+    "scripts/installtests/ci_admission_inventory_test.go",
     "scripts/installtests/container_dependency_contract_test.go",
     "scripts/installtests/container_cpu_guidance_test.go",
     "scripts/installtests/demo_reachability_test.go",
