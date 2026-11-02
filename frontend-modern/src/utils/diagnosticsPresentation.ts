@@ -9,6 +9,12 @@ export const DIAGNOSTICS_PANEL_COPY = {
   runActionLabel: 'Run Diagnostics',
   runShortLabel: 'Run',
   runningActionLabel: 'Running...',
+  runSuccess: 'Diagnostics completed',
+  runError:
+    'Diagnostics could not be loaded. Previous results have been cleared. Check your access and try again only when live checks are safe.',
+  accessUnavailable: 'Diagnostics is not available to this session.',
+  exportRequiresResult: 'Run diagnostics first, only when live checks are safe.',
+  exportError: 'Diagnostics could not be downloaded. Nothing was uploaded. Try downloading again.',
   exportFullLabel: 'Full (private)',
   exportGithubLabel: 'GitHub (review first)',
   exportFullSuccess: 'Full diagnostics downloaded — keep this file private',
