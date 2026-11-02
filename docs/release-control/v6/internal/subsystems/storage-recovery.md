@@ -648,14 +648,13 @@ datastore rows; the drawer reads them from the row's resource.
 
 Host-figure truthfulness therefore belongs to the drawer. The deleted
 table-cell proof (`ProxmoxBackupServersTable.memory.test.tsx`) has no surface
-left to cover, and the drawer is weaker than that cell in two known ways: its
-CPU and memory percentages come from its History charts, so a failed history
-read hides them where the row showed the live reading; and its shared
-`getMemoryPercent` treats a measured zero used with a positive capacity as
-missing and lets an invalid byte pair override a valid percentage. Those are
-existing drawer behaviors on every platform, not part of this change, and are
-not yet fixed; this section does not claim the drawer matches the deleted
-cell's validation.
+left to cover. The drawer keeps the cell's guarantees: when no History chart
+can be drawn, a failed read or a locked range, its Latest readings strip still
+shows the live CPU and memory with their current, last-known or
+freshness-unknown qualifier; and the shared `getMemoryPercent` uses a valid
+byte pair, a measured zero included, before a 0-100 percentage. Those are
+shared drawer and helper behaviors on every platform, pinned by
+`ResourceDetailDrawer.history.test.tsx` and `resource.test.ts`.
 `ProxmoxBackupServersTable.test.ts` pins that rows carry no host readings and
 keep the host resource the drawer reads, and `ProxmoxBackupsTable.test.tsx`
 pins the column set.
