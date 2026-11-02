@@ -112,6 +112,16 @@ class PackageShardsTest(unittest.TestCase):
         self.assertGreater(len(weights), 0)
         self.assertTrue(all(value > 0 for value in weights.values()))
 
+    def test_sliced_ci_packages_keep_whole_package_hints_for_the_shared_queue(self):
+        # CI's ordinary-package samples exclude these sliced packages, but
+        # the shared backend queue still executes their complete binaries.
+        # A partial refresh must not turn known long packages into unmeasured
+        # default-cost work. Do not freeze their historical numeric estimates.
+        weights, default = selector.read_weights(ROOT / ".github/scripts/go-package-test-seconds.txt")
+        for package in ("internal/monitoring", "scripts/installtests"):
+            with self.subTest(package=package):
+                self.assertGreater(weights["github.com/rcourtman/pulse-go-rewrite/" + package], default)
+
 
 if __name__ == "__main__":
     unittest.main()

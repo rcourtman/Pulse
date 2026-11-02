@@ -3,7 +3,10 @@
 # 41371985948 (candidate 4fc752b4, checkout 87ea1002), 2 November 2026.
 # Whole-package weights are median observed task wall times, including
 # per-package Go startup/compilation. The separate monitoring/installer
-# slice weights and their source-order boundaries are unchanged. Overlapping times are not workflow wall-time forecasts.
+# slice weights and their source-order boundaries are unchanged. Overlapping
+# times are not workflow wall-time forecasts. The shared release queue still
+# runs these two packages whole: retain their 9 October whole-package hints,
+# since the new sliced observations do not measure their complete binaries.
 # Checked-out go list alone defines coverage. Stale names cannot add or
 # remove packages; new packages use the mean measured sub-20s task cost.
 # Preserve both required checks, four slots per shard and race/time limits.
@@ -18,6 +21,7 @@ github.com/rcourtman/pulse-go-rewrite/internal/config 275.333
 github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 123.752
 github.com/rcourtman/pulse-go-rewrite/internal/hostagent 22.885
 github.com/rcourtman/pulse-go-rewrite/internal/mock 130.077
+github.com/rcourtman/pulse-go-rewrite/internal/monitoring 314.522
 github.com/rcourtman/pulse-go-rewrite/internal/notifications 209.899
 github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 24.909
 github.com/rcourtman/pulse-go-rewrite/internal/relay 73.068
@@ -30,4 +34,5 @@ github.com/rcourtman/pulse-go-rewrite/pkg/db 52.639
 github.com/rcourtman/pulse-go-rewrite/pkg/metrics 514.654
 github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 39.225
 github.com/rcourtman/pulse-go-rewrite/pkg/server 57.043
+github.com/rcourtman/pulse-go-rewrite/scripts/installtests 360.228
 github.com/rcourtman/pulse-go-rewrite/tests/migration 84.480
