@@ -86,6 +86,50 @@ def private_file(home: Path, content: str = CONTENT) -> Path:
 
 
 class ConfigurationAuthDocsTest(unittest.TestCase):
+    def test_deployment_template_is_inert_and_has_no_seeded_credentials(self):
+        text = (ROOT / ".env.example").read_text(encoding="utf-8")
+        # Copying the reference must not install a shared password or override
+        # existing authentication. Even commented credentials invite reuse.
+        self.assertTrue(all(not line.strip() or line.lstrip().startswith("#")
+                            for line in text.splitlines()))
+        self.assertNotRegex(text, r"(?m)^#\s*(?:PULSE_AUTH_(?:USER|PASS)|API_TOKENS?)\s*=")
+        self.assertNotIn("super-secret-password", text)
+        for expected in ("Never overwrite an existing authentication file",
+                         "Do not source it", "leave PULSE_AUTH_USER and PULSE_AUTH_PASS unset",
+                         "API_TOKEN and API_TOKENS are ignored in v6",
+                         "Settings > API Access", "complete bcrypt hash",
+                         "does not remove a", "plaintext password from Docker's environment"):
+            self.assertIn(expected, text)
+        # The template sends readers to existing, source-verified recipes;
+        # do not introduce a second credential-file or bootstrap procedure.
+        for target in ("docs/INSTALL.md#step-1-get-the-token",
+                       "docs/CONFIGURATION.md#private-docker-authentication-file",
+                       "SECURITY.md#api-token-authentication"):
+            self.assertIn(target, text)
+            path, anchor = target.split("#")
+            headings = re.findall(r"^#{1,6}\s+(.+?)\s*$",
+                                  (ROOT / path).read_text(encoding="utf-8"), re.M)
+            slugs = {re.sub(r"[^\w\s-]", "", heading.lower()).strip().replace(" ", "-")
+                     for heading in headings}
+            self.assertIn(anchor, slugs)
+
+    def test_deployment_template_distinguishes_compose_from_runtime_settings(self):
+        text = (ROOT / ".env.example").read_text(encoding="utf-8")
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        interpolation = text.split("# Compose interpolation", 1)[1].split(
+            "# Pulse runtime settings", 1)[0]
+        examples = set(re.findall(r"(?m)^#\s*([A-Z][A-Z0-9_]*)=", interpolation))
+        # Tie the documented selectors to the actual bundled Compose file,
+        # rather than implying every .env key reaches the Pulse process.
+        consumed = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)(?::-[^}]*)?\}", compose))
+        self.assertEqual(examples, consumed)
+        for expected in ("interpolation, not the container's", "does not pass them to Pulse",
+                         "not automatically forwarded by Compose", "data directory",
+                         "/etc/pulse", "/data inside a container", "PULSE_DATA_DIR",
+                         "Deployment-supplied environment values take precedence",
+                         "not a Compose interpolation"):
+            self.assertIn(expected, text)
+
     def test_no_shared_password_or_secret_in_command_arguments(self):
         for name in GUIDES:
             with self.subTest(guide=name):
