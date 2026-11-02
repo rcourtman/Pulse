@@ -56,7 +56,7 @@ describe('AlertsAPI', () => {
 
       const result = await AlertsAPI.getConfig();
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/config');
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/config', undefined);
       expect(result).toEqual(mockConfig);
     });
 

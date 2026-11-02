@@ -1,6 +1,6 @@
 import type { Alert, AlertDeliveryDiagnosis, AlertEvent, Incident } from '@/types/api';
 import type { AlertConfig, DeadManStatus } from '@/types/alerts';
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, type APIContextOptions } from '@/utils/apiClient';
 import { arrayOrEmpty } from './responseUtils';
 
 export class AlertsAPI {
@@ -37,19 +37,22 @@ export class AlertsAPI {
     return arrayOrEmpty<AlertDeliveryDiagnosis>(diagnoses);
   }
 
-  static async getEvents(params?: {
-    alertIdentifier?: string;
-    types?: string[];
-    since?: string;
-    limit?: number;
-  }): Promise<AlertEvent[]> {
+  static async getEvents(
+    params?: {
+      alertIdentifier?: string;
+      types?: string[];
+      since?: string;
+      limit?: number;
+    },
+    options?: APIContextOptions,
+  ): Promise<AlertEvent[]> {
     const query = new URLSearchParams();
     if (params?.alertIdentifier) query.set('alertIdentifier', params.alertIdentifier);
     if (params?.types?.length) query.set('type', params.types.join(','));
     if (params?.since) query.set('since', params.since);
     if (params?.limit) query.set('limit', String(params.limit));
     const suffix = query.size > 0 ? `?${query.toString()}` : '';
-    const events = (await apiFetchJSON(`${this.baseUrl}/events${suffix}`)) as AlertEvent[];
+    const events = (await apiFetchJSON(`${this.baseUrl}/events${suffix}`, options)) as AlertEvent[];
     return arrayOrEmpty<AlertEvent>(events);
   }
 
@@ -127,12 +130,16 @@ export class AlertsAPI {
   }
 
   // Alert configuration methods
-  static async getConfig(): Promise<AlertConfig> {
-    return apiFetchJSON(`${this.baseUrl}/config`) as Promise<AlertConfig>;
+  static async getConfig(options?: APIContextOptions): Promise<AlertConfig> {
+    return apiFetchJSON(`${this.baseUrl}/config`, options) as Promise<AlertConfig>;
   }
 
-  static async updateConfig(config: AlertConfig): Promise<{ success: boolean }> {
+  static async updateConfig(
+    config: AlertConfig,
+    options?: APIContextOptions,
+  ): Promise<{ success: boolean }> {
     return apiFetchJSON(`${this.baseUrl}/config`, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify(config),
     });
@@ -142,18 +149,24 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/deadman/status`) as Promise<DeadManStatus>;
   }
 
-  static async getDeadManConfig(): Promise<{ pingUrl: string; configured: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/deadman/config`) as Promise<{
+  static async getDeadManConfig(
+    options?: APIContextOptions,
+  ): Promise<{ pingUrl: string; configured: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/deadman/config`, options) as Promise<{
       pingUrl: string;
       configured: boolean;
     }>;
   }
 
-  static async updateDeadManConfig(pingUrl: string): Promise<{
+  static async updateDeadManConfig(
+    pingUrl: string,
+    options?: APIContextOptions,
+  ): Promise<{
     success: boolean;
     configured: boolean;
   }> {
     return apiFetchJSON(`${this.baseUrl}/deadman/config`, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify({ pingUrl }),
     }) as Promise<{ success: boolean; configured: boolean }>;

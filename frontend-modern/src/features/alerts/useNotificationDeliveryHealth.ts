@@ -3,6 +3,7 @@ import { batch, createMemo, createSignal, onCleanup } from 'solid-js';
 import { NotificationsAPI, type NotificationHealth } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import type { APIContextOptions } from '@/utils/apiClient';
 import {
   getAlertDestinationsDeliveryDismissConfirmation,
   getAlertDestinationsDeliveryRetryConfirmation,
@@ -15,6 +16,8 @@ import {
 // The retained-queue actions live here for the same reason: the warning must
 // be clearable wherever it is shown, not only on the destinations tab.
 export function useNotificationDeliveryHealth(options?: {
+  requestOptions?: APIContextOptions;
+  isCurrentReader?: () => boolean;
   onAfterQueueAction?: () => Promise<unknown> | unknown;
 }) {
   const [deliveryHealth, setDeliveryHealth] = createSignal<NotificationHealth | null>(null);
@@ -31,13 +34,15 @@ export function useNotificationDeliveryHealth(options?: {
   // Mount, configuration retry and queue actions can overlap. Only the latest
   // requested snapshot owns health and loading state, regardless of completion order.
   let latestHealthRequest = 0;
-  const ownsHealthRequest = (request: number) => !disposed && request === latestHealthRequest;
+  const isCurrentReader = () => !disposed && options?.isCurrentReader?.() !== false;
+  const ownsHealthRequest = (request: number) =>
+    isCurrentReader() && request === latestHealthRequest;
   const loadDeliveryHealth = async () => {
-    if (disposed) return;
+    if (!isCurrentReader()) return;
     const request = ++latestHealthRequest;
     setRefreshingDeliveryHealth(true);
     try {
-      const health = await NotificationsAPI.getHealth();
+      const health = await NotificationsAPI.getHealth(options?.requestOptions);
       if (!ownsHealthRequest(request)) return;
       // Snapshot and availability change together. Set one at a time and
       // deliveryNeedsAttention reads a half-updated pair (no health, not yet
@@ -75,18 +80,18 @@ export function useNotificationDeliveryHealth(options?: {
   const [queueActionFeedback, setQueueActionFeedback] = createSignal<string | null>(null);
   let latestAction = 0;
   const clearQueueActionFeedback = () => {
-    if (disposed) return;
+    if (!isCurrentReader()) return;
     ++latestAction;
     setQueueActionFeedback(null);
   };
   const refreshAfterAction = async (action: number) => {
-    if (disposed) return;
+    if (!isCurrentReader()) return;
     await Promise.all([
       loadDeliveryHealth(),
       Promise.resolve()
-        .then(() => (disposed ? undefined : options?.onAfterQueueAction?.()))
+        .then(() => (!isCurrentReader() ? undefined : options?.onAfterQueueAction?.()))
         .catch((error) => {
-          if (disposed) return;
+          if (!isCurrentReader()) return;
           logger.error(
             'Failed to refresh notification activity after accepted queue action',
             error,
@@ -104,7 +109,7 @@ export function useNotificationDeliveryHealth(options?: {
   const [dismissingTerminalFailures, setDismissingTerminalFailures] = createSignal(false);
 
   const retryTerminalFailures = async () => {
-    if (disposed) return;
+    if (!isCurrentReader()) return;
     const count = deliveryHealth()?.queue.attentionRequired ?? 0;
     if (count <= 0 || !confirm(getAlertDestinationsDeliveryRetryConfirmation(count))) {
       return;
@@ -113,25 +118,25 @@ export function useNotificationDeliveryHealth(options?: {
     setQueueActionFeedback(null);
     setRetryingTerminalFailures(true);
     try {
-      const result = await NotificationsAPI.retryTerminalFailures();
-      if (disposed) return;
+      const result = await NotificationsAPI.retryTerminalFailures(options?.requestOptions);
+      if (!isCurrentReader()) return;
       notificationStore.success(
         `${result.affected} retained ${result.affected === 1 ? 'delivery' : 'deliveries'} queued for retry.`,
       );
       await refreshAfterAction(action);
     } catch (error) {
-      if (disposed) return;
+      if (!isCurrentReader()) return;
       logger.error('Failed to retry retained notification deliveries', error);
       if (action === latestAction)
         setQueueActionFeedback('Unable to retry retained notification deliveries.');
       notificationStore.error('Unable to retry retained notification deliveries.');
     } finally {
-      if (!disposed) setRetryingTerminalFailures(false);
+      if (isCurrentReader()) setRetryingTerminalFailures(false);
     }
   };
 
   const dismissTerminalFailures = async () => {
-    if (disposed) return;
+    if (!isCurrentReader()) return;
     const count = deliveryHealth()?.queue.attentionRequired ?? 0;
     if (count <= 0 || !confirm(getAlertDestinationsDeliveryDismissConfirmation(count))) {
       return;
@@ -140,20 +145,20 @@ export function useNotificationDeliveryHealth(options?: {
     setQueueActionFeedback(null);
     setDismissingTerminalFailures(true);
     try {
-      const result = await NotificationsAPI.dismissTerminalFailures();
-      if (disposed) return;
+      const result = await NotificationsAPI.dismissTerminalFailures(options?.requestOptions);
+      if (!isCurrentReader()) return;
       notificationStore.success(
         `${result.affected} retained ${result.affected === 1 ? 'failure' : 'failures'} dismissed.`,
       );
       await refreshAfterAction(action);
     } catch (error) {
-      if (disposed) return;
+      if (!isCurrentReader()) return;
       logger.error('Failed to dismiss retained notification failures', error);
       if (action === latestAction)
         setQueueActionFeedback('Unable to dismiss retained notification failures.');
       notificationStore.error('Unable to dismiss retained notification failures.');
     } finally {
-      if (!disposed) setDismissingTerminalFailures(false);
+      if (isCurrentReader()) setDismissingTerminalFailures(false);
     }
   };
 

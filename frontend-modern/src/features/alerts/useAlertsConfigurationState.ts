@@ -15,6 +15,7 @@ import {
   getAlertConfigSaveSuccess,
 } from '@/utils/alertConfigPresentation';
 import { logger } from '@/utils/logger';
+import { getOrgID } from '@/utils/apiClient';
 
 import {
   ALERT_DOCKER_GAP_VALIDATION_ERROR,
@@ -28,6 +29,7 @@ import { useAlertOverridesState } from './useAlertOverridesState';
 import type { AlertTab, Override } from './types';
 
 export interface AlertsConfigurationSurfaceProps {
+  isCurrentReader?: Accessor<boolean>;
   activeTab: Accessor<AlertTab>;
   allResources: Accessor<Resource[]>;
   byType: (resourceType: ResourceType) => Resource[];
@@ -46,6 +48,12 @@ export interface AlertsConfigurationSurfaceProps {
 }
 
 export function useAlertsConfigurationState(props: AlertsConfigurationSurfaceProps) {
+  const org = getOrgID() || 'default';
+  const requestOptions = { expectedOrgID: org, retry: false } as const;
+  let disposed = false;
+  let readController: AbortController | undefined;
+  const isCurrentReader = () =>
+    !disposed && props.isCurrentReader?.() !== false && (getOrgID() || 'default') === org;
   const alertsActivation = useAlertsActivation();
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
   const [isConfigLoaded, setIsConfigLoaded] = createSignal(false);
@@ -55,6 +63,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   let configurationVersion = 0;
   const [suppressDirtyFlag, setSuppressDirtyFlag] = createSignal(false);
   const guardedSetHasUnsavedChanges = (value: boolean) => {
+    if (!isCurrentReader()) return;
     if (value && suppressDirtyFlag()) return;
     if (value) ++draftRevision;
     props.setHasUnsavedChanges(value);
@@ -64,6 +73,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   });
   const destinationsState = useAlertDestinationsState({
     activeTab: props.activeTab,
+    isCurrentReader,
     canReload: () =>
       isConfigLoaded() && !props.hasUnsavedChanges() && !isSavingConfig() && !isReloadingConfig(),
   });
@@ -76,7 +86,12 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   });
 
   const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
+    if (!isCurrentReader()) return;
+    readController?.abort();
+    const controller = new AbortController();
+    readController = controller;
     const thisVersion = ++configurationVersion;
+    const ownsRead = () => isCurrentReader() && thisVersion === configurationVersion;
     // A context change invalidates unsent writes from the old editor. It cannot
     // cancel or undo a request that has already reached the server.
     setIsSavingConfig(false);
@@ -91,8 +106,12 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     );
 
     try {
-      const config = await AlertsAPI.getConfig();
-      if (thisVersion !== configurationVersion) return;
+      const config = await AlertsAPI.getConfig({
+        ...requestOptions,
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!ownsRead()) return;
       configurationSnapshotState.applyConfigurationSnapshot(
         readAlertsConfigurationSnapshot(config),
       );
@@ -100,24 +119,25 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
       overridesState.replaceRawOverridesConfig(config.overrides || {});
 
       await destinationsState.loadDestinations();
-      if (thisVersion !== configurationVersion) return;
+      if (!ownsRead()) return;
       setIsConfigLoaded(true);
 
       if (options.notify) {
         notificationStore.success(getAlertConfigDiscardedSuccess());
       }
     } catch (error) {
-      if (thisVersion !== configurationVersion) return;
+      if (!ownsRead()) return;
       setConfigLoadError(getAlertConfigLoadError());
       logger.error('Failed to load alert configuration:', error);
       if (options.notify) {
         notificationStore.error(getAlertConfigReloadFailure());
       }
     } finally {
-      if (thisVersion === configurationVersion) {
+      if (ownsRead()) {
+        readController = undefined;
         setIsReloadingConfig(false);
         queueMicrotask(() => {
-          if (thisVersion === configurationVersion) setSuppressDirtyFlag(false);
+          if (ownsRead()) setSuppressDirtyFlag(false);
         });
       }
     }
@@ -125,6 +145,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
   const saveAlertConfiguration = async () => {
     if (
+      !isCurrentReader() ||
       !isConfigLoaded() ||
       isSavingConfig() ||
       isReloadingConfig() ||
@@ -146,11 +167,11 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     const destinationsSnapshot = destinationsState.captureDestinations();
     const savedRevision = draftRevision;
     const savedVersion = configurationVersion;
-    const ownsSave = () => savedVersion === configurationVersion;
+    const ownsSave = () => isCurrentReader() && savedVersion === configurationVersion;
     setIsSavingConfig(true);
     let configSaved = false;
     try {
-      await AlertsAPI.updateConfig(result.alertConfig!);
+      await AlertsAPI.updateConfig(result.alertConfig!, requestOptions);
       configSaved = true;
       if (!ownsSave()) return;
       await destinationsState.saveDestinations(destinationsSnapshot, ownsSave);
@@ -172,10 +193,16 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
   onMount(() => {
     void loadAlertConfiguration();
-    const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
-      void loadAlertConfiguration();
-    });
+    // The page's keyed reader owns workspace replacement. Standalone callers
+    // without that owner retain the existing explicit reload event.
+    const unsubscribeOrgSwitched = props.isCurrentReader
+      ? () => undefined
+      : eventBus.on('org_switched', () => {
+          void loadAlertConfiguration();
+        });
     onCleanup(() => {
+      disposed = true;
+      readController?.abort();
       ++configurationVersion;
       unsubscribeOrgSwitched();
     });

@@ -4,6 +4,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, type NotificationDeliveryLog } from '@/api/notifications';
 import type { AlertEvent } from '@/types/api';
 import { logger } from '@/utils/logger';
+import type { APIContextOptions } from '@/utils/apiClient';
 
 const HELD_EVENT_TYPES = ['notification_suppressed', 'notification_deferred'];
 const HELD_EVENT_WINDOW_DAYS = 7;
@@ -20,7 +21,10 @@ const DELIVERY_LOG_LIMIT = 200;
 // deliberately not attempted, with the mechanism that held them. They come
 // from the alert event log and degrade independently — a failed events read
 // withdraws the held rows and reports that gap without hiding readable attempts.
-export function useNotificationDeliveryLog() {
+export function useNotificationDeliveryLog(options?: {
+  requestOptions?: APIContextOptions;
+  isCurrentReader?: () => boolean;
+}) {
   const [deliveryLog, setDeliveryLog] = createSignal<NotificationDeliveryLog | null>(null);
   const [deliveryLogUnavailable, setDeliveryLogUnavailable] = createSignal(false);
   const [refreshingDeliveryLog, setRefreshingDeliveryLog] = createSignal(false);
@@ -35,7 +39,8 @@ export function useNotificationDeliveryLog() {
   onCleanup(() => {
     disposed = true;
   });
-  const ownsRequest = (request: number) => !disposed && request === latestRequest;
+  const isCurrentReader = () => !disposed && options?.isCurrentReader?.() !== false;
+  const ownsRequest = (request: number) => isCurrentReader() && request === latestRequest;
 
   const loadHeldEvents = async (request: number) => {
     setRefreshingHeldEvents(true);
@@ -43,11 +48,14 @@ export function useNotificationDeliveryLog() {
       const since = new Date(
         Date.now() - HELD_EVENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
       ).toISOString();
-      const events = await AlertsAPI.getEvents({
-        types: HELD_EVENT_TYPES,
-        since,
-        limit: HELD_EVENT_LIMIT,
-      });
+      const events = await AlertsAPI.getEvents(
+        {
+          types: HELD_EVENT_TYPES,
+          since,
+          limit: HELD_EVENT_LIMIT,
+        },
+        options?.requestOptions,
+      );
       if (!ownsRequest(request)) return;
       setHeldEvents(events);
       setHeldEventsUnavailable(false);
@@ -62,7 +70,7 @@ export function useNotificationDeliveryLog() {
   };
 
   const loadDeliveryLog = async () => {
-    if (disposed) return;
+    if (!isCurrentReader()) return;
     const request = ++latestRequest;
     setRefreshingDeliveryLog(true);
     // Held events refresh independently: they must never delay or fail the
@@ -72,7 +80,9 @@ export function useNotificationDeliveryLog() {
       // Request the server's bounded maximum. A degraded queue can retain more
       // than the default page of 50 failures, and the evidence view should not
       // hide them behind unrelated successful attempts when space is available.
-      const log = await NotificationsAPI.getDeliveryLog(DELIVERY_LOG_LIMIT);
+      const log = await (options?.requestOptions
+        ? NotificationsAPI.getDeliveryLog(DELIVERY_LOG_LIMIT, options.requestOptions)
+        : NotificationsAPI.getDeliveryLog(DELIVERY_LOG_LIMIT));
       if (!ownsRequest(request)) return;
       setDeliveryLog(log);
       setDeliveryLogUnavailable(false);

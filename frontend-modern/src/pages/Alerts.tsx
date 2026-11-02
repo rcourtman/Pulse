@@ -43,12 +43,15 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import type { SecurityStatus } from '@/types/config';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';
 import { OverviewTab } from '@/features/alerts/OverviewTab';
 import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';
 import { pathForTab, tabFromPath, type AlertTab, type Override } from '@/features/alerts/types';
 
-export function Alerts() {
+export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
   const {
     activeAlerts,
     activeAlertsHydrationStatus,
@@ -63,6 +66,29 @@ export function Alerts() {
   const alertsActivation = useAlertsActivation();
   const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
   const readOnlySession = createMemo(() => presentationPolicyIsReadOnly());
+  const [workspaceRevision, setWorkspaceRevision] = createSignal(0);
+  const unsubscribeWorkspace = eventBus.on('org_switched', () => {
+    setWorkspaceRevision((revision) => revision + 1);
+  });
+  onCleanup(unsubscribeWorkspace);
+  // A copied status with the same facts must preserve drafts and focus. A new
+  // reader must never inherit destination credentials or an in-flight editor.
+  const configurationReader = createMemo(() => {
+    const status = props.securityStatus;
+    if (!status || status.requiresAuth !== false || readOnlySession()) return undefined;
+    return JSON.stringify([
+      workspaceRevision(),
+      getOrgID() || 'default',
+      status.currentUsername ??
+        status.proxyAuthUsername ??
+        status.ssoSessionUsername ??
+        status.authUsername,
+      status.apiTokenHint,
+      status.tokenScopes?.slice().sort(),
+      status.proxyAuthIsAdmin,
+      Object.entries(status.settingsCapabilities ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+    ]);
+  });
   const isNotificationDeliveryActive = alertsActivation.notificationDeliveryEnabled;
   const alertActivationPresentation = createMemo(() =>
     getAlertActivationPresentation({
@@ -159,6 +185,11 @@ export function Alerts() {
   };
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
+  createEffect(() => {
+    configurationReader();
+    setHasUnsavedChanges(false);
+    setOverviewOverrides([]);
+  });
   const [showAcknowledged, setShowAcknowledged] = createSignal(true);
   // Quick tip visibility state
   const [showQuickTip, setShowQuickTip] = createSignal(
@@ -437,19 +468,35 @@ export function Alerts() {
             </Show>
 
             <Show when={!readOnlySession()}>
-              <AlertsConfigurationSurface
-                activeTab={activeTab}
-                allResources={allResources}
-                byType={byType}
-                children={children}
-                activeAlerts={activeAlerts}
-                removeAlerts={removeAlerts}
-                setOverviewOverrides={setOverviewOverrides}
-                hasUnsavedChanges={hasUnsavedChanges}
-                setHasUnsavedChanges={setHasUnsavedChanges}
-                alertsActivationState={alertsActivation.activationState}
-                alertsActivationConfig={alertsActivation.config}
-              />
+              <Show
+                when={configurationReader()}
+                keyed
+                fallback={
+                  <Show when={isAlertsConfigurationTab(activeTab())}>
+                    <p role="status" class="text-sm text-muted">
+                      Alert settings access is unavailable. Reload Pulse to check access before
+                      editing.
+                    </p>
+                  </Show>
+                }
+              >
+                {(acceptedReader) => (
+                  <AlertsConfigurationSurface
+                    isCurrentReader={() => configurationReader() === acceptedReader}
+                    activeTab={activeTab}
+                    allResources={allResources}
+                    byType={byType}
+                    children={children}
+                    activeAlerts={activeAlerts}
+                    removeAlerts={removeAlerts}
+                    setOverviewOverrides={setOverviewOverrides}
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    setHasUnsavedChanges={setHasUnsavedChanges}
+                    alertsActivationState={alertsActivation.activationState}
+                    alertsActivationConfig={alertsActivation.config}
+                  />
+                )}
+              </Show>
             </Show>
 
             <Show when={activeTab() === 'history'}>

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "11b2d46fb642be7bf5af0096f9805e2e1b2433f5",
+  "verified_at": "2026-11-02T16:19:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/api/alerts.ts",
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/api/relay.ts",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "52d46866148cb18fccd0219d33dbab64eab6ff9efa33c2085ce97ee750fbd7d7",
+    "frontend-modern/src/api/alerts.ts": "f165968e3882983d8a917d1cf3825b8e4023b4a4b0ca45cee871df7629505b7e",
+    "frontend-modern/src/api/notifications.ts": "5944986c86327a416f8ed3bcf82611aab89c087e369b7f3aed32630e93e5db4b",
+    "frontend-modern/src/api/relay.ts": "c5b3dd124946b4f4182134e7ddbe0a746e9e2ba49d1cef2e7b3c32ef62e969c9",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "1a700330eb8dbdca071d177087fbf2006572a531810d34a5b5699697dab06f76",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "9dffa47880dc6f324d409e20fba1650b8b93cef34e041a736fef432c536f4e98",
+    "frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts": "796cf460d749ba40ef9bd8266face49862b199f35efed32ae29da47e304f74c0",
+    "frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts": "216691ecbfc2a79b9bd2534d036cf80f708bd1792ec03c27f51a7f3062033831",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "fcd049daa344e0ab2d02467b1c73e555c56e632011c2a2f0ee1a38c16ef29970",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "97252c73820c86fa507de0439e71d1e7e58a83f327fc5a2a03d71e55a43c0124",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryLog.ts": "b3cce16b4668b4c1bc9af726ab0cf02d6fdf59b6978d96737363d69fd81f5bbc",
+    "frontend-modern/src/pages/Alerts.tsx": "de54a1ce22dad099c2f72adc5e96306c60229e369e0ac58236770d27b18f4460",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "331cb64aca721517bf571756fc9d762ffd53341cf322badd86a803e81cca0035",
+    "frontend-modern/src/utils/apiClient.ts": "69c5fecf7e7114b8bfdee071a127ee607e4856439f694c69e551ae7a8738c1a5"
+  },
+  "routes": [
+    "/alerts/destinations",
+    "/alerts/schedule"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App route passes authenticated security-status facts to the keyed Alerts configuration reader. Existing configuration owner, API adapters, destination editor and workspace-event producer consume only synthetic local endpoints.",
+    "Complete saved snapshot, partial denied read, explicit Retry, pending obsolete read, replacement workspace recovery, acknowledged save and pending old-policy write. Chromium desktop/light and WebKit narrow/dark; Playwright 1.56.1 matches the integration lock. Principal/token/capability equality and retirement are covered separately by registered page tests, not claimed as installed IdP proof."
+  ],
+  "interactions": [
+    "39 checks at 1280x900 and 390x844. Denied reads withdraw all destination details and Test controls; no fallback retry or configuration/test side effect from reading. Explicit recovery requires a complete fresh snapshot.",
+    "Obsolete reads are cancelled; current saved reads use no-store and expected workspace. Released old reads do not overwrite the new workspace. A single Save dispatches exactly policy/email/Apprise/watchdog once; old policy completion starts no destination writes or new success notice after replacement. Issued writes are not undone.",
+    "All eight viewport captures opened with native view_image. Desktop and narrow pixels show readable denial/retry with no old fields, then only tenant-b and tenant-c SMTP/webhook values. Crops do not show every editor control or prove provider/installed recovery.",
+    "Both browser contexts/engines, Vite and HTTP fixture close. No uncaught page errors. Earlier fixture error, two pending-read recovery failures and an overbroad old-toast assertion remain in retained evidence; the assertion now dismisses the earlier accepted save through its real Dismiss control before judging new feedback."
+  ]
+}

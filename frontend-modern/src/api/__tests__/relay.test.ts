@@ -18,7 +18,7 @@ describe('RelayAPI', () => {
 
       const result = await RelayAPI.getConfig();
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/settings/relay');
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/settings/relay', undefined);
       expect(result).toEqual(mockConfig);
     });
   });

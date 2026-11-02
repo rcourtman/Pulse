@@ -82,6 +82,9 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   expectedOrgID?: string;
 }
 
+// A surface can retain its admitted workspace without exposing auth/header overrides.
+export type APIContextOptions = Pick<FetchOptions, 'expectedOrgID' | 'retry' | 'signal' | 'cache'>;
+
 type APIErrorDetails = Record<string, string>;
 
 type APIErrorShape = Error & {

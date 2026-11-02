@@ -14,6 +14,49 @@ describe('NotificationsAPI', () => {
     apiFetchJSONMock.mockReset();
   });
 
+  it('retains the admitted workspace and retry policy through every destination configuration adapter', async () => {
+    const context = { expectedOrgID: 'tenant-a', retry: false } as const;
+    const email = {
+      enabled: true,
+      server: 'smtp.example.test',
+      provider: 'custom',
+      port: 587,
+      username: 'ops',
+      password: '',
+      from: 'pulse@example.test',
+      to: ['ops@example.test'],
+      tls: true,
+      startTLS: true,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(email);
+    await NotificationsAPI.getEmailConfig(context);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/notifications/email', context);
+    apiFetchJSONMock.mockResolvedValueOnce({ enabled: false });
+    await NotificationsAPI.getAppriseConfig(context);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/notifications/apprise', context);
+    apiFetchJSONMock.mockResolvedValueOnce([]);
+    await NotificationsAPI.getWebhooks(context);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/notifications/webhooks', context);
+    apiFetchJSONMock.mockResolvedValueOnce({ success: true });
+    await NotificationsAPI.updateEmailConfig(email, context);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
+      '/api/notifications/email',
+      expect.objectContaining({ ...context, method: 'PUT' }),
+    );
+    apiFetchJSONMock.mockResolvedValueOnce({ enabled: false });
+    await NotificationsAPI.updateAppriseConfig({ enabled: false }, context);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
+      '/api/notifications/apprise',
+      expect.objectContaining({ ...context, method: 'PUT' }),
+    );
+    apiFetchJSONMock.mockResolvedValueOnce({ success: true });
+    await NotificationsAPI.testNotification({ type: 'email' }, context);
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
+      '/api/notifications/test',
+      expect.objectContaining({ ...context, method: 'POST' }),
+    );
+  });
+
   it('preserves valid zero values when mapping email config', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       enabled: false,
@@ -32,7 +75,7 @@ describe('NotificationsAPI', () => {
 
     const config = await NotificationsAPI.getEmailConfig();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/email');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/email', undefined);
     expect(config).toEqual({
       enabled: false,
       provider: 'smtp',
@@ -134,7 +177,7 @@ describe('NotificationsAPI', () => {
 
     const result = await NotificationsAPI.getWebhooks();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks', undefined);
     expect(result).toEqual([]);
   });
 
@@ -173,7 +216,7 @@ describe('NotificationsAPI', () => {
 
     const health = await NotificationsAPI.getHealth();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/health');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/health', undefined);
     expect(health).toEqual({
       overallHealthy: false,
       queue: {
@@ -343,7 +386,10 @@ describe('NotificationsAPI', () => {
 
     const log = await NotificationsAPI.getDeliveryLog(25);
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log?limit=25');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/notifications/delivery-log?limit=25',
+      undefined,
+    );
     expect(log.windowDays).toBe(30);
     expect(log.completedRetentionDays).toBe(7);
     expect(log.deadLetterRetentionDays).toBe(30);
@@ -365,7 +411,7 @@ describe('NotificationsAPI', () => {
 
     const log = await NotificationsAPI.getDeliveryLog();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log', undefined);
     expect(log.entries).toEqual([]);
     // A missing or nonsensical window falls back to the seven-day default.
     expect(log.windowDays).toBe(7);

@@ -104,6 +104,47 @@ function degradedHealth(): NotificationHealth {
 }
 
 describe('DestinationsTab recovery while editing SMTP', () => {
+  it('withdraws saved destination details and all editors during a failed read, then recovers explicitly', async () => {
+    const [emailConfig, setEmailConfig] = createSignal(buildEmailConfig());
+    const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());
+    const [error, setError] = createSignal<string | null>(null);
+    const [loading, setLoading] = createSignal(false);
+    const retry = vi.fn();
+    render(() => (
+      <DestinationsTab
+        emailConfig={emailConfig}
+        setEmailConfig={setEmailConfig}
+        appriseConfig={appriseConfig}
+        setAppriseConfig={setAppriseConfig}
+        setHasUnsavedChanges={vi.fn()}
+        configLoadError={error}
+        isRetrying={() => false}
+        isLoadingDestinations={loading}
+        onRetryLoad={retry}
+        webhooks={() => []}
+        deadManPingUrl={() => ''}
+        setDeadManPingUrl={vi.fn()}
+        pushMinimumSeverity={() => 'all'}
+        setPushMinimumSeverity={vi.fn()}
+      />
+    ));
+    await screen.findByRole('textbox', { name: 'SMTP server' });
+    setLoading(true);
+    expect(screen.queryByRole('textbox', { name: 'SMTP server' })).not.toBeInTheDocument();
+    setError('Unable to load notification settings.');
+    setLoading(false);
+    expect(screen.queryByRole('textbox', { name: 'SMTP server' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Test/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(screen.getByText(/Destination details and controls stay hidden/)).toBeInTheDocument();
+    setEmailConfig({ ...emailConfig(), server: 'smtp.current.example.test' });
+    setError(null);
+    expect(await screen.findByRole('textbox', { name: 'SMTP server' })).toHaveValue(
+      'smtp.current.example.test',
+    );
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     setActiveLocale(DEFAULT_LOCALE);
