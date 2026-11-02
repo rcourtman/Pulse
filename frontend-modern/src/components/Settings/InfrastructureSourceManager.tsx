@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-solid';
 import { Button } from '@/components/shared/Button';
+import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -56,6 +57,9 @@ import { ClusterAgentDeployDialog } from './ClusterAgentDeployDialog';
 
 interface InfrastructureSourceManagerProps {
   rows: Accessor<readonly InfrastructureSystemRow[]>;
+  inventoryLoading?: boolean;
+  inventoryError?: unknown;
+  onRetryInventory?: () => void;
   discoveredNodes: Accessor<readonly DiscoveredServer[]>;
   discoveryEnabled: boolean;
   discoveryScanStatus: Accessor<DiscoveryScanStatus>;
@@ -326,6 +330,7 @@ const agentHostProfileGroupLabel = (row: InfrastructureSystemRow): string | null
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   let layoutContainerRef: HTMLDivElement | undefined;
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
+  const inventoryReadUncertain = () => Boolean(props.inventoryLoading || props.inventoryError);
   const infrastructureRows = createMemo(() =>
     props.rows().filter((row) => row.ownerType !== 'availability'),
   );
@@ -355,7 +360,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       next.set(product.type, []);
     }
 
-    for (const server of props.discoveredNodes()) {
+    // A failed inventory cannot establish that a discovered system is new.
+    for (const server of inventoryReadUncertain() ? [] : props.discoveredNodes()) {
       const productRows = next.get(server.type as InfrastructureOnboardingConnectionType);
       if (!productRows) continue;
       productRows.push(server);
@@ -855,6 +861,49 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     </div>
   );
 
+  const inventoryReadNotice = () => (
+    <Show
+      when={props.inventoryError}
+      fallback={
+        <Show when={props.inventoryLoading}>
+          <div role="status" class="border-b border-border px-4 py-4 text-sm text-muted">
+            {hasAnyConfigured()
+              ? 'Refreshing connected systems...'
+              : 'Loading connected systems...'}
+          </div>
+        </Show>
+      }
+    >
+      <div
+        role="alert"
+        class="flex flex-col gap-3 border-b border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/25 dark:bg-amber-950/25 dark:text-amber-200"
+      >
+        <div class="min-w-0 space-y-1">
+          <p class="font-semibold">Connected systems unavailable</p>
+          <p>
+            {getAPIReadAccessErrorMessage(props.inventoryError) ??
+              'Pulse could not read the connection list. Retry to check your saved systems.'}
+          </p>
+          <Show when={hasAnyConfigured()}>
+            <p>Showing the last loaded list. Connection status may be out of date.</p>
+          </Show>
+        </div>
+        <Show when={props.onRetryInventory}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="mdCompact"
+            class="min-h-11 shrink-0 self-start sm:self-center lg:min-h-9"
+            disabled={props.inventoryLoading}
+            onClick={() => props.onRetryInventory?.()}
+          >
+            {props.inventoryLoading ? 'Retrying...' : 'Retry'}
+          </Button>
+        </Show>
+      </div>
+    </Show>
+  );
+
   return (
     <div ref={layoutContainerRef} class="min-w-0">
       <SettingsPanel
@@ -875,9 +924,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           ) : undefined
         }
       >
-        {setupSummaryBand()}
+        {inventoryReadNotice()}
+        <Show when={!inventoryReadUncertain()}>{setupSummaryBand()}</Show>
 
-        <Show when={!useCardLayout()}>
+        <Show when={!useCardLayout() && (hasAnyConfigured() || !inventoryReadUncertain())}>
           <Table class="w-full min-w-[820px] table-fixed text-sm">
             <TableHeader class="">
               <TableRow>
@@ -1445,7 +1495,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           </Table>
         </Show>
 
-        <Show when={useCardLayout()}>
+        <Show when={useCardLayout() && (hasAnyConfigured() || !inventoryReadUncertain())}>
           <div class="space-y-3 p-3">
             <For each={sortedProducts()}>
               {(product) => {
@@ -1860,7 +1910,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             </Show>
           </div>
         </Show>
-        {discoveryMonitorBand()}
+        <Show when={!inventoryReadUncertain()}>{discoveryMonitorBand()}</Show>
         {/* Keyed so the dialog gets plain values: an install it started keeps
             running after close, and must not read a stale <Show> accessor. */}
         <Show when={clusterDeploy()} keyed>

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
+import { eventBus } from '@/stores/events';
 import {
   agentAttachmentProblem,
   infrastructureRowMonitoringPath,
@@ -34,6 +35,11 @@ const connectionState = vi.hoisted(() => {
     notifyChanged: () => notifyChanged(),
   };
 });
+const ledgerReadState = vi.hoisted(() => ({
+  error: null as unknown,
+  loading: false,
+  reload: vi.fn(),
+}));
 const nodeCredentialSlotState = vi.hoisted(() => ({ mountCount: 0 }));
 const emptyFleetRow = vi.hoisted(
   () =>
@@ -160,9 +166,10 @@ vi.mock('../useConnectionsLedger', () => ({
       })),
     findById: (id: string) =>
       connectionState.connections.find((connection) => connection.id === id),
-    reload: vi.fn(),
-    loading: () => false,
-    error: () => null,
+    reload: ledgerReadState.reload,
+    loading: () => ledgerReadState.loading,
+    error: () => ledgerReadState.error,
+    resolvedOnce: () => true,
   }),
 }));
 
@@ -304,6 +311,9 @@ const baseProps = () =>
 describe('InfrastructureWorkspace', () => {
   beforeEach(() => {
     navigateSpy.mockReset();
+    ledgerReadState.error = null;
+    ledgerReadState.loading = false;
+    ledgerReadState.reload.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     routeState.pathname = '/settings/infrastructure';
@@ -853,6 +863,36 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
+  it('forwards an unavailable ledger and its read-only retry instead of onboarding', async () => {
+    connectionState.connections = [];
+    connectionState.rows = [];
+    ledgerReadState.error = { status: 503 };
+    presentationPolicyIsReadOnlyMock.mockReturnValue(true);
+    renderWorkspace();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Connected systems unavailable');
+    expect(screen.queryByText('0 systems connected')).not.toBeInTheDocument();
+    expect(screen.queryByText('Start monitoring infrastructure')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(ledgerReadState.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries saved node configuration alongside the connection list for an administrator', () => {
+    connectionState.connections = [];
+    connectionState.rows = [];
+    ledgerReadState.error = { status: 503 };
+    const refreshNodes = vi.fn();
+    const unsubscribe = eventBus.on('refresh_nodes', refreshNodes);
+    try {
+      renderWorkspace();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(ledgerReadState.reload).toHaveBeenCalledTimes(1);
+      expect(refreshNodes).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it('keeps onboarding copy visible in the empty infrastructure state', async () => {
     connectionState.connections = [];
     connectionState.rows = [];
@@ -1170,6 +1210,32 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('Connected systems')).toBeInTheDocument());
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('recovers unavailable saved node settings inside the existing manage dialog', async () => {
+    const [savedNodes, setSavedNodes] = createSignal<any[]>([]);
+    const refresh = vi.fn(() => setSavedNodes([{ name: 'zeus', host: 'https://10.0.0.1:8006' }]));
+    const unsubscribe = eventBus.on('refresh_nodes', refresh);
+    try {
+      renderWorkspace({ pveNodes: savedNodes });
+      fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        'Saved configuration for zeus is unavailable',
+      );
+      expect(dialog).not.toHaveTextContent('removed');
+      expect(within(dialog).queryByTestId('proxmox-section')).toBeNull();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Retry saved configuration' }));
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(ledgerReadState.reload).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(within(dialog).getByTestId('proxmox-section')).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('dialog')).toBe(dialog);
+      expect(dialog).toHaveAccessibleName('Manage zeus');
+    } finally {
+      unsubscribe();
+    }
   });
 
   it('opens the manage dialog directly from an existing source card', async () => {
