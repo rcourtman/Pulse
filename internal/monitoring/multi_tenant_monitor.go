@@ -28,6 +28,7 @@ type MultiTenantMonitor struct {
 	initializer    func(*Monitor)
 	globalCtx      context.Context
 	globalCancel   context.CancelFunc
+	stopped        bool // Terminal admission fence, protected by mu.
 }
 
 // NewMultiTenantMonitor creates a new multi-tenant monitor manager.
@@ -152,6 +153,10 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	}
 
 	mtm.mu.RLock()
+	if mtm.stopped {
+		mtm.mu.RUnlock()
+		return nil, fmt.Errorf("tenant monitor manager is stopped")
+	}
 	monitor, exists := mtm.monitors[orgID]
 	_, deleting := mtm.tenantDeleting[orgID]
 	mtm.mu.RUnlock()
@@ -165,6 +170,12 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 
 	mtm.mu.Lock()
 	defer mtm.mu.Unlock()
+
+	// Stop can win between the cache lookup and this initialization lock.
+	// A retired manager must never reopen stores or mutate the shared config.
+	if mtm.stopped {
+		return nil, fmt.Errorf("tenant monitor manager is stopped")
+	}
 
 	if mtm.monitors == nil {
 		mtm.monitors = make(map[string]*Monitor)
@@ -300,15 +311,20 @@ func (mtm *MultiTenantMonitor) PeekMonitor(orgID string) (*Monitor, bool) {
 
 	mtm.mu.RLock()
 	defer mtm.mu.RUnlock()
+	if mtm.stopped {
+		return nil, false
+	}
 	monitor, exists := mtm.monitors[orgID]
 	return monitor, exists
 }
 
-// Stop stops all tenant monitors.
+// Stop permanently closes admission and stops all tenant monitors. A new
+// manager, rather than a lookup on this retired one, owns replacement runtimes.
 func (mtm *MultiTenantMonitor) Stop() {
 	log.Info().Msg("stopping MultiTenantMonitor and all tenant instances")
 
 	mtm.mu.Lock()
+	mtm.stopped = true
 	if mtm.globalCancel != nil {
 		mtm.globalCancel()
 	}
