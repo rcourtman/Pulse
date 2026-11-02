@@ -65,6 +65,28 @@ late read/write results. Actual App browser proof at desktop and narrow widths
 exercises the producer through Settings, its registry, API client and dialogs.
 Synthetic proof is not native receiver delivery, IdP or original tenant recovery.
 
+### Failed Settings access checks withdraw the previous grant
+
+A same-reader security-status refresh keeps the mounted panel and its draft
+while checking. Once a refresh fails (including HTTP refusal, unavailable
+transport or invalid JSON/status shape), Settings discards the previous status,
+unmounts capability-gated panels and withdraws shared Settings capability links.
+It keeps the existing safe General fallback and explains that access is unknown,
+not that permission was denied or authentication disabled. Explicit Retry only
+checks status again; it does not change permissions or repeat a mutation.
+Pending Retry keeps withdrawn navigation hidden until the new check succeeds.
+
+Status reads are deduplicated, cancellable and not automatically retried. Panel
+disposal cancels the read and prevents late status from restoring local or shared
+capabilities. A failed check does not reset the separate read-only/demo policy to
+permissive defaults. Successful checks still use the served capabilities and
+existing navigation rules, with no backend or authentication-policy change.
+Normal `useSettingsAccess.refresh` and existing access/navigation tests exercise
+failure, recovery, pending same-reader preservation and disposal. Actual-App
+browser proof covers the password-dialog close producer, failed check, safe
+fallback and read-only retry at desktop and narrow widths; it is not original
+administrator, IdP or installed recovery.
+
 ### Role administration belongs to the current reader
 
 The existing Roles screen binds its accepted role inventory, unsaved permissions,
