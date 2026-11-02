@@ -177,4 +177,24 @@ describe('useAuditLogPanelState audit request lifecycle', () => {
     expect(result.isPersistent()).toBe(false);
     cleanup();
   });
+  it('keeps a license refusal unavailable rather than announcing an empty audit log', async () => {
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce(auditResponse(['existing']))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'feature not included in license' }), { status: 402 }),
+      );
+    const { result, cleanup } = renderHook(() => useAuditLogPanelState());
+    try {
+      await waitFor(() => expect(result.events()).toHaveLength(1));
+      result.refresh();
+      expect(result.events()).toEqual([]);
+      await waitFor(() => expect(result.loading()).toBe(false));
+      expect(result.isPersistent()).toBe(false);
+      expect(result.error()).toBe(
+        'Audit log access could not be confirmed. Refresh after access is restored.',
+      );
+    } finally {
+      cleanup();
+    }
+  });
 });

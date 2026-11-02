@@ -32,11 +32,16 @@ import {
   getAuditLogLoadingState,
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
-import { useAuditLogPanelState } from '@/components/Settings/useAuditLogPanelState';
+import {
+  useAuditLogPanelState,
+  type AuditLogPanelProps,
+} from '@/components/Settings/useAuditLogPanelState';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 
-export default function AuditLogPanel() {
+export default function AuditLogPanel(props: AuditLogPanelProps) {
   const { isMobile } = useBreakpoint();
   const {
+    accessAllowed,
     activeFilterCount,
     auditLoggingEnabled,
     autoVerifyEnabled,
@@ -90,7 +95,7 @@ export default function AuditLogPanel() {
     verifying,
     verifyingAll,
     userFilter,
-  } = useAuditLogPanelState();
+  } = useAuditLogPanelState(props);
 
   const formatTimestamp = (ts: string) => {
     const date = new Date(ts);
@@ -157,7 +162,7 @@ export default function AuditLogPanel() {
         <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <button
             onClick={refresh}
-            disabled={loading() || !auditLoggingEnabled()}
+            disabled={loading() || !accessAllowed()}
             class={AUDIT_REFRESH_BUTTON_CLASS}
           >
             <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
@@ -318,6 +323,12 @@ export default function AuditLogPanel() {
             </button>
           </div>
         </div>
+      </Show>
+
+      <Show when={!loading() && auditLoggingEnabled() && !accessAllowed()}>
+        <InlineNotice tone="warning" role="status">
+          Audit log is unavailable for this session.
+        </InlineNotice>
       </Show>
 
       <Show when={error()}>

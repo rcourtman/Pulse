@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Audit events and signature checks withdraw with the reader
+
+The existing Settings Audit Log passes its current principal, explicit audit
+read capability and non-secret token/scope identity into the viewer. Accepted
+events, counts, signature results, pending checks and batch feedback belong to
+that reader, organisation and entitlement. Switching, withdrawal and disposal
+clear them and cancel pending work, including work that ignores cancellation.
+Returning to the same identifiers does not readmit an old result. An unchanged
+status response does not invalidate a live request. Every read/check uses the
+expected organisation and disabled automatic retries. Refresh replaces the page
+and its verification generation; stale row objects are not actionable. Read or
+verification refusal stays explicitly unavailable until an admitted refresh,
+never a false empty inventory or an inherited Verified badge. Normal audit
+reader/request and registry tests plus desktop/narrow actual-App browser proof
+cover these boundaries. Backend audit authorization/redaction and original
+administrator/IdP recovery remain separate, unchanged responsibilities.
+
 ### Audit destinations belong to their current reader
 
 The existing Audit Webhooks panel receives the live principal and explicit

@@ -18,6 +18,22 @@
 
 ## Purpose
 
+### Audit viewer results cannot outlive their reader or page
+
+Audit event details and verification outcomes in Settings are reader-owned.
+The public viewer withdraws them on principal, token/scope identity, explicit
+read permission, organisation, entitlement or lifetime change. Page replacement
+also cancels and invalidates row and batch signature checks: an obsolete success,
+refusal or completion cannot annotate a same-ID event in a later page or publish
+old batch feedback. Calls remain bound to the original organisation without
+client retry/fallback. Cancel is immediate; recovery reads current inventory and
+only explicit Verify/Resume checks it again. Refusals are unknown access, not
+successful empty results. These consumer changes neither widen backend access
+nor change audit collection, signed records, redaction or retention. Registered
+`AuditLogReaderLifetime`/audit request/registry tests and actual-App desktop/narrow
+proof exercise the consuming route with synthetic events, not installed tenant,
+IdP recovery or measured customer exposure.
+
 ### Audit webhook configuration withdraws with its reader
 
 The Settings Audit Webhooks consumer treats endpoint addresses and new URL
