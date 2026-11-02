@@ -10,8 +10,7 @@ import {
 export type ProxmoxBackupsTableLayoutMode =
   'compact' | 'basic' | 'operational' | 'expanded' | 'full';
 
-export type BackupServerColumnId =
-  'server' | 'status' | 'datastore' | 'used' | 'jobs' | 'backups' | 'dedup';
+export type BackupServerColumnId = 'datastore' | 'status' | 'used' | 'jobs' | 'backups' | 'dedup';
 
 export type CoverageColumnId =
   'workload' | 'type' | 'targetId' | 'node' | 'posture' | 'latest' | 'task';
@@ -57,9 +56,8 @@ export const getRecoverableLayoutForContainer = (width: number): ProxmoxBackupsT
   layoutForWidth(width, [480, 720, 880, 1120]);
 
 export const BACKUP_SERVER_COLUMNS: readonly BackupTableColumn<BackupServerColumnId>[] = [
-  { id: 'server', label: 'Backup server', kind: 'name' },
+  { id: 'datastore', label: 'Datastore', kind: 'name' },
   { id: 'status', label: 'Status', kind: 'text' },
-  { id: 'datastore', label: 'Datastore', kind: 'text' },
   { id: 'used', label: 'Used', kind: 'numeric-value' },
   { id: 'jobs', label: 'Jobs', kind: 'text' },
   { id: 'backups', label: 'Backups', kind: 'numeric-value' },
@@ -78,9 +76,9 @@ const BACKUP_SERVER_VISIBLE: Record<
   // Host CPU, memory, uptime and version live in the server's drawer, with
   // their history: they say whether the box is alive, which Status already
   // answers, and took the row's room from the datastore answers.
-  compact: ['server', 'status', 'datastore', 'used'],
-  basic: ['server', 'status', 'datastore', 'used', 'jobs'],
-  operational: ['server', 'status', 'datastore', 'used', 'jobs', 'backups'],
+  compact: ['datastore', 'status', 'used'],
+  basic: ['datastore', 'status', 'used', 'jobs'],
+  operational: ['datastore', 'status', 'used', 'jobs', 'backups'],
   expanded: BACKUP_SERVER_COLUMNS.map((column) => column.id),
   full: BACKUP_SERVER_COLUMNS.map((column) => column.id),
 };
@@ -91,20 +89,20 @@ const BACKUP_SERVER_WEIGHTS: Record<
 > = {
   // State must fit a job problem ("Sync failed", "Verify late") or a fill
   // forecast ("Full in ~4d") because the phone layout has no Jobs column, and
-  // capacity must fit "Unavailable". Datastore names truncate at either width;
-  // keep the shared 40% identity anchor. The compact status omits its
-  // redundant dot.
-  compact: { server: 40, status: 24, datastore: 13, used: 23 },
+  // capacity must fit "Unavailable". The datastore name, with its server in
+  // muted text, keeps the shared 40% identity anchor and truncates the server
+  // first. The compact status omits its redundant dot.
+  compact: { datastore: 40, status: 30, used: 30 },
   // Jobs must fit "Verify failed" and Used must fit "Unavailable" or a fill
   // forecast pill, not just short values. The 30% identity anchor below still
-  // owns the server column in this band.
-  basic: { server: 30, status: 13.6, datastore: 14, used: 26.9, jobs: 15.5 },
+  // owns the datastore column in this band.
+  basic: { datastore: 30, status: 17.6, used: 30.9, jobs: 21.5 },
   // Used carries a percentage plus the used/total pair or the forecast pill,
   // the longest value in the row, so it keeps the widest share.
-  operational: { server: 24, status: 13, datastore: 17, used: 22, jobs: 13, backups: 11 },
+  operational: { datastore: 34, status: 13, used: 22, jobs: 20, backups: 11 },
   // At the 900px breakpoint Count needs 9% (81px) to fit "Unavailable".
-  expanded: { server: 22, status: 12, datastore: 16, used: 21, jobs: 12, backups: 9, dedup: 8 },
-  full: { server: 22, status: 11, datastore: 17, used: 20, jobs: 14, backups: 8, dedup: 8 },
+  expanded: { datastore: 34, status: 12, used: 21, jobs: 16, backups: 9, dedup: 8 },
+  full: { datastore: 34, status: 11, used: 20, jobs: 19, backups: 8, dedup: 8 },
 };
 
 export const getBackupServerColumns = (
@@ -124,7 +122,7 @@ export const getBackupServerColumnWidthStyle = (
     BACKUP_SERVER_VISIBLE[layout],
     layout === 'compact' || layout === 'basic'
       ? {
-          columnId: 'server',
+          columnId: 'datastore',
           widthPercent:
             layout === 'compact'
               ? PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT

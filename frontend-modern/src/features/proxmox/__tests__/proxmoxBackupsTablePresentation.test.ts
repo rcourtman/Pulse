@@ -41,36 +41,24 @@ describe('Proxmox backups responsive table presentation', () => {
   });
 
   it('keeps server reachability and datastore exhaustion risk visible first', () => {
-    expect(ids(getBackupServerColumns('compact'))).toEqual([
-      'server',
-      'status',
-      'datastore',
-      'used',
-    ]);
-    expect(getBackupServerColumnWidthStyle('server', 'compact')).toEqual({ width: '40%' });
-    expect(getBackupServerColumnWidthStyle('status', 'compact')).toEqual({ width: '24%' });
-    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '23%' });
-    expect(getBackupServerColumnWidthStyle('datastore', 'compact')).toEqual({ width: '13%' });
-    expect(ids(getBackupServerColumns('basic'))).toEqual([
-      'server',
-      'status',
-      'datastore',
-      'used',
-      'jobs',
-    ]);
+    // Each row is a datastore, named first with its server beside it, so there
+    // is no separate server or datastore column to read as a second server.
+    expect(ids(getBackupServerColumns('compact'))).toEqual(['datastore', 'status', 'used']);
+    expect(getBackupServerColumnWidthStyle('datastore', 'compact')).toEqual({ width: '40%' });
+    expect(getBackupServerColumnWidthStyle('status', 'compact')).toEqual({ width: '30%' });
+    expect(getBackupServerColumnWidthStyle('used', 'compact')).toEqual({ width: '30%' });
+    expect(ids(getBackupServerColumns('basic'))).toEqual(['datastore', 'status', 'used', 'jobs']);
     expect(ids(getBackupServerColumns('operational'))).toEqual([
-      'server',
-      'status',
       'datastore',
+      'status',
       'used',
       'jobs',
       'backups',
     ]);
     // Host CPU, memory, uptime and version live in the server's drawer.
     expect(ids(getBackupServerColumns('full'))).toEqual([
-      'server',
-      'status',
       'datastore',
+      'status',
       'used',
       'jobs',
       'backups',
@@ -97,10 +85,10 @@ describe('Proxmox backups responsive table presentation', () => {
   );
 
   it.each([
-    ['basic', '15.5%'],
-    ['operational', '13%'],
-    ['expanded', '12%'],
-    ['full', '14%'],
+    ['basic', '21.5%'],
+    ['operational', '20%'],
+    ['expanded', '16%'],
+    ['full', '19%'],
   ] as const)('fits a worded job result such as "Verify failed" in %s', (layout, width) => {
     expect(getBackupServerColumnWidthStyle('jobs', layout)).toEqual({ width });
     const total = getBackupServerColumns(layout).reduce(

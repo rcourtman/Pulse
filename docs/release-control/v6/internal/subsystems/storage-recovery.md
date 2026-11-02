@@ -1770,10 +1770,10 @@ checks establish no native datastore repair, backup/thaw or release acceptance.
 
 The Backups "Backup server" table keeps one row per server and datastore, so
 each datastore keeps its own capacity, count, dedup, detail toggle and web
-link. Host status, version, CPU, memory and uptime render only on a server's
-first datastore row (`buildBackupServerRows` marks later rows
-`continuesServer`); later rows show the server name muted and leave those host
-cells empty, so two datastores no longer read as two identical servers. Rows
+link. (Superseded 2 November 2026: rows are now named by their datastore with
+the server beside them, every row shows its server's status, and
+`continuesServer` is gone; host version, CPU, memory and uptime live in the
+server's drawer.) Rows
 stay grouped (servers by name then ID, datastores by name), and windowing
 follows the scroll position, so a later row is only ever mounted without its
 first row once that first row has scrolled out of view. Capacity evidence is
@@ -5077,6 +5077,20 @@ Protected row opens nothing and carries no chevron; an empty last grid track
 keeps its columns aligned. Rows stay 32px, the accessible names are unchanged,
 and the phone bar narrows from 5rem to 4rem to make room. Which workloads each
 reason selects is unchanged.
+
+### Backup servers rows are named by their datastore (2 November 2026)
+
+The Backup servers table keeps one row per datastore, but each row is now
+named by its datastore, with its server beside it in muted text and that
+server's web-interface link, the way restore point rows name a workload and
+its connection. The first column is "Datastore"; the separate Datastore column
+is gone; every row carries its server's status. Rows named by their server read
+as two PBS servers on a real two-datastore install, and hiding the repeated
+name on later rows left a nameless row with only a toggle.
+`BackupServerRow.continuesServer` is removed. A server with no datastore data
+still gets one reachability row named by the server. Earlier notes in this
+contract that status shows once per server, or that later rows keep a muted
+server name, are historical.
 
 ### Restore points drop the per-day chart (2 November 2026)
 

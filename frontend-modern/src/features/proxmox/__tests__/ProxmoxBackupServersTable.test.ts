@@ -63,11 +63,9 @@ describe('buildBackupServerRows', () => {
       expect(row.resource.uptime).toBe(1_036_800);
     }
     expect(rows.map((row) => row.datastore?.name)).toEqual(['offsite', 'tank']);
-    // The table shows host cells once per server: only later rows continue it.
-    expect(rows.map((row) => row.continuesServer)).toEqual([false, true]);
   });
 
-  it('starts every server, and every reachability-only row, as its own first row', () => {
+  it('groups datastore rows by server, with reachability-only rows last', () => {
     const first = makePbsResource();
     const second = makePbsResource({ id: 'pbs-2', name: 'pbs-second' });
     const empty = makePbsResource({
@@ -78,12 +76,12 @@ describe('buildBackupServerRows', () => {
 
     const rows = buildBackupServerRows([empty, second, first]);
 
-    expect(rows.map((row) => [row.serverName, row.continuesServer])).toEqual([
-      ['pbs-main', false],
-      ['pbs-main', true],
-      ['pbs-second', false],
-      ['pbs-second', true],
-      ['pbs-third', false],
+    expect(rows.map((row) => [row.serverName, row.datastore?.name ?? null])).toEqual([
+      ['pbs-main', 'offsite'],
+      ['pbs-main', 'tank'],
+      ['pbs-second', 'offsite'],
+      ['pbs-second', 'tank'],
+      ['pbs-third', null],
     ]);
   });
 

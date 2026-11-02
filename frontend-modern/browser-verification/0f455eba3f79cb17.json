@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "53099e283b59852dbcfd54122bb857a193b669bf",
+  "verified_at": "2026-11-02T17:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "6bcf6c9e20ba0a54bc1b8a37fcd38d1c05b4269e47ebe1c6fdbd7f7b4cc3e4fe"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev",
+    "Backup servers table with a two-datastore server, closed and with the second row expanded",
+    "dark and light themes, desktop and phone layouts"
+  ],
+  "interactions": [
+    "built this branch and ran it in mock mode on pulse-dev, signed in and opened Proxmox > Backups > By date at 1440x1000 and 375x812 in dark and light themes",
+    "the Backup servers table shows backup-vault once with Healthy on its offsite-vault row; its primary-vault row shows only the toggle and datastore figures, then dr-vault starts a new server with its own name and status",
+    "rows measured 33px on desktop and 32px on phone; no horizontal page overflow at either width",
+    "opened the primary-vault row's drawer on desktop: it reads Backup reader backup-vault, Datastore primary-vault and the backup-vault host panel",
+    "tapped the primary-vault row on phone: aria-expanded became true and the drawer opened"
+  ]
+}

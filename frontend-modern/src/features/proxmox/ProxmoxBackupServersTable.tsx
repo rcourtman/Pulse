@@ -55,14 +55,15 @@ import {
 // where the rows read as generic "PVE" storage. Each datastore row also says
 // whether its GC, prune, verify and sync jobs last succeeded, because a failed
 // sync or verify leaves backups that exist but cannot be relied on. One row
-// per datastore, labelled by its server; a server with no datastore data still
-// gets a reachability row.
+// per datastore, named by the datastore with its server beside it in muted
+// text, the way restore point rows name a workload and its connection; a
+// server with no datastore data still gets a reachability row under its own
+// name. Rows named by their server read as two servers, and hiding the
+// repeated name left a nameless row.
 // PBS hosts left the v5 nodes table in the v6 IA, so this is where their health
 // lives. The row says whether the server is reachable; its CPU, memory, uptime,
-// version and their history are in the server's drawer, one click away. Status
-// shows once, on the server's first datastore row; its later rows keep the
-// server name (muted), toggle and web link, so two datastores never read as two
-// identical servers.
+// version and their history are in the server's drawer, one click away. Every
+// row carries its server's status and web link, so each row reads on its own.
 
 interface BackupServerRow {
   key: string;
@@ -74,8 +75,6 @@ interface BackupServerRow {
   // The worst backend-judged GC, prune, verify or sync result for this store.
   jobs: DatastoreJobSummary;
   backupCount: number;
-  // A later datastore row of the server on the row above: host cells stay empty.
-  continuesServer: boolean;
 }
 
 // Key by instance and datastore so multi-datastore servers get accurate counts.
@@ -510,14 +509,12 @@ export function buildBackupServerRows(
         resource: resourceSnapshot(),
         jobs: summarizeDatastoreJobs(server.pbs?.jobHealthEvidence, undefined),
         backupCount: 0,
-        continuesServer: false,
       });
       continue;
     }
-    for (const [index, datastore] of datastores.entries()) {
+    for (const datastore of datastores) {
       rows.push({
         key: `${server.id}:${datastore.name}`,
-        continuesServer: index > 0,
         ...host,
         resource: resourceSnapshot(),
         // Row stores reconcile independently from the nested PBS snapshot. Do
@@ -588,17 +585,10 @@ export function ProxmoxBackupServersTable(props: {
           }
           header={
             <>
-              <TableHead class={`${getPlatformTableHeadClassForKind('name')}`}>
-                <PlatformResponsiveTableLabel compact="Server" full="Backup server" />
-              </TableHead>
+              <TableHead class={`${getPlatformTableHeadClassForKind('name')}`}>Datastore</TableHead>
               <TableHead class={`${getPlatformTableHeadClassForKind('text')}`}>
                 <PlatformResponsiveTableLabel compact="State" full="Status" />
               </TableHead>
-              <Show when={columnVisible('datastore')}>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')}`}>
-                  <PlatformResponsiveTableLabel compact="Store" full="Datastore" />
-                </TableHead>
-              </Show>
               <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')}`}>
                 Used
               </TableHead>
@@ -677,9 +667,7 @@ export function ProxmoxBackupServersTable(props: {
                         })}
                       >
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('name')} truncate ${
-                            row.continuesServer ? 'text-muted' : 'text-base-content font-medium'
-                          }`}
+                          class={`${getPlatformTableCellClassForKind('name')} truncate text-base-content`}
                           title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}
                         >
                           <div class="flex min-w-0 items-center gap-1">
@@ -693,12 +681,39 @@ export function ProxmoxBackupServersTable(props: {
                               controlsId={detailRowId()}
                               onToggle={() => detail.toggle(rowIdentity)}
                             />
-                            <ResourceNameWithWebInterfaceLink
-                              name={row.serverName}
-                              url={row.resource.customUrl}
-                              class="min-w-0 flex-1"
-                              nameClass="block min-w-0 flex-1 truncate"
-                            />
+                            <Show
+                              when={row.datastore}
+                              fallback={
+                                <ResourceNameWithWebInterfaceLink
+                                  name={row.serverName}
+                                  url={row.resource.customUrl}
+                                  class="min-w-0 flex-1"
+                                  nameClass="block min-w-0 flex-1 truncate font-medium"
+                                />
+                              }
+                            >
+                              {(datastore) => (
+                                <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
+                                  {/* The datastore name keeps priority but leaves room
+                                      for the server's web link, so a long name can never
+                                      push a focusable link out of view. */}
+                                  <span
+                                    class="min-w-0 max-w-[calc(100%-2rem)] shrink-0 truncate font-medium"
+                                    data-backup-server-datastore
+                                  >
+                                    {datastore().name}
+                                  </span>
+                                  <span class="flex min-w-6 flex-1">
+                                    <ResourceNameWithWebInterfaceLink
+                                      name={row.serverName}
+                                      url={row.resource.customUrl}
+                                      class="min-w-0 flex-1"
+                                      nameClass="block min-w-0 truncate text-[10px] text-muted"
+                                    />
+                                  </span>
+                                </div>
+                              )}
+                            </Show>
                           </div>
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
@@ -717,24 +732,22 @@ export function ProxmoxBackupServersTable(props: {
                                   </span>
                                 }
                               >
-                                <Show when={!row.continuesServer}>
-                                  <div class="flex items-center gap-2">
-                                    <Show when={layoutMode() !== 'compact'}>
-                                      <StatusDot
-                                        size="sm"
-                                        variant={row.online ? 'success' : 'danger'}
-                                        title={row.connectionLabel}
-                                        ariaHidden
-                                      />
-                                    </Show>
-                                    <span
-                                      class="truncate text-[11px] text-base-content"
+                                <div class="flex items-center gap-2">
+                                  <Show when={layoutMode() !== 'compact'}>
+                                    <StatusDot
+                                      size="sm"
+                                      variant={row.online ? 'success' : 'danger'}
                                       title={row.connectionLabel}
-                                    >
-                                      {row.connectionLabel}
-                                    </span>
-                                  </div>
-                                </Show>
+                                      ariaHidden
+                                    />
+                                  </Show>
+                                  <span
+                                    class="truncate text-[11px] text-base-content"
+                                    title={row.connectionLabel}
+                                  >
+                                    {row.connectionLabel}
+                                  </span>
+                                </div>
                               </Show>
                             }
                           >
@@ -749,14 +762,6 @@ export function ProxmoxBackupServersTable(props: {
                             )}
                           </Show>
                         </TableCell>
-                        <Show when={columnVisible('datastore')}>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
-                            title={row.datastore?.name}
-                          >
-                            {row.datastore?.name ?? '—'}
-                          </TableCell>
-                        </Show>
                         <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
                           <Show
                             when={row.datastore}
