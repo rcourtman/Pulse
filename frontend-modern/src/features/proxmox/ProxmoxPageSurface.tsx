@@ -57,6 +57,9 @@ import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicat
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { getAlertsForResource } from '@/utils/alerts';
 import type { ReplicationJob } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { updateStore } from '@/stores/updates';
@@ -100,6 +103,8 @@ const EMPTY_PROXMOX_PAGE_MODEL = buildProxmoxPageModel([]);
 
 export function ProxmoxPageSurface() {
   const location = useLocation();
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
   const phoneViewport = typeof window !== 'undefined' && window.innerWidth < 640;
   const requestedTab = createMemo<ProxmoxPageTabId>(() => {
     const segment = location.pathname.split('/').filter(Boolean)[1] as ProxmoxPageTabId | undefined;
@@ -436,6 +441,9 @@ export function ProxmoxPageSurface() {
                 workloads={model().guests}
                 servers={model().resources}
                 summaryAside={<ProxmoxBackupJobsSection />}
+                datastoreAlerts={(ids) =>
+                  getAlertsForResource(ids, activeAlerts, alertsActivation.detectionEnabled())
+                }
               />
             </Show>
             <Show when={activeTab() === 'ceph'}>

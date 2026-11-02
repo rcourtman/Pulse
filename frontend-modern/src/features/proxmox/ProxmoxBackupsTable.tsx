@@ -35,6 +35,7 @@ import {
   recoveryDateKeyFromTimestamp,
 } from '@/utils/recoveryDatePresentation';
 import type {
+  Alert,
   BackupTask,
   GuestSnapshot,
   PBSBackup,
@@ -144,6 +145,8 @@ export const ProxmoxBackupsTable: Component<{
   // A page-owned summary beside Backup health (the backup jobs card). It owns
   // its own read, so the table's inventory reads stay PVE plus PBS.
   summaryAside?: JSX.Element;
+  // Page-owned live alert lookup, for the backup servers' fill forecast.
+  datastoreAlerts?: (resourceIds: string[]) => Alert[];
 }> = (props) => {
   let inspection: HTMLDivElement | undefined;
   // Recovering a read removes its notice (or the whole-inventory error).
@@ -832,6 +835,7 @@ export const ProxmoxBackupsTable: Component<{
         <ProxmoxBackupServersTable
           servers={props.servers ?? []}
           backups={pbsArtifacts()}
+          datastoreAlerts={props.datastoreAlerts}
           backupInventoryState={
             pbsBackups.error() ? 'unavailable' : pbsBackups.resolvedOnce() ? 'available' : 'loading'
           }

@@ -209,6 +209,20 @@ narrow browser proof exercises the same producer through the inventory consumer
 with native interactions and inspected pixels. No API, provider, guest, polling,
 auth, resource identity or protection-policy change, nor installed recovery claim.
 
+### PBS datastore alerts join by instance id, not display name (2 November 2026)
+
+The Backup servers table finds a datastore's capacity alert from the unified
+PBS resource's `pbs.instanceId` ("pbs-<connection>"), which the poller also uses
+for that datastore's storage id (`<instance id>-<store>`) and alias
+(`<instance id>/<store>`). The resource `name` can be the PBS hostname rather
+than the connection name, so it is never part of the join. Because the dashed
+storage id is ambiguous across connections, an alert counts for a row only when
+its policy aliases contain that exact alias, or, without aliases, its instance
+and store name match. The forecast adds no identity: it decorates the existing
+datastore row and never creates, merges or retires one.
+`proxmoxBackupServerForecast.test.ts` covers the hostname-named resource and
+the cross-connection collision.
+
 ### Coverage duration requires observed task timing
 
 The existing Coverage task disclosure derives a duration only from positive,

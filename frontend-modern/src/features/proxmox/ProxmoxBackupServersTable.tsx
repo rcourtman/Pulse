@@ -24,7 +24,7 @@ import {
   PlatformResourceDetailTableRow,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import type { PBSBackup } from '@/types/api';
+import type { Alert, PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import { getPlatformAgentRecord } from '@/utils/agentResources';
 import {
@@ -46,6 +46,12 @@ import {
   type DatastoreJobState,
   type DatastoreJobSummary,
 } from './proxmoxBackupServerJobs';
+import {
+  backupServerDatastoreAlertIds,
+  getDatastoreFillForecast,
+  isBackupServerDatastoreAlert,
+  type DatastoreFillForecast,
+} from './proxmoxBackupServerForecast';
 
 // "Backup servers" answers the two questions the coverage table can't: is my
 // PBS reachable, and is its datastore about to fill? Datastore fill is the
@@ -166,6 +172,19 @@ function jobToneClass(state: DatastoreJobState): string {
 const jobDetailTone = (state: DatastoreJobState): DetailValueTone | undefined =>
   state === 'critical' ? 'danger' : state === 'warning' ? 'warning' : undefined;
 
+const forecastDetailTone = (forecast: DatastoreFillForecast): DetailValueTone =>
+  forecast.level === 'critical' ? 'danger' : 'warning';
+
+const forecastToneClass = (forecast: DatastoreFillForecast): string =>
+  forecast.level === 'critical'
+    ? 'text-red-600 dark:text-red-300'
+    : 'text-amber-600 dark:text-amber-300';
+
+const FORECAST_PILL_CLASS: Record<DatastoreFillForecast['level'], string> = {
+  critical: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  warning: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+};
+
 function usageToneClass(pct: number | undefined): string {
   if (pct === undefined) return 'text-muted';
   if (pct >= 90) return 'text-red-600 dark:text-red-300';
@@ -180,6 +199,7 @@ function usageToneClass(pct: number | undefined): string {
 function BackupServerDatastoreContext(props: {
   row: BackupServerRow;
   inventoryState?: 'available' | 'loading' | 'unavailable';
+  forecast?: DatastoreFillForecast | null;
 }) {
   const capacityText = () => {
     const datastore = props.row.datastore;
@@ -224,6 +244,16 @@ function BackupServerDatastoreContext(props: {
                 layout: 'stacked',
                 tone: capacityTone(),
               },
+              ...(props.forecast
+                ? [
+                    {
+                      label: 'Fill forecast',
+                      value: props.forecast.detail,
+                      layout: 'stacked' as const,
+                      tone: forecastDetailTone(props.forecast),
+                    },
+                  ]
+                : []),
               {
                 label: 'Jobs',
                 value: describeDatastoreJobs(props.row.jobs),
@@ -555,6 +585,9 @@ export function ProxmoxBackupServersTable(props: {
   backupInventoryState?: 'available' | 'loading' | 'unavailable';
   emptyIcon?: JSX.Element;
   layoutWidth?: Accessor<number | null | undefined>;
+  // Open alerts for a datastore's alert keys. The page owns the live alert
+  // store; without it the table shows no fill forecast.
+  datastoreAlerts?: (resourceIds: string[]) => Alert[];
 }) {
   const retention = createPbsCorrelationRetention();
   const rows = createMemo(() =>
@@ -665,6 +698,32 @@ export function ProxmoxBackupServersTable(props: {
                   // Read admission is not a generic storage-adapter capacity snapshot.
                   const capacityEvidence = () => datastoreCapacity(row.datastore, row.online);
                   const pct = () => capacityEvidence().percent;
+                  // Only a readable store can be forecast; Unavailable stays the answer.
+                  const forecast = createMemo(() => {
+                    const datastore = row.datastore;
+                    const lookup = props.datastoreAlerts;
+                    if (!datastore || !lookup || capacityEvidence().state !== 'available') {
+                      return null;
+                    }
+                    return getDatastoreFillForecast(
+                      lookup(backupServerDatastoreAlertIds(row.resource, datastore.name)).filter(
+                        (alert) =>
+                          isBackupServerDatastoreAlert(alert, row.resource, datastore.name),
+                      ),
+                    );
+                  });
+                  // Phones have no room beside the percentage, so the forecast takes
+                  // State like a job problem does. A full store stops every future
+                  // backup, so it outranks a job problem unless only the job is critical.
+                  const showForecastAsState = () => {
+                    const fill = forecast();
+                    if (!fill || layoutMode() !== 'compact') return false;
+                    return !(
+                      showJobProblemAsState(row) &&
+                      row.jobs.state === 'critical' &&
+                      fill.level !== 'critical'
+                    );
+                  };
                   const capacityNotice = () =>
                     capacityEvidence().state === 'unavailable'
                       ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
@@ -707,35 +766,50 @@ export function ProxmoxBackupServersTable(props: {
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
                           <Show
-                            when={!showJobProblemAsState(row)}
+                            when={showForecastAsState() ? forecast() : null}
                             fallback={
-                              <span
-                                class={`block truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
-                                title={describeDatastoreJobs(row.jobs)}
-                                data-backup-server-jobs={row.jobs.state}
+                              <Show
+                                when={!showJobProblemAsState(row)}
+                                fallback={
+                                  <span
+                                    class={`block truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
+                                    title={describeDatastoreJobs(row.jobs)}
+                                    data-backup-server-jobs={row.jobs.state}
+                                  >
+                                    {row.jobs.label}
+                                  </span>
+                                }
                               >
-                                {row.jobs.label}
-                              </span>
+                                <Show when={!row.continuesServer}>
+                                  <div class="flex items-center gap-2">
+                                    <Show when={layoutMode() !== 'compact'}>
+                                      <StatusDot
+                                        size="sm"
+                                        variant={row.online ? 'success' : 'danger'}
+                                        title={row.connectionLabel}
+                                        ariaHidden
+                                      />
+                                    </Show>
+                                    <span
+                                      class="truncate text-[11px] text-base-content"
+                                      title={row.connectionLabel}
+                                    >
+                                      {row.connectionLabel}
+                                    </span>
+                                  </div>
+                                </Show>
+                              </Show>
                             }
                           >
-                            <Show when={!row.continuesServer}>
-                              <div class="flex items-center gap-2">
-                                <Show when={layoutMode() !== 'compact'}>
-                                  <StatusDot
-                                    size="sm"
-                                    variant={row.online ? 'success' : 'danger'}
-                                    title={row.connectionLabel}
-                                    ariaHidden
-                                  />
-                                </Show>
-                                <span
-                                  class="truncate text-[11px] text-base-content"
-                                  title={row.connectionLabel}
-                                >
-                                  {row.connectionLabel}
-                                </span>
-                              </div>
-                            </Show>
+                            {(fill) => (
+                              <span
+                                class={`block truncate text-[11px] font-medium ${forecastToneClass(fill())}`}
+                                title={fill().detail}
+                                data-backup-server-forecast={fill().level}
+                              >
+                                {fill().shortLabel}
+                              </span>
+                            )}
                           </Show>
                         </TableCell>
                         <Show when={columnVisible('version')}>
@@ -872,11 +946,30 @@ export function ProxmoxBackupServersTable(props: {
                                   <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
                                     <PlatformTablePercentValue value={pct()} />
                                   </span>
-                                  <Show when={layoutMode() !== 'compact'}>
-                                    <span class="truncate text-[10px] text-muted tabular-nums">
-                                      {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
-                                      {formatPlatformTableBytesValue(datastore().total)}
-                                    </span>
+                                  {/* A fill forecast is the more urgent answer, so it
+                                      takes the bytes' place; they stay in the title
+                                      and the drawer, and the row stays one line. */}
+                                  <Show
+                                    when={layoutMode() !== 'compact' && forecast()}
+                                    fallback={
+                                      <Show when={layoutMode() !== 'compact'}>
+                                        <span class="truncate text-[10px] text-muted tabular-nums">
+                                          {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
+                                          {formatPlatformTableBytesValue(datastore().total)}
+                                        </span>
+                                      </Show>
+                                    }
+                                  >
+                                    {(fill) => (
+                                      <span
+                                        class={`inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${FORECAST_PILL_CLASS[fill().level]}`}
+                                        title={`${fill().detail}. ${formatPlatformTableBytesValue(datastore().used, '0 B')} / ${formatPlatformTableBytesValue(datastore().total)} used.`}
+                                        data-backup-server-forecast={fill().level}
+                                      >
+                                        <span aria-hidden="true">{fill().shortLabel}</span>
+                                        <span class="sr-only">{fill().label}</span>
+                                      </span>
+                                    )}
                                   </Show>
                                 </div>
                               </Show>
@@ -952,6 +1045,7 @@ export function ProxmoxBackupServersTable(props: {
                           <BackupServerDatastoreContext
                             row={row}
                             inventoryState={props.backupInventoryState}
+                            forecast={forecast()}
                           />
                         }
                         initialShowHostDetails

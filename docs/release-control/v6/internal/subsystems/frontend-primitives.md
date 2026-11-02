@@ -523,6 +523,20 @@ desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
 day selection, metric switching, empty matches and recovery. No shared-filter,
 route, navigation, access or backup operation changes.
 
+### Datastore fill forecast stays on one row line (2 November 2026)
+
+`ProxmoxBackupServersTable` shows a PBS datastore's fill forecast as the
+shared count-pill style in the Used cell, replacing the secondary used/total
+bytes so the row keeps its single line. In the compact layout the pill would
+crowd the percentage, so the forecast moves to the State cell as tinted text,
+the slot the compact layout already gives a job problem. Its label comes from
+`describeStorageAlertHeadline`, the Storage page's wording, and the drawer's
+`DetailSectionTable` gains a toned "Fill forecast" row.
+`ProxmoxBackupServersTable.forecast.test.tsx` and
+`proxmoxBackupServerForecast.test.ts` cover both layouts, the drawer, live
+alert changes, the unreadable store, the cross-connection id collision and the
+job-problem precedence.
+
 ### Backup jobs card composes the overview primitives (2 November 2026)
 
 `ProxmoxBackupJobsCard` is a `TableCard` with a `TableCardHeader` strip, like

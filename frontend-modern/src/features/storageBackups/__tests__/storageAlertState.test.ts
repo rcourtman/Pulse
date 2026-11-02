@@ -6,6 +6,8 @@ import {
   getStorageRecordAlertResourceIds,
   mergeStorageAlertRowState,
 } from '@/features/storageBackups/storageAlertState';
+import { getStorageAlertForecastDaysToFull } from '@/features/storageBackups/storageRowAlertPresentation';
+import type { Alert } from '@/types/api';
 
 const makeRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => ({
   id: 'storage-1',
@@ -86,5 +88,23 @@ describe('storageAlertState', () => {
         }),
       ),
     ).toEqual(['storage-1', 'legacy-storage-id', 'cluster-a-pve1-tank']);
+  });
+});
+
+// The Storage page headline and the Backups page's PBS datastore rows read the
+// same forecast field through this one rule.
+describe('getStorageAlertForecastDaysToFull', () => {
+  const alert = (metadata?: Record<string, unknown>) => ({ metadata }) as unknown as Alert;
+
+  it('reads a finite, non-negative forecast', () => {
+    expect(getStorageAlertForecastDaysToFull(alert({ forecastDaysToFull: 4.2 }))).toBe(4.2);
+    expect(getStorageAlertForecastDaysToFull(alert({ forecastDaysToFull: 0 }))).toBe(0);
+  });
+
+  it('treats a missing, malformed or negative forecast as none', () => {
+    expect(getStorageAlertForecastDaysToFull(alert())).toBeNull();
+    expect(getStorageAlertForecastDaysToFull(alert({ forecastDaysToFull: '4' }))).toBeNull();
+    expect(getStorageAlertForecastDaysToFull(alert({ forecastDaysToFull: Number.NaN }))).toBeNull();
+    expect(getStorageAlertForecastDaysToFull(alert({ forecastDaysToFull: -1 }))).toBeNull();
   });
 });
