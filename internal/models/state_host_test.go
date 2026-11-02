@@ -720,6 +720,67 @@ func TestCephClusterStatePrefersProxmoxAPIByFSID(t *testing.T) {
 	}
 }
 
+// A reported status and its health details are one observation. In particular,
+// healthy reports cannot borrow a previous incident's message or checks.
+func TestCephClusterHealthDetailsFollowAuthoritativeStatus(t *testing.T) {
+	warning := func(source, instance string) CephCluster {
+		return CephCluster{ID: instance + "-fsid", Instance: instance, Source: source, FSID: "fsid-health",
+			Health: "WARN", HealthMessage: "No active Ceph manager",
+			HealthChecks: []CephHealthCheck{{Code: "MGR_DOWN", Severity: "HEALTH_WARN", Summary: "No active Ceph manager"}}, NumMgrs: 3}
+	}
+	agentWarning := warning(CephClusterSourceHostAgent, "agent")
+	apiWarning := warning(CephClusterSourceProxmoxAPI, "api")
+	agentHealthy := CephCluster{ID: "agent-fsid", Instance: "agent", Source: CephClusterSourceHostAgent, FSID: "fsid-health", Health: "OK"}
+	apiHealthy := CephCluster{ID: "api-fsid", Instance: "api", Source: CephClusterSourceProxmoxAPI, FSID: "fsid-health", Health: "HEALTH_OK"}
+	apiUnknown := apiHealthy
+	apiUnknown.Health = ""
+	apiBlank := apiUnknown
+	apiBlank.Health = "  "
+	agentNewWarning := agentHealthy
+	agentNewWarning.Health = "WARN"
+	cases := []struct {
+		name         string
+		reports      []CephCluster
+		wantStatus   string
+		wantFallback bool
+	}{
+		{"agent recovery clears the previous incident", []CephCluster{agentWarning, agentHealthy}, "OK", false},
+		{"API recovery clears the previous incident", []CephCluster{apiWarning, apiHealthy}, "HEALTH_OK", false},
+		{"API health takes authority over agent warning", []CephCluster{agentWarning, apiHealthy}, "HEALTH_OK", false},
+		{"agent warning cannot fill explicit API health", []CephCluster{apiHealthy, agentWarning}, "HEALTH_OK", false},
+		{"agent health cannot clear authoritative API warning", []CephCluster{apiWarning, agentHealthy}, "WARN", true},
+		{"missing API status retains health fallback", []CephCluster{agentWarning, apiUnknown}, "WARN", true},
+		{"blank API status retains health fallback", []CephCluster{agentWarning, apiBlank}, "WARN", true},
+		{"new warning without detail cannot inherit an old cause", []CephCluster{agentWarning, agentNewWarning}, "WARN", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			state := NewState()
+			for _, report := range tc.reports {
+				state.UpsertCephCluster(report)
+			}
+			clusters := state.GetSnapshot().CephClusters
+			if len(clusters) != 1 {
+				t.Fatalf("clusters = %#v, want one FSID", clusters)
+			}
+			got := clusters[0]
+			if got.Health != tc.wantStatus {
+				t.Fatalf("health = %q, want %q", got.Health, tc.wantStatus)
+			}
+			if tc.wantFallback {
+				if got.HealthMessage != "No active Ceph manager" || len(got.HealthChecks) != 1 || got.HealthChecks[0].Code != "MGR_DOWN" {
+					t.Fatalf("health fallback lost: %#v", got)
+				}
+			} else if got.HealthMessage != "" || len(got.HealthChecks) != 0 {
+				t.Fatalf("explicit health inherited stale details: %#v", got)
+			}
+			if got.NumMgrs != 3 {
+				t.Fatalf("unrelated count fallback changed: managers = %d", got.NumMgrs)
+			}
+		})
+	}
+}
+
 func TestUpsertCephClusterKeepsProxmoxAPIWhenAgentRefreshArrives(t *testing.T) {
 	state := NewState()
 

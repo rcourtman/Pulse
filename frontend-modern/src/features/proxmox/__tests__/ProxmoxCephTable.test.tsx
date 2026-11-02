@@ -188,6 +188,37 @@ describe('ProxmoxCephTable', () => {
     );
   });
 
+  it.each(['ERR', 'HEALTH_ERR'])(
+    'keeps %s critical when no managers are reported',
+    async (healthStatus) => {
+      const cluster = makeCluster('ceph-critical');
+      cluster.ceph = {
+        ...cluster.ceph!,
+        healthStatus,
+        services: [{ type: 'mgr', running: 0, total: 0 }],
+      };
+      render(() => (
+        <ProxmoxCephTable
+          resources={[cluster]}
+          emptyIcon={<span />}
+          emptyTitle="No Ceph clusters"
+          emptyDescription="No clusters"
+        />
+      ));
+
+      expect(screen.getByRole('cell', { name: 'Critical' })).toBeInTheDocument();
+      const heading = screen.getByRole('heading', { level: 2, name: 'ceph-critical' });
+      expect(heading.parentElement?.querySelector('[aria-label="Critical"]')).not.toBeNull();
+      expect(screen.getByTestId('ceph-cluster-services')).toHaveTextContent('None reported');
+      const critical = screen.getByRole('button', { name: 'Critical, 1' });
+      await fireEvent.click(critical);
+      expect(critical).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('cell', { name: 'Critical' })).toBeInTheDocument();
+      await fireEvent.click(screen.getByRole('button', { name: 'All, 1' }));
+      expect(critical).toHaveAttribute('aria-pressed', 'false');
+    },
+  );
+
   it("heads the drawer with the row's own health verdict", () => {
     // A cluster without a reported health status reads healthy in its row, so
     // the drawer header must not show a grey "Unknown" beside it.

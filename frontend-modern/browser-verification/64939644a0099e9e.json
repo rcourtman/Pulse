@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "2d380af6580ebe4f8edaeda4f3894c13af880321",
+  "verified_at": "2026-11-02T08:41:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "d734206f4c79ecd9ece4b8c68812d4ab5a4813c776e1fbf560a5c09d1d1dc4ab"
+  },
+  "routes": [
+    "/proxmox/ceph"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Legacy agent available manager row normalizes from 1 of 3 to 3 of 3 without a false shortage",
+    "Current agent available manager row remains 3 of 3",
+    "Starting map with an active-name hint but unavailable manager retains 0 of 3",
+    "Unavailable manager retains 0 of 2 and the native warning",
+    "No managers reported retains the native ERR critical row, filter count and drawer header",
+    "Real MON and OSD shortages remain visible while manager standbys are healthy",
+    "First healthy report clears old health details while the incident awaits confirmation",
+    "Second healthy report clears the active incident and all service shortages",
+    "Critical filter selected and unselected with pointer and keyboard focus visible",
+    "Narrow inline Filters area expanded and collapsed",
+    "Details disclosure open and closed with full FSID visible",
+    "Overview and Manage tabs selected",
+    "Drawer closed, reopened and retained across reload"
+  ],
+  "interactions": [
+    "Post real authenticated agent reports and read the published canonical resources",
+    "Hover desktop health cells and inspect the native health title",
+    "Select Critical with pointer and Space, restore All with Enter and pointer",
+    "Expand and collapse narrow Filters while retaining the selected cluster drawer",
+    "Toggle Details with Enter and inspect cluster, native health and topology",
+    "Switch Manage and Overview tabs",
+    "Close drawer with Enter, verify focus returns to the row disclosure, reopen with Space",
+    "Reload the route and verify stable selection, healthy manager count and recovered state",
+    "Inspect actual desktop, intermediate and narrow pixels for placement, clipping and focus"
+  ]
+}

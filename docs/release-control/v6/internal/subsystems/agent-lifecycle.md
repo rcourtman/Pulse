@@ -920,6 +920,17 @@ An explicit zero active count under a known requirement is retained; neither
 device-token inference nor a different kernel fallback probe may fill it in.
 The collector/report controls exercise both zero-active boundaries.
 
+### Ceph standby managers count as running
+
+The host agent's Ceph `mgr` service row counts every manager in the mgr map as
+running while `mgrmap.available` holds. A standby is a running `ceph-mgr` that
+beacons the monitors like the active one and is dropped once those beacons stop
+for `mon_mgr_beacon_grace`, so a healthy cluster with one active and two
+standby managers reports 3 of 3 running, not 1 of 3. Without an available
+manager the row keeps zero running. Report shapes, enrollment and command
+authority are unchanged, and monitoring normalizes rows from earlier agents at
+ingest. `internal/hostagent/agent_metrics_test.go` covers the report row.
+
 ### Continuity-aware broadcast read ownership
 
 Broadcast state takes its single resource list from the current continuity-aware

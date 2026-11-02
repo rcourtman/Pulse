@@ -68,8 +68,9 @@ func TestIssue1626ParseCephStatusSquidSchema(t *testing.T) {
 	if monService == nil || monService.Running != 3 || monService.Total != 3 {
 		t.Errorf("mon service = %+v, want Running 3 / Total 3", monService)
 	}
-	if mgrService == nil || mgrService.Running != 1 || mgrService.Total != 2 {
-		t.Errorf("mgr service = %+v, want Running 1 / Total 2", mgrService)
+	// The standby is a running ceph-mgr, not a stopped one.
+	if mgrService == nil || mgrService.Running != 2 || mgrService.Total != 2 {
+		t.Errorf("mgr service = %+v, want Running 2 / Total 2", mgrService)
 	}
 }
 

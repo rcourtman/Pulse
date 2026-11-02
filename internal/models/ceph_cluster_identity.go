@@ -106,14 +106,18 @@ func supplementCephCluster(primary, supplemental CephCluster) CephCluster {
 	aliases = append(aliases, supplemental.InstanceAliases...)
 	primary.InstanceAliases = normalizeCephInstanceAliases(primary.Instance, aliases)
 
-	if primary.Health == "" {
+	// Status and its details belong to one health observation. An explicit
+	// status owns empty details too: a recovered report must not inherit an
+	// old incident from an earlier or lower-priority source. Only an absent
+	// status permits the existing last-known health fallback.
+	if strings.TrimSpace(primary.Health) == "" {
 		primary.Health = supplemental.Health
-	}
-	if primary.HealthMessage == "" {
-		primary.HealthMessage = supplemental.HealthMessage
-	}
-	if len(primary.HealthChecks) == 0 && len(supplemental.HealthChecks) > 0 {
-		primary.HealthChecks = append([]CephHealthCheck(nil), supplemental.HealthChecks...)
+		if primary.HealthMessage == "" {
+			primary.HealthMessage = supplemental.HealthMessage
+		}
+		if len(primary.HealthChecks) == 0 && len(supplemental.HealthChecks) > 0 {
+			primary.HealthChecks = append([]CephHealthCheck(nil), supplemental.HealthChecks...)
+		}
 	}
 	if primary.TotalBytes == 0 && supplemental.TotalBytes != 0 {
 		primary.TotalBytes = supplemental.TotalBytes
