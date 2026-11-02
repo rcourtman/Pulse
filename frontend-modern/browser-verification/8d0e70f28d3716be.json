@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "68ef53046fbbb25b1c0d89f84aa3e39098ce4f81",
+  "verified_at": "2026-11-02T03:19:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "fe4bb5b2600f341bb6d7fbb896a9a3393d30969229edb392172ae86d0f979187",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "8c753ed50d42528db777e3dde7e9666a34b4a244ac89d020b99c1dfd5569fcf4",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts": "4a8ef7e2867e50c130ed8569380647f68c8d6e9ec8c35217b0b5b9ddf768c975"
+  },
+  "routes": [
+    "/settings/security-webhooks",
+    "/settings/security-sso (ordinary synthetic status-refresh precursor)",
+    "/settings/system-general (existing safe capability-withdrawal fallback)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App, Settings registry, Audit Webhooks state/panel/dialog, API client and application CSS from committed source68ef5304. Safe synthetic session/CSRF/token/organisation/status/configuration HTTP producers, not installed receiver delivery or original tenant/IdP recovery.",
+    "54 checks across12 contexts in light desktop Chromium1280x900 and dark touch WebKit390x844. All12 final captures received native view_image pixel inspection. Inline errors, retained confirmation and explicit retry are visible and usable; unknown configuration is not an empty list.",
+    "Write withdrawal clears the old entry and confirmation before permitted read-only inventory returns; read withdrawal reaches the actual General page without caught/uncaught route errors. Same-reader status refresh retains its mounted draft and confirmation. Six expected synthetic HTTP403 console errors are retained."
+  ],
+  "interactions": [
+    "Refused add and removal do not retry automatically. Deliberate retries alone repeat their identical exact-org replacement payloads; cancel sends no write, failed removal retains the confirmation and other destinations remain intact. All10 audit writes retain session, ordinary token, CSRF and the confirmed default organisation.",
+    "Use the actual organisation selector with the next configuration read held. Old endpoint/draft/confirmation withdraw; new actions wait for accepted configuration. Refused inventory offers a read-only Retry preserving the current draft, without raw error or false-empty feedback.",
+    "An ordinary synthetic SSO save starts a held containing Settings status refresh. Change the observed principal during a held audit save, and hold the new read. Old completion cannot clear an identically retyped later draft, finish the new read, refetch or announce audit success. Another unchanged-reader refresh retains both draft and confirmation.",
+    "Toggle read/write authority through the status producer, and audit entitlement through the actual organisation/runtime-capability producer. Read-only recovery never enables writes; restored entitlement needs a fresh configuration read and does not revive the old draft.",
+    "Playwright1.56.1 matches the committed integration lock; Chromium141.0.7390.37 and WebKit26.0. All12 contexts,2 browsers,Vite and HTTP server close normally. First attempt failed only an incorrect fixture expectation of commercial rather than non-commercial entitlement copy; adverse results/capture are retained. No stopped original Back/reload diagnostics or installed services are exercised."
+  ]
+}
