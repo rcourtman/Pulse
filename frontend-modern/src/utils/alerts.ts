@@ -183,7 +183,11 @@ const ALERT_LEVEL_RANK: Record<Alert['level'], number> = { critical: 0, warning:
 // "agent:<id>/raid:<device>", "docker:<id>/<container>".
 const getUnifiedResourceAlertKeys = (
   resource: Resource,
-): { exact: Set<string>; componentPrefixes: string[] } => {
+): {
+  exact: Set<string>;
+  componentPrefixes: string[];
+  localStorage?: { node: string; instance?: string };
+} => {
   const exact = new Set<string>();
   const add = (value: string | undefined) => {
     const trimmed = value?.trim();
@@ -212,6 +216,7 @@ const getUnifiedResourceAlertKeys = (
 
   const machine = new Set<string>();
   const componentPrefixes: string[] = [];
+  let localStorage: { node: string; instance?: string } | undefined;
   if (resource.type === 'agent' || resource.type === 'docker-host') {
     const agentId = getActionableAgentIdFromResource(resource);
     if (agentId) machine.add(agentId.startsWith('agent:') ? agentId : `agent:${agentId}`);
@@ -233,10 +238,26 @@ const getUnifiedResourceAlertKeys = (
     const instance = resource.proxmox?.instance?.trim();
     const nodeName = resource.proxmox?.nodeName?.trim();
     if (instance && nodeName) componentPrefixes.push(`${instance}:${nodeName}:disk:`);
+    // Its own storage (local, local-zfs) raises usage, offline and ZFS alerts
+    // on the storage id under the node's name. Storage shared across a cluster
+    // is recorded under "cluster", so it never matches one node.
+    if (nodeName) localStorage = { node: nodeName, instance };
   }
   machine.forEach(add);
   componentPrefixes.push(...[...machine].map((key) => `${key}/`));
-  return { exact, componentPrefixes };
+  return { exact, componentPrefixes, localStorage };
+};
+
+const isLocalStorageAlert = (
+  alert: Alert,
+  localStorage: { node: string; instance?: string } | undefined,
+): boolean => {
+  if (!localStorage || alert.node !== localStorage.node) return false;
+  const resourceType = alert.metadata?.resourceType;
+  if (typeof resourceType !== 'string' || resourceType.trim().toLowerCase() !== 'storage') {
+    return false;
+  }
+  return !localStorage.instance || !alert.instance || alert.instance === localStorage.instance;
 };
 
 /**
@@ -259,12 +280,13 @@ export function getAlertsForUnifiedResource(
   alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
 ): Alert[] {
   if (!alertsEnabled) return [];
-  const { exact, componentPrefixes } = getUnifiedResourceAlertKeys(resource);
+  const { exact, componentPrefixes, localStorage } = getUnifiedResourceAlertKeys(resource);
   return Object.values(activeAlerts)
     .filter(
       (alert) =>
         exact.has(alert.resourceId) ||
-        componentPrefixes.some((prefix) => alert.resourceId?.startsWith(prefix)),
+        componentPrefixes.some((prefix) => alert.resourceId?.startsWith(prefix)) ||
+        isLocalStorageAlert(alert, localStorage),
     )
     .sort(
       (a, b) =>

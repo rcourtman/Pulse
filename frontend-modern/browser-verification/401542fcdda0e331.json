@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "8918a53c3d2de7626e31bb2a847b20417c2e81b7",
+  "verified_at": "2026-11-02T11:26:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/alerts.ts": "3dd113842a5694a94703f9426252912be899358dd6158dfaf21e1a32713591ab"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "production vite build of this change served by vite preview on pulse-dev against a mock backend (4 Proxmox nodes pve1-pve4 in instance Production West, dark theme)",
+    "active alerts: usage on pve1 local (resourceType Storage), ZFS pool and device alerts on pve3 local-zfs, usage on shared storage, guest and Docker alerts elsewhere"
+  ],
+  "interactions": [
+    "read data-workload-alert-accent on every node row at 1440 and 390: West Production A (pve1) and C (pve3) warning, B and D none",
+    "confirmed from /api/alerts/active and /api/resources that each tinted row's storage alert carries the node's proxmox.nodeName and instance, and that the shared-storage alert tints no node",
+    "inspected node table screenshots at both widths: yellow stripe and tint on A and C only, rows stay single-line",
+    "no page errors at either width"
+  ]
+}
