@@ -20,6 +20,16 @@
 
 ## Purpose
 
+### Backups bars use the metric bar colours (2 November 2026)
+
+The Backup health rows (`ProxmoxBackupsCoverageStrip`) and the Backup jobs
+chart (`ProxmoxBackupJobsCard`) fill their bars with `bg-metric-normal-bg`,
+`bg-metric-warning-bg` and `bg-metric-critical-bg`, the tokens every
+`getMetricColorClass` bar uses. They had used Tailwind emerald, amber and red
+at their own opacities, so the Backups page green visibly differed from the
+Overview CPU, memory and disk bars. Status dots and count pills keep their
+own colours; only bar fills moved.
+
 ### Drawer History keeps live readings when no chart can be drawn (2 November 2026)
 
 When the first history read fails, or the selected range is beyond the plan,
