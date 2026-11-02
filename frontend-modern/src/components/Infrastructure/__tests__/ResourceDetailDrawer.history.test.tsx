@@ -368,6 +368,71 @@ describe('ResourceDetailDrawer change history section', () => {
     }
   });
 
+  it('keeps a PBS server CPU and qualified memory visible when its first history read fails', async () => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    // The Backups page sends people here for PBS host figures, so a failed
+    // history read must not take the server's own readings with it.
+    const source = baseResource({
+      id: 'pbs-history-down',
+      type: 'pbs',
+      name: 'pbs-main',
+      displayName: 'PBS Main',
+      platformId: 'pbs-main',
+      platformType: 'proxmox-pbs',
+      platformData: { sources: ['pbs'], pbs: { hostname: 'pbs-main.local' } },
+      metricsTarget: { resourceType: 'agent', resourceId: 'pbs-main' },
+      cpu: { current: 7 },
+      memory: { current: 99, total: 8_000, used: 2_000 },
+    });
+    const read = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockRejectedValue(new Error('history store unavailable'));
+    const [resource, setResource] = createSignal(source);
+    const view = render(() => <ResourceDetailDrawer resource={resource()} />);
+    try {
+      const history = view.container.querySelector('[data-testid="resource-metrics-history"]')!;
+      await waitFor(() => expect(history).toHaveTextContent('Failed to load history data'));
+      expect(history.querySelector('[data-testid="guest-history-plot"]')).toBeNull();
+      const readings = history.querySelector('[data-testid="guest-history-live-readings"]')!;
+      expect(readings.querySelector('[data-live-reading="cpu"]')).toHaveTextContent(
+        'CPU7.0%current',
+      );
+      // The byte pair is the measurement; the stale 99% selection is ignored.
+      expect(readings.querySelector('[data-live-reading="memory"]')).toHaveTextContent(
+        'Memory25.0%current',
+      );
+
+      setResource({ ...source, memory: { current: 99, total: 8_000, used: 0 } });
+      expect(readings.querySelector('[data-live-reading="memory"]')).toHaveTextContent(
+        'Memory0.0%current',
+      );
+
+      setResource({
+        ...source,
+        memory: {
+          current: 40,
+          observation: {
+            state: 'last-known',
+            source: 'status-mem',
+            observedAt: '2026-10-04T12:00:00Z',
+          },
+        },
+      });
+      expect(readings.querySelector('[data-live-reading="memory"]')).toHaveTextContent(
+        'Memory40.0%last known',
+      );
+      expect(readings.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+        '2026-10-04 12:00:00 UTC',
+      );
+      expect(readings.querySelector('[data-live-reading="cpu"]')).toHaveTextContent('7.0%current');
+      expect(read).toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      read.mockRestore();
+      resetCreateNonSuspendingQueryCacheForTest();
+    }
+  });
+
   it.each(['vm', 'system-container'] as const)(
     'keeps the mounted %s Overview charts on the selected filesystem producer',
     async (type) => {

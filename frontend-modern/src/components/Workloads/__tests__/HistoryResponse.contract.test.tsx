@@ -70,13 +70,19 @@ describe('production History consumers reject unbound response evidence', () => 
       );
       expect(plots(view.container)).toHaveLength(0);
       expect(view.container).not.toHaveTextContent('97.0%');
-      expect(view.container).not.toHaveTextContent('99.0%');
+      // The resource's own reading stays, labelled current, and never stands
+      // in for a history series.
+      expect(screen.getByTestId('guest-history-live-readings')).toHaveTextContent(
+        'CPU99.0%current',
+      );
+      expect(view.container.querySelector('[data-history-current]')).toBeNull();
       expect(view.container).not.toHaveTextContent('No stored history');
       expect(view.container).not.toHaveTextContent('private');
       transport.mockResolvedValueOnce(body(0));
       fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
       await settle();
       expect(plots(view.container)).toHaveLength(1);
+      expect(screen.queryByTestId('guest-history-live-readings')).not.toBeInTheDocument();
       expect(view.container).toHaveTextContent('0.0%');
       transport.mockResolvedValueOnce({ ...body(), metrics: {} });
       await vi.advanceTimersByTimeAsync(GUEST_DRAWER_HISTORY_POLL_MS);

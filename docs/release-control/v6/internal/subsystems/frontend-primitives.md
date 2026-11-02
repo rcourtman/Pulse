@@ -20,6 +20,20 @@
 
 ## Purpose
 
+### Drawer History keeps live readings when no chart can be drawn (2 November 2026)
+
+When the first history read fails, or the selected range is beyond the plan,
+`GuestDrawerHistory` shows a "Latest readings" strip in place of the charts. It
+reads the same `currentMetrics` and `deferredMetrics` as the chart readouts,
+through one `getLiveReading` helper, so retained or freshness-unknown memory
+keeps the qualifier and explanation from `getMemoryObservationPresentation`.
+The strip draws no plot, timestamp or inspection. A final 401/403 still
+withdraws the whole panel, readings included, and a successful read restores
+the charts. PBS servers depend on this: their host CPU and memory are read in
+the drawer, not the Backups table. `GuestDrawerHistory.refresh.test.tsx` and
+`ResourceDetailDrawer.history.test.tsx` (a PBS drawer with a rejected history
+read) cover it.
+
 ### Compact toggles mark selection by colour, and icon labels stay on one line (2 November 2026)
 
 The compact `FilterButtonGroup` variant (View preferences, type and status

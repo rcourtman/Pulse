@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### Drawer live-readings strip adds no history work (2 November 2026)
+
+`GuestDrawerHistory` renders its "Latest readings" strip only in place of
+charts it cannot draw (a failed first read or a plan-locked range). It reads
+the `currentMetrics` and `deferredMetrics` the drawer already derives, issues
+no request, adds no poll or timer, and holds one item per configured series.
+The history query, its 30-second poll and its retry are unchanged.
+
 ### Missing backup completion remains a presentation-only uncertainty
 
 Workloads keeps its existing scalar and legacy absence classification, but

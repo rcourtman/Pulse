@@ -306,6 +306,58 @@ describe('GuestDrawerHistory refresh recovery', () => {
     },
   );
 
+  it('keeps qualified live readings without charts when the first read fails or the range is locked', async () => {
+    const pending = deferred<AllMetricsHistoryResponse>();
+    const fetch = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockRejectedValueOnce(new Error('store offline'))
+      .mockReturnValueOnce(pending.promise);
+    const [range, setRange] = createSignal<HistoryTimeRange>('24h');
+    const { container } = render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range={range()}
+        currentMetrics={{ cpu: 12, memory: 0 }}
+        deferredMetrics={{
+          disk: { lastKnownValue: 61, message: 'Filesystem read paused.' },
+          netin: { lastKnownValue: 2048, valueLabel: 'freshness unknown', message: 'No time.' },
+        }}
+      />
+    ));
+    await screen.findByText('Failed to load history data');
+    expect(paths(container)).toHaveLength(0);
+    const readings = screen.getByTestId('guest-history-live-readings');
+    expect(readings).toHaveTextContent('Latest readings');
+    expect(readings.querySelector('[data-live-reading="cpu"]')).toHaveTextContent(
+      'CPU12.0%current',
+    );
+    // A measured zero is a reading, not an absence.
+    expect(readings.querySelector('[data-live-reading="memory"]')).toHaveTextContent(
+      'Memory0.0%current',
+    );
+    expect(readings.querySelector('[data-live-reading="disk"]')).toHaveTextContent(
+      'Disk61.0%last known',
+    );
+    expect(readings.querySelector('[data-live-reading="netin"]')).toHaveAttribute(
+      'data-live-reading-qualifier',
+      'freshness unknown',
+    );
+    expect(readings.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
+      'Disk reading: Filesystem read paused.',
+    );
+    expect(readings.querySelector('[data-live-reading="diskread"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    pending.resolve(response());
+    await waitFor(() => expect(paths(container)).toHaveLength(1));
+    expect(screen.queryByTestId('guest-history-live-readings')).not.toBeInTheDocument();
+
+    setRange('14d');
+    await screen.findByText(/14 days history requires a higher license plan/);
+    expect(screen.getByTestId('guest-history-live-readings')).toHaveTextContent('CPU12.0%current');
+  });
+
   it('offers no refresh when the target is absent or the range is locked', async () => {
     const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory');
     const [currentTarget, setTarget] = createSignal<GuestDrawerHistoryTarget | null>(null);

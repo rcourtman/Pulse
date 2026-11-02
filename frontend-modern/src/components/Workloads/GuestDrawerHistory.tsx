@@ -257,6 +257,114 @@ const HistoryPointMarker: Component<HistoryPointMarkerProps> = (props) => {
   );
 };
 
+type LiveReadingQualifier = 'current' | 'last known' | 'freshness unknown';
+
+interface LiveReading {
+  value: number | undefined;
+  deferred: GuestDrawerHistoryDeferredMetric | undefined;
+  qualifier: LiveReadingQualifier | null;
+}
+
+// The resource's own reading for one series: current, or a deferred
+// last-known or freshness-unknown value with its explanation. The chart
+// readouts and the strip shown when no chart can be drawn both use it, so a
+// retained reading is qualified the same way in either place.
+const getLiveReading = (
+  metric: string,
+  currentMetrics: Record<string, number | null | undefined> | undefined,
+  deferredMetrics: Record<string, GuestDrawerHistoryDeferredMetric | undefined> | undefined,
+): LiveReading => {
+  const deferred = deferredMetrics?.[metric];
+  const raw = deferred ? deferred.lastKnownValue : currentMetrics?.[metric];
+  const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+  return {
+    value,
+    deferred,
+    qualifier:
+      value === undefined
+        ? null
+        : !deferred
+          ? 'current'
+          : deferred.valueLabel === 'freshness unknown'
+            ? 'freshness unknown'
+            : 'last known',
+  };
+};
+
+interface GuestDrawerLiveReadingsProps {
+  currentMetrics?: Record<string, number | null | undefined>;
+  deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
+  groups: GuestDrawerHistoryGroupConfig[];
+}
+
+// Shown in place of the charts when none can be drawn (the first read failed
+// or the range is beyond the plan), so CPU and memory stay visible: they
+// belong to the resource, not to its stored history.
+const GuestDrawerLiveReadings: Component<GuestDrawerLiveReadingsProps> = (props) => {
+  const descriptionId = `live-readings-${createUniqueId()}`;
+  const items = createMemo(() => {
+    const seen = new Set<string>();
+    return props.groups.flatMap((group) =>
+      group.series.flatMap((series) => {
+        if (seen.has(series.metric)) return [];
+        seen.add(series.metric);
+        const reading = getLiveReading(series.metric, props.currentMetrics, props.deferredMetrics);
+        return reading.value !== undefined || reading.deferred ? [{ ...series, ...reading }] : [];
+      }),
+    );
+  });
+  return (
+    <Show when={items().length > 0}>
+      <section
+        class="rounded-xs border border-border bg-surface p-2.5"
+        data-testid="guest-history-live-readings"
+      >
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          Latest readings
+        </h4>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+          <For each={items()}>
+            {(item, index) => (
+              <span
+                class="inline-flex items-center gap-1"
+                data-live-reading={item.metric}
+                data-live-reading-qualifier={item.qualifier ?? undefined}
+                aria-describedby={item.deferred ? `${descriptionId}-${index()}` : undefined}
+              >
+                <svg aria-hidden="true" class="h-2.5 w-2.5 shrink-0" viewBox="0 0 10 10">
+                  <circle cx="5" cy="5" r="4" fill={item.color} />
+                </svg>
+                <span class="font-medium text-base-content">{item.label}</span>
+                <span class="tabular-nums text-base-content">
+                  {item.value !== undefined
+                    ? formatHistoryChartTooltipValue(item.value, item.unit)
+                    : '-'}
+                </span>
+                <Show when={item.qualifier}>{(qualifier) => <span>{qualifier()}</span>}</Show>
+              </span>
+            )}
+          </For>
+        </div>
+        <For each={items()}>
+          {(item, index) => (
+            <Show when={item.deferred}>
+              {(deferred) => (
+                <p
+                  id={`${descriptionId}-${index()}`}
+                  class="mt-2 text-xs leading-relaxed text-muted"
+                  data-history-deferred={item.metric}
+                >
+                  {item.label} reading: {deferred().message}
+                </p>
+              )}
+            </Show>
+          )}
+        </For>
+      </section>
+    </Show>
+  );
+};
+
 const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps> = (props) => {
   const [hoverTimestamp, setHoverTimestamp] = createSignal<number | null>(null);
   const [selectedTimestamp, setSelectedTimestamp] = createSignal<number | null>(null);
@@ -516,12 +624,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     series().map((item, index) => {
       const timestamp = readoutTimestamp();
       const point = item.points.find((point) => point.timestamp === timestamp);
-      const deferred = props.deferredMetrics?.[item.metric];
-      const fallbackValue = deferred
-        ? deferred.lastKnownValue
-        : props.currentMetrics?.[item.metric];
-      const isFallback =
-        timestamp === null && typeof fallbackValue === 'number' && Number.isFinite(fallbackValue);
+      const reading = getLiveReading(item.metric, props.currentMetrics, props.deferredMetrics);
+      const isFallback = timestamp === null && reading.value !== undefined;
       const alert = props.alerts?.[item.metric];
       return {
         ...item,
@@ -531,11 +635,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             ? `alert at ${formatHistoryChartTooltipValue(alert.value, item.unit)}`
             : null,
         reserve: valueReserves().get(item.metric) ?? ['', ''],
-        deferred,
+        deferred: reading.deferred,
         descriptionId: `${inspectionId}-deferred-${index}`,
-        isCurrent: isFallback && !deferred,
-        isLastKnown: isFallback && Boolean(deferred) && !deferred?.valueLabel,
-        isUnknown: isFallback && deferred?.valueLabel === 'freshness unknown',
+        isCurrent: isFallback && reading.qualifier === 'current',
+        isLastKnown: isFallback && reading.qualifier === 'last known',
+        isUnknown: isFallback && reading.qualifier === 'freshness unknown',
         valueLabel: point
           ? getGuestDrawerHistoryValueLabel([point], item.unit)
           : // A stored time where this series has no reading says so in place,
@@ -543,8 +647,8 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             // the chart) as the inspected time changes.
             timestamp !== null
             ? 'no reading'
-            : typeof fallbackValue === 'number' && Number.isFinite(fallbackValue)
-              ? formatHistoryChartTooltipValue(fallbackValue, item.unit)
+            : reading.value !== undefined
+              ? formatHistoryChartTooltipValue(reading.value, item.unit)
               : '-',
       };
     }),
@@ -1029,6 +1133,20 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     ),
   );
 
+  const liveCurrentMetrics = () =>
+    props.liveReadingsAvailable !== false ? props.currentMetrics : undefined;
+  // A final 401/403 withdraws the whole History panel, readings included; an
+  // outage or a locked range leaves the resource's own readings standing.
+  const liveReadings = () => (
+    <Show when={!getAPIReadAccessErrorMessage(historyQuery.error())}>
+      <GuestDrawerLiveReadings
+        groups={groups()}
+        currentMetrics={liveCurrentMetrics()}
+        deferredMetrics={props.deferredMetrics}
+      />
+    </Show>
+  );
+
   return (
     <Show
       when={props.target}
@@ -1098,13 +1216,16 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         <Show
           when={!locked()}
           fallback={
-            <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
-              {formatHistoryRangeOptionLabel(props.range)} history requires a higher license plan.
-              This instance's plan retains {maxHistoryDays()} days.
-            </div>
+            <>
+              <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
+                {formatHistoryRangeOptionLabel(props.range)} history requires a higher license plan.
+                This instance's plan retains {maxHistoryDays()} days.
+              </div>
+              {liveReadings()}
+            </>
           }
         >
-          <Show when={!historyQuery.error() || hasHistoryPoints()}>
+          <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
             {/* A reply that is not stored history says so once, above its charts. */}
             <Show when={hasHistoryPoints() && getHistorySourceNotice(historyQuery.value().source)}>
               {(notice) => (
@@ -1125,9 +1246,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     group={group}
                     loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
                     metrics={metrics()}
-                    currentMetrics={
-                      props.liveReadingsAvailable !== false ? props.currentMetrics : undefined
-                    }
+                    currentMetrics={liveCurrentMetrics()}
                     deferredMetrics={props.deferredMetrics}
                     range={props.range}
                     source={historyQuery.value().source}
