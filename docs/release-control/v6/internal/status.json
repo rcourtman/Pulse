@@ -7532,6 +7532,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/i18n/fr/README.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/i18n/README.md",
           "kind": "file"
         },
@@ -7593,6 +7598,11 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/i18n/messages.es.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/i18n/messages.fr.ts",
           "kind": "file"
         },
         {

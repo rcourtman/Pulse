@@ -156,8 +156,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        {/* Language Selector */}
-        <div class="flex items-center justify-between gap-2 p-2 sm:gap-4 sm:p-6">
+        {/* Language Selector: stacks on phones so every locale option fits on one line */}
+        <div class="flex flex-col items-start gap-2 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-6">
           <div class="flex min-w-0 items-center gap-3">
             <div class="hidden shrink-0 rounded-md border border-border bg-surface p-2.5 sm:block">
               <Languages class="w-5 h-5 text-slate-500" strokeWidth={2} />
@@ -172,7 +172,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             </div>
           </div>
           <FilterButtonGroup
-            class="max-w-[72%] shrink-0 [&_button]:px-1.5 sm:w-auto sm:max-w-full sm:[&_button]:px-3"
+            class="max-w-full shrink-0 [&_button]:px-1.5 sm:w-auto sm:[&_button]:px-3"
             options={getLocalePreferenceOptions()}
             value={activeLocale()}
             onChange={setLocalePreference}

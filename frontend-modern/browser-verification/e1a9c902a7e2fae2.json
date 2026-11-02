@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "8918a53c3d2de7626e31bb2a847b20417c2e81b7",
+  "verified_at": "2026-11-02T12:36:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
+    "frontend-modern/src/i18n/catalogs.ts",
+    "frontend-modern/src/i18n/locales.ts",
+    "frontend-modern/src/i18n/messages.fr.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/i18n/policy.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx": "3748496fcac51b9822abbbcd0607d15117203683cc16b2f8d7beba3279c579b3",
+    "frontend-modern/src/i18n/catalogs.ts": "ce4d3416720166b954be9b5a96a032b55f856c9d5404ca9f21fd2dcb060ee916",
+    "frontend-modern/src/i18n/locales.ts": "3c82a0130e6088ec10e6fb4d9ca23e0e3c67daae4273fa9414c1c888a71b890e",
+    "frontend-modern/src/i18n/messages.fr.ts": "c4dbcfa52013eba1b075d9128e9adf5bbc683f5c7b7c3af38630a11abd8ad227",
+    "frontend-modern/src/i18n/messages.ts": "851cfe424edb34d5a69293dccc60551b41f893e9ff42da80d64e9b6756aadf8f",
+    "frontend-modern/src/i18n/policy.ts": "b3c78c115cc088f9c6419f2fd7065c158967e17b37f888e0caa34ef3400b55cd"
+  },
+  "routes": [
+    "/settings/system-general",
+    "/alerts/overview",
+    "/alerts/schedule",
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Production build served by preview on pulse-dev, proxied to the :7699 mock rig",
+    "Settings General with French selected: page title, settings navigation, appearance rows and telemetry section in French",
+    "Language row lists English, Deutsch, Español, Français; at 375px it stacks under its label and all four options fit on one line",
+    "Settings search placeholder 'Rechercher un paramètre...' fits the desktop search box",
+    "Alerts overview in French: title 'Aperçu des alertes', paused-delivery card, counts 'Critique : 6' and 'Avertissement : 49', '+1 en lien' groups, acknowledge and snooze actions",
+    "Alerts schedule and history page headers in French; unmigrated page bodies stay English as expected"
+  ],
+  "interactions": [
+    "Selected Français in Settings > General > Language and confirmed the document title and app shell switched to French without a reload",
+    "Navigated between the alerts overview, schedule and history tabs in French",
+    "Resized between 1024px desktop and 375px phone and re-read the language row and the alerts overview"
+  ]
+}

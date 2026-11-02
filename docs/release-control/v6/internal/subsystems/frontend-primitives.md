@@ -2685,9 +2685,20 @@ locale coverage rather than page-local string switches.
 Alert snooze and resume copy follows that same boundary: action labels, bounded
 duration presets, monitoring-continuity wording, exact-expiry presentation,
 failure feedback, and timeline labels must stay in the typed English, German,
-and Spanish catalogs. The product surface may format the chosen instant in the
+Spanish, and French catalogs. The product surface may format the chosen instant in the
 viewer locale, but must not duplicate those lifecycle strings inside the alert
 card or dialog component.
+
+French is a first-wave locale alongside German and Spanish: a lazily loaded
+`frontend-modern/src/i18n/messages.fr.ts` must cover every migrated key, `fr-*`
+browser languages resolve to it, and the Settings > General language selector
+lists every entry of `SUPPORTED_LOCALES` from the registry rather than a
+hand-written option list. Because that selector grows with the registry, its row
+stacks the label above the options below the `sm` breakpoint so every locale
+stays on one line at phone width instead of clipping the last option.
+Count-bearing catalog keys have no plural forms, so locales whose nouns or
+adjectives agree with the number must use count-neutral wording (for example
+`Critique : {count}`) rather than a form that is wrong for one or for many.
 
 Date and number formatting is part of that boundary and is separate from the
 message catalog. Every `toLocaleString`, `toLocaleDateString`,

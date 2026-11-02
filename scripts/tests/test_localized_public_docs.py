@@ -17,6 +17,7 @@ def read(rel: str) -> str:
 LOCALIZED_DOCS = (
     "docs/i18n/de/README.md",
     "docs/i18n/es/README.md",
+    "docs/i18n/fr/README.md",
 )
 
 MACHINE_FACING_STRINGS = (
@@ -47,8 +48,10 @@ class LocalizedPublicDocsTest(unittest.TestCase):
 
         self.assertIn("[Deutsch](docs/i18n/de/README.md)", root_readme)
         self.assertIn("[Español](docs/i18n/es/README.md)", root_readme)
+        self.assertIn("[Français](docs/i18n/fr/README.md)", root_readme)
         self.assertIn("[Deutsch](i18n/de/README.md)", docs_index)
         self.assertIn("[Español](i18n/es/README.md)", docs_index)
+        self.assertIn("[Français](i18n/fr/README.md)", docs_index)
 
     def test_localized_docs_preserve_machine_facing_strings(self) -> None:
         for rel in LOCALIZED_DOCS:
@@ -86,6 +89,8 @@ class LocalizedPublicDocsTest(unittest.TestCase):
             "no-cap",
             "sin límite",
             "ilimitado",
+            "illimité",
+            "sans limite",
             "unbegrenzt",
         )
         for rel in LOCALIZED_DOCS:

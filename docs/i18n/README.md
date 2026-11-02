@@ -5,6 +5,7 @@ Pulse users.
 
 - [Deutsch](de/README.md)
 - [Español](es/README.md)
+- [Français](fr/README.md)
 
 The canonical deep documentation remains the English docs tree. Localized docs
 must preserve commands, image names, config keys, activation-key formats,

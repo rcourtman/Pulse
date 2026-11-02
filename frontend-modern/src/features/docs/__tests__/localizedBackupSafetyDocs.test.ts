@@ -58,6 +58,28 @@ const locales = [
     unknown: 'un estado anterior desconocido no autoriza su inicio',
     lock: 'No borres bloqueos de copias ni desactives la congelación',
   },
+  {
+    locale: 'fr',
+    heading: 'proxmox--sécurité-pendant-les-sauvegardes',
+    warning: 'API-only ne signifie pas sans agent invité',
+    readOnly: 'Des droits en lecture seule ne prouvent pas que la sauvegarde est sûre',
+    defer: "n'envoyez pas de requêtes manuelles à l'agent invité",
+    planned: 'avant une sauvegarde planifiée avec gel',
+    issued: "n'annule pas les requêtes déjà envoyées à l'agent invité",
+    outage: 'la supervision et les alertes Pulse ne sont pas disponibles',
+    ok: "OK de la sauvegarde ne prouve pas que l'invité a été dégelé",
+    independent: 'effectuées après sa fin, sans Pulse ni QEMU Guest Agent',
+    checks: [
+      'Les systèmes de fichiers ont été dégelés.',
+      'Des écritures récentes et réussies des charges de travail sur chaque système de fichiers inclus dans la sauvegarde.',
+      'Les charges de travail fonctionnent.',
+    ],
+    failed: 'Si une vérification manque ou échoue, maintenez la pause',
+    console: 'Une connexion à la console ou une lecture réussie ne suffit pas',
+    restore: 'étaient actifs avant la pause',
+    unknown: "Un état antérieur inconnu n'autorise pas leur démarrage",
+    lock: 'Ne supprimez pas les verrous de sauvegarde et ne désactivez pas le gel',
+  },
 ];
 
 for (const copy of locales) {

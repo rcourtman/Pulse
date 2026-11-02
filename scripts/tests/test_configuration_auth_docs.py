@@ -18,7 +18,14 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GUIDES = ("CONFIGURATION.md", "INSTALL.md", "DOCKER.md", "i18n/de/README.md", "i18n/es/README.md")
+GUIDES = (
+    "CONFIGURATION.md",
+    "INSTALL.md",
+    "DOCKER.md",
+    "i18n/de/README.md",
+    "i18n/es/README.md",
+    "i18n/fr/README.md",
+)
 HASH = "$2a$12$" + "a" * 53  # Synthetic file/argv sentinel, not a real password.
 CONTENT = f"PULSE_AUTH_USER=admin\nPULSE_AUTH_PASS={HASH}\n"
 

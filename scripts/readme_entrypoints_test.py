@@ -21,6 +21,7 @@ ENTRYPOINTS = (
     "README.md",
     "docs/i18n/de/README.md",
     "docs/i18n/es/README.md",
+    "docs/i18n/fr/README.md",
 )
 SIGNER = (
     'pulse-installer namespaces="pulse-install" ssh-ed25519 '
@@ -169,6 +170,11 @@ class ReadmeEntrypointsTest(unittest.TestCase):
                 "31 de marzo de 2027", "Relay ya no se vende", "precio actual",
                 "mientras continúe su suscripción", "tu propia VPN o un túnel",
                 "ntfy, Gotify o Pushover", "no la interfaz web",
+            ),
+            "docs/i18n/fr/README.md": (
+                "31 mars 2027", "Relay n'est plus commercialisé", "tarif actuel",
+                "tant que leur abonnement se poursuit", "votre propre VPN ou un tunnel",
+                "ntfy, Gotify ou Pushover", "pas l'interface web",
             ),
         }
         stale_claims = (

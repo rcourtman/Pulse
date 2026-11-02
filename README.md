@@ -172,7 +172,8 @@ Pushover destination for phone alerts.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](docs/API.md) · [Architecture](ARCHITECTURE.md) · [Security](SECURITY.md) · [Privacy](docs/PRIVACY.md) · [Code signing](docs/CODE_SIGNING_POLICY.md)
 
 Getting started in other languages:
-[Deutsch](docs/i18n/de/README.md) · [Español](docs/i18n/es/README.md)
+[Deutsch](docs/i18n/de/README.md) · [Español](docs/i18n/es/README.md) ·
+[Français](docs/i18n/fr/README.md)
 
 ## Community and support
 
