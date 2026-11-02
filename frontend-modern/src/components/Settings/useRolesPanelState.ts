@@ -42,15 +42,19 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
   });
   const accessAllowed = () => featureGate.rbacEnabled() && props.canManage !== false;
   const currentOrg = () => getOrgID() || 'default';
-  let context = { org: currentOrg(), user: props.currentUser, allowed: accessAllowed() };
+  const [context, setContext] = createSignal({
+    org: currentOrg(),
+    user: props.currentUser,
+    allowed: accessAllowed(),
+  });
   let disposed = false;
   let readController: AbortController | undefined;
   let mutationController: AbortController | undefined;
   const contextIsCurrent = () =>
     !disposed &&
-    context.org === currentOrg() &&
-    context.user === props.currentUser &&
-    context.allowed === accessAllowed();
+    context().org === currentOrg() &&
+    context().user === props.currentUser &&
+    context().allowed === accessAllowed();
   const canEdit = () =>
     contextIsCurrent() &&
     accessAllowed() &&
@@ -62,7 +66,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
   const isCurrentRole = (role: Role) => roles().some((current) => unwrap(current) === unwrap(role));
   const requestOptions = (controller: AbortController) => ({
     signal: controller.signal,
-    expectedOrgID: context.org,
+    expectedOrgID: context().org,
     retry: false,
   });
 
@@ -86,11 +90,11 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
 
   const loadRoles = async () => {
     if (!contextIsCurrent() || !accessAllowed() || readController || mutationController) return;
-    const reader = context;
+    const reader = context();
     const controller = new AbortController();
     readController = controller;
     const isCurrentRead = () =>
-      contextIsCurrent() && reader === context && readController === controller;
+      contextIsCurrent() && reader === context() && readController === controller;
     batch(() => {
       clearEditor();
       setRolePendingDeletion(null);
@@ -149,7 +153,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     mutationController?.abort();
     readController = mutationController = undefined;
     // A new object also invalidates operations when returning to the same reader.
-    context = { org: currentOrg(), user: props.currentUser, allowed: accessAllowed() };
+    setContext({ org: currentOrg(), user: props.currentUser, allowed: accessAllowed() });
     batch(() => {
       clearEditor();
       setRoles([]);
@@ -207,11 +211,11 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
   };
 
   const mutateRole = async (role: Role, remove: boolean) => {
-    const reader = context;
+    const reader = context();
     const controller = new AbortController();
     mutationController = controller;
     const isCurrentWrite = () =>
-      contextIsCurrent() && reader === context && mutationController === controller;
+      contextIsCurrent() && reader === context() && mutationController === controller;
     batch(() => {
       setSaving(!remove);
       setDeleting(remove);
@@ -239,7 +243,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
         setDeleting(false);
       }
     }
-    if (saved && contextIsCurrent() && reader === context) await loadRoles();
+    if (saved && contextIsCurrent() && reader === context()) await loadRoles();
   };
   const handleDeleteRole = async () => {
     const role = rolePendingDeletion();

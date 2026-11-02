@@ -66,7 +66,7 @@ function mount() {
         return allowed();
       },
     });
-    return <div />;
+    return <button disabled={!state.canEdit()}>Current reader action</button>;
   });
   return { state, setUser, setAllowed, view };
 }
@@ -109,6 +109,7 @@ describe('Roles reader lifetime', () => {
     expect(state.showModal()).toBe(false);
     state.openEditRole(south);
     expect(state.formName()).toBe('South role');
+    expect(screen.getByRole('button', { name: 'Current reader action' })).not.toBeDisabled();
   });
 
   it.each(['success', 'failure'] as const)(
@@ -133,6 +134,19 @@ describe('Roles reader lifetime', () => {
       expect(mocks.error).not.toHaveBeenCalled();
     },
   );
+
+  it('reactivates rendered controls after capability withdrawal and restoration', async () => {
+    const [feature, setFeature] = createSignal(true);
+    enabled = feature;
+    const { state } = mount();
+    await loaded(state);
+    expect(screen.getByRole('button', { name: 'Current reader action' })).not.toBeDisabled();
+    setFeature(false);
+    expect(screen.getByRole('button', { name: 'Current reader action' })).toBeDisabled();
+    setFeature(true);
+    await loaded(state);
+    expect(screen.getByRole('button', { name: 'Current reader action' })).not.toBeDisabled();
+  });
 
   it('does not let an old completion finish a newer loading state', async () => {
     const old = deferred<Role[]>(),
