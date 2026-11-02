@@ -324,6 +324,20 @@ func (p *Provider) GetAppConfig(_ context.Context, appID string) (*AppConfigResu
 	return result, nil
 }
 
+// SystemMetricResourceID reports the same native host identity as Records and
+// SystemMetricHistory, without starting a provider request.
+func (p *Provider) SystemMetricResourceID() string {
+	if p == nil {
+		return ""
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.lastSnapshot == nil {
+		return ""
+	}
+	return trueNASSystemMetricResourceID(p.connectionID, p.lastSnapshot.System)
+}
+
 // SystemMetricHistory returns canonical host-chart metrics for the TrueNAS
 // appliance keyed by the shared agent metrics resource ID.
 func (p *Provider) SystemMetricHistory(ctx context.Context, duration time.Duration) (string, map[string][]TimeSeriesPoint, error) {

@@ -72,6 +72,12 @@ type MonitorGuestMetricHistoryProvider interface {
 	GuestMetricHistory(m *Monitor, orgID string, resourceType string, duration time.Duration) map[string]map[string][]MetricPoint
 }
 
+// MonitorTargetedGuestMetricHistoryProvider avoids querying other appliances
+// when a single resource needs a source-native chart fallback.
+type MonitorTargetedGuestMetricHistoryProvider interface {
+	GuestMetricHistoryForResource(m *Monitor, orgID, resourceType, resourceID string, duration time.Duration) map[string][]MetricPoint
+}
+
 // GetGuestMetrics returns historical metrics for a guest
 func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
 	if m == nil || m.metricsHistory == nil {
@@ -106,17 +112,18 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 // inMemoryKey is the key used in the in-memory buffer (e.g. "docker:abc123").
 // sqlResourceType/sqlResourceID are the type/id used in the SQLite store
 // (e.g. "dockerContainer"/"abc123").
-func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration) map[string][]MetricPoint {
+func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration, metricTypes ...string) map[string][]MetricPoint {
+	requestedMetricTypes := normalizeChartMetricTypes(metricTypes)
 	if mock.IsMockEnabled() {
-		return m.mockGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID, duration, m.GetGuestMetrics(inMemoryKey, duration))
+		return filterChartMetricMap(m.mockGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID, duration, m.GetGuestMetrics(inMemoryKey, duration)), requestedMetricTypes)
 	}
 
 	inMemoryResult := map[string][]MetricPoint{}
-	if m.shouldLoadGuestChartInMemory(inMemoryKey, nil, duration) {
-		inMemoryResult = m.GetGuestMetrics(inMemoryKey, duration)
+	if m.shouldLoadGuestChartInMemory(inMemoryKey, requestedMetricTypes, duration) {
+		inMemoryResult = filterChartMetricMap(m.GetGuestMetrics(inMemoryKey, duration), requestedMetricTypes)
 	}
 
-	if hasSufficientChartMapCoverage(inMemoryResult, duration) {
+	if hasSufficientChartMapCoverageForMetrics(inMemoryResult, duration, requestedMetricTypes) {
 		return inMemoryResult
 	}
 
@@ -125,12 +132,15 @@ func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResou
 	best := inMemoryResult
 	if m.metricsStore != nil {
 		if converted, ok := m.queryStoreMetricMapWithGapFillAliases(sqlResourceType, sqlResourceID, duration); ok {
-			best = mergeGuestMetricHistory(best, converted, duration)
+			best = mergeGuestMetricHistory(best, filterChartMetricMap(converted, requestedMetricTypes), duration)
 		}
 	}
-	if nativeHistory := m.nativeGuestMetricHistory(sqlResourceType, duration); len(nativeHistory) > 0 {
+	if len(requestedMetricTypes) > 0 && hasSufficientChartMapCoverageForMetrics(best, duration, requestedMetricTypes) {
+		return best
+	}
+	if nativeHistory := m.nativeGuestMetricHistory(sqlResourceType, duration, sqlResourceID); len(nativeHistory) > 0 {
 		if nativeMetrics, ok := nativeHistory[sqlResourceID]; ok {
-			best = mergeGuestMetricHistory(best, nativeMetrics, duration)
+			best = mergeGuestMetricHistory(best, filterChartMetricMap(nativeMetrics, requestedMetricTypes), duration)
 		}
 	}
 	return best
@@ -806,7 +816,7 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 	return result
 }
 
-func (m *Monitor) nativeGuestMetricHistory(resourceType string, duration time.Duration) map[string]map[string][]MetricPoint {
+func (m *Monitor) nativeGuestMetricHistory(resourceType string, duration time.Duration, resourceIDs ...string) map[string]map[string][]MetricPoint {
 	providers := m.supplementalProviderSnapshot()
 	if len(providers) == 0 {
 		return nil
@@ -821,6 +831,14 @@ func (m *Monitor) nativeGuestMetricHistory(resourceType string, duration time.Du
 
 	history := make(map[string]map[string][]MetricPoint)
 	for _, provider := range providers {
+		if targeted, ok := provider.(MonitorTargetedGuestMetricHistoryProvider); ok && len(resourceIDs) == 1 {
+			id := resourceIDs[0]
+			metricMap := targeted.GuestMetricHistoryForResource(m, orgID, resourceType, id, duration)
+			if len(metricMap) > 0 {
+				history[id] = mergeGuestMetricHistory(history[id], metricMap, duration)
+			}
+			continue
+		}
 		historyProvider, ok := provider.(MonitorGuestMetricHistoryProvider)
 		if !ok {
 			continue

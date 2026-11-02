@@ -1514,12 +1514,21 @@ func TestJSONRPCConfiguredTimeoutIncludesReadRetryBackoff(t *testing.T) {
 		<-release
 		return protocolFixtureReply{result: nil}
 	}, nil)
-	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 200 * time.Millisecond})
+	client := protocolFixtureClient(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", Username: "fixture-user", Timeout: 2 * time.Second})
 	t.Cleanup(func() { close(release) })
+	// This case must reach the read/retry boundary, rather than also racing a
+	// cold TLS/login against 200 ms. Separate fixtures above bound those stages.
+	if err := client.withRPC(context.Background(), func(context.Context, *trueNASRPCClient) error { return nil }); err != nil {
+		t.Fatalf("prepare authenticated read-retry session: %v", err)
+	}
+	if fixture.sessions.Load() != 1 || reads.Load() != 0 || fixture.restRequests.Load() != 0 {
+		t.Fatalf("read-retry setup dispatched work: sessions=%d reads=%d REST=%d", fixture.sessions.Load(), reads.Load(), fixture.restRequests.Load())
+	}
+	client.config.Timeout = 200 * time.Millisecond // unchanged budget under test
 	err := awaitConfiguredRPCBudget(t, client.TestConnection)
 	assertRPCTimeout(t, err)
 	if fixture.sessions.Load() != 1 || reads.Load() != 1 || fixture.restRequests.Load() != 0 {
-		t.Fatal("read retry restarted an exhausted operation budget")
+		t.Fatalf("read retry restarted an exhausted operation budget: sessions=%d reads=%d REST=%d", fixture.sessions.Load(), reads.Load(), fixture.restRequests.Load())
 	}
 }
 
