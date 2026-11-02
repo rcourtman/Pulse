@@ -4553,12 +4553,33 @@ func TestFrontendCIRequiresCompleteIsolatedUnitProof(t *testing.T) {
 // silent-mutation policy also need credential-free PR/main admission, without
 // relaxing product runtime, dependency audit or receipt-only boundaries.
 func TestCIIssueMetadataUsesSourceOnlyTriageChecks(t *testing.T) {
+	// This suite now includes Git history and real workflow-shell controls.
+	// Keep the existing minute bound per discovered check, not shared across
+	// a growing inventory: native macOS exhausted the aggregate deadline while
+	// completed checks were still passing. The outer Go/job alarms still apply.
+	script := repoFile("scripts", "tests", "test_ci_browser_proof_only.py")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_ci_browser_proof_only.py"), "-v")
+	cmd := exec.CommandContext(ctx, "python3", script, "--list-tests")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("issue metadata CI admission and failure controls: %v\n%s", err, out)
+		t.Fatalf("discover issue metadata CI admission checks: %v (%v)\n%s", err, ctx.Err(), out)
+	}
+	names, err := ciAdmissionCaseNames(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "python3", script, name, "-v")
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("issue metadata CI admission check: %v (%v)\n%s", err, ctx.Err(), out)
+			}
+			t.Logf("%s", out)
+		})
 	}
 }
 

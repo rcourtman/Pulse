@@ -3,12 +3,15 @@
 
 import importlib.util
 import fnmatch
+import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -30,6 +33,51 @@ COMPLETION = importlib.util.module_from_spec(COMPLETION_SPEC)
 COMPLETION_SPEC.loader.exec_module(COMPLETION)
 RECEIPT = "frontend-modern/browser-verification/2026-10-14-proof.json"
 JOBS = ("tier-selection", "test-images", "e2e", "agent-registration")
+
+
+def test_case_names(module):
+    """Discover the same complete inventory as unittest, without running it."""
+    def leaves(suite):
+        for case in suite:
+            if isinstance(case, unittest.TestSuite):
+                yield from leaves(case)
+            else:
+                yield case.id().removeprefix(module.__name__ + ".")
+
+    names = list(leaves(unittest.defaultTestLoader.loadTestsFromModule(module)))
+    if not names or len(names) != len(set(names)) or any(
+            re.fullmatch(r"[A-Za-z_]\w*\.test_\w+", name) is None for name in names):
+        raise ValueError("missing, repeated or invalid CI admission test inventory")
+    return names
+
+
+class InventoryTest(unittest.TestCase):
+    def test_listing_matches_unittest_including_future_cases(self):
+        module = types.ModuleType("future_admission_fixture")
+        for name in ("FirstCase", "FutureCase"):
+            setattr(module, name, type(name, (unittest.TestCase,), {
+                "__module__": module.__name__,
+                "test_added": lambda self: None,
+                "test_last": lambda self: None,
+            }))
+        self.assertEqual(test_case_names(module), [
+            "FirstCase.test_added", "FirstCase.test_last",
+            "FutureCase.test_added", "FutureCase.test_last",
+        ])
+        listed = subprocess.run([sys.executable, str(Path(__file__)), "--list-tests"],
+                                check=True, capture_output=True, text=True, timeout=10)
+        self.assertEqual(json.loads(listed.stdout), test_case_names(sys.modules[__name__]))
+
+    def test_empty_or_aliased_inventory_cannot_silently_drop_checks(self):
+        module = types.ModuleType("invalid_admission_fixture")
+        with self.assertRaises(ValueError):
+            test_case_names(module)
+        module.First = type("First", (unittest.TestCase,), {
+            "__module__": module.__name__, "test_present": lambda self: None,
+        })
+        module.Alias = module.First
+        with self.assertRaises(ValueError):
+            test_case_names(module)
 
 
 def job_block(workflow, name):
@@ -690,4 +738,7 @@ class WorkflowScopeTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if sys.argv[1:] == ["--list-tests"]:
+        print(json.dumps(test_case_names(sys.modules[__name__])))
+    else:
+        unittest.main()
