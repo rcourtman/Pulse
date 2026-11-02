@@ -15,6 +15,34 @@
 
 ## Purpose
 
+### NAS utility compatibility preserves URL and lifecycle trust
+
+The Unix installer uses explicit ASCII alphabets and whitespace for `tr`, not
+POSIX character classes that older NAS utilities may interpret literally.
+Scheme checks do not rewrite the endpoint. URL/OS/hostname and fingerprint
+normalisation, nonce generation, effective systemd word sets and rendered rc.d
+parent-PID reads use the same portable character sets. A mixed-case HTTPS
+scheme is stripped correctly when selecting the pinned-certificate authority.
+Malformed input and mismatching pins remain refusals; this changes neither
+runtime URL policy nor CA/pin verification or the action runner's loopback-only
+HTTP exception.
+
+`TestAgentInstallerPortableTRPreflight` executes the real preflight entry with
+real local TLS, saved CA and formatted fingerprint, alongside an explicitly
+classless `tr` model and malformed URL/pin, wrong-pin and HTTP controls. It
+checks download OS/architecture and saved-file bytes/modes. The downstream
+identity/transport controls also check hostname, nonce and effective word sets.
+The model reproduces the earlier corruption; it is not native QNAP evidence.
+
+`TestAgentInstalledRemovalSavedTransport` executes saved-state recovery and the
+initial uninstall caller through the real collector CLI and authenticated local
+TLS. Exact confirmation permits only the selected private fixture erasure;
+missing trust, wrong pins, server refusal, another identity and non-loopback HTTP
+retain recovery files. Service/process operations are closed doubles, and their
+quiescence can precede refusal: retained files do not mean the service stayed
+running. This does not execute the root entry, native systemd/appliance removal
+or establish the cause of a reporter's unexplained removal failure.
+
 ### Unix agent URL admission precedes replacement
 
 After checksum and signature verification, the Unix installer runs the staged

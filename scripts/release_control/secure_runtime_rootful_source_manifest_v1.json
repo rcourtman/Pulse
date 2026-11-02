@@ -16,6 +16,8 @@
     "scripts/install.sh",
     "scripts/release_ldflags.sh",
     "scripts/installtests/agent_id_recovery_unix_test.go",
+    "scripts/installtests/agent_installed_removal_transport_test.go",
+    "scripts/installtests/agent_portable_tr_test.go",
     "scripts/installtests/agent_state_dir_lifecycle_test.go",
     "scripts/installtests/agent_url_admission_test.go",
     "scripts/installtests/api_guidance_test.go",

@@ -687,7 +687,7 @@ resolve_safe_profile_hostname() {
     if [[ -z "$resolved_hostname" ]]; then
         resolved_hostname=$(hostname 2>/dev/null || true)
     fi
-    resolved_hostname=$(printf '%s' "$resolved_hostname" | tr '[:upper:]' '[:lower:]')
+    resolved_hostname=$(printf '%s' "$resolved_hostname" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
     resolved_hostname="${resolved_hostname%.}"
     [[ ${#resolved_hostname} -ge 1 && ${#resolved_hostname} -le 253 &&
        "$resolved_hostname" =~ ^[a-z0-9][a-z0-9._:-]*$ ]] || return 1
@@ -2112,7 +2112,7 @@ write_action_runner_config() {
 
 generate_action_runner_activation_nonce() {
 	local nonce=""
-	nonce=$(od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d '[:space:]' || true)
+	nonce=$(od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d ' \t\r\n\v\f' || true)
 	[[ "$nonce" =~ ^[a-f0-9]{64}$ ]] || return 1
 	printf '%s\n' "$nonce"
 }
@@ -2150,7 +2150,7 @@ action_runner_reestablish_repair_fence() {
 # intentionally indeterminate: callers must not restore a predecessor because
 # an unreachable server may already have committed and revoked it.
 action_runner_url_uses_loopback_http() {
-	local raw_url="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+	local raw_url="$(printf '%s' "$1" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
 	local authority=""
 	local host=""
 	local octet=""
@@ -2183,7 +2183,7 @@ action_runner_url_uses_loopback_http() {
 
 action_runner_url_transport_allowed() {
 	local raw_url="$1"
-	local lower_url="$(printf '%s' "$raw_url" | tr '[:upper:]' '[:lower:]')"
+	local lower_url="$(printf '%s' "$raw_url" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')"
 	if [[ "$lower_url" =~ ^https://[^[:space:]]+$ && "$lower_url" != *'@'* ]]; then
 		return 0
 	fi
@@ -2570,7 +2570,7 @@ systemd_effective_words_equal() {
     local actual=""
     local expected=""
     actual=$(systemd_effective_unit_property "$unit_name" "$property") || return 1
-    actual=$(printf '%s\n' "$actual" | tr '[:space:]' '\n' | sed '/^$/d' | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    actual=$(printf '%s\n' "$actual" | tr ' \t\r\n\v\f' '\n' | sed '/^$/d' | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')
     expected=$(printf '%s\n' "$@" | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')
     [[ "$actual" == "$expected" ]]
 }
@@ -3319,7 +3319,7 @@ pulse_agent_supervisor_pid()
             ;;
     esac
 
-    parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d '[:space:]')
+    parent_pid=\$(ps -o ppid= -p "\${agent_pid}" 2>/dev/null | tr -d ' \t\r\n\v\f')
     if [ -z "\${parent_pid}" ] || [ "\${parent_pid}" = "1" ]; then
         return 1
     fi
@@ -4879,7 +4879,7 @@ detect_proxmox() {
 
 pulse_url_uses_plain_http() {
     local url_lower
-    url_lower=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+    url_lower=$(printf '%s' "$1" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
     [[ "$url_lower" =~ ^http:// ]]
 }
 
@@ -4910,12 +4910,12 @@ verify_pinned_server_certificate() {
     local host=""
     local target=""
     local actual=""
-    normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+    normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ': \t\r\n\v\f' | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
     if [[ ! "$normalized" =~ ^[a-f0-9]{64}$ ]]; then
         fail "Invalid --server-fingerprint value. Expected a SHA-256 certificate fingerprint (64 hexadecimal characters)." "$EXIT_PREFLIGHT_FAILED"
     fi
 
-    authority="${PULSE_URL#https://}"
+    authority="${PULSE_URL#*://}"
     authority="${authority%%/*}"
     if [[ "$authority" == \[*\]* ]]; then
         host="${authority#\[}"
@@ -6744,8 +6744,10 @@ if [[ -z "$PULSE_URL" ]]; then
     fail "Missing required argument: --url (or --pulse-url)" "$EXIT_MISSING_ARGS"
 fi
 # Validate URL format (basic check) - case-insensitive for http:// or https://
-# Normalize to lowercase for the check
-url_lower=$(echo "$PULSE_URL" | tr '[:upper:]' '[:lower:]')
+# Use explicit ASCII alphabets: older NAS tr implementations can treat POSIX
+# character classes literally and corrupt even an already-lowercase https URL.
+# Keep the original endpoint unchanged for downloads and runtime policy admission.
+url_lower=$(echo "$PULSE_URL" | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
 if [[ ! "$url_lower" =~ ^https?:// ]]; then
     fail "Invalid URL format. Must start with http:// or https://"
 fi
@@ -7057,7 +7059,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
     json_event "preflight" "checking" "Running preflight checks"
 
     # Check 1: Architecture
-    PF_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    PF_OS=$(uname -s | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
     PF_ARCH=$(uname -m)
     case "$PF_ARCH" in
         x86_64|amd64) PF_ARCH="amd64" ;;
@@ -7174,7 +7176,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 fi
 
 # --- Download ---
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+OS=$(uname -s | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
 ARCH=$(uname -m)
 
 case "$ARCH" in
