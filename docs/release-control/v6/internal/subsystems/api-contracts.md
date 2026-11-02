@@ -21,6 +21,38 @@
 
 ## Purpose
 
+### Requested metric history retains its admitted reader
+
+The existing `/api/metrics-store/history` chart read and canonical agent
+`get_metric_history` read retain the admitted API token or local browser session
+through the complete synchronous lookup and response. For API tokens, current
+monitoring-read scope, credential identity, principal and organisation authority
+are checked at output, including after the agent's inventory lookup. Local
+sessions retain the admitted session instance, validity, principal and store.
+Withdrawal before output returns the fixed 401 rather than metric values or a
+successful empty series;
+after an admitted prefix it only stops further writes. Handler-specific headers
+remain undisclosed until an authorised write.
+
+This uses the existing response-authority guard and changes no initial gate,
+resource/metric mapping, provider work lifetime, downsampling, fallback, response
+shape or retention entitlement. Removing unrelated execution/settings scopes does
+not end a permitted monitoring read. Existing proxy and unauthenticated policies
+are unchanged. Other readers and canonical metrics are not cancelled or deleted.
+It does not erase data already admitted to an HTTP response or a client cache,
+and does not establish installed session/IdP recovery or measured exposure.
+
+Normal-suite metric-history lifetime tests hold the real resource provider after
+registered-route admission, without database locks or production hooks. The
+contract matrix covers both token transports, persisted HTTP token deletion,
+expiry, scope/organisation/identity/principal/runtime-role withdrawal, and an
+independent reader. Session tests cover actual persisted logout, replacement,
+expiry, principal and session-store changes, for single and all-series responses.
+Route-inventory controls retain monitoring-only, wildcard, session and proxy
+reads and unrelated-scope removal. Existing history query/entitlement/fallback
+and shared response-writer tests remain applicable. Consuming browser proof must
+use actual producer responses at desktop and narrow sizes, not a guard skip.
+
 ### Agent HTTP redirects retain their configured origin
 
 Manifest discovery, capability HTTP calls and agent SSE reads using standard Go

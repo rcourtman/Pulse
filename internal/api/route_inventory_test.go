@@ -1018,3 +1018,43 @@ func TestAgentHistoryPreservesAdmittedReaders(t *testing.T) {
 		})
 	}
 }
+
+func TestMetricHistoryPreservesAdmittedReaders(t *testing.T) {
+	for _, entry := range []string{"chart", "agent"} {
+		for _, kind := range []string{"monitoring", "execution_removed", "scope_added", "wildcard", "session", "proxy"} {
+			t.Run(entry+"/"+kind, func(t *testing.T) {
+				scopes := []string{config.ScopeMonitoringRead, config.ScopeSettingsRead}
+				if kind == "execution_removed" {
+					scopes = append(scopes, config.ScopeAIExecute)
+				}
+				if kind == "wildcard" {
+					scopes = []string{config.ScopeWildcard}
+				}
+				f := newMetricAuthorityFixture(t, entry, scopes)
+				raw, transport := metricAuthorityToken, "bearer"
+				if kind == "session" {
+					raw, transport = "metric-authority-unchanged-session", "session"
+					GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", f.router.config.AuthUser)
+					t.Cleanup(func() { GetSessionStore().DeleteSession(raw) })
+				} else if kind == "proxy" {
+					transport = "proxy"
+				}
+				control := f.begin(t, metricAuthorityControl, "header")
+				primary := f.begin(t, raw, transport)
+				config.Mu.Lock()
+				if kind == "session" || kind == "proxy" {
+					f.router.config.RemoveAPIToken(f.router.config.APITokens[0].ID)
+				} else {
+					f.router.config.APITokens[0].Scopes = []string{config.ScopeMonitoringRead}
+					if kind == "scope_added" {
+						f.router.config.APITokens[0].Scopes = append(f.router.config.APITokens[0].Scopes, config.ScopeAIExecute)
+					}
+				}
+				config.Mu.Unlock()
+				f.provider.unblock()
+				readMetricAuthorityResult(t, primary, http.StatusOK)
+				readMetricAuthorityResult(t, control, http.StatusOK)
+			})
+		}
+	}
+}
