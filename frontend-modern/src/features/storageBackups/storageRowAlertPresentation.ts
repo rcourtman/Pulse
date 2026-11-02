@@ -58,7 +58,7 @@ export const getStorageRowAlertPresentation = (options: {
   };
 };
 
-const forecastDaysToFull = (alert: Alert): number | null => {
+export const getStorageAlertForecastDaysToFull = (alert: Alert): number | null => {
   const value = alert.metadata?.forecastDaysToFull;
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 };
@@ -71,7 +71,7 @@ export const describeStorageAlertHeadline = (
   alert: Alert,
   options: { compact?: boolean } = {},
 ): string => {
-  const days = forecastDaysToFull(alert);
+  const days = getStorageAlertForecastDaysToFull(alert);
   if (days !== null) {
     if (days < 1) return options.compact ? 'Full <1d' : 'Full within a day';
     const rounded = Math.max(1, Math.round(days));

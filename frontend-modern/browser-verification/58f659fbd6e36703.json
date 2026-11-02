@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "3a57ee56d97e1c616a79a409aa15d5e3c71d60c3",
+  "verified_at": "2026-11-02T10:19:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerForecast.ts",
+    "frontend-modern/src/features/storageBackups/storageRowAlertPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "f522139d4efcdd7ecc7a2df80539f806af84063f266dac37280c74adabbfc5be",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "56ae74fd990c09cb510de62fda9e6ef55d0b706a11c67c2ecaca4004b2722f8a",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "b0e6fc3dd407405cef2f9e439c30ecff6c62e221650e921ae554062ea0b145e4",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerForecast.ts": "284b5424c7a3b8a61df4ae073dd147a853f45f731a3dcd85d07761a525872eae",
+    "frontend-modern/src/features/storageBackups/storageRowAlertPresentation.ts": "2ed1961c84ec8827c6f38eb024eb6ae731d8dcff5d33557c1a31fb107be5f5ec"
+  },
+  "routes": [
+    "/proxmox/backups"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev with one injected PBS datastore forecast alert",
+    "warning and critical forecasts in the Backup servers table and the datastore drawer",
+    "dark theme, desktop and phone layouts"
+  ],
+  "interactions": [
+    "signed in to the private mock backend and opened Proxmox > Backups at 1440x1000 and 375x812",
+    "mock mode raises no PBS forecast alert (it needs a week of usage trend), so injected one for pbs-main / primary-vault into the websocket activeAlerts payload and /api/alerts/active",
+    "desktop: the primary-vault row read 23.9% with a 'Full in ~4d' amber pill in place of the used/total bytes; a critical alert read 'Full <1d' in red; rows without a forecast kept their bytes",
+    "phone: the forecast moved to State as 'Full in ~4d' and the percentage stayed whole (the first attempt placed the pill beside it and clipped 23.9% to 3.9%, which this fixed)",
+    "opened the primary-vault drawer at both widths: Fill forecast 'Full in ~4 days, growing 4.1% a day' between Capacity and Jobs",
+    "every row stayed 32-33 px and single-line; only datastore names truncate on phone, as rows without a forecast already do; no horizontal page overflow"
+  ]
+}

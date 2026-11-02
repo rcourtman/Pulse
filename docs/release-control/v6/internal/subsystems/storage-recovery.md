@@ -5041,6 +5041,32 @@ read "0 protected, 38 attention", which left the operator counting rows to
 find the cause; on the 932-guest mock it now reads as five lines. No posture,
 freshness or protection evaluation changes.
 
+### Backup servers show the datastore fill forecast (2 November 2026)
+
+A PBS datastore row in the Backup servers table says when the store fills
+("Full in ~4d", red within a day) while its active capacity alert carries
+`forecastDaysToFull`. That alert is the existing storage capacity forecast the
+PBS poller evaluates for storage `<instance id>-<store>` (alias
+`<instance id>/<store>`), with its own trigger, latch and recovery lifecycle;
+the Backups page never estimates a runway of its own. The dashed storage id is
+ambiguous across connections (`main` + `daily-tank` and `main-daily` + `tank`),
+so a row takes an alert only when its policy aliases name the exact
+`<instance id>/<store>`, or, without aliases, its instance and store name match.
+The resource name can be the PBS hostname, so it is never used. No countdown
+does not mean the runway is safe: a store over the usage threshold alerts on
+usage instead (the percentage already shows it) and a young trend is not yet
+trusted. An unreadable store keeps "Unavailable" rather than a forecast.
+Acknowledging the alert does not change when the store fills, so an
+acknowledged forecast still shows.
+
+On desktop the forecast pill takes the used/total bytes' place in Used (they
+stay in its title and the drawer). On phones it takes State, as a job problem
+does, and the percentage stays whole; a critical job problem keeps State over a
+warning forecast. The datastore drawer adds a "Fill forecast" line with the
+observed daily growth. The page owns the live alert store and passes a lookup
+through `ProxmoxBackupsTable`'s `datastoreAlerts`, so the table renders without
+an alerts provider and shows no forecast when none is given.
+
 ### Backup jobs show 14 days of retained outcomes beside Backup health (2 November 2026)
 
 A Backup jobs card answers "did last night's backups run, and is that

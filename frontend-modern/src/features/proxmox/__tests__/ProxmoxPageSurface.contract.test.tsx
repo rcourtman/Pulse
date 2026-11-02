@@ -25,6 +25,7 @@ const mockWorkloadsOptions = vi.hoisted(() => vi.fn());
 const mockWorkloadsSurfaceProps = vi.hoisted(() => vi.fn());
 const mockWorkloadsStateRef = vi.hoisted(() => ({ current: undefined as unknown }));
 const mockWorkloadsReady = vi.hoisted(() => vi.fn(() => false));
+const mockActiveAlerts = vi.hoisted(() => ({}) as Record<string, unknown>);
 const mockFetchReplicationJobs = vi.hoisted(() =>
   vi.fn((_signal?: AbortSignal) => Promise.resolve([] as unknown[])),
 );
@@ -59,6 +60,10 @@ const setResourcesSnapshot = (resources: Resource[] | undefined, loading = false
     refetch: vi.fn(),
   });
 };
+
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: mockActiveAlerts }),
+}));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
@@ -617,6 +622,36 @@ describe('ProxmoxPageSurface contract', () => {
     expect(mockBackupsTableProps).toHaveBeenCalledWith(
       expect.objectContaining({ workloads: [guest], servers: [guest, agent, server] }),
     );
+  });
+
+  it('hands the backups table a live alert lookup for datastore fill forecasts', () => {
+    mockPathname.mockReturnValue('/proxmox/backups');
+    const forecast = { id: 'a1', resourceId: 'pbs-main-store', level: 'warning' };
+    mockActiveAlerts.a1 = forecast;
+    mockActiveAlerts.a2 = { id: 'a2', resourceId: 'pbs-other-store', level: 'warning' };
+    // The Backups tab mounts only once a PBS server is in the estate.
+    const server = makeResource({
+      id: 'pbs-1',
+      type: 'pbs',
+      platformType: 'proxmox-pbs',
+      sources: ['pbs'],
+    });
+    mockUseUnifiedResources.mockImplementation((options: { cacheKey: string }) => ({
+      resources: () => (options.cacheKey === 'proxmox-backups-shell' ? [server] : []),
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    }));
+    try {
+      renderSurface();
+      const props = mockBackupsTableProps.mock.calls.at(-1)?.[0] as {
+        datastoreAlerts?: (ids: string[]) => unknown[];
+      };
+      expect(props.datastoreAlerts?.(['pbs-main-store'])).toEqual([forecast]);
+    } finally {
+      delete mockActiveAlerts.a1;
+      delete mockActiveAlerts.a2;
+    }
   });
 
   it('places workload controls beside the workload table they affect', () => {
