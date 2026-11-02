@@ -440,7 +440,11 @@ export function useTrueNASSettingsPanelState({
       notificationStore.success('TrueNAS connection successful');
       return true;
     } catch (error) {
-      if (isCurrent())
+      // Access belongs to the reader, not the tested draft. A Name/credential
+      // edit may obsolete a result, but must not hide this reader's denial.
+      if (!isCurrentReader(accepted)) return false;
+      if (withdrawOnDenial(error)) notificationStore.error(loadingError()!);
+      else if (isCurrent())
         handleActionError(
           error,
           'TrueNAS connection failed',
@@ -499,8 +503,14 @@ export function useTrueNASSettingsPanelState({
       setMonitoredSystemPreview(preview);
       return preview;
     } catch (error) {
+      // An obsolete reader cannot withdraw its replacement; an obsolete draft
+      // on the same reader still must withdraw on lost access.
+      if (!isCurrentReader(accepted)) return null;
+      if (withdrawOnDenial(error)) {
+        notificationStore.error(loadingError()!);
+        return null;
+      }
       if (!isCurrent()) return null;
-      if (withdrawOnDenial(error)) return null;
       const unavailableState = monitoredSystemImpactPreviewUnavailableStateFromError(error);
       if (unavailableState) setMonitoredSystemPreviewUnavailableState(unavailableState);
       else

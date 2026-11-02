@@ -292,6 +292,121 @@ describe('TrueNAS reader lifetime', () => {
     expect(notificationStore.success).not.toHaveBeenCalled();
   });
 
+  for (const action of ['Test', 'Preview'] as const)
+    for (const status of [401, 403])
+      for (const saved of [true, false])
+        it(`withdraws edited ${saved ? 'saved' : 'new'} draft on ${action} HTTP ${status}, then recovers only by fresh read`, async () => {
+          const method =
+            action === 'Test'
+              ? saved
+                ? 'testSavedConnection'
+                : 'testConnection'
+              : saved
+                ? 'previewSavedConnection'
+                : 'previewConnection';
+          const pending = deferred<never>();
+          vi.mocked(TrueNASAPI[method]).mockReturnValueOnce(pending.promise);
+          const { result } = renderHook(() => useTrueNASSettingsPanelState());
+          await ready(result);
+          const old = result.connections()[0];
+          if (saved) openDraft(result);
+          else {
+            result.openCreateDialog();
+            result.updateForm({
+              host: 'nas.example.invalid',
+              username: 'monitor',
+              apiKey: 'synthetic-draft',
+            });
+          }
+          const task = action === 'Test' ? result.testCurrentForm() : result.previewCurrentForm();
+          expect(TrueNASAPI[method]).toHaveBeenCalledTimes(1);
+          result.updateForm({ name: 'Name edited while request is pending' });
+          expect(result.form().name).toBe('Name edited while request is pending');
+          pending.reject({ status, message: 'private-provider-detail' });
+          await task;
+          expect(result.connections()).toEqual([]);
+          expect(result.dialogOpen()).toBe(false);
+          expect(result.form().apiKey).toBe('');
+          expect(result.form().username).toBe('');
+          expect(result.monitoredSystemPreview()).toBeNull();
+          expect(result.monitoredSystemPreviewError()).toBeNull();
+          expect(result.loadingError()).toContain('access could not be verified');
+          expect(result.testing() || result.previewing()).toBe(false);
+          expect(notificationStore.success).not.toHaveBeenCalled();
+          expect(notificationStore.error).toHaveBeenCalledWith(result.loadingError());
+          expect(notificationStore.error).not.toHaveBeenCalledWith('private-provider-detail');
+          expect(logger.error).not.toHaveBeenCalled();
+          result.openEditDialog(old);
+          result.openCreateDialog();
+          expect(result.dialogOpen()).toBe(false);
+          expect(TrueNASAPI.listConnections).toHaveBeenCalledTimes(1);
+          expect(TrueNASAPI[method]).toHaveBeenCalledTimes(1); // No replay on denial.
+          await result.loadConnections();
+          await ready(result);
+          result.openEditDialog(result.connections()[0]);
+          expect(result.form().apiKey).toBe('');
+          expect(result.loadingError()).toBeNull();
+          vi.mocked(TrueNASAPI.testSavedConnection).mockResolvedValueOnce({
+            success: true,
+          } as never);
+          expect(await result.testCurrentForm()).toBe(true);
+          expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection successful');
+        });
+
+  for (const action of ['Test', 'Preview'] as const)
+    for (const status of [401, 403])
+      it(`ignores old-reader ${action} HTTP ${status} after an A-to-B-to-A replacement`, async () => {
+        const method = action === 'Test' ? 'testSavedConnection' : 'previewSavedConnection';
+        const pending = deferred<never>();
+        vi.mocked(TrueNASAPI[method]).mockReturnValueOnce(pending.promise);
+        const [currentUser, setUser] = createSignal('a');
+        const { result } = renderHook(() => useTrueNASSettingsPanelState({ currentUser }));
+        await ready(result);
+        openDraft(result);
+        const task = action === 'Test' ? result.testCurrentForm() : result.previewCurrentForm();
+        const options = vi.mocked(TrueNASAPI[method]).mock.calls[0][2]!;
+        result.updateForm({ name: 'Obsolete edited draft' });
+        setUser('b');
+        setUser('a');
+        await ready(result);
+        openDraft(result);
+        pending.reject({ status, message: 'obsolete-private-detail' });
+        await task;
+        expect(options.signal?.aborted).toBe(true);
+        expect(result.connections()).toHaveLength(1);
+        expect(result.dialogOpen()).toBe(true);
+        expect(result.form().apiKey).toBe('synthetic-draft');
+        expect(result.loadingError()).toBeNull();
+        expect(result.testing() || result.previewing()).toBe(false);
+        expect(notificationStore.error).not.toHaveBeenCalled();
+        expect(notificationStore.success).not.toHaveBeenCalled();
+        expect(logger.error).not.toHaveBeenCalled();
+        expect(TrueNASAPI.listConnections).toHaveBeenCalledTimes(3);
+      });
+
+  for (const action of ['Test', 'Preview'] as const)
+    it(`ignores a stale-draft ${action} ordinary error without withdrawing the current reader`, async () => {
+      const method = action === 'Test' ? 'testSavedConnection' : 'previewSavedConnection';
+      const pending = deferred<never>();
+      vi.mocked(TrueNASAPI[method]).mockReturnValueOnce(pending.promise);
+      const { result } = renderHook(() => useTrueNASSettingsPanelState());
+      await ready(result);
+      openDraft(result);
+      const task = action === 'Test' ? result.testCurrentForm() : result.previewCurrentForm();
+      result.updateForm({ name: 'Keep this current draft' });
+      pending.reject({ status: 500, message: 'obsolete-provider-detail' });
+      await task;
+      expect(result.connections()).toHaveLength(1);
+      expect(result.dialogOpen()).toBe(true);
+      expect(result.form().name).toBe('Keep this current draft');
+      expect(result.form().apiKey).toBe('synthetic-draft');
+      expect(result.loadingError()).toBeNull();
+      expect(result.monitoredSystemPreviewError()).toBeNull();
+      expect(result.testing() || result.previewing()).toBe(false);
+      expect(notificationStore.error).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
   it('starts a single mutation and does not retarget it while busy', async () => {
     const pending = deferred<never>();
     vi.mocked(TrueNASAPI.updateConnection).mockReturnValueOnce(pending.promise);
