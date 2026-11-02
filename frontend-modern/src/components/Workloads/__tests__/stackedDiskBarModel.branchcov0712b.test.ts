@@ -424,6 +424,44 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
       expect(p.barColor).toBe(CRITICAL); // getMetricColorRgba(90)
     });
 
+    it('keeps the max summary when only one of several reported disks is measured', () => {
+      // An unmeasured sibling must not drop the host to a low aggregate and
+      // hide the full disk it can still read.
+      const p = buildStackedDiskBarPresentation(
+        {
+          mode: 'aggregate',
+          summaryStrategy: 'max',
+          aggregateDisk: makeDisk({ total: 1000, used: 200, free: 800, usage: 20 }),
+          disks: [
+            makeDisk({ mountpoint: '/data', total: 100, used: 95, free: 5, usage: 95 }),
+            makeDisk({ mountpoint: '/scratch', total: 100, used: 0, usage: -1 }),
+          ],
+        },
+        400,
+      );
+      expect(p.displayPercentValue).toBe(95);
+      expect(p.maxLabelShort).toBe('max');
+      expect(p.showMaxLabel).toBe(true);
+      expect(p.barColor).toBe(CRITICAL);
+    });
+
+    it('drops the max marker rather than clip the percentage in a narrow cell', () => {
+      const p = buildStackedDiskBarPresentation(
+        {
+          mode: 'aggregate',
+          summaryStrategy: 'max',
+          disks: [
+            makeDisk({ mountpoint: '/a', total: 100, used: 30, free: 70, usage: 30 }),
+            makeDisk({ mountpoint: '/b', total: 100, used: 61, free: 39, usage: 61 }),
+          ],
+        },
+        30,
+      );
+      expect(p.displayPercentValue).toBe(61);
+      expect(p.showMaxLabel).toBe(false);
+      expect(p.maxLabelFull).toBe('Highest usage: /b 61%');
+    });
+
     it('builds vertical bars clamped to 0..100 and the vertical-bars container class', () => {
       // verticalBarsMode = mode === 'vertical-bars' && hasDisks; fillPercent uses
       // Math.max(0, Math.min(percent, 100)) -> exercises the upper clamp. A

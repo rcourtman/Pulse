@@ -183,7 +183,7 @@ const ALERT_LEVEL_RANK: Record<Alert['level'], number> = { critical: 0, warning:
 // "agent:<id>/raid:<device>", "docker:<id>/<container>".
 const getUnifiedResourceAlertKeys = (
   resource: Resource,
-): { exact: Set<string>; machine: string[] } => {
+): { exact: Set<string>; componentPrefixes: string[] } => {
   const exact = new Set<string>();
   const add = (value: string | undefined) => {
     const trimmed = value?.trim();
@@ -211,6 +211,7 @@ const getUnifiedResourceAlertKeys = (
   }
 
   const machine = new Set<string>();
+  const componentPrefixes: string[] = [];
   if (resource.type === 'agent' || resource.type === 'docker-host') {
     const agentId = getActionableAgentIdFromResource(resource);
     if (agentId) machine.add(agentId.startsWith('agent:') ? agentId : `agent:${agentId}`);
@@ -227,9 +228,15 @@ const getUnifiedResourceAlertKeys = (
         ? resource.metricsTarget.resourceId?.trim()
         : undefined);
     if (dockerHostId) machine.add(`docker:${dockerHostId}`);
+    // A Proxmox node's physical disks raise health and wearout alerts on
+    // "<instance>:<node>:disk:<device>" (ProxmoxPhysicalDiskAlertResourceID).
+    const instance = resource.proxmox?.instance?.trim();
+    const nodeName = resource.proxmox?.nodeName?.trim();
+    if (instance && nodeName) componentPrefixes.push(`${instance}:${nodeName}:disk:`);
   }
   machine.forEach(add);
-  return { exact, machine: [...machine] };
+  componentPrefixes.push(...[...machine].map((key) => `${key}/`));
+  return { exact, componentPrefixes };
 };
 
 /**
@@ -252,13 +259,12 @@ export function getAlertsForUnifiedResource(
   alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
 ): Alert[] {
   if (!alertsEnabled) return [];
-  const { exact, machine } = getUnifiedResourceAlertKeys(resource);
-  const machinePrefixes = machine.map((key) => `${key}/`);
+  const { exact, componentPrefixes } = getUnifiedResourceAlertKeys(resource);
   return Object.values(activeAlerts)
     .filter(
       (alert) =>
         exact.has(alert.resourceId) ||
-        machinePrefixes.some((prefix) => alert.resourceId?.startsWith(prefix)),
+        componentPrefixes.some((prefix) => alert.resourceId?.startsWith(prefix)),
     )
     .sort(
       (a, b) =>

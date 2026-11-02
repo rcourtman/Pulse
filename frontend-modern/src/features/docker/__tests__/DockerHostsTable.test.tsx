@@ -82,11 +82,13 @@ vi.mock('@/components/Workloads/StackedDiskBar', () => ({
     disks?: Disk[];
     aggregateDisk?: Disk;
     mode?: string;
+    summaryStrategy?: string;
     thresholds?: MetricDisplayThresholds | null;
   }) => (
     <div
       data-testid="stacked-disk-bar"
       data-mode={props.mode ?? ''}
+      data-summary-strategy={props.summaryStrategy ?? ''}
       data-disks={String(props.disks?.length ?? 0)}
       data-aggregate-usage={String(props.aggregateDisk?.usage ?? '')}
       data-thresholds={formatThresholds(props.thresholds)}
@@ -187,7 +189,9 @@ describe('DockerHostsTable', () => {
     expect(screen.getByTestId('responsive-cpu-metric')).toHaveAttribute('data-running', 'true');
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-used', '3200');
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-total', '8000');
-    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-mode', 'vertical-bars');
+    // One bar shape for every host: a multi-disk host reads its fullest disk.
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-mode', 'aggregate');
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-summary-strategy', 'max');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '2');
   });
 

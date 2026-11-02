@@ -23,6 +23,22 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Host Disk columns draw one bar shape (2 November 2026)
+
+Proxmox node, Docker host and Machines tables render a host with more than one
+agent-reported disk through `StackedDiskBar` `mode="aggregate"` with
+`summaryStrategy="max"`: the single horizontal bar a one-disk host gets, sized
+and coloured by the fullest measured disk and labelled `NN% max` when the cell
+is wide enough, so a Disk column reads in one shape down its rows. The
+`vertical-bars` micro-bars are no longer used by these tables. The max summary
+holds while any reported disk is unmeasured, so a full disk is not hidden
+behind a low aggregate. The Proxmox node row's alert accent reads the node's
+own alerts through `getUnifiedResourceAlertStyles`, like the other host
+tables, and no longer tints for a guest's alert. `DockerHostsTable.test.tsx`,
+`AgentsMachinesTable.test.tsx` and `ProxmoxNodesTable.test.tsx` cover the
+rendered shape and the accent. No resource identity, projection or metric
+change.
+
 ### Backup views share bounded owned-focus restoration
 
 Coverage posture sorting and By date regrouping use the same existing backups

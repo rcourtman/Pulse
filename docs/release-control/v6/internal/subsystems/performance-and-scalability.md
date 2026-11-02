@@ -3423,13 +3423,15 @@ resize-observer plus tooltip lifecycle live in
 `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts`.
 Future disk-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state and presentation branching into the shell.
-The multi-disk `vertical-bars` mode (Proxmox nodes, Machines, and Docker
-hosts with more than one agent-reported disk) draws one equal-weight micro-bar
-per disk and labels the cell with the fullest disk's usage percentage, derived
-in the model from the existing max-disk summary, so a multi-disk host answers
-"how close is this host to running out of space?" at a glance in Bars mode
-instead of only on hover or in Trends mode. The label names no disk in the
-row; the mount and the per-disk breakdown stay in the title and tooltip.
+Proxmox nodes, Machines, and Docker hosts with more than one agent-reported
+disk render the `aggregate` mode with `summaryStrategy="max"`: the same
+horizontal bar a single-disk host gets, sized and coloured by the fullest
+disk and labelled with its percentage plus `max`, so every row in a host
+Disk column reads in one shape and compares down the column. The label names
+no disk in the row; the mount and the per-disk breakdown stay in the title
+and tooltip. The `vertical-bars` mode (one equal-weight micro-bar per disk,
+labelled with the fullest disk's percentage) is no longer used by those
+tables; mixing it with single-disk bars gave one column three shapes.
 The dashboard stacked memory bar now follows that same pattern: the shell
 stays in `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`,
 while memory-capacity math, balloon/swap tooltip derivation, anomaly label

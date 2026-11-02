@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "daa183bfda853796173c8f5f0a1e04b4ff084fcb",
+  "verified_at": "2026-11-02T09:12:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/components/shared/FilterButtonGroup.tsx",
+    "frontend-modern/src/components/shared/filterButtonGroupModel.ts",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "ff836f9655be9d655411ee86f6e97322bdcb8fa24e1181cadd1c041760d6a17d",
+    "frontend-modern/src/components/shared/FilterButtonGroup.tsx": "c9aa539958b8fce09fe851aeed65e21e1a60cd421854682427abf922e73e870c",
+    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "428db55df9674f1ddc52f1d5efc0aac98d6c5d1d2d9d5793b506962ced9acca1",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "c6f5d0d926559661ea3b4e1313ac74379c23b4644e3ce6f75d37e7e6c659946c",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "7c70e1f7160bac309c9c96ebc475ef7ecdcc736486ba1c57b7c51369cabc4512",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "3566f0c84a3b186c6a62abb67de0324c8562d156dfc29361d563ec4b7da92589",
+    "frontend-modern/src/utils/alerts.ts": "99fae16fcef2e6fa030a18509818c117adb6ee6de02668d4a19b70fda1c2d0ad"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/standalone/machines",
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "production vite build of this change served by vite preview on pulse-dev against a mock backend built from origin/main (4 Proxmox nodes, 3 machines, 2 Docker hosts, dark theme)",
+    "multi-disk Proxmox nodes and machines, single-disk Proxmox node and Docker hosts",
+    "View preferences open with Grouped, Bars, History, Guest and Show selected",
+    "Mac in-app preview (dark and light themes) for the toggle colours before the pulse-dev pass"
+  ],
+  "interactions": [
+    "read every host Disk cell at 1440 and 390: one horizontal bar per row, no vertical micro-bars, multi-disk rows labelled 'NN% max' on desktop and 'NN%' on phone, single-disk rows keep used/total on desktop",
+    "measured disk labels for clipping (scrollWidth vs clientWidth): none clipped at either width; row heights 33px desktop, 32px phone; no horizontal page overflow",
+    "hovered a multi-disk machine's disk bar: the Disk Breakdown tooltip lists each mount with its percentage and capacity",
+    "opened View preferences: selected toggles render blue text with a blue ring, unselected stay muted; Layout and Metrics icons sit on the label's line (button height 28px)",
+    "no page errors in any route at either width"
+  ]
+}

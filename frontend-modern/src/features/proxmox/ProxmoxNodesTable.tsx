@@ -10,7 +10,7 @@ import {
 } from 'solid-js';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { getAlertsForResource, getAlertStyles } from '@/utils/alerts';
+import { getAlertsForResource, getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -510,8 +510,11 @@ export const ProxmoxNodesTable: Component<{
                   const currentNode = drawerNode();
                   return currentNode ? hasCurrentProxmoxUpdateEvidence(currentNode) : false;
                 };
+                // The node's own alerts, the set its drawer lists, as on every
+                // other host table. Matching on the node name would also tint
+                // the row for any guest's alert, with nothing in it to say why.
                 const alertStyles = createMemo(() =>
-                  getAlertStyles(node.id, activeAlerts, alertsEnabled(), node.name),
+                  getUnifiedResourceAlertStyles(node, activeAlerts, alertsEnabled()),
                 );
                 const alertAccentTone = createMemo<
                   'critical' | 'warning' | 'acknowledged' | undefined
@@ -705,12 +708,11 @@ export const ProxmoxNodesTable: Component<{
                               fallback={
                                 <StackedDiskBar
                                   mode={
-                                    usesCompactMetrics()
+                                    usesCompactMetrics() || (node.agent?.disks?.length ?? 0) > 1
                                       ? 'aggregate'
-                                      : (node.agent?.disks?.length ?? 0) > 1
-                                        ? 'vertical-bars'
-                                        : undefined
+                                      : undefined
                                   }
+                                  summaryStrategy="max"
                                   disks={normalizeDiskArray(node.agent?.disks)}
                                   aggregateDisk={aggregateDisk()}
                                   thresholds={diskThresholds()}

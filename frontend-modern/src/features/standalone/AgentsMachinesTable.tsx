@@ -1833,7 +1833,8 @@ export const AgentsMachinesTable: Component<{
                               fallback={telemetryFallbackMarker()}
                             >
                               <StackedDiskBar
-                                mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
+                                mode={(disks()?.length ?? 0) > 1 ? 'aggregate' : undefined}
+                                summaryStrategy="max"
                                 disks={disks()}
                                 aggregateDisk={aggregateDisk()}
                                 thresholds={diskThresholds()}

@@ -101,7 +101,7 @@ export function FilterButtonGroup<T extends string | number>(props: FilterButton
                     )
                   }
                 >
-                  <span>{renderedLabel()}</span>
+                  <span class="inline-flex items-center gap-1">{renderedLabel()}</span>
                 </Show>
                 <Show when={option().count !== undefined}>
                   <span

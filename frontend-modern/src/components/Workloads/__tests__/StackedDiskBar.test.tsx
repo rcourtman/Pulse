@@ -619,6 +619,27 @@ describe('StackedDiskBar', () => {
       // Bar color should be critical (based on max disk at 92%)
       expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
     });
+
+    it('draws a multi-disk host as one bar of its fullest disk, as host tables do', () => {
+      const { container } = render(() => (
+        <StackedDiskBar
+          mode="aggregate"
+          summaryStrategy="max"
+          aggregateDisk={makeDisk({ usage: 20, used: 20, total: 100 })}
+          disks={[
+            makeDisk({ mountpoint: '/', usage: 24, used: 24, total: 100 }),
+            makeDisk({ mountpoint: '/data', usage: 93, used: 93, total: 100 }),
+            makeDisk({ mountpoint: '/scratch', usage: -1 }),
+          ]}
+        />
+      ));
+
+      // Same shape as a single-disk row: one fill, no per-disk micro-bars.
+      expect(container.querySelectorAll('[data-stacked-disk-fill="single"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[data-stacked-disk-fill="vertical"]')).toHaveLength(0);
+      expect(getSingleBarFill(container)?.getAttribute('fill')).toContain('239, 68, 68');
+      expect(screen.getByText('93%')).toBeInTheDocument();
+    });
   });
 
   describe('vertical-bars mode', () => {

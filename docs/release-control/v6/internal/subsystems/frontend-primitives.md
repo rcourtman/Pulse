@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Compact toggles mark selection by colour, and icon labels stay on one line (2 November 2026)
+
+The compact `FilterButtonGroup` variant (View preferences, type and status
+chips, the history range) marked its default-tone selection only with
+`bg-surface` on a `bg-surface-hover` track. In dark mode that fill is darker
+than the track, so the selected option read as unselected. The default active
+tone in `filterButtonGroupModel.ts` now carries blue text and a blue ring
+(`text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-800`), as the
+default and segmented variants already do; explicitly toned options keep their
+own colours. A `visualLabel` that contains an icon wraps in an
+`inline-flex items-center gap-1` span in `FilterButtonGroup.tsx`, because
+preflight makes an svg a block box and stacked Layout and Metrics icons above
+their text. `FilterButtonGroup.test.tsx` covers the selected tone and the icon
+row. No option, value, keyboard or count behaviour changes.
+
 ### Audit viewer state belongs to its reader and accepted page
 
 The existing Audit Log panel receives live principal, non-secret token/scope

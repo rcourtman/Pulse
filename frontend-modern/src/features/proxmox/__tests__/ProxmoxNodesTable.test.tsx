@@ -528,6 +528,46 @@ describe('ProxmoxNodesTable', () => {
     expect(offlineRow).toHaveTextContent('Offline');
   });
 
+  it("accents a node row for its own disks' alerts, not for its guests' alerts", () => {
+    const nodeAlert = (id: string, resourceId: string) => ({
+      id,
+      resourceId,
+      node: 'pve-node-1',
+      level: 'critical',
+      type: 'disk-health',
+      acknowledged: false,
+    });
+    const renderNode = () =>
+      render(() => (
+        <ProxmoxNodesTable
+          nodes={[
+            makeNodeResource({
+              proxmox: { clusterName: 'homelab', instance: 'homelab', nodeName: 'pve-node-1' },
+            }),
+          ]}
+          guests={[]}
+          emptyIcon={<span />}
+          emptyTitle="No Proxmox VE nodes"
+          emptyDescription="No nodes"
+        />
+      ));
+
+    // A guest on the node shares its node name; its row carries that alert.
+    activeAlertsMock.value = { guest: nodeAlert('guest', 'homelab:pve-node-1:101') };
+    renderNode();
+    expect(screen.getByText('pve-node-1').closest('tr')).not.toHaveAttribute(
+      'data-workload-alert-accent',
+    );
+    cleanup();
+
+    activeAlertsMock.value = { disk: nodeAlert('disk', 'homelab:pve-node-1:disk:/dev/sda') };
+    renderNode();
+    expect(screen.getByText('pve-node-1').closest('tr')).toHaveAttribute(
+      'data-workload-alert-accent',
+      'critical',
+    );
+  });
+
   it('does not present a retained stale update count as current in the node row', () => {
     render(() => (
       <ProxmoxNodesTable
