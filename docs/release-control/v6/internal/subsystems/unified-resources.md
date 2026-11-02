@@ -222,6 +222,14 @@ narrow browser proof exercises the same producer through the inventory consumer
 with native interactions and inspected pixels. No API, provider, guest, polling,
 auth, resource identity or protection-policy change, nor installed recovery claim.
 
+### Storeless PBS task history is not an unread job family (2 November 2026)
+
+The Backups Jobs column reads `PBSJobHealthEvidence.evidenceScope`: a
+storeless entry that is not OK marks a job family unknown across the datastores
+of a PBS resource only when it is a failed read (`partial-read` or carrying an
+`error`) or a failed or warned run. A storeless `observed-task` run whose
+status is merely unclear no longer does.
+
 ### Backup servers rows name the datastore, then its PBS resource (2 November 2026)
 
 `ProxmoxBackupServersTable` still renders one row per datastore of a `pbs`

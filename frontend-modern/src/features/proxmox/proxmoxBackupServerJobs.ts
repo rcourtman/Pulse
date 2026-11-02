@@ -86,11 +86,22 @@ export function summarizeDatastoreJobs(
   const store = datastoreName?.trim();
   if (!store || !evidence?.length) return { state: 'none', label: '—', entries: [] };
 
-  // A family whose read failed for the whole server (no store attached) leaves
-  // every datastore's result for that family unknown, never silently OK.
+  // A family whose read failed for the whole server (a partial read with no
+  // store attached) leaves every datastore's result for that family unknown,
+  // never silently OK. PBS task history arrives with no store too: a failed or
+  // warned run there keeps that same server-wide signal, but a run whose
+  // status is merely unclear is not a failed read, and one such run among
+  // hundreds must not mark every datastore unknown while its configured jobs
+  // report their results.
   const unreadFamilies = new Set(
     evidence
-      .filter((entry) => !entry.store?.trim() && stateForPosture(entry.posture) !== 'ok')
+      .filter((entry) => {
+        if (entry.store?.trim()) return false;
+        const state = stateForPosture(entry.posture);
+        if (state === 'ok') return false;
+        const failedRead = entry.evidenceScope === 'partial-read' || Boolean(entry.error?.trim());
+        return failedRead || state === 'critical' || state === 'warning';
+      })
       .map((entry) => normalize(entry.family))
       .filter(isDatastoreFamily),
   );
