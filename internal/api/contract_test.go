@@ -20791,6 +20791,7 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`Manifest:                     manifest`,
 		`agentcapabilities.FetchManifest(context.Background(), manifestClient, *baseURL)`,
 		`agentcapabilities.StreamMCPEventNotifications(ctx, pulseMCPAgentSurfaceHTTPDoer{}, s.baseURL, path, s.token, func(notification agentcapabilities.JSONRPCRequest) error`,
+		`agentcapabilities.DoAgentHTTPRequest(client, req)`,
 	}
 	for _, fragment := range required {
 		if !strings.Contains(src, fragment) {
@@ -21476,7 +21477,8 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`func StreamAgentSSERecords(`,
 		`NewAgentHTTPRequest(ctx, http.MethodGet, baseURL, path, token, nil)`,
 		`req.Header.Set("Accept", AgentSSEAccept)`,
-		`httpClient(client).Do(req)`,
+		// SSE must use the same redirect-origin boundary as manifest and tool reads.
+		`DoAgentHTTPRequest(client, req)`,
 		`ScanSSERecords(resp.Body, handle)`,
 		`func IsActionableSSERecord(`,
 		`func StreamAgentActionableSSERecords(`,
@@ -21573,6 +21575,8 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`func FetchManifest(`,
 		`func BuildCapabilityHTTPRequest(`,
 		`func CallCapabilityHTTP(`,
+		`func DoAgentHTTPRequest(`,
+		`DoAgentHTTPRequest(client, req)`,
 		`func CallCapabilityHTTPByName(`,
 		`func CallRequestResponseCapabilityHTTPByName(`,
 		`func (r HTTPCallResponse) FailureError() error`,
