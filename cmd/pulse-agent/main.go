@@ -304,6 +304,17 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		return fmt.Errorf("failed to load unified agent configuration: %w", err)
 	}
 
+	// The installer runs this on the verified staged executable before changing
+	// a service or its saved credentials. Use the modules' primary-destination
+	// policy, without logging, enrollment, identity persistence or listeners.
+	if cfg.ValidateURLOnly {
+		if _, err := agenttarget.NormalizePulseURL(cfg.PulseURL, true, cfg.AllowPlaintextHTTP); err != nil {
+			return fmt.Errorf("invalid pulse URL: %w", err)
+		}
+		fmt.Println("Pulse URL validation passed")
+		return nil
+	}
+
 	// 2. Setup Logging
 	logger, closeLogger, err := configureAgentLogger(cfg)
 	if err != nil {
@@ -1167,6 +1178,7 @@ type Config struct {
 	DisableCeph               bool   // Disable local Ceph status polling
 	DisableClusterPeerSensors bool   // Keep Proxmox monitoring local and skip SSH sensor collection from cluster peers
 	SelfTest                  bool   // Perform self-test and exit
+	ValidateURLOnly           bool   // Check primary URL policy without starting or changing an installation
 
 	// AvailabilityTargets are externally probed availability checks assigned to
 	// this agent by the server. Remote config is the only source.
@@ -1389,6 +1401,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	disableClusterPeerSensorsFlag := fs.Bool("disable-cluster-peer-sensors", utils.ParseBool(envDisableClusterPeerSensors), "Skip SSH sensor collection from Proxmox cluster peers")
 	showVersion := fs.Bool("version", false, "Print the agent version and exit")
 	selfTest := fs.Bool("self-test", false, "Perform self-test and exit (used during auto-update)")
+	validateURL := fs.Bool("validate-url", false, "Validate the primary Pulse URL policy and exit without reading credentials, writing state or starting modules")
 
 	var tagFlags multiValue
 	fs.Var(&tagFlags, "tag", "Tag to apply (repeatable)")
@@ -1408,6 +1421,19 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	if *showVersion {
 		fmt.Println(Version)
 		return Config{}, flag.ErrHelp
+	}
+
+	if *validateURL {
+		// Do not let saved credentials, enrollment, observers or log paths make
+		// this read-only URL check touch an existing installation. In particular,
+		// --insecure is not plaintext consent. The installer explicitly disables
+		// plaintext consent, matching the service configuration it will render.
+		securityutil.SetOperatorPlaintextHTTPConsent(*allowPlaintextHTTPFlag)
+		return Config{
+			PulseURL:           strings.TrimSpace(*urlFlag),
+			AllowPlaintextHTTP: *allowPlaintextHTTPFlag,
+			ValidateURLOnly:    true,
+		}, nil
 	}
 
 	// Validation
