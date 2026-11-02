@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "6dfcfed1e1541752938e23b5d6df8aa1aaa6cfd8",
+  "verified_at": "2026-11-02T11:45:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "721a507e3f0b70fb5dff3b3d93bc3e0a733b7fb2ab80283b887ee20eadb96ccd"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev",
+    "By date page order at desktop and phone, and an exception tap on each",
+    "dark theme, desktop and phone layouts"
+  ],
+  "interactions": [
+    "signed in to the private mock backend built from this branch and opened Proxmox > Backups By date at 1440x1000 and 375x812",
+    "desktop: Backup health (457 of 929 protected) beside Backup jobs at the top, the Backup servers table below them, then the By date / Coverage tabs, the activity chart and the search, all in order down the page",
+    "phone: health, jobs, servers, then the restore points starting at the fold (811 px in an 812 px viewport)",
+    "tapped '86 no successful backup' on phone: the page moved to Coverage filtered to reason=no-backup and the restore points scrolled up to 73 px from the top, showing the filtered list",
+    "tapped the same exception on desktop: Coverage filtered and the page did not scroll because the list was already on screen",
+    "no horizontal page overflow at either width"
+  ]
+}
