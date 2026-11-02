@@ -150,6 +150,42 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getOrganizationSharingPanelProps()).toMatchObject({ currentUser: undefined });
     expect(context.getApiAccessPanelProps()).toMatchObject({ currentUser: undefined });
   });
+  it('binds audit webhooks to the live principal and explicit read/write capabilities', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    expect(context.getAuditWebhookPanelProps()).toEqual({
+      currentUser: undefined,
+      canRead: false,
+      canManage: false,
+    });
+    setStatus({
+      currentUsername: 'audit-reader',
+      settingsCapabilities: { auditWebhooksRead: true, auditWebhooksWrite: false },
+    } as SecurityStatus);
+    expect(context.getAuditWebhookPanelProps()).toEqual({
+      currentUser: 'audit-reader',
+      canRead: true,
+      canManage: false,
+    });
+    setStatus({
+      currentUsername: 'audit-writer',
+      settingsCapabilities: { auditWebhooksRead: true, auditWebhooksWrite: true },
+    } as SecurityStatus);
+    expect(context.getAuditWebhookPanelProps()).toEqual({
+      currentUser: 'audit-writer',
+      canRead: true,
+      canManage: true,
+    });
+    setStatus({ currentUsername: '', settingsCapabilities: {} } as SecurityStatus);
+    expect(context.getAuditWebhookPanelProps()).toEqual({
+      currentUser: '',
+      canRead: false,
+      canManage: false,
+    });
+  });
   it('binds Roles to the live principal and explicit roles capability', () => {
     const [status, setStatus] = createSignal<SecurityStatus | null>(null);
     const context = buildSettingsPanelRegistryContext({

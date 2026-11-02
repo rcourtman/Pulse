@@ -125,6 +125,8 @@ export function buildSettingsPanelRegistryContext(
       canManage: settingsCapabilities()?.relayWrite === true,
     }),
     getAuditWebhookPanelProps: () => ({
+      currentUser: currentUser(),
+      canRead: settingsCapabilities()?.auditWebhooksRead === true,
       canManage: settingsCapabilities()?.auditWebhooksWrite === true,
     }),
     getRolesPanelProps: () => ({
