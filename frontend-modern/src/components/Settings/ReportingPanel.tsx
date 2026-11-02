@@ -185,7 +185,7 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
     <div class="space-y-6">
       <Show when={actionError() || successNotice()}>
         <Portal>
-          <div class="fixed inset-x-3 top-28 z-50 sm:left-auto sm:right-4 sm:w-96">
+          <div class="fixed inset-x-3 top-28 z-50 rounded-lg bg-surface sm:left-auto sm:right-4 sm:w-96">
             <InlineNotice
               role={actionError() ? 'alert' : 'status'}
               aria-live={actionError() ? 'assertive' : 'polite'}
