@@ -783,7 +783,7 @@ floors = {
     "github.com/prometheus/common": (0, 72, 1),
     "github.com/shirou/gopsutil/v4": (4, 26, 9),
     "golang.org/x/crypto": (0, 58, 0),
-    "golang.org/x/net": (0, 61, 0),
+    "golang.org/x/net": (0, 62, 0),
     "golang.org/x/sync": (0, 24, 0),
     "golang.org/x/sys": (0, 49, 0),
     "golang.org/x/term": (0, 47, 0),
