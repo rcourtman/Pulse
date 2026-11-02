@@ -231,12 +231,20 @@ func TestTrueNASHostIOHistoryWithPartialStore(t *testing.T) {
 			rec := request(token, "org-host-io", "agent", "host-io-target", "")
 			var result struct {
 				Metrics map[string][]hostIOHistoryPoint
+				Source  *string
 			}
 			if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &result) != nil {
 				t.Fatalf("host history %d %s", rec.Code, rec.Body.String())
 			}
 			if (len(result.Metrics["diskread"]) > 0) != test.read || (len(result.Metrics["diskwrite"]) > 0) != test.write {
 				t.Fatalf("host I/O completeness: read=%d write=%d want %t/%t", len(result.Metrics["diskread"]), len(result.Metrics["diskwrite"]), test.read, test.write)
+			}
+			if test.read || test.write {
+				if result.Source != nil {
+					t.Fatal("mixed native/stored history claimed a single source")
+				}
+			} else if result.Source == nil || *result.Source != "store" {
+				t.Fatal("unchanged stored history lost its source hint")
 			}
 			if f.reads.Load()-before != 1 || other.reads.Load() != 0 {
 				t.Fatalf("host fallback read other appliance or lost its one-request bound: reads %d/%d", f.reads.Load()-before, other.reads.Load())

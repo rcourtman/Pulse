@@ -7384,6 +7384,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		// Convert to frontend format
 		if response == nil {
 			apiData := make(map[string][]map[string]interface{})
+			mixedHostHistory := false
 			for metric, points := range metricsMap {
 				apiPoints := make([]map[string]interface{}, len(points))
 				for i, p := range points {
@@ -7425,7 +7426,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 						}
 						if len(withinWindow) > 0 {
 							apiData[metric] = buildHistoryPoints(withinWindow, stepSecs)
-							source = historySourceMemory
+							mixedHostHistory = true
 						}
 					}
 				}
@@ -7463,6 +7464,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				"end":          end.UnixMilli(),
 				"metrics":      apiData,
 				"source":       source,
+			}
+			if mixedHostHistory {
+				// The optional hint describes no single origin in this reply:
+				// stored CPU/capacity survives beside native or ring I/O. Calling
+				// all of it "memory" falsely says the history store has no data.
+				delete(response.(map[string]interface{}), "source")
 			}
 		}
 	}
