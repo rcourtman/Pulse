@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "7bc1dd11583c4b393506d507f4e51af60c3204cf",
+  "verified_at": "2026-11-02T14:52:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx": "deleted",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "416037f92500470a6061820d3b0a63967dd910e0576fd5e47a598e4885b28295",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "dd01cbe4cae6d7425e4649ffd4ea36f4e814a23eb2e2978ed20c402b3448fb65",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "dc1dfafeacb2c52cf588b61a5f740f40888d1d5a8682fb837eba95037c3486f5",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "deleted"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev",
+    "By date with a stale day bookmark at desktop and phone",
+    "dark theme, desktop and phone layouts"
+  ],
+  "interactions": [
+    "built this branch and ran it in mock mode on pulse-dev, signed in and opened Proxmox > Backups > By date at 1440x1000 and 375x812, with an old ?day= bookmark",
+    "desktop: Backup health beside Backup jobs, the Backup servers table, then the By date / Coverage tabs followed directly by the search and the restore point list; no per-day restore point chart, no Count/Volume toggle, no date chip",
+    "the stale day parameter did not narrow the list: 139 rows on desktop and 35 on phone stayed visible",
+    "phone: same order, restore points start at the fold, no horizontal page overflow at either width",
+    "the same build also ran against a copy of the maintainer's real Proxmox and PBS config for the maintainer to inspect"
+  ]
+}

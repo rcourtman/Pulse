@@ -159,23 +159,6 @@ describe('retiring backup evidence retains a usable keyboard position', () => {
     expect(screen.getByPlaceholderText(searchLabel)).toHaveValue('pbs-100');
   });
 
-  it.each([true, false])(
-    'retains focus when a PBS-filtered activity chart is withdrawn (PVE empty: %s)',
-    async (pveEmpty) => {
-      window.history.replaceState({}, '', '/proxmox/backups/date?source=pbs');
-      mount({ pveEmpty });
-      await point();
-      const day = document.querySelector<HTMLButtonElement>(
-        '[data-backup-activity-day="2026-10-04"]',
-      )!;
-      expect(day).not.toBeNull();
-      day.focus();
-      const retry = await fail('pbs');
-      await waitFor(() => expect(retry).toHaveFocus());
-      expect(day).not.toBeInTheDocument();
-    },
-  );
-
   it('retains focus when a failed source removes the unmatched-evidence disclosure', async () => {
     window.history.replaceState({}, '', '/proxmox/backups/coverage');
     mount({ pbsOrphaned: true });

@@ -30,10 +30,6 @@ import {
   PlatformSectionTabs,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
-import {
-  getRecoveryFilterDateLabel,
-  recoveryDateKeyFromTimestamp,
-} from '@/utils/recoveryDatePresentation';
 import type {
   Alert,
   BackupTask,
@@ -44,18 +40,9 @@ import type {
   StorageBackup,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { BackupActivityChart } from './BackupActivityChart';
-import {
-  buildBackupActivityTimeline,
-  getBackupActivityUnknownCount,
-  type BackupActivityMetricMode,
-  type BackupActivityRangeDays,
-  type BackupActivitySegmentKind,
-} from './proxmoxBackupActivityPresentation';
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
-  isCompletedRecoveryArtifact,
   selectWorkloadRecoveryArtifacts,
   recoverableArtifactMatchesSearch,
   type RecoverableArtifact,
@@ -279,13 +266,6 @@ export const ProxmoxBackupsTable: Component<{
       },
       { replace: true },
     );
-  const selectedDateKey = (): string | null => {
-    const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.day);
-    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
-  };
-  const setSelectedDateKey = (value: string | null): void =>
-    setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.day]: value || null }, { replace: true });
-
   const nodeFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.node);
   const setNodeFilter = (value: string): void =>
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.node]: value || null }, { replace: true });
@@ -337,14 +317,11 @@ export const ProxmoxBackupsTable: Component<{
   // pile of unassigned artifacts sorted to the top.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
 
-  // Chronological feed sort and activity-chart controls.
+  // Chronological feed sort.
   const [recoverableSortKey, setRecoverableSortKey] = createSignal<RecoverableSortKey>('created');
   const [recoverableSortDirection, setRecoverableSortDirection] = createSignal<'asc' | 'desc'>(
     'desc',
   );
-  const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
-  const [recoverableMetricMode, setRecoverableMetricMode] =
-    createSignal<BackupActivityMetricMode>('count');
 
   const handleCoverageSort = (key: CoverageSortKey) => {
     if (coverageSortKey() === key) {
@@ -364,7 +341,6 @@ export const ProxmoxBackupsTable: Component<{
   };
   const toggleCoverageExpansion = (key: string) =>
     setExpandedCoverageKey((current) => (current === key ? null : key));
-  const toggleDay = (key: string) => setSelectedDateKey(selectedDateKey() === key ? null : key);
 
   // Retain readable observations while a retry is pending, but never treat a
   // settled failed read as a complete inventory or expose its old artifacts.
@@ -618,15 +594,8 @@ export const ProxmoxBackupsTable: Component<{
     BACKUP_VIEW_TABS.map((tab) => ({ ...tab, path: backupViewPath(tab.id) })),
   );
 
-  // Recoverable artifact feed: PBS snapshots, PVE backup files, and guest snapshot rows.
-  const RECOVERABLE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = [
-    'pbs',
-    'archive',
-    'snapshot',
-  ];
-
-  // The chart and list share every inventory facet. Day selection narrows
-  // only the list so other days remain available to select in the chart.
+  // Recoverable artifact feed: PBS snapshots, PVE backup files, and guest
+  // snapshot rows, narrowed by every inventory facet.
   const scopedRecoverableArtifacts = createMemo(() => {
     const term = search().trim().toLowerCase();
     const filter = recoverableFilter();
@@ -646,48 +615,8 @@ export const ProxmoxBackupsTable: Component<{
     });
   });
 
-  const recoverableTimeline = createMemo(() =>
-    buildBackupActivityTimeline<RecoverableArtifact>(
-      chartRange(),
-      scopedRecoverableArtifacts(),
-      (artifact) => artifact.createdMs,
-      (artifact) =>
-        !isCompletedRecoveryArtifact(artifact)
-          ? null
-          : artifact.sourceKind === 'pbs'
-            ? 'pbs'
-            : artifact.sourceKind === 'archive'
-              ? 'archive'
-              : 'snapshot',
-      {
-        now: new Date(nowMs()),
-        getValue:
-          recoverableMetricMode() === 'volume'
-            ? (artifact) => (artifact.size && artifact.size > 0 ? artifact.size : 0)
-            : undefined,
-      },
-    ),
-  );
-  const hasRecoverableActivityInRange = createMemo(() =>
-    recoverableTimeline().points.some(
-      (point) => point.total > 0 || getBackupActivityUnknownCount(point) > 0,
-    ),
-  );
-  const unknownVolumeCount = createMemo(() =>
-    recoverableTimeline().points.reduce(
-      (sum, point) => sum + getBackupActivityUnknownCount(point),
-      0,
-    ),
-  );
-
   const filteredRecoverableArtifacts = createMemo(() => {
-    const dateKey = selectedDateKey();
-    const list = scopedRecoverableArtifacts().filter(
-      (artifact) =>
-        !dateKey ||
-        (artifact.createdMs !== undefined &&
-          recoveryDateKeyFromTimestamp(artifact.createdMs) === dateKey),
-    );
+    const list = [...scopedRecoverableArtifacts()];
     const sortKey = recoverableSortKey();
     const direction = recoverableSortDirection();
     list.sort((a, b) => {
@@ -786,8 +715,7 @@ export const ProxmoxBackupsTable: Component<{
       typeFilter() ||
       coverageFilter() !== 'all' ||
       exceptionFilter() !== null ||
-      recoverableFilter() !== 'all' ||
-      selectedDateKey(),
+      recoverableFilter() !== 'all',
     );
   const resetBackupsFilters = (): void =>
     setSearchParams(
@@ -984,76 +912,15 @@ export const ProxmoxBackupsTable: Component<{
             </div>
           </Show>
 
-          <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
-            <Show
-              when={scopedRecoverableArtifacts().some(
-                (artifact) => artifact.createdMs === undefined,
-              )}
-            >
-              <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-                Backup entries with unavailable or future dates remain listed. Their ages are
-                unknown. They are excluded from the activity chart and day filters.
-              </p>
-            </Show>
-            <Show
-              when={hasRecoverableActivityInRange()}
-              fallback={
-                <div
-                  ref={retainEvidenceFocus}
-                  class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <span>
-                    No completed restore points with known dates in the selected {chartRange()}
-                    -day window.
-                  </span>
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                      onClick={() => setChartRange(90)}
-                    >
-                      Show 90 days
-                    </button>
-                    <span aria-hidden="true">·</span>
-                    <button
-                      type="button"
-                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                      onClick={() => setChartRange(365)}
-                    >
-                      Show 1 year
-                    </button>
-                  </div>
-                </div>
-              }
-            >
-              <div ref={retainEvidenceFocus} class="space-y-1">
-                <Show when={recoverableMetricMode() === 'volume' && unknownVolumeCount() > 0}>
-                  <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-                    Sizes are unavailable for {unknownVolumeCount()} completed restore{' '}
-                    {unknownVolumeCount() === 1 ? 'point' : 'points'} in this window. Bars show
-                    known volume only. Amber marks days with unknown sizes, not zero volume.
-                  </p>
-                </Show>
-                <BackupActivityChart
-                  title={
-                    recoverableMetricMode() === 'volume'
-                      ? 'Known restore volume per day'
-                      : 'Completed restore points per day'
-                  }
-                  noun="restore point"
-                  segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-                  range={chartRange}
-                  onRangeChange={setChartRange}
-                  timeline={recoverableTimeline}
-                  selectedDateKey={selectedDateKey}
-                  onToggleDay={toggleDay}
-                  metricToggle={{
-                    mode: recoverableMetricMode,
-                    onChange: setRecoverableMetricMode,
-                  }}
-                />
-              </div>
-            </Show>
+          <Show
+            when={
+              view() === 'date' &&
+              scopedRecoverableArtifacts().some((artifact) => artifact.createdMs === undefined)
+            }
+          >
+            <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
+              Backup entries with unavailable or future dates remain listed. Their ages are unknown.
+            </p>
           </Show>
 
           <FilterBar
@@ -1068,24 +935,6 @@ export const ProxmoxBackupsTable: Component<{
             filters={buildBackupsFilters()}
             showClearAll={hasActiveBackupsFilters}
             onClearAll={resetBackupsFilters}
-            searchTrailing={
-              <Show when={view() === 'date' && selectedDateKey() !== null}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedDateKey(null)}
-                  class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
-                  aria-label="Clear date filter"
-                >
-                  <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
-                    Date
-                  </span>
-                  <span class="font-mono tabular-nums">
-                    {getRecoveryFilterDateLabel(selectedDateKey()!)}
-                  </span>
-                  <span aria-hidden="true">×</span>
-                </button>
-              </Show>
-            }
             trailingControls={
               <PlatformResourceCounter
                 visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}

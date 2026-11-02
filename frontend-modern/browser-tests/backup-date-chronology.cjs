@@ -52,7 +52,6 @@ const posture = {
 };
 const runtime = [
   'src/features/proxmox/proxmoxBackupRecoveryModel.ts',
-  'src/features/proxmox/proxmoxBackupActivityPresentation.ts',
   'src/features/proxmox/proxmoxBackupsTableShared.tsx',
   'src/features/proxmox/ProxmoxCoverageTable.tsx',
   'src/features/proxmox/ProxmoxBackupsTable.tsx',
@@ -354,8 +353,6 @@ const runtime = [
         .filter({ hasText: 'Backup entries with unavailable or future dates remain listed' })
         .waitFor();
       assert.equal(await rows('recoverable').getByText('Unknown', { exact: true }).count(), 5);
-      const today = page.getByRole('button', { name: /: 1 backup$/ });
-      await today.waitFor();
       await page.getByText('Running', { exact: true }).waitFor();
       await page.getByText('Failed', { exact: true }).waitFor();
       assert.equal(await page.getByText('not-a-date', { exact: true }).count(), 0);
@@ -397,30 +394,9 @@ const runtime = [
       await capture('date-evidence');
       checks.push({
         check:
-          'PBS/PVE/guest snapshots keep unknown ages, running/failed/verified states and all artifacts; today counts one dated observation only',
+          'PBS/PVE/guest snapshots keep unknown ages, running/failed/verified states and all artifacts',
       });
 
-      const beforeDay = requests.length;
-      if (phone) await today.tap();
-      else {
-        await today.focus();
-        await page.keyboard.press('Enter');
-      }
-      await page.waitForFunction(
-        () =>
-          document.querySelectorAll('[data-proxmox-backup-row="recoverable"]').length === 1 &&
-          new URLSearchParams(location.search).get('day') === '2026-10-04',
-      );
-      assert.equal(await rows('recoverable').getByText('Unknown', { exact: true }).count(), 0);
-      assert.equal(requests.length, beforeDay);
-      await page.getByRole('button', { name: 'Clear date filter', exact: true }).click();
-      await page.waitForFunction(
-        () => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]').length === 6,
-      );
-      checks.push({
-        check:
-          'Keyboard/touch day selection omits unknown/future dates; clearing restores all six without another read',
-      });
       assert.deepEqual(errors, []);
       assert.deepEqual(offOrigin, []);
       assert(requests.every((request) => request.method === 'GET'));

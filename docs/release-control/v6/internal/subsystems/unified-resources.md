@@ -222,6 +222,14 @@ narrow browser proof exercises the same producer through the inventory consumer
 with native interactions and inspected pixels. No API, provider, guest, polling,
 auth, resource identity or protection-policy change, nor installed recovery claim.
 
+### Backup empty states name only filters that exist (2 November 2026)
+
+With the per-day restore point chart removed from Backups By date, no control
+selects a day. The restore point and Coverage empty states now say "Adjust the
+search or filters to see more artifacts / workloads." instead of naming a
+selected day; Coverage had carried the stale day wording since its own day
+filter was dropped. Which rows match is unchanged.
+
 ### Backup-server rows read host figures through the drawer resource (2 November 2026)
 
 Backup servers rows no longer copy the PBS host's CPU, memory or uptime out of

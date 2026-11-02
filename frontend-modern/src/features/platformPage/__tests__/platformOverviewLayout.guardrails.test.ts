@@ -998,11 +998,8 @@ describe('platform overview layout guardrails', () => {
     const filterBarAt = proxmoxBackupsTableSource.indexOf('<FilterBar');
     expect(sectionTabsAt).toBeGreaterThan(-1);
     expect(filterBarAt).toBeGreaterThan(sectionTabsAt);
-    // Its activity day is route state; its chart range is component state.
-    expect(proxmoxBackupsTableSource).toMatch(
-      /setSearchParams\(\{\s*\[PROXMOX_BACKUPS_QUERY_PARAMS\.day\]: value \|\| null \}/,
-    );
-    expect(proxmoxBackupsTableSource).toContain('createSignal<BackupActivityRangeDays>(30)');
+    // The restore points carry no activity chart, so no day or range state.
+    expect(proxmoxBackupsTableSource).not.toContain('BackupActivityChart');
     expect(proxmoxBackupsTableSource).not.toMatch(/PROXMOX_BACKUPS_QUERY_PARAMS\.range\b/);
     for (const call of proxmoxBackupsTableSource.match(/setSearchParams\([^;]*/g) ?? []) {
       expect(call).not.toMatch(/\brange\b|chartRange/);

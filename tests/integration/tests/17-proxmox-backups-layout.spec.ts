@@ -45,12 +45,9 @@ async function openProxmoxBackups(page: Page) {
   // The route commits before the Proxmox snapshot finishes loading. CI can
   // take more than a minute while all E2E shards share the runner, so wait for
   // the destination surface rather than the URL alone.
-  await expect(
-    page.getByText("Completed restore points per day", { exact: true }),
-  ).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByRole("group", { name: "Activity range" })).toBeVisible(
-    { timeout: 60_000 },
-  );
+  await expect(page.getByText(/^\d+ backup entries$/).first()).toBeVisible({
+    timeout: 120_000,
+  });
 }
 
 // Layout guards for the Proxmox Backups section, which replaced the retired
@@ -59,7 +56,7 @@ async function openProxmoxBackups(page: Page) {
 test.describe("Proxmox backups layout guards", () => {
   test.setTimeout(180_000);
 
-  test("activity day selection filters the backups table in place", async ({
+  test("the Backups page stays inside the horizontal viewport", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -72,62 +69,7 @@ test.describe("Proxmox backups layout guards", () => {
     await skipUnlessManagedRuntimeIsMock(page);
     await openProxmoxBackups(page);
 
-    // The Backups section now opens the date view directly.
-    // The chart counts completed restore points, while the inventory keeps
-    // running and failed backup entries available for inspection.
-    const dayButtons = page.getByRole("button", {
-      name: /: \d+ restore points?$/,
-    });
-    await expect.poll(() => dayButtons.count()).toBeGreaterThanOrEqual(7);
-
-    const totalCopy = page.getByText(/^\d+ backup entries$/).first();
-    await expect(totalCopy).toBeVisible();
-    const unfilteredCount = await totalCopy.innerText();
-
-    // Picking a day narrows the table without navigating away.
-    const activeDay = page
-      .getByRole("button", { name: /: [1-9]\d* restore points?$/ })
-      .last();
-    await activeDay.click();
-    await expect(
-      page.getByRole("button", { name: /: [1-9]\d* restore points?, selected$/ }),
-    ).toHaveAttribute("aria-pressed", "true");
-    await expect(page).toHaveURL(/\/proxmox\/backups/);
-    await expect(
-      page.getByText(/^\d+ of \d+ backup entries$/).first(),
-    ).toBeVisible();
-
-    await page
-      .getByRole("button", { name: "Clear date filter", exact: true })
-      .click();
-    await expect(totalCopy).toHaveText(unfilteredCount);
-  });
-
-  test("long-range activity keeps the page inside the horizontal viewport", async ({
-    page,
-  }, testInfo) => {
-    test.skip(
-      testInfo.project.name.startsWith("mobile-"),
-      "Desktop-only backups layout coverage",
-    );
-
-    await page.setViewportSize(DESKTOP_VIEWPORT);
-    await ensureAuthenticated(page);
-    await skipUnlessManagedRuntimeIsMock(page);
-    await openProxmoxBackups(page);
-
-    await page
-      .getByRole("group", { name: "Activity range" })
-      .getByRole("button", { name: "1y" })
-      .click();
-
-    const dayButtons = page.getByRole("button", {
-      name: /: \d+ restore points?$/,
-    });
-    await expect.poll(() => dayButtons.count()).toBe(365);
-
-    // A year of bars must stay contained: the chart may scroll internally but
-    // the page itself must not overflow horizontally.
+    // The page itself must not overflow horizontally.
     const pageOverflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,

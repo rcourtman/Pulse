@@ -119,11 +119,6 @@ describe('restore-point identity without hover', () => {
             expect(created).toHaveTextContent('2026');
           } else {
             expect(created).toHaveTextContent('Unknown');
-            const notice = screen.getByText(
-              /Backup entries with unavailable or future dates remain listed/,
-            );
-            expect(notice).toHaveTextContent('Their ages are unknown.');
-            expect(notice).toHaveTextContent('excluded from the activity chart and day filters');
           }
           expect(panel.querySelector('img')).toBeNull();
         }

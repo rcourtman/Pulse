@@ -2274,23 +2274,21 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 13. `frontend-modern/src/utils/storageSummaryCache.ts`
 14. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
 15. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
-16. `frontend-modern/src/features/proxmox/BackupActivityChart.tsx`
-17. `frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts`
-18. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
-19. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
-20. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
-21. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
-22. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
-23. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
-24. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
-25. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
-26. `internal/recovery/model/posture.go`
-27. `internal/recovery/posture.go`
-28. `internal/recovery/store/store_posture.go`
-29. `frontend-modern/src/hooks/useProtectionPostures.ts`
-30. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
-31. `internal/mock/recovery_points.go`
-33. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
+16. `frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts`
+17. `frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx`
+18. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
+19. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
+20. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
+21. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
+22. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
+23. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
+24. `internal/recovery/model/posture.go`
+25. `internal/recovery/posture.go`
+26. `internal/recovery/store/store_posture.go`
+27. `frontend-modern/src/hooks/useProtectionPostures.ts`
+28. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
+29. `internal/mock/recovery_points.go`
+30. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
 
@@ -5068,13 +5066,29 @@ observed daily growth. The page owns the live alert store and passes a lookup
 through `ProxmoxBackupsTable`'s `datastoreAlerts`, so the table renders without
 an alerts provider and shows no forecast when none is given.
 
+### Restore points drop the per-day chart (2 November 2026)
+
+By date no longer draws "Completed restore points per day" (or its Volume
+mode, range picker and day filter). Beside the Backup jobs card it read as the
+same chart, yet it counted only points that still exist, bucketed by creation
+day: pruned days fell to zero and retained weekly points spiked, so its shape
+mostly showed the retention policy rather than what ran. Backup jobs reports
+each day's retained backup task outcomes for current workloads; the list's day
+headings already group restore points by date. `BackupActivityChart.tsx`, `proxmoxBackupActivityPresentation.ts`
+and their tests are deleted, the undated-entry notice keeps only "remain
+listed. Their ages are unknown." without its chart clause, and an old bookmark's
+`day` parameter is ignored and cleared by Clear filters. Earlier notes in this
+contract that describe the chart's sizing, tooltips, day focus or volume rules
+are historical. `docs/RECOVERY.md` explains why Backup jobs and the list can
+disagree for a day, and `completedBackupCountsDocs.test.ts` pins that copy and
+that the table renders no activity chart.
+
 ### Backups page orders its answers: health, servers, restore points (2 November 2026)
 
 The Backups page now reads in the order people ask: Backup health beside
 Backup jobs (are my backups protected, did last night run), then the Backup
 servers table (is my PBS reachable, is its datastore filling), then the
-restore points: the By date / Coverage tabs, the activity chart, filters and
-list. The view tabs head the restore points only; health and jobs belong to the
+restore points: the By date / Coverage tabs, filters and list. The view tabs head the restore points only; health and jobs belong to the
 page and render the same in either view.
 
 The Backup servers table stays mounted through inventory loading, failure and

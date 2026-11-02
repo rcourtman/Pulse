@@ -58,37 +58,28 @@ answer different questions:
   The **completed restore points** total in **Backup health** excludes both,
   even when an incomplete entry has a size or a verification flag. The total
   covers the loaded inventory, not just the rows matching your list filters.
-- **Completed restore points per day** also requires a known, non-future date
-  within the selected chart range. An undated completed point can count in
-  Backup health but not in a daily column. A blank chart is not proof that
-  no backups exist; check any inventory loading or access warning first.
-- **Known restore volume per day** adds only positive reported sizes for
-  those dated completed points. A point with no reported size can count as a
-  point without contributing volume. It remains selectable in **Volume** and
-  counts normally in **Count**. Amber marks days with unknown sizes, not zero
-  volume. When a day mixes known and unknown sizes, its known volume is a lower
-  bound, not a complete total. These are recorded artifact sizes, not
-  PBS datastore usage or deduplicated physical space. For a row marked
-  **Unknown size**, use the [individual size checks](#restore-point-sizes-and-unknown-values).
-- Guest **snapshots** can contribute to completed-point and chart totals.
-  They are not independent backups and do not fill Coverage's **Last backup**.
-  If a completed backup's date is unavailable or in the future, the latest
-  backup age stays unknown rather than choosing an older dated backup.
+  For a row marked **Unknown size**, use the
+  [individual size checks](#restore-point-sizes-and-unknown-values).
+- **Backup jobs** counts the Proxmox backup tasks Pulse has retained for
+  current workloads, including failed runs, and ignores the list filters. A
+  run's outcome is separate evidence from the restore points: a failed run
+  usually leaves none, and retention prunes older points from the list, so the
+  two need not agree for any day.
+- Guest **snapshots** can contribute to completed-point totals. They are not
+  independent backups and do not fill Coverage's **Last backup**. If a
+  completed backup's date is unavailable or in the future, the latest backup
+  age stays unknown rather than choosing an older dated backup.
 
-Both activity charts follow the **By date** list's search, **Node**, **Backup
-location**, **Type** and **Source** filters, including Verified or Unverified.
+The list follows the **By date** search, **Node**, **Backup location**,
+**Type** and **Source** filters, including Verified or Unverified.
 **Backup health** still covers the loaded inventory: a non-zero total there
-can sit beside an empty filtered chart. An unresolved or ambiguous saved backup
+can sit beside an empty filtered list. An unresolved or ambiguous saved backup
 location shows no matching points; choose the intended location again or clear
-that filter, rather than treating the empty view as missing backups.
-
-Selecting a chart day filters the list only; the other scoped days remain
-available in the chart. The chart's date range limits its activity columns, not
-the list. **Clear date filter** removes only the selected day; clear search and
-the other filter chips separately to inspect the wider inventory, including
-undated and incomplete entries. None of these display controls changes
-collection, permissions, retention or protection policy. Older versions may use
-different labels or show unfiltered activity charts.
+that filter, rather than treating the empty view as missing backups. An empty
+list is not proof that no backups exist; check any inventory loading or access
+warning first. None of these display controls changes collection, permissions,
+retention or protection policy. Older versions may use different labels or
+show a per-day restore point chart.
 
 **Completed is not Verified, a tested restore or guest thaw.** Compare the same
 provider, guest, location and time using existing records, not just a count.
@@ -96,7 +87,7 @@ Do not run a new backup, verification or restore, delete entries, or clear
 History to make totals agree. For contradictory PBS verification or protection,
 use the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unprotected).
 An unresponsive guest or uncertain freeze/thaw needs the
-[backup safety precaution](VM_DISK_MONITORING.md#backup-safety), not a chart check.
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety), not a count check.
 
 ## Restore-point sizes and unknown values
 
@@ -113,7 +104,7 @@ the measured order. On a phone, expand the restore-point row and read **Size**
 under **Restore point**. A hidden column is not a missing reading. In
 **Coverage**, expand the workload to see each point's size; narrow layouts
 show it alongside the point's identity. One known size does not fill the gaps
-for other points. For daily totals, see [why counts and volume differ](#why-proxmox-backup-counts-differ).
+for other points. For totals, see [why backup counts differ](#why-proxmox-backup-counts-differ).
 
 Compare the same workload, repository and time in existing provider records
 before drawing a conclusion. Do not run another backup, verification or
@@ -368,11 +359,11 @@ A recent archive in PVE and an old or **Unprotected** Coverage row are
 different observations, not proof that the archive failed or the workload is
 protected. Compare one existing archive with the same workload in Pulse:
 
-1. Open **Proxmox → Backups → By date**. Clear search and the selected chart
-   day, start with **All nodes** and **All backup locations**, then select
-   **PVE backup files** (**PVE files** on narrow screens). A chart range or
-   list filter is not the protection policy; widening it does not refresh
-   collection or change a backup's age.
+1. Open **Proxmox → Backups → By date**. Clear search, start with
+   **All nodes** and **All backup locations**, then select
+   **PVE backup files** (**PVE files** on narrow screens). A list filter is
+   not the protection policy; widening it does not refresh collection or
+   change a backup's age.
 2. Expand the archive to read **Source**, **Location**, **Created**, **State**
    and **Identifier** under **Details**, including on a phone. Compare these
    with the existing record in the owning PVE installation: connection,

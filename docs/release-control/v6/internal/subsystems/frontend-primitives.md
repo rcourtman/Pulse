@@ -537,6 +537,13 @@ desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
 day selection, metric switching, empty matches and recovery. No shared-filter,
 route, navigation, access or backup operation changes.
 
+### Backups By date carries no activity chart (2 November 2026)
+
+The restore points no longer render `BackupActivityChart`; the component and
+its presentation module are deleted. Backup jobs is the page's one daily bar
+chart, so two look-alike bar charts never stack on one page. Earlier notes here
+about the chart's tooltip portal and day-control focus are historical.
+
 ### Backup view tabs head the restore points, not the page (2 November 2026)
 
 On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,
@@ -6472,8 +6479,7 @@ Enter/Space work through the native button, and lifecycle actions do not bubble
 into collapse. Generic `Ask Assistant` and `Copy context` actions do not belong
 in object drawer headers: raw context export must not compete with the
 operational reading path.
-`frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx` and
-`frontend-modern/src/features/proxmox/BackupActivityChart.tsx` render their
+`frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx` renders its
 hover tooltips through `frontend-modern/src/components/shared/TooltipPortal.tsx`
 rather than as HTML `foreignObject` shells inside the chart SVG; the mini
 sparkline's SVG uses `preserveAspectRatio="none"`, where cross-browser scaling

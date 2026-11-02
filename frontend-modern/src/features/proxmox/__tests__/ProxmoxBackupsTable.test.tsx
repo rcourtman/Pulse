@@ -24,10 +24,7 @@ import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
 import type { ProtectionPosturesResponse } from '@/types/recovery';
 import { protectionPolicy, protectionPosture } from '@/utils/__fixtures__/protectionPosture';
-import {
-  getRecoveryFullDateLabel,
-  getRecoveryPrettyDateLabel,
-} from '@/utils/recoveryDatePresentation';
+import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
 import { eventBus } from '@/stores/events';
 import { setKioskMode } from '@/utils/url';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
@@ -646,7 +643,7 @@ describe('ProxmoxBackupsTable', () => {
     window.history.replaceState(
       {},
       '',
-      '/?view=date&q=pbs-docker&source=pbs&location=pbs%3Apbs-main%3Amain&node=pve-a&type=ct&day=2026-05-25',
+      '/?view=date&q=pbs-docker&source=pbs&location=pbs%3Apbs-main%3Amain&node=pve-a&type=ct&day=2026-01-01',
     );
 
     renderInRouter(() => (
@@ -660,7 +657,8 @@ describe('ProxmoxBackupsTable', () => {
       'aria-pressed',
       'true',
     );
-    expect(screen.getByRole('button', { name: /clear date filter/i })).toBeInTheDocument();
+    // An old bookmark's day no longer narrows the list; Clear filters drops it.
+    expect(screen.queryByRole('button', { name: /clear date filter/i })).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Backup location: PBS · pbs-main / main' }),
     ).toBeInTheDocument();
@@ -1139,7 +1137,7 @@ describe('ProxmoxBackupsTable', () => {
     });
     expect(emptyStateHeading).toBeInTheDocument();
     expect(
-      screen.getByText('Adjust the search, source filter, or selected day to see more artifacts.'),
+      screen.getByText('Adjust the search or filters to see more artifacts.'),
     ).toBeInTheDocument();
     expectClassTokens(
       emptyStateHeading.closest(`.${TABLE_CARD_FRAME_CLASS}`),
@@ -1963,11 +1961,6 @@ describe('backup-date-evidence connected inventory', () => {
       const panel = screen.getByTestId('proxmox-recoverable-detail');
       expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(date);
       expect(within(panel).getByText('Created').closest('tr')).toHaveTextContent('Unknown');
-      const notice = screen.getByText(
-        /Backup entries with unavailable or future dates remain listed/,
-      );
-      expect(notice).toHaveTextContent('Their ages are unknown.');
-      expect(notice).toHaveTextContent('excluded from the activity chart and day filters');
       expect(apiFetchMock).toHaveBeenCalledTimes(2);
     },
   );
@@ -2011,19 +2004,13 @@ describe('backup-date-evidence connected inventory', () => {
     await waitFor(() => expect(lastBackupCell()).toHaveTextContent('Unknown'));
   });
 
-  it('[regression] By date retains future artifacts but excludes them from today activity and day filtering', async () => {
+  it('[regression] By date retains future artifacts with an unknown age', async () => {
     window.history.replaceState({}, '', '/?view=date');
     supply('2026-10-04T12:00:01Z', true);
     mount();
     await waitFor(() =>
       expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2),
     );
-    const warning = screen.getByText(
-      /Backup entries with unavailable or future dates remain listed/,
-    );
-    expect(warning).toHaveAttribute('role', 'status');
-    expect(warning).toHaveTextContent('excluded from the activity chart and day filters');
-    expect(screen.getByText(/No completed restore points with known dates/)).toBeInTheDocument();
     const future = [...document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')].find(
       (row) => row.textContent?.includes('PBS'),
     )! as HTMLElement;
@@ -2450,7 +2437,7 @@ describe('Coverage withdraws failed protection assessments', () => {
   });
 });
 
-describe('completed restore-point summary and activity', () => {
+describe('completed restore-point summary', () => {
   afterEach(() => vi.restoreAllMocks());
 
   const mountInventory = (incompleteOnly = false) => {
@@ -2487,60 +2474,33 @@ describe('completed restore-point summary and activity', () => {
     ));
   };
 
-  it('counts completed points and volume separately while retaining running and failed rows for inspection', async () => {
+  it('counts completed points while retaining running and failed rows for inspection', async () => {
     const { container } = mountInventory();
     await screen.findByText(/3 completed restore points · 1 running · 1 failed/);
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
     expect(
       screen.getByRole('cell', { name: `${getRecoveryFullDateLabel('2026-10-04')} 5 entries` }),
     ).toBeInTheDocument();
-    const day = screen.getByRole('button', { name: /: 3 restore points$/ });
-    expect(day).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /: 5 restore points$/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Completed restore points per day')).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-    expect(screen.getByText('Known restore volume per day')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ }),
-    ).toBeInTheDocument();
     expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
   });
 
-  it('does not draw completed activity or claim PBS restore coverage for an incomplete-only inventory', async () => {
+  it('does not claim PBS restore coverage for an incomplete-only inventory', async () => {
     const { container } = mountInventory(true);
     const summary = await screen.findByText(/0 completed restore points · 1 running · 1 failed/);
     expect(summary).not.toHaveTextContent('with PBS snapshots');
-    expect(screen.getByText(/No completed restore points with known dates/)).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Activity metric' })).not.toBeInTheDocument();
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
     expect(
       screen.getByRole('cell', { name: `${getRecoveryFullDateLabel('2026-10-04')} 2 entries` }),
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('link', { name: 'Coverage' }));
-    expect(screen.queryByText(/completed restore points with known dates/)).not.toBeInTheDocument();
     expect(
       screen.getByText(/0 completed restore points · 1 running · 1 failed/),
     ).toBeInTheDocument();
   });
-
-  it('keeps incomplete entries available under a completed day filter and when it is cleared', async () => {
-    const { container } = mountInventory();
-    await screen.findByText(/3 completed restore points/);
-    await fireEvent.click(screen.getByRole('button', { name: /: 3 restore points$/ }));
-    await waitFor(() => expect(window.location.search).toContain('day=2026-10-04'));
-    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
-    await fireEvent.click(screen.getByRole('button', { name: 'Clear date filter' }));
-    await waitFor(() => expect(window.location.search).not.toContain('day='));
-    expect(screen.getByRole('button', { name: /: 3 restore points$/ })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
-  });
 });
 
-describe('restore volume with unavailable sizes', () => {
+describe('restore points with unavailable sizes', () => {
   afterEach(() => vi.restoreAllMocks());
 
   const mountVolumeInventory = (mixed = false) => {
@@ -2584,60 +2544,6 @@ describe('restore volume with unavailable sizes', () => {
     ));
   };
 
-  it('[volume-size] keeps unknown-only activity and the Count control instead of claiming no restore points', async () => {
-    mountVolumeInventory();
-    await screen.findByRole('button', { name: /: 3 restore points$/ });
-    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-    expect(screen.getByRole('button', { name: 'Count' })).toBeInTheDocument();
-    expect(screen.getByText('Known restore volume per day')).toBeInTheDocument();
-    expect(
-      screen.queryByText(/No completed restore points with known dates/),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/Sizes are unavailable for 3 completed restore points in this window/),
-    ).toBeInTheDocument();
-    const day = screen.getByRole('button', { name: /: 3 sizes unknown$/ });
-    expect(day.querySelector('[data-unknown-volume]')).not.toBeNull();
-    await fireEvent.click(day);
-    expect(
-      screen.getByRole('button', { name: /: 3 sizes unknown, selected$/ }),
-    ).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Count' }));
-    expect(
-      screen.getByRole('button', { name: /: 3 restore points, selected$/ }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/Sizes are unavailable for/)).not.toBeInTheDocument();
-  });
-
-  it('[volume-size] distinguishes known bytes, unknown-only days and genuinely empty days', async () => {
-    mountVolumeInventory(true);
-    await screen.findByRole('button', { name: /: 3 restore points$/ });
-    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-    expect(
-      screen.getByText(/Sizes are unavailable for 2 completed restore points in this window/),
-    ).toBeInTheDocument();
-    const today = screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ });
-    const yesterday = screen.getByRole('button', { name: /: 1 size unknown$/ });
-    expect(screen.getAllByRole('button', { name: /: 0 B$/ }).length).toBeGreaterThan(0);
-    await fireEvent.focus(today);
-    expect(screen.getByText('3.00 KB known · 1 size unknown')).toBeInTheDocument();
-    expect(
-      within(document.querySelector<HTMLElement>('[data-tooltip-portal]')!).getByText(
-        'Unknown size',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('1.00 KB (33%)')).not.toBeInTheDocument();
-    await fireEvent.click(yesterday);
-    expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
-    expect(
-      screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ }),
-    ).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Count' }));
-    expect(
-      screen.getByRole('button', { name: /: 1 restore point, selected$/ }),
-    ).toBeInTheDocument();
-  });
-
   it('[point-size] keeps unavailable size explicit without changing verification or completed counts', async () => {
     mountVolumeInventory();
     const toggle = await screen.findByRole('button', {
@@ -2655,20 +2561,6 @@ describe('restore volume with unavailable sizes', () => {
     expect(within(panel).getAllByText('Verified')).toHaveLength(2);
     expect(document.body).toHaveTextContent('5 completed restore points');
     expect(document.body).toHaveTextContent('1 running');
-  });
-
-  it('[volume-size] follows source scope without counting incomplete or out-of-window unknown sizes', async () => {
-    mountVolumeInventory(true);
-    await screen.findByRole('button', { name: /: 3 restore points$/ });
-    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-    await fireEvent.click(
-      within(screen.getByRole('group', { name: 'Source' })).getByRole('button', {
-        name: 'PVE backup files found on Proxmox VE storage',
-      }),
-    );
-    expect(screen.getByRole('button', { name: /: 1.00 KB$/ })).toBeInTheDocument();
-    expect(screen.queryByText(/Sizes are unavailable for/)).not.toBeInTheDocument();
-    expect(document.querySelector('[data-unknown-volume]')).toBeNull();
   });
 });
 
@@ -3081,7 +2973,7 @@ describe('location-scoped evidence keeps workload-wide protection explicit', () 
   });
 });
 
-describe('backup activity follows the consuming inventory scope', () => {
+describe('restore point list follows the consuming inventory scope', () => {
   afterEach(() => vi.restoreAllMocks());
 
   const mountScopedInventory = (query = '') => {
@@ -3138,143 +3030,30 @@ describe('backup activity follows the consuming inventory scope', () => {
       />
     ));
   };
-  const day = (date: string, value: string, selected = false) =>
-    screen.getByRole('button', {
-      name: `${getRecoveryPrettyDateLabel(date)}: ${value}${selected ? ', selected' : ''}`,
-    });
   const rows = () => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
 
   it.each([
-    ['source', 'source=archive', 3, '1 restore point', '2 restore points', '1.00 KB', '12.0 KB'],
-    ['verified', 'source=verified', 1, '1 restore point', '0 restore points', '2.00 KB', '0 B'],
-    ['unverified', 'source=unverified', 1, '0 restore points', '1 restore point', '0 B', '16.0 KB'],
-    ['node', 'node=pve-2', 1, '0 restore points', '1 restore point', '0 B', '8.00 KB'],
-    ['type', 'type=ct', 1, '0 restore points', '1 restore point', '0 B', '8.00 KB'],
-    ['search', 'q=west-200', 1, '0 restore points', '1 restore point', '0 B', '8.00 KB'],
-    [
-      'combined',
-      'node=pve-1&type=vm&source=archive',
-      2,
-      '1 restore point',
-      '1 restore point',
-      '1.00 KB',
-      '4.00 KB',
-    ],
-    [
-      'case-sensitive location',
-      `location=${encodeURIComponent('["pbs","pbs-server","Main"]')}`,
-      1,
-      '0 restore points',
-      '1 restore point',
-      '0 B',
-      '16.0 KB',
-    ],
-  ])(
-    'keeps %s-filtered count and volume in agreement with the list',
-    async (_label, query, count, today, yesterday, todayBytes, yesterdayBytes) => {
-      mountScopedInventory(String(query));
-      await waitFor(() => expect(rows()).toHaveLength(Number(count)));
-      expect(day('2026-10-04', String(today))).toBeInTheDocument();
-      expect(day('2026-10-03', String(yesterday))).toBeInTheDocument();
-      await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-      expect(day('2026-10-04', String(todayBytes))).toBeInTheDocument();
-      expect(day('2026-10-03', String(yesterdayBytes))).toBeInTheDocument();
-    },
-  );
+    ['source', 'source=archive', 3],
+    ['verified', 'source=verified', 1],
+    ['unverified', 'source=unverified', 1],
+    ['node', 'node=pve-2', 1],
+    ['type', 'type=ct', 1],
+    ['search', 'q=west-200', 1],
+    ['combined', 'node=pve-1&type=vm&source=archive', 2],
+    ['case-sensitive location', `location=${encodeURIComponent('["pbs","pbs-server","Main"]')}`, 1],
+  ])('narrows the list by %s', async (_label, query, count) => {
+    mountScopedInventory(String(query));
+    await waitFor(() => expect(rows()).toHaveLength(Number(count)));
+  });
 
   it.each(['q=no-such-workload', 'location=missing', 'location=pbs%3Apbs-server%3Amain'])(
-    'does not show another scope activity for empty or unresolved %s',
+    'shows no restore points for empty or unresolved %s',
     async (query) => {
       mountScopedInventory(query);
       await screen.findByText(/7 backup entries/);
       expect(rows()).toHaveLength(0);
-      expect(screen.queryByRole('group', { name: 'Activity metric' })).not.toBeInTheDocument();
-      expect(screen.getByText(/No completed restore points with known dates/)).toBeInTheDocument();
     },
   );
-
-  it('keeps other scoped days available while selecting, clearing and changing filters', async () => {
-    mountScopedInventory('source=archive');
-    await waitFor(() => expect(rows()).toHaveLength(3));
-    const calls = apiFetchMock.mock.calls.length;
-    await fireEvent.click(day('2026-10-04', '1 restore point'));
-    await waitFor(() => expect(rows()).toHaveLength(1));
-    expect(day('2026-10-04', '1 restore point', true)).toBeInTheDocument();
-    expect(day('2026-10-03', '2 restore points')).toBeInTheDocument();
-    await fireEvent.click(day('2026-10-03', '2 restore points'));
-    await waitFor(() => expect(rows()).toHaveLength(2));
-    await fireEvent.click(screen.getByRole('button', { name: 'Clear date filter' }));
-    await waitFor(() => expect(rows()).toHaveLength(3));
-    await fireEvent.click(
-      within(screen.getByRole('group', { name: 'Source' })).getByRole('button', { name: 'All' }),
-    );
-    await waitFor(() => expect(rows()).toHaveLength(7));
-    expect(day('2026-10-04', '3 restore points')).toBeInTheDocument();
-    expect(day('2026-10-03', '3 restore points')).toBeInTheDocument();
-    expect(apiFetchMock).toHaveBeenCalledTimes(calls);
-  });
-});
-
-describe('backup activity day controls survive ordinary inventory polling', () => {
-  afterEach(() => vi.useRealTimers());
-
-  it('retains the same focused date, updates its count and toggles the current parsed entries', async () => {
-    vi.useFakeTimers({
-      now: BACKUP_IDENTITY_NOW,
-      toFake: ['Date', 'setInterval', 'clearInterval'],
-    });
-    let archives = [identityArchive()];
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse({
-          data: url.endsWith('/pbs')
-            ? { backups: [] }
-            : {
-                backupTasks: [],
-                guestSnapshots: [],
-                storageBackups: archives,
-              },
-        }),
-      ),
-    );
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
-    window.history.replaceState({}, '', '/proxmox/backups/date');
-    renderInRouter(() => (
-      <ProxmoxBackupsTable
-        emptyIcon={<span />}
-        workloads={[identityGuest('east-100', 'east', 'pve-1')]}
-      />
-    ));
-    const target = await screen.findByRole('button', {
-      name: `${getRecoveryPrettyDateLabel('2026-10-04')}: 1 restore point`,
-    });
-    target.focus();
-    archives = [identityArchive(), identityArchive({ id: 'second', time: '2026-10-04T10:00:00Z' })];
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(
-      screen.getByRole('button', {
-        name: `${getRecoveryPrettyDateLabel('2026-10-04')}: 2 restore points`,
-      }),
-    ).toBe(target);
-    expect(target).toHaveFocus();
-    expect(apiFetchMock).toHaveBeenCalledTimes(4);
-    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
-    // Like the existing saved-view/navigation regressions, keep the router's
-    // scheduling live during input. The inventory poll above stays controlled.
-    vi.useRealTimers();
-    vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW + 30_000, toFake: ['Date'] });
-    fireEvent.click(target);
-    await waitFor(() => expect(target).toHaveAttribute('aria-pressed', 'true'));
-    expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
-    await waitFor(() =>
-      expect(new URLSearchParams(window.location.search).get('day')).toBe('2026-10-04'),
-    );
-    fireEvent.click(target);
-    await waitFor(() => expect(target).toHaveAttribute('aria-pressed', 'false'));
-    expect(target).toHaveFocus();
-    await waitFor(() => expect(new URLSearchParams(window.location.search).has('day')).toBe(false));
-    expect(apiFetchMock).toHaveBeenCalledTimes(4);
-  });
 });
 
 describe('bare Backups entry retains its assessed workspace', () => {
