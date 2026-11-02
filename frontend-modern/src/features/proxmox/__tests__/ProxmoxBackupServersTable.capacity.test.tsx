@@ -40,7 +40,9 @@ function usedCell(container: HTMLElement) {
   const index = Array.from(table.querySelectorAll('th')).findIndex(
     (head) => head.textContent === 'Used',
   );
-  return table.querySelector('tbody tr')!.querySelectorAll('td')[index] as HTMLElement;
+  return table.querySelector('tbody tr:not([data-backup-server-group])')!.querySelectorAll('td')[
+    index
+  ] as HTMLElement;
 }
 
 describe('PBS datastore capacity evidence', () => {

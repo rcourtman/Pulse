@@ -54,7 +54,7 @@ const host: Resource = {
 
 describe('PBS Backups web-interface parity', () => {
   it.each([320, 390, 768, 1365])(
-    'uses the service-owned URL on every datastore at width %s without opening details',
+    'uses the service-owned URL once, on the server header, at width %s without opening details',
     (width) => {
       const ancestorKeydown = vi.fn();
       const { container } = render(() => (
@@ -65,7 +65,8 @@ describe('PBS Backups web-interface parity', () => {
       const links = within(container).getAllByRole('link', {
         name: 'Open web interface for pbs-main',
       });
-      expect(links).toHaveLength(2);
+      // The link lives on the server header row, not repeated on each datastore.
+      expect(links).toHaveLength(1);
       for (const link of links) {
         expect(link).toHaveAttribute('href', 'https://pbs-east.example:8007');
         expect(link).toHaveAttribute('target', '_blank');
@@ -100,14 +101,12 @@ describe('PBS Backups web-interface parity', () => {
       within(container)
         .getAllByRole('link')
         .map((a) => a.getAttribute('href'));
-    expect(hrefs()).toEqual([east.customUrl, east.customUrl, west.customUrl, west.customUrl]);
+    expect(hrefs()).toEqual([east.customUrl, west.customUrl]);
     setServers([
       { ...west, pbs: { ...west.pbs!, datastores: [...west.pbs!.datastores!].reverse() } },
       east,
     ]);
-    await waitFor(() =>
-      expect(hrefs()).toEqual([east.customUrl, east.customUrl, west.customUrl, west.customUrl]),
-    );
+    await waitFor(() => expect(hrefs()).toEqual([east.customUrl, west.customUrl]));
   });
 
   it.each([
@@ -123,19 +122,21 @@ describe('PBS Backups web-interface parity', () => {
     expect(within(container).queryByRole('link')).not.toBeInTheDocument();
     expect(
       within(container).getAllByRole('img', { name: 'Web interface URL for pbs-main is invalid' }),
-    ).toHaveLength(2);
-    expect(within(container).getAllByText('pbs-main')).toHaveLength(2);
+    ).toHaveLength(1);
+    expect(within(container).getAllByText('pbs-main')).toHaveLength(1);
   });
 
   it('withdraws an edited or cleared URL without replacing it with a host, name or remembered endpoint', async () => {
     const pbs = server();
     const [servers, setServers] = createSignal([pbs, host]);
     const { container } = render(() => <ProxmoxBackupServersTable servers={servers()} />);
-    expect(within(container).getAllByRole('link')).toHaveLength(2);
+    expect(within(container).getAllByRole('link')).toHaveLength(1);
     setServers([{ ...pbs, customUrl: 'javascript:alert(1)' }, host]);
     await waitFor(() => expect(within(container).queryByRole('link')).not.toBeInTheDocument());
     setServers([{ ...pbs, customUrl: '' }, host]);
-    await waitFor(() => expect(within(container).queryByRole('img')).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(container).queryByRole('img', { name: /is invalid/ })).not.toBeInTheDocument(),
+    );
     expect(within(container).queryByRole('link')).not.toBeInTheDocument();
     setServers([{ ...pbs, customUrl: ' https://new.example:8443/pbs/ ' }]);
     await waitFor(() =>
@@ -144,6 +145,29 @@ describe('PBS Backups web-interface parity', () => {
         'https://new.example:8443/pbs/',
       ),
     );
+  });
+
+  it('keeps the server header current as polls change its state and datastores', async () => {
+    const pbs = server();
+    const [servers, setServers] = createSignal([pbs]);
+    const { container } = render(() => <ProxmoxBackupServersTable servers={servers()} />);
+    const header = () => container.querySelector('[data-backup-server-group]') as HTMLElement;
+    expect(header()).toHaveTextContent('2 datastores');
+    expect(within(header()).getByRole('img', { name: 'Healthy' })).toBeInTheDocument();
+    setServers([
+      {
+        ...pbs,
+        status: 'offline',
+        pbs: { ...pbs.pbs!, connectionHealth: 'error', datastores: [pbs.pbs!.datastores![1]] },
+      },
+    ]);
+    await waitFor(() => expect(header()).toHaveTextContent('1 datastore'));
+    expect(within(header()).getByRole('img', { name: 'Error' })).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-backup-server-datastore]')).toHaveLength(1);
+    // A server whose datastore read returned nothing claims no count.
+    setServers([{ ...pbs, pbs: { ...pbs.pbs!, datastores: undefined } }]);
+    await waitFor(() => expect(header()).not.toHaveTextContent(/datastore/));
+    expect(container).toHaveTextContent('No datastore data');
   });
 
   it('does not invent an endpoint when a server has no custom URL or datastore', () => {

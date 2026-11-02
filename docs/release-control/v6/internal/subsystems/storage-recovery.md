@@ -5104,6 +5104,19 @@ amber and red as the Overview CPU, memory and disk bars. They had their own
 shades, so the Backups page looked inconsistent beside every other page. What
 each bar counts is unchanged.
 
+### Backup servers rows sit under one header per server (2 November 2026)
+
+The Backup servers table now puts a header row above each PBS server's
+datastores: its connection dot, its name with the web-interface link, and how
+many datastores it reports. On a real install with one server and two
+datastores, a muted server name on each row still left the maintainer asking
+whether they ran one PBS or two; the header answers that at a glance, the way
+guest tables group by node. Datastore rows are named by the datastore alone. A
+server with no datastore data keeps its reachability row, and its header
+claims no count, because an empty read is not proof of no datastores. The
+earlier note that each row carries its server's name and web link is
+historical.
+
 ### Backup servers rows are named by their datastore (2 November 2026)
 
 The Backup servers table keeps one row per datastore, but each row is now

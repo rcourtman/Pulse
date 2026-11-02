@@ -2,6 +2,11 @@ import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 
 import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  GROUPED_TABLE_ROW_META_CLASS,
+  getGroupedTableRowCellClass,
+  getGroupedTableRowClass,
+} from '@/components/shared/groupedTableRowPresentation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { DetailSectionTable, type DetailValueTone } from '@/components/shared/DetailSectionTable';
@@ -55,15 +60,14 @@ import {
 // where the rows read as generic "PVE" storage. Each datastore row also says
 // whether its GC, prune, verify and sync jobs last succeeded, because a failed
 // sync or verify leaves backups that exist but cannot be relied on. One row
-// per datastore, named by the datastore with its server beside it in muted
-// text, the way restore point rows name a workload and its connection; a
-// server with no datastore data still gets a reachability row under its own
-// name. Rows named by their server read as two servers, and hiding the
-// repeated name left a nameless row.
+// per datastore, grouped under a header row per PBS server that carries its
+// reachability, web link and datastore count, the way guest tables group by
+// node. Rows named by their server read as two servers; a muted server name
+// on each datastore row still left "how many servers do I have?" unanswered.
+// A server with no datastore data still gets a reachability row.
 // PBS hosts left the v5 nodes table in the v6 IA, so this is where their health
 // lives. The row says whether the server is reachable; its CPU, memory, uptime,
-// version and their history are in the server's drawer, one click away. Every
-// row carries its server's status and web link, so each row reads on its own.
+// version and their history are in the server's drawer, one click away.
 
 interface BackupServerRow {
   key: string;
@@ -75,6 +79,42 @@ interface BackupServerRow {
   // The worst backend-judged GC, prune, verify or sync result for this store.
   jobs: DatastoreJobSummary;
   backupCount: number;
+}
+
+interface BackupServerGroup {
+  key: string;
+  // Only plain values: each windowed item is its own reconciled store, so the
+  // header must not alias a datastore row's resource snapshot.
+  customUrl?: string;
+  serverName: string;
+  online: boolean;
+  connectionLabel: string;
+  datastoreCount: number;
+}
+
+type BackupServerTableItem =
+  { kind: 'server'; group: BackupServerGroup } | { kind: 'datastore'; row: BackupServerRow };
+
+// Rows arrive sorted by server, so each server's header precedes its rows.
+export function groupBackupServerRows(rows: readonly BackupServerRow[]): BackupServerTableItem[] {
+  const items: BackupServerTableItem[] = [];
+  let current: BackupServerGroup | undefined;
+  for (const row of rows) {
+    if (current?.key !== row.resource.id) {
+      current = {
+        key: row.resource.id,
+        customUrl: row.resource.customUrl,
+        serverName: row.serverName,
+        online: row.online,
+        connectionLabel: row.connectionLabel,
+        datastoreCount: 0,
+      };
+      items.push({ kind: 'server', group: current });
+    }
+    if (row.datastore) current.datastoreCount += 1;
+    items.push({ kind: 'datastore', row });
+  }
+  return items;
 }
 
 // Key by instance and datastore so multi-datastore servers get accurate counts.
@@ -529,6 +569,42 @@ export function buildBackupServerRows(
   return rows;
 }
 
+// The server's header row: reachability, web link and how many datastores it
+// reports, so one server with two datastores never reads as two servers.
+function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number }) {
+  const count = () => props.group.datastoreCount;
+  return (
+    <tr class={getGroupedTableRowClass()} data-backup-server-group={props.group.serverName}>
+      <td colspan={props.colSpan} class={getGroupedTableRowCellClass()}>
+        <div
+          class={`flex min-w-0 items-center gap-2 ${props.group.online ? '' : 'opacity-60'}`}
+          title={props.group.connectionLabel}
+        >
+          <StatusDot
+            variant={props.group.online ? 'success' : 'danger'}
+            title={props.group.connectionLabel}
+            ariaLabel={props.group.connectionLabel}
+            size="xs"
+          />
+          <ResourceNameWithWebInterfaceLink
+            name={props.group.serverName}
+            url={props.group.customUrl}
+            class="min-w-0"
+            nameClass="block min-w-0 truncate text-base-content"
+          />
+          {/* No datastore rows can mean the read failed, not that the server
+              has none, so the header claims no count; its row says why. */}
+          <Show when={count() > 0}>
+            <span class={`shrink-0 ${GROUPED_TABLE_ROW_META_CLASS}`}>
+              {count()} {count() === 1 ? 'datastore' : 'datastores'}
+            </span>
+          </Show>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export function ProxmoxBackupServersTable(props: {
   servers: readonly Resource[];
   backups?: readonly PBSBackup[];
@@ -543,6 +619,7 @@ export function ProxmoxBackupServersTable(props: {
   const rows = createMemo(() =>
     buildBackupServerRows(props.servers, props.backups ?? [], retention),
   );
+  const tableItems = createMemo(() => groupBackupServerRows(rows()));
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
     const width = props.layoutWidth?.() ?? observedWidth.width();
@@ -617,11 +694,21 @@ export function ProxmoxBackupServersTable(props: {
           body={
             <>
               <PlatformWindowedRows
-                items={rows}
-                keyExtractor={(row) => row.key}
+                items={tableItems}
+                keyExtractor={(item) =>
+                  item.kind === 'server' ? `server:${item.group.key}` : `datastore:${item.row.key}`
+                }
+                colSpan={visibleColumns().length}
                 estimatedRowHeight={32}
               >
-                {(row) => {
+                {(item) => {
+                  // The kind is part of the key, so an item never changes kind.
+                  if (item.kind === 'server') {
+                    return (
+                      <BackupServerGroupRow group={item.group} colSpan={visibleColumns().length} />
+                    );
+                  }
+                  const row = item.row;
                   // Read admission is not a generic storage-adapter capacity snapshot.
                   const capacityEvidence = () => datastoreCapacity(row.datastore, row.online);
                   const pct = () => capacityEvidence().percent;
@@ -684,34 +771,16 @@ export function ProxmoxBackupServersTable(props: {
                             <Show
                               when={row.datastore}
                               fallback={
-                                <ResourceNameWithWebInterfaceLink
-                                  name={row.serverName}
-                                  url={row.resource.customUrl}
-                                  class="min-w-0 flex-1"
-                                  nameClass="block min-w-0 flex-1 truncate font-medium"
-                                />
+                                <span class="block min-w-0 flex-1 truncate text-muted">—</span>
                               }
                             >
                               {(datastore) => (
-                                <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
-                                  {/* The datastore name keeps priority but leaves room
-                                      for the server's web link, so a long name can never
-                                      push a focusable link out of view. */}
-                                  <span
-                                    class="min-w-0 max-w-[calc(100%-2rem)] shrink-0 truncate font-medium"
-                                    data-backup-server-datastore
-                                  >
-                                    {datastore().name}
-                                  </span>
-                                  <span class="flex min-w-6 flex-1">
-                                    <ResourceNameWithWebInterfaceLink
-                                      name={row.serverName}
-                                      url={row.resource.customUrl}
-                                      class="min-w-0 flex-1"
-                                      nameClass="block min-w-0 truncate text-[10px] text-muted"
-                                    />
-                                  </span>
-                                </div>
+                                <span
+                                  class="block min-w-0 flex-1 truncate font-medium"
+                                  data-backup-server-datastore
+                                >
+                                  {datastore().name}
+                                </span>
                               )}
                             </Show>
                           </div>

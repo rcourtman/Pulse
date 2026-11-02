@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "c7271c81868d8b41260932f64870de5ddb2b2e52",
+  "verified_at": "2026-11-02T21:55:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "a4813584e2743da04a3cb3251bc40a637be8288c4f46485d6300bd74ae650448"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode built from this branch on pulse-dev: two PBS servers, backup-vault with two datastores and dr-vault with one",
+    "real-config clone built from this branch on pulse-dev, reading the maintainer PBS with one server and two datastores",
+    "desktop and phone layouts"
+  ],
+  "interactions": [
+    "opened Proxmox > Backups in mock mode at 1440x1000: the Backup servers table shows a header row per server (status dot, name, datastore count) above its datastore rows, and datastore rows carry no server name",
+    "at 375x812 the same table renders 32px header and datastore rows with no horizontal page overflow",
+    "before this change the maintainer, looking at their real one-server, two-datastore install, asked whether they ran one PBS server or two",
+    "unit coverage pins grouping order and counts, one web link per server, live header updates when connection state and datastores change, and no count when a server reports no datastore rows"
+  ]
+}
