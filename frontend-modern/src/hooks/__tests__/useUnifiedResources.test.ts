@@ -3479,6 +3479,103 @@ describe('useUnifiedResources', () => {
     }
   });
 
+  it.each(['update', 'reconnect', 'remount'] as const)(
+    'keeps picker canonical denial through websocket %s until explicit recovery',
+    async (delivery) => {
+      const { useResources } = await import('../useResources');
+      const disposals: (() => void)[] = [];
+      const mount = () => {
+        let result!: ReturnType<typeof useResources>;
+        createRoot((dispose) => {
+          disposals.push(dispose);
+          result = useResources(undefined, { retainReadError: true });
+        });
+        return result;
+      };
+      const publish = (version: number, cpu: number) => {
+        batch(() => {
+          setWsState('resources', reconcile([createWsResource({ cpu: { current: cpu } })]));
+          setWsState('lastUpdate', version);
+          setWsResourceChange({ version, changedIds: null });
+        });
+      };
+      try {
+        let picker = mount();
+        await picker.refetch();
+        expect(apiFetchMock).toHaveBeenCalledTimes(1);
+        expect(picker.error()).toBeUndefined();
+        const failure = new Error('canonical picker inventory denied');
+        apiFetchMock.mockRejectedValueOnce(failure);
+        await expect(picker.refetch()).rejects.toBe(failure);
+        expect(picker.error()).toBe(failure);
+        const calls = apiFetchMock.mock.calls.length;
+
+        if (delivery === 'reconnect') setWsConnected(false);
+        if (delivery === 'remount') disposals.shift()!();
+        publish(1, 71);
+        if (delivery === 'reconnect') setWsConnected(true);
+        if (delivery === 'remount') picker = mount();
+        await flushAsync();
+        // Assert the frame really reached the projection, not just a socket
+        // toggle that never delivered any inventory to the consumer.
+        expect(picker.resources()[0].cpu?.current).toBe(71);
+        expect(picker.loading()).toBe(false);
+        expect(picker.error()).toBe(failure);
+        expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+
+        const accepted = deferred<ReturnType<typeof resourceResponse>>();
+        apiFetchMock.mockReturnValueOnce(accepted.promise);
+        const retry = picker.refetch();
+        publish(2, 82);
+        await flushAsync();
+        expect(picker.resources()[0].cpu?.current).toBe(82);
+        expect(picker.error()).toBe(failure);
+        accepted.resolve(resourceResponse([]));
+        await retry;
+        expect(picker.error()).toBeUndefined();
+        expect(picker.loading()).toBe(false);
+        expect(picker.resources()).toHaveLength(0);
+
+        disposals.shift()!();
+        picker = mount();
+        await flushAsync();
+        expect(picker.error()).toBeUndefined();
+        expect(apiFetchMock).toHaveBeenCalledTimes(calls + 1);
+      } finally {
+        disposals.forEach((dispose) => dispose());
+      }
+    },
+  );
+
+  it('keeps the default consumer websocket error-clearing policy', async () => {
+    const { useResources } = await import('../useResources');
+    let dispose = () => {};
+    let consumer!: ReturnType<typeof useResources>;
+    createRoot((d) => {
+      dispose = d;
+      consumer = useResources();
+    });
+    try {
+      await consumer.refetch();
+      const failure = new Error('transient default-consumer failure');
+      apiFetchMock.mockRejectedValueOnce(failure);
+      await expect(consumer.refetch()).rejects.toBe(failure);
+      expect(consumer.error()).toBe(failure);
+      const calls = apiFetchMock.mock.calls.length;
+      batch(() => {
+        setWsState('resources', reconcile([createWsResource({ cpu: { current: 71 } })]));
+        setWsState('lastUpdate', 1);
+        setWsResourceChange({ version: 1, changedIds: null });
+      });
+      await flushAsync();
+      expect(consumer.resources()[0].cpu?.current).toBe(71);
+      expect(consumer.error()).toBeUndefined();
+      expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+    } finally {
+      dispose();
+    }
+  });
+
   it('retains a scoped failed read across remounts until a real successful retry', async () => {
     const options = {
       query: 'type=physical_disk&parent=vm-alpha',

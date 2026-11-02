@@ -2074,7 +2074,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       setPolicyPosture(cacheEntry.policyPosture);
       setAggregations(cacheEntry.aggregations);
       setFacets(cacheEntry.facets);
-      setError(undefined);
+      // Realtime rows are not a successful canonical read. Opt-in selection
+      // consumers keep a failed read (including on reconnect/remount) until
+      // REST succeeds; other consumers retain their existing websocket policy.
+      if (!retainReadError) setError(undefined);
       setLoading(false);
     });
 
