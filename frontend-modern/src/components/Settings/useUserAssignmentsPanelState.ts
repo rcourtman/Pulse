@@ -45,10 +45,9 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   });
   const accessAllowed = () => featureGate.rbacEnabled() && props.canManage !== false;
   const currentOrg = () => getOrgID() || 'default';
+  // Replacing this snapshot invalidates every operation, even on return to the same reader.
   let context = { org: currentOrg(), user: props.currentUser, allowed: accessAllowed() };
   let disposed = false;
-  let contextVersion = 0;
-  let editorVersion = 0;
   let readController: AbortController | undefined;
   let permissionsController: AbortController | undefined;
   let mutationController: AbortController | undefined;
@@ -74,7 +73,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   });
 
   const clearEditor = () => {
-    editorVersion += 1;
     permissionsController?.abort();
     permissionsController = undefined;
     batch(() => {
@@ -93,10 +91,10 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
 
   const loadData = async () => {
     if (!contextIsCurrent() || !accessAllowed() || readController || mutationController) return;
-    const version = contextVersion;
+    const reader = context;
     const controller = new AbortController();
     const isCurrentRead = () =>
-      contextIsCurrent() && version === contextVersion && readController === controller;
+      contextIsCurrent() && reader === context && readController === controller;
     readController = controller;
     batch(() => {
       clearEditor();
@@ -165,7 +163,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   };
 
   const resetContext = () => {
-    contextVersion += 1;
     readController?.abort();
     mutationController?.abort();
     readController = mutationController = undefined;
@@ -213,14 +210,12 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     const user = editingUser();
     if (!user || !showModal() || !canEdit() || !isCurrentUser(user) || permissionsController)
       return;
-    const version = contextVersion;
-    const editor = editorVersion;
+    const reader = context;
     const controller = new AbortController();
     permissionsController = controller;
     const isCurrentRead = () =>
       contextIsCurrent() &&
-      version === contextVersion &&
-      editor === editorVersion &&
+      reader === context &&
       permissionsController === controller &&
       showModal() &&
       editingUser() === user;
@@ -268,10 +263,10 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
 
   const mutateUser = async (user: UserRoleAssignment, kind: 'save' | 'delete') => {
     if (!canEdit() || !isCurrentUser(user) || mutationController) return;
-    const version = contextVersion;
+    const reader = context;
     const controller = new AbortController();
     const isCurrentMutation = () =>
-      contextIsCurrent() && version === contextVersion && mutationController === controller;
+      contextIsCurrent() && reader === context && mutationController === controller;
     mutationController = controller;
     setActionError(null);
     setSuccessNotice(null);
@@ -304,7 +299,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
         setDeletingUser(false);
         if (saved) {
           await loadData();
-          if (contextIsCurrent() && version === contextVersion) {
+          if (contextIsCurrent() && reader === context) {
             setSuccessNotice(
               kind === 'save'
                 ? `Roles updated for ${user.username}`

@@ -337,6 +337,51 @@ describe('User Access reader lifetime', () => {
     expect(state.filteredAssignments()).toEqual([bob]);
   });
 
+  it.each(['success', 'failure'])(
+    'keeps a reopened same-row editor independent of its obsolete permissions %s',
+    async (outcome) => {
+      const old = deferred<Permission[]>();
+      mocks.getUserPermissions.mockReturnValueOnce(old.promise);
+      const { state } = mount();
+      await loaded(state);
+      const earlierEditor = state.openManageAccess(alice);
+      const earlierSignal = mocks.getUserPermissions.mock.calls.at(-1)![1].signal;
+      state.closeModal();
+      expect(earlierSignal.aborted).toBe(true);
+      await state.openManageAccess(alice);
+      state.toggleRole('reader');
+      const currentPermissions = state.userPermissions();
+      if (outcome === 'success') old.resolve([{ action: 'read', resource: 'obsolete' }]);
+      else old.reject(new Error('obsolete private failure'));
+      await earlierEditor;
+      expect(state.editingUser()).toBe(alice);
+      expect(state.showModal()).toBe(true);
+      expect(state.userPermissions()).toBe(currentPermissions);
+      expect(state.permissionsError()).toBeNull();
+      expect(state.formRoleIds()).toEqual([]);
+      expect(state.loadingPermissions()).toBe(false);
+    },
+  );
+
+  it('does not announce a save whose refresh is overtaken by a return to the same reader', async () => {
+    const { state } = mount();
+    await loaded(state);
+    await state.openManageAccess(alice);
+    const oldRefresh = deferred<UserRoleAssignment[]>();
+    mocks.getUsers.mockReturnValueOnce(oldRefresh.promise);
+    const save = state.handleSaveAssignments();
+    await waitFor(() => expect(mocks.getUsers).toHaveBeenCalledTimes(2));
+    // Same organisation and principal, but a new reader generation.
+    eventBus.emit('org_switched', 'north');
+    await loaded(state);
+    const fresh = state.filteredAssignments();
+    oldRefresh.resolve([{ ...alice, displayName: 'Obsolete refresh' }]);
+    await save;
+    expect(state.filteredAssignments()).toBe(fresh);
+    expect(state.successNotice()).toBeNull();
+    expect(state.loading()).toBe(false);
+  });
+
   it.each([null, {}, [null], [{ ...alice, roleIds: null }], [alice, alice]])(
     'reports a malformed user inventory as unknown: %j',
     async (value) => {
