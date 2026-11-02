@@ -125,7 +125,7 @@ Pulse is configured via the UI (`system.json`) with optional environment overrid
 | `ALLOWED_ORIGINS` | CORS allowed origin (`*` or a single origin). Empty = same-origin only. | *(unset)* |
 | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` | Disable container image-update actions; does not disable start/stop/restart | `false` |
-| `PULSE_METRICS_DB_PATH` | Optional path for only `metrics.db`, useful with tmpfs | `/data/metrics.db` |
+| `PULSE_METRICS_DB_PATH` | Optional path for only `metrics.db`; keep it on persistent storage | `/data/metrics.db` |
 | `PULSE_METRICS_ROLLUP_INTERVAL` | Metrics aggregation cadence; minimum 5 minutes | `15m` |
 
 > **Tip**: Set `LOG_LEVEL=warn` to reduce log volume while still capturing important events.
@@ -135,19 +135,18 @@ Pulse is configured via the UI (`system.json`) with optional environment overrid
 > Docker administrators can read those values. Prefer bootstrap setup; never
 > share full `docker inspect` or resolved Compose output.
 
-For SSD-sensitive installs, keep `/data` persistent and put only metrics
-history on tmpfs:
+**Keep metric history on persistent storage as well as `/data`.** Moving
+`metrics.db` to tmpfs trades away retained observations; it does not repair
+excessive writes. A custom container path also needs its own persistent volume
+or bind mount: setting `PULSE_METRICS_DB_PATH` alone does not create one, and
+recreating the container discards an unmounted writable-layer store.
 
-```yaml
-services:
-  pulse:
-    environment:
-      PULSE_METRICS_DB_PATH: /metrics-tmpfs/metrics.db
-    tmpfs:
-      - /metrics-tmpfs:size=512m,uid=1000,gid=1000,mode=0700
-```
-
-Metrics history stored this way is lost on container restart.
+If writes or disk use are unexpected, start with the
+[bounded performance checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth),
+not a storage change. For an existing override or history lost after recreation,
+see [metrics storage checks](METRICS_HISTORY.md#advanced-disk-write-tuning).
+Do not restart, recreate the container, clear history or change retention just
+to diagnose it; preserve the original store and current deployment.
 
 ### Healthcheck and resource sizing
 

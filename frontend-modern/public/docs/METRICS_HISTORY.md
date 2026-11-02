@@ -157,62 +157,45 @@ After changing these values, restart Pulse.
 
 ## Advanced: Disk Write Tuning
 
-This is a deliberate storage trade-off, not a repair for missing history or
-unexplained writes. Changing the path opens a different history store; it does
-not migrate the existing history. Keep the original durable data and establish
-the writer using [bounded performance checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth)
-before changing storage.
+**Keep history on persistent storage.** SSD write pressure is a reason to
+identify the writer using [bounded performance checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth),
+not to discard observations. Do not move history to tmpfs, clear it or shorten
+retention as a diagnostic workaround.
 
-Pulse keeps metrics history on disk by default. SSD-sensitive installs can move
-only the metrics SQLite database without moving secrets or general config:
+`PULSE_METRICS_DB_PATH` remains a supported storage-location override for only
+the default organization's `metrics.db`; it does not move secrets or general
+configuration. This is not a repair for missing history or unexplained writes.
+**Changing the path opens a different history store; it does not migrate the
+existing history or merge stores.** An empty chart after a path change is
+not proof that the original data was deleted or that collection recovered.
+Keep the original store intact.
 
-```bash
-PULSE_METRICS_DB_PATH=/dev/shm/pulse/metrics.db
-```
+For an existing override, distinguish these cases from the deployment's saved
+configuration and storage settings, using observations already available:
 
-Use a dedicated directory owned by the account running Pulse. Do not place the
-database directly in a shared parent such as `/tmp/metrics.db`: Pulse secures
-the database directory to mode `0700` and will reject a directory owned by
-another user. On systemd installs, `PrivateTmp=true` also means a path below
-`/tmp` is private to the service and will not appear in the host's `/tmp`.
+| Selected storage | What survives, and what can be lost |
+|---|---|
+| Persistent directory, volume or bind mount | History can survive service restarts and container recreation while that same storage remains attached. Retention still applies; persistence is not a backup. |
+| Container writable layer without a volume or bind mount | A process restart can retain it, but container recreation discards it. Setting the path alone does not create a persistent mount. |
+| RAM-backed storage such as tmpfs or `/dev/shm` | History is lost when that mount is discarded, including host reboot or container recreation. A service restart alone is not guaranteed to clear it. |
 
-The default systemd sandbox permits `/dev/shm/pulse` and Pulse can create that
-subdirectory itself. A dedicated mount elsewhere, such as `/mnt/ramdisk`, also
-needs an explicit writable-path grant:
+Do not use volatile storage for the whole data directory: it also holds
+configuration, encrypted credentials, tokens and other state that must remain
+durable. A separate durable metrics path must be writable by the actual Pulse
+service account and permitted by the deployment's existing sandbox. Use a
+dedicated private directory, not a shared parent such as `/tmp`; do not relax
+ownership or service confinement just to make a path work.
 
-```bash
-sudo install -d -o pulse -g pulse -m 0700 /mnt/ramdisk/pulse
-sudo systemctl edit pulse
-```
-
-Add this drop-in (replace `pulse` with the installed unit name if different):
-
-```ini
-[Service]
-ReadWritePaths=/mnt/ramdisk/pulse
-```
-
-Then set `PULSE_METRICS_DB_PATH=/mnt/ramdisk/pulse/metrics.db` in
-`/etc/pulse/.env` and restart Pulse. `ProtectSystem=strict` deliberately keeps
-paths outside the unit's writable allowlist read-only even when Unix ownership
-would otherwise permit writes.
-
-For Docker, mount a tmpfs at the selected directory and keep `/data` on a
-persistent volume:
-
-```yaml
-services:
-  pulse:
-    environment:
-      PULSE_METRICS_DB_PATH: /metrics-tmpfs/metrics.db
-    tmpfs:
-      - /metrics-tmpfs:size=512m,uid=1000,gid=1000,mode=0700
-```
-
-Using tmpfs loses that history when the RAM-backed mount is discarded, for
-example on a host reboot or container recreation. A service restart alone is
-not guaranteed to clear it. Do not use tmpfs for `/data`: it also contains
-config, encrypted credentials, tokens, and other state that must remain durable.
+**If history has already disappeared**, retain the last known chart range and
+the original update, recreation or reboot time if known. Compare the current
+configured path and mount with the previous deployment's saved settings; an
+unset override uses the [default storage location](#storage-location).
+Do not restart, recreate a container, switch paths again, copy an open database
+or delete the original store to test an explanation. Do not post configuration,
+databases or full container inspections. An unavailable previous path remains
+unknown; a new empty store cannot recover observations lost with a discarded
+mount. Use [Getting Help](TROUBLESHOOTING.md#-getting-help) with a relevant,
+locally redacted description of the storage type and sequence instead.
 
 The aggregation cadence can also be lengthened when an install prefers fewer,
 larger rollup writes over more frequent smaller writes:
