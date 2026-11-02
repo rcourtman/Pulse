@@ -25,6 +25,22 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Pulse MCP does not forward credentials to a redirected origin
+
+The adapter's standard-client requests share the agent HTTP origin boundary for
+manifest discovery, tool/resource calls, workflow-prompt activity and the live
+notification bridge, including its default client with no finite SSE timeout.
+An off-origin redirect cannot send the token or write body, and cannot supply a
+successful tool/resource result or live notification. The error tells the
+operator to configure the final Pulse base URL without echoing destination data.
+
+Same-origin redirects retain method/body semantics, token and surface attribution;
+normal stdio errors, caller cancellation and client redirect limits still apply.
+This is maintenance of existing transports, not a new tool, event type, history
+source or grant. It changes no Pulse web consumer. The registered MCP suite
+exercises tool reads/writes and resources through stdio, prompt-activity POSTs,
+live notification consumption and the default-client request clone boundary.
+
 ### Typed MCP fleet filters survive HTTP projection
 
 GET/DELETE capability projection preserves public string and boolean query
