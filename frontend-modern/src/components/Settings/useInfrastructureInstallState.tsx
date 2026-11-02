@@ -373,18 +373,13 @@ Pulse prepares the first-host install token from setup so you can move straight 
 
     notificationStore.info(
       value
-        ? 'Token regenerated with command execution permission. Copy the install command again.'
-        : 'Token regenerated without command execution permission. Copy the install command again.',
+        ? 'New token prepared with command execution permission. Existing tokens remain valid. Rerun the install command on the intended host.'
+        : 'New token prepared without command execution permission. Existing tokens remain valid. Rerun the install command on the intended host.',
       5000,
     );
-    // The superseded token was never handed to an agent; revoke it so
-    // toggling does not accumulate orphaned install tokens.
-    const supersededTokenId = supersededRecord?.id;
-    if (supersededTokenId && supersededTokenId !== latestRecord()?.id) {
-      SecurityAPI.deleteToken(supersededTokenId).catch((err) => {
-        logger.warn('Failed to revoke superseded install token', err);
-      });
-    }
+    // A displayed token may already be installed on a reporting host. Preparing
+    // a different scope does not prove it is unused and must not revoke it.
+    // Deliberate revocation stays in Tokens, after the operator checks its use.
   };
 
   const resolvedCommandToken = () => {

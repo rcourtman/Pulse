@@ -5153,6 +5153,19 @@ the authoritative analysis outcome.
     install-state surface must describe that prepared token path consistently
     with the live runtime behavior rather than directing the operator to create
     another install token manually.
+    Preparing a different command-access scope through `/api/agent-install-command`
+    must not delete the previous install token through `/api/security/tokens/{id}`.
+    A returned or revealed credential may already be reporting from an installed
+    host; absence of local usage evidence is not evidence it is unused. Minting
+    a replacement preserves the old credential and its scopes. Command flags
+    and the replacement credential become available atomically, or the complete
+    previous command state is restored on failure. The installer explains that
+    preparation does not reconfigure an installed agent and that deliberate
+    revocation belongs in Tokens only after checking no agent still uses it.
+    `InfrastructureOperationsModel.test.tsx`,
+    `useInfrastructureOperationsState.branchcov0722pm.test.tsx` and
+    `InfrastructureInstallerSection.test.tsx` cover this consuming boundary;
+    native service recovery remains separate.
 24. Keep connected-infrastructure surface vocabulary canonical across the
     shared `/api/state` and reporting/install consumers:
     `frontend-modern/src/types/api.ts` must treat `truenas` as a first-class

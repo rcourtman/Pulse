@@ -67,6 +67,9 @@ describe('InfrastructureInstallerSection', () => {
     expect(checkbox).toHaveAccessibleDescription(
       /update, start, stop or restart Docker and Podman containers.*run commands as root/,
     );
+    expect(checkbox).toHaveAccessibleDescription(
+      /prepares a new token and command.*does not reconfigure an installed agent.*Earlier tokens remain valid.*only when no agent still uses them/,
+    );
     expect(
       screen.getByText(
         'Monitoring only. Pulse cannot run commands or change containers on this host.',
