@@ -33,7 +33,8 @@ not an empty role list, and its inline Retry performs only a read. Built-in and
 obsolete row objects remain uneditable. Save and delete are serialised; deletion
 requires the current in-page confirmation, which is withdrawn on context loss.
 A failed save preserves the live draft with fixed inline feedback. Closing an
-editor erases its draft. Success feedback belongs to this panel rather than a
+editor erases its draft. Saved permission strings outside the editor's shortcut
+list remain visible and unchanged unless explicitly edited. Success feedback belongs to this panel rather than a
 global identity-bearing notification. Backend authorisation, endpoints and
 permission semantics remain unchanged.
 

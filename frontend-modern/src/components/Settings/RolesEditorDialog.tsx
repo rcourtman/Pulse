@@ -129,6 +129,13 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       }
                       selectBaseClass="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
                     >
+                      <Show
+                        when={
+                          !RBAC_PERMISSION_ACTIONS.some((action) => action === permission.action)
+                        }
+                      >
+                        <option value={permission.action}>{permission.action}</option>
+                      </Show>
                       <For each={RBAC_PERMISSION_ACTIONS}>
                         {(action) => <option value={action}>{action}</option>}
                       </For>
@@ -144,6 +151,15 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
                       }
                       selectBaseClass="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
                     >
+                      <Show
+                        when={
+                          !RBAC_PERMISSION_RESOURCES.some(
+                            (resource) => resource === permission.resource,
+                          )
+                        }
+                      >
+                        <option value={permission.resource}>{permission.resource}</option>
+                      </Show>
                       <For each={RBAC_PERMISSION_RESOURCES}>
                         {(resource) => <option value={resource}>{resource}</option>}
                       </For>

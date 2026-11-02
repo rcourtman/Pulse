@@ -348,6 +348,22 @@ describe('Roles reader lifetime', () => {
     expect(mocks.error).not.toHaveBeenCalled();
   });
 
+  it('keeps unlisted saved permission strings visible and unchanged in the real editor', async () => {
+    mocks.getRoles.mockResolvedValueOnce([
+      { ...north, permissions: [{ action: 'future:read', resource: 'future/*' }] },
+    ]);
+    render(() => <RolesPanel currentUser="reader-a" canManage={true} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit role' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit role' });
+    expect(within(dialog).getByLabelText('Permission 1 action')).toHaveValue('future:read');
+    expect(within(dialog).getByLabelText('Permission 1 resource')).toHaveValue('future/*');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Update Role' }));
+    await waitFor(() => expect(mocks.saveRole).toHaveBeenCalled());
+    expect(mocks.saveRole.mock.calls[0][0].permissions).toEqual([
+      { action: 'future:read', resource: 'future/*' },
+    ]);
+  });
+
   it('shows inline draft errors and a cancellable, withdrawable confirmation in the consuming panel', async () => {
     const [allowed, setAllowed] = createSignal(true);
     mocks.saveRole.mockRejectedValueOnce(new Error('PRIVATE DETAIL'));
