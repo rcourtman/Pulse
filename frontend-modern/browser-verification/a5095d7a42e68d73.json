@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "53e6b8f8c34ed69a95404758cfc6d7cb5e612ac6",
+  "verified_at": "2026-11-02T21:44:21.114900Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "c62dfb6e477adc997f6dfda1edfcf8646e7adbaf4843c81709673fc916dcbfce",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "e54fbde513164e73e7e7961283180b9513e749644f76fe4de202ce4b8c066bbf",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts": "e0795030367f5eb2851dad74f3fd26f7f29ea4f9333a2cf55a6219392b59baea"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "states": [
+    "Exact full production App built by source-3q0zdc43 on 53e6b8f8c34ed69a95404758cfc6d7cb5e612ac6; no fixture component or substitute renderer. Source-byrvms2l on 81c0661f23 supplies the unchanged manager/hook proof and the first desktop loading/error/retry captures.",
+    "Composite proof: initial desktop run passed 11 checks then exposed a real misleading saved-configuration removal fallback while the independent nodes reader still returned 503. That failure is retained, repaired and directly exercised in the final run; no aggregate first-attempt pass.",
+    "Final run: 44 checks, desktop 1440x1000 and narrow 390x844, 14 final captures opened through native view_image; five earlier captures and two initiating Core failed-read captures were also opened. Loading and cold 503/held retry do not claim zero or show onboarding. Transient 503 retains the same row with an explicit last-loaded warning and no current posture claim.",
+    "403 withdraws the old row and presents access-specific guidance without onboarding; successful empty inventory alone shows zero and onboarding. The independent saved-node failure now says unavailable with a direct Retry, then the same saved name/HTTPS endpoint and paused connection recover.",
+    "Core source-bm2cm8vz supplied exact request-scoped 503/200 connections/node replies. Pending/403/empty variations and unrelated session/shell/WebSocket replies are declared safe fixtures, not live authentication, native appliance acceptance or original removal/startup recovery. No configuration writes.",
+    "Pixels show readable, unclipped failure/retry guidance at both widths, retained-row staleness, withdrawn private row, and saved HTTPS identity in the recovered scrollable editor. The green shell Connected dot is a fixture, not monitoring readiness."
+  ],
+  "interactions": [
+    "Keyboard Retry with held response keeps the error visible and disables duplicate Retry; successful list read restores the paused saved connection without writes.",
+    "Keyboard Manage opens the saved settings dialog. An independent configuration-read failure no longer suggests deletion; Retry saved configuration re-reads through the existing owner and restores that same dialog, identity and HTTPS address. Escape returns focus to Manage.",
+    "Existing poll drives a warm 503 and then 403; explicit Retry clears the stale warning on successful read, and successful empty read enables genuine onboarding. No wider selection, permission or TLS change."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browser": {
+    "client": "1.56.1",
+    "engine": "Chromium",
+    "version": "141.0.7390.37"
+  },
+  "proof": {
+    "source_receipt": "source-3q0zdc43",
+    "app_archive_sha256": "79d80b7c3a3817ee6c851b27f57e047041c9c34cc3889ed79d0bce35094af6f8",
+    "final_checks": 44,
+    "final_captures": 14,
+    "page_errors": 0,
+    "console_errors": 11,
+    "console_note": "Retained expected failed HTTP reads and the existing node-reader logger; not a zero-console-error claim."
+  }
+}
