@@ -33,6 +33,9 @@ establish safe recovery.
   [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
   before replacing a token or reinstalling. Installer success is not an accepted
   report.
+- **Proxmox or PBS rejects an HTTP → HTTPS redirect:** use the
+  [direct HTTPS recovery](#proxmox-or-pbs-rejects-an-http-to-https-redirect)
+  on the existing connection, without replacing credentials or weakening trust.
 - **Proxmox or PBS reports a certificate error:** distinguish
   [certificate trust, renewal and saved-pin conflicts](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed).
   Keep verification enabled; a new certificate or a working browser is not
@@ -308,6 +311,35 @@ repeated state requests, induce a freeze or take a process-terminating dump to
 recreate the incident. Preserve existing configuration, credentials and logs;
 [report the evidence already available](#-getting-help). A later recovery does
 not explain the earlier failure, and this guidance is not a runtime fix.
+
+### Proxmox or PBS rejects an HTTP to HTTPS redirect
+
+The error **infrastructure redirects must stay on the same origin** means a
+request was redirected to a different scheme, hostname or port. HTTP → HTTPS
+changes the origin even when the hostname and port stay the same. A browser
+following that redirect does not establish that Pulse can safely forward its
+API credentials there; this is not an invalid-token or permission error.
+
+For this specific HTTP → HTTPS failure, open the **existing** connection in
+**Settings → Infrastructure → Manage → SSL settings**. If its **Endpoint URL**
+starts with `http://` and the intended endpoint supports HTTPS at that same
+hostname and port, change only the scheme to `https://`. Keep the saved
+credentials, **Verify SSL certificate** and **SSL Fingerprint (optional)**
+unchanged. Do not delete and re-add the connection, rotate tokens, clear pins,
+disable verification or restart Pulse to make the redirect work.
+
+If HTTPS requires a different hostname or port, establish the intended address
+and certificate trust independently before editing; do not copy a redirect's
+destination blindly. If direct HTTPS gives a certificate error, use the
+[certificate guidance](#proxmox-or-pbs-certificate-validation-failed), not HTTP
+fallback or a trust bypass.
+
+Save the correction and check the next ordinary poll for the affected members.
+A successful Test alone does not establish every member's polling recovery;
+see [Test Connection and cluster polling](#test-connection-succeeds-but-cluster-polling-fails).
+If the refusal remains, keep the connection intact and use [Getting Help](#-getting-help)
+with the existing redacted error and running version. Keep literal endpoints,
+credentials and full configuration private; no new diagnostic run is required.
 
 ### Proxmox or PBS certificate validation failed
 

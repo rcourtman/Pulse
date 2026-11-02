@@ -34,6 +34,45 @@ const prose = (element: HTMLElement): string =>
   (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('Proxmox TLS troubleshooting guide', () => {
+  it('routes a refused HTTP upgrade to direct HTTPS without replacing saved identity or trust', () => {
+    const article = guide('TROUBLESHOOTING');
+    const heading = article.querySelector('#proxmox-or-pbs-rejects-an-http-to-https-redirect');
+    expect(heading?.tagName).toBe('H3');
+    const section = document.createElement('section');
+    for (let next = heading!.nextElementSibling; next; next = next.nextElementSibling) {
+      if (/^H[1-3]$/.test(next.tagName)) break;
+      section.appendChild(next.cloneNode(true));
+    }
+    const text = prose(section);
+    expect(text).toContain('infrastructure redirects must stay on the same origin');
+    expect(text).toContain('HTTP → HTTPS changes the origin');
+    expect(text).toContain('the intended endpoint supports HTTPS at that same hostname and port');
+    expect(text).toContain('change only the scheme to https://');
+    expect(text).toContain(
+      'Keep the saved credentials, Verify SSL certificate and SSL Fingerprint (optional) unchanged',
+    );
+    expect(text).toContain('Do not delete and re-add the connection, rotate tokens, clear pins');
+    expect(text).toContain("do not copy a redirect's destination blindly");
+    expect(text).toContain('check the next ordinary poll for the affected members');
+    expect(text).toContain(
+      "A successful Test alone does not establish every member's polling recovery",
+    );
+    expect(text).toContain('Keep literal endpoints, credentials and full configuration private');
+    expect(section.querySelector('pre')).toBeNull();
+    for (const id of [
+      'proxmox-or-pbs-certificate-validation-failed',
+      'test-connection-succeeds-but-cluster-polling-fails',
+      '-getting-help',
+    ]) {
+      expect(section.querySelector(`a[href="#${id}"]`), id).not.toBeNull();
+      expect(article.querySelector(`[id="${id}"]`), id).not.toBeNull();
+    }
+    const entry = article.querySelector(
+      'a[href="#proxmox-or-pbs-rejects-an-http-to-https-redirect"]',
+    );
+    expect(entry?.textContent).toBe('direct HTTPS recovery');
+  });
+
   it('distinguishes the primary connection test from saved-member polling and agent reports', () => {
     const { section } = testScopeSection();
     const text = prose(section);
