@@ -23,21 +23,20 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
-### Host Disk columns draw one bar shape (2 November 2026)
+### Compact Proxmox node Disk cells show the fullest disk (2 November 2026)
 
-Proxmox node, Docker host and Machines tables render a host with more than one
-agent-reported disk through `StackedDiskBar` `mode="aggregate"` with
-`summaryStrategy="max"`: the single horizontal bar a one-disk host gets, sized
-and coloured by the fullest measured disk and labelled `NN% max` when the cell
-is wide enough, so a Disk column reads in one shape down its rows. The
-`vertical-bars` micro-bars are no longer used by these tables. The max summary
-holds while any reported disk is unmeasured, so a full disk is not hidden
-behind a low aggregate. The Proxmox node row's alert accent reads the node's
-own alerts through `getUnifiedResourceAlertStyles`, like the other host
-tables, and no longer tints for a guest's alert. `DockerHostsTable.test.tsx`,
-`AgentsMachinesTable.test.tsx` and `ProxmoxNodesTable.test.tsx` cover the
-rendered shape and the accent. No resource identity, projection or metric
-change.
+A compact Proxmox node row (phone width or compact metrics) has no room for
+the per-disk `vertical-bars` micro-bars, so a node with more than one
+agent-reported disk draws the `StackedDiskBar` `aggregate` bar. It used the
+average across disks, which hid a nearly full disk behind a half-empty one;
+it now passes `summaryStrategy="max"` and is sized and coloured by the
+fullest measured disk, and the max summary holds while any reported disk is
+unmeasured. Wide rows keep one micro-bar per disk, and Machines and Docker
+host tables are unchanged. The Proxmox node row's alert accent reads the
+node's own alerts through `getUnifiedResourceAlertStyles`, like the other
+host tables, and no longer tints for a guest's alert. `StackedDiskBar.test.tsx`
+covers the compact summary and `ProxmoxNodesTable.test.tsx` the accent. No
+resource identity, projection or metric change.
 
 ### Backup views share bounded owned-focus restoration
 

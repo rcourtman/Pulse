@@ -708,10 +708,14 @@ export const ProxmoxNodesTable: Component<{
                               fallback={
                                 <StackedDiskBar
                                   mode={
-                                    usesCompactMetrics() || (node.agent?.disks?.length ?? 0) > 1
+                                    usesCompactMetrics()
                                       ? 'aggregate'
-                                      : undefined
+                                      : (node.agent?.disks?.length ?? 0) > 1
+                                        ? 'vertical-bars'
+                                        : undefined
                                   }
+                                  // A compact cell has no room for per-disk bars; summarise it
+                                  // by the fullest disk so a full one is not averaged away.
                                   summaryStrategy="max"
                                   disks={normalizeDiskArray(node.agent?.disks)}
                                   aggregateDisk={aggregateDisk()}

@@ -620,7 +620,7 @@ describe('StackedDiskBar', () => {
       expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
     });
 
-    it('draws a multi-disk host as one bar of its fullest disk, as host tables do', () => {
+    it('summarises a compact multi-disk cell by its fullest disk, not the average', () => {
       const { container } = render(() => (
         <StackedDiskBar
           mode="aggregate"
@@ -634,7 +634,7 @@ describe('StackedDiskBar', () => {
         />
       ));
 
-      // Same shape as a single-disk row: one fill, no per-disk micro-bars.
+      // One fill, sized and coloured by /data rather than the 20% aggregate.
       expect(container.querySelectorAll('[data-stacked-disk-fill="single"]')).toHaveLength(1);
       expect(container.querySelectorAll('[data-stacked-disk-fill="vertical"]')).toHaveLength(0);
       expect(getSingleBarFill(container)?.getAttribute('fill')).toContain('239, 68, 68');

@@ -526,8 +526,7 @@ export const DockerHostsTable: Component<{
                               fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedDiskBar
-                                mode={(disks()?.length ?? 0) > 1 ? 'aggregate' : undefined}
-                                summaryStrategy="max"
+                                mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
                                 disks={disks()}
                                 aggregateDisk={aggregateDisk()}
                                 thresholds={diskThresholds()}

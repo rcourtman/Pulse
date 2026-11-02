@@ -720,7 +720,7 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByTitle(/Agent has stopped reporting/)).toBeInTheDocument();
   });
 
-  it('renders multi-disk machine usage as one bar for the fullest disk', () => {
+  it('renders multi-disk machine usage as vertical mini-bars', () => {
     const { container } = render(() => (
       <AgentsMachinesTable
         resources={[
@@ -757,11 +757,9 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    // Same bar shape as a single-disk machine, sized and coloured by /data.
-    expect(container.querySelectorAll('[data-stacked-disk-fill="vertical"]')).toHaveLength(0);
-    expect(container.querySelectorAll('[data-stacked-disk-fill="single"]')).toHaveLength(1);
-    expect(screen.getByText('91%')).toBeInTheDocument();
-    expect(screen.getByText('max')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-stacked-disk-fill="vertical"]')).toHaveLength(2);
+    expect(screen.queryByText('max')).not.toBeInTheDocument();
+    expect(screen.queryByText('2 disks')).not.toBeInTheDocument();
   });
 
   it('searches machine-native fields and exposes host-style search affordances', async () => {
