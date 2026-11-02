@@ -98,6 +98,7 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
   const infrastructureSettings = useInfrastructureSettingsState({
     eventBus,
     canReadInfrastructure,
+    currentUser: () => securityStatus()?.currentUsername,
     discoveryEnabled: discoverySettings.discoveryEnabled,
     setDiscoveryEnabled: discoverySettings.setDiscoveryEnabled,
     discoverySubnet: discoverySettings.discoverySubnet,

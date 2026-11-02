@@ -123,13 +123,15 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
   });
 
   it('extracts and trims a plain-object message through testSavedConnection failure', async () => {
-    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([] as never);
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([
+      makeConnection({ id: 'conn-saved', name: 'tower' }),
+    ]);
     vi.mocked(TrueNASAPI.testSavedConnection).mockRejectedValueOnce({ message: ' saved boom ' });
 
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
 
-    await result.testSavedConnection(makeConnection({ id: 'conn-saved', name: 'tower' }));
+    await result.testSavedConnection(result.connections()[0]);
 
     expect(notificationStore.error).toHaveBeenCalledWith('saved boom');
     expect(logger.error).toHaveBeenCalledWith(
@@ -280,7 +282,9 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
 
   it('opens the delete confirmation dialog with the pending connection and closes it while idle', async () => {
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([] as never);
+
     const target = makeConnection({ id: 'conn-del', name: 'tower' });
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([target]);
 
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
@@ -302,7 +306,9 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
         resolveDelete = resolve;
       }),
     );
+
     const target = makeConnection({ id: 'conn-del', name: 'tower' });
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([target]);
 
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
@@ -329,13 +335,23 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([] as never);
     vi.mocked(TrueNASAPI.deleteConnection).mockResolvedValueOnce({ success: true, id: 'conn-1' });
 
+    const target = makeConnection({ id: 'conn-1', name: 'tower', host: 'truenas.local' });
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([target]);
+
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
 
-    result.openDeleteDialog(makeConnection({ id: 'conn-1', name: 'tower', host: 'truenas.local' }));
+    result.openDeleteDialog(target);
     await result.deletePendingConnection();
 
-    expect(TrueNASAPI.deleteConnection).toHaveBeenCalledWith('conn-1');
+    expect(TrueNASAPI.deleteConnection).toHaveBeenCalledWith(
+      'conn-1',
+      expect.objectContaining({
+        expectedOrgID: 'default',
+        retry: false,
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(notificationStore.success).toHaveBeenCalledWith('Removed tower');
     expect(result.deleteDialogOpen()).toBe(false);
     expect(result.pendingDeleteConnection()).toBeNull();
@@ -348,10 +364,13 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([] as never);
     vi.mocked(TrueNASAPI.deleteConnection).mockResolvedValueOnce({ success: true, id: 'conn-2' });
 
+    const target = makeConnection({ id: 'conn-2', name: '', host: 'box.local' });
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([target]);
+
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
 
-    result.openDeleteDialog(makeConnection({ id: 'conn-2', name: '', host: 'box.local' }));
+    result.openDeleteDialog(target);
     await result.deletePendingConnection();
 
     expect(notificationStore.success).toHaveBeenCalledWith('Removed box.local');
@@ -361,10 +380,12 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([] as never);
     vi.mocked(TrueNASAPI.deleteConnection).mockRejectedValueOnce(new Error('server is down'));
 
+    const target = makeConnection({ id: 'conn-3', name: 'tower' });
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([target]);
+
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await waitFor(() => expect(result.loading()).toBe(false));
 
-    const target = makeConnection({ id: 'conn-3', name: 'tower' });
     result.openDeleteDialog(target);
     await result.deletePendingConnection();
 

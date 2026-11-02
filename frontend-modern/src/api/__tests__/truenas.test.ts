@@ -281,3 +281,53 @@ describe('TrueNASAPI', () => {
     expect(isRedactedTrueNASSecret(undefined)).toBe(false);
   });
 });
+
+describe('TrueNAS request context', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+  it('carries reader scope, cancellation and retry policy through every canonical connection operation', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValue({ success: true });
+    const options = { expectedOrgID: 'team-a', signal: new AbortController().signal, retry: false };
+    const input = {
+      host: 'nas.example.invalid',
+      username: 'monitor',
+      useHttps: true,
+      insecureSkipVerify: false,
+      fingerprint: 'SHA256:synthetic',
+    };
+    await TrueNASAPI.listConnections(options);
+    await TrueNASAPI.createConnection(input, options);
+    await TrueNASAPI.updateConnection('id/with slash', input, options);
+    await TrueNASAPI.deleteConnection('id/with slash', options);
+    await TrueNASAPI.testConnection(input, options);
+    await TrueNASAPI.testSavedConnection('id/with slash', input, options);
+    await TrueNASAPI.previewConnection(input, options);
+    await TrueNASAPI.previewSavedConnection('id/with slash', input, options);
+    const calls = vi.mocked(apiFetchJSON).mock.calls;
+    expect(calls).toHaveLength(8);
+    expect(calls.map(([url]) => url)).toEqual([
+      '/api/truenas/connections',
+      '/api/truenas/connections',
+      '/api/truenas/connections/id%2Fwith%20slash',
+      '/api/truenas/connections/id%2Fwith%20slash',
+      '/api/truenas/connections/test',
+      '/api/truenas/connections/id%2Fwith%20slash/test',
+      '/api/truenas/connections/preview',
+      '/api/truenas/connections/id%2Fwith%20slash/preview',
+    ]);
+    expect(calls.map(([, request]) => request?.method ?? 'GET')).toEqual([
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'POST',
+      'POST',
+      'POST',
+      'POST',
+    ]);
+    for (const [, request] of calls) expect(request).toMatchObject(options);
+    for (const [, request] of calls.filter(([, request]) => request?.body))
+      expect(JSON.parse(request!.body as string)).toEqual(input);
+  });
+});

@@ -113,7 +113,9 @@ vi.mock('@/features/alerts/AlertsConfigurationSurface', () => ({
 }));
 
 const admittedStatus = {
-  requiresAuth: false,
+  detailLevel: 'privileged',
+  hasAuthentication: true,
+  requiresAuth: true,
   currentUsername: 'alice',
   apiTokenHint: 'hint-a',
   tokenScopes: ['settings:read', 'settings:write'],
@@ -145,6 +147,48 @@ describe('Alerts read-only presentation', () => {
     expect(screen.queryByTestId('alerts-config-surface')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Alert settings access is unavailable');
     expect(configurationSurfaceSpy).not.toHaveBeenCalled();
+  });
+
+  for (const detailLevel of ['authenticated', 'privileged'] as const)
+    it(`admits a ${detailLevel} reader on an install that requires login`, () => {
+      render(() => <Alerts securityStatus={{ ...admittedStatus, detailLevel }} />);
+      expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
+    });
+
+  it('preserves configuration access on an auth-free install', () => {
+    render(() => (
+      <Alerts
+        securityStatus={{ detailLevel: 'public', requiresAuth: false, hasAuthentication: false }}
+      />
+    ));
+    expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
+  });
+
+  for (const detailLevel of ['public', undefined] as const)
+    it(`withholds configuration from ${detailLevel ?? 'unresolved'} login discovery`, () => {
+      locationState.pathname = '/alerts/thresholds';
+      render(() => (
+        <Alerts securityStatus={{ requiresAuth: true, hasAuthentication: true, detailLevel }} />
+      ));
+      expect(screen.queryByTestId('alerts-config-surface')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Alert settings access is unavailable');
+    });
+
+  it('retires a signed-in editor when status becomes public and admits only a fresh authenticated editor', async () => {
+    const retired = vi.fn();
+    configurationSurfaceSpy.mockImplementation(() => {
+      onCleanup(retired);
+      return <div data-testid="alerts-config-surface">Config</div>;
+    });
+    const [status, setStatus] = createSignal<SecurityStatus>(admittedStatus);
+    render(() => <Alerts securityStatus={status()} />);
+    expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
+    setStatus({ requiresAuth: true, hasAuthentication: true, detailLevel: 'public' });
+    await waitFor(() => expect(retired).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('alerts-config-surface')).not.toBeInTheDocument();
+    setStatus({ ...admittedStatus, detailLevel: 'authenticated' });
+    await screen.findByTestId('alerts-config-surface');
+    expect(configurationSurfaceSpy).toHaveBeenCalledTimes(2);
   });
 
   it('keeps equivalent reader facts mounted, but retires user, token, scope and workspace lifetimes', async () => {
