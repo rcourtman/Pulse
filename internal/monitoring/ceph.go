@@ -141,7 +141,11 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 			var offline []string
 			for daemonName, daemon := range definition.Daemons {
 				total++
-				if strings.EqualFold(daemon.Status, "running") || strings.EqualFold(daemon.Status, "active") {
+				// Standby is a healthy running role for a manager, not an
+				// offline daemon. Do not extend it to MON/OSD or infer health
+				// for stopped/unknown daemons from the cluster summary.
+				if strings.EqualFold(daemon.Status, "running") || strings.EqualFold(daemon.Status, "active") ||
+					(strings.EqualFold(serviceType, "mgr") && strings.EqualFold(daemon.Status, "standby")) {
 					running++
 					continue
 				}
