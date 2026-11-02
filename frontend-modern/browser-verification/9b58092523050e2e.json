@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "e1ea0cf5851ad661711d83c47b6cb99afdf98c52",
+  "source_sha": "e1ea0cf5851ad661711d83c47b6cb99afdf98c52",
+  "verified_at": "2026-11-02T08:53:39.541966Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/nodes.ts",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/nodes.ts": "65286e90e15af6b07446966ab44643f7b2d6c55ce94a75c446ad48299107b6d4",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "7116839c0dd4e7b923a3be26e906de03b12118314a533b673325d1f6f2cf48c2",
+    "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx": "2b1c7ff1892b80cf4db3b836eea42f38b21ea27dce3376e37eef05cf71c98061"
+  },
+  "routes": [
+    "/settings/infrastructure?add=linux-host"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App and Infrastructure installer consume synthetic security, host-token mint and agent-lookup HTTP producers using the normal API client. Playwright1.56.1; desktop Chromium141.0.7390.37/light1280x900 and narrow WebKit26.0/dark390x844.",
+    "Command access defaults off. A held scope replacement locks generation and removes old reveal/copyable commands until the matching token and flags are ready. Unix command text contains no revealed token.",
+    "Preparing both command-enabled and monitoring-only replacements sends no DELETE and preserves earlier token IDs and scopes. The existing lookup consumer still accepts a synthetic host using the original credential; no native service acceptance is inferred.",
+    "A refused403 host mint is submitted exactly once with no automatic CSRF replay. The previous checkbox, command and reveal are restored and usable without minting again.",
+    "39 final checks and eight native capture inspections passed. Both contexts and browsers, Vite and the fixture HTTP server closed. No uncaught page errors; expected synthetic403 console errors are retained.",
+    "Adjacent consent and replacement guidance, enabled/disabled checkbox states and scope/refusal feedback are readable in both viewports. Narrow text wraps within the scrollable installer; temporary toasts cover the lower form during their normal lifetime. No document-width overflow.",
+    "Earlier source copy-lint and evidence-fixture failures, including incomplete cleanup in one adverse attempt, remain retained. A corrected copy sentence was re-exercised on this exact final source; no release availability or issue3747 service-start recovery is claimed."
+  ],
+  "interactions": [
+    "Generate and reveal the monitoring-only token, then prepare a held command-enabled replacement through the real checkbox.",
+    "Release the mint and inspect matching Unix flags, preserve the earlier credential, and run the actual hostname lookup consumer against that credential.",
+    "Prepare monitoring-only access without revoking the command-capable credential, then refuse one new mint and recover the prior checkbox, command and separately revealed token."
+  ]
+}

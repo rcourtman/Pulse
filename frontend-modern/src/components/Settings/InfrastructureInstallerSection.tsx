@@ -368,7 +368,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 checked={state.enableCommands()}
                 disabled={state.isGeneratingToken()}
                 onChange={(event) => void state.setEnableCommands(event.currentTarget.checked)}
-                aria-describedby="install-command-access-description"
+                aria-describedby="install-command-access-description install-token-replacement-description"
                 class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
               />
               {COMMAND_ACCESS_OPTION_LABEL}
@@ -378,6 +378,12 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               for Patrol actions. Pulse can then run commands as root on this host, so leave it off
               if you only want monitoring. It cannot be switched on later from Pulse: rerun the
               install command with this selected.
+            </p>
+            <p id="install-token-replacement-description" class="ml-6 mt-2 text-xs text-muted">
+              Changing this choice prepares a new token and command. It does not reconfigure an
+              installed agent. Rerun the installer on the intended host with the new token. Earlier
+              tokens remain valid. Revoke them from Settings → Infrastructure → Tokens only when no
+              agent still uses them.
             </p>
           </div>
 

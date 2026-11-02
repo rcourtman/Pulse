@@ -244,9 +244,18 @@ this host** and sits in the token step, before the credential is minted,
 instead of behind the advanced connection options as "Enable legacy combined
 command profile". The behaviour behind it is unchanged: default off, an
 explicit choice adds `--enable-commands`, records `command-capable`, and mints
-an execution-scoped token; toggling after a mint still regenerates and revokes
-the superseded token, and a `monitoring-only` install still cannot be promoted
-remotely. The old name told the users who need Docker/Podman updates not to
+an execution-scoped token. Toggling after a mint prepares a replacement without
+revoking earlier tokens: a displayed token may already be installed and reporting.
+The new token and its command flags are admitted together; commands stay locked
+while minting, and a failed mint restores the previous complete state. Preparing
+a host install credential makes one non-retrying request, including on a 403;
+the generic CSRF retry must not resubmit this credential-creation operation.
+The existing authentication and CSRF gates are unchanged. Preparing
+a replacement does not change an installed agent's local command access or any
+existing token's scopes. Rerunning the installer on the intended host is still
+required; explicit token revocation stays in Tokens after checking no agent still
+uses it. A `monitoring-only` install still cannot be promoted remotely.
+The old name told the users who need Docker/Podman updates not to
 use the only working route: Docker updates dispatch through the agent command
 session, the separate action runner's container actions are unqualified, and
 rootful Docker under the safe collector profile carries no update checks or
@@ -254,7 +263,13 @@ actions. The label is owned by `getUnifiedAgentCommandAccessOptionLabel`, which
 the locked Docker update pill and the Proxmox setup guide also read, so copy
 that sends users to it cannot drift from the checkbox.
 `InfrastructureInstallerSection.test.tsx` pins the checkbox in the token step
-with its root-access description.
+with its root-access and replacement descriptions.
+`useInfrastructureOperationsState.branchcov0722pm.test.tsx` exercises atomic
+replacement and failed-mint rollback, including both command-access directions
+without deleting an already-displayed token. `InfrastructureOperationsModel.test.tsx`
+keeps preparation free of the token deletion API. Browser proof exercises the
+actual Infrastructure consumer and token/lookup HTTP fixtures, not native agent
+installation, service-start diagnosis or installed recovery.
 
 ### Manual update checks skip images with no registry tag (21 October 2026)
 

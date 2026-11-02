@@ -455,7 +455,14 @@ describe('infrastructure operations model', () => {
       'setEnableCommands(previousEnableCommands);',
     );
     expect(useInfrastructureInstallStateSource).toContain('setCurrentToken(supersededToken);');
+    expect(useInfrastructureInstallStateSource).not.toContain('SecurityAPI.deleteToken');
     expect(infrastructureInstallerSectionSource).toContain('disabled={state.isGeneratingToken()}');
+    expect(infrastructureInstallerSectionSource.replace(/\s+/g, ' ')).toContain(
+      'does not reconfigure an installed agent',
+    );
+    expect(infrastructureInstallerSectionSource.replace(/\s+/g, ' ')).toContain(
+      'Earlier tokens remain valid.',
+    );
   });
 
   it('keeps infrastructure install and operations surfaces free of retired commercial telemetry wrappers', () => {

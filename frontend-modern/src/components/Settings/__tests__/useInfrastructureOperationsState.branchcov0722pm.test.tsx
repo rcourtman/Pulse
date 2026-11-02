@@ -463,9 +463,55 @@ describe('useInfrastructureOperationsState command-building closures', () => {
 
       expect(state.currentToken()).toBe('tok-command');
       expect(state.commandsUnlocked()).toBe(true);
-      expect(mocks.securityDeleteToken).toHaveBeenCalledWith('rec-1');
+      expect(mocks.securityDeleteToken).not.toHaveBeenCalled();
       dispose();
     });
+
+    it.each([false, true])(
+      'keeps an already-installed credential valid when preparing command access from %s',
+      async (previousEnableCommands) => {
+        const { state, dispose } = mountHook();
+        await flushAsync();
+        await state.setEnableCommands(previousEnableCommands);
+        await state.handleGenerateToken();
+
+        // Once revealed, the token may already be reporting from a host. The
+        // install workspace cannot infer that a replaced token is unused.
+        const installedTokens = new Set([state.currentToken()]);
+        mocks.securityDeleteToken.mockImplementation(async () => {
+          installedTokens.delete('tok-1');
+        });
+        mocks.createHostAgentInstallToken.mockResolvedValueOnce({
+          token: 'tok-replacement',
+          record: {
+            id: 'rec-replacement',
+            name: 'Replacement agent token',
+            prefix: 'pul',
+            suffix: 'next',
+            createdAt: '2026-11-02',
+          },
+        });
+
+        await state.setEnableCommands(!previousEnableCommands);
+
+        expect(state.enableCommands()).toBe(!previousEnableCommands);
+        expect(state.currentToken()).toBe('tok-replacement');
+        expect(state.commandsUnlocked()).toBe(true);
+        expect(mocks.createHostAgentInstallToken).toHaveBeenLastCalledWith({
+          enableCommands: !previousEnableCommands,
+          name: expect.any(String),
+        });
+        expect(installedTokens.has('tok-1')).toBe(true);
+        expect(mocks.securityDeleteToken).not.toHaveBeenCalled();
+        const linuxCommand = state
+          .commandSections()
+          .find((section) => section.platform === 'linux');
+        expect(
+          unixBootstrapTestSource(linuxCommand!.snippets[0].command).includes('--enable-commands'),
+        ).toBe(!previousEnableCommands);
+        dispose();
+      },
+    );
 
     it('restores the previous complete command state when replacement minting fails', async () => {
       const { state, dispose } = mountHook();
