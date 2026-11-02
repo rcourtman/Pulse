@@ -6,6 +6,7 @@ import { formControl } from '@/components/shared/Form';
 import { SearchField } from '@/components/shared/SearchField';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { Button } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { useResources } from '@/hooks/useResources';
 import type { Resource, ResourceType } from '@/types/resource';
@@ -40,7 +41,22 @@ interface ResourcePickerProps {
 }
 
 export function ResourcePicker(props: ResourcePickerProps) {
-  const { resources, loading } = useResources();
+  const { resources, loading, error, refetch } = useResources(undefined, { retainReadError: true });
+  const [retrying, setRetrying] = createSignal(false);
+  const inventoryLoading = () => loading() || retrying();
+  const inventoryAvailable = () => !error() && !inventoryLoading();
+  const retryResources = async () => {
+    if (inventoryLoading()) return;
+    setRetrying(true);
+    try {
+      await refetch();
+    } catch {
+      // The canonical hook retains the read error. Do not expose provider
+      // details or turn a failed retry into an empty inventory.
+    } finally {
+      setRetrying(false);
+    }
+  };
   const [search, setSearch] = createSignal('');
   const [typeFilter, setTypeFilter] = createSignal<TypeFilter>('all');
   const [tagFilter, setTagFilter] = createSignal('');
@@ -51,6 +67,9 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
   // Filter to reportable resource types across infrastructure, workloads, storage, and recovery.
   const reportableResources = createMemo(() => {
+    // A retained snapshot is not permission to choose resources after its
+    // read failed. Preserve the caller's explicit selection, not stale rows.
+    if (!inventoryAvailable()) return [];
     return resources().filter(
       (r) =>
         REPORTABLE_RESOURCE_TYPES.has(r.type) &&
@@ -112,6 +131,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
   const isSelected = (id: string) => selectedIds().has(id);
 
   const toggleResource = (resource: Resource) => {
+    if (!inventoryAvailable()) return;
     const current = props.selected();
     if (isSelected(resource.id)) {
       props.onSelectionChange(current.filter((s) => s.id !== resource.id));
@@ -132,6 +152,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
   };
 
   const selectAllVisible = () => {
+    if (!inventoryAvailable()) return;
     const current = props.selected();
     const currentIds = new Set(current.map((s) => s.id));
     const toAdd = filteredResources()
@@ -194,13 +215,34 @@ export function ResourcePicker(props: ResourcePickerProps) {
       </div>
 
       {/* Resource list */}
-      <div class="border border-border rounded-md overflow-hidden">
+      <div class="border border-border rounded-md overflow-hidden" aria-busy={inventoryLoading()}>
         <Show
-          when={!loading() || reportableResources().length > 0}
+          when={inventoryAvailable()}
           fallback={
-            <div class="p-8 text-center text-sm text-muted" role="status">
-              Loading resources…
-            </div>
+            <Show
+              when={error()}
+              fallback={
+                <div class="p-8 text-center text-sm text-muted" role="status">
+                  Loading resources…
+                </div>
+              }
+            >
+              <InlineNotice role="alert" tone="warning" class="m-3">
+                <div class="space-y-3">
+                  <p class="font-medium">Resources could not be loaded.</p>
+                  <p>Existing selections are unchanged. Retry loading to choose resources.</p>
+                  <Button
+                    variant="secondary"
+                    size="settingsAction"
+                    class="w-full sm:w-auto"
+                    disabled={inventoryLoading()}
+                    onClick={() => void retryResources()}
+                  >
+                    {inventoryLoading() ? 'Retrying resources…' : 'Retry loading resources'}
+                  </Button>
+                </div>
+              </InlineNotice>
+            </Show>
           }
         >
           <Show
@@ -349,6 +391,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             variant="outline"
             size="settingsAction"
             class="w-full gap-1.5 text-muted sm:w-auto"
+            disabled={!inventoryAvailable() || filteredResources().length === 0}
             onClick={selectAllVisible}
           >
             <CheckSquare size={14} />
