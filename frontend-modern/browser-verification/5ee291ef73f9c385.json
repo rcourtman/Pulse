@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "62c20a0c35ee66a534b512ad02f6a47b4a9085b3",
+  "verified_at": "2026-11-02T00:39:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "665b2c9c45e9ae252aa19c3dd916304653c4cfe101628d616e70cccc03a3bca3"
+  },
+  "routes": [
+    "/settings/security-users",
+    "/settings/security-sso (ordinary containing Settings status refresh)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "48 actual-App checks in light desktop Chromium 141.0.7390.37 and dark narrow WebKit 26.0, using Playwright 1.56.1 matching the integration lock. All 12 captures received native image-tool pixel review. Fresh Vite compilation serves the committed App, Settings registry, User Access state, canonical API clients and application CSS. Safe synthetic HTTP/session/CSRF/role producers only, not native IdP or installed recovery.",
+    "Both viewports show legible current identity, role draft, saved-permission context, refusal feedback and confirmation controls. Directory failure is unknown with one persistent read-only Retry, no stale rows and no private-response canary. No uncaught application page error; four expected synthetic HTTP403 console messages remain."
+  ],
+  "interactions": [
+    "Close and reopen the exact same account while its earlier permission read is held, then deliver that obsolete response after the new editor has current permissions and a changed draft. Current saved permissions and the draft survive, and the obsolete canary is not rendered.",
+    "Refuse one actual role PUT, preserve the selected draft and show only bounded inline feedback; explicit retry alone sends the second identical confirmed payload. Every write keeps the ordinary synthetic session, CSRF, API token and exact confirmed organisation.",
+    "Use the real organisation selector with the new inventory held: old account, draft, confirmation and success/error feedback withdraw, Loading is not false-empty, and the admitted directory/editor belongs to the new organisation. Retry a refused directory through its actual persistent notice without writing.",
+    "An ordinary synthetic SSO save starts the real Settings status refresh; navigate normally to Users, open an editor, then release the changed-principal status and old permission response. The mounted old editor withdraws and a fresh reader has no old draft. Read and cancel the actual removal confirmation, retaining its IdP limitation without writing. All six contexts, two browsers, Vite and HTTP fixture server close normally. No external/production/original stopped recovery or Back/reload job is exercised."
+  ]
+}
