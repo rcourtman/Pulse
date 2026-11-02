@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "a3e18162b16e4d96665fe7be0afa40f21690333b",
+  "source_sha": "a3e18162b16e4d96665fe7be0afa40f21690333b",
+  "verified_at": "2026-11-02T10:36:02.122835Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/Settings.tsx": "d1ecf3d4dcb54d925c0763363c765ba786bde9bba63051dc1b9d08f035905d95",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "3592a690d0461796433f2729e27c2b293e4e6f7aa6a5aedde09f55b918185b3f"
+  },
+  "routes": [
+    "/settings/security-auth",
+    "/settings/system-general"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App and Settings renderer consume held, successful, unavailable503 and refused403 synthetic security-status HTTP responses through the normal API client. Playwright1.56.1 matches the integration lock; desktop Chromium141.0.7390.37/light and narrow WebKit26.0/dark.",
+    "Closing the existing password dialog triggers a real status refresh without changing credentials. Same-reader checks retain the mounted Authentication panel. A failed check unmounts privileged controls, withdraws restricted navigation and uses the existing General fallback.",
+    "The visible unavailable-access callout distinguishes unknown access from authentication-disabled or denied permission. Retry checks status only, disables itself while pending and keeps withdrawn panels and navigation hidden. No raw response error is rendered.",
+    "A refused retry submits once without CSRF/auth replay. A fresh successful response with narrower read-only capabilities restores the permitted Authentication view but not credential mutation controls or wider settings access.",
+    "35 final interaction and state checks, eight native screenshot inspections, no document-width overflow or uncaught page errors. Both contexts, browsers, Vite and HTTP fixture server closed. Only synthetic GET requests occurred; this is not native administrator or IdP recovery.",
+    "Earlier fixture-selector failures and a weaker pass that exposed retry-navigation flicker are retained separately. The final navigation assertion checks the corrected runtime bytes."
+  ],
+  "interactions": [
+    "Open and cancel the password dialog, hold the resulting check, and confirm same-reader panel-node preservation after success.",
+    "Close it again, return503, inspect the access callout, absence of old principal/control/navigation and usable General fallback.",
+    "Retry while held, confirm disabled retry and hidden privileged navigation, then return403 and confirm one read without automatic replay.",
+    "Retry with narrower successful capabilities, navigate through desktop/mobile Settings navigation, and inspect read-only Authentication controls."
+  ]
+}

@@ -447,7 +447,9 @@ describe('settings architecture guardrails', () => {
     expect(settingsSource).toContain(
       'canMountSettingsPanel(currentTab, securityStatus()?.settingsCapabilities)',
     );
-    expect(settingsAccessSource).toContain('securityStatus() !== null || !securityStatusLoading()');
+    expect(settingsAccessSource).toMatch(
+      /securityStatus\(\) !== null \|\| !securityStatusLoading\(\) \|\| securityStatusError\(\)/,
+    );
     expect(settingsAccessSource).toContain("DEFAULT_SETTINGS_TAB,\n  'system-general'");
   });
 

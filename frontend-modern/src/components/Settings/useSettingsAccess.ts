@@ -1,4 +1,13 @@
-import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import {
+  Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
+import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesOrganizationSurfaces,
@@ -44,6 +53,7 @@ export function useSettingsAccess({
 }: UseSettingsAccessParams) {
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
+  const [securityStatusError, setSecurityStatusError] = createSignal(false);
   const commercialSurfacesHidden = createMemo(() => {
     const resolvedSecurityStatus = securityStatus();
     if (resolvedSecurityStatus) {
@@ -97,8 +107,11 @@ export function useSettingsAccess({
     const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
     // A failed status request is a resolved denial, not permission to expose
     // capability-gated routes. Keep an existing successful status usable while
-    // it refreshes, but fail closed once the first request settles without one.
-    const settingsCapabilitiesResolved = securityStatus() !== null || !securityStatusLoading();
+    // it refreshes, but withdraw it if that refresh cannot verify access.
+    // A failed check stays resolved while Retry is pending: it must not make
+    // previously withdrawn navigation look available again.
+    const settingsCapabilitiesResolved =
+      securityStatus() !== null || !securityStatusLoading() || securityStatusError();
 
     return {
       hasFeature,
@@ -221,28 +234,60 @@ export function useSettingsAccess({
   });
 
   let securityStatusRequest: Promise<void> | null = null;
+  let securityStatusController: AbortController | null = null;
+  let disposed = false;
+
+  onCleanup(() => {
+    disposed = true;
+    securityStatusController?.abort();
+  });
 
   async function fetchSecurityStatus() {
+    const controller = new AbortController();
+    securityStatusController = controller;
     setSecurityStatusLoading(true);
     try {
       const { apiFetch } = await import('@/utils/apiClient');
-      const response = await apiFetch('/api/security/status');
-      if (response.ok) {
-        const status = (await response.json()) as SecurityStatus;
-        logger.debug('Security status loaded', status);
+      if (disposed) return;
+      const response = await apiFetch('/api/security/status', {
+        signal: controller.signal,
+        retry: false,
+      });
+      if (disposed) return;
+      if (!response.ok) {
+        throw new Error(`Security status request failed (${response.status})`);
+      }
+      const status = (await response.json()) as SecurityStatus;
+      if (disposed) return;
+      if (!status || typeof status !== 'object' || Array.isArray(status)) {
+        throw new Error('Invalid security status');
+      }
+      batch(() => {
         syncSessionPresentationPolicy(status);
         setSecurityStatus(status);
-      } else {
-        logger.error('Failed to fetch security status', { status: response.status });
-      }
+        setSecurityStatusError(false);
+      });
     } catch (error) {
+      if (disposed) return;
       logger.error('Failed to fetch security status', error);
+      batch(() => {
+        // A previous grant is not evidence of current access. Unmount restricted
+        // panels and withdraw their links, without resetting the session's
+        // separate read-only/demo presentation policy to permissive defaults.
+        setSecurityStatus(null);
+        syncSessionSettingsCapabilities(null);
+        setSecurityStatusError(true);
+      });
     } finally {
-      setSecurityStatusLoading(false);
+      if (!disposed) {
+        securityStatusController = null;
+        setSecurityStatusLoading(false);
+      }
     }
   }
 
   function loadSecurityStatus(): Promise<void> {
+    if (disposed) return Promise.resolve();
     if (securityStatusRequest) {
       return securityStatusRequest;
     }
@@ -263,6 +308,7 @@ export function useSettingsAccess({
   return {
     securityStatus,
     securityStatusLoading,
+    securityStatusError,
     visibleTabGroups,
     flatTabs,
     filteredTabGroups,

@@ -27,6 +27,7 @@ import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 import { isRouteableSettingsLocation } from './settingsNavigationModel';
 import { canMountSettingsPanel } from './settingsNavVisibility';
+import { Button } from '@/components/shared/Button';
 import NotFound from '@/pages/NotFound';
 
 import { getRuntimeLimit, loadRuntimeCapabilities } from '@/stores/license';
@@ -70,12 +71,18 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
   // Security
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
-  const { securityStatus, securityStatusLoading, flatTabs, filteredTabGroups, loadSecurityStatus } =
-    useSettingsAccess({
-      activeTab,
-      setActiveTab,
-      searchQuery,
-    });
+  const {
+    securityStatus,
+    securityStatusLoading,
+    securityStatusError,
+    flatTabs,
+    filteredTabGroups,
+    loadSecurityStatus,
+  } = useSettingsAccess({
+    activeTab,
+    setActiveTab,
+    searchQuery,
+  });
   const backupTransferFlow = useBackupTransferFlow({ securityStatus });
   const systemSettings = useSystemSettingsState({
     activeTab,
@@ -195,6 +202,26 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
         setActiveTab={setActiveTab}
         isPro={isPro}
       >
+        <Show when={securityStatusError()}>
+          <div
+            role="alert"
+            class="mb-4 space-y-3 rounded-md border border-border bg-surface-hover p-4 text-sm"
+          >
+            <p class="font-medium text-base-content">Settings access could not be verified</p>
+            <p class="text-muted">
+              Restricted settings are hidden until a fresh check succeeds. Retrying does not change
+              your permissions.
+            </p>
+            <Button
+              variant="secondary"
+              size="settingsAction"
+              disabled={securityStatusLoading()}
+              onClick={() => void loadSecurityStatus()}
+            >
+              {securityStatusLoading() ? 'Checking access…' : 'Retry access check'}
+            </Button>
+          </div>
+        </Show>
         <Show
           when={activeSettingsPanelEntry()}
           fallback={securityStatusLoading() ? <SettingsPanelLoadingFallback /> : null}
