@@ -349,7 +349,7 @@ every paid plan are self-service: you evaluate on your own host and buy from
 ### Evaluating without a licence
 
 Self-service evaluation is available from the signed provider bundle published
-with Pulse v6.6.0. Use this exact release asset and its integrity sidecars; do
+with Pulse v6.7.0. Use this exact release asset and its integrity sidecars; do
 **not** download the moving `main` branch archive or run its `setup.sh` as
 root. For a later release, first confirm its release page contains the
 versioned provider archive, checksum, and SSH signature before changing the
@@ -359,7 +359,7 @@ Download the versioned asset, verify it with Pulse's pinned release key, and
 only then extract and run the guided setup:
 
 ```bash
-export PULSE_VERSION=v6.6.0
+export PULSE_VERSION=v6.7.0
 export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
 export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
 
