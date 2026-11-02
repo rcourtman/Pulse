@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Agent HTTP redirects retain their configured origin
+
+Manifest discovery, capability HTTP calls and agent SSE reads using standard Go
+clients refuse redirects that change scheme, hostname or effective port, or
+introduce different URL userinfo. In particular, the custom `X-API-Token` header
+and replayable write bodies must not follow an off-origin redirect. Same-origin
+relative redirects and equivalent default ports remain supported. Explicit HTTP
+base URLs remain supported; an upgrade or downgrade is not silently followed.
+
+The shared request executor copies the client, preserving its transport, timeout,
+cookie jar and stricter redirect callback, with the normal ten-redirect default
+when no callback exists. Callback edits cannot widen the origin. Boundary refusal
+returns a fixed final-base-URL diagnostic without the redirect destination's
+userinfo, path or query. Custom `HTTPDoer` implementations still own their transport
+policy. No server route, scope, payload, token grant or browser producer changes.
+Registered HTTP and MCP tests cover real loopback redirects, TLS, cancellation,
+caller policy, request preservation and consuming stdio/event errors.
+
 ### Slow Assistant JSON results use current token authority
 
 The existing POST `execute` and `kubernetes/analyze` routes revalidate the

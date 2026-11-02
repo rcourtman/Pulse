@@ -8,9 +8,198 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
+
+// These are two independent loopback servers, not real Pulse installations.
+// A redirect must not widen the destination of either the token or write body.
+func TestAgentHTTPRedirectsRejectOtherOrigins(t *testing.T) {
+	for _, status := range []int{301, 302, 303, 307, 308} {
+		for _, method := range []string{http.MethodGet, http.MethodPut} {
+			t.Run(fmt.Sprintf("%d/%s", status, method), func(t *testing.T) {
+				var destinationRequests, tokenRequests, bodyRequests atomic.Int32
+				destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					destinationRequests.Add(1)
+					if r.Header.Get(AgentAPITokenHeader) != "" {
+						tokenRequests.Add(1)
+					}
+					body, _ := io.ReadAll(r.Body)
+					if len(body) > 0 {
+						bodyRequests.Add(1)
+					}
+					_, _ = io.WriteString(w, `{"unexpected":true}`)
+				}))
+				defer destination.Close()
+				origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					http.Redirect(w, r, destination.URL+"/elsewhere?private=redirect-query-marker", status)
+				}))
+				defer origin.Close()
+
+				args := map[string]any{}
+				if method == http.MethodPut {
+					args["body"] = map[string]any{"note": "private-write-marker"}
+				}
+				response, err := CallCapabilityHTTP(context.Background(), origin.Client(), origin.URL, "synthetic-private-token", Capability{Method: method, Path: "/api/example"}, args)
+				if err == nil {
+					t.Errorf("off-origin redirect returned success: status %d", response.StatusCode)
+				} else if strings.Contains(err.Error(), "redirect-query-marker") {
+					t.Error("redirect rejection exposed the destination query")
+				}
+				if got := destinationRequests.Load(); got != 0 {
+					t.Errorf("off-origin destination received %d requests (%d with token, %d with body)", got, tokenRequests.Load(), bodyRequests.Load())
+				}
+			})
+		}
+	}
+}
+
+type redirectTestTransport func(*http.Request) (*http.Response, error)
+
+func (f redirectTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestAgentHTTPRedirectOriginPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, from, to string
+		allowed        bool
+	}{
+		{"relative", "https://pulse.example", "/accepted", true},
+		{"same-origin", "https://pulse.example", "https://pulse.example/accepted", true},
+		{"host-case", "https://pulse.example", "https://PULSE.example/accepted", true},
+		{"default-https-port", "https://pulse.example", "https://pulse.example:443/accepted", true},
+		{"default-http-port", "http://pulse.example:80", "http://pulse.example/accepted", true},
+		{"same-nondefault-port", "https://pulse.example:9443", "https://pulse.example:9443/accepted", true},
+		{"other-host", "https://pulse.example", "https://elsewhere.example/accepted", false},
+		{"subdomain", "https://pulse.example", "https://child.pulse.example/accepted", false},
+		{"other-port", "https://pulse.example", "https://pulse.example:9443/accepted", false},
+		{"downgrade", "https://pulse.example", "http://pulse.example/accepted", false},
+		{"upgrade", "http://pulse.example", "https://pulse.example/accepted", false},
+		{"trailing-dot", "https://pulse.example", "https://pulse.example./accepted", false},
+		{"new-userinfo", "https://pulse.example", "https://name:redirect-password-marker@pulse.example/accepted", false},
+		{"retained-userinfo", "https://name:original@pulse.example", "/accepted", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requests := 0
+			client := &http.Client{Transport: redirectTestTransport(func(r *http.Request) (*http.Response, error) {
+				requests++
+				if requests == 1 {
+					return &http.Response{StatusCode: http.StatusTemporaryRedirect, Header: http.Header{"Location": {tc.to}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"version":"v1"}`)), Request: r}, nil
+			})}
+			_, err := FetchManifest(context.Background(), client, tc.from)
+			if (err == nil) != tc.allowed {
+				t.Errorf("redirect allowed = %v, want %v", err == nil, tc.allowed)
+			}
+			wantRequests := 1
+			if tc.allowed {
+				wantRequests = 2
+			}
+			if requests != wantRequests {
+				t.Errorf("transport requests = %d, want %d", requests, wantRequests)
+			}
+			if err != nil && strings.Contains(err.Error(), "redirect-password-marker") {
+				t.Error("redirect rejection exposed userinfo")
+			}
+		})
+	}
+}
+
+func TestAgentHTTPRedirectsPreserveClientPolicy(t *testing.T) {
+	for _, stop := range []error{errors.New("caller redirect refusal"), http.ErrUseLastResponse} {
+		t.Run(stop.Error(), func(t *testing.T) {
+			var calls atomic.Int32
+			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, "/accepted", http.StatusTemporaryRedirect)
+			}))
+			defer origin.Close()
+			client := origin.Client()
+			client.CheckRedirect = func(*http.Request, []*http.Request) error { calls.Add(1); return stop }
+			_, err := FetchManifest(context.Background(), client, origin.URL)
+			if err == nil || (stop != http.ErrUseLastResponse && !errors.Is(err, stop)) {
+				t.Fatalf("caller policy error was lost: %v", err)
+			}
+			if calls.Load() != 1 {
+				t.Fatalf("caller policy calls = %d, want 1", calls.Load())
+			}
+			// The guard must not replace policy on a client it does not own.
+			if got := client.CheckRedirect(nil, nil); got != stop {
+				t.Fatal("caller client was mutated")
+			}
+		})
+	}
+}
+
+func TestAgentHTTPRedirectsRetainDefaultLimit(t *testing.T) {
+	var requests atomic.Int32
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Redirect(w, r, "/loop", http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+	_, err := FetchManifest(context.Background(), origin.Client(), origin.URL)
+	if err == nil || !strings.Contains(err.Error(), "stopped after 10 redirects") {
+		t.Fatalf("default redirect limit lost: %v", err)
+	}
+	if requests.Load() != 10 {
+		t.Fatalf("redirect requests = %d, want 10", requests.Load())
+	}
+}
+
+func TestAgentHTTPRedirectCallbackCannotWidenOrigin(t *testing.T) {
+	var foreignRequests, callbackCalls atomic.Int32
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { foreignRequests.Add(1) }))
+	defer foreign.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/accepted", http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+	client := origin.Client()
+	client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+		callbackCalls.Add(1)
+		next.URL, _ = url.Parse(foreign.URL + "/elsewhere")
+		return nil
+	}
+	_, err := FetchManifest(context.Background(), client, origin.URL)
+	if !errors.Is(err, errAgentRedirectOrigin) || callbackCalls.Load() != 1 || foreignRequests.Load() != 0 {
+		t.Fatalf("callback escaped boundary: err=%v callbacks=%d foreign=%d", err, callbackCalls.Load(), foreignRequests.Load())
+	}
+}
+
+func TestAgentHTTPRedirectsPreserveTLSAndCancellation(t *testing.T) {
+	var foreignRequests atomic.Int32
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { foreignRequests.Add(1) }))
+	defer foreign.Close()
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/accepted":
+			_, _ = io.WriteString(w, `{"version":"v1"}`)
+		case "/downgrade":
+			http.Redirect(w, r, foreign.URL, http.StatusTemporaryRedirect)
+		default:
+			http.Redirect(w, r, "/accepted", http.StatusTemporaryRedirect)
+		}
+	}))
+	defer origin.Close()
+	client := origin.Client() // Includes this fixture's trusted TLS certificate.
+	if _, err := FetchManifest(context.Background(), client, origin.URL); err != nil {
+		t.Fatalf("configured TLS transport lost: %v", err)
+	}
+	response, err := CallCapabilityHTTP(context.Background(), client, origin.URL, "synthetic-token", Capability{Method: http.MethodGet, Path: "/downgrade"}, nil)
+	if !errors.Is(err, errAgentRedirectOrigin) || response.StatusCode != 0 || foreignRequests.Load() != 0 {
+		t.Fatalf("TLS downgrade escaped boundary: err=%v status=%d foreign=%d", err, response.StatusCode, foreignRequests.Load())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := FetchManifest(ctx, client, origin.URL); !errors.Is(err, context.Canceled) {
+		t.Fatalf("request cancellation lost: %v", err)
+	}
+	if client.CheckRedirect != nil {
+		t.Fatal("caller TLS client was mutated")
+	}
+}
 
 func TestFetchManifestUsesSharedDiscoveryPath(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

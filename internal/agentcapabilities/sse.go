@@ -87,7 +87,7 @@ func StreamAgentSSERecords(ctx context.Context, client HTTPDoer, baseURL, path, 
 		return err
 	}
 	req.Header.Set("Accept", AgentSSEAccept)
-	resp, err := httpClient(client).Do(req)
+	resp, err := DoAgentHTTPRequest(client, req)
 	if err != nil {
 		return err
 	}
