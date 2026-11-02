@@ -21,7 +21,7 @@ vi.mock('@/api/rbac', () => ({ RBACAPI: mocks }));
 vi.mock('@/stores/notifications', () => ({
   notificationStore: { success: mocks.success, error: mocks.error },
 }));
-vi.mock('@/utils/logger', () => ({ logger: { error: mocks.log } }));
+vi.mock('@/utils/logger', () => ({ logger: { error: mocks.log, debug: vi.fn(), warn: vi.fn() } }));
 let enabled: () => boolean;
 vi.mock('../useRBACFeatureGateState', () => ({
   useRBACFeatureGateState: () => ({

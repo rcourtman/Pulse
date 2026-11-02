@@ -35,8 +35,11 @@ requires the current in-page confirmation, which is withdrawn on context loss.
 A failed save preserves the live draft with fixed inline feedback. Closing an
 editor erases its draft. Saved permission strings outside the editor's shortcut
 list remain visible and unchanged unless explicitly edited. Success feedback belongs to this panel rather than a
-global identity-bearing notification. Backend authorisation, endpoints and
-permission semantics remain unchanged.
+global identity-bearing notification. The containing Settings renderer reads optional current entry props rather than
+retaining a conditional accessor after a panel is withdrawn. Revocation keeps
+the existing safe navigation fallback usable instead of raising the route error
+boundary; a same-reader status refresh does not remount the panel or lose its
+draft. Backend authorisation, endpoints and permission semantics remain unchanged.
 
 Normal `RolesReaderLifetime`, RBAC API, paywall and registry tests cover
 read/write races, revoked authority, licence loss, disposal, stale row IDs,

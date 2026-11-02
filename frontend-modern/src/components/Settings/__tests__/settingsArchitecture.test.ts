@@ -357,6 +357,9 @@ describe('settings architecture guardrails', () => {
   it('keeps allowed organization deep links on the canonical settings shell', () => {
     expect(settingsSource).toContain("import { useSettingsAccess } from './useSettingsAccess';");
     expect(settingsSource).toContain('const activeSettingsPanelEntry = createMemo(() => {');
+    expect(settingsSource).toContain('component={activeSettingsPanelEntry()?.component}');
+    expect(settingsSource).toContain('...(activeSettingsPanelEntry()?.getProps?.() ?? {})');
+    expect(settingsSource).not.toContain('entry().getProps');
     expect(settingsSource).toContain('if (!flatTabs().some((tab) => tab.id === currentTab)) {');
     expect(settingsSource).toContain('return settingsPanelRegistry()[currentTab];');
     expect(settingsPanelRegistryContextSource).toContain(
