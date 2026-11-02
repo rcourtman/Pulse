@@ -74,6 +74,7 @@ unmounts capability-gated panels and withdraws shared Settings capability links.
 It keeps the existing safe General fallback and explains that access is unknown,
 not that permission was denied or authentication disabled. Explicit Retry only
 checks status again; it does not change permissions or repeat a mutation.
+Pending Retry keeps withdrawn navigation hidden until the new check succeeds.
 
 Status reads are deduplicated, cancellable and not automatically retried. Panel
 disposal cancels the read and prevents late status from restoring local or shared

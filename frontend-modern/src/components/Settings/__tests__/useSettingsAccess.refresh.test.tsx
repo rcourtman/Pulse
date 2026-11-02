@@ -155,8 +155,19 @@ describe('Settings capability refresh withdrawal', () => {
     await first;
     expect(view.queryByText('Privileged panel')).toBeNull();
     expect(access.securityStatusError()).toBe(true);
-    apiFetchMock.mockResolvedValue(response());
-    await access.loadSecurityStatus();
+    const recovery = deferred<ReturnType<typeof response>>();
+    apiFetchMock.mockReturnValue(recovery.promise);
+    const retry = access.loadSecurityStatus();
+    expect(access.flatTabs().some((tab) => tab.id === 'security-auth')).toBe(false);
+    expect(
+      access
+        .filteredTabGroups()
+        .flatMap((group) => group.items)
+        .some((tab) => tab.id === 'security-auth'),
+    ).toBe(false);
+    recovery.resolve(response());
+    await retry;
+    expect(access.flatTabs().some((tab) => tab.id === 'security-auth')).toBe(true);
     expect(access.securityStatusError()).toBe(false);
     expect(view.queryByText('Privileged panel')).not.toBeNull();
     expect(sessionCanReadInfrastructureSettings()).toBe(true);

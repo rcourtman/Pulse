@@ -108,7 +108,10 @@ export function useSettingsAccess({
     // A failed status request is a resolved denial, not permission to expose
     // capability-gated routes. Keep an existing successful status usable while
     // it refreshes, but withdraw it if that refresh cannot verify access.
-    const settingsCapabilitiesResolved = securityStatus() !== null || !securityStatusLoading();
+    // A failed check stays resolved while Retry is pending: it must not make
+    // previously withdrawn navigation look available again.
+    const settingsCapabilitiesResolved =
+      securityStatus() !== null || !securityStatusLoading() || securityStatusError();
 
     return {
       hasFeature,
