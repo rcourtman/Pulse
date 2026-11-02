@@ -508,7 +508,13 @@ describe('useAlertDestinationsTabState', () => {
       }),
     );
 
+    // A Test is withheld while the independently loaded webhook snapshot is pending.
     await result.testEmailConfig();
+    expect(NotificationsAPI.testNotification).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.isLoading()).toBe(false));
+    expect(result.hasLoadError()).toBeFalsy();
+    await result.testEmailConfig();
+    expect(NotificationsAPI.testNotification).toHaveBeenCalledOnce();
     expect(notificationStore.warning).toHaveBeenCalledWith(
       expect.stringContaining('delivery is paused'),
     );

@@ -11,6 +11,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationsAPI, type Webhook } from '@/api/notifications';
+import { setOrgID } from '@/utils/apiClient';
 import { useAlertWebhookDestinationsState } from '@/features/alerts/useAlertWebhookDestinationsState';
 import { WebhookConfig } from './WebhookConfig';
 
@@ -95,6 +96,7 @@ function expectListLocked() {
 describe('acknowledged webhook list mutations', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    setOrgID('default');
     vi.mocked(NotificationsAPI.getWebhookTemplates).mockResolvedValue([]);
   });
   afterEach(cleanup);
@@ -112,10 +114,12 @@ describe('acknowledged webhook list mutations', () => {
     fireEvent.click(disableAll);
 
     expect(NotificationsAPI.updateWebhook).toHaveBeenCalledTimes(1);
-    expect(NotificationsAPI.updateWebhook).toHaveBeenNthCalledWith(1, 'hook-1', {
-      ...webhook,
-      enabled: false,
-    });
+    expect(NotificationsAPI.updateWebhook).toHaveBeenNthCalledWith(
+      1,
+      'hook-1',
+      { ...webhook, enabled: false },
+      { expectedOrgID: 'default', retry: false },
+    );
     expectListLocked();
     expect(screen.getByRole('button', { name: '+ Add Webhook' })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('Saving webhook changes');
@@ -123,10 +127,12 @@ describe('acknowledged webhook list mutations', () => {
 
     first.resolve({ ...webhook, enabled: false });
     await waitFor(() => expect(NotificationsAPI.updateWebhook).toHaveBeenCalledTimes(2));
-    expect(NotificationsAPI.updateWebhook).toHaveBeenNthCalledWith(2, 'hook-2', {
-      ...secondWebhook,
-      enabled: false,
-    });
+    expect(NotificationsAPI.updateWebhook).toHaveBeenNthCalledWith(
+      2,
+      'hook-2',
+      { ...secondWebhook, enabled: false },
+      { expectedOrgID: 'default', retry: false },
+    );
     expect(owner.webhooks()).toEqual([{ ...webhook, enabled: false }, secondWebhook, unchanged]);
     expectListLocked();
 
