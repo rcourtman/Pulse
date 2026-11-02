@@ -29,6 +29,33 @@ import (
 	"github.com/rs/zerolog"
 )
 
+func TestLoadConfigURLAdmissionDoesNotReadToken(t *testing.T) {
+	t.Cleanup(func() { securityutil.SetOperatorPlaintextHTTPConsent(false) })
+	for _, dryRun := range []bool{true, false} {
+		reads := 0
+		args := []string{"--url", "https://pulse.example.invalid", "--state-dir", t.TempDir()}
+		if dryRun {
+			args = append(args, "--validate-url")
+		}
+		cfg, err := loadConfig(args, func(key string) string {
+			if key == "PULSE_TOKEN" {
+				reads++
+				return "synthetic-inherited-token"
+			}
+			return ""
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dryRun && (reads != 0 || cfg.APIToken != "") {
+			t.Fatal("URL-only admission read inherited credentials")
+		}
+		if !dryRun && (reads != 1 || cfg.APIToken != "synthetic-inherited-token") {
+			t.Fatal("ordinary startup lost its inherited-token fallback")
+		}
+	}
+}
+
 func TestEnableCommandsHelpUsesPatrolRemediationCopy(t *testing.T) {
 	source, err := os.ReadFile("main.go")
 	if err != nil {

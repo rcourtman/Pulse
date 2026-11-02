@@ -1271,7 +1271,6 @@ func kubernetesReportTargets(cfg Config) []kubernetesagent.TargetConfig {
 func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// Environment Variables
 	envURL := strings.TrimSpace(getenv("PULSE_URL"))
-	envToken := strings.TrimSpace(getenv("PULSE_TOKEN"))
 	envInterval := strings.TrimSpace(getenv("PULSE_INTERVAL"))
 	envHostname := strings.TrimSpace(getenv("PULSE_HOSTNAME"))
 	envAgentID := strings.TrimSpace(getenv("PULSE_AGENT_ID"))
@@ -1473,7 +1472,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	if token == "" {
 		// Resolve token with priority: --token > --token-file > env > state-dir file.
 		var err error
-		token, err = resolveToken(*tokenFlag, *tokenFileFlag, envToken, stateDir)
+		token, err = resolveToken(*tokenFlag, *tokenFileFlag, strings.TrimSpace(getenv("PULSE_TOKEN")), stateDir)
 		if err != nil {
 			return Config{}, err
 		}
