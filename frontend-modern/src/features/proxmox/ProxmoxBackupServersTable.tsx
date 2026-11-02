@@ -9,7 +9,6 @@ import {
   formatPlatformTableBytesValue,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
-  formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformResponsiveTableLabel,
@@ -27,10 +26,6 @@ import {
 import type { Alert, PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import { getPlatformAgentRecord } from '@/utils/agentResources';
-import {
-  getMemoryObservationPresentation,
-  type MemoryObservationPresentation,
-} from '@/utils/memoryObservation';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
@@ -63,10 +58,11 @@ import {
 // per datastore, labelled by its server; a server with no datastore data still
 // gets a reachability row.
 // PBS hosts left the v5 nodes table in the v6 IA, so this is where their health
-// lives. Host status, version, CPU, memory and uptime show once, on the server's
-// first datastore row; its later rows keep the server name (muted), toggle and
-// web link but leave those host cells empty, so two datastores never read as
-// two identical servers.
+// lives. The row says whether the server is reachable; its CPU, memory, uptime,
+// version and their history are in the server's drawer, one click away. Status
+// shows once, on the server's first datastore row; its later rows keep the
+// server name (muted), toggle and web link, so two datastores never read as two
+// identical servers.
 
 interface BackupServerRow {
   key: string;
@@ -74,13 +70,6 @@ interface BackupServerRow {
   serverName: string;
   online: boolean;
   connectionLabel: string;
-  version?: string;
-  cpuPercent?: number;
-  memoryPercent?: number;
-  memoryUsed?: number;
-  memoryTotal?: number;
-  memoryReading?: MemoryObservationPresentation | null;
-  uptimeSeconds?: number;
   datastore?: ResourcePBSDatastore;
   // The worst backend-judged GC, prune, verify or sync result for this store.
   jobs: DatastoreJobSummary;
@@ -504,46 +493,10 @@ export function buildBackupServerRows(
     const datastores = (server.pbs?.datastores ?? [])
       .slice()
       .sort((left, right) => left.name.localeCompare(right.name));
-    const memory = server.memory;
-    const memoryTotal =
-      typeof memory?.total === 'number' && Number.isFinite(memory.total) && memory.total > 0
-        ? memory.total
-        : undefined;
-    const memoryUsed =
-      typeof memory?.used === 'number' &&
-      Number.isFinite(memory.used) &&
-      memory.used >= 0 &&
-      (memoryTotal === undefined || memory.used <= memoryTotal)
-        ? memory.used
-        : undefined;
-    // A partial metric may report a percentage and capacity without used
-    // bytes. Capacity cannot turn the missing amount into a measured zero.
-    // Keep an independently valid percentage, but show a byte pair only when
-    // both amounts were actually reported. Explicit zero remains a reading.
-    const percent =
-      memoryTotal !== undefined && memoryUsed !== undefined
-        ? (memoryUsed / memoryTotal) * 100
-        : memory?.current;
-    const memoryPercent =
-      typeof percent === 'number' && Number.isFinite(percent) && percent >= 0 && percent <= 100
-        ? percent
-        : undefined;
     const host = {
       serverName: server.name,
       online: serverIsOnline(server),
       connectionLabel: connectionLabel(server),
-      version: server.pbs?.version,
-      cpuPercent: typeof server.cpu?.current === 'number' ? server.cpu.current : undefined,
-      memoryPercent,
-      memoryUsed,
-      memoryTotal,
-      // A healthy PBS connection does not renew a linked host's retained
-      // memory. Use the same source-owned observation as the resource drawer.
-      memoryReading: getMemoryObservationPresentation(memoryPercent, memory?.observation, false, {
-        includeCurrent: false,
-        agentStale: (server.agent ?? getPlatformAgentRecord(server))?.stale === true,
-      }),
-      uptimeSeconds: server.uptime ?? server.pbs?.uptimeSeconds,
     };
     // Each keyed row has a reconciled Solid store. Give it its own JSON DTO
     // snapshot: otherwise joining an Agent mutates the source's service
@@ -641,22 +594,6 @@ export function ProxmoxBackupServersTable(props: {
               <TableHead class={`${getPlatformTableHeadClassForKind('text')}`}>
                 <PlatformResponsiveTableLabel compact="State" full="Status" />
               </TableHead>
-              <Show when={columnVisible('version')}>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
-              </Show>
-              <Show when={columnVisible('cpu')}>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>CPU</TableHead>
-              </Show>
-              <Show when={columnVisible('memory')}>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Memory
-                </TableHead>
-              </Show>
-              <Show when={columnVisible('uptime')}>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Uptime
-                </TableHead>
-              </Show>
               <Show when={columnVisible('datastore')}>
                 <TableHead class={`${getPlatformTableHeadClassForKind('text')}`}>
                   <PlatformResponsiveTableLabel compact="Store" full="Datastore" />
@@ -812,99 +749,6 @@ export function ProxmoxBackupServersTable(props: {
                             )}
                           </Show>
                         </TableCell>
-                        <Show when={columnVisible('version')}>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-muted truncate text-[11px]`}
-                          >
-                            <Show when={!row.continuesServer}>{row.version || '—'}</Show>
-                          </TableCell>
-                        </Show>
-                        <Show when={columnVisible('cpu')}>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <Show when={!row.continuesServer}>
-                              <Show
-                                when={row.online && row.cpuPercent !== undefined}
-                                fallback={<span class="text-muted">—</span>}
-                              >
-                                <PlatformTablePercentValue value={row.cpuPercent} />
-                              </Show>
-                            </Show>
-                          </TableCell>
-                        </Show>
-                        <Show when={columnVisible('memory')}>
-                          <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
-                            <Show when={!row.continuesServer}>
-                              <Show
-                                when={
-                                  row.online &&
-                                  row.memoryPercent !== undefined &&
-                                  row.memoryReading?.state !== 'unavailable'
-                                }
-                                fallback={
-                                  <span class="text-muted text-[11px]">
-                                    {row.online && row.memoryReading?.state === 'unavailable'
-                                      ? 'Unavailable'
-                                      : '—'}
-                                  </span>
-                                }
-                              >
-                                <span
-                                  class="text-base-content"
-                                  title={
-                                    row.memoryReading?.message ??
-                                    (row.memoryTotal !== undefined && row.memoryUsed !== undefined
-                                      ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
-                                      : undefined)
-                                  }
-                                >
-                                  <PlatformTablePercentValue value={row.memoryPercent} />
-                                </span>
-                                <Show
-                                  when={
-                                    row.memoryTotal !== undefined &&
-                                    row.memoryUsed !== undefined &&
-                                    layoutMode() === 'full'
-                                  }
-                                >
-                                  <span class="ml-1 text-[10px] text-muted tabular-nums">
-                                    {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
-                                  </span>
-                                </Show>
-                                <Show
-                                  when={
-                                    row.memoryReading?.state === 'last-known' ||
-                                    row.memoryReading?.state === 'unknown'
-                                  }
-                                >
-                                  <span
-                                    class="block whitespace-normal text-[10px] leading-snug text-amber-600 dark:text-amber-300"
-                                    title={row.memoryReading?.message}
-                                  >
-                                    {row.memoryReading?.state === 'last-known'
-                                      ? 'Last known'
-                                      : 'Freshness unknown'}
-                                  </span>
-                                </Show>
-                              </Show>
-                            </Show>
-                          </TableCell>
-                        </Show>
-                        <Show when={columnVisible('uptime')}>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                          >
-                            <Show when={!row.continuesServer}>
-                              <Show
-                                when={row.online && (row.uptimeSeconds ?? 0) > 0}
-                                fallback={<span class="text-muted">—</span>}
-                              >
-                                {formatPlatformTableUptimeValue(row.uptimeSeconds)}
-                              </Show>
-                            </Show>
-                          </TableCell>
-                        </Show>
                         <Show when={columnVisible('datastore')}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}

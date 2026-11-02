@@ -149,6 +149,7 @@ export const ProxmoxBackupsTable: Component<{
   datastoreAlerts?: (resourceIds: string[]) => Alert[];
 }> = (props) => {
   let inspection: HTMLDivElement | undefined;
+  let restorePoints: HTMLDivElement | undefined;
   // Recovering a read removes its notice (or the whole-inventory error).
   // Hand off only focus owned by that retiring content, never focus the
   // operator has moved elsewhere or focus after leaving this surface.
@@ -197,6 +198,9 @@ export const ProxmoxBackupsTable: Component<{
   const hasReadableInventory = () =>
     inventorySources.some(({ query }) => query.resolvedOnce() && !query.error());
   const allInventoriesFailed = () => inventorySources.every(({ query }) => Boolean(query.error()));
+  // Something to show: a readable inventory, or a failure notice to explain.
+  const inventoryShown = () =>
+    hasReadableInventory() || inventorySources.some(({ query }) => Boolean(query.error()));
   const retryAllInventories = () => {
     if (inventorySources.some(({ query }) => query.loading())) return;
     void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
@@ -575,8 +579,23 @@ export const ProxmoxBackupsTable: Component<{
   });
   const exceptionGroupPressed = (key: string): boolean =>
     view() === 'coverage' && exceptionFilter() === key;
+  // Restore points sit below the summary and the backup servers. On a phone an
+  // exception tap would otherwise filter a list the reader cannot see, so
+  // bring it into view; when it already shows, leave the page where it is.
+  const revealRestorePoints = (): void => {
+    queueMicrotask(() => {
+      const target = restorePoints;
+      if (!target?.isConnected || typeof target.scrollIntoView !== 'function') return;
+      if (target.getBoundingClientRect().top < window.innerHeight - 96) return;
+      const reduceMotion =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+    });
+  };
   const selectExceptionGroup = (key: string): void => {
     const next = exceptionGroupPressed(key) ? null : key;
+    if (next) revealRestorePoints();
     if (routeView() === 'coverage') {
       setSearchParams(
         {
@@ -829,18 +848,6 @@ export const ProxmoxBackupsTable: Component<{
           </Show>
         )}
       </For>
-      {/* Server health comes from /api/resources, not either backup inventory.
-          Keep this owner mounted through loading, failure and ordinary retries. */}
-      <Show when={(props.servers?.length ?? 0) > 0}>
-        <ProxmoxBackupServersTable
-          servers={props.servers ?? []}
-          backups={pbsArtifacts()}
-          datastoreAlerts={props.datastoreAlerts}
-          backupInventoryState={
-            pbsBackups.error() ? 'unavailable' : pbsBackups.resolvedOnce() ? 'available' : 'loading'
-          }
-        />
-      </Show>
       <Show
         when={!allInventoriesFailed()}
         fallback={
@@ -854,9 +861,7 @@ export const ProxmoxBackupsTable: Component<{
         }
       >
         <Show
-          when={
-            hasReadableInventory() || inventorySources.some(({ query }) => Boolean(query.error()))
-          }
+          when={inventoryShown()}
           fallback={
             <PlatformTableLoadingState
               title="Loading Proxmox backup inventory"
@@ -865,7 +870,6 @@ export const ProxmoxBackupsTable: Component<{
           }
         >
           <div ref={retainEvidenceFocus} class="space-y-3">
-            <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
             <Show when={protectionPostures.response.error}>
               <div
                 ref={retainRecoveryFocus}
@@ -890,16 +894,11 @@ export const ProxmoxBackupsTable: Component<{
               </div>
             </Show>
 
-            <Show when={locationSelection().unresolved}>
-              <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
-                The saved backup location cannot be identified uniquely in the current inventory.
-                Choose a backup location again or clear the filter. No restore points are shown for
-                this filter.
-              </div>
-            </Show>
-
-            {/* The health and backup-job cards render identically in both
-                route-backed views, side by side once there is room. */}
+            {/* The page answers in the order people ask: are my backups
+                protected and did last night run (health beside jobs once
+                there is room), is my backup server OK, then the restore
+                points themselves. Health and jobs belong to the page, not to
+                either restore-point view. */}
             <div class="grid gap-3 xl:[&:has([data-backup-jobs])]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
               <ProxmoxBackupsCoverageStrip
                 title="Backup health"
@@ -948,234 +947,269 @@ export const ProxmoxBackupsTable: Component<{
                 </div>
               )}
             </Show>
+          </div>
+        </Show>
+      </Show>
+      {/* Server health comes from /api/resources, not either backup inventory.
+          Keep this owner mounted through loading, failure and ordinary retries,
+          between the summary above and the restore points below. */}
+      <Show when={(props.servers?.length ?? 0) > 0}>
+        <ProxmoxBackupServersTable
+          servers={props.servers ?? []}
+          backups={pbsArtifacts()}
+          datastoreAlerts={props.datastoreAlerts}
+          backupInventoryState={
+            pbsBackups.error() ? 'unavailable' : pbsBackups.resolvedOnce() ? 'available' : 'loading'
+          }
+        />
+      </Show>
+      {/* Restore points come last: By date and Coverage, reached by search or
+          by tapping an exception above. Same readiness as the summary, whose
+          loading or failure state already stands in for both. */}
+      <Show when={!allInventoriesFailed() && inventoryShown()}>
+        <div
+          ref={(element) => {
+            restorePoints = element;
+            retainEvidenceFocus(element);
+          }}
+          class="space-y-3"
+          data-backup-restore-points
+        >
+          <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
+          <Show when={locationSelection().unresolved}>
+            <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
+              The saved backup location cannot be identified uniquely in the current inventory.
+              Choose a backup location again or clear the filter. No restore points are shown for
+              this filter.
+            </div>
+          </Show>
 
-            <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
-              <Show
-                when={scopedRecoverableArtifacts().some(
-                  (artifact) => artifact.createdMs === undefined,
-                )}
-              >
-                <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-                  Backup entries with unavailable or future dates remain listed. Their ages are
-                  unknown. They are excluded from the activity chart and day filters.
-                </p>
-              </Show>
-              <Show
-                when={hasRecoverableActivityInRange()}
-                fallback={
-                  <div
-                    ref={retainEvidenceFocus}
-                    class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <span>
-                      No completed restore points with known dates in the selected {chartRange()}
-                      -day window.
-                    </span>
-                    <div class="flex items-center gap-2">
-                      <button
-                        type="button"
-                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                        onClick={() => setChartRange(90)}
-                      >
-                        Show 90 days
-                      </button>
-                      <span aria-hidden="true">·</span>
-                      <button
-                        type="button"
-                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                        onClick={() => setChartRange(365)}
-                      >
-                        Show 1 year
-                      </button>
-                    </div>
-                  </div>
-                }
-              >
-                <div ref={retainEvidenceFocus} class="space-y-1">
-                  <Show when={recoverableMetricMode() === 'volume' && unknownVolumeCount() > 0}>
-                    <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-                      Sizes are unavailable for {unknownVolumeCount()} completed restore{' '}
-                      {unknownVolumeCount() === 1 ? 'point' : 'points'} in this window. Bars show
-                      known volume only. Amber marks days with unknown sizes, not zero volume.
-                    </p>
-                  </Show>
-                  <BackupActivityChart
-                    title={
-                      recoverableMetricMode() === 'volume'
-                        ? 'Known restore volume per day'
-                        : 'Completed restore points per day'
-                    }
-                    noun="restore point"
-                    segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-                    range={chartRange}
-                    onRangeChange={setChartRange}
-                    timeline={recoverableTimeline}
-                    selectedDateKey={selectedDateKey}
-                    onToggleDay={toggleDay}
-                    metricToggle={{
-                      mode: recoverableMetricMode,
-                      onChange: setRecoverableMetricMode,
-                    }}
-                  />
-                </div>
-              </Show>
+          <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
+            <Show
+              when={scopedRecoverableArtifacts().some(
+                (artifact) => artifact.createdMs === undefined,
+              )}
+            >
+              <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
+                Backup entries with unavailable or future dates remain listed. Their ages are
+                unknown. They are excluded from the activity chart and day filters.
+              </p>
             </Show>
-
-            <FilterBar
-              role="group"
-              ariaLabel="Backups filters"
-              isMobile={isMobile}
-              search={{
-                value: search,
-                setValue: setSearch,
-                placeholder: 'Search backups by workload, node, source, or status',
-              }}
-              filters={buildBackupsFilters()}
-              showClearAll={hasActiveBackupsFilters}
-              onClearAll={resetBackupsFilters}
-              searchTrailing={
-                <Show when={view() === 'date' && selectedDateKey() !== null}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDateKey(null)}
-                    class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
-                    aria-label="Clear date filter"
-                  >
-                    <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
-                      Date
-                    </span>
-                    <span class="font-mono tabular-nums">
-                      {getRecoveryFilterDateLabel(selectedDateKey()!)}
-                    </span>
-                    <span aria-hidden="true">×</span>
-                  </button>
-                </Show>
+            <Show
+              when={hasRecoverableActivityInRange()}
+              fallback={
+                <div
+                  ref={retainEvidenceFocus}
+                  class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span>
+                    No completed restore points with known dates in the selected {chartRange()}
+                    -day window.
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                      onClick={() => setChartRange(90)}
+                    >
+                      Show 90 days
+                    </button>
+                    <span aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                      onClick={() => setChartRange(365)}
+                    >
+                      Show 1 year
+                    </button>
+                  </div>
+                </div>
               }
-              trailingControls={
-                <PlatformResourceCounter
-                  visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
-                  total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}
-                  rowNoun={
-                    view() === 'date'
-                      ? inventoryIncomplete()
-                        ? 'backup entries read'
-                        : 'backup entries'
-                      : 'targets'
+            >
+              <div ref={retainEvidenceFocus} class="space-y-1">
+                <Show when={recoverableMetricMode() === 'volume' && unknownVolumeCount() > 0}>
+                  <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
+                    Sizes are unavailable for {unknownVolumeCount()} completed restore{' '}
+                    {unknownVolumeCount() === 1 ? 'point' : 'points'} in this window. Bars show
+                    known volume only. Amber marks days with unknown sizes, not zero volume.
+                  </p>
+                </Show>
+                <BackupActivityChart
+                  title={
+                    recoverableMetricMode() === 'volume'
+                      ? 'Known restore volume per day'
+                      : 'Completed restore points per day'
                   }
+                  noun="restore point"
+                  segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+                  range={chartRange}
+                  onRangeChange={setChartRange}
+                  timeline={recoverableTimeline}
+                  selectedDateKey={selectedDateKey}
+                  onToggleDay={toggleDay}
+                  metricToggle={{
+                    mode: recoverableMetricMode,
+                    onChange: setRecoverableMetricMode,
+                  }}
                 />
+              </div>
+            </Show>
+          </Show>
+
+          <FilterBar
+            role="group"
+            ariaLabel="Backups filters"
+            isMobile={isMobile}
+            search={{
+              value: search,
+              setValue: setSearch,
+              placeholder: 'Search backups by workload, node, source, or status',
+            }}
+            filters={buildBackupsFilters()}
+            showClearAll={hasActiveBackupsFilters}
+            onClearAll={resetBackupsFilters}
+            searchTrailing={
+              <Show when={view() === 'date' && selectedDateKey() !== null}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDateKey(null)}
+                  class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                  aria-label="Clear date filter"
+                >
+                  <span class="uppercase tracking-wide text-[9px] text-blue-600 dark:text-blue-300">
+                    Date
+                  </span>
+                  <span class="font-mono tabular-nums">
+                    {getRecoveryFilterDateLabel(selectedDateKey()!)}
+                  </span>
+                  <span aria-hidden="true">×</span>
+                </button>
+              </Show>
+            }
+            trailingControls={
+              <PlatformResourceCounter
+                visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
+                total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}
+                rowNoun={
+                  view() === 'date'
+                    ? inventoryIncomplete()
+                      ? 'backup entries read'
+                      : 'backup entries'
+                    : 'targets'
+                }
+              />
+            }
+          />
+
+          <Show when={view() === 'date'}>
+            <ProxmoxRecoverableTable
+              artifacts={filteredRecoverableArtifacts()}
+              hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle={
+                inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
+              }
+              emptyDescription={
+                inventoryIncomplete()
+                  ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
+                  : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
+              }
+              sortKey={recoverableSortKey}
+              sortDirection={recoverableSortDirection}
+              onSort={handleRecoverableSort}
+              sizeMaxBytes={recoverableSizeMaxBytes()}
+              groupByDay
+              showWorkloadConnection={showWorkloadConnection()}
+              showSourceConnection={showSourceConnection()}
+              retainInspectionFocus={retainEvidenceFocus}
+            />
+          </Show>
+
+          <Show when={view() === 'coverage'}>
+            <Show when={evidenceLocationLabel()}>
+              {(label) => (
+                <InlineNotice
+                  tone="info"
+                  role="note"
+                  aria-label="Backup location scope"
+                  class="text-xs whitespace-normal wrap-anywhere"
+                >
+                  Backup ages and restore evidence below use {label()}. Protection assessments and
+                  task history are workload-wide, not a rating of this location.
+                </InlineNotice>
+              )}
+            </Show>
+            <ProxmoxCoverageTable
+              rows={liveCoverageRows()}
+              hasAnyRows={liveTotalCount() > 0}
+              emptyIcon={props.emptyIcon}
+              emptyTitle="No backup target coverage"
+              emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
+              sortKey={coverageSortKey}
+              sortDirection={coverageSortDirection}
+              onSort={handleCoverageSort}
+              expandedKey={expandedCoverageKey()}
+              onToggleExpand={toggleCoverageExpansion}
+              retainInspectionFocus={retainEvidenceFocus}
+              showTaskColumn={coverageHasTask()}
+              showWorkloadConnection={showWorkloadConnection()}
+              evidenceLocationLabel={evidenceLocationLabel()}
+              historyReadIncomplete={
+                inventoryIncomplete() ||
+                !protectionPostures.resolvedOnce() ||
+                Boolean(protectionPostures.response.error)
               }
             />
 
-            <Show when={view() === 'date'}>
-              <ProxmoxRecoverableTable
-                artifacts={filteredRecoverableArtifacts()}
-                hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
-                emptyIcon={props.emptyIcon}
-                emptyTitle={
-                  inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
-                }
-                emptyDescription={
-                  inventoryIncomplete()
-                    ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                    : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
-                }
-                sortKey={recoverableSortKey}
-                sortDirection={recoverableSortDirection}
-                onSort={handleRecoverableSort}
-                sizeMaxBytes={recoverableSizeMaxBytes()}
-                groupByDay
-                showWorkloadConnection={showWorkloadConnection()}
-                showSourceConnection={showSourceConnection()}
-                retainInspectionFocus={retainEvidenceFocus}
-              />
+            <Show when={orphanedTotalCount() > 0}>
+              <div ref={retainEvidenceFocus} class="rounded-lg border border-border-subtle">
+                <button
+                  type="button"
+                  onClick={() => setShowOrphaned((v) => !v)}
+                  class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
+                  aria-expanded={showOrphaned()}
+                >
+                  <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                    <ChevronRightIcon
+                      class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
+                      aria-hidden="true"
+                    />
+                    {orphanedTotalCount()} unmatched{' '}
+                    {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
+                  </span>
+                  <span class="w-full text-[11px] text-muted sm:w-auto">
+                    No unambiguous inventory match
+                  </span>
+                </button>
+                <Show when={showOrphaned()}>
+                  <div class="border-t border-border-subtle p-2">
+                    <ProxmoxCoverageTable
+                      rows={orphanedCoverageRows()}
+                      hasAnyRows={orphanedTotalCount() > 0}
+                      emptyIcon={props.emptyIcon}
+                      emptyTitle="No unmatched backups"
+                      emptyDescription="Backups without an unambiguous live guest match will appear here."
+                      sortKey={coverageSortKey}
+                      sortDirection={coverageSortDirection}
+                      onSort={handleCoverageSort}
+                      expandedKey={expandedCoverageKey()}
+                      onToggleExpand={toggleCoverageExpansion}
+                      retainInspectionFocus={retainEvidenceFocus}
+                      showTaskColumn={coverageHasTask()}
+                      showWorkloadConnection={showWorkloadConnection()}
+                      evidenceLocationLabel={evidenceLocationLabel()}
+                      historyReadIncomplete={
+                        inventoryIncomplete() ||
+                        !protectionPostures.resolvedOnce() ||
+                        Boolean(protectionPostures.response.error)
+                      }
+                    />
+                  </div>
+                </Show>
+              </div>
             </Show>
-
-            <Show when={view() === 'coverage'}>
-              <Show when={evidenceLocationLabel()}>
-                {(label) => (
-                  <InlineNotice
-                    tone="info"
-                    role="note"
-                    aria-label="Backup location scope"
-                    class="text-xs whitespace-normal wrap-anywhere"
-                  >
-                    Backup ages and restore evidence below use {label()}. Protection assessments and
-                    task history are workload-wide, not a rating of this location.
-                  </InlineNotice>
-                )}
-              </Show>
-              <ProxmoxCoverageTable
-                rows={liveCoverageRows()}
-                hasAnyRows={liveTotalCount() > 0}
-                emptyIcon={props.emptyIcon}
-                emptyTitle="No backup target coverage"
-                emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
-                sortKey={coverageSortKey}
-                sortDirection={coverageSortDirection}
-                onSort={handleCoverageSort}
-                expandedKey={expandedCoverageKey()}
-                onToggleExpand={toggleCoverageExpansion}
-                retainInspectionFocus={retainEvidenceFocus}
-                showTaskColumn={coverageHasTask()}
-                showWorkloadConnection={showWorkloadConnection()}
-                evidenceLocationLabel={evidenceLocationLabel()}
-                historyReadIncomplete={
-                  inventoryIncomplete() ||
-                  !protectionPostures.resolvedOnce() ||
-                  Boolean(protectionPostures.response.error)
-                }
-              />
-
-              <Show when={orphanedTotalCount() > 0}>
-                <div ref={retainEvidenceFocus} class="rounded-lg border border-border-subtle">
-                  <button
-                    type="button"
-                    onClick={() => setShowOrphaned((v) => !v)}
-                    class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
-                    aria-expanded={showOrphaned()}
-                  >
-                    <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                      <ChevronRightIcon
-                        class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
-                        aria-hidden="true"
-                      />
-                      {orphanedTotalCount()} unmatched{' '}
-                      {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
-                    </span>
-                    <span class="w-full text-[11px] text-muted sm:w-auto">
-                      No unambiguous inventory match
-                    </span>
-                  </button>
-                  <Show when={showOrphaned()}>
-                    <div class="border-t border-border-subtle p-2">
-                      <ProxmoxCoverageTable
-                        rows={orphanedCoverageRows()}
-                        hasAnyRows={orphanedTotalCount() > 0}
-                        emptyIcon={props.emptyIcon}
-                        emptyTitle="No unmatched backups"
-                        emptyDescription="Backups without an unambiguous live guest match will appear here."
-                        sortKey={coverageSortKey}
-                        sortDirection={coverageSortDirection}
-                        onSort={handleCoverageSort}
-                        expandedKey={expandedCoverageKey()}
-                        onToggleExpand={toggleCoverageExpansion}
-                        retainInspectionFocus={retainEvidenceFocus}
-                        showTaskColumn={coverageHasTask()}
-                        showWorkloadConnection={showWorkloadConnection()}
-                        evidenceLocationLabel={evidenceLocationLabel()}
-                        historyReadIncomplete={
-                          inventoryIncomplete() ||
-                          !protectionPostures.resolvedOnce() ||
-                          Boolean(protectionPostures.response.error)
-                        }
-                      />
-                    </div>
-                  </Show>
-                </div>
-              </Show>
-            </Show>
-          </div>
-        </Show>
+          </Show>
+        </div>
       </Show>
     </div>
   );

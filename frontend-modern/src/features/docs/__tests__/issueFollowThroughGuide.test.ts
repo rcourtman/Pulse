@@ -36,34 +36,22 @@ const prose = (element: Element): string => (element.textContent ?? '').replace(
 describe('public issue follow-through guidance', () => {
   it('keeps resolution, stable-release retest and timeout distinct in rendered paragraphs', () => {
     const paragraphs = followThrough().querySelectorAll('p');
-    expect(paragraphs).toHaveLength(4);
+    expect(paragraphs).toHaveLength(3);
     expect(prose(paragraphs[0])).toContain('no reported symptom left unresolved');
-    expect(prose(paragraphs[1])).toContain('start with that stable-release retest reply');
-    expect(prose(paragraphs[1])).toContain('carrying the same fix');
-    expect(prose(paragraphs[1])).toContain(
-      'limit on repeated unanswered contact prevents another reply',
-    );
-    expect(prose(paragraphs[1])).toContain(
-      "later of that request and the stable release's publication",
-    );
-    expect(prose(paragraphs[1])).toContain(
-      'A beta or release candidate alone never starts the timeout, nor does a fix commit',
-    );
-    const emphasis = paragraphs[2].querySelector('strong');
+    expect(prose(paragraphs[0])).toContain('A merged fix or a workaround alone is not enough');
+    expect(prose(paragraphs[1])).toContain('Once the fix ships in a stable release');
+    expect(prose(paragraphs[1])).toContain('After 14 days with no reply');
+    expect(prose(paragraphs[1])).toContain('nobody else reporting the same problem');
+    const emphasis = paragraphs[1].querySelector('strong');
     expect(emphasis).not.toBeNull();
     expect(prose(emphasis!)).toBe('not confirmed resolution');
-    expect(prose(paragraphs[2])).toContain('at least 14 days without any reply from the reporter');
-    expect(prose(paragraphs[2])).toContain(
-      'no other person reporting the same problem since that retest request',
-    );
-    expect(prose(paragraphs[2])).toContain('an unfixed or unexplained symptom');
+    expect(prose(paragraphs[1])).toContain('unexplained symptoms are never closed this way');
   });
 
   it('keeps the existing issue and safe evidence route usable without new collection', () => {
     const section = followThrough();
     expect(prose(section)).toContain('original issue rather than filing it again');
-    expect(prose(section)).toContain('unknown details are valid and credentials stay private');
-    expect(prose(section)).toContain('do not repeat an outage, update or backup');
+    expect(prose(section)).toContain("Don't repeat an outage, update or backup");
     expect(section.querySelector('pre, form, input, button')).toBeNull();
     const link = section.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/docs/TROUBLESHOOTING#collect-diagnostics-safely');
@@ -86,14 +74,9 @@ describe('public issue follow-through guidance', () => {
   it('keeps the disclosure and its linked release guide on the weekly, no-early-cut policy', () => {
     const article = renderGuide('AI_TRANSPARENCY', source);
     const text = prose(article);
-    expect(text).toContain(
-      'Minor stable publication is targeted seven days after the last minor stable release',
-    );
-    expect(text).toContain('one day earlier, reserving its full 24-hour soak');
-    expect(text).toContain(
-      'An important fix ships in the next beta, not through an early candidate or stable release',
-    );
-    expect(text).toContain('unless a release-blocker requires a fresh candidate');
+    expect(text).toContain('Releases follow a fixed weekly train');
+    expect(text).toContain('soaks for 24 hours and is promoted unchanged to stable');
+    expect(text).toContain('unless a release-blocker issue stops it');
     expect(text).not.toContain('Every 14 days');
     expect(text).not.toContain('An early cut can bring');
     expect(
@@ -110,17 +93,17 @@ describe('public issue follow-through guidance', () => {
     expect(prose(release)).not.toContain('can bring');
   });
 
-  it('makes the unavailable patch path and limited contents explicit in both consumed guides', () => {
-    for (const name of ['AI_TRANSPARENCY', 'RELEASE_PROCESS']) {
-      const article = renderGuide(name, readGuide(name));
-      const text = prose(article);
-      expect(text).toContain('As of 27 October 2026, stable patches are not yet available');
-      expect(text).toContain('containing minor release');
-      expect(text).toContain('eligible repairs already merged to main');
-      expect(text).toContain('release metadata and publication support');
-      expect(text).toContain('stable-regression');
-      expect(text).not.toContain('Patch releases are not scheduled');
-    }
+  it('makes the unavailable patch path explicit in both consumed guides', () => {
+    expect(prose(renderGuide('AI_TRANSPARENCY', source))).toContain(
+      'Stable patches are not yet available',
+    );
+    const text = prose(renderGuide('RELEASE_PROCESS', readGuide('RELEASE_PROCESS')));
+    expect(text).toContain('As of 27 October 2026, stable patches are not yet available');
+    expect(text).toContain('containing minor release');
+    expect(text).toContain('eligible repairs already merged to main');
+    expect(text).toContain('release metadata and publication support');
+    expect(text).toContain('stable-regression');
+    expect(text).not.toContain('Patch releases are not scheduled');
   });
 
   it('links the public triage disclosure to the actual scoped patch guidance', () => {

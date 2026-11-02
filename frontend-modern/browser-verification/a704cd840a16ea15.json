@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "8918a53c3d2de7626e31bb2a847b20417c2e81b7",
+  "verified_at": "2026-11-02T11:05:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "30109b7fe1684eb8bf7c1d5035e33e68fd5291ba3cb30691359e611beea8e674",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "62ca40112ab1bbae9d60386847657ed7ee14f4313342a5400baa9fc26ca34e9c"
+  },
+  "routes": [
+    "/proxmox/backups"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1000,
+      "height": 1000
+    },
+    {
+      "width": 800,
+      "height": 1000
+    },
+    {
+      "width": 640,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "private mock-mode backend built from this branch on pulse-dev",
+    "Backup servers table at every layout width, and a server's drawer with its host figures",
+    "an injected PBS datastore forecast alert in the reshaped Used column",
+    "dark theme, desktop, intermediate and phone layouts"
+  ],
+  "interactions": [
+    "signed in to the private mock backend built from this branch and opened Proxmox > Backups at 1440, 1000, 800, 640 and 375 px wide",
+    "before: the Backup servers header read Backup server, Status, Version, CPU, Memory, Uptime, Datastore, Used, Jobs, Backups, Dedup; after: Backup server, Status, Datastore, Used, Jobs, Backups, Dedup",
+    "every row stayed 32-33 px and single-line at every width with no clipped cell on desktop; datastore names truncate at 640 and 375 as they already did",
+    "opened a server's drawer at desktop and phone: it shows the PBS 3.2.1 version badge, CPU and memory with History charts, 5.33 GB of 16.0 GB RAM and uptime in Details",
+    "with an injected PBS datastore forecast alert the 'Full in ~4d' pill still fits in Used on desktop and moves to State on phone",
+    "no horizontal page overflow at any width"
+  ]
+}

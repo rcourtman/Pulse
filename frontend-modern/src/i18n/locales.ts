@@ -1,6 +1,6 @@
 export const DEFAULT_LOCALE = 'en';
 
-export const SUPPORTED_LOCALES = ['en', 'de', 'es'] as const;
+export const SUPPORTED_LOCALES = ['en', 'de', 'es', 'fr'] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
@@ -32,19 +32,27 @@ export const SUPPORTED_LOCALE_REGISTRY: Record<SupportedLocale, SupportedLocaleD
     fallbackLocale: DEFAULT_LOCALE,
     rolloutStage: 'first-wave',
   },
+  fr: {
+    label: 'Français',
+    englishLabel: 'French',
+    fallbackLocale: DEFAULT_LOCALE,
+    rolloutStage: 'first-wave',
+  },
 };
 
 export const FIRST_LOCALIZATION_LOCALES = [
   'de',
   'es',
+  'fr',
 ] as const satisfies readonly SupportedLocale[];
 
-export const NEXT_LOCALIZATION_LOCALES = ['fr', 'pt-BR', 'ja', 'zh-Hans', 'ko'] as const;
+export const NEXT_LOCALIZATION_LOCALES = ['pt-BR', 'ja', 'zh-Hans', 'ko'] as const;
 
 export const SUPPORTED_LOCALE_LABELS: Record<SupportedLocale, string> = {
   en: SUPPORTED_LOCALE_REGISTRY.en.label,
   de: SUPPORTED_LOCALE_REGISTRY.de.label,
   es: SUPPORTED_LOCALE_REGISTRY.es.label,
+  fr: SUPPORTED_LOCALE_REGISTRY.fr.label,
 };
 
 const SUPPORTED_LOCALE_SET = new Set<string>(SUPPORTED_LOCALES);
@@ -63,6 +71,11 @@ const LOCALE_ALIASES: Record<string, SupportedLocale> = {
   'es-mx': 'es',
   'es-pe': 'es',
   'es-us': 'es',
+  'fr-be': 'fr',
+  'fr-ca': 'fr',
+  'fr-ch': 'fr',
+  'fr-fr': 'fr',
+  'fr-lu': 'fr',
 };
 
 export function isSupportedLocale(value: string): value is SupportedLocale {

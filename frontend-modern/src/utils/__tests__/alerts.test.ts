@@ -338,6 +338,31 @@ describe('getAlertsForUnifiedResource', () => {
     ]);
   });
 
+  it("matches a Proxmox node's own storage alerts but not shared or another node's storage", () => {
+    const node = resource({
+      id: 'agent:pve1',
+      proxmox: { sourceId: 'homelab-pve1', instance: 'homelab', nodeName: 'pve1' },
+    } as Partial<Resource>);
+    const storage = (id: string, overrides: Partial<Alert>) =>
+      alert(id, `${id}-storage`, {
+        type: 'usage',
+        instance: 'homelab',
+        metadata: { resourceType: 'storage' },
+        ...overrides,
+      });
+    const active = byId(
+      storage('local-zfs', { node: 'pve1' }),
+      // Usage alerts carry the resource type as the backend capitalises it.
+      storage('local', { node: 'pve1', metadata: { resourceType: 'Storage' } }),
+      storage('shared-nfs', { node: 'cluster' }),
+      storage('pve2-local', { node: 'pve2' }),
+      storage('other-cluster', { node: 'pve1', instance: 'lab' }),
+      alert('guest-memory', 'homelab:pve1:101', { node: 'pve1', instance: 'homelab' }),
+    );
+
+    expect(ids(getAlertsForUnifiedResource(node, active, true))).toEqual(['local-zfs', 'local']);
+  });
+
   it("matches a Docker container's alerts on its host and container ID, or its name", () => {
     const container = resource({
       id: 'app-container-b858bc8f1caf601a',

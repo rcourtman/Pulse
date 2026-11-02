@@ -64,6 +64,9 @@
     "messages.de": {
       "baselineGzip": 10489
     },
+    "messages.fr": {
+      "baselineGzip": 10742
+    },
     "ActionReviewDialog": {
       "baselineGzip": 10457
     },

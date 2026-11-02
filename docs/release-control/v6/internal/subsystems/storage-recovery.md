@@ -635,28 +635,30 @@ proof must inspect desktop and 320px pixels, ordinary disclosure clicks/taps,
 namesake isolation, task refresh/withdrawal and close-focus return. No shared
 primitive, read cadence, protection policy, backup or guest operation changes.
 
-### Backup-server memory does not invent empty or current readings
+### Backup-server rows leave host figures to the server drawer (2 November 2026)
 
-The Backup servers table keeps a valid selected memory percentage when a partial
-metric reports capacity without used bytes; it never substitutes zero used bytes.
-A displayed byte pair needs finite non-negative used bytes and positive capacity,
-with used not exceeding capacity. Valid reported pairs still determine the
-percentage, including an explicit measured zero. An independent finite percentage
-in the range 0–100 remains usable when the byte pair is absent or invalid.
+A Backup servers row answers "is the server reachable and is this datastore
+OK?": Status, datastore, Used, Jobs, the backup count and dedup. The PBS host's
+CPU, memory, uptime and version moved out of the row into the server's
+drawer, where they sit with their History charts and the version badge. Status
+already says whether the box is alive, and those columns took the row's room
+from the datastore answers, which now carry job results and the fill forecast.
+Phones never showed them. The row model no longer copies host readings into
+datastore rows; the drawer reads them from the row's resource.
 
-Server reachability does not renew memory evidence. The table reuses the resource
-drawer's memory-observation qualification: retained and unknown readings say
-`Last known` or `Freshness unknown`; explicitly unavailable readings show no
-number. A stopped linked agent qualifies its own reading without invalidating an
-independent current source. Offline suppression, datastore risk, backup counts,
-identity, History targets and original observation clocks remain unchanged.
-
-Normal-suite `ProxmoxBackupServersTable.memory.test.tsx` covers partial and invalid
-metrics, measured zero, retained/unavailable/future observations, stopped-agent
-source isolation, live recovery and multi-datastore/offline controls. Browser
-proof must consume the resource producer through the actual Backups surface and
-its existing drawer at desktop and narrow widths. This improves truthful
-inspection, not installed memory relief, a successful backup or guest recovery.
+Host-figure truthfulness therefore belongs to the drawer. The deleted
+table-cell proof (`ProxmoxBackupServersTable.memory.test.tsx`) has no surface
+left to cover, and the drawer is weaker than that cell in two known ways: its
+CPU and memory percentages come from its History charts, so a failed history
+read hides them where the row showed the live reading; and its shared
+`getMemoryPercent` treats a measured zero used with a positive capacity as
+missing and lets an invalid byte pair override a valid percentage. Those are
+existing drawer behaviors on every platform, not part of this change, and are
+not yet fixed; this section does not claim the drawer matches the deleted
+cell's validation.
+`ProxmoxBackupServersTable.test.ts` pins that rows carry no host readings and
+keep the host resource the drawer reads, and `ProxmoxBackupsTable.test.tsx`
+pins the column set.
 
 ### Contradictory task completion cannot complete an archive
 
@@ -5066,6 +5068,30 @@ warning forecast. The datastore drawer adds a "Fill forecast" line with the
 observed daily growth. The page owns the live alert store and passes a lookup
 through `ProxmoxBackupsTable`'s `datastoreAlerts`, so the table renders without
 an alerts provider and shows no forecast when none is given.
+
+### Backups page orders its answers: health, servers, restore points (2 November 2026)
+
+The Backups page now reads in the order people ask: Backup health beside
+Backup jobs (are my backups protected, did last night run), then the Backup
+servers table (is my PBS reachable, is its datastore filling), then the
+restore points: the By date / Coverage tabs, the activity chart, filters and
+list. The view tabs head the restore points only; health and jobs belong to the
+page and render the same in either view.
+
+The Backup servers table stays mounted through inventory loading, failure and
+retries, since it reads `/api/resources`, not either backup inventory. The
+single loading or all-sources-failed state sits above it in the summary's place,
+and the restore-point block appears only when an inventory is readable or a
+source failure needs explaining. The posture-unavailable and unread-sources
+notices stay with the health card they qualify; the unresolved saved-location
+notice moves with the list it empties.
+
+Tapping a health exception still lands on Coverage filtered to those guests.
+Because the list now sits below the servers, a tap scrolls the restore points
+into view when their top is below the fold (phones), honouring reduced motion,
+and leaves the page where it is when the list already shows; clearing a filter
+never scrolls. `ProxmoxBackupsTable.test.tsx` pins the section order and both
+scroll cases.
 
 ### Backup jobs show 14 days of retained outcomes beside Backup health (2 November 2026)
 

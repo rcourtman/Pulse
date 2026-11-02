@@ -15,7 +15,7 @@ import {
 describe('resolveSupportedLocale — branch coverage', () => {
   describe('(a) direct supported-locale hit — isSupportedLocale(normalized) true arm', () => {
     it('returns every supported locale verbatim (locks the supported set)', () => {
-      expect(SUPPORTED_LOCALES).toEqual(['en', 'de', 'es']);
+      expect(SUPPORTED_LOCALES).toEqual(['en', 'de', 'es', 'fr']);
       for (const locale of SUPPORTED_LOCALES) {
         expect(resolveSupportedLocale(locale)).toBe(locale);
       }
@@ -84,8 +84,8 @@ describe('resolveSupportedLocale — branch coverage', () => {
 
   describe('null/false arm — base unsupported or input falsy', () => {
     it('returns null when the base locale is itself unsupported (ternary false arm)', () => {
-      // 'fr-FR' -> not direct, not alias, base 'fr' NOT supported -> null.
-      expect(resolveSupportedLocale('fr-FR')).toBeNull();
+      // 'ko-KR' -> not direct, not alias, base 'ko' NOT supported -> null.
+      expect(resolveSupportedLocale('ko-KR')).toBeNull();
       // 'zh-Hans' -> base 'zh' not supported -> null.
       expect(resolveSupportedLocale('zh-Hans')).toBeNull();
       // 'pt-BR' -> base 'pt' not supported -> null.
@@ -93,7 +93,7 @@ describe('resolveSupportedLocale — branch coverage', () => {
       // 'ja-JP' -> base 'ja' not supported -> null.
       expect(resolveSupportedLocale('ja-JP')).toBeNull();
       // A bare unsupported code with no region also returns null.
-      expect(resolveSupportedLocale('fr')).toBeNull();
+      expect(resolveSupportedLocale('ko')).toBeNull();
       expect(resolveSupportedLocale('xyz')).toBeNull();
     });
 
@@ -140,8 +140,8 @@ describe('getLocaleFallbackChain — branch coverage', () => {
     });
 
     it('returns a single-element chain for an unsupported locale (defaults to en)', () => {
-      // 'fr-FR' resolves to null -> normalizeLocale -> DEFAULT_LOCALE 'en' -> ['en'].
-      expect(getLocaleFallbackChain('fr-FR')).toEqual(['en']);
+      // 'ko-KR' resolves to null -> normalizeLocale -> DEFAULT_LOCALE 'en' -> ['en'].
+      expect(getLocaleFallbackChain('ko-KR')).toEqual(['en']);
     });
   });
 
@@ -169,7 +169,18 @@ describe('getLocaleFallbackChain — branch coverage', () => {
 
   describe('return shape', () => {
     it('always emits members of SUPPORTED_LOCALES', () => {
-      for (const input of ['en', 'de', 'es', 'en-GB', 'de-AT', 'es-MX', 'de-XX', 'fr-FR', null]) {
+      for (const input of [
+        'en',
+        'de',
+        'es',
+        'en-GB',
+        'de-AT',
+        'es-MX',
+        'de-XX',
+        'fr-FR',
+        'ko-KR',
+        null,
+      ]) {
         const chain = getLocaleFallbackChain(input);
         for (const member of chain) {
           expect((SUPPORTED_LOCALES as readonly string[]).includes(member)).toBe(true);

@@ -447,7 +447,9 @@ describe('settings architecture guardrails', () => {
     expect(settingsSource).toContain(
       'canMountSettingsPanel(currentTab, securityStatus()?.settingsCapabilities)',
     );
-    expect(settingsAccessSource).toContain('securityStatus() !== null || !securityStatusLoading()');
+    expect(settingsAccessSource).toMatch(
+      /securityStatus\(\) !== null \|\| !securityStatusLoading\(\) \|\| securityStatusError\(\)/,
+    );
     expect(settingsAccessSource).toContain("DEFAULT_SETTINGS_TAB,\n  'system-general'");
   });
 
@@ -975,6 +977,18 @@ describe('settings architecture guardrails', () => {
     expect(generalSettingsPanelSource).toContain('variant="primary"');
     expect(generalSettingsPanelSource).not.toContain('license_tier');
     expect(generalSettingsPanelSource).not.toContain('api_tokens');
+  });
+
+  // Every supported locale is offered from the registry, and with four options
+  // the row must stack on phones or the last option is clipped at 375px.
+  it('keeps the language selector registry-driven and stacked on phones', () => {
+    expect(generalSettingsPanelSource).toContain('SUPPORTED_LOCALES.map((locale) => ({');
+    expect(generalSettingsPanelSource).toContain(
+      'class="flex flex-col items-start gap-2 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-6"',
+    );
+    expect(generalSettingsPanelSource).toContain(
+      'class="max-w-full shrink-0 [&_button]:px-1.5 sm:w-auto sm:[&_button]:px-3"',
+    );
   });
 
   it('keeps panel-owned gated settings routes separate from sidebar visibility', () => {

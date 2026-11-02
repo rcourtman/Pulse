@@ -395,14 +395,16 @@ describe('ProxmoxBackupsTable', () => {
     };
 
     // Two datastores of one server read as one server, not two identical ones:
-    // the host cells sit on its first row, and the second row keeps its name
-    // and its own datastore figures.
+    // status sits on its first row, and the second row keeps its name and its
+    // own datastore figures. Host CPU, memory, uptime and version are in the
+    // server's drawer, not the row.
     expect(dataRows()).toHaveLength(2);
     expect(within(table).getAllByText('pbs-main')).toHaveLength(2);
-    for (const column of ['status', 'version', 'cpu', 'memory', 'uptime']) {
-      expect(cellText(0, column)).not.toBe('');
-      expect(cellText(1, column)).toBe('');
-    }
+    expect(cellText(0, 'status')).not.toBe('');
+    expect(cellText(1, 'status')).toBe('');
+    expect(
+      columns.filter((column) => ['version', 'cpu', 'memory', 'uptime'].includes(column ?? '')),
+    ).toEqual([]);
     expect(cellText(0, 'datastore')).toBe('main');
     expect(cellText(1, 'datastore')).toBe('offsite');
     expect(cellText(1, 'used')).toContain('25');
@@ -811,6 +813,102 @@ describe('ProxmoxBackupsTable', () => {
     expect(grid.className).toContain('xl:[&:has([data-backup-jobs])]:grid-cols-');
   });
 
+  it('answers health first, then the backup servers, then the restore points', async () => {
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={[pbsServerResource]}
+      />
+    ));
+
+    const verdict = await waitFor(() => {
+      const element = document.querySelector('[data-backup-verdict]');
+      expect(element).toHaveTextContent('0 of 1 protected');
+      return element!;
+    });
+    const servers = document.querySelector('[data-proxmox-backups-table="servers"]')!;
+    const restorePoints = document.querySelector<HTMLElement>('[data-backup-restore-points]')!;
+    const follows = (first: Node, second: Node) =>
+      Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(verdict, servers)).toBe(true);
+    expect(follows(servers, restorePoints)).toBe(true);
+    // The view tabs head the restore points; health and jobs belong to the page.
+    expect(within(restorePoints).getByRole('navigation', { name: 'Backup views' })).toBeTruthy();
+    expect(restorePoints.contains(verdict)).toBe(false);
+    expect(restorePoints.contains(servers)).toBe(false);
+  });
+
+  it('brings the restore points into view after an exception tap only when they are below the fold', async () => {
+    mockBackupAPIs('attention');
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const scrollIntoView = vi.fn();
+    const prototype = HTMLElement.prototype as { scrollIntoView?: (arg?: unknown) => void };
+    const original = prototype.scrollIntoView;
+    prototype.scrollIntoView = scrollIntoView;
+    try {
+      renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      await waitFor(() =>
+        expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent(
+          '0 of 1 protected',
+        ),
+      );
+      const restorePoints = document.querySelector<HTMLElement>('[data-backup-restore-points]')!;
+      const top = vi.spyOn(restorePoints, 'getBoundingClientRect');
+      const group = () =>
+        within(screen.getByRole('list', { name: 'Backups that are not protected' })).getByRole(
+          'button',
+          { name: '1 backup source reported a failure' },
+        );
+      const reason = () => new URLSearchParams(window.location.search).get('reason');
+      const settle = async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      };
+      const belowFold = { top: window.innerHeight + 300 } as DOMRect;
+
+      // From By date, below the fold (phone): the tap lands on the filtered
+      // Coverage list and brings the restore points into view.
+      top.mockReturnValue(belowFold);
+      await fireEvent.click(group());
+      await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+      expect(reason()).toBe('source-failed');
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+      expect(scrollIntoView.mock.contexts[0]).toBe(restorePoints);
+      expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }));
+
+      // Clearing the filter never scrolls, even with the list below the fold.
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBeNull());
+      await settle();
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+      // On Coverage with the list already on screen (desktop): no scroll.
+      top.mockReturnValue({ top: 120 } as DOMRect);
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBe('source-failed'));
+      await settle();
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+      // On Coverage below the fold: selecting again reveals the list.
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBeNull());
+      top.mockReturnValue(belowFold);
+      await fireEvent.click(group());
+      await waitFor(() => expect(reason()).toBe('source-failed'));
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2));
+      expect(scrollIntoView.mock.contexts[1]).toBe(restorePoints);
+    } finally {
+      if (original) prototype.scrollIntoView = original;
+      else delete prototype.scrollIntoView;
+    }
+  });
+
   it('lets a backup exception group filter Coverage to those workloads', async () => {
     // "17 attention" was text: finding which workloads it counted took the
     // Filters sheet on a phone. A group is one tap to exactly its workloads.
@@ -1060,23 +1158,16 @@ describe('ProxmoxBackupsTable', () => {
     );
   });
 
-  it('keeps PBS backup count and uptime cells on shared platform primitives', () => {
+  it('keeps PBS backup count and capacity cells on shared platform primitives', () => {
     const directLocaleCountCall = 'row.backupCount.' + 'toLocale' + 'String()';
-    const directCpuPercentRound = 'Math.round(row.cpuPercent ?? 0)}' + '%';
-    const directMemoryPercentRound = 'Math.round(row.memoryPercent ?? 0)}' + '%';
     const directDatastorePercentRound = 'Math.round(pct() ?? 0)}' + '%';
-    const directUptimeCall = 'formatUptime(row.uptimeSeconds ?? 0)';
 
     expect(proxmoxBackupServersTableSource).toContain('PlatformTableNumberValue');
     expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableIntegerValue');
     expect(proxmoxBackupServersTableSource).toContain('PlatformTablePercentValue');
     expect(proxmoxBackupServersTableSource).toContain('formatPlatformTablePercentValue');
-    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableUptimeValue');
     expect(proxmoxBackupServersTableSource).not.toContain(directLocaleCountCall);
-    expect(proxmoxBackupServersTableSource).not.toContain(directCpuPercentRound);
-    expect(proxmoxBackupServersTableSource).not.toContain(directMemoryPercentRound);
     expect(proxmoxBackupServersTableSource).not.toContain(directDatastorePercentRound);
-    expect(proxmoxBackupServersTableSource).not.toContain(directUptimeCall);
   });
 
   it('routes PBS server expansion through the canonical resource drawer', () => {
@@ -3579,18 +3670,18 @@ describe('PBS inventory state column', () => {
     const countColumn = table.querySelector<HTMLElement>(
       'col[data-proxmox-backups-column="backups"]',
     )!;
-    // Server, status, CPU, memory, datastore, used, jobs, then the count.
+    // Server, status, datastore, used, jobs, then the count.
     const cells = table.querySelector('tbody tr')!.querySelectorAll('td');
-    expect(countColumn.style.width).toBe('12%');
-    expect(cells[7]).toHaveTextContent(/^Loading$/);
+    expect(countColumn.style.width).toBe('11%');
+    expect(cells[5]).toHaveTextContent(/^Loading$/);
     setState('unavailable');
-    expect(cells[7]).toHaveTextContent(/^Unavailable$/);
+    expect(cells[5]).toHaveTextContent(/^Unavailable$/);
     expect(cells[1]).toHaveTextContent('Healthy');
-    expect(cells[5]).toHaveTextContent('40.0%');
-    expect(cells[5]).toHaveTextContent('400 B / 1000 B');
+    expect(cells[3]).toHaveTextContent('40.0%');
+    expect(cells[3]).toHaveTextContent('400 B / 1000 B');
     setState('available');
-    expect(cells[7]).toHaveTextContent(/^0$/);
-    expect(countColumn.style.width).toBe('12%');
+    expect(cells[5]).toHaveTextContent(/^0$/);
+    expect(countColumn.style.width).toBe('11%');
   });
 });
 

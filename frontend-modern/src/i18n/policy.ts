@@ -20,7 +20,7 @@ export const LOCALIZATION_FOUNDATION = {
   fallbackBehavior:
     'Normalize locale input to a supported locale, then fall back to English for unsupported locales and missing catalog entries.',
   catalogShape:
-    'English is the source catalog. Every supported locale catalog must expose the same message keys. Migrated first-wave surfaces must provide explicit German and Spanish strings instead of inheriting English copy.',
+    'English is the source catalog. Every supported locale catalog must expose the same message keys. Migrated first-wave surfaces must provide explicit German, Spanish, and French strings instead of inheriting English copy.',
 } as const;
 
 export const NEVER_TRANSLATE_COPY_RULES = [
@@ -99,11 +99,16 @@ export const LOCALIZED_COMMERCIAL_PRICING_HANDOFF_KEYS =
 export const SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: ['settings.nav.group.system', 'settings.general.theme.option.system'],
   es: ['settings.header.systemGeneral.title', 'settings.nav.item.general'],
+  fr: [
+    'settings.general.monitoringCadence.duration.minute',
+    'settings.general.monitoringCadence.duration.minutes',
+  ],
 } as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;
 
 export const FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: ['setup.completion.sourceOptions.agent.title', 'setup.security.placeholder.username'],
   es: ['setup.completion.sourceOptions.agent.title', 'setup.security.placeholder.username'],
+  fr: ['setup.completion.sourceOptions.agent.title', 'setup.security.placeholder.username'],
 } as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;
 
 export const ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS = {
@@ -120,9 +125,17 @@ export const ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS = {
     'alerts.timeline.event.aiAnalysis',
     'alerts.timeline.event.runbook',
   ],
+  fr: [
+    'alerts.page.destinations.title',
+    'alerts.tabs.destinations',
+    'alerts.tabs.group.configuration',
+    'alerts.timeline.event.aiAnalysis',
+    'alerts.timeline.heading',
+  ],
 } as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;
 
 export const COMMERCIAL_PRICING_HANDOFF_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: ['pricing.handoff.description.afterLink'],
   es: ['pricing.handoff.description.afterLink'],
+  fr: ['pricing.handoff.description.afterLink'],
 } as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;

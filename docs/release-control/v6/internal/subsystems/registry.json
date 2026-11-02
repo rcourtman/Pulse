@@ -5647,6 +5647,7 @@
         "frontend-modern/src/i18n/index.ts",
         "frontend-modern/src/i18n/messages.de.ts",
         "frontend-modern/src/i18n/messages.es.ts",
+        "frontend-modern/src/i18n/messages.fr.ts",
         "frontend-modern/src/i18n/messages.ts",
         "frontend-modern/src/i18n/policy.ts",
         "frontend-modern/src/index.css",
@@ -5936,6 +5937,7 @@
               "frontend-modern/src/i18n/index.ts",
               "frontend-modern/src/i18n/messages.de.ts",
               "frontend-modern/src/i18n/messages.es.ts",
+              "frontend-modern/src/i18n/messages.fr.ts",
               "frontend-modern/src/i18n/messages.ts",
               "frontend-modern/src/i18n/policy.ts"
             ],

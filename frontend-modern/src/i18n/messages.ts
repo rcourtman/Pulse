@@ -868,4 +868,5 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
 export const I18N_RUNTIME_MESSAGE_LOADERS = {
   de: () => import('./messages.de').then((module) => module.DE_MESSAGE_OVERRIDES),
   es: () => import('./messages.es').then((module) => module.ES_MESSAGE_OVERRIDES),
+  fr: () => import('./messages.fr').then((module) => module.FR_MESSAGE_OVERRIDES),
 } as const;

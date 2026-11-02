@@ -566,6 +566,22 @@ describe('ProxmoxNodesTable', () => {
       'data-workload-alert-accent',
       'critical',
     );
+    cleanup();
+
+    // Its own storage lives on the Storage tab; the row is the Overview's only sign of it.
+    activeAlertsMock.value = {
+      storage: {
+        ...nodeAlert('storage', 'homelab-pve-node-1-local-zfs'),
+        type: 'usage',
+        instance: 'homelab',
+        metadata: { resourceType: 'storage' },
+      },
+    };
+    renderNode();
+    expect(screen.getByText('pve-node-1').closest('tr')).toHaveAttribute(
+      'data-workload-alert-accent',
+      'critical',
+    );
   });
 
   it('does not present a retained stale update count as current in the node row', () => {

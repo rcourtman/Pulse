@@ -537,6 +537,26 @@ desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
 day selection, metric switching, empty matches and recovery. No shared-filter,
 route, navigation, access or backup operation changes.
 
+### Backup view tabs head the restore points, not the page (2 November 2026)
+
+On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,
+Coverage) now sit at the top of the restore-point block, below the Backup
+health and Backup jobs cards and the Backup servers table, so a tab reads as
+switching the list it heads rather than the whole page. The tabs keep their
+`nav` landmark and active-route state, so recovery focus that lands on the
+active view still finds it inside the inspection region.
+
+### Backup servers table drops its host columns (2 November 2026)
+
+`ProxmoxBackupServersTable` no longer renders Version, CPU, Memory or Uptime
+columns; `BACKUP_SERVER_COLUMNS` is server, status, datastore, used, jobs,
+backups and dedup, and every layout's weights were redistributed so Used, the
+longest value (percentage plus the used/total pair or the forecast pill), keeps
+the widest datastore share. The table therefore no longer consumes
+`formatPlatformTableUptimeValue`, and the shared-template registry drops it
+from that rule's required consumers. The memory cell's multi-line "Last known"
+qualifier went with it, so every row is now single-line by construction.
+
 ### Datastore fill forecast stays on one row line (2 November 2026)
 
 `ProxmoxBackupServersTable` shows a PBS datastore's fill forecast as the
@@ -2679,9 +2699,20 @@ locale coverage rather than page-local string switches.
 Alert snooze and resume copy follows that same boundary: action labels, bounded
 duration presets, monitoring-continuity wording, exact-expiry presentation,
 failure feedback, and timeline labels must stay in the typed English, German,
-and Spanish catalogs. The product surface may format the chosen instant in the
+Spanish, and French catalogs. The product surface may format the chosen instant in the
 viewer locale, but must not duplicate those lifecycle strings inside the alert
 card or dialog component.
+
+French is a first-wave locale alongside German and Spanish: a lazily loaded
+`frontend-modern/src/i18n/messages.fr.ts` must cover every migrated key, `fr-*`
+browser languages resolve to it, and the Settings > General language selector
+lists every entry of `SUPPORTED_LOCALES` from the registry rather than a
+hand-written option list. Because that selector grows with the registry, its row
+stacks the label above the options below the `sm` breakpoint so every locale
+stays on one line at phone width instead of clipping the last option.
+Count-bearing catalog keys have no plural forms, so locales whose nouns or
+adjectives agree with the number must use count-neutral wording (for example
+`Critique : {count}`) rather than a form that is wrong for one or for many.
 
 Date and number formatting is part of that boundary and is separate from the
 message catalog. Every `toLocaleString`, `toLocaleDateString`,
