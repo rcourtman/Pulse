@@ -15,6 +15,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestReloadableMonitorRetiredManagerRejectsLookups(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	cfg, err := config.LoadWithoutLoggingInit()
+	require.NoError(t, err)
+	rm, err := NewReloadableMonitor(cfg, config.NewMultiTenantPersistence(cfg.DataPath), nil)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	rm.Start(ctx)
+	t.Cleanup(rm.Stop)
+	retired := rm.GetMultiTenantMonitor()
+	require.NoError(t, rm.Reload())
+	replacement := rm.GetMultiTenantMonitor()
+	require.NotSame(t, retired, replacement)
+	monitor, err := retired.GetMonitor("default")
+	require.Error(t, err, "stale handler must not recreate the retired default runtime")
+	require.Nil(t, monitor)
+	monitor, exists := retired.PeekMonitor("default")
+	require.False(t, exists)
+	require.Nil(t, monitor)
+	require.NoError(t, replacement.globalCtx.Err(), "replacement must have its own live lifetime")
+	require.Same(t, cfg, rm.GetConfig(), "retirement must not replace the canonical credential owner")
+}
+
 func TestReloadableMonitor_Lifecycle_Coverage(t *testing.T) {
 	// Create minimal config
 	cfg := &config.Config{

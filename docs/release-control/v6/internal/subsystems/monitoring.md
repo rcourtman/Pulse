@@ -17,6 +17,28 @@
 
 ## Purpose
 
+### Retired tenant managers cannot create replacement runtimes
+
+`MultiTenantMonitor.Stop` closes admission under the same lock as lazy
+initialization, before cancelling or draining any tenant. Both cached and new
+`GetMonitor` lookups reject a retired manager; `PeekMonitor` does not expose its
+retained runtimes. The initialization path rechecks the fence after acquiring
+its write lock. An incomplete shutdown keeps its existing runtime/data owner,
+not a usable read owner. Repeated Stop can finish cleanup but never reopens
+admission. A separately constructed manager owns replacement runtimes.
+
+`multi_tenant_monitor_stop_test.go` covers unused/default/scoped lookups,
+canonical-config and saved-file preservation, concurrent cached reads during
+drain, incomplete cleanup and explicit cleanup completion.
+`TestReloadableMonitorRetiredManagerRejectsLookups` exercises the real reload
+handover while preserving its canonical credential owner.
+`TestTenantMonitorRetirementFailsClosedAndReplacementRecovers` connects the
+retirement fence to the existing tenant HTTP 503 guard and configuration
+handler: stale consumers cannot recreate or borrow default state, while a
+new manager recovers the saved tenant inventory. This does not prove detached
+worker quiescence, the whole removal/startup journey or installed recovery.
+Authentication, tenant selection, TLS and the HTTP error shape are unchanged.
+
 ### Datastore discovery cannot turn unread history into absence
 
 PBS datastore enumeration uses the same bounded, fully read and closed HTTP 200
