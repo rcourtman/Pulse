@@ -5066,6 +5066,18 @@ observed daily growth. The page owns the live alert store and passes a lookup
 through `ProxmoxBackupsTable`'s `datastoreAlerts`, so the table renders without
 an alerts provider and shows no forecast when none is given.
 
+### Backup health reason rows show they open Coverage (2 November 2026)
+
+Each Backup health reason row was already a button that filters Coverage to
+those workloads, but it read as a static statistic. `ProxmoxBackupsCoverageStrip`
+now ends each clickable row with a muted chevron that brightens on hover and
+turns blue while the filter is on, and the hover title reads "Show in Coverage:"
+before the name preview ("Clear this filter in Coverage" while pressed). The
+Protected row opens nothing and carries no chevron; an empty last grid track
+keeps its columns aligned. Rows stay 32px, the accessible names are unchanged,
+and the phone bar narrows from 5rem to 4rem to make room. Which workloads each
+reason selects is unchanged.
+
 ### Restore points drop the per-day chart (2 November 2026)
 
 By date no longer draws "Completed restore points per day" (or its Volume

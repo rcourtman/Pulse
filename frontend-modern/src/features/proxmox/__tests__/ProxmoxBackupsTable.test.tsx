@@ -779,9 +779,12 @@ describe('ProxmoxBackupsTable', () => {
     const exceptions = within(screen.getByRole('list', { name: 'Backups that are not protected' }));
     const group = exceptions.getByRole('button', { name: '1 backup source reported a failure' });
     expect(group).toHaveTextContent('Backup source reported a failure');
-    // Names preview on hover; the filtered Coverage table lists them all.
-    expect(group).toHaveAttribute('title', 'pbs-docker (LXC 112)');
+    // The hover title says where a click goes and previews the names; the
+    // filtered Coverage table lists them all.
+    expect(group).toHaveAttribute('title', 'Show in Coverage: pbs-docker (LXC 112)');
     expect(group).not.toHaveTextContent('pbs-docker');
+    // A trailing chevron marks the row as one that opens something.
+    expect(group.querySelector('svg.lucide-chevron-right')).not.toBeNull();
     // The old posture bar and per-posture counts are gone: the sentence is the answer.
     expect(screen.queryByRole('button', { name: '1 attention' })).toBeNull();
   });
@@ -936,6 +939,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(
       exceptions.getByRole('button', { name: '1 backup source reported a failure' }),
     ).toHaveAttribute('aria-pressed', 'true');
+    expect(group).toHaveAttribute('title', 'Clear this filter in Coverage');
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
 
     // Toggling off keeps the same focused control rather than rebuilding it.
