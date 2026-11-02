@@ -293,32 +293,51 @@ and import have different permissions; a successful public health check does
 not establish either. Prefer the signed-in UI and keep the encrypted export and
 its passphrase separate and private.
 
-### Option 1: Create an API Token (Recommended)
-Create a dedicated token in **API Access** with `settings:read` for export, or
-`settings:write` for import. Use the [private-file export example](#usage) below;
-do not paste a token or export passphrase into a command. An organization-bound
-token can transfer only its selected organization, not the whole instance.
+### Use existing authorised access
 
-### Option 2: Allow Unprotected Export (Homelab)
-```bash
-# Using systemd
-sudo systemctl edit pulse
-# Add:
-[Service]
-Environment="ALLOW_UNPROTECTED_EXPORT=true"
+For a browser transfer, use an instance administrator in the default
+organisation, or an owner/admin of the selected tenant. A viewer or editor
+session is not enough. A trusted-proxy identity also needs administrator
+authority. Check the [organisation and access requirements](docs/MIGRATION.md#confirm-organisation-and-access)
+before exporting or replacing settings.
 
-# Docker: set ALLOW_UNPROTECTED_EXPORT=true in the existing deployment's
-# environment, without changing its image, data volumes or other settings.
-```
+For automation, create a dedicated token in **API Access** with `settings:read`
+for export, or `settings:write` for import. Use the [private-file export
+example](#usage) below; do not paste a token or export passphrase into a command.
+An organization-bound token can transfer only its selected organization, not
+the whole instance. Signing in as an administrator does not enlarge an
+explicitly supplied token's scopes or organisation binding.
 
-This exception applies only when Pulse has no configured authentication and
-only to configuration export. It never enables import and never overrides
-password, proxy, API-token, SSO, or hosted authentication. Without the
-exception, unauthenticated export and import recovery is limited to a direct
-loopback connection; private-network and forwarded requests are not loopback.
+### Recover an installation with no authentication
 
-**Note:** for production, prefer Docker secrets or systemd environment files
-for sensitive data.
+Only when Pulse has **no configured authentication**, configuration export and
+import can use a direct loopback connection without enabling a network-wide
+exception. The request must reach Pulse directly inside the server's own
+network namespace: private-network and forwarded requests are not loopback.
+A reverse proxy or your laptop's `localhost` is not that connection. Do not
+change network exposure or remove working authentication to make recovery
+possible.
+
+If authentication is configured but you cannot sign in, follow the
+[deployment-specific access recovery guide](docs/TROUBLESHOOTING.md#i-forgot-my-password).
+Loopback does not bypass password, proxy, API-token, SSO or hosted
+authentication. Keep the existing deployment, data and credentials intact.
+
+### Existing unprotected-export exception
+
+`ALLOW_UNPROTECTED_EXPORT=true` applies only to configuration export, and only
+when Pulse has no configured authentication. It permits export beyond
+direct loopback: **anyone who can reach the export endpoint can choose their
+own passphrase and receive the configuration, including provider and SSO
+secrets**. Export encryption does not authenticate the caller, and a homelab
+or private network is not an access-control boundary.
+
+Prefer the authorised or direct-loopback routes above; do not enable this
+exception just to clear an export error. It never enables import and never
+overrides configured authentication. If it is already enabled, review its
+exposure privately and remove it from the existing deployment's managed
+configuration when no longer needed, without replacing the installation or
+discarding state. Do not test exposure by making a public export.
 
 ## Security Features Summary
 
@@ -844,7 +863,7 @@ JSON
 ## Troubleshooting
 
 **Account locked?** Wait 15 minutes or contact admin for manual reset  
-**Export blocked?** Authenticate with management authority, use a correctly scoped API token, connect directly over loopback on a no-auth installation, or deliberately set `ALLOW_UNPROTECTED_EXPORT=true` for export only<br>
+**Export blocked?** Check the [transfer access and direct-loopback requirements](#exportimport-protection). Do not enable unprotected network export just to clear an error.<br>
 **Rate limited?** Wait 1 minute and try again  
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
 **API access denied?** Verify the token you supplied matches one of the values created in *Settings → API Tokens* (use the original token, not the hash)  

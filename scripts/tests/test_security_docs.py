@@ -234,7 +234,7 @@ class SecurityDocsTest(unittest.TestCase):
     def test_guidance_retains_authority_and_credential_lifecycle_boundaries(self):
         guide = " ".join(DOC.read_text().split())
         for boundary in ("monitoring:read", "settings:read", "settings:write", "CSRF",
-                         "organization-bound", "direct loopback", "export only",
+                         "organization-bound", "direct loopback", "only to configuration export",
                          "12 characters", "public", "separate from the export",
                          "entire configuration bundle", "31 March 2027", "no longer sold",
                          "does not reset a password", "deleting `.env` is not a universal reset",
@@ -251,6 +251,39 @@ class SecurityDocsTest(unittest.TestCase):
                          "do not run both examples as a batch", "repeat an uncertain POST"):
             self.assertIn(boundary, guide)
         self.assertNotIn("### What's **Not** Encrypted", guide)
+
+    def test_transfer_recovery_does_not_recommend_a_network_export_bypass(self):
+        source = DOC.read_text()
+        transfer = source.split("## Export/Import Protection\n", 1)[1].split("\n## ", 1)[0]
+        guide = " ".join(transfer.split())
+        for boundary in ("instance administrator", "owner/admin", "viewer or editor",
+                         "trusted-proxy identity", "explicitly supplied token",
+                         "no configured authentication", "direct loopback",
+                         "private-network and forwarded requests are not loopback",
+                         "only to configuration export", "It never enables import",
+                         "server's own network namespace", "your laptop's `localhost`",
+                         "Do not change network exposure or remove working authentication",
+                         "anyone who can reach the export endpoint",
+                         "own passphrase", "provider and SSO secrets",
+                         "Export encryption does not authenticate the caller",
+                         "private network is not an access-control boundary",
+                         "never enables import", "never overrides configured authentication",
+                         "Do not test exposure by making a public export"):
+            self.assertIn(boundary, guide)
+        self.assertLess(transfer.index("### Use existing authorised access"),
+                        transfer.index("### Recover an installation with no authentication"))
+        self.assertLess(transfer.index("### Recover an installation with no authentication"),
+                        transfer.index("### Existing unprotected-export exception"))
+        self.assertIn("docs/MIGRATION.md#confirm-organisation-and-access", transfer)
+        self.assertIn("docs/TROUBLESHOOTING.md#i-forgot-my-password", transfer)
+        # Keep the supported exception visible, but never as a copyable
+        # deployment recipe or a shortcut in the troubleshooting summary.
+        for block in blocks():
+            self.assertNotIn("ALLOW_UNPROTECTED_EXPORT", block)
+        summary = source.split("**Export blocked?**", 1)[1].split("\n", 1)[0]
+        self.assertIn("#exportimport-protection", summary)
+        self.assertNotIn("ALLOW_UNPROTECTED_EXPORT", summary)
+        self.assertNotIn("Allow Unprotected Export (Homelab)", source)
 
     def test_encrypted_file_examples_match_the_actual_store_and_data_path(self):
         guide = " ".join(DOC.read_text().split())
