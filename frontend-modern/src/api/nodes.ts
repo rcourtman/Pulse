@@ -312,6 +312,9 @@ export class NodesAPI {
       '/api/agent-install-command',
       {
         method: 'POST',
+        // Minting creates a credential. A refusal must return to the operator,
+        // not pass through the shared client's automatic 403/CSRF replay.
+        retry: false,
         body: JSON.stringify({
           type: 'host',
           enableCommands: params.enableCommands,

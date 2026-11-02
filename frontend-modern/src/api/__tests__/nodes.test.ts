@@ -30,6 +30,34 @@ describe('NodesAPI', () => {
     vi.clearAllMocks();
   });
 
+  describe('createHostAgentInstallToken', () => {
+    it.each([false, true])(
+      'submits one non-retrying host mint with command access %s',
+      async (enableCommands) => {
+        const record = {
+          id: 'install-1',
+          name: 'Host install',
+          prefix: 'synthetic',
+          suffix: 'only',
+          createdAt: '2026-11-02',
+        };
+        vi.mocked(apiFetchJSON).mockResolvedValueOnce({ token: 'synthetic-install-token', record });
+
+        const result = await NodesAPI.createHostAgentInstallToken({
+          enableCommands,
+          name: 'Host install',
+        });
+
+        expect(apiFetchJSON).toHaveBeenCalledExactlyOnceWith('/api/agent-install-command', {
+          method: 'POST',
+          retry: false,
+          body: JSON.stringify({ type: 'host', enableCommands, name: 'Host install' }),
+        });
+        expect(result).toEqual({ token: 'synthetic-install-token', record });
+      },
+    );
+  });
+
   describe('getNodes', () => {
     it('fetches all nodes', async () => {
       const mockNodes: NodeConfig[] = [{ id: 'node1', name: 'Node 1' } as NodeConfig];

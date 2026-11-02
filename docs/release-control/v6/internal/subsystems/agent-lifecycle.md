@@ -228,6 +228,9 @@ an execution-scoped token. Toggling after a mint prepares a replacement without
 revoking earlier tokens: a displayed token may already be installed and reporting.
 The new token and its command flags are admitted together; commands stay locked
 while minting, and a failed mint restores the previous complete state. Preparing
+a host install credential makes one non-retrying request, including on a 403;
+the generic CSRF retry must not resubmit this credential-creation operation.
+The existing authentication and CSRF gates are unchanged. Preparing
 a replacement does not change an installed agent's local command access or any
 existing token's scopes. Rerunning the installer on the intended host is still
 required; explicit token revocation stays in Tokens after checking no agent still

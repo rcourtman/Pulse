@@ -5159,13 +5159,17 @@ the authoritative analysis outcome.
     host; absence of local usage evidence is not evidence it is unused. Minting
     a replacement preserves the old credential and its scopes. Command flags
     and the replacement credential become available atomically, or the complete
-    previous command state is restored on failure. The installer explains that
+    previous command state is restored on failure. Host install mints opt out of
+    the shared API client's automatic retry, including its generic 403/CSRF
+    replay: a failure returns to the operator without resubmitting credential
+    creation. Authentication and CSRF checks remain enabled. The installer explains that
     preparation does not reconfigure an installed agent and that deliberate
     revocation belongs in Tokens only after checking no agent still uses it.
     `InfrastructureOperationsModel.test.tsx`,
     `useInfrastructureOperationsState.branchcov0722pm.test.tsx` and
     `InfrastructureInstallerSection.test.tsx` cover this consuming boundary;
-    native service recovery remains separate.
+    `nodes.test.ts` pins the non-retrying host mint and browser HTTP fixtures
+    verify a single refused submission. Native service recovery remains separate.
 24. Keep connected-infrastructure surface vocabulary canonical across the
     shared `/api/state` and reporting/install consumers:
     `frontend-modern/src/types/api.ts` must treat `truenas` as a first-class
