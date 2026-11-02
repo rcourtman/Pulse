@@ -50,7 +50,9 @@ describe('registration security guidance', () => {
     expect(text(section)).toContain('API_TOKEN and API_TOKENS environment variables are ignored');
     expect(text(section)).toContain('does not create a token, secure an installation');
     expect(text(section)).toContain('instead of widening scopes, disabling authentication');
-    expect(text(section)).toContain('Keep HTTPS verification and existing saved connections intact');
+    expect(text(section)).toContain(
+      'Keep HTTPS verification and existing saved connections intact',
+    );
     for (const [name, fragment] of [
       ['CONFIGURATION', '-api-tokens'],
       ['UNIFIED_AGENT', 'quick-start'],
