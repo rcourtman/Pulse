@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,6 +23,102 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+func TestMCPRedirectBoundaryCoversEveryAuthenticatedTransport(t *testing.T) {
+	for _, operation := range []string{"tools/read", "tools/write", "resources/read", "prompt-activity", "live-notifications"} {
+		t.Run(operation, func(t *testing.T) {
+			var destinationRequests atomic.Int32
+			destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				destinationRequests.Add(1)
+				if operation == "live-notifications" {
+					_, _ = io.WriteString(w, "event: finding.created\ndata: {\"findingId\":\"off-origin-marker\"}\n\n")
+				} else {
+					_, _ = io.WriteString(w, `{"marker":"off-origin-marker"}`)
+				}
+			}))
+			defer destination.Close()
+			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, destination.URL+"/target", http.StatusTemporaryRedirect)
+			}))
+			defer origin.Close()
+			manifest := agentcapabilities.CanonicalManifest()
+			out := &bytes.Buffer{}
+			server := &mcpServer{baseURL: origin.URL, token: "synthetic-token", manifest: &manifest, http: origin.Client(), out: out}
+			switch operation {
+			case "prompt-activity":
+				server.recordWorkflowPromptActivity(context.Background(), "overnight-triage")
+			case "live-notifications":
+				if err := server.streamSSEOnce(context.Background(), agentcapabilities.AgentEventsPath); err == nil {
+					t.Error("off-origin event stream succeeded")
+				}
+			default:
+				method := "tools/call"
+				params := `{"name":"get_fleet_context","arguments":{}}`
+				if operation == "tools/write" {
+					params = `{"name":"set_operator_state","arguments":{"resourceId":"vm:101","body":{"intentionallyOffline":true,"note":"private-write-marker"}}}`
+				} else if operation == "resources/read" {
+					method = "resources/read"
+					params = `{"uri":"pulse://resource/vm:101"}`
+				}
+				input := fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":%q,\"params\":%s}\n", method, params)
+				server.serve(strings.NewReader(input), out)
+				var response map[string]any
+				if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+					t.Fatalf("decode stdio response: %v", err)
+				}
+				result, _ := response["result"].(map[string]any)
+				if response["error"] == nil && result["isError"] != true {
+					t.Error("off-origin request did not reach MCP as an error")
+				}
+			}
+			if destinationRequests.Load() != 0 {
+				t.Errorf("off-origin destination received %d requests", destinationRequests.Load())
+			}
+			if strings.Contains(out.String(), "off-origin-marker") {
+				t.Error("off-origin data reached the agent")
+			}
+		})
+	}
+}
+
+func TestMCPSameOriginRedirectPreservesWriteAndEventConsumer(t *testing.T) {
+	var writes, events atomic.Int32
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/accepted" {
+			http.Redirect(w, r, "/accepted", http.StatusPermanentRedirect)
+			return
+		}
+		if r.Header.Get(agentcapabilities.AgentAPITokenHeader) != "synthetic-token" || r.Header.Get(agentcapabilities.AgentSurfaceHeader) != agentcapabilities.AgentSurfacePulseMCP {
+			t.Error("same-origin redirect lost the token or surface header")
+		}
+		if r.Header.Get("Accept") == agentcapabilities.AgentSSEAccept {
+			events.Add(1)
+			_, _ = io.WriteString(w, "event: finding.created\ndata: {\"findingId\":\"same-origin-marker\"}\n\n")
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if r.Method != http.MethodPut || !strings.Contains(string(body), "private-write-marker") || r.Header.Get("Content-Type") != "application/json" {
+			t.Error("same-origin redirect changed the write")
+		}
+		writes.Add(1)
+		_, _ = io.WriteString(w, `{"accepted":true}`)
+	}))
+	defer origin.Close()
+	manifest := agentcapabilities.CanonicalManifest()
+	out := &bytes.Buffer{}
+	server := &mcpServer{baseURL: origin.URL, token: "synthetic-token", manifest: &manifest, http: origin.Client(), out: out}
+	server.serve(strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"set_operator_state\",\"arguments\":{\"resourceId\":\"vm:101\",\"body\":{\"intentionallyOffline\":true,\"note\":\"private-write-marker\"}}}}\n"), out)
+	if writes.Load() != 1 || !strings.Contains(out.String(), `"accepted":true`) || strings.Contains(out.String(), `"isError":true`) {
+		t.Fatalf("same-origin write did not reach the MCP consumer: %s", out)
+	}
+	out.Reset()
+	if err := server.streamSSEOnce(context.Background(), agentcapabilities.AgentEventsPath); err != nil {
+		t.Fatalf("same-origin stream: %v", err)
+	}
+	if events.Load() != 1 || !strings.Contains(out.String(), "same-origin-marker") {
+		t.Fatalf("same-origin event did not reach the MCP consumer: %s", out)
+	}
+}
 
 type httpDoerFunc func(*http.Request) (*http.Response, error)
 
