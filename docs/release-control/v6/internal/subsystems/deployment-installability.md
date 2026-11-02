@@ -8607,8 +8607,11 @@ Windows runtime or service-lifecycle acceptance.
 
 ### Published MSP evaluation bundle guidance
 
-The MSP guide and its shipped mirror select the signed v6.6.0 provider archive,
-not a moving source archive. Its portal sells every MSP plan from Plan, so the
+The MSP guide and its shipped mirror select the signed v6.7.0 provider archive,
+not a moving source archive. v6.7.0 is the first release in which a fresh
+client workspace accepts an agent token minted in that client's own UI
+(#3268); on v6.6.0 the first client's agent was refused before auth was
+configured, so new evaluations must not start from it. Its portal sells every MSP plan from Plan, so the
 guide describes self-serve purchase, plan change and cancellation through
 Manage billing, the 14-day paid-period margin plus the 7-day lapse grace, and
 upgrading by running `upgrade.sh` from a newly verified bundle, with client
