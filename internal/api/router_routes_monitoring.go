@@ -126,7 +126,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// triage view above, which answers "where do I look now?".
 	r.mux.HandleFunc(agentcapabilities.RecentChangesCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ListRecentChangesCapabilityName,
-		r.agentContextHandler.HandleRecentChanges,
+		retainAgentHistoryResponseAuthority(r.config, r.agentContextHandler.HandleRecentChanges),
 	))))
 	// Agent-consumable metric history — "how did it move?" for one resource,
 	// served by the same history read the charts use.

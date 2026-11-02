@@ -977,3 +977,44 @@ func TestAgentEventTokenLifecycleDeleteThroughHTTP(t *testing.T) {
 		t.Fatalf("revoked reconnect = %d, want 401", resp.StatusCode)
 	}
 }
+
+func TestAgentHistoryPreservesAdmittedReaders(t *testing.T) {
+	for _, kind := range []string{"monitoring", "executor", "wildcard", "scope_added", "session", "proxy"} {
+		t.Run(kind, func(t *testing.T) {
+			scopes := []string{config.ScopeMonitoringRead, config.ScopeSettingsRead}
+			private := kind != "monitoring" && kind != "scope_added"
+			if kind == "executor" {
+				scopes = append(scopes, config.ScopeAIExecute)
+			} else if kind == "wildcard" {
+				scopes = []string{config.ScopeWildcard}
+			}
+			f := newHistoryAuthorityFixture(t, scopes)
+			raw, transport := historyAuthorityToken, "bearer"
+			if kind == "session" {
+				raw, transport = "history-authority-unchanged-session", "session"
+				GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", f.router.config.AuthUser)
+				t.Cleanup(func() { GetSessionStore().DeleteSession(raw) })
+			} else if kind == "proxy" {
+				transport = "proxy"
+			}
+			control := f.begin(t, historyAuthorityControl, "header")
+			primary := f.begin(t, raw, transport)
+			config.Mu.Lock()
+			if kind == "session" || kind == "proxy" {
+				f.router.config.RemoveAPIToken(f.router.config.APITokens[0].ID)
+			} else {
+				f.router.config.APITokens[0].Scopes = []string{config.ScopeMonitoringRead}
+				if private || kind == "scope_added" {
+					f.router.config.APITokens[0].Scopes = append(f.router.config.APITokens[0].Scopes, config.ScopeAIExecute)
+				}
+			}
+			config.Mu.Unlock()
+			f.provider.unblock()
+			readHistoryAuthorityResult(t, primary, http.StatusOK, private)
+			readHistoryAuthorityResult(t, control, http.StatusOK, true)
+			if f.stored(t) != f.original {
+				t.Error("read rewrote canonical history")
+			}
+		})
+	}
+}

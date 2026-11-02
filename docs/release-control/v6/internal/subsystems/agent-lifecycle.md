@@ -15,6 +15,32 @@
 
 ## Purpose
 
+### Unix agent URL admission precedes replacement
+
+After checksum and signature verification, the Unix installer runs the staged
+collector's `--validate-url` mode before safe-profile transactions, credential
+reduction, service stops, binary replacement or service/state rendering. The
+mode uses `agenttarget.NormalizePulseURL` with the authoritative primary policy,
+but reads no credentials or observer files, creates no logs/state/listeners,
+and performs no enrollment. It is URL-policy admission, not reachability,
+TLS trust, authenticated reporting or sustained module health.
+
+The installer explicitly sets `--allow-plaintext-http=false`: neither inherited
+plaintext consent nor `--insecure` authorises a configuration that its rendered
+service would reject. HTTPS and existing local/private HTTP policy remain
+unchanged. An unsupported or unexecutable staged validator fails closed with
+preflight exit 14 and a state-preservation explanation; it never falls back to
+an older `--self-test`, which does not establish URL admissibility. Temporary
+staging may be cleaned up; the installed service and saved credentials stay
+intact. The reachability-only `--preflight-only` path still performs metadata
+checks, not executable validation.
+
+`TestRunValidateURLIsReadOnly`, `TestAgentInstallerURLAdmission` and
+`TestAgentURLAdmissionPrecedesInstallMutation` cover production URL policy,
+actual built CLI/installer admission, inherited consent, file/mode preservation
+and trust-before-validation-before-mutation order. These are confined source
+fixtures, not original-host recovery or native service acceptance.
+
 ### Unix installer startup failure is not successful completion
 
 Fresh and upgrade callers of `complete_installation_flow` require successful
