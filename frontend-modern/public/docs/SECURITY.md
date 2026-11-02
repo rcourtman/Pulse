@@ -616,15 +616,29 @@ Endpoints enforce scope checks before processing. A token without the required s
 
 ### Auto-Registration Security
 
-#### Default Mode
-- All access requires authentication
-- Nodes can auto-register with the API token
-- Setup scripts work without additional configuration
+Registration always authenticates its request; there is no separate registration
+"secure mode" to enable. `/api/auto-register` validates its own credentials even
+when no long-lived API token is configured. A reachable endpoint does not mean
+that an unauthenticated caller can register a node.
 
-#### Secure Mode
-- Require API token for all operations
-- Protects auto-registration endpoint
-- Enable by creating at least one API token (UI or legacy env seeding)
+Use the normal authenticated add-connection or agent installation flow for the
+intended Pulse destination:
+
+- **Initial setup:** the add-connection flow issues a short-lived, node-type-specific
+  setup token. Registration consumes it; keep the token and setup URL private.
+- **Existing Proxmox source:** an appropriate `agent:report` token can maintain
+  an already registered source. An ordinary reporting token does not authorise
+  arbitrary new connections. Installer-issued Proxmox tokens can carry a
+  separate, limited bootstrap grant; not every API token is a setup credential.
+
+Manage long-lived tokens in **Settings → API Access**, in the **Security** group,
+using the [API token guidance](docs/CONFIGURATION.md#-api-tokens). The legacy
+`API_TOKEN` and `API_TOKENS` environment variables are ignored in v6: setting
+them does not create a token, secure an installation or repair registration.
+Follow the [agent installation guidance](docs/UNIFIED_AGENT.md#quick-start)
+instead of widening scopes, disabling authentication or reinstalling an existing
+agent to clear a registration error. Keep HTTPS verification and existing saved
+connections intact.
 
 ### Runtime Logging Configuration
 
