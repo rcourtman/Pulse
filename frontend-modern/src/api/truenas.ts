@@ -1,4 +1,4 @@
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, type APIContextOptions } from '@/utils/apiClient';
 import {
   normalizeMonitoredSystemLedgerPreviewResponse,
   type MonitoredSystemLedgerPreviewResponse,
@@ -218,14 +218,20 @@ export const isRedactedTrueNASSecret = (value: string | null | undefined) =>
   (value || '').trim() === REDACTED_SECRET;
 
 export class TrueNASAPI {
-  static async listConnections(): Promise<TrueNASConnection[]> {
-    const response = await apiFetchJSON<RawTrueNASConnection[]>(TRUE_NAS_CONNECTIONS_PATH);
+  static async listConnections(options?: APIContextOptions): Promise<TrueNASConnection[]> {
+    const response = await (options === undefined
+      ? apiFetchJSON<RawTrueNASConnection[]>(TRUE_NAS_CONNECTIONS_PATH)
+      : apiFetchJSON<RawTrueNASConnection[]>(TRUE_NAS_CONNECTIONS_PATH, options));
     const list = arrayOrUndefined<RawTrueNASConnection>(response) ?? [];
     return list.map(normalizeTrueNASConnection);
   }
 
-  static async createConnection(input: TrueNASConnectionInput): Promise<TrueNASConnection> {
+  static async createConnection(
+    input: TrueNASConnectionInput,
+    options?: APIContextOptions,
+  ): Promise<TrueNASConnection> {
     const response = await apiFetchJSON<RawTrueNASConnection>(TRUE_NAS_CONNECTIONS_PATH, {
+      ...options,
       method: 'POST',
       body: JSON.stringify(serializeTrueNASConnectionInput(input)),
     });
@@ -235,10 +241,12 @@ export class TrueNASAPI {
   static async updateConnection(
     id: string,
     input: TrueNASConnectionInput,
+    options?: APIContextOptions,
   ): Promise<TrueNASConnection> {
     const response = await apiFetchJSON<RawTrueNASConnection>(
       `${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}`,
       {
+        ...options,
         method: 'PUT',
         body: JSON.stringify(serializeTrueNASConnectionInput(input)),
       },
@@ -246,16 +254,24 @@ export class TrueNASAPI {
     return normalizeTrueNASConnection(response);
   }
 
-  static async deleteConnection(id: string): Promise<{ success: boolean; id: string }> {
+  static async deleteConnection(
+    id: string,
+    options?: APIContextOptions,
+  ): Promise<{ success: boolean; id: string }> {
     return apiFetchJSON(`${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}`, {
+      ...options,
       method: 'DELETE',
     });
   }
 
-  static async testConnection(input: TrueNASConnectionInput): Promise<TrueNASConnectionTestResult> {
+  static async testConnection(
+    input: TrueNASConnectionInput,
+    options?: APIContextOptions,
+  ): Promise<TrueNASConnectionTestResult> {
     const response = await apiFetchJSON<Partial<TrueNASConnectionTestResult>>(
       `${TRUE_NAS_CONNECTIONS_PATH}/test`,
       {
+        ...options,
         method: 'POST',
         body: JSON.stringify(serializeTrueNASConnectionInput(input)),
       },
@@ -268,10 +284,12 @@ export class TrueNASAPI {
   static async testSavedConnection(
     id: string,
     input?: TrueNASConnectionInput,
+    options?: APIContextOptions,
   ): Promise<TrueNASConnectionTestResult> {
     const response = await apiFetchJSON<Partial<TrueNASConnectionTestResult>>(
       `${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}/test`,
       {
+        ...options,
         method: 'POST',
         ...(input !== undefined
           ? { body: JSON.stringify(serializeTrueNASConnectionInput(input)) }
@@ -285,10 +303,12 @@ export class TrueNASAPI {
 
   static async previewConnection(
     input: TrueNASConnectionInput,
+    options?: APIContextOptions,
   ): Promise<MonitoredSystemLedgerPreviewResponse> {
     const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
       `${TRUE_NAS_CONNECTIONS_PATH}/preview`,
       {
+        ...options,
         method: 'POST',
         body: JSON.stringify(serializeTrueNASConnectionInput(input)),
       },
@@ -299,10 +319,12 @@ export class TrueNASAPI {
   static async previewSavedConnection(
     id: string,
     input?: TrueNASConnectionInput,
+    options?: APIContextOptions,
   ): Promise<MonitoredSystemLedgerPreviewResponse> {
     const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
       `${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}/preview`,
       {
+        ...options,
         method: 'POST',
         ...(input !== undefined
           ? { body: JSON.stringify(serializeTrueNASConnectionInput(input)) }

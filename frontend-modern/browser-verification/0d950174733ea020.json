@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "0e82e9b2a19081ba6c2b7c72d728ab45af05dbba",
+  "verified_at": "2026-11-02T19:58:57.735826Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/truenas.ts",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/truenas.ts": "8375d3219eacf215ffcc73d9ceee37cc70965c5931ebc21de8e635d66c4a90a8",
+    "frontend-modern/src/components/Settings/Settings.tsx": "cc0e83ce82510a1fddd3cef8e84d8856a94c1d0ad1101cefcd077b5f4c92ff81",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "4735207796b3c1bf2bfca992b003c7f5f19b4cb7b97ca00ec12761d556294ea8",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "d647d153f3d6b9f0b4b7dabe8b1dc68b3f4046244f33de982ef6ebd4f9a2f6c7"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/security-auth",
+    "/settings/general"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App/Settings/Infrastructure/TrueNAS credential slot with synthetic HTTP producers and the real API client. Desktop Chromium/light and narrow WebKit/dark; Playwright 1.56.1 matches integration lock.",
+    "Saved connection with masked credential, unsaved key draft and pending Test; organisation change through production client/event bus; fresh same-ID editor and successful Test/explicit Update; denied preview; full-page reload recovery; real password-modal Cancel triggers a fresh status that withdraws infrastructure access."
+  ],
+  "interactions": [
+    "35 assertions. Organisation withdrawal closes the draft and late Test cannot publish a success. Fresh Test and explicit PUT bind team-b and preserve host, owner, masked stored key, HTTPS, verification and certificate pin. Denied preview removes the draft without provider detail or automatic replay.",
+    "Real access refresh removes Infrastructure/Manage and issues no further TrueNAS request. One explicit save, no automatic create or removal; native unit regressions separately cover hook delete confirmations (the unchanged generic row-action pause/remove controller is not qualified by this proof).",
+    "Eight final captures opened using native view_image: desktop full credential form, narrow vertically scrolling form, closed draft with focus returned to Manage, fresh empty key field with saved-key retention hint, and denied access falling back to General. No body overflow. Narrow captures do not show every lower field; actual buttons were scrolled to and exercised.",
+    "Both context/browser trees and websocket/Vite/HTTP servers close. No uncaught page errors. Two expected synthetic HTTP403 console entries and two Vite ECONNRESET observations retained; no clean-console claim. Fixture-contract and exact-label preparation failures retained separately, with unchanged product source."
+  ]
+}

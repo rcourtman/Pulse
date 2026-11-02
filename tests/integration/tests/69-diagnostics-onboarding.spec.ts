@@ -345,8 +345,9 @@ const test = base.extend<{}, WorkerFixtures>({
 
 async function prepareDiagnosticsRoute(
   page: Page,
-  payload: typeof DIAGNOSTICS_PAYLOAD | typeof EXPORT_DIAGNOSTICS_PAYLOAD =
-    DIAGNOSTICS_PAYLOAD,
+  payload:
+    | typeof DIAGNOSTICS_PAYLOAD
+    | typeof EXPORT_DIAGNOSTICS_PAYLOAD = DIAGNOSTICS_PAYLOAD,
 ): Promise<DiagnosticsTraffic> {
   const traffic: DiagnosticsTraffic = { reads: 0, writes: [] };
   page.on("request", (request) => {
@@ -603,9 +604,8 @@ test.describe("Diagnostics safe collection and local exports", () => {
     expect(traffic.reads).toBe(1);
     expect(traffic.writes).toEqual(writesBeforeExport);
     await expect(
-      page.getByRole("heading", {
-        name: "Full diagnostics downloaded — keep this file private",
-        exact: true,
+      page.getByRole("status").filter({
+        hasText: "Full diagnostics downloaded — keep this file private",
       }),
     ).toBeVisible();
 
@@ -678,9 +678,8 @@ test.describe("Diagnostics safe collection and local exports", () => {
     expect(traffic.reads).toBe(1);
     expect(traffic.writes).toEqual(writesBeforeExport);
     await expect(
-      page.getByRole("heading", {
-        name: "Sanitised diagnostics downloaded — review before sharing",
-        exact: true,
+      page.getByRole("status").filter({
+        hasText: "Sanitised diagnostics downloaded — review before sharing",
       }),
     ).toBeVisible();
     // A full export after sanitisation must still be the original displayed
@@ -700,7 +699,7 @@ test.describe("Diagnostics safe collection and local exports", () => {
     });
   });
 
-  test("disables exports during a refresh and retains the previous result after a failed live check", async ({
+  test("withdraws exports during refresh and failure, then restores them only from a successful fresh check", async ({
     page,
   }, testInfo) => {
     let reads = 0;
@@ -711,10 +710,15 @@ test.describe("Diagnostics safe collection and local exports", () => {
     await page.route("**/api/diagnostics", async (route) => {
       reads += 1;
       if (reads === 1) return route.fulfill({ json: DIAGNOSTICS_PAYLOAD });
-      await held;
+      if (reads === 2) {
+        await held;
+        return route.fulfill({
+          status: 400,
+          json: { error: "Synthetic private provider detail" },
+        });
+      }
       return route.fulfill({
-        status: 400,
-        json: { error: "Synthetic live check failed" },
+        json: { ...DIAGNOSTICS_PAYLOAD, version: "6.7.0-fresh" },
       });
     });
     await openDiagnostics(page);
@@ -736,20 +740,32 @@ test.describe("Diagnostics safe collection and local exports", () => {
     await expect(
       page.getByRole("button", { name: "Running...", exact: true }),
     ).toBeDisabled();
-    await expect(full).toBeDisabled();
-    await expect(github).toBeDisabled();
+    // A pending check cannot certify current access to the previous result.
+    await expect(full).toHaveCount(0);
+    await expect(github).toHaveCount(0);
+    await expect(page.getByText("Metrics Store", { exact: false })).toHaveCount(
+      0,
+    );
     expect(reads).toBe(2);
     await page.screenshot({
       path: testInfo.outputPath("diagnostics-refresh-disabled.png"),
       fullPage: true,
     });
     release!();
+    await expect(page.getByRole("alert")).toContainText(
+      "Diagnostics could not be loaded. Previous results have been cleared.",
+    );
     await expect(
-      page.getByRole("heading", {
-        name: "Synthetic live check failed",
-        exact: true,
-      }),
-    ).toBeVisible();
+      page.getByText("Synthetic private provider detail", { exact: true }),
+    ).toHaveCount(0);
+    await expect(full).toHaveCount(0);
+    await expect(github).toHaveCount(0);
+    await expect(page.getByText("Metrics Store", { exact: false })).toHaveCount(
+      0,
+    );
+    // Explicit recovery is safe here because every producer is a local fixture.
+    // A failed check must never offer the previous private file for download.
+    await run.click();
     await expect(full).toBeEnabled();
     await expect(github).toBeEnabled();
     const {
@@ -757,10 +773,11 @@ test.describe("Diagnostics safe collection and local exports", () => {
       commercialFunnel: _funnel,
       ...expectedFull
     } = DIAGNOSTICS_PAYLOAD;
-    expect(await downloadJSON(page, "Full (private)", "full")).toEqual(
-      expectedFull,
-    );
-    expect(reads).toBe(2);
+    expect(await downloadJSON(page, "Full (private)", "full")).toEqual({
+      ...expectedFull,
+      version: "6.7.0-fresh",
+    });
+    expect(reads).toBe(3);
     await scrollToBottom(page);
     await assertControlsInViewport(
       page,

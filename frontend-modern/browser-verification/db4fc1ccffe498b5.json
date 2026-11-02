@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "f886613300bc5f4785827ae0266fd223e2ac5e40",
+  "verified_at": "2026-11-02T20:30:15.753170Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "f551123f5abdfe5d231da5d5dd7d5022bfefa7bf3012d3fb7087628418b5158e"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App/Settings/Infrastructure/TrueNAS saved credential editor. Safe local HTTP fixtures use the real API client, desktop Chromium/light and narrow WebKit/dark; Playwright 1.56.1.",
+    "Held Test and Preview, ordinary Name edit, same-reader HTTP403, credential withdrawal and explicit reload/fresh Test recovery. Auth-free fixture metadata retains infrastructure capabilities; native login/tenant/appliance recovery is not claimed."
+  ],
+  "interactions": [
+    "37 assertions and eight captures opened natively with view_image. Each pending Name edit is accepted. Denial removes key/owner form fields, shows safe reload guidance and does not repeat the request or automatically read inventory. Fresh explicit reload starts with empty key and Test preserves stored key marker, owner, HTTPS, verification and pin.",
+    "Pixels: masked draft before denial; afterwards existing Manage shell remains with its missing-configuration fallback plus safe denial toast, with no credential inputs. Narrow form scrolls vertically and lower actions are exercised, not all visible in captures. No save/removal or changed grants.",
+    "Both browser/context trees and websocket/Vite/HTTP servers close. Earlier login redirect, repeated-load and short admission-timeout observations retained separately, not counted passed or diagnosed. Same-reader HTTP401, stale-draft errors/success and obsolete-reader denials additionally covered by registered source tests."
+  ]
+}
