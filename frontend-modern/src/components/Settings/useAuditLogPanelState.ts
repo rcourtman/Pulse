@@ -1,13 +1,24 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+  untrack,
+} from 'solid-js';
 import type { Accessor } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createLocalStorageBooleanSignal,
   createLocalStorageNumberSignal,
   STORAGE_KEYS,
 } from '@/utils/localStorage';
-import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
-import { showSuccess, showToast, showWarning } from '@/utils/toast';
+import { apiErrorFromResponse, apiFetch, getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
+import { showSuccess } from '@/utils/toast';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
@@ -19,11 +30,11 @@ export interface AuditEvent {
   id: string;
   timestamp: string;
   event: string;
-  user: string;
+  user?: string;
   ip: string;
-  path: string;
+  path?: string;
   success: boolean;
-  details: string;
+  details?: string;
   signature?: string;
 }
 
@@ -75,7 +86,13 @@ const parseVerificationFilter = (raw: string | null | undefined): string =>
 const normalizeAuditPageSize = (value: number): number =>
   ALLOWED_AUDIT_PAGE_SIZES.has(value) ? value : DEFAULT_AUDIT_PAGE_SIZE;
 
-export const useAuditLogPanelState = () => {
+export interface AuditLogPanelProps {
+  currentUser?: string;
+  accessKey?: string;
+  canRead?: boolean;
+}
+
+export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [events, setEvents] = createSignal<AuditEvent[]>([]);
@@ -139,6 +156,10 @@ export const useAuditLogPanelState = () => {
     0,
   );
   const [verification, setVerification] = createSignal<Record<string, VerificationState>>({});
+  const [verificationNotice, setVerificationNotice] = createSignal<{
+    tone: 'success' | 'warning';
+    message: string;
+  } | null>(null);
   const [verifying, setVerifying] = createSignal<Record<string, boolean>>({});
   const [verifyingAll, setVerifyingAll] = createSignal(false);
   const [verifyAllTotal, setVerifyAllTotal] = createSignal(0);
@@ -153,13 +174,17 @@ export const useAuditLogPanelState = () => {
   );
   const [pageInput, setPageInput] = createSignal('');
   const [isMounted, setIsMounted] = createSignal(false);
-  const [cancelVerifyAll, setCancelVerifyAll] = createSignal(false);
   const [verifyCanceled, setVerifyCanceled] = createSignal(false);
   const [verifyControllers, setVerifyControllers] = createSignal<Record<string, AbortController>>(
     {},
   );
   let auditRequestController: AbortController | null = null;
   let auditRequestGeneration = 0;
+  let verificationGeneration = 0;
+  let verificationBatch: object | null = null;
+  let autoVerifyHandle: ReturnType<typeof setTimeout> | undefined;
+  let userFilterDebounceHandle: number | null = null;
+  let disposed = false;
 
   const auditLoggingEnabled = createMemo(
     () => runtimeCapabilitiesLoaded() && hasFeature('audit_logging'),
@@ -181,17 +206,74 @@ export const useAuditLogPanelState = () => {
   );
   const upgradeActionLabel = () => (paidRuntimeRequired() ? 'Download Pulse Pro' : 'View plans');
 
+  const accessAllowed = () => auditLoggingEnabled() && props.canRead !== false;
+  const currentReader = () => ({
+    org: getOrgID() || 'default',
+    user: props.currentUser,
+    accessKey: props.accessKey,
+    allowed: accessAllowed(),
+  });
+  const [reader, setReader] = createSignal(currentReader());
+  let readerInitialized = false;
+  const readerIsCurrent = () => {
+    const current = currentReader();
+    const accepted = reader();
+    return (
+      !disposed &&
+      Object.keys(current).every(
+        (key) => current[key as keyof typeof current] === accepted[key as keyof typeof accepted],
+      )
+    );
+  };
+  // Storage can change before its event arrives. A stale action/completion is
+  // not permission to dispatch under the newly selected organisation.
+  const ensureCurrentReader = () => {
+    if (disposed) return false;
+    if (readerIsCurrent()) return true;
+    resetReader();
+    return false;
+  };
+  const requestOptions = (controller: AbortController) => ({
+    signal: controller.signal,
+    expectedOrgID: reader().org,
+    retry: false,
+  });
+  const stopVerification = (clearResults = false) => {
+    verificationGeneration += 1;
+    verificationBatch = null;
+    if (autoVerifyHandle !== undefined) clearTimeout(autoVerifyHandle);
+    autoVerifyHandle = undefined;
+    for (const controller of Object.values(verifyControllers())) controller.abort();
+    batch(() => {
+      setVerifyControllers({});
+      setVerifying({});
+      setVerifyingAll(false);
+      setVerificationNotice(null);
+      if (clearResults) {
+        setVerification({});
+        setVerifyAllTotal(0);
+        setVerifyAllDone(0);
+        setVerifyCanceled(false);
+      }
+    });
+  };
+  const clearInventory = () => {
+    stopVerification(true);
+    setEvents([]);
+    setTotalEvents(0);
+    setIsPersistent(false);
+    setError(null);
+  };
+
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
+    if (!ensureCurrentReader()) return;
     auditRequestController?.abort();
     auditRequestController = null;
     const requestGeneration = ++auditRequestGeneration;
-
-    if (!auditLoggingEnabled()) {
-      setEvents([]);
-      setTotalEvents(0);
-      setIsPersistent(false);
-      setError(null);
-      setLoading(false);
+    const acceptedReader = reader();
+    batch(clearInventory);
+    if (!accessAllowed()) {
+      setLoading(!runtimeCapabilitiesLoaded());
       return;
     }
 
@@ -200,12 +282,12 @@ export const useAuditLogPanelState = () => {
     const controller = new AbortController();
     auditRequestController = controller;
 
+    const isCurrentRead = () =>
+      ensureCurrentReader() &&
+      acceptedReader === reader() &&
+      requestGeneration === auditRequestGeneration &&
+      auditRequestController === controller;
     setLoading(true);
-    setError(null);
-    setVerification({});
-    setVerifying({});
-    setVerifyAllTotal(0);
-    setVerifyAllDone(0);
 
     try {
       const params = new URLSearchParams();
@@ -217,14 +299,11 @@ export const useAuditLogPanelState = () => {
       if (successFilter() === 'failed') params.set('success', 'false');
 
       const response = await apiFetch(`/api/audit?${params.toString()}`, {
-        signal: controller.signal,
+        ...requestOptions(controller),
       });
-      if (requestGeneration !== auditRequestGeneration) return;
-      if (response.status === 402) {
-        setEvents([]);
-        setTotalEvents(0);
-        setIsPersistent(false);
-        setError(null);
+      if (!isCurrentRead()) return;
+      if ([401, 402, 403].includes(response.status)) {
+        setError('Audit log access could not be confirmed. Refresh after access is restored.');
         return;
       }
       if (!response.ok) {
@@ -235,11 +314,34 @@ export const useAuditLogPanelState = () => {
       }
 
       const data: AuditResponse = await response.json();
-      if (requestGeneration !== auditRequestGeneration) return;
+      if (!isCurrentRead()) return;
+      const ids = new Set<string>();
       if (
+        !data ||
         !Array.isArray(data.events) ||
-        typeof data.total !== 'number' ||
-        typeof data.persistentLogging !== 'boolean'
+        !Number.isSafeInteger(data.total) ||
+        data.total < 0 ||
+        data.total < data.events.length ||
+        typeof data.persistentLogging !== 'boolean' ||
+        data.events.some((event) => {
+          if (
+            !event ||
+            typeof event.id !== 'string' ||
+            !event.id.trim() ||
+            ids.has(event.id) ||
+            typeof event.timestamp !== 'string' ||
+            typeof event.event !== 'string' ||
+            (event.user !== undefined && typeof event.user !== 'string') ||
+            typeof event.ip !== 'string' ||
+            (event.path !== undefined && typeof event.path !== 'string') ||
+            (event.details !== undefined && typeof event.details !== 'string') ||
+            typeof event.success !== 'boolean' ||
+            (event.signature !== undefined && typeof event.signature !== 'string')
+          )
+            return true;
+          ids.add(event.id);
+          return false;
+        })
       ) {
         throw new Error('Audit log returned an invalid response');
       }
@@ -260,99 +362,128 @@ export const useAuditLogPanelState = () => {
       if (data.persistentLogging && autoVerifyEnabled()) {
         const verificationLimit = autoVerifyLimit();
         if (verificationLimit <= 0) return;
-        setTimeout(() => {
-          if (!isMounted() || requestGeneration !== auditRequestGeneration) return;
+        autoVerifyHandle = setTimeout(() => {
+          autoVerifyHandle = undefined;
+          if (
+            !isMounted() ||
+            !ensureCurrentReader() ||
+            acceptedReader !== reader() ||
+            requestGeneration !== auditRequestGeneration
+          )
+            return;
           void verifyAllEvents({ limit: verificationLimit, showToast: false });
         }, 0);
       }
     } catch (err) {
-      if (
-        requestGeneration !== auditRequestGeneration ||
-        (err as { name?: string })?.name === 'AbortError'
-      ) {
+      if (!isCurrentRead() || (err as { name?: string })?.name === 'AbortError') {
         return;
       }
       const message = getAuditLogFetchErrorMessage(err);
-      if (typeof message === 'string' && /feature not included in license/i.test(message)) {
-        setEvents([]);
-        setTotalEvents(0);
-        setIsPersistent(false);
-        setError(null);
-        return;
-      }
       setEvents([]);
       setTotalEvents(0);
       setIsPersistent(false);
       setError(message);
-      showWarning('Audit Log Error', message);
     } finally {
-      if (requestGeneration === auditRequestGeneration) {
+      if (isCurrentRead()) {
         auditRequestController = null;
         setLoading(false);
       }
     }
   };
 
+  const isCurrentEvent = (event: AuditEvent) =>
+    events().some((current) => unwrap(current) === unwrap(event));
+
   const verifyEvent = async (event: AuditEvent) => {
-    if (!auditLoggingEnabled() || !event.signature) return;
-
-    setVerifying((prev) => ({ ...prev, [event.id]: true }));
-
-    try {
-      const controller = new AbortController();
+    if (
+      !ensureCurrentReader() ||
+      !accessAllowed() ||
+      loading() ||
+      error() ||
+      !isCurrentEvent(event) ||
+      !event.signature ||
+      verifyControllers()[event.id]
+    )
+      return;
+    const acceptedReader = reader();
+    const generation = verificationGeneration;
+    const controller = new AbortController();
+    const isCurrentVerification = () =>
+      ensureCurrentReader() &&
+      acceptedReader === reader() &&
+      generation === verificationGeneration &&
+      verifyControllers()[event.id] === controller &&
+      isCurrentEvent(event);
+    batch(() => {
+      setVerificationNotice(null);
+      setVerifying((prev) => ({ ...prev, [event.id]: true }));
       setVerifyControllers((prev) => ({ ...prev, [event.id]: controller }));
-      if (!isMounted()) {
-        controller.abort();
-      }
-
-      const response = await apiFetch(`/api/audit/${event.id}/verify`, {
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to verify signature: ${response.statusText}`);
-      }
-
-      const data: VerifyResponse = await response.json();
-      let status: VerificationStatus = 'unavailable';
-      if (!data.available) {
-        status = 'unavailable';
-      } else if (data.verified) {
-        status = 'verified';
-      } else {
-        status = 'failed';
-      }
-
-      setVerification((prev) => ({
-        ...prev,
-        [event.id]: { status, message: data.message || '' },
-      }));
-    } catch (err) {
-      if ((err as { name?: string })?.name === 'AbortError') {
+    });
+    try {
+      const response = await apiFetch(
+        `/api/audit/${encodeURIComponent(event.id)}/verify`,
+        requestOptions(controller),
+      );
+      if (!isCurrentVerification()) return;
+      if ([401, 402, 403].includes(response.status)) {
+        batch(() => {
+          clearInventory();
+          setError('Audit log access could not be confirmed. Refresh after access is restored.');
+        });
         return;
       }
-
+      if (!response.ok) throw new Error('Failed to verify signature. Refresh or retry.');
+      const data: VerifyResponse = await response.json();
+      if (!isCurrentVerification()) return;
+      if (
+        !data ||
+        typeof data.available !== 'boolean' ||
+        (data.available && typeof data.verified !== 'boolean') ||
+        (data.message !== undefined && typeof data.message !== 'string')
+      )
+        throw new Error('Failed to verify signature. Refresh or retry.');
+      const status: VerificationStatus = !data.available
+        ? 'unavailable'
+        : data.verified
+          ? 'verified'
+          : 'failed';
+      setVerification((prev) => ({ ...prev, [event.id]: { status, message: data.message || '' } }));
+    } catch (err) {
+      if (!isCurrentVerification() || (err as { name?: string })?.name === 'AbortError') return;
       setVerification((prev) => ({
         ...prev,
         [event.id]: {
           status: 'error',
-          message: err instanceof Error ? err.message : 'Unknown error',
+          message: 'Failed to verify signature. Refresh or retry.',
         },
       }));
     } finally {
-      setVerifying((prev) => ({ ...prev, [event.id]: false }));
-      setVerifyControllers((prev) => {
-        const next = { ...prev };
-        delete next[event.id];
-        return next;
-      });
+      if (isCurrentVerification()) {
+        batch(() => {
+          setVerifying((prev) => ({ ...prev, [event.id]: false }));
+          setVerifyControllers((prev) => {
+            const next = { ...prev };
+            delete next[event.id];
+            return next;
+          });
+        });
+      }
     }
   };
 
   const verifyAllEvents = async (options?: VerifyAllOptions) => {
-    if (!auditLoggingEnabled()) return;
-
+    if (!ensureCurrentReader() || !accessAllowed() || loading() || error() || verificationBatch)
+      return;
+    const acceptedReader = reader();
+    const generation = verificationGeneration;
+    const batchIdentity = {};
+    const isCurrentBatch = () =>
+      ensureCurrentReader() &&
+      acceptedReader === reader() &&
+      generation === verificationGeneration &&
+      verificationBatch === batchIdentity;
     const limit = options?.limit;
-    let signedEvents = events().filter((event) => event.signature);
+    let signedEvents = events().filter((event) => event.signature && !verifying()[event.id]);
     if (options?.resume) {
       signedEvents = signedEvents.filter((event) => {
         const state = verification()[event.id];
@@ -364,29 +495,20 @@ export const useAuditLogPanelState = () => {
     }
     if (signedEvents.length === 0) return;
 
+    verificationBatch = batchIdentity;
     setVerifyingAll(true);
     setVerifyCanceled(false);
-    setCancelVerifyAll(false);
     setVerifyAllTotal(signedEvents.length);
     setVerifyAllDone(0);
 
     for (const event of signedEvents) {
-      if (cancelVerifyAll()) {
-        setVerifyingAll(false);
-        setVerifyCanceled(true);
-        if (options?.showToast) {
-          showToast('info', 'Signature verification canceled');
-        }
-        for (const controller of Object.values(verifyControllers())) {
-          controller.abort();
-        }
-        return;
-      }
-
+      if (!isCurrentBatch()) return;
       await verifyEvent(event);
+      if (!isCurrentBatch()) return;
       setVerifyAllDone((prev) => prev + 1);
     }
 
+    verificationBatch = null;
     setVerifyingAll(false);
     setVerifyCanceled(false);
 
@@ -417,14 +539,10 @@ export const useAuditLogPanelState = () => {
         }
       }
 
-      if (failed > 0 || errors > 0) {
-        showWarning(
-          'Signature verification completed',
-          `Verified ${verified}, failed ${failed}, errors ${errors}, unavailable ${unavailable}.`,
-        );
-      } else {
-        showSuccess('Signature verification completed', `Verified ${verified} events.`);
-      }
+      setVerificationNotice({
+        tone: failed > 0 || errors > 0 ? 'warning' : 'success',
+        message: `Signature verification completed. Verified ${verified}, failed ${failed}, errors ${errors}, unavailable ${unavailable}.`,
+      });
     }
   };
 
@@ -598,7 +716,11 @@ export const useAuditLogPanelState = () => {
   };
 
   const cancelVerification = () => {
-    setCancelVerifyAll(true);
+    if (!verifyingAll()) return;
+    batch(() => {
+      stopVerification();
+      setVerifyCanceled(true);
+    });
   };
 
   const goToFirstPage = () => goToOffset(0);
@@ -642,26 +764,35 @@ export const useAuditLogPanelState = () => {
     }
   });
 
-  createEffect(() => {
-    if (!runtimeCapabilitiesLoaded()) {
-      setLoading(true);
-      return;
-    }
-    if (!hasFeature('audit_logging')) {
-      auditRequestController?.abort();
-      auditRequestController = null;
-      auditRequestGeneration += 1;
-      setEvents([]);
-      setTotalEvents(0);
-      setIsPersistent(false);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    untrack(() => {
-      void fetchAuditEvents();
+  const resetReader = () => {
+    auditRequestController?.abort();
+    auditRequestController = null;
+    auditRequestGeneration += 1;
+    if (userFilterDebounceHandle !== null) window.clearTimeout(userFilterDebounceHandle);
+    userFilterDebounceHandle = null;
+    batch(() => {
+      setReader(currentReader());
+      clearInventory();
+      if (readerInitialized) {
+        resetPaging();
+        updateSearchParam((params) => {
+          params.delete('user');
+        });
+      }
+      readerInitialized = true;
+      setLoading(!runtimeCapabilitiesLoaded() || accessAllowed());
     });
-  });
+    if (!disposed) void fetchAuditEvents();
+  };
+  createEffect(
+    on(
+      [runtimeCapabilitiesLoaded, accessAllowed, () => props.currentUser, () => props.accessKey],
+      (current, previous) => {
+        if (!previous || current.some((value, index) => value !== previous[index])) resetReader();
+      },
+    ),
+  );
+  const unsubscribeOrg = eventBus.on('org_switched', resetReader);
 
   // Live-apply: server-side filters (event, success) trigger a fresh fetch from
   // the first page immediately on change. userFilter debounces to avoid one
@@ -675,8 +806,8 @@ export const useAuditLogPanelState = () => {
       void value;
       return;
     }
-    if (!auditLoggingEnabled()) return;
-    refetchFromFirstPage();
+    if (!accessAllowed()) return;
+    untrack(refetchFromFirstPage);
   });
 
   let initialSuccessFilterApplied = false;
@@ -687,11 +818,10 @@ export const useAuditLogPanelState = () => {
       void value;
       return;
     }
-    if (!auditLoggingEnabled()) return;
-    refetchFromFirstPage();
+    if (!accessAllowed()) return;
+    untrack(refetchFromFirstPage);
   });
 
-  let userFilterDebounceHandle: number | null = null;
   let initialUserFilterApplied = false;
   createEffect(() => {
     const value = userFilter();
@@ -700,7 +830,7 @@ export const useAuditLogPanelState = () => {
       void value;
       return;
     }
-    if (!auditLoggingEnabled()) return;
+    if (!accessAllowed()) return;
     if (userFilterDebounceHandle !== null) {
       window.clearTimeout(userFilterDebounceHandle);
     }
@@ -711,21 +841,19 @@ export const useAuditLogPanelState = () => {
   });
 
   onCleanup(() => {
+    disposed = true;
+    unsubscribeOrg();
     setIsMounted(false);
-    setCancelVerifyAll(true);
     auditRequestController?.abort();
     auditRequestController = null;
     auditRequestGeneration += 1;
-    if (userFilterDebounceHandle !== null) {
-      window.clearTimeout(userFilterDebounceHandle);
-      userFilterDebounceHandle = null;
-    }
-    for (const controller of Object.values(verifyControllers())) {
-      controller.abort();
-    }
+    if (userFilterDebounceHandle !== null) window.clearTimeout(userFilterDebounceHandle);
+    userFilterDebounceHandle = null;
+    batch(clearInventory);
   });
 
   return {
+    accessAllowed,
     activeFilterChips,
     activeFilterCount,
     auditLoggingEnabled,
@@ -777,6 +905,7 @@ export const useAuditLogPanelState = () => {
     verification,
     verificationFilter,
     verificationSummary,
+    verificationNotice,
     verifyAll,
     verifyAllDone,
     verifyAllLabel,

@@ -133,6 +133,14 @@ export function buildSettingsPanelRegistryContext(
       ]),
       canRead: settingsCapabilities()?.reportingRead === true,
     }),
+    getAuditLogPanelProps: () => ({
+      currentUser: currentUser(),
+      accessKey: JSON.stringify([
+        params.securityStatus()?.apiTokenHint,
+        params.securityStatus()?.tokenScopes?.slice().sort(),
+      ]),
+      canRead: settingsCapabilities()?.auditLog === true,
+    }),
     getAuditWebhookPanelProps: () => ({
       currentUser: currentUser(),
       canRead: settingsCapabilities()?.auditWebhooksRead === true,

@@ -283,4 +283,37 @@ describe('buildSettingsPanelRegistryContext', () => {
       canManage: false,
     });
   });
+  it('binds Audit Log to live principal, explicit capability and normalised credential scopes', () => {
+    const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+    const context = buildSettingsPanelRegistryContext({
+      ...buildParams(null),
+      securityStatus: status,
+    });
+    expect(context.getAuditLogPanelProps()).toEqual({
+      currentUser: undefined,
+      accessKey: '[null,null]',
+      canRead: false,
+    });
+    setStatus({
+      currentUsername: 'audit-reader',
+      apiTokenHint: 'fixture-hint',
+      tokenScopes: ['settings:read', 'monitoring:read'],
+      settingsCapabilities: { auditLog: true },
+    } as SecurityStatus);
+    expect(context.getAuditLogPanelProps()).toMatchObject({
+      currentUser: 'audit-reader',
+      canRead: true,
+    });
+    const key = context.getAuditLogPanelProps()?.accessKey;
+    setStatus({ ...status(), tokenScopes: ['monitoring:read', 'settings:read'] } as SecurityStatus);
+    expect(context.getAuditLogPanelProps()?.accessKey).toBe(key);
+    setStatus({ ...status(), tokenScopes: ['monitoring:read'] } as SecurityStatus);
+    expect(context.getAuditLogPanelProps()?.accessKey).not.toBe(key);
+    setStatus({
+      ...status(),
+      currentUsername: '',
+      settingsCapabilities: { auditLog: false },
+    } as SecurityStatus);
+    expect(context.getAuditLogPanelProps()).toMatchObject({ currentUser: '', canRead: false });
+  });
 });

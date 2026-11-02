@@ -20,6 +20,29 @@
 
 ## Purpose
 
+### Audit viewer state belongs to its reader and accepted page
+
+The existing Audit Log panel receives live principal, non-secret token/scope
+identity and explicit audit-read capability from the Settings registry. Reader,
+organisation, entitlement or lifetime changes cancel work and withdraw events,
+counts, signature results and batch feedback. An equal-reader status refresh
+keeps its pending operation. A fresh inventory read withdraws the previous page
+and all its signature work before awaiting a replacement; an old result cannot
+verify a new event with the same ID. Only current accepted row objects admit
+verification. Reads and signature checks bind the expected organisation with
+cancellation and no automatic retries. Cancel ends local verification immediately
+and Resume is an explicit action; neither an old batch nor its completion may
+change a new batch's progress or publish feedback.
+
+Failed, refused and malformed reads are unavailable, not empty or verified.
+Verification refusal withdraws the page and requires a new read; other check
+failures remain retryable on the current row. Inventory validation accepts the
+producer's omitted optional strings. `AuditLogReaderLifetime`, existing audit
+request/branch tests and registry tests run in the normal frontend suite.
+Desktop/narrow actual-App proof covers the existing route, including late
+responses and usable Refresh/Verify/Cancel/Resume. This changes no audit source,
+server permissions, signing semantics, retention or installed recovery contract.
+
 ### Token reveals keep content and copy feedback with the admitted value
 
 The existing token reveal consumer scrolls within the bounded shared dialog,

@@ -373,10 +373,10 @@ describe('useAuditLogPanelState branch coverage', () => {
         if (isVerifyCall(url)) {
           return verifyResponse({ available: true, verified: true, message: 'matched' });
         }
-        return auditListResponse([]);
+        return auditListResponse([signedEvent('a')]);
       });
       const { result, cleanup } = await renderIdle();
-      const event = signedEvent('a');
+      const event = result.events()[0];
       await result.verifyEvent(event);
       expect(result.verification()[event.id]).toEqual({ status: 'verified', message: 'matched' });
       expect(result.verifying()[event.id]).toBe(false);
@@ -386,10 +386,10 @@ describe('useAuditLogPanelState branch coverage', () => {
     it('records an "unavailable" status when verification is not available for the event', async () => {
       vi.mocked(apiFetch).mockImplementation(async (url: string) => {
         if (isVerifyCall(url)) return verifyResponse({ available: false, message: 'no key' });
-        return auditListResponse([]);
+        return auditListResponse([signedEvent('a')]);
       });
       const { result, cleanup } = await renderIdle();
-      const event = signedEvent('a');
+      const event = result.events()[0];
       await result.verifyEvent(event);
       expect(result.verification()[event.id]).toEqual({
         status: 'unavailable',
@@ -403,10 +403,10 @@ describe('useAuditLogPanelState branch coverage', () => {
         if (isVerifyCall(url)) {
           return verifyResponse({ available: true, verified: false, message: 'mismatch' });
         }
-        return auditListResponse([]);
+        return auditListResponse([signedEvent('a')]);
       });
       const { result, cleanup } = await renderIdle();
-      const event = signedEvent('a');
+      const event = result.events()[0];
       await result.verifyEvent(event);
       expect(result.verification()[event.id]).toEqual({ status: 'failed', message: 'mismatch' });
       cleanup();
@@ -417,10 +417,10 @@ describe('useAuditLogPanelState branch coverage', () => {
         if (isVerifyCall(url)) {
           return verifyResponse({ available: true }, 500, 'Internal Server Error');
         }
-        return auditListResponse([]);
+        return auditListResponse([signedEvent('a')]);
       });
       const { result, cleanup } = await renderIdle();
-      const event = signedEvent('a');
+      const event = result.events()[0];
       await result.verifyEvent(event);
       expect(result.verification()[event.id]?.status).toBe('error');
       expect(result.verification()[event.id]?.message).toContain('Failed to verify signature');
@@ -515,7 +515,7 @@ describe('useAuditLogPanelState branch coverage', () => {
       cleanup();
     });
 
-    it('falls back to the ellipsis label when a fetch resets the verify-all total mid-flight', async () => {
+    it('ends the obsolete batch when a refresh replaces its inventory', async () => {
       const firstVerify = deferred<Response>();
       let verifyCount = 0;
       vi.mocked(apiFetch).mockImplementation(async (url: string) => {
@@ -530,7 +530,7 @@ describe('useAuditLogPanelState branch coverage', () => {
       result.verifyAll();
       expect(result.verifyAllLabel()).toBe('Verifying 0 of 2');
       result.refresh();
-      expect(result.verifyAllLabel()).toBe('Verifying…');
+      expect(result.verifyAllLabel()).toBe('Verify All');
       firstVerify.resolve(verifyResponse({ available: true, verified: true }));
       await waitFor(() => expect(result.verifyingAll()).toBe(false));
       cleanup();
