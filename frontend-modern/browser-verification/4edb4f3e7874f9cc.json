@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "fd6e641d745cad233ad9344980ba0a93eb30969d",
+  "verified_at": "2026-11-02T04:36:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ReportingPanel.tsx": "22fbdbf79bc38c33e17fcab4cc15c8fc172b00d0d322b87869652285f21cf4d4",
+    "frontend-modern/src/components/Settings/useReportingPanelState.ts": "0153bee40a1af26d1bc9283fd6ee4714b3cdbbde1c0f630f4a8e2a3d45f1c067",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts": "d3f3f2339d3f8144c2b8e85dc989bfd07421ff1cb844b4cae690c8f07392774a",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "339e67ea0d0e8fd7277a4754bf4dd4a19b54c9d23bfb92925f0184c36afcd467"
+  },
+  "routes": [
+    "/settings/support/reporting",
+    "/settings/security-sso (synthetic containing-status refresh precursor)",
+    "/settings/system-general (actual existing read-withdrawal fallback)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual App/Settings/registry/ReportingPanel/editor/picker/hook/API client/CSS from committed fd6e641d; synthetic HTTP/WS producers only, not installed generation, retention, recipient delivery or original IdP recovery.",
+    "34 distinct checks completed across complementary desktop Chromium and dark touch narrow WebKit executions. 12 retained success-state captures and one adverse locked-state capture received native view_image inspection.",
+    "Source unchanged across attempts. First used a wrong fixture URL and did not exercise Reporting. Next completed 13 desktop assertions before its fixture wrongly expected entitlement loss to navigate to General; actual pixels showed the correct locked panel. Only the unfinished desktop entitlement journey and all seven narrow journeys ran in the final continuation (21 checks, exit0). Both adverse results remain retained, not rewritten as passes."
+  ],
+  "interactions": [
+    "Refused save retains the editor; deliberate retry alone repeats it. An accepted current inventory body can download. Six report writes across the completed matrix retain ordinary session/token/CSRF and the confirmed original organisation.",
+    "Actual organisation switch clears schedules, editor, title and resource-picker search, requires an accepted list before editing and recovers current controls.",
+    "An old applied held save cannot close an identically named later-reader draft, publish success, refetch or overwrite a new principal inventory.",
+    "Equal principal and reordered equal scopes preserve a mounted draft; changed credential/scope context withdraws it. Read withdrawal removes private UI and prevents a held body from downloading. Entitlement withdrawal shows the existing locked panel and restoration cannot revive drafts.",
+    "Malformed list is unknown, not empty; explicit Refresh restores controls. All active browsers, contexts and servers close. Native Playwright1.56.1 matches the integration lock; Chromium141.0.7390.37 and WebKit26.0.",
+    "Pixel review found the reader-owned refusal at the top of a long form can be outside the saving user viewport. A following source repair will improve placement with its own fresh browser proof; this receipt establishes the containing reader-lifetime behaviour, not that later visual change."
+  ]
+}
