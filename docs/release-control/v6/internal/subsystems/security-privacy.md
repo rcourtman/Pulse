@@ -44,6 +44,20 @@ replacement against stale regular files, symlinks, hardlinks and directories.
 errors, independent concurrent writes and unchanged import staging. Existing
 filesystem fault tests inject write errors through the same descriptor seam.
 
+The public Core `FileBillingStore` uses the same private publication primitive
+for default and named organisations, including plaintext-secret and integrity
+migrations. A stale `billing.json.tmp` is never opened, removed or renamed by
+the new writer. Independent store instances own separate temporary files;
+replacement publishes one complete encrypted, signed state, not mixed writes.
+Encryption, HMAC verification, normalisation, entitlement decisions and the
+existing best-effort migration error policy are unchanged. This does not add
+cross-instance read/modify/write serialisation or power-loss durability.
+`billing_state_atomic_test.go` exercises real saves and fresh-store recovery
+against stale files, symlinks, hardlinks and directories in both storage layouts,
+plus existing destination-link replacement, failed-publication cleanup/retry,
+plaintext migration and independent concurrent writers. Consuming Billing Admin
+proof must include the persisted producer responses, not only mocked save data.
+
 ### SSO settings results remain with their current reader
 
 The existing SSO provider inventory, provider-detail editor, connection test and
