@@ -5,13 +5,211 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+func TestBuildCephClusterModelServiceRoles(t *testing.T) {
+	for _, tc := range []struct {
+		service, status string
+		wantRunning     int
+	}{
+		{"mgr", "active", 1},
+		{"mgr", "running", 1},
+		{"mgr", "standby", 1},
+		{"MGR", "STANDBY", 1},
+		{"mgr", "stopped", 0},
+		{"mgr", "down", 0},
+		{"mgr", "unknown", 0},
+		{"mgr", "", 0},
+		{"mon", "running", 1},
+		{"mon", "standby", 0},
+		{"osd", "running", 1},
+		{"osd", "standby", 0},
+	} {
+		t.Run(tc.service+"/"+tc.status, func(t *testing.T) {
+			status := &proxmox.CephStatus{
+				Health: proxmox.CephHealth{Status: "HEALTH_OK"},
+				ServiceMap: proxmox.CephServiceMap{Services: map[string]proxmox.CephServiceDefinition{
+					tc.service: {Daemons: map[string]proxmox.CephServiceDaemon{
+						"daemon": {Host: "node", Status: tc.status},
+					}},
+				}},
+			}
+			cluster := buildCephClusterModel("pve", status, nil)
+			want := models.CephServiceStatus{Type: tc.service, Running: tc.wantRunning, Total: 1}
+			if tc.wantRunning == 0 {
+				want.Message = "Offline: daemon@node"
+			}
+			assert.Equal(t, []models.CephServiceStatus{want}, cluster.Services)
+		})
+	}
+}
+
+// Exercise the API poll and accepted host report, rather than making agent
+// data canonical to hide an inconsistent API service row (issue #1626).
+func TestPollCephClusterMixedSourceServiceHealth(t *testing.T) {
+	for _, scenario := range []string{"healthy", "manager_down", "manager_unavailable", "mon_osd_down", "summary_only"} {
+		for _, apiFirst := range []bool{true, false} {
+			order := "agent_then_api"
+			if apiFirst {
+				order = "api_then_agent"
+			}
+			t.Run(scenario+"/"+order, func(t *testing.T) {
+				snapshot := cephMixedSourceServiceHealthSnapshot(t, scenario, apiFirst)
+				if !assert.Len(t, snapshot.CephClusters, 1) || !assert.Len(t, snapshot.Hosts, 1) {
+					return
+				}
+				cluster := snapshot.CephClusters[0]
+				assert.Equal(t, models.CephClusterSourceProxmoxAPI, cluster.Source)
+				assert.Equal(t, "pve-api-ceph-mixed-services", cluster.ID)
+				assert.Equal(t, 3, cluster.NumMons)
+				assert.Equal(t, 2, cluster.NumMgrs)
+				services := make(map[string]models.CephServiceStatus)
+				for _, service := range cluster.Services {
+					services[service.Type] = service
+				}
+				mgr := models.CephServiceStatus{Type: "mgr", Running: 2, Total: 2}
+				health := "HEALTH_OK"
+				switch scenario {
+				case "manager_down":
+					mgr.Running, mgr.Message = 1, "Offline: spare@pve-b"
+					health = "HEALTH_WARN"
+				case "manager_unavailable":
+					mgr.Running = 0
+					assert.Contains(t, []string{"Offline: active@pve-a, spare@pve-b", "Offline: spare@pve-b, active@pve-a"}, services["mgr"].Message)
+					mgr.Message = services["mgr"].Message
+					health = "HEALTH_ERR"
+					if assert.Len(t, cluster.HealthChecks, 1) {
+						assert.Equal(t, "MGR_DOWN", cluster.HealthChecks[0].Code)
+					}
+				case "mon_osd_down":
+					health = "HEALTH_WARN"
+					assert.Equal(t, models.CephServiceStatus{Type: "mon", Running: 2, Total: 3, Message: "Offline: c@pve-c"}, services["mon"])
+					assert.Equal(t, models.CephServiceStatus{Type: "osd", Running: 2, Total: 3, Message: "Offline: 2@pve-c"}, services["osd"])
+					assert.Equal(t, 2, cluster.NumOSDsUp)
+					assert.Len(t, cluster.HealthChecks, 2)
+					codes := make([]string, 0, len(cluster.HealthChecks))
+					for _, check := range cluster.HealthChecks {
+						codes = append(codes, check.Code)
+					}
+					assert.ElementsMatch(t, []string{"MON_DOWN", "OSD_DOWN"}, codes)
+					assert.Contains(t, cluster.HealthMessage, "monitor down")
+					assert.Contains(t, cluster.HealthMessage, "osd down")
+				}
+				assert.Equal(t, mgr, services["mgr"])
+				assert.Equal(t, health, cluster.Health)
+				if health == "HEALTH_OK" {
+					assert.Empty(t, cluster.HealthChecks)
+					assert.Empty(t, cluster.HealthMessage)
+				}
+				if assert.NotNil(t, snapshot.Hosts[0].Ceph) {
+					// The intentionally healthy agent must not erase API down
+					// evidence; its own machine projection remains independent.
+					for _, service := range snapshot.Hosts[0].Ceph.Services {
+						if service.Type == "mgr" {
+							assert.Equal(t, 2, service.Running)
+							assert.Equal(t, 2, service.Total)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func cephMixedSourceServiceHealthSnapshot(t *testing.T, scenario string, apiFirst bool) models.StateSnapshot {
+	t.Helper()
+	var status proxmox.CephStatus
+	err := json.Unmarshal([]byte(`{
+		"fsid":"ceph-mixed-services","health":{"status":"HEALTH_OK"},
+		"monmap":{"num_mons":3},"mgrmap":{"available":true,"num_standbys":1},
+		"osdmap":{"num_osds":3,"num_up_osds":3,"num_in_osds":3},
+		"pgmap":{"num_pgs":32,"bytes_total":1000,"bytes_used":100,"bytes_avail":900},
+		"servicemap":{"services":{
+			"mon":{"daemons":{"a":{"hostname":"pve-a","status":"running"},"b":{"hostname":"pve-b","status":"running"},"c":{"hostname":"pve-c","status":"running"}}},
+			"mgr":{"daemons":{"active":{"hostname":"pve-a","status":"active"},"spare":{"hostname":"pve-b","status":"standby"}}},
+			"osd":{"daemons":{"0":{"hostname":"pve-a","status":"running"},"1":{"hostname":"pve-b","status":"running"},"2":{"hostname":"pve-c","status":"running"}}}
+		}}
+	}`), &status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setDaemonStatus := func(service, daemon, state string) {
+		d := status.ServiceMap.Services[service].Daemons[daemon]
+		d.Status = state
+		status.ServiceMap.Services[service].Daemons[daemon] = d
+	}
+	switch scenario {
+	case "healthy":
+	case "manager_down":
+		setDaemonStatus("mgr", "spare", "stopped")
+		status.Health.Status = "HEALTH_WARN"
+	case "manager_unavailable":
+		setDaemonStatus("mgr", "active", "stopped")
+		setDaemonStatus("mgr", "spare", "stopped")
+		status.MgrMap = proxmox.CephMgrMap{Available: false, NumMgrs: 2}
+		status.Health.Status = "HEALTH_ERR"
+		status.Health.Checks = map[string]proxmox.CephHealthCheckRaw{
+			"MGR_DOWN": {Severity: "HEALTH_ERR", Summary: json.RawMessage(`{"message":"no active manager"}`)},
+		}
+	case "mon_osd_down":
+		setDaemonStatus("mon", "c", "stopped")
+		setDaemonStatus("osd", "2", "down")
+		status.OSDMap.NumUpOSDs = 2
+		status.Health.Status = "HEALTH_WARN"
+		status.Health.Checks = map[string]proxmox.CephHealthCheckRaw{
+			"MON_DOWN": {Severity: "HEALTH_WARN", Summary: json.RawMessage(`{"message":"1 monitor down"}`)},
+			"OSD_DOWN": {Severity: "HEALTH_WARN", Summary: json.RawMessage(`{"message":"1 osd down"}`)},
+		}
+	case "summary_only":
+		status.ServiceMap.Services = nil
+	default:
+		t.Fatalf("unknown Ceph service scenario %q", scenario)
+	}
+	m := &Monitor{state: models.NewState(), alertManager: alerts.NewManager(), config: &config.Config{},
+		hostTokenBindings: make(map[string]string), rateTracker: NewRateTracker()}
+	t.Cleanup(m.alertManager.Stop)
+	client := &mockCephPVEClient{}
+	client.On("GetCephStatus", mock.Anything).Return(&status, nil).Once()
+	client.On("GetCephDF", mock.Anything).Return(nil, nil).Once()
+	t.Cleanup(func() { client.AssertExpectations(t) })
+	applyAPI := func() { m.pollCephCluster(context.Background(), "pve-api", client, true) }
+	applyAgent := func() {
+		_, err := m.ApplyHostReport(agentshost.Report{
+			Agent:     agentshost.AgentInfo{ID: "mixed-agent", Version: "6.7.0", IntervalSeconds: 30},
+			Host:      agentshost.HostInfo{ID: "mixed-host", Hostname: "pve-a", Platform: "linux"},
+			Timestamp: time.Now().UTC(),
+			Ceph: &agentshost.CephCluster{
+				FSID: "ceph-mixed-services", Health: agentshost.CephHealth{Status: "HEALTH_OK"},
+				MonMap: agentshost.CephMonitorMap{NumMons: 3},
+				MgrMap: agentshost.CephManagerMap{Available: true, NumMgrs: 2, Standbys: 1},
+				OSDMap: agentshost.CephOSDMap{NumOSDs: 3, NumUp: 3, NumIn: 3},
+				Services: []agentshost.CephService{
+					{Type: "mon", Running: 3, Total: 3}, {Type: "mgr", Running: 1, Total: 2}, {Type: "osd", Running: 3, Total: 3},
+				},
+			},
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if apiFirst {
+		applyAPI()
+		applyAgent()
+	} else {
+		applyAgent()
+		applyAPI()
+	}
+	return m.state.GetSnapshot()
+}
 
 type mockCephPVEClient struct {
 	mock.Mock

@@ -27,6 +27,35 @@ import (
 	"time"
 )
 
+func TestAgentURLAdmissionRefusesUnsupportedOrUnexecutableValidator(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix installer")
+	}
+	for _, executable := range []bool{true, false} {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "staged-agent")
+		mode := os.FileMode(0600)
+		if executable {
+			mode = 0700
+		}
+		// Old binaries reject an unknown flag; noexec staging cannot run it.
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 2\n"), mode); err != nil {
+			t.Fatal(err)
+		}
+		script := `set -euo pipefail
+OUTPUT_FORMAT=json
+NON_INTERACTIVE=true
+EXIT_PREFLIGHT_FAILED=14
+PULSE_URL=https://pulse.example.invalid
+` + extractInstallShellFunction(t, "fail") + "\n" + extractInstallShellFunction(t, "json_event") + "\n" + extractInstallShellFunction(t, "validate_staged_agent_url") + "\nvalidate_staged_agent_url " + strconv.Quote(path) + "\nprintf 'UNEXPECTED-ADMITTED\\n'\n"
+		output, err := exec.Command("bash", "-c", script).CombinedOutput()
+		var failure *exec.ExitError
+		if !errors.As(err, &failure) || failure.ExitCode() != 14 || strings.Contains(string(output), "UNEXPECTED-ADMITTED") || !strings.Contains(string(output), `"exitCode":14`) {
+			t.Fatalf("unknown/unexecutable validator was not refused: %v\n%s", err, output)
+		}
+	}
+}
+
 func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitoring(t *testing.T) {
 	wrapperBytes, err := os.ReadFile(repoFile("scripts", "install-container-agent.sh"))
 	if err != nil {

@@ -29193,3 +29193,51 @@ func TestContract_BackupJobsPayloadJSONSnapshot(t *testing.T) {
 
 	assertJSONSnapshot(t, got, want)
 }
+
+func TestAgentHistoryWithdrawnTokenCannotDisclose(t *testing.T) {
+	for _, transport := range []string{"header", "bearer"} {
+		for _, change := range []string{"revoked", "expired", "monitoring_removed", "execution_removed", "org_removed", "credential_replaced", "principal_replaced", "invalid_role"} {
+			t.Run(transport+"/"+change, func(t *testing.T) {
+				f := newHistoryAuthorityFixture(t, []string{config.ScopeMonitoringRead, config.ScopeAIExecute})
+				control := f.begin(t, historyAuthorityControl, "header")
+				primary := f.begin(t, historyAuthorityToken, transport)
+				config.Mu.Lock()
+				record := &f.router.config.APITokens[0]
+				switch change {
+				case "revoked":
+					f.router.config.RemoveAPIToken(record.ID)
+				case "expired":
+					past := time.Now().Add(-time.Second)
+					record.ExpiresAt = &past
+				case "monitoring_removed":
+					record.Scopes = []string{config.ScopeAIExecute}
+				case "execution_removed":
+					record.Scopes = []string{config.ScopeMonitoringRead}
+				case "org_removed":
+					record.OrgIDs = []string{"other-org"}
+				case "credential_replaced":
+					record.ID = "replacement-history-credential"
+				case "principal_replaced":
+					record.Metadata = map[string]string{apiTokenMetadataOwnerUserID: "replacement-history-principal"}
+				case "invalid_role":
+					record.Metadata = map[string]string{authpkg.RuntimeRoleMetadataKey: authpkg.RuntimeRoleActionRunner}
+				}
+				config.Mu.Unlock()
+				f.provider.unblock()
+				readHistoryAuthorityResult(t, primary, http.StatusUnauthorized, false)
+				readHistoryAuthorityResult(t, control, http.StatusOK, true)
+				if change == "execution_removed" {
+					// No wider grant is needed to resume: a NEW monitoring read is
+					// valid and redacted. The old full projection cannot be reused.
+					response, err := f.server.Client().Do(f.request(t, historyAuthorityToken, transport))
+					fresh := make(chan historyAuthorityResult, 1)
+					fresh <- historyAuthorityResult{response, err}
+					readHistoryAuthorityResult(t, fresh, http.StatusOK, false)
+				}
+				if f.stored(t) != f.original {
+					t.Error("withdrawal or read rewrote canonical history")
+				}
+			})
+		}
+	}
+}

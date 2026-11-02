@@ -6139,6 +6139,15 @@ reports cannot inherit an older or lower-priority incident. Only an absent
 status permits the existing health continuity fallback. Other topology/count
 fallbacks and source priority remain independent. `internal/models/state_host_test.go`
 checks recovery, source authority and missing-status continuity.
+The Proxmox API service-map projection in `internal/monitoring/ceph.go` also
+counts `standby` as running for `mgr` daemons, case-insensitively. This role
+does not imply healthy MON/OSD daemons and does not override explicit stopped,
+down or unknown manager states from a healthy cluster summary. API source
+priority and absent-service supplementation are unchanged.
+`TestBuildCephClusterModelServiceRoles` and
+`TestPollCephClusterMixedSourceServiceHealth` in `internal/monitoring/ceph_test.go`
+pin individual roles, both API/agent arrival orders, genuine manager loss,
+MON/OSD warnings and the summary-only fallback through polling and host ingest.
 Unraid long-running operation state uses the same authoritative transition
 boundary. A non-empty active sync action may carry progress; cancellation,
 completion, or idle state is represented by an empty action and normalized
