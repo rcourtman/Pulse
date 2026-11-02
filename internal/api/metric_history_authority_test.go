@@ -31,10 +31,11 @@ type metricAuthorityProvider struct {
 	release chan struct{}
 	once    sync.Once
 	calls   atomic.Int32
+	armed   atomic.Bool
 }
 
 func (p *metricAuthorityProvider) GetAll() []unified.Resource {
-	if p.calls.Add(1) <= 2 {
+	if p.armed.Load() && p.calls.Add(1) <= 2 {
 		p.entered <- struct{}{}
 		<-p.release
 	}
@@ -79,6 +80,9 @@ func newMetricAuthorityFixture(t *testing.T, entry string, scopes []string) *met
 	router := NewRouter(cfg, nil, nil, nil, nil, "test")
 	router.monitor = monitor
 	router.resourceHandlers.SetStateProvider(p)
+	// SetResourceStore publishes an initial view synchronously. Only later
+	// request-owned lookups belong to the withdrawal experiment.
+	p.armed.Store(true)
 	t.Cleanup(router.ShutdownResourceStores)
 	path := "/api/metrics-store/history"
 	q := url.Values{"resourceType": {"disk"}, "resourceId": {metricAuthorityID}, "metric": {"smart_temp"}, "range": {"1h"}}
