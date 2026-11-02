@@ -3440,6 +3440,8 @@ describe('useUnifiedResources', () => {
   it('keeps picker read failures through the useResources adapter and cached remounts', async () => {
     const { useResources } = await import('../useResources');
     setWsConnected(false);
+    setWsInitialDataReceived(false);
+    setWsState('resources', []);
     const disposals: (() => void)[] = [];
     const mount = (retainReadError = true) => {
       let result!: ReturnType<typeof useResources>;
