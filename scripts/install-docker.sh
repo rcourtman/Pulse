@@ -119,7 +119,8 @@ services:
     environment:
       - TZ=\${TZ:-UTC}
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7655/api/health"]
+      # Use the image's HTTPS-aware probe; HTTP is only for images without it.
+      test: ["CMD-SHELL", "if [ -x /docker-healthcheck.sh ]; then exec /docker-healthcheck.sh; else exec wget --quiet --tries=1 --spider http://localhost:7655/api/health; fi"]
       interval: 30s
       timeout: 10s
       retries: 3

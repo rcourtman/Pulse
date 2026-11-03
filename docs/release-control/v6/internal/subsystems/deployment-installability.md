@@ -16,6 +16,24 @@
 
 ## Purpose
 
+### Compose preserves the image healthcheck verdict
+
+The bundled Compose configuration and first-install generator select the
+image's executable `/docker-healthcheck.sh` when available. Its exit status
+and diagnostic are final: a failed HTTPS-aware or custom image probe must not
+trigger an HTTP retry that can turn failure into success. The existing HTTP
+probe remains a compatibility fallback only when that script is not executable.
+Probe intervals, deadlines, retry counts, image pins, credentials, volumes and
+existing-deployment admission remain unchanged. This is container-local health
+reporting, not external TLS verification or installed/customer recovery.
+
+`TestDockerComposeHealthcheckPreservesImageProbe` executes the actual commands
+from both parsed Compose producers with the shipped probe and an inert `wget`.
+It covers HTTP/HTTPS/`1`/unset selection, unsuccessful HTTPS alongside successful
+HTTP, legacy absent/non-executable helpers, and a custom image's exit/diagnostic.
+No live endpoint, Docker daemon, service restart or release qualification is
+performed by these registered installer tests.
+
 ### Removal refusals distinguish retained files from running services
 
 A missing saved URL with collector credentials refuses before stopping or
