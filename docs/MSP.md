@@ -254,9 +254,11 @@ During a backup, uncertain freeze/thaw or an unresponsive-guest incident,
 defer setup, live tests and guest-agent probes. Follow [backup safety](VM_DISK_MONITORING.md#backup-safety)
 first; this connection workflow is not guest recovery.
 
-Because each client workspace is its own runtime, overlapping RFC1918
-subnets across client sites never collide inside Pulse: each workspace only
-ever dials its own client's tunnel addresses.
+Because each client workspace is its own runtime, identical RFC1918
+addresses across clients stay apart in Pulse's data, alerts and reports. The
+network path does not: every runtime leaves through this host's routes, so
+two clients that both use `192.168.1.0/24` need distinct addresses from the
+provider side, for example a NAT mapping (netmap) on each client's tunnel.
 
 ## Per-client alert routing
 
