@@ -241,6 +241,42 @@ describe('ActionDecisionPacket', () => {
     },
   );
 
+  it('keeps the agent raw report behind an Agent details disclosure under the plain execution sentence', () => {
+    const raw =
+      'Container lifecycle: phase=verify; mutation started=true; mutation completed=true; readback ran=true; before=running/unknown; after=running/unknown';
+    const variant: ActionAuditRecord = {
+      ...audit,
+      result: {
+        ...audit.result!,
+        output: raw,
+        actionResultV2: {
+          ...audit.result!.actionResultV2!,
+          execution: { status: 'succeeded', summary: 'Docker restarted the container.' },
+        },
+      },
+    };
+    render(() => <ActionDecisionPacket audit={variant} />);
+    const execution = screen.getByTestId('action-execution-truth');
+    expect(within(execution).getByText('Docker restarted the container.')).toBeInTheDocument();
+    const details = within(execution).getByText('Agent details').closest('details');
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute('open');
+    expect(within(details as HTMLElement).getByText(raw)).toBeInTheDocument();
+    cleanup();
+
+    render(() => (
+      <ActionDecisionPacket
+        audit={{
+          ...variant,
+          result: { ...variant.result!, output: 'Docker restarted the container.' },
+        }}
+      />
+    ));
+    expect(
+      within(screen.getByTestId('action-execution-truth')).queryByText('Agent details'),
+    ).toBeNull();
+  });
+
   it('shows bounded APT facts, agent attestation, recovery, and one durable receipt without a reboot control', () => {
     const aptAudit: ActionAuditRecord = {
       ...audit,
