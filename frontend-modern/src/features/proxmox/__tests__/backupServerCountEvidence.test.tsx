@@ -163,6 +163,7 @@ describe('PBS server count identity', () => {
     await waitFor(() => expect(displayedCounts(table)).toEqual(['0', '2']));
     const disclosures = within(table).getAllByRole('button', { name: /details/i });
     await fireEvent.click(disclosures[0]);
+    await fireEvent.click(screen.getByRole('button', { name: 'Show server' }));
     const detail = screen.getByTestId('pbs-count-owner-detail');
 
     // Only the query's actual 30-second polling is advanced; no direct call to

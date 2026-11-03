@@ -9531,6 +9531,14 @@ misrepresented. `ProxmoxCoverageTable.test.tsx` checks narrow/full projection
 and complete long location text; the parsed inventory regressions also retain
 reader identity and full repository context without adding reads or routes.
 
+### A datastore drawer keeps its server's resource one click away (3 November 2026)
+
+A Backup servers datastore row still resolves to its canonical PBS resource,
+and correlated host details and history still come from that resource. The
+drawer opens on the datastore instead: the resource inspector sits behind a
+collapsed "Server" section and is mounted, with its reads, only when opened.
+A server row with no datastore opens the inspector directly, as before.
+
 ### Backup rows stay on one line (1 November 2026)
 
 Coverage and By date rows keep one line at every container width, phones

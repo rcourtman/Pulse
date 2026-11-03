@@ -1,7 +1,9 @@
-import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
+import { For, Show, createMemo, createUniqueId, type Accessor, type JSX } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 
 import { StatusDot } from '@/components/shared/StatusDot';
+import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
+import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import {
   GROUPED_TABLE_ROW_META_CLASS,
   getGroupedTableRowCellClass,
@@ -228,7 +230,10 @@ function BackupServerDatastoreContext(props: {
   row: BackupServerRow;
   inventoryState?: 'available' | 'loading' | 'unavailable';
   forecast?: DatastoreFillForecast | null;
+  onClose?: () => void;
 }) {
+  const id = createUniqueId();
+  const headingId = () => `backup-datastore-drawer-${id}`;
   const capacityText = () => {
     const datastore = props.row.datastore;
     if (!datastore) return 'No datastore data';
@@ -236,7 +241,11 @@ function BackupServerDatastoreContext(props: {
     if (reading.state !== 'available') {
       return `${reading.state === 'unavailable' ? 'Unavailable' : 'Unknown'}. This does not mean the datastore is empty.`;
     }
-    return `${formatPlatformTablePercentValue(reading.percent)} used · ${formatPlatformTableBytesValue(datastore.used, '0 B')} / ${formatPlatformTableBytesValue(datastore.total)}`;
+    const free =
+      typeof datastore.total === 'number' && typeof datastore.used === 'number'
+        ? ` · ${formatPlatformTableBytesValue(Math.max(0, datastore.total - datastore.used), '0 B')} free`
+        : '';
+    return `${formatPlatformTablePercentValue(reading.percent)} used · ${formatPlatformTableBytesValue(datastore.used, '0 B')} / ${formatPlatformTableBytesValue(datastore.total)}${free}`;
   };
   const inventoryText = () => {
     if (!props.row.datastore) return 'Not reported';
@@ -253,31 +262,38 @@ function BackupServerDatastoreContext(props: {
   };
 
   return (
-    <section class="mb-3" aria-label="Selected PBS datastore">
+    <section class="mb-3 space-y-2" aria-label="Selected PBS datastore">
+      {/* A datastore row's drawer is about the datastore; its server is one
+          click away below. A server row with no datastore is about the server,
+          whose own inspector header names it. */}
+      <Show when={props.row.datastore}>
+        {(datastore) => (
+          <ObjectDrawerHeader
+            collapseLabel={`Collapse ${datastore().name} details`}
+            onCollapse={() => props.onClose?.()}
+          >
+            <DrawerSubjectHeading
+              headingId={headingId()}
+              title={datastore().name}
+              statusVariant={props.row.online ? 'success' : 'danger'}
+              statusLabel={props.row.connectionLabel}
+              trailing={<span class="truncate text-xs text-muted">on {props.row.serverName}</span>}
+            />
+          </ObjectDrawerHeader>
+        )}
+      </Show>
       <DetailSectionTable
         wrapValues
         sections={[
           {
-            label: 'Selected datastore',
+            label: 'Datastore',
             rows: [
-              { label: 'Backup reader', value: props.row.serverName, layout: 'stacked' },
-              {
-                label: 'Datastore',
-                value: props.row.datastore?.name ?? 'Not reported',
-                layout: 'stacked',
-              },
-              {
-                label: 'Capacity',
-                value: capacityText(),
-                layout: 'stacked',
-                tone: capacityTone(),
-              },
+              { label: 'Capacity', value: capacityText(), tone: capacityTone() },
               ...(props.forecast
                 ? [
                     {
                       label: 'Fill forecast',
                       value: props.forecast.detail,
-                      layout: 'stacked' as const,
                       tone: forecastDetailTone(props.forecast),
                     },
                   ]
@@ -285,16 +301,14 @@ function BackupServerDatastoreContext(props: {
               {
                 label: 'Jobs',
                 value: describeDatastoreJobs(props.row.jobs),
-                layout: 'stacked',
                 tone: jobDetailTone(props.row.jobs.state),
               },
-              { label: 'Backup entries', value: inventoryText(), layout: 'stacked' },
+              { label: 'Backup entries', value: inventoryText() },
             ],
             footerContent: (
               <p class="whitespace-normal text-[11px] leading-snug text-muted">
-                Counts describe the loaded inventory, which can include in-progress and unverified
-                entries. They do not establish backup protection. Connection health and datastore
-                capacity are separate readings.
+                Backup entries can include running and unverified backups. They do not prove a guest
+                is protected.
               </p>
             ),
           },
@@ -986,9 +1000,20 @@ export function ProxmoxBackupServersTable(props: {
                             row={row}
                             inventoryState={props.backupInventoryState}
                             forecast={forecast()}
+                            onClose={() => detail.close(rowIdentity)}
                           />
                         }
                         initialShowHostDetails
+                        collapseResource={
+                          row.datastore
+                            ? {
+                                title: 'Server',
+                                summary: `${row.serverName} · CPU, memory, network, disk`,
+                                showLabel: 'Show server',
+                                hideLabel: 'Hide server',
+                              }
+                            : undefined
+                        }
                         onClose={() => detail.close(rowIdentity)}
                       />
                     </>

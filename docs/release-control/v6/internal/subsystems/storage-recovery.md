@@ -5102,6 +5102,19 @@ named; namesakes keep the VM id and connection that tell them apart. The
 disclosure label and the row drawer always carry both. Wider layouts are
 unchanged.
 
+### The datastore drawer answers the datastore (3 November 2026)
+
+Opening a Backup servers datastore row filled about 750px with a "Selected
+datastore" list that repeated the row, then the whole server dashboard (CPU,
+network, disk and temperature charts), none of which says whether backups are
+safe. The drawer now leads with the canonical drawer heading, the datastore
+named with its status dot and "on <server>", then one compact Datastore block:
+capacity with free space, fill forecast when there is one, job results and
+backup entries. The server's own inspector waits behind a collapsed "Server"
+section ("Show server"), mounted and read only when opened, so power users
+lose nothing. A server row with no datastore is about the server and still
+opens its inspector directly. About 260px at desktop and phone widths.
+
 ### Backup health reason rows show they open Coverage (2 November 2026)
 
 Each Backup health reason row was already a button that filters Coverage to

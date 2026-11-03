@@ -85,6 +85,7 @@ describe('PBS Backups web-interface parity', () => {
           name: 'Expand details for pbs-main · datastore archive',
         }),
       );
+      fireEvent.click(within(container).getByRole('button', { name: 'Show server' }));
       expect(within(container).getByTestId('pbs-detail')).toHaveAttribute(
         'data-resource-id',
         'pbs-east',

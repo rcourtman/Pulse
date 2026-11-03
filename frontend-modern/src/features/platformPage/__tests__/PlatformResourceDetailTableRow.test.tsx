@@ -12,8 +12,10 @@ import {
 } from '../PlatformResourceDetailTableRow';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
-  ResourceDetailDrawer: (props: { resource: Resource }) => (
-    <div data-testid="canonical-resource-inspector">{props.resource.id}</div>
+  ResourceDetailDrawer: (props: { resource: Resource; onClose?: () => void }) => (
+    <div data-testid="canonical-resource-inspector" data-has-close={props.onClose ? '' : undefined}>
+      {props.resource.id}
+    </div>
   ),
 }));
 
@@ -54,6 +56,71 @@ describe('platform resource row context', () => {
     expect(screen.getByTestId('canonical-resource-inspector')).toHaveTextContent('canonical-host');
     setOpen(false);
     expect(screen.queryByRole('region')).toBeNull();
+  });
+
+  it('keeps a collapsed resource inspector unmounted until its disclosure opens', () => {
+    render(() => (
+      <table>
+        <tbody>
+          <PlatformResourceDetailTableRow
+            resource={{ id: 'backup-server' } as Resource}
+            open
+            detailRowId="datastore-row"
+            colSpan={4}
+            context={<section aria-label="Selected row">Datastore readings</section>}
+            collapseResource={{
+              title: 'Server',
+              summary: 'backup-server · CPU, memory, network, disk',
+              showLabel: 'Show server',
+              hideLabel: 'Hide server',
+            }}
+          />
+        </tbody>
+      </table>
+    ));
+    // The row's own answer shows at once; the resource's inspector, and the
+    // reads it starts, wait for a click.
+    expect(screen.getByRole('region', { name: 'Selected row' })).toBeInTheDocument();
+    expect(screen.queryByTestId('canonical-resource-inspector')).toBeNull();
+    expect(screen.getByText('backup-server · CPU, memory, network, disk')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show server' }));
+    expect(screen.getByTestId('canonical-resource-inspector')).toHaveTextContent('backup-server');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide server' }));
+    expect(screen.queryByTestId('canonical-resource-inspector')).toBeNull();
+  });
+
+  it('starts a collapsed resource inspector collapsed each time the row opens', () => {
+    const [open, setOpen] = createSignal(true);
+    const onClose = vi.fn();
+    render(() => (
+      <table>
+        <tbody>
+          <PlatformResourceDetailTableRow
+            resource={{ id: 'backup-server' } as Resource}
+            open={open()}
+            detailRowId="datastore-row"
+            colSpan={4}
+            context={<section aria-label="Selected row">Datastore readings</section>}
+            collapseResource={{
+              title: 'Server',
+              showLabel: 'Show server',
+              hideLabel: 'Hide server',
+            }}
+            onClose={onClose}
+          />
+        </tbody>
+      </table>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Show server' }));
+    expect(screen.getByTestId('canonical-resource-inspector')).toBeInTheDocument();
+    // The row's own heading closes the row; the inspector carries no second close.
+    expect(screen.getByTestId('canonical-resource-inspector')).not.toHaveAttribute(
+      'data-has-close',
+    );
+    setOpen(false);
+    setOpen(true);
+    expect(screen.queryByTestId('canonical-resource-inspector')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show server' })).toBeInTheDocument();
   });
 
   it('leaves context-free inspectors unchanged', () => {

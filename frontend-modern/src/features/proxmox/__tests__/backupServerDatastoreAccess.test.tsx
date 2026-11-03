@@ -46,6 +46,8 @@ const mount = (component: () => JSX.Element) =>
   ));
 const selected = () => screen.getByRole('region', { name: 'Selected PBS datastore' });
 const field = (name: string) => within(selected()).getByText(name).closest('tr')!;
+// The drawer names its datastore in the heading and its server beside it.
+const heading = () => within(selected()).getByRole('heading');
 const disclosure = (name = store) =>
   screen.getByRole('button', {
     name: `Expand details for ${reader} · datastore ${name}`,
@@ -84,18 +86,18 @@ describe('selected PBS datastore inspection', () => {
       });
       expect(east).not.toBe(disclosure(otherStore));
       fireEvent.click(east);
-      expect(field('Backup reader')).toHaveTextContent(reader);
-      expect(field('Datastore')).toHaveTextContent(store);
-      expect(field('Datastore')).not.toHaveTextContent(otherStore);
+      expect(selected()).toHaveTextContent(`on ${reader}`);
+      expect(heading()).toHaveTextContent(store);
+      expect(heading()).not.toHaveTextContent(otherStore);
       expect(field('Capacity')).toHaveTextContent('98.0% used · 980 B / 1000 B');
       expect(field('Backup entries')).toHaveTextContent('0');
-      expect(selected()).toHaveTextContent('They do not establish backup protection.');
+      expect(selected()).toHaveTextContent('They do not prove a guest is protected.');
       expect(document.getElementById(east.getAttribute('aria-controls')!)).toContainElement(
         selected(),
       );
       fireEvent.click(disclosure(otherStore));
       expect(screen.getAllByRole('region', { name: 'Selected PBS datastore' })).toHaveLength(1);
-      expect(field('Datastore')).toHaveTextContent(otherStore);
+      expect(heading()).toHaveTextContent(otherStore);
       expect(field('Capacity')).toHaveTextContent('0.0% used · 0 B / 1000 B');
     },
   );
@@ -122,7 +124,10 @@ describe('selected PBS datastore inspection', () => {
   it('does not invent a selected store or count when no datastore was reported', async () => {
     mount(() => <ProxmoxBackupServersTable servers={[server([])]} layoutWidth={() => 320} />);
     fireEvent.click(await screen.findByRole('button', { name: `Expand details for ${reader}` }));
-    expect(field('Datastore')).toHaveTextContent('Not reported');
+    // With no datastore the row is about the server: no datastore heading,
+    // and its inspector opens directly rather than behind "Show server".
+    expect(within(selected()).queryByRole('heading')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show server' })).toBeNull();
     expect(field('Capacity')).toHaveTextContent('No datastore data');
     expect(field('Backup entries')).toHaveTextContent('Not reported');
   });
@@ -145,7 +150,7 @@ describe('selected PBS datastore inspection', () => {
     ]);
     await waitFor(() => expect(field('Capacity')).toHaveTextContent('Unavailable.'));
     expect(selected()).toBe(context);
-    expect(field('Datastore')).toHaveTextContent(store);
+    expect(heading()).toHaveTextContent(store);
     expect(toggle).toHaveFocus();
     const detail = document.getElementById(toggle.getAttribute('aria-controls')!)!;
     const close = within(detail).getByRole('button', { name: /Collapse .* details/ });
@@ -201,7 +206,7 @@ describe('selected PBS datastore inspection', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     await waitFor(() => expect(field('Backup entries')).toHaveTextContent('2'));
     expect(selected()).toBe(context);
-    expect(field('Datastore')).toHaveTextContent(store);
+    expect(heading()).toHaveTextContent(store);
     expect(api.fetch.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(3);
     const calls = api.fetch.mock.calls.length;
     mounted.unmount();
