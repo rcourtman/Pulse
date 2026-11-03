@@ -45,20 +45,23 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// Unified query results can wait on inventory or retained evidence after
 	// admission. Keep the admitted reader through every response (including
 	// errors), without changing mutation admission or the work's lifetime.
-	resourceRead := func(next http.HandlerFunc) http.HandlerFunc {
-		return RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
-			retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, next)))
-	}
-
 	// Unified resources API
-	r.mux.HandleFunc("/api/resources", resourceRead(r.resourceHandlers.HandleListResources))
-	r.mux.HandleFunc("/api/resources/storage-incidents", resourceRead(r.resourceHandlers.HandleStorageIncidents))
-	r.mux.HandleFunc("/api/resources/storage-summary", resourceRead(r.resourceHandlers.HandleStorageSummary))
-	r.mux.HandleFunc("/api/resources/stats", resourceRead(r.resourceHandlers.HandleStats))
-	r.mux.HandleFunc("/api/resources/k8s/namespaces", resourceRead(r.resourceHandlers.HandleK8sNamespaces))
-	r.mux.HandleFunc("/api/resources/timeline", resourceRead(r.resourceHandlers.HandleListResourceTimeline))
-	r.mux.HandleFunc("/api/resources/{id}/facets", resourceRead(r.resourceHandlers.HandleGetResourceFacets))
-	r.mux.HandleFunc("/api/resources/{id}/timeline", resourceRead(r.resourceHandlers.HandleGetResourceTimeline))
+	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleListResources))))
+	r.mux.HandleFunc("/api/resources/storage-incidents", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleStorageIncidents))))
+	r.mux.HandleFunc("/api/resources/storage-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleStorageSummary))))
+	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleStats))))
+	r.mux.HandleFunc("/api/resources/k8s/namespaces", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleK8sNamespaces))))
+	r.mux.HandleFunc("/api/resources/timeline", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleListResourceTimeline))))
+	r.mux.HandleFunc("/api/resources/{id}/facets", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleGetResourceFacets))))
+	r.mux.HandleFunc("/api/resources/{id}/timeline", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.resourceHandlers.HandleGetResourceTimeline))))
 	// Per-resource operator-set state. GET is read; PUT/DELETE are
 	// governance-shaping writes (suppress findings, refuse remediation,
 	// schedule maintenance) so they require the write scope. Method-keyed
@@ -94,9 +97,11 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// for the same reason. Wired before the broad `/api/resources/`
 	// catch-all so the more specific paths route here.
 	if r.maintenanceVerificationHandlers != nil {
-		r.mux.HandleFunc("/api/resources/{id}/maintenance-verifications", resourceRead(r.maintenanceVerificationHandlers.HandleListForResource))
+		r.mux.HandleFunc("/api/resources/{id}/maintenance-verifications", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+			retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.maintenanceVerificationHandlers.HandleListForResource))))
 		r.mux.HandleFunc("POST /api/resources/{id}/maintenance-verifications/rerun", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, r.maintenanceVerificationHandlers.HandleRerun)))
-		r.mux.HandleFunc("/api/maintenance-verifications/{reportId}", resourceRead(r.maintenanceVerificationHandlers.HandleGet))
+		r.mux.HandleFunc("/api/maintenance-verifications/{reportId}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+			retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.maintenanceVerificationHandlers.HandleGet))))
 		r.mux.HandleFunc("POST /api/maintenance-verifications/{reportId}/review", RequireAuth(r.config, RequireScope(config.ScopeMonitoringWrite, r.maintenanceVerificationHandlers.HandleReview)))
 	}
 	// HandleResourceRoutes also dispatches POST link, unlink and report-merge,
