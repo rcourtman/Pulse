@@ -67,6 +67,43 @@ describe('TrueNAS reader lifetime', () => {
     vi.mocked(TrueNASAPI.listConnections).mockImplementation(async () => [connection()]);
   });
 
+  it.each([404, 503])(
+    'withdraws a stale draft after a failed settings read (%s) until a fresh read succeeds',
+    async (status) => {
+      const { result } = renderHook(() => useTrueNASSettingsPanelState());
+      await ready(result);
+      openDraft(result);
+      result.openDeleteDialog(result.connections()[0]);
+      vi.mocked(TrueNASAPI.listConnections).mockRejectedValueOnce({
+        status,
+        message: 'synthetic unavailable',
+      });
+      await result.loadConnections();
+      expect(result.connections()).toEqual([]);
+      expect(result.form().apiKey).toBe('');
+      expect(result.dialogOpen()).toBe(false);
+      expect(result.deleteDialogOpen()).toBe(false);
+      expect(result.pendingDeleteConnection()).toBeNull();
+      expect(result.editingConnection()).toBeNull();
+      expect(TrueNASAPI.listConnections).toHaveBeenCalledTimes(2);
+      for (const [method, mock] of Object.entries(TrueNASAPI))
+        if (method !== 'listConnections') expect(mock).not.toHaveBeenCalled();
+      await result.loadConnections();
+      await ready(result);
+      result.openEditDialog(result.connections()[0]);
+      expect(result.form()).toMatchObject({
+        name: 'Synthetic NAS',
+        apiKey: '',
+        hasStoredApiKey: true,
+        useHttps: true,
+        insecureSkipVerify: false,
+        fingerprint: 'SHA256:synthetic-pin',
+      });
+      expect(result.loadingError()).toBeNull();
+      expect(result.featureDisabled()).toBe(false);
+    },
+  );
+
   it('withdraws accepted inventory, draft secrets and confirmations when access is revoked', async () => {
     const [canLoad, setAllowed] = createSignal(true);
     const { result } = renderHook(() => useTrueNASSettingsPanelState({ canLoad }));

@@ -334,4 +334,50 @@ describe('VMwareAPI', () => {
     expect(isRedactedVMwareSecret('secret')).toBe(false);
     expect(isRedactedVMwareSecret(undefined)).toBe(false);
   });
+  it('carries reader scope, cancellation and retry policy through every canonical connection operation', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValue({ success: true });
+    const options = { expectedOrgID: 'team-a', signal: new AbortController().signal, retry: false };
+    const input = {
+      host: 'vc.example.invalid',
+      username: 'monitor',
+      password: '********',
+      monitorVms: false,
+      monitorHosts: true,
+      monitorDatastores: false,
+      insecureSkipVerify: false,
+    };
+    await VMwareAPI.listConnections(options);
+    await VMwareAPI.createConnection(input, options);
+    await VMwareAPI.updateConnection('id/with slash', input, options);
+    await VMwareAPI.deleteConnection('id/with slash', options);
+    await VMwareAPI.testConnection(input, options);
+    await VMwareAPI.testSavedConnection('id/with slash', input, options);
+    await VMwareAPI.previewConnection(input, options);
+    await VMwareAPI.previewSavedConnection('id/with slash', input, options);
+    const calls = vi.mocked(apiFetchJSON).mock.calls;
+    expect(calls).toHaveLength(8);
+    expect(calls.map(([url]) => url)).toEqual([
+      '/api/vmware/connections',
+      '/api/vmware/connections',
+      '/api/vmware/connections/id%2Fwith%20slash',
+      '/api/vmware/connections/id%2Fwith%20slash',
+      '/api/vmware/connections/test',
+      '/api/vmware/connections/id%2Fwith%20slash/test',
+      '/api/vmware/connections/preview',
+      '/api/vmware/connections/id%2Fwith%20slash/preview',
+    ]);
+    expect(calls.map(([, request]) => request?.method ?? 'GET')).toEqual([
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'POST',
+      'POST',
+      'POST',
+      'POST',
+    ]);
+    for (const [, request] of calls) expect(request).toMatchObject(options);
+    for (const [, request] of calls.filter(([, request]) => request?.body))
+      expect(JSON.parse(request!.body as string)).toEqual(input);
+  });
 });

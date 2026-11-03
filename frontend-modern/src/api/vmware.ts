@@ -1,4 +1,4 @@
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, type APIContextOptions } from '@/utils/apiClient';
 import {
   normalizeMonitoredSystemLedgerPreviewResponse,
   type MonitoredSystemLedgerPreviewResponse,
@@ -215,14 +215,20 @@ export const isRedactedVMwareSecret = (value: string | null | undefined) =>
   (value || '').trim() === REDACTED_SECRET;
 
 export class VMwareAPI {
-  static async listConnections(): Promise<VMwareConnection[]> {
-    const response = await apiFetchJSON<RawVMwareConnection[]>(VMWARE_CONNECTIONS_PATH);
+  static async listConnections(options?: APIContextOptions): Promise<VMwareConnection[]> {
+    const response = await (options === undefined
+      ? apiFetchJSON<RawVMwareConnection[]>(VMWARE_CONNECTIONS_PATH)
+      : apiFetchJSON<RawVMwareConnection[]>(VMWARE_CONNECTIONS_PATH, options));
     const list = arrayOrUndefined<RawVMwareConnection>(response) ?? [];
     return list.map(normalizeVMwareConnection);
   }
 
-  static async createConnection(input: VMwareConnectionInput): Promise<VMwareConnection> {
+  static async createConnection(
+    input: VMwareConnectionInput,
+    options?: APIContextOptions,
+  ): Promise<VMwareConnection> {
     const response = await apiFetchJSON<RawVMwareConnection>(VMWARE_CONNECTIONS_PATH, {
+      ...options,
       method: 'POST',
       body: JSON.stringify(serializeVMwareConnectionInput(input)),
     });
@@ -232,10 +238,12 @@ export class VMwareAPI {
   static async updateConnection(
     id: string,
     input: VMwareConnectionInput,
+    options?: APIContextOptions,
   ): Promise<VMwareConnection> {
     const response = await apiFetchJSON<RawVMwareConnection>(
       `${VMWARE_CONNECTIONS_PATH}/${encodeURIComponent(id)}`,
       {
+        ...options,
         method: 'PUT',
         body: JSON.stringify(serializeVMwareConnectionInput(input)),
       },
@@ -243,16 +251,24 @@ export class VMwareAPI {
     return normalizeVMwareConnection(response);
   }
 
-  static async deleteConnection(id: string): Promise<{ success: boolean; id: string }> {
+  static async deleteConnection(
+    id: string,
+    options?: APIContextOptions,
+  ): Promise<{ success: boolean; id: string }> {
     return apiFetchJSON(`${VMWARE_CONNECTIONS_PATH}/${encodeURIComponent(id)}`, {
+      ...options,
       method: 'DELETE',
     });
   }
 
-  static async testConnection(input: VMwareConnectionInput): Promise<VMwareConnectionTestResult> {
+  static async testConnection(
+    input: VMwareConnectionInput,
+    options?: APIContextOptions,
+  ): Promise<VMwareConnectionTestResult> {
     const response = await apiFetchJSON<Partial<VMwareConnectionTestResult>>(
       `${VMWARE_CONNECTIONS_PATH}/test`,
       {
+        ...options,
         method: 'POST',
         body: JSON.stringify(serializeVMwareConnectionInput(input)),
       },
@@ -263,10 +279,12 @@ export class VMwareAPI {
   static async testSavedConnection(
     id: string,
     input?: VMwareConnectionInput,
+    options?: APIContextOptions,
   ): Promise<VMwareConnectionTestResult> {
     const response = await apiFetchJSON<Partial<VMwareConnectionTestResult>>(
       `${VMWARE_CONNECTIONS_PATH}/${encodeURIComponent(id)}/test`,
       {
+        ...options,
         method: 'POST',
         ...(input !== undefined
           ? { body: JSON.stringify(serializeVMwareConnectionInput(input)) }
@@ -278,10 +296,12 @@ export class VMwareAPI {
 
   static async previewConnection(
     input: VMwareConnectionInput,
+    options?: APIContextOptions,
   ): Promise<MonitoredSystemLedgerPreviewResponse> {
     const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
       `${VMWARE_CONNECTIONS_PATH}/preview`,
       {
+        ...options,
         method: 'POST',
         body: JSON.stringify(serializeVMwareConnectionInput(input)),
       },
@@ -292,10 +312,12 @@ export class VMwareAPI {
   static async previewSavedConnection(
     id: string,
     input?: VMwareConnectionInput,
+    options?: APIContextOptions,
   ): Promise<MonitoredSystemLedgerPreviewResponse> {
     const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
       `${VMWARE_CONNECTIONS_PATH}/${encodeURIComponent(id)}/preview`,
       {
+        ...options,
         method: 'POST',
         ...(input !== undefined
           ? { body: JSON.stringify(serializeVMwareConnectionInput(input)) }

@@ -81,7 +81,10 @@ export function useInfrastructureSettingsState({
     canLoad: canReadInfrastructure,
     currentUser,
   });
-  const vmwareSettings = useVMwareSettingsPanelState({ canLoad: canReadInfrastructure });
+  const vmwareSettings = useVMwareSettingsPanelState({
+    canLoad: canReadInfrastructure,
+    currentUser,
+  });
 
   const discoveryRuntime = useInfrastructureDiscoveryRuntimeState({
     eventBus,
