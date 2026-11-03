@@ -863,7 +863,8 @@ type FindingsStore struct {
 	// other operator-set intent, auto-acknowledging new findings whose
 	// resource is in a maintenance window. Nil-safe; an unset provider
 	// disables operator-state-driven suppression.
-	resourceOperatorStateProvider ResourceOperatorStateProvider
+	resourceOperatorStateProvider         ResourceOperatorStateProvider
+	resourceOperatorStateProviderRevision uint64
 	// Optional finding-storm throttler — when set, the store invokes it
 	// from Add's new-finding branch so a single noisy resource's burst
 	// of multi-symptom findings is summarised by one storm finding.
@@ -986,6 +987,7 @@ func (s *FindingsStore) SetResourceOperatorStateProvider(p ResourceOperatorState
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.resourceOperatorStateProvider = p
+	s.resourceOperatorStateProviderRevision++
 }
 
 // SetStormThrottler installs the finding-storm throttler. The store
@@ -1906,12 +1908,50 @@ func (s *FindingsStore) syncLoopStateLocked(f *Finding) {
 	// it's the only signal that a transition was rejected, not a duplicate.
 }
 
+// operatorResourceIDLocked resolves Add's operator-state lookup identity.
+// Caller holds s.mu; an update without an identity uses the retained finding.
+func (s *FindingsStore) operatorResourceIDLocked(f *Finding) string {
+	if id := strings.TrimSpace(f.ResourceID); id != "" {
+		return id
+	}
+	if existing := s.findings[f.ID]; existing != nil {
+		return strings.TrimSpace(existing.ResourceID)
+	}
+	return ""
+}
+
 // Add adds or updates a finding
 // If a finding with the same ID exists, it updates LastSeenAt and increments TimesRaised
 // If the finding is suppressed or dismissed, it may be skipped
 // Returns true if this is a new finding
 func (s *FindingsStore) Add(f *Finding) bool {
 	s.mu.Lock()
+
+	// Operator-state adapters can wait on storage or read this store. Do not
+	// retain the findings lock across that external call: shutdown needs it to
+	// persist findings already accepted, even if a new lookup is stalled.
+	var operatorProjection ResourceOperatorStateProjection
+	operatorProjectionOK := false
+	operatorStateProviderPresent := false
+	for {
+		provider := s.resourceOperatorStateProvider
+		resourceID := s.operatorResourceIDLocked(f)
+		if provider == nil || resourceID == "" {
+			break
+		}
+		revision := s.resourceOperatorStateProviderRevision
+		s.mu.Unlock()
+		projection, ok := provider.OperatorStateProjection(resourceID, time.Now())
+		s.mu.Lock()
+		// A replaced provider or rebound fallback identity invalidates the
+		// result. Re-read before committing suppression or criticality.
+		if revision != s.resourceOperatorStateProviderRevision || resourceID != s.operatorResourceIDLocked(f) {
+			continue
+		}
+		operatorProjection, operatorProjectionOK = projection, ok
+		operatorStateProviderPresent = true
+		break
+	}
 
 	if f.ResourceType == "" {
 		f.ResourceType = inferFindingResourceType(f.ResourceID, f.ResourceName)
@@ -1920,24 +1960,13 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	f.syncLoopState()
 
 	existing, exists := s.findings[f.ID]
-	operatorStateProviderPresent := false
-	operatorProjectionOK := false
-	var operatorProjection ResourceOperatorStateProjection
-	if provider := s.resourceOperatorStateProvider; provider != nil {
-		operatorResourceID := strings.TrimSpace(f.ResourceID)
-		if operatorResourceID == "" && existing != nil {
-			operatorResourceID = strings.TrimSpace(existing.ResourceID)
+	if operatorStateProviderPresent {
+		if operatorProjectionOK {
+			f.ResourceCriticality = normalizeResourceCriticality(operatorProjection.Criticality)
+		} else {
+			f.ResourceCriticality = ""
 		}
-		if operatorResourceID != "" {
-			operatorStateProviderPresent = true
-			operatorProjection, operatorProjectionOK = provider.OperatorStateProjection(operatorResourceID, time.Now())
-			if operatorProjectionOK {
-				f.ResourceCriticality = normalizeResourceCriticality(operatorProjection.Criticality)
-			} else {
-				f.ResourceCriticality = ""
-			}
-		}
-	} else {
+	} else if s.resourceOperatorStateProvider == nil {
 		f.ResourceCriticality = normalizeResourceCriticality(f.ResourceCriticality)
 	}
 	if exists {

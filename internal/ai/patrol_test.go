@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -1086,6 +1087,68 @@ func TestPatrolService_GetIntelligence(t *testing.T) {
 	}
 	if got := summary.PolicyPosture.SensitivityCounts[ur.ResourceSensitivityPublic]; got != 1 {
 		t.Fatalf("expected 1 public resource, got %d", got)
+	}
+}
+
+func TestPatrolService_StopWhileOperatorStateLookupBlocked(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	persistence := config.NewConfigPersistence(t.TempDir())
+	if err := ps.SetFindingsPersistence(NewFindingsPersistenceAdapter(persistence)); err != nil {
+		t.Fatal(err)
+	}
+	ps.findings.Add(&Finding{ID: "retained", ResourceID: "vm:100", Title: "Retained finding", Severity: FindingSeverityWarning})
+	entered, release := make(chan struct{}), make(chan struct{})
+	ps.findings.SetResourceOperatorStateProvider(ResourceOperatorStateProviderFunc(func(string, time.Time) (ResourceOperatorStateProjection, bool) {
+		close(entered)
+		<-release
+		return ResourceOperatorStateProjection{}, false
+	}))
+	addDone, stopDone := make(chan struct{}), make(chan struct{})
+	go func() {
+		ps.findings.Add(&Finding{ID: "pending", ResourceID: "vm:101", Title: "Pending lookup", Severity: FindingSeverityInfo})
+		close(addDone)
+	}()
+	defer func() {
+		close(release)
+		select {
+		case <-addDone:
+		case <-time.After(3 * time.Second):
+			t.Error("finding add did not finish after its lookup was released")
+			return
+		}
+		select {
+		case <-stopDone:
+		case <-time.After(3 * time.Second):
+			t.Error("Patrol stop did not finish after its lookup was released")
+			return
+		}
+		if err := ps.findings.ForceSave(); err != nil {
+			t.Error(err)
+		}
+	}()
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("operator-state lookup did not start")
+	}
+	ps.running = true
+	ps.stopCh = make(chan struct{})
+	go func() { ps.Stop(); close(stopDone) }()
+	select {
+	case <-stopDone:
+	case <-time.After(3 * time.Second):
+		t.Error("Patrol shutdown cannot save retained findings while an external operator-state lookup is blocked")
+		return
+	}
+	saved, err := persistence.LoadAIFindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Findings["retained"] == nil {
+		t.Error("shutdown did not preserve the retained finding")
+	}
+	if saved.Findings["pending"] != nil {
+		t.Error("shutdown saved a finding whose operator-state lookup had not completed")
 	}
 }
 
