@@ -9717,3 +9717,30 @@ browser proof at desktop and phone must inspect the rendered safety boundaries,
 keyboard/touch linked recovery navigation and direct/reload fragments. These
 are help qualification, not installed upgrade, native recovery, paid deployment
 or release acceptance.
+
+### Canonical Markdown and router graph maintenance (3 November 2026)
+
+The shared frontend manifest and lock are one graph. A managed proposal's
+package records must not replace newer canonical serializer, sanitizer, glob
+or lint-tooling security repairs. Marked 18.1.1 and Solid Router 1.0.0 retain
+every other canonical lock record and every override; Vite remains on the
+reviewed 6.4.5 line. The separate Vite 8 bundler migration is not implied by
+those runtime updates, and neither chunk budgets nor SRI/preload requirements
+are relaxed to admit it.
+
+Kubernetes Overview reads its selected cluster query value once before
+narrowing it to a string. Its selected-row state and toggle use that same
+accessor, preserving ordinary bookmark restoration, namespace clearing and
+shared-search state without passing a possible query array into the table.
+This does not grant access to resources or change server-side filtering.
+
+Completion requires the exact committed graph's clean install, registered
+security/serializer/Markdown/router consumers, full types and lint, embedded
+build and unchanged bundle/preload/SRI checks. The installed-package assertions
+in `dependencyTooling.test.ts` include Marked and Router so a stale local tree
+cannot stand in for those consumers. `KubernetesPageSurfaceUrlFilters.test.tsx`
+exercises bookmarked selection, deselection and replacement through the real
+router and containing tables. Required desktop/narrow browser interactions and
+native pixel inspection, the complete dependency audit and independent review
+remain distinct proofs; a lock acquisition or metadata read establishes none
+of them.

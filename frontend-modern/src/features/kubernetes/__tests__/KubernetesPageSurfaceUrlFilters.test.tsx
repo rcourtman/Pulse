@@ -245,6 +245,57 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     expect(screen.queryByText('east-api')).not.toBeInTheDocument();
   });
 
+  it('restores a bookmarked cluster and toggles scope without losing the shared search', async () => {
+    setResources([
+      makeResource({
+        id: 'cluster-west',
+        type: 'k8s-cluster',
+        name: 'West',
+        kubernetes: { clusterId: 'cluster-west', clusterName: 'West' },
+      }),
+      makeResource({
+        id: 'cluster-east',
+        type: 'k8s-cluster',
+        name: 'East',
+        kubernetes: { clusterId: 'cluster-east', clusterName: 'East' },
+      }),
+      makeResource({
+        id: 'west-api',
+        type: 'k8s-deployment',
+        kubernetes: { clusterId: 'cluster-west', clusterName: 'West', namespace: 'prod' },
+      }),
+      makeResource({
+        id: 'east-api',
+        type: 'k8s-deployment',
+        kubernetes: { clusterId: 'cluster-east', clusterName: 'East', namespace: 'prod' },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/overview?cluster=cluster-west&namespace=prod&q=-cache');
+
+    const west = screen.getByRole('button', { name: 'Show workloads for West' });
+    const east = screen.getByRole('button', { name: 'Show workloads for East' });
+    expect(west).toHaveAttribute('aria-pressed', 'true');
+    expect(east).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('east-api')).not.toBeInTheDocument();
+
+    fireEvent.click(west);
+    await waitFor(() => expect(window.location.search).toBe('?q=-cache'));
+    expect(west).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('east-api')).toBeInTheDocument();
+
+    fireEvent.click(east);
+    await waitFor(() => {
+      expect(new URLSearchParams(window.location.search).get('cluster')).toBe('cluster-east');
+      expect(east).toHaveAttribute('aria-pressed', 'true');
+    });
+    expect(new URLSearchParams(window.location.search).get('namespace')).toBeNull();
+    expect(new URLSearchParams(window.location.search).get('q')).toBe('-cache');
+    expect(west).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText('west-api')).not.toBeInTheDocument();
+    expect(screen.getByText('east-api')).toBeInTheDocument();
+  });
+
   it('applies the URL search filter on the services tab', () => {
     setResources([
       makeResource({ id: 'checkout-svc', type: 'k8s-service' }),

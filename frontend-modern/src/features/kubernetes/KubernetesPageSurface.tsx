@@ -707,6 +707,12 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
 
 function KubernetesOverview(props: KubernetesOverviewProps) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const selectedClusterId = (): string => {
+    // Read the reactive query property once so the checked value stays
+    // narrowed when the router can also return repeated parameters as arrays.
+    const value = searchParams[KUBERNETES_QUERY_PARAMS.cluster];
+    return typeof value === 'string' ? value : '';
+  };
   const workloadAttention = createMemo(() => {
     const posture = buildKubernetesOverviewPosture(props.model());
     return posture.podAttention + posture.deploymentAttention;
@@ -760,17 +766,13 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         emptyTitle="No clusters reported"
         emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
         showToolbar={false}
-        selectedClusterId={
-          typeof searchParams[KUBERNETES_QUERY_PARAMS.cluster] === 'string'
-            ? searchParams[KUBERNETES_QUERY_PARAMS.cluster]
-            : ''
-        }
+        selectedClusterId={selectedClusterId()}
         onSelectCluster={(cluster) => {
           const clusterId =
             cluster.kubernetes?.clusterId?.trim() || cluster.kubernetes?.clusterName?.trim() || '';
           setSearchParams({
             [KUBERNETES_QUERY_PARAMS.cluster]:
-              searchParams[KUBERNETES_QUERY_PARAMS.cluster] === clusterId ? null : clusterId,
+              selectedClusterId() === clusterId ? null : clusterId,
             [KUBERNETES_QUERY_PARAMS.namespace]: null,
           });
         }}
