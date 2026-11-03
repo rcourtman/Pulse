@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { PBSJobHealthEvidence } from '@/types/api';
 
-import { describeDatastoreJobs, summarizeDatastoreJobs } from '../proxmoxBackupServerJobs';
+import type { Resource } from '@/types/resource';
+
+import {
+  collectDatastoreJobFailures,
+  describeDatastoreJobs,
+  summarizeDatastoreJobs,
+} from '../proxmoxBackupServerJobs';
 
 const job = (overrides: Partial<PBSJobHealthEvidence>): PBSJobHealthEvidence => ({
   id: 'job',
@@ -71,6 +77,18 @@ describe('summarizeDatastoreJobs', () => {
     );
     expect(summary.label).toBe('OK');
     expect(summary.entries).toHaveLength(1);
+  });
+
+  it('keeps families that share a job id apart', () => {
+    const summary = summarizeDatastoreJobs(
+      [
+        job({ id: 'daily', family: 'sync', posture: 'critical', postureReason: 'last-run-failed' }),
+        job({ id: 'daily', family: 'verify', 'last-run-endtime': 2_000 }),
+      ],
+      'main',
+    );
+    expect(summary.label).toBe('Sync failed');
+    expect(summary.entries).toHaveLength(2);
   });
 
   it('never reports a family as OK when its server-wide read failed', () => {
@@ -165,5 +183,53 @@ describe('summarizeDatastoreJobs', () => {
   it('has nothing to say without a datastore or evidence', () => {
     expect(summarizeDatastoreJobs(undefined, 'main').label).toBe('—');
     expect(summarizeDatastoreJobs([job({})], undefined).label).toBe('—');
+  });
+});
+
+describe('collectDatastoreJobFailures', () => {
+  const server = (name: string, evidence: PBSJobHealthEvidence[]): Resource =>
+    ({
+      id: name,
+      name,
+      type: 'pbs',
+      pbs: {
+        datastores: [
+          { name: 'main', total: 1, used: 0 },
+          { name: 'offsite', total: 1, used: 0 },
+        ],
+        jobHealthEvidence: evidence,
+      },
+    }) as unknown as Resource;
+
+  it('groups failed jobs by family and names the datastores they hit (#1815)', () => {
+    const groups = collectDatastoreJobFailures([
+      server('vault', [
+        job({ id: 'b-1', family: 'backup', store: 'main' }),
+        job({ id: 's-1', family: 'sync', store: 'offsite', posture: 'critical' }),
+        job({ id: 'v-1', family: 'verify', store: 'offsite', posture: 'warning' }),
+        job({ id: 'garbage:main', family: 'garbage', store: 'main', posture: 'critical' }),
+      ]),
+    ]);
+    expect(groups).toEqual([
+      { family: 'sync', label: 'Sync failed', datastores: ['offsite'] },
+      { family: 'garbage', label: 'GC failed', datastores: ['main'] },
+    ]);
+  });
+
+  it('leaves out storeless failures and a job whose newest run succeeded', () => {
+    const groups = collectDatastoreJobFailures([
+      server('vault', [
+        job({ id: 'sync:task', family: 'sync', store: undefined, posture: 'critical' }),
+        job({ id: 'v-1', posture: 'critical', 'last-run-endtime': 1_000 }),
+        job({ id: 'v-1', 'last-run-endtime': 2_000 }),
+      ]),
+    ]);
+    expect(groups).toEqual([]);
+  });
+
+  it('names the server once more than one is connected', () => {
+    const failed = [job({ id: 's-1', family: 'sync', store: 'offsite', posture: 'critical' })];
+    const groups = collectDatastoreJobFailures([server('vault', failed), server('dr', failed)]);
+    expect(groups[0].datastores).toEqual(['offsite (dr)', 'offsite (vault)']);
   });
 });

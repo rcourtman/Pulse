@@ -142,6 +142,21 @@ admission, cancellation, runtime/client replacement and old-worker completion.
 Source-bound desktop/narrow Backups proof consumes produced partial/recovery
 frames. This is truthful collection, not original frozen-guest recovery.
 
+### PBS job failures persist until a newer outcome is observed (3 November 2026)
+
+`pollPBSInstance` now passes each poll's job results through
+`carryPBSJobFailures` with the results last stored for that instance
+(`State.PBSJobHealthEvidence`). A job whose last completed run failed stays
+`critical`/`last-run-failed` while PBS reports no newer outcome: `/admin`
+drops the previous result while the next run is in progress, an overdue or
+unreadable job reports none, and a failed read lists no jobs. The carried
+failure clears on an observed success or warning, or when a complete read
+drops or disables the job. Jobs are keyed by family plus id, since PBS ids are
+unique only within a family. `pbsJobHealthPosture` now ranks a failed last
+run above overdue, so a failed job that has also missed its next run reads
+failed, not late. This keeps the datastore job alert from flapping (#1815).
+Mock PBS instances report job results with one failed secondary sync.
+
 ### PBS job run status comes from the admin endpoints (2 November 2026)
 
 `pkg/pbs.Client.GetJobHealthEvidence` reads configured sync, verify and prune

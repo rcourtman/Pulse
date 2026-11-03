@@ -862,3 +862,91 @@ func TestPBSNamespaceDiscoveryLegacyRootOnlyRemainsComplete(t *testing.T) {
 func TestPBSBudgetOwnerWithdrawsLatePublication(t *testing.T) {
 	exercisePBSBudgetOwnerWithdrawal(t)
 }
+
+func carriedJob(id, family, posture, reason string) models.PBSJobHealthEvidence {
+	return models.PBSJobHealthEvidence{
+		ID:            id,
+		Family:        family,
+		Store:         "offsite",
+		Enabled:       true,
+		Posture:       posture,
+		PostureReason: reason,
+	}
+}
+
+func postureOf(evidence []models.PBSJobHealthEvidence, family, id string) string {
+	for _, entry := range evidence {
+		if entry.Family == family && entry.ID == id {
+			return entry.Posture + "/" + entry.PostureReason
+		}
+	}
+	return "absent"
+}
+
+// A failed sync stays failed through the polls that cannot report a newer
+// outcome (#1815): otherwise its alert would clear and fire again each time.
+func TestCarryPBSJobFailuresHoldsAFailureUntilAnOutcomeIsObserved(t *testing.T) {
+	failed := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "critical", "last-run-failed")}
+
+	cases := []struct {
+		name       string
+		current    []models.PBSJobHealthEvidence
+		readFailed bool
+		want       string
+	}{
+		{"next run in progress", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "healthy", "running")}, false, "critical/last-run-failed"},
+		{"overdue with no newer run", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "warning", "job-overdue")}, false, "critical/last-run-failed"},
+		{"state unreadable", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "unknown", "no-run-observed")}, false, "critical/last-run-failed"},
+		{"whole read failed", nil, true, "critical/last-run-failed"},
+		{"family read failed", []models.PBSJobHealthEvidence{{ID: "sync:partial", Family: "sync", Error: "403"}}, false, "critical/last-run-failed"},
+		{"retry succeeded", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "healthy", "last-run-success")}, false, "healthy/last-run-success"},
+		{"retry warned", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "warning", "last-run-warning")}, false, "warning/last-run-warning"},
+		{"job removed", []models.PBSJobHealthEvidence{}, false, "absent"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := carryPBSJobFailures(failed, tc.current, tc.readFailed)
+			if posture := postureOf(got, "sync", "s-1"); posture != tc.want {
+				t.Fatalf("posture = %s, want %s", posture, tc.want)
+			}
+		})
+	}
+
+	disabled := carriedJob("s-1", "sync", "unknown", "no-run-observed")
+	disabled.Enabled = false
+	got := carryPBSJobFailures(failed, []models.PBSJobHealthEvidence{disabled}, false)
+	if len(got) != 1 || got[0].Enabled {
+		t.Fatalf("a disabled job must replace its carried failure, got %+v", got)
+	}
+}
+
+func TestCarryPBSJobFailuresKeysJobsByFamily(t *testing.T) {
+	previous := []models.PBSJobHealthEvidence{carriedJob("daily", "sync", "critical", "last-run-failed")}
+	current := []models.PBSJobHealthEvidence{
+		carriedJob("daily", "verify", "healthy", "last-run-success"),
+		carriedJob("daily", "sync", "healthy", "running"),
+	}
+	got := carryPBSJobFailures(previous, current, false)
+	if posture := postureOf(got, "sync", "daily"); posture != "critical/last-run-failed" {
+		t.Fatalf("sync daily = %s, want the carried failure", posture)
+	}
+	if posture := postureOf(got, "verify", "daily"); posture != "healthy/last-run-success" {
+		t.Fatalf("verify daily = %s, want its own success", posture)
+	}
+}
+
+func TestPBSJobHealthPostureRanksAFailedRunAboveOverdue(t *testing.T) {
+	observedAt := time.Unix(1700010000, 0)
+	evidence := pbsJobHealthEvidenceFromFacts([]pbs.JobHealthEvidence{{
+		ID:             "s-1",
+		Family:         "sync",
+		Store:          "offsite",
+		Enabled:        true,
+		LastRunState:   "connection error",
+		LastRunEndtime: 1700000000,
+		NextRun:        1700003600,
+	}}, observedAt)
+	if got := evidence[0]; got.Freshness.State != "overdue" || got.Posture != "critical" || got.PostureReason != "last-run-failed" {
+		t.Fatalf("freshness/posture = %s %s/%s, want overdue critical/last-run-failed", got.Freshness.State, got.Posture, got.PostureReason)
+	}
+}

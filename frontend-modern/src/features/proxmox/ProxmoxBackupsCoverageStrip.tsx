@@ -9,6 +9,7 @@ import type {
   BackupVerdict,
   BackupVerdictTone,
 } from './proxmoxBackupVerdict';
+import type { DatastoreJobFailureGroup } from './proxmoxBackupServerJobs';
 
 // The Backup health card answers "is everything backed up?" the way the
 // Proxmox overview tables do: the protected count sits in the header strip,
@@ -27,6 +28,10 @@ export interface CoverageStripProps {
   rule?: JSX.Element;
   isGroupPressed?: (key: string) => boolean;
   onSelectGroup?: (key: string) => void;
+  // Failed datastore jobs: problems with the backups' home, not with any
+  // guest, so they never count against the protected verdict.
+  datastoreProblems?: readonly DatastoreJobFailureGroup[];
+  onSelectDatastoreProblem?: () => void;
 }
 
 const TONE_DOT_CLASS: Record<BackupVerdictTone, string> = {
@@ -86,6 +91,22 @@ const previewNames = (group: BackupExceptionGroup, pressed: boolean): string => 
 
 const accessibleName = (group: BackupExceptionGroup): string =>
   `${group.rows.length} ${group.label.charAt(0).toLowerCase()}${group.label.slice(1)}`;
+
+const datastoreProblemName = (group: DatastoreJobFailureGroup): string =>
+  `${group.label} on ${group.datastores.length} ${
+    group.datastores.length === 1 ? 'datastore' : 'datastores'
+  }: ${group.datastores.join(', ')}`;
+
+// Same grid as a reason row; the datastore names stand where the share bar
+// would, since a datastore is not a share of rated guests.
+const DatastoreProblemCells: Component<{ group: DatastoreJobFailureGroup }> = (props) => (
+  <>
+    <span class={`h-2 w-2 rounded-full ${ROW_TONE.attention.dot}`} aria-hidden="true" />
+    <span class="min-w-0 truncate text-left text-base-content">{props.group.label}</span>
+    <span class={`${PILL_BASE} ${ROW_TONE.attention.pill}`}>{props.group.datastores.length}</span>
+    <span class="min-w-0 truncate text-left text-muted">{props.group.datastores.join(', ')}</span>
+  </>
+);
 
 const percentOf = (count: number, total: number): number =>
   total > 0 ? Math.round((count / total) * 100) : 0;
@@ -228,6 +249,47 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
             />
           </div>
         </Show>
+      </Show>
+      <Show when={(props.datastoreProblems?.length ?? 0) > 0}>
+        {/* A heading keeps these apart from the guest counts above them. */}
+        <div
+          class="border-t border-border px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted"
+          aria-hidden="true"
+        >
+          Datastore jobs
+        </div>
+        <ul class="divide-y divide-border" aria-label="Datastores with failed jobs">
+          <For each={props.datastoreProblems}>
+            {(group) => (
+              <li class="flex" data-backup-datastore-problem={group.family}>
+                <Show
+                  when={props.onSelectDatastoreProblem}
+                  fallback={
+                    <span class={`${ROW_GRID} h-8`} title={datastoreProblemName(group)}>
+                      <DatastoreProblemCells group={group} />
+                    </span>
+                  }
+                >
+                  {(onSelect) => (
+                    <button
+                      type="button"
+                      class={`${ROW_GRID} group/reason h-8 hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500`}
+                      aria-label={datastoreProblemName(group)}
+                      title={`Show in Backup servers: ${group.datastores.join(', ')}`}
+                      onClick={() => onSelect()()}
+                    >
+                      <DatastoreProblemCells group={group} />
+                      <ChevronRightIcon
+                        class="h-3.5 w-3.5 justify-self-end text-muted group-hover/reason:text-base-content"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  )}
+                </Show>
+              </li>
+            )}
+          </For>
+        </ul>
       </Show>
       <Show when={props.rule}>
         <details

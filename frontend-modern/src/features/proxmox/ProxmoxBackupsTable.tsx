@@ -74,6 +74,7 @@ import {
   describeUnreadBackupSources,
 } from './proxmoxBackupUnreadSources';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
+import { collectDatastoreJobFailures } from './proxmoxBackupServerJobs';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
 import { resolveBackupLocationFilter } from './proxmoxBackupLocation';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
@@ -516,6 +517,7 @@ export const ProxmoxBackupsTable: Component<{
   const backupVerdict = createMemo(() =>
     buildBackupVerdict(recoveryModel().coverageRows, protectionPostures.policy()),
   );
+  const datastoreJobFailures = createMemo(() => collectDatastoreJobFailures(props.servers ?? []));
   const view = (): BackupView => routeView() ?? legacyQueryView() ?? PROXMOX_BACKUPS_DEFAULT_VIEW;
 
   const backupViewPath = (next: BackupView): string => {
@@ -547,6 +549,16 @@ export const ProxmoxBackupsTable: Component<{
   // Restore points sit below the summary and the backup servers. On a phone an
   // exception tap would otherwise filter a list the reader cannot see, so
   // bring it into view; when it already shows, leave the page where it is.
+  // A failed datastore job points at its row in Backup servers, which sits
+  // right below the summary; bring it into view the same way.
+  let backupServers: HTMLDivElement | undefined;
+  const revealBackupServers = (): void => {
+    if (!backupServers?.isConnected || typeof backupServers.scrollIntoView !== 'function') return;
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    backupServers.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
   const revealRestorePoints = (): void => {
     queueMicrotask(() => {
       const target = restorePoints;
@@ -819,6 +831,8 @@ export const ProxmoxBackupsTable: Component<{
             <div class="grid gap-3 xl:[&:has([data-backup-jobs])]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
               <ProxmoxBackupsCoverageStrip
                 title="Backup health"
+                datastoreProblems={datastoreJobFailures()}
+                onSelectDatastoreProblem={revealBackupServers}
                 rule={
                   <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
                     {(rule) => <span data-coverage-posture-rule>{rule()}</span>}
@@ -871,14 +885,20 @@ export const ProxmoxBackupsTable: Component<{
           Keep this owner mounted through loading, failure and ordinary retries,
           between the summary above and the restore points below. */}
       <Show when={(props.servers?.length ?? 0) > 0}>
-        <ProxmoxBackupServersTable
-          servers={props.servers ?? []}
-          backups={pbsArtifacts()}
-          datastoreAlerts={props.datastoreAlerts}
-          backupInventoryState={
-            pbsBackups.error() ? 'unavailable' : pbsBackups.resolvedOnce() ? 'available' : 'loading'
-          }
-        />
+        <div ref={backupServers} class="scroll-mt-4" data-backup-servers-section>
+          <ProxmoxBackupServersTable
+            servers={props.servers ?? []}
+            backups={pbsArtifacts()}
+            datastoreAlerts={props.datastoreAlerts}
+            backupInventoryState={
+              pbsBackups.error()
+                ? 'unavailable'
+                : pbsBackups.resolvedOnce()
+                  ? 'available'
+                  : 'loading'
+            }
+          />
+        </div>
       </Show>
       {/* Restore points come last: By date and Coverage, reached by search or
           by tapping an exception above. Same readiness as the summary, whose

@@ -29,7 +29,7 @@ func IncidentCategoryForResource(resource *Resource, incident ResourceIncident) 
 			return IncidentCategoryRecoverability
 		}
 		return IncidentCategoryCapacity
-	case "pbs_datastore_state", "pbs_datastore_error", "backup_target_degraded":
+	case "pbs_datastore_state", "pbs_datastore_error", "backup_target_degraded", PBSJobFailedIncidentCode:
 		return IncidentCategoryRecoverability
 	case "disk_failed", "disk_unavailable", "disk_smart_failed", "disk_wearout", "disk_health", "zfs_pool_errors", "zfs_device_errors", "zfs_scan_errors", "zfs_scan_failed":
 		return IncidentCategoryDiskHealth

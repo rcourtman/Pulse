@@ -613,3 +613,26 @@ func TestAlertSummaryIsOptionalJSON(t *testing.T) {
 		t.Fatalf("empty summary serialized in %s", without)
 	}
 }
+
+// The PBS poller reads the last stored job results to tell a job's recovery
+// from a missing read; the accessor returns a copy, never the state's slice.
+func TestStatePBSJobHealthEvidenceReturnsACopyPerInstance(t *testing.T) {
+	state := &State{}
+	state.UpdatePBSInstance(PBSInstance{ID: "pbs-a", JobHealthEvidence: []PBSJobHealthEvidence{{ID: "s-1", Family: "sync", Posture: "critical"}}})
+	state.UpdatePBSInstance(PBSInstance{ID: "pbs-b"})
+
+	got := state.PBSJobHealthEvidence("pbs-a")
+	if len(got) != 1 || got[0].ID != "s-1" {
+		t.Fatalf("pbs-a evidence = %+v", got)
+	}
+	got[0].Posture = "healthy"
+	if again := state.PBSJobHealthEvidence("pbs-a"); again[0].Posture != "critical" {
+		t.Fatalf("accessor exposed the stored slice: %+v", again)
+	}
+	if other := state.PBSJobHealthEvidence("pbs-b"); len(other) != 0 {
+		t.Fatalf("pbs-b evidence = %+v, want none", other)
+	}
+	if missing := state.PBSJobHealthEvidence("pbs-missing"); missing != nil {
+		t.Fatalf("unknown instance evidence = %+v, want nil", missing)
+	}
+}

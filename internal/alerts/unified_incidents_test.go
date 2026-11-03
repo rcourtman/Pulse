@@ -1423,3 +1423,51 @@ func TestPBSCapacityUsesStoragePolicyNotTopologyBands(t *testing.T) {
 		t.Fatal("capacity policy hid datastore failure")
 	}
 }
+
+// #1815: a failed PBS-to-PBS sync raises its own alert on the store the sync
+// writes to, through the ordinary incident pipeline, and the alert clears once
+// the job's newest run succeeds. Guest protection is not involved.
+func TestSyncUnifiedResourceIncidentsAlertsOnFailedPBSSyncJob(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	ranAt := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
+	snapshot := func(posture string) []unifiedresources.Resource {
+		instance := models.PBSInstance{
+			ID: "pbs-main", Name: "main", Status: "online", LastSeen: time.Now(),
+			Datastores: []models.PBSDatastore{
+				{Name: "fast", Status: "available", Total: 1000, Used: 100, Free: 900, Usage: 10},
+				{Name: "offsite", Status: "available", Total: 1000, Used: 100, Free: 900, Usage: 10},
+			},
+			JobHealthEvidence: []models.PBSJobHealthEvidence{{
+				ID: "s-offsite", Family: "sync", Store: "offsite", Remote: "pbs-main", Enabled: true,
+				Posture: posture, LastRunEndtime: ranAt.Unix(),
+				Freshness: models.PBSJobHealthFreshness{LastRunEndTime: ranAt},
+			}},
+		}
+		registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+		registry.IngestSnapshot(models.StateSnapshot{PBSInstances: []models.PBSInstance{instance}})
+		return registry.List()
+	}
+
+	m.SyncUnifiedResourceIncidents(snapshot("critical"))
+	active := m.GetActiveAlerts()
+	if len(active) != 1 {
+		t.Fatalf("expected one failed-sync alert, got %d: %+v", len(active), active)
+	}
+	alert := active[0]
+	if alert.Type != "backup-storage-incident" || alert.Level != AlertLevelWarning {
+		t.Fatalf("alert type/level = %q/%q, want backup-storage-incident/warning", alert.Type, alert.Level)
+	}
+	if want := "Sync job s-offsite failed on datastore offsite (copying from pbs-main)"; alert.Message != want {
+		t.Fatalf("message = %q, want %q", alert.Message, want)
+	}
+	if alert.ResourceName != "offsite" {
+		t.Fatalf("resource name = %q, want the sync's store", alert.ResourceName)
+	}
+
+	m.SyncUnifiedResourceIncidents(snapshot("healthy"))
+	if active := m.GetActiveAlerts(); len(active) != 0 {
+		t.Fatalf("a succeeded sync must clear the alert, got %+v", active)
+	}
+}

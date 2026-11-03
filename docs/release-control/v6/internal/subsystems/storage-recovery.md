@@ -5103,6 +5103,21 @@ keeps its columns aligned. Rows stay 32px, the accessible names are unchanged,
 and the phone bar narrows from 5rem to 4rem to make room. Which workloads each
 reason selects is unchanged.
 
+### Failed PBS jobs are datastore problems, with an alert (3 November 2026)
+
+A PBS sync, verify, prune or garbage-collection job whose newest run failed on
+a datastore is now that datastore's problem, not a guest's. Backup health lists
+it in its own "Datastores with failed jobs" rows below the guest reasons ("Sync
+failed", the datastore count, the names), and each row brings the Backup
+servers table into view. The guest verdict is unchanged: in the #1815 case the
+guest's primary backup succeeded and stays protected while the failed copy to
+the second store shows and alerts on its own. The rows and the alert use the
+Jobs column's judgment (`summarizeDatastoreJobs`): only a failure pinned to the
+datastore counts, the newest run of each job speaks, and storeless task history
+or a late, warned or unknown job never does. Durable PBS task history, a Tasks
+view, secondary-copy lag and PBS jobs in the 14-day Backup jobs chart remain
+open under the cross-system task outcomes entry.
+
 ### Task history no longer marks a datastore job family unknown (2 November 2026)
 
 `summarizeDatastoreJobs` treats a family as unread for every datastore only
