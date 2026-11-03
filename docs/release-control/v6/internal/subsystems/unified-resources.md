@@ -23,6 +23,14 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backups names PBS restore points as backups (3 November 2026)
+
+The Backups source presentation reads PBS items from the same PBS resource
+and backup inventory as before, and now labels them "PBS backup(s)" rather
+than "PBS snapshot(s)", so "snapshot" on that page means only a Proxmox VE
+guest snapshot. Source kinds (`pbs`, `archive`, `snapshot`), filter values,
+URLs, resource identity and what counts as protection are unchanged.
+
 ### Resource memory and disk percentages validate their byte pair (2 November 2026)
 
 `getMemoryPercent` and `getDiskPercent` in `frontend-modern/src/types/resource.ts`

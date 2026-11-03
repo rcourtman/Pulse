@@ -183,7 +183,7 @@ describe('backup workload identity in real inventory consumers', () => {
     );
     await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
     const point = await screen.findByRole('button', {
-      name: /^Expand details for same-name \(VM 100\) · PVE connection: east · PBS snapshot/,
+      name: /^Expand details for same-name \(VM 100\) · PVE connection: east · PBS backup/,
     });
     fireEvent.click(point);
     detail = screen.getByTestId('proxmox-recoverable-detail');
@@ -228,7 +228,7 @@ describe('backup workload identity in real inventory consumers', () => {
     await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: /^Expand details for VM 100 · PVE connection: Not reported · PBS snapshot/,
+        name: /^Expand details for VM 100 · PVE connection: Not reported · PBS backup/,
       }),
     );
     expect(connectionRow(screen.getByTestId('proxmox-recoverable-detail'))).toHaveTextContent(

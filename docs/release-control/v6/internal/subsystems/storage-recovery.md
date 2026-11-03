@@ -5167,6 +5167,22 @@ it read as the datastore and its backups being fine. Connection health is on
 the server header; phones keep a State column for the datastore's job result,
 a job problem or a fill forecast.
 
+### On Backups, "snapshot" means a guest snapshot (3 November 2026)
+
+The page used "snapshot" for two opposite things: PBS restore points, which
+are backups, and guest snapshots, which are not and never count as
+protection. PBS items are now "PBS backups" everywhere the page names them:
+the source filter, record details, the Backup health header ("N with PBS
+backups"), the loading and empty copy, and the Coverage "No PBS backup or PVE
+backup file" cell, whose hover now says "A guest snapshot is not a separate
+backup". A PBS backup with no verification result shows "Backup", not
+"Snapshot", in the By date state column. Guest snapshots keep "Snapshot",
+the `snapshots-only` health reason reads "Only guest snapshots", and the empty
+list says items appear "when available" rather than "once backups run",
+since backup jobs do not make guest snapshots. The PBS filter's hover notes
+that PBS itself calls these backup snapshots. Source kinds, filters, URLs and
+what counts as protection are unchanged.
+
 ### Backup servers rows are named by their datastore (2 November 2026)
 
 The Backup servers table keeps one row per datastore, but each row is now

@@ -21,20 +21,26 @@ export interface ProxmoxBackupSourcePresentation {
   timelineSwatchClassName: string;
 }
 
+// "Snapshot" means one thing on the Backups page: a guest snapshot, which is
+// not a separate backup and never counts as protection. PBS calls its own
+// restore points snapshots too, but beside guest snapshots that reads as the
+// same thing, so PBS items are named PBS backups here.
 const SOURCE_PRESENTATION: Record<ProxmoxBackupSourceKind, ProxmoxBackupSourcePresentation> = {
   pbs: {
     badgeTone: 'sky',
     badgeLabel: 'PBS',
     compactFilterLabel: 'PBS',
     coverageColumnLabel: 'Latest PBS',
-    coverageFallbackLabel: 'No PBS snapshot',
-    detailFallbackLabel: 'PBS snapshot',
-    filterAriaLabel: 'PBS snapshots from Proxmox Backup Server',
-    filterLabel: 'PBS snapshots',
-    filterTitle: 'Direct inventory from Proxmox Backup Server',
+    coverageFallbackLabel: 'No PBS backup',
+    detailFallbackLabel: 'PBS backup',
+    filterAriaLabel: 'PBS backups from Proxmox Backup Server',
+    filterLabel: 'PBS backups',
+    // The PBS UI calls these backup snapshots; say so where it helps, not in
+    // the labels.
+    filterTitle: 'Direct inventory from Proxmox Backup Server, which calls these backup snapshots',
     sourceTitle: 'Direct inventory from Proxmox Backup Server',
-    stateFallbackLabel: 'Snapshot',
-    timelineLabel: 'PBS snapshots',
+    stateFallbackLabel: 'Backup',
+    timelineLabel: 'PBS backups',
     timelineSegmentClassName: 'bg-cyan-500',
     timelineSwatchClassName: 'bg-cyan-500',
   },
