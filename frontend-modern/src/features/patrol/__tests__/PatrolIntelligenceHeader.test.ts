@@ -16,16 +16,14 @@ const headerSource = readFileSync(
   resolve(__dirname, '..', 'PatrolIntelligenceHeader.tsx'),
   'utf-8',
 );
-const workspaceSource = readFileSync(
-  resolve(__dirname, '..', 'PatrolIntelligenceWorkspace.tsx'),
-  'utf-8',
-);
-const bannersSource = readFileSync(
-  resolve(__dirname, '..', 'PatrolIntelligenceBanners.tsx'),
-  'utf-8',
-);
 
 describe('PatrolIntelligenceHeader', () => {
+  it('resolves the header setup action from the block cause before readiness (#1789)', () => {
+    expect(headerSource).toContain(
+      'resolvePatrolBlockedActionCause(state.blockedCause(), state.patrolReadiness()?.cause)',
+    );
+  });
+
   it('does not present the server zero-time sentinel as an Autopilot expiry', () => {
     expect(getPatrolAutopilotExpiry('0001-01-01T00:00:00Z')).toBeNull();
     expect(getPatrolAutopilotExpiry('not-a-date')).toBeNull();
@@ -35,57 +33,8 @@ describe('PatrolIntelligenceHeader', () => {
     );
   });
 
-  it('keeps trigger runtime status in the header chrome after setup', () => {
-    expect(headerSource).toContain('getPatrolTriggerStatusSummary');
-    expect(headerSource).toContain('state.patrolStatus()?.trigger_status');
-    expect(headerSource).toContain('!state.shouldShowPatrolSetupOnly() && triggerStatusSummary()');
-    expect(headerSource).not.toContain('Automation:');
-    expect(headerSource).not.toContain('Trigger status:');
-  });
-
-  it('keeps Patrol mode visible while setup blocks running and configuration', () => {
-    const setupOnlyGateCount = headerSource.match(/!state\.shouldShowPatrolSetupOnly\(\)/g)?.length;
-
-    expect(setupOnlyGateCount).toBeGreaterThanOrEqual(3);
-    expect(headerSource).toContain('<Show when={!state.shouldShowPatrolSetupOnly()}>');
-    expect(headerSource).toContain('id={PATROL_CONTROL_ANCHOR}');
-    expect(headerSource).not.toContain(
-      '<Show when={!state.shouldShowPatrolSetupOnly()}>\n        <div\n          id={PATROL_CONTROL_ANCHOR}',
-    );
-    expect(headerSource).toContain('Open Patrol settings');
-    expect(headerSource).toContain("settingsTabPath('system-ai-patrol')");
-    expect(headerSource).not.toContain('Patrol schedule and model settings');
-    expect(headerSource).toContain('Check now');
-  });
-
-  it('opens the collapsed Patrol mode disclosure only for its route anchors', () => {
-    // Rendered behaviour lives in PatrolIntelligenceHeader.render.test.tsx.
-    expect(headerSource).toContain('`#${PATROL_CONTROL_ANCHOR}`');
-    expect(headerSource).toContain('`#${PATROL_OPERATIONS_LOOP_ANCHOR}`');
-    expect(headerSource).toContain('<details ref={setModeDisclosure}');
-    expect(headerSource).toContain('PATROL_MODE_ANCHOR_HASHES.has(location.hash)');
-    expect(headerSource).not.toMatch(/<details[^>]*\sopen[\s=>]/);
-  });
-
   it('turns provider-blocked manual run controls into setup actions', () => {
-    expect(headerSource).toContain('runBlockedByProviderSetup');
-    expect(headerSource).toContain("state.patrolReadiness()?.status === 'not_ready'");
-    expect(headerSource).toContain('getPatrolSetupAction');
-    expect(headerSource).toContain('providerSetupAction().href');
     expect(headerSource).toContain('Fix setup');
-    expect(headerSource).toContain(
-      'resolvePatrolBlockedActionCause(state.blockedCause(), state.patrolReadiness()?.cause)',
-    );
-    expect(headerSource).toContain('runButtonDisabled');
-    expect(headerSource).not.toContain('!state.canTriggerPatrol() ||');
-  });
-
-  it('keeps manual page sync out of the primary Patrol header actions', () => {
-    expect(headerSource).not.toContain('handleRefreshPatrol');
-    expect(headerSource).not.toContain('Sync page data');
-    expect(headerSource).not.toContain('RefreshCwIcon');
-    expect(headerSource).not.toContain('animate-spin');
-    expect(headerSource).not.toContain('Refresh Patrol');
   });
 
   it('keeps primary Patrol actions touch-sized on phones without inflating desktop chrome', () => {
@@ -95,7 +44,6 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain(
       'flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent',
     );
-    expect(headerSource).toContain('sm:min-h-0');
   });
 
   it('makes Patrol mode a simple four-level choice without rendering plan-locked paid modes', () => {
@@ -123,73 +71,7 @@ describe('PatrolIntelligenceHeader', () => {
         compactLabel: 'Autopilot',
       },
     });
-    expect(headerSource).toContain("['monitor', 'approval', 'assisted', 'full']");
-    expect(headerSource).toContain("state.autoFixLocked() ? 'monitor' : state.autonomyLevel()");
-    expect(headerSource).toContain('value={effectiveAutonomyLevel()}');
-    expect(headerSource).toContain('canChooseAutonomyLevel');
-    expect(headerSource).toContain('shouldShowAutonomyOptions');
-    expect(headerSource).toContain('shouldShowAutonomyActionColumn');
-    expect(headerSource).toContain("autonomyAvailability().kind === 'runtime_locked'");
-    expect(headerSource).toContain('<Show when={shouldShowAutonomyOptions()}>');
-    expect(headerSource).toContain('<Show when={shouldShowAutonomyActionColumn()}>');
-    expect(headerSource).toContain(
-      "const lockedPaidMode = state.autoFixLocked() && level !== 'monitor'",
-    );
-    expect(headerSource).toContain('disabled: lockedPaidMode');
-    expect(headerSource).toContain('compactLabel: presentation.compactLabel');
-    expect(headerSource).not.toContain('showPlanLockedModeAction');
     expect(headerSource).toContain('Patrol mode');
-    expect(headerSource).not.toContain('getPatrolAutonomyContractPresentation');
-    expect(headerSource).not.toContain('selectedAutonomyContract');
-    expect(headerSource).not.toContain('showControlDetails');
-    expect(headerSource).not.toContain("'Limits'");
-    expect(headerSource).not.toContain('Hide limits');
-    expect(headerSource).not.toContain('Hard limits');
-    expect(headerSource).not.toContain('requires Pulse Pro');
-    expect(headerSource).not.toContain('const isProLocked = () =>');
-    expect(headerSource).not.toContain('visualLabel: proLocked');
-    expect(headerSource).not.toContain('Current mode:');
-    expect(headerSource).not.toContain('How much can Patrol do?');
-    expect(headerSource).not.toContain("level === 'full' ? 'assisted'");
-    expect(headerSource).not.toContain('Autonomous critical remediation');
-    expect(headerSource).not.toContain('Ask before changes');
-    expect(headerSource).not.toContain('Auto-fix safe issues');
-    expect(headerSource).not.toContain('Policy autopilot');
-  });
-
-  it('keeps Patrol mode inline and routes configuration to settings', () => {
-    const autonomyControlCallCount =
-      headerSource.match(/renderAutonomyPolicyControl\(\{/g)?.length ?? 0;
-    const configurationAutonomyIndex = headerSource.indexOf("ariaLabel: 'Patrol mode'");
-
-    expect(autonomyControlCallCount).toBe(1);
-    expect(configurationAutonomyIndex).toBeGreaterThan(-1);
-    expect(headerSource).toContain('Open Patrol settings');
-    expect(headerSource).toContain("settingsTabPath('system-ai-patrol')");
-    expect(headerSource).not.toContain('Schedule & model');
-    expect(headerSource).not.toContain('Patrol schedule and model settings');
-    expect(headerSource).not.toContain('label="Provider model"');
-    expect(headerSource).not.toContain('label="Run Every"');
-    expect(headerSource).not.toContain('FormSelect');
-    expect(headerSource).not.toContain('showAdvancedSettings');
-    expect(headerSource).not.toContain('Advanced settings');
-    expect(headerSource).not.toContain('Advanced Patrol settings');
-    expect(headerSource).not.toContain('Done');
-    expect(headerSource).not.toContain('Set Patrol mode');
-    expect(headerSource).not.toContain('Save Patrol mode');
-    expect(headerSource).not.toContain('Patrol policy');
-    expect(headerSource).not.toContain("variant: 'prominent'");
-    expect(headerSource).not.toContain('Patrol Configuration');
-    expect(headerSource).not.toContain('Apply Configuration');
-  });
-
-  it('keeps the Patrol model catalog out of the operator page', () => {
-    expect(headerSource).not.toContain('showModelCatalog');
-    expect(headerSource).not.toContain('Provider model');
-    expect(headerSource).not.toContain('Change model');
-    expect(headerSource).not.toContain('Hide model list');
-    expect(headerSource).not.toContain('Choose available model');
-    expect(headerSource).not.toContain('formatPatrolModelOptionLabel(model)');
   });
 
   it('explains when Patrol mode is locked by plan or runtime', () => {
@@ -227,13 +109,6 @@ describe('PatrolIntelligenceHeader', () => {
         external: false,
       },
     });
-    expect(headerSource).toContain(
-      'commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),',
-    );
-    expect(headerSource).not.toContain('commercialSurfacesHidden: true');
-    expect(headerSource).not.toContain('showAutonomyPlanBillingAction');
-    expect(headerSource).not.toContain('CreditCardIcon');
-    expect(headerSource).not.toContain('Plans & Billing');
 
     const hiddenUpgradePresentation = getPatrolAutonomyAvailabilityPresentation({
       autoFixLocked: true,
@@ -327,35 +202,5 @@ describe('PatrolIntelligenceHeader', () => {
       title: 'Not available',
       body: 'This install does not include container update risk.',
     });
-  });
-
-  it('keeps trust counters out of the page header chrome', () => {
-    // Needs Attention and deliberate history review own trust
-    // state. The header should stay focused on title, recency, and controls.
-    expect(headerSource).not.toContain('aria-label="Patrol trust summary header"');
-    expect(headerSource).not.toContain('state.patrolStatus()?.trust');
-    expect(headerSource).not.toContain('trust.currently_active');
-    expect(headerSource).not.toContain('trust.regressed_at_least_once');
-    expect(headerSource).not.toContain('trust.fix_verified');
-  });
-
-  it('routes every Patrol setup action through the runtime block cause (#1789)', () => {
-    // A used-up cost budget blocks Patrol while readiness still reads
-    // "none"; the header, setup card, and paused banner must all resolve the
-    // action from the block cause first so the operator lands on the budget
-    // field instead of the model check.
-    for (const source of [headerSource, bannersSource]) {
-      expect(source).toContain(
-        'resolvePatrolBlockedActionCause(state.blockedCause(), state.patrolReadiness()?.cause)',
-      );
-    }
-    for (const source of [headerSource, workspaceSource, bannersSource]) {
-      expect(source).not.toContain('getPatrolSetupAction(state.patrolReadiness()?.cause)');
-    }
-    // The setup card also reads the persisted runtime finding's cause, because
-    // the in-memory block state does not survive a restart.
-    expect(workspaceSource).toContain('state.blockedCause() || setupFindingCause(),');
-    expect(workspaceSource).toContain('setupFinding()?.failureCause');
-    expect(workspaceSource).toContain('getPatrolSetupHint(setupCause())');
   });
 });

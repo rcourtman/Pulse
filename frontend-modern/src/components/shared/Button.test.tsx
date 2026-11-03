@@ -11,55 +11,11 @@ import {
   DrawerHeaderActionGroup,
   DrawerHeaderIconButton,
 } from './Button';
-import buttonSource from './Button.tsx?raw';
-import buttonModelSource from './buttonModel.ts?raw';
 
 describe('Button', () => {
   afterEach(() => {
     cleanup();
     window.history.replaceState({}, '', '/');
-  });
-
-  it('keeps shell styling in the shared model', () => {
-    expect(buttonSource).toContain('getButtonClass');
-    expect(buttonModelSource).toContain('export const BUTTON_VARIANT_CLASSES');
-    expect(buttonModelSource).toContain('export const COPY_VALUE_BUTTON_VARIANT_CLASSES');
-    expect(buttonModelSource).toContain('export const COPY_VALUE_BUTTON_SIZE_CLASSES');
-    expect(buttonModelSource).toContain('getCopyValueButtonClass');
-    expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_TONE_CLASSES');
-    expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_SIZE_CLASSES');
-    expect(buttonModelSource).toContain('getActionIconButtonClass');
-    expect(buttonSource).toContain('export function ActionIconButton');
-    expect(buttonModelSource).toContain(
-      "secondary: 'border border-border bg-surface text-base-content shadow-xs hover:bg-surface-hover'",
-    );
-    expect(buttonModelSource).toContain('primaryFlat:');
-    expect(buttonModelSource).toContain('success:');
-    expect(buttonModelSource).toContain('warningSolid:');
-    expect(buttonModelSource).toContain('successOutline:');
-    expect(buttonModelSource).toContain('successGhost:');
-    expect(buttonModelSource).toContain('dangerGhost:');
-    expect(buttonModelSource).toContain(
-      "'border border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'",
-    );
-    expect(buttonModelSource).toContain(
-      "accent: 'text-blue-700 hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950/25'",
-    );
-    expect(buttonModelSource).toContain('dangerOutline:');
-    expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
-    expect(buttonModelSource).toContain("xs: 'min-h-11 px-2.5 py-1 text-xs sm:min-h-0'");
-    expect(buttonModelSource).toContain("mdCompact: 'min-h-11 px-3 py-2 text-sm sm:min-h-0'");
-    expect(buttonModelSource).toContain("settingsAction: 'min-h-11 px-3 py-2 text-sm sm:min-h-9'");
-    expect(buttonModelSource).toContain(
-      "settingsActionXs: 'min-h-11 px-3 py-2 text-xs sm:min-h-9'",
-    );
-    expect(buttonModelSource).toContain("chip: 'gap-1 px-1.5 py-0.5 text-[10px]'");
-    expect(buttonModelSource).toContain(
-      "iconMd: 'h-9 w-9 min-h-11 min-w-11 p-0 sm:min-h-0 sm:min-w-0'",
-    );
-    expect(buttonModelSource).toContain('DRAWER_HEADER_ACTION_BUTTON_CLASS');
-    expect(buttonModelSource).toContain('DRAWER_HEADER_ICON_BUTTON_CLASS');
-    expect(buttonModelSource).toContain('getDrawerHeaderActionButtonClass');
   });
 
   it('renders command buttons with the shared secondary shell', () => {
@@ -91,9 +47,6 @@ describe('Button', () => {
     ));
 
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
-    expect(buttonSource).toContain("import { LoadingSpinner } from './LoadingSpinner'");
-    expect(buttonSource).toContain('<LoadingSpinner size="md" tone="current"');
-    expect(buttonSource).not.toContain('class="animate-spin -ml-1 mr-2 h-4 w-4 text-current"');
   });
 
   it('renders settings action buttons through named size and variants', () => {

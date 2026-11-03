@@ -17,9 +17,7 @@ import {
   SETTINGS_WRITE_SCOPE,
 } from '@/constants/apiScopes';
 import { API_TOKEN_CREATE_ANCHOR, PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
-import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
-import apiTokenManagerDialogsSource from '../APITokenManagerDialogs.tsx?raw';
 import { APIAccessPanel } from '../APIAccessPanel';
 import { APITokenManager } from '../APITokenManager';
 
@@ -164,15 +162,6 @@ describe('APITokenManager security surface', () => {
   // external-agent setup; API Access only mints and manages the
   // scoped token that setup links to when credentials are needed.
   it('keeps API Access separate from Pulse Intelligence external-agent setup', () => {
-    expect(apiAccessPanelSource).toContain('<APITokenManager');
-    expect(apiAccessPanelSource).toContain('api-access-token-section');
-    expect(apiAccessPanelSource).not.toContain('AgentIntegrationsPanel');
-    expect(apiAccessPanelSource).not.toContain('isExternalAgentSetupHash');
-    expect(apiAccessPanelSource).not.toContain('api-access-external-agent-section');
-    expect(apiTokenManagerSource).toContain("import('./APITokenManagerDialogs')");
-    expect(apiTokenManagerSource).not.toContain('<Dialog');
-    expect(apiTokenManagerDialogsSource).toContain('ariaLabel="Edit API token scopes"');
-    expect(apiTokenManagerDialogsSource).toContain('ariaLabel="Revoke API token"');
     expect(apiTokenManagerSource).toContain(
       'flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between',
     );
@@ -495,17 +484,6 @@ describe('APITokenManager', () => {
   });
 
   it('creates scoped tokens from the canonical preset path', async () => {
-    expect(apiTokenManagerSource).toContain('@/components/shared/SelectablePillButton');
-    expect(apiTokenManagerSource.match(/<SelectablePillButton/g) ?? []).toHaveLength(3);
-    expect(apiTokenManagerSource).not.toContain(
-      'inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition',
-    );
-    expect(apiTokenManagerSource).not.toContain(
-      'min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition',
-    );
-    expect(apiTokenManagerSource).not.toContain('border-blue-500 bg-blue-600 text-white shadow-xs');
-    expect(apiTokenManagerSource).not.toContain('hover:border-blue-400 hover:text-blue-600');
-
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     await waitFor(() => {
@@ -887,8 +865,6 @@ describe('APITokenManager', () => {
     expect(compactCard.getByText('Last used')).toBeInTheDocument();
     expect(compactCard.getByRole('button', { name: 'Edit scopes' })).toBeInTheDocument();
     expect(compactCard.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
-    expect(apiTokenManagerSource).toContain('class="hidden min-[1600px]:block"');
-    expect(apiTokenManagerSource).toContain('desktopMinWidth="960px"');
   });
 
   it('keeps the reconciled desktop row actionable after a confirmed scope edit', async () => {

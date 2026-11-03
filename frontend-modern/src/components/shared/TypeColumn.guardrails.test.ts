@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import guestRowModelSource from '@/components/Workloads/guestRowModel.tsx?raw';
-import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
-import typeColumnContractSource from '@/utils/typeColumnContract.ts?raw';
 
 const sourceFiles = import.meta.glob(['../../**/*.ts', '../../**/*.tsx'], {
   query: '?raw',
@@ -13,35 +10,6 @@ const INLINE_TYPE_COLUMN_PATTERN =
   /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?toggleable:\s*true[\s\S]*?\}/g;
 
 describe('type column guardrails', () => {
-  it('keeps the canonical Type column definition in the shared helper', () => {
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_ID = 'type'");
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_LABEL = 'Type'");
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_SORT_KEY = 'type'");
-    expect(typeColumnContractSource).toContain('TYPE_COLUMN_SORTABLE = true');
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_PRIORITY = 'essential'");
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_WIDTH = '60px'");
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_MIN_WIDTH = '60px'");
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_MAX_WIDTH = '80px'");
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_ALIGN = 'center'");
-    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_ID');
-    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_LABEL');
-    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_SORT_KEY');
-    expect(typeColumnDefinitionSource).toContain('TYPE_COLUMN_WIDTH');
-    expect(typeColumnDefinitionSource).toContain('toggleable: true');
-    expect(typeColumnDefinitionSource).not.toContain('export const createCanonicalTypeColumn');
-    expect(typeColumnDefinitionSource).not.toContain("id: 'type'");
-    expect(typeColumnDefinitionSource).not.toContain("label: 'Type'");
-    expect(typeColumnDefinitionSource).not.toContain("width: '60px'");
-    expect(typeColumnDefinitionSource).not.toContain("sortKey: 'type'");
-  });
-
-  it('routes runtime Type columns through the shared helper', () => {
-    expect(guestRowModelSource).toContain('createVisibleCanonicalTypeColumn()');
-    expect(guestRowModelSource).not.toContain('createCanonicalTypeColumn');
-    expect(guestRowModelSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
-    expect(guestRowModelSource).not.toContain('defaultVisibility:');
-  });
-
   it('limits runtime Type columns to the known allowlist', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),

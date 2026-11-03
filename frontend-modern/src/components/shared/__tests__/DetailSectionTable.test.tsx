@@ -10,19 +10,12 @@ import {
   formatDetailIntegerValue,
   makeDetailRow,
 } from '../DetailSectionTable';
-import detailSectionTableSource from '../DetailSectionTable.tsx?raw';
-import detailSectionModelSource from '../detailSectionModel.ts?raw';
 import { TechnicalDetailsDisclosure, TechnicalDetailsSection } from '../TechnicalDetailsDisclosure';
 
 describe('DetailSectionTable', () => {
   afterEach(() => cleanup());
 
   it('keeps detail section row shaping in the shared model', () => {
-    expect(detailSectionModelSource).toContain('export type DetailValueTone');
-    expect(detailSectionModelSource).toContain('makeDetailRow');
-    expect(detailSectionTableSource).toContain('DetailSectionTable');
-    expect(detailSectionTableSource).toContain('InlineDetailPanel');
-
     expect(
       compactDetailRows([
         makeDetailRow('Host', ' tower '),

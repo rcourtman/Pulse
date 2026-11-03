@@ -81,4 +81,21 @@ describe('AlertAppriseDestinationsSection', () => {
 
     expect(screen.getByLabelText('API key')).toHaveAttribute('placeholder', 'Optional API key');
   });
+
+  it('warns, with the fix, while self-signed certificates are allowed', () => {
+    renderSection(makeConfig({ mode: 'http', skipTlsVerify: true }));
+
+    const warning = screen.getByRole('alert');
+    expect(warning).toHaveTextContent('TLS verification disabled.');
+    expect(warning).toHaveTextContent('this Apprise API endpoint');
+    expect(warning).toHaveTextContent(
+      'Install a trusted certificate on the Apprise server before using this in production.',
+    );
+  });
+
+  it('shows no TLS warning while certificates are verified', () => {
+    renderSection(makeConfig({ mode: 'http', skipTlsVerify: false }));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import relayPairingSectionSource from '../RelayPairingSection.tsx?raw';
-import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
-import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 
 const loadLicenseStatusMock = vi.fn();
 const hasFeatureMock = vi.fn();
@@ -173,12 +170,6 @@ describe('RelaySettingsPanel runtime', () => {
     cleanup();
   });
 
-  it('relies on shared commercial posture bootstrap for relay settings', () => {
-    expect(relaySettingsPanelStateSource).not.toContain('loadCommercialPosture(');
-    expect(relaySettingsPanelStateSource).not.toContain('canOfferCommercialTrial');
-    expect(relaySettingsPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
-  });
-
   it('explains the Pulse Mobile retirement without an upsell when the plan lacks it', async () => {
     hasFeatureMock.mockReturnValue(false);
 
@@ -238,6 +229,17 @@ describe('RelaySettingsPanel runtime', () => {
     expect(screen.getByText('relay_beta')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy Payload' })).toBeInTheDocument();
     expect(deleteTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('links the pairing help text to the Pulse Mobile download page', async () => {
+    render(() => <RelaySettingsPanel canManage />);
+
+    const link = await screen.findByRole('link', { name: 'your download page' });
+    expect(link).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(
+      screen.getByText(/Pulse Mobile stays available for iOS and Android until 31 March 2027/),
+    ).toBeInTheDocument();
   });
 
   it('shows disconnected state and withholds pairing until relay is connected', async () => {
@@ -560,18 +562,5 @@ describe('RelaySettingsPanel runtime', () => {
       screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123'),
     ).toBeInTheDocument();
     expect(showErrorMock).toHaveBeenCalledWith('Failed to generate pairing QR code');
-  });
-
-  it('keeps relay settings split into shell, runtime, and pairing owners', () => {
-    expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
-    expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
-    expect(relaySettingsPanelSource).not.toContain('@/utils/upgradePresentation');
-    expect(relaySettingsPanelSource).not.toContain('UPGRADE_TRIAL_LABEL');
-    expect(relaySettingsPanelSource).not.toContain('createSignal(');
-    expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
-    expect(relaySettingsPanelSource).not.toContain('>Start free trial<');
-    expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
-    expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
-    expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
   });
 });

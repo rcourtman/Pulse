@@ -23,7 +23,6 @@ import {
   type AgentCapabilitiesManifest,
   type AgentSurfaceToolContract,
 } from '../agentCapabilities';
-import generatedAgentCapabilitiesSource from '@/api/generated/agentCapabilities.ts?raw';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 vi.mock('@/utils/apiClient', () => ({
@@ -811,39 +810,5 @@ describe('agent capabilities API client', () => {
         2,
       ),
     );
-  });
-
-  it('uses generated backend manifest types for the frontend contract', () => {
-    expect(generatedAgentCapabilitiesSource).toContain(
-      '// Source: internal/agentcapabilities manifest structs.',
-    );
-    expect(generatedAgentCapabilitiesSource).toContain('export interface Manifest');
-    expect(generatedAgentCapabilitiesSource).toContain('surfaceContract: SurfaceContract');
-    expect(generatedAgentCapabilitiesSource).toContain('mcpAdapter: MCPAdapterContract');
-    expect(generatedAgentCapabilitiesSource).toContain('workflowPrompts: PulseWorkflowPrompt[]');
-    expect(generatedAgentCapabilitiesSource).toContain('export interface MCPAdapterContract');
-    expect(generatedAgentCapabilitiesSource).toContain('export interface PulseWorkflowPrompt');
-    expect(generatedAgentCapabilitiesSource).toContain('label?: string');
-    expect(generatedAgentCapabilitiesSource).toContain('arguments?: PulseWorkflowPromptArgument[]');
-    expect(generatedAgentCapabilitiesSource).toContain(
-      'export interface SurfaceAffordanceContract',
-    );
-    expect(generatedAgentCapabilitiesSource).toContain('affordances?: SurfaceAffordanceContract');
-    expect(generatedAgentCapabilitiesSource).toContain('configFamilies: MCPAdapterConfigFamily[]');
-    expect(generatedAgentCapabilitiesSource).toContain(
-      'operatorSurfaces: OperatorSurfaceContract[]',
-    );
-    expect(generatedAgentCapabilitiesSource).toContain('actionMode: AgentCapabilityActionMode');
-    expect(generatedAgentCapabilitiesSource).toContain(
-      'approvalPolicy: AgentCapabilityApprovalPolicy',
-    );
-    expect(generatedAgentCapabilitiesSource).toContain('inputSchema?: Record<string, unknown>');
-    expect(generatedAgentCapabilitiesSource).toContain('export interface SurfaceToolContract');
-    expect(generatedAgentCapabilitiesSource).toContain('surfaceId: string');
-    expect(generatedAgentCapabilitiesSource).toContain('toolSource: string');
-    expect(generatedAgentCapabilitiesSource).toContain('toolNames: string[]');
-    expect(generatedAgentCapabilitiesSource).toContain('registryToolNames?: string[]');
-    expect(generatedAgentCapabilitiesSource).toContain('capabilityNames?: string[]');
-    expect(generatedAgentCapabilitiesSource).toContain('nativeToolNames?: string[]');
   });
 });

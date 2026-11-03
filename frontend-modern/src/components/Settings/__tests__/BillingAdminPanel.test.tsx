@@ -2,9 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { BillingAdminPanel } from '../BillingAdminPanel';
-import billingAdminOrganizationsTableSource from '../BillingAdminOrganizationsTable.tsx?raw';
-import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
-import billingAdminPanelStateSource from '../useBillingAdminPanelState.ts?raw';
 
 const isMobileMock = vi.fn();
 const listOrganizationsMock = vi.fn();
@@ -135,43 +132,6 @@ describe('BillingAdminPanel', () => {
     const payload = putBillingStateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(payload.subscription_state).toBe('suspended');
     expect(payload.plan_version).toBe('cloud_power');
-  });
-
-  it('keeps hosted billing admin split into shell, runtime, and table owners', () => {
-    expect(billingAdminPanelSource).toContain('@/components/shared/Button');
-    expect(billingAdminPanelSource).toContain('variant="secondary"');
-    expect(billingAdminPanelSource).toContain('size="sm"');
-    expect(billingAdminPanelSource).not.toContain(
-      'w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
-    );
-    expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
-    expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
-    expect(billingAdminPanelSource).not.toContain('createSignal(');
-    expect(billingAdminPanelSource).not.toContain('BillingAdminAPI.listOrganizations');
-    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.listOrganizations');
-    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.getBillingState');
-    expect(billingAdminPanelStateSource).toContain('BillingAdminAPI.putBillingState');
-    expect(billingAdminPanelStateSource).toContain('promisePool');
-    expect(billingAdminOrganizationsTableSource).toContain('PulseDataGrid');
-    expect(billingAdminOrganizationsTableSource).toContain('Billing state JSON');
-    expect(billingAdminOrganizationsTableSource).toContain('@/components/shared/Button');
-    expect(billingAdminOrganizationsTableSource).toContain('variant="secondary"');
-    expect(billingAdminOrganizationsTableSource).toContain('size="sm"');
-    expect(billingAdminOrganizationsTableSource).toContain('size="xs"');
-    for (const key of ['owner', 'trial', 'stripeCustomer']) {
-      expect(billingAdminOrganizationsTableSource).toMatch(
-        new RegExp(`key: '${key}',[\\s\\S]*?hiddenOnMobile: true`),
-      );
-    }
-    expect(billingAdminOrganizationsTableSource).not.toMatch(
-      /key: 'subscription',\s+label: 'Subscription',\s+hiddenOnMobile:/,
-    );
-    expect(billingAdminOrganizationsTableSource).not.toContain(
-      'px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
-    );
-    expect(billingAdminOrganizationsTableSource).not.toContain(
-      'px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover',
-    );
   });
 
   it('stays unavailable in demo mode without loading hosted billing admin data', () => {

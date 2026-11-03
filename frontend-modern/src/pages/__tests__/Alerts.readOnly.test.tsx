@@ -7,10 +7,13 @@ import { createSignal, onCleanup } from 'solid-js';
 import type { SecurityStatus } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { setOrgID } from '@/utils/apiClient';
-import alertsPageSource from '@/pages/Alerts.tsx?raw';
-import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 
 const navigateSpy = vi.hoisted(() => vi.fn());
+const leaveGuards = vi.hoisted(() => ({
+  handlers: [] as Array<
+    (event: { to: string | number; from: { pathname: string }; preventDefault: () => void }) => void
+  >,
+}));
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
 const activationStateMock = vi.hoisted(() => vi.fn(() => 'active'));
 const locationState = vi.hoisted(() => ({
@@ -37,7 +40,9 @@ vi.mock('@solidjs/router', async () => {
     ...actual,
     useLocation: () => locationState,
     useNavigate: () => navigateSpy,
-    useBeforeLeave: () => undefined,
+    useBeforeLeave: (handler: (typeof leaveGuards.handlers)[number]) => {
+      leaveGuards.handlers.push(handler);
+    },
   };
 });
 
@@ -126,6 +131,7 @@ describe('Alerts read-only presentation', () => {
     cleanup();
     setOrgID('default');
     navigateSpy.mockReset();
+    leaveGuards.handlers.length = 0;
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     activationStateMock.mockReset();
@@ -233,18 +239,12 @@ describe('Alerts read-only presentation', () => {
     );
   });
 
-  it('keeps alert history narrowing URL-owned with no saved-views affordance', () => {
-    // Saved views stored the page's URL query string in localStorage. Bookmarks
-    // already do that, and better, so the control was removed; history filters
-    // stay URL-owned and the filtered page remains a shareable link.
-    expect(alertHistoryFiltersCardSource).not.toContain('savedViewsKey');
-    expect(alertHistoryFiltersCardSource).not.toContain('SavedViews');
-  });
+  it('hides the scrollbar on the touch-scrollable mobile tab rail', () => {
+    render(() => <Alerts securityStatus={admittedStatus} />);
 
-  it('keeps the mobile tab shell on shared scroll classes instead of inline styles', () => {
-    expect(alertsPageSource).toContain('touch-scroll');
-    expect(alertsPageSource).toContain('scrollbar-hide');
-    expect(alertsPageSource).not.toContain('style="-webkit-overflow-scrolling: touch;"');
+    const navigation = document.querySelector('nav.touch-scroll');
+    expect(navigation).not.toBeNull();
+    expect(navigation).toHaveClass('scrollbar-hide');
   });
 
   it('keeps the active mobile destination visible when the tab rail narrows', async () => {
@@ -339,6 +339,48 @@ describe('Alerts read-only presentation', () => {
     expect(screen.getAllByText('Thresholds').length).toBeGreaterThan(0);
     expect(screen.queryByText('Alerts are paused')).not.toBeInTheDocument();
     expect(overviewTabSpy.mock.calls.at(-1)?.[0].alertsDisabled()).toBe(false);
+  });
+
+  it('asks before leaving the page with unsaved configuration, and only then', async () => {
+    locationState.pathname = '/alerts/thresholds';
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    try {
+      render(() => <Alerts securityStatus={admittedStatus} />);
+      await screen.findByTestId('alerts-config-surface');
+      const surface = configurationSurfaceSpy.mock.calls.at(-1) as unknown as [
+        { setHasUnsavedChanges: (unsaved: boolean) => void },
+      ];
+      const leave = (to: string | number) => {
+        const preventDefault = vi.fn();
+        leaveGuards.handlers.at(-1)!({
+          to,
+          from: { pathname: '/alerts/thresholds' },
+          preventDefault,
+        });
+        return preventDefault;
+      };
+
+      // Nothing to lose: leaving is silent.
+      expect(leave('/proxmox/overview')).not.toHaveBeenCalled();
+      expect(confirmSpy).not.toHaveBeenCalled();
+
+      surface[0].setHasUnsavedChanges(true);
+
+      // Narrowing the same page keeps the edits, so it never asks.
+      expect(leave('/alerts/thresholds?q=web')).not.toHaveBeenCalled();
+      expect(confirmSpy).not.toHaveBeenCalled();
+
+      // Leaving the page asks, and declining keeps the operator here.
+      expect(leave('/proxmox/overview')).toHaveBeenCalledTimes(1);
+      expect(confirmSpy).toHaveBeenCalledWith(
+        'You have unsaved changes that will be lost. Discard changes and leave?',
+      );
+
+      confirmSpy.mockReturnValue(true);
+      expect(leave('/proxmox/overview')).not.toHaveBeenCalled();
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 
   it('names the delivery switch the same way whether it is on or off', async () => {

@@ -7,15 +7,10 @@ import {
   sessionCanReadUpdateStatus,
 } from '@/App';
 import appSource from '@/App.tsx?raw';
-import appLayoutSource from '@/AppLayout.tsx?raw';
-import appRuntimeContextSource from '@/contexts/appRuntime.ts?raw';
-import runtimeHomeSource from '@/pages/RuntimeHome.tsx?raw';
-import routePreloadSource from '@/routing/routePreload.ts?raw';
 import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 import type { Resource } from '@/types/resource';
 
 const appStylesSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
-const headerAuditSource = readFileSync(join(process.cwd(), 'scripts/header-audit.mjs'), 'utf8');
 const integrationTestsDir = join(process.cwd(), '..', 'tests', 'integration', 'tests');
 const platformSurfaceSources = [
   'features/proxmox/ProxmoxPageSurface.tsx',
@@ -243,24 +238,13 @@ describe('Global update progress authorization', () => {
 
 describe('App architecture', () => {
   it('gates Patrol navigation on the AI availability session capability (#905)', () => {
+    // The tab itself is rendered in AppLayout.test.tsx; these are the App-level
+    // and bootstrap wiring that no render test reaches.
     expect(appSource).toContain('patrolVisible: () => aiAvailabilityStore.enabled === true');
     expect(appSource).toContain('patrolVisible={() => aiAvailabilityStore.enabled === true}');
-    expect(appLayoutSource).toMatch(
-      /\.\.\.\(aiAvailabilityStore\.enabled === true\s*\?\s*\[\s*\{\s*id: 'ai' as const/,
-    );
     expect(appRuntimeStateSource).toContain(
       'aiAvailabilityStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true)',
     );
-  });
-
-  it('mounts no Assistant chat window or launcher now the chat is retired', () => {
-    for (const source of [appSource, appLayoutSource, appRuntimeStateSource]) {
-      expect(source).not.toContain('aiChatStore');
-      expect(source).not.toContain('@/stores/aiChat');
-      expect(source).not.toContain('components/AI/Chat');
-    }
-    expect(appLayoutSource).not.toContain('renderAssistantLauncher');
-    expect(appLayoutSource).not.toContain('getAssistantPageContext');
   });
 
   it('keeps first-load connection progress understandable and retryable', () => {
@@ -388,218 +372,32 @@ describe('App architecture', () => {
     });
   });
 
-  it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
-    expect(appSource).toContain(
-      "import { AppLayout, sessionHasSettingsAccess } from '@/AppLayout';",
-    );
-    expect(appSource).toContain("import { aiAvailabilityStore } from './stores/aiAvailability';");
-    expect(appSource).toContain(
-      "import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';",
-    );
-    expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
-    expect(appSource).toContain("} from '@/utils/appShellScrollRestoration';");
-    expect(appSource).toContain('const runtime = useAppRuntimeState();');
-    expect(appSource).toContain('pendingAppShellRestoreTop');
-    expect(appSource).toContain('setAppScrollShellRef');
-    expect(appSource).toContain('readPendingAppShellRestoreTop');
-    expect(appSource).toContain('clearPendingAppShellRestoreTop');
-    expect(appSource).toContain("const ProxmoxPage = lazy(() => import('./pages/Proxmox'));");
-    expect(appSource).toContain('const ROOT_PATROL_PATH = PATROL_PATH;');
-    expect(appSource).toContain(
-      "import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';",
-    );
-    expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
-    expect(routePreloadSource).toContain(
-      'export const APP_SHELL_ROUTE_PRELOAD_PATHS = [ACTIONS_PATH] as const;',
-    );
-    expect(routePreloadSource).not.toContain('ROOT_PROXMOX_PATH');
-    expect(routePreloadSource).not.toContain('ROOT_STANDALONE_PATH');
-    // These aggregate pages never shipped as stable top-level routes, so they
-    // must not remain wired as hidden compatibility or shell workspace surfaces.
-    expect(routePreloadSource).not.toContain('ROOT_INFRASTRUCTURE_PATH');
-    expect(routePreloadSource).not.toContain("id: 'workloads',");
-    expect(routePreloadSource).not.toContain("id: 'storage',");
-    expect(routePreloadSource).not.toContain("id: 'recovery',");
-    expect(appSource).not.toContain('const InfrastructurePage = lazy(');
-    expect(appSource).not.toContain('const WorkloadsPage = lazy(');
-    expect(appSource).not.toContain('const StoragePage = lazy(');
-    expect(appSource).not.toContain('const RecoveryPage = lazy(');
-    expect(appSource).not.toContain(
-      "import('./features/infrastructure/InfrastructurePageSurface')",
-    );
-    expect(appSource).not.toContain('component={InfrastructurePage}');
-    expect(appSource).not.toContain('INFRASTRUCTURE_PATH');
-    expect(appSource).not.toContain('<Route path={WORKLOADS_PATH}');
-    expect(appSource).not.toContain('<Route path={STORAGE_PATH}');
-    expect(appSource).not.toContain('<Route path={RECOVERY_PATH}');
-    expect(appSource).not.toContain('<Route path="/ceph"');
-    expect(appSource).not.toContain('<Route path="/ceph/*"');
-    expect(appSource).not.toContain('Route, Navigate,');
-    expect(appSource).not.toContain('<Navigate ');
-    expect(appSource).toContain('await preloadRouteModule(route);');
-    expect(appRuntimeStateSource).not.toContain('preloadLazyRoutes');
-    expect(appRuntimeStateSource).not.toContain("import('@/pages/Alerts')");
-    expect(appRuntimeStateSource).not.toContain("import('@/components/Settings/Settings')");
-    expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
-    expect(appSource).toContain('void preloadAppShellRoutes();');
-    expect(appRuntimeStateSource).not.toContain('getInfrastructureSummaryCharts');
-    expect(appRuntimeStateSource).not.toContain('getWorkloadCharts');
-    expect(appRuntimeStateSource).not.toContain('requestIdleCallback');
-    expect(appRuntimeStateSource).toContain('ssoSessionDisplayName?: string;');
-    expect(appRuntimeStateSource).toContain(
-      'securityData.ssoSessionDisplayName || securityData.ssoSessionUsername',
-    );
-    expect(appRuntimeStateSource).toContain('username: ssoDisplayName');
-    expect(appSource).toContain("const StandalonePage = lazy(() => import('./pages/Standalone'));");
-    expect(appSource).toContain('<Route path={STANDALONE_PATH} component={StandalonePage} />');
-    expect(appSource).toContain(
+  it('mounts every platform page, the workspace entry and Patrol under the app shell', () => {
+    // Retired aggregate routes are gone from the source; these are the pages a
+    // user reaches. No render test mounts App, so the registrations are pinned.
+    for (const route of [
+      '<Route path="/pricing" component={PricingHandoffPage} />',
+      '<Route path="/login" component={RuntimeHomePage} />',
+      '<Route path="/" component={RuntimeHomePage} />',
+      '<Route path="/infrastructure" component={RuntimeHomePage} />',
+      '<Route path={PROXMOX_PATH} component={ProxmoxPage} />',
+      '<Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />',
+      '<Route path={DOCKER_PATH} component={DockerPage} />',
+      '<Route path={KUBERNETES_PATH} component={KubernetesPage} />',
+      '<Route path={TRUENAS_PATH} component={TrueNASPage} />',
+      '<Route path={VMWARE_PATH} component={VmwarePage} />',
+      '<Route path={STANDALONE_PATH} component={StandalonePage} />',
       '<Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />',
-    );
-    expect(appSource).not.toContain("import('./pages/Agents')");
-    expect(appSource).not.toContain('AGENTS_PATH');
-    expect(appSource).toContain('<Route path={PROXMOX_PATH} component={ProxmoxPage} />');
-    expect(appSource).toContain('<Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />');
-    expect(appSource).toContain("const DockerPage = lazy(() => import('./pages/Docker'));");
-    expect(appSource).toContain("const KubernetesPage = lazy(() => import('./pages/Kubernetes'));");
-    expect(appSource).toContain("const TrueNASPage = lazy(() => import('./pages/TrueNAS'));");
-    expect(appSource).toContain("const VmwarePage = lazy(() => import('./pages/Vmware'));");
-    expect(appSource).toContain('<Route path={DOCKER_PATH} component={DockerPage} />');
-    expect(appSource).toContain('<Route path={KUBERNETES_PATH} component={KubernetesPage} />');
-    expect(appSource).toContain('<Route path={TRUENAS_PATH} component={TrueNASPage} />');
-    expect(appSource).toContain('<Route path={VMWARE_PATH} component={VmwarePage} />');
-    expect(routePreloadSource).toContain("id: 'standalone',");
-    expect(routePreloadSource).toContain("id: 'docker',");
-    expect(routePreloadSource).toContain("id: 'kubernetes',");
-    expect(routePreloadSource).toContain("id: 'truenas',");
-    expect(routePreloadSource).toContain("id: 'vmware',");
-    expect(routePreloadSource.indexOf("id: 'proxmox',")).toBeLessThan(
-      routePreloadSource.indexOf("id: 'standalone',"),
-    );
-    expect(appLayoutSource).toContain("id: 'standalone',");
-    expect(appLayoutSource).toContain("id: 'docker',");
-    expect(appLayoutSource).toContain("id: 'kubernetes',");
-    expect(appLayoutSource).toContain("id: 'truenas',");
-    expect(appLayoutSource).toContain("id: 'vmware',");
-    expect(appLayoutSource).toContain(
-      "tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks'",
-    );
-    expect(appLayoutSource).toContain(
-      "tooltip: 'Pulse Agent machines, agentless computers, and availability checks'",
-    );
-    // Governed shell nav: Infrastructure, Workloads, Storage, and Recovery are
-    // not standalone shell tabs; platform/runtime pages own those workflows.
-    expect(appSource).toContain('getDefaultWorkspaceRoute');
-    expect(appSource).toContain('platformNavigationResolved');
-    expect(appSource).toContain('resolvePlatformNavigationAdmission');
-    expect(appSource).toContain('runtime.runtimeStateResolved()');
-    expect(appSource).not.toContain('store?.initialDataReceived?.()');
-    expect(appSource).toContain('if (!platformNavigationResolved()) return;');
-    expect(appSource).toContain('buildPrimaryPlatformNavigationVisibility');
-    expect(appLayoutSource).toContain('buildPrimaryPlatformNavigationVisibility');
-    expect(appLayoutSource).toContain('primaryPlatformNavigationIsVisible');
-    expect(appLayoutSource).toContain("label: 'Docker'");
-    expect(appLayoutSource).toContain("'Docker / Podman runtime lens");
-    expect(appLayoutSource).not.toContain("id: 'infrastructure',");
-    expect(appLayoutSource).not.toContain("id: 'workloads',");
-    expect(appLayoutSource).not.toContain("id: 'storage',");
-    expect(appLayoutSource).not.toContain("id: 'recovery',");
-    expect(appLayoutSource).not.toContain('aria-label="Workspaces"');
-    expect(appLayoutSource).not.toContain('buildStorageRecoveryTabSpecs(');
-    // Nav tab arrays are rebuilt from live store reads (activeAlerts is
-    // replaced wholesale by state frames), so both tab lists must route
-    // through the shared identity stabilizer or every reference-keyed <For>
-    // consumer recreates all nav buttons and drops in-flight taps.
-    expect(appLayoutSource).toContain(
-      'const primaryTabs = createStableTabList(primaryTabsSource, primaryNavTabEquals);',
-    );
-    expect(appLayoutSource).toContain(
-      'const utilityTabs = createStableTabList(utilityTabsSource, utilityNavTabEquals);',
-    );
-    expect(appSource).not.toContain('DashboardPage');
-    expect(headerAuditSource).not.toContain("['src/pages/Dashboard.tsx', 'PageHeader']");
-    expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
-    expect(appSource).toContain('<Route path="/login" component={RuntimeHomePage} />');
-    expect(appSource).toContain('<Route path="/" component={RuntimeHomePage} />');
-    expect(appSource).toContain('<Route path="/infrastructure" component={RuntimeHomePage} />');
-    expect(appSource).toContain('function isWorkspaceEntryRoutePath(pathname: string): boolean');
-    expect(appSource).toContain("normalizedPath === '/'");
-    expect(appSource).toContain("normalizedPath === '/login'");
-    expect(appSource).toContain("normalizedPath === '/infrastructure'");
-    expect(appSource).toContain('let workspaceRedirectPending = false');
-    expect(appSource).toContain('if (workspaceRedirectPending) return');
-    expect(appSource).toContain('workspaceRedirectPending = true');
-    expect(appSource).toContain(
       '<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />',
-    );
-    expect(appSource).not.toContain('LegacyPatrolRouteRedirect');
-    expect(appSource).not.toContain('<Route path="/ai/*"');
-    expect(appSource).toContain(
-      "const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));",
-    );
-    expect(appSource).toContain('<Route path="/pricing" component={PricingHandoffPage} />');
-    expect(appSource).not.toContain(
-      "const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));",
-    );
-    expect(appSource).not.toContain(
-      "const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));",
-    );
-    expect(appSource).not.toContain('<Route path="/cloud" component=');
-    expect(appSource).not.toContain('<Route path="/cloud/signup" component=');
-    expect(appSource).toContain("const ProxmoxPage = lazy(() => import('./pages/Proxmox'));");
-    expect(appSource).not.toContain("import('./pages/Operations')");
-    expect(appSource).not.toContain('<Route path="/operations/*"');
-    // Legacy page wrappers were deleted when primary nav moved to
-    // platform-first; their tables are reused inside platform pages directly.
-    expect(appSource).not.toContain("import('./pages/Storage')");
-    expect(appSource).not.toContain("import('./pages/Workloads')");
-    expect(appSource).not.toContain("import('./pages/Recovery')");
-    expect(appSource).not.toContain("import('./pages/Infrastructure')");
-    expect(appSource).not.toContain("import('./pages/Ceph')");
-    expect(appSource).not.toContain(
-      "const StorageComponent = lazy(() => import('./components/Storage/Storage'));",
-    );
-    expect(appSource).not.toContain(
-      "const WorkloadsView = lazy(() => import('./components/Workloads/WorkloadsSurface'));",
-    );
-    expect(appSource).not.toContain(
-      "const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));",
-    );
-    expect(appSource).not.toContain("const PricingPage = lazy(() => import('./pages/PricingV6'));");
-    expect(appSource).not.toContain('function ConnectionStatusBadge(');
-    expect(appSource).not.toContain('function AppLayout(');
-    expect(appSource).not.toContain('export const WebSocketContext = createContext<');
-    expect(appSource).not.toContain('export const DarkModeContext = createContext<');
-    expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');
-    expect(appSource).not.toContain('const [themePreference, setThemePreference] =');
-    expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
-    expect(appSource).not.toContain("import('./api/ai')");
-    expect(appSource).not.toContain('AIAPI.getSettings()');
-    expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
-    expect(appSource).toContain("import { WhatsNewCard } from './components/WhatsNewCard';");
-    expect(appSource).toContain('<WhatsNewCard />');
-    expect(appSource).not.toContain('TrialBanner');
-    expect(appSource).not.toContain('MonitoredSystemLimitWarningBanner');
-    expect(appSource).not.toContain('monitoredSystemLimitWarningBanner');
+    ]) {
+      expect(appSource).toContain(route);
+    }
   });
 
   it('Issue1650 keeps kiosk-scoped sessions off settings chrome in the shell', () => {
-    // ESC used to call toggleKioskMode() unconditionally, and setKioskMode(false)
-    // is sticky for the rest of the session, so a kiosk display could be walked
-    // out of kiosk and into settings-linked chrome it has no authority to use.
-    expect(appLayoutSource).toContain('export function sessionHasSettingsAccess(');
-    expect(appLayoutSource).toContain(
-      'const hasSettingsAccess = createMemo(() => sessionHasSettingsAccess(props.tokenScopes()));',
-    );
-    expect(appLayoutSource).toContain("if (event.key !== 'Escape') return;");
-    expect(appLayoutSource).toContain('if (!hasSettingsAccess()) {');
-    expect(appLayoutSource).toContain('scheduleHideHeader(3000);');
-    expect(appLayoutSource).not.toContain(
-      "if (event.key === 'Escape') {\n        toggleKioskMode();",
-    );
-    // The blocked-route guard is an authority rule, not kiosk decoration.
-    expect(appLayoutSource).toContain('if (!kioskMode() && hasSettingsAccess()) return;');
-    expect(appLayoutSource).toContain("const blockedPrefixes = ['/settings', '/patrol'];");
-    // Banners in the shell deep-link into settings, so they follow the same rule.
+    // Escape handling and the blocked-route redirect are rendered in
+    // AppLayout.test.tsx. Banners in the shell deep-link into settings, so they
+    // follow the same rule; no render test mounts App itself.
     expect(appSource).toContain('<Show when={!kioskMode() && hasSettingsAccess()}>');
     expect(appSource).toContain(
       'const hasSettingsAccess = createMemo(() =>\n      sessionHasSettingsAccess(runtime.securityStatus()?.tokenScopes),\n    );',
@@ -626,8 +424,6 @@ describe('App architecture', () => {
 
   it('mounts the update progress watcher only behind its route capability', () => {
     expect(appSource).toContain('sessionCanReadUpdateStatus(runtime.securityStatus())');
-    expect(appSource).toContain('return status.settingsCapabilities?.systemSettingsRead === true;');
-    expect(appSource).toContain('if (!status || !status.requiresAuth) return true;');
 
     const watcherGate = appSource.indexOf('<Show when={canReadUpdateStatus()}>');
     const watcherMount = appSource.indexOf('<GlobalUpdateProgressWatcher />');
@@ -651,11 +447,7 @@ describe('App architecture', () => {
     expect(retiredRouteNavigations).toEqual([]);
   });
 
-  it('keeps compact organization chrome presentational and its offline audit explicitly entitled', () => {
-    expect(appLayoutSource).toContain('<Show when={props.showOrgSwitcher()}>');
-    expect(appLayoutSource).toContain('selectedOrgId={props.activeOrgID()}');
-    expect(appLayoutSource).toContain('onChange={props.onSwitchOrg}');
-    expect(appLayoutSource).not.toContain('/api/license/activate');
+  it('keeps the compact organization audit explicitly entitled before it creates an organization', () => {
     const audit = readFileSync(
       join(integrationTestsDir, '05-settings-mobile-audit.spec.ts'),
       'utf8',
@@ -678,46 +470,9 @@ describe('App architecture', () => {
     // navigation. Runtime tests exercise successful and partial cleanup;
     // the metadata lifetime tests exercise late results after disposal.
     expect(appSource).toContain('when={!runtime.needsAuth()}');
-    expect(appRuntimeStateSource).toContain('setNeedsAuth(true)');
-    for (const source of platformSurfaceSources) {
-      expect(source).not.toContain('pulseGuestMetadata');
-    }
   });
 
-  it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
-    expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
-    expect(appLayoutSource).toContain(
-      "import { preloadRouteModule } from '@/routing/routePreload';",
-    );
-    expect(appLayoutSource).toContain(
-      "import { aiAvailabilityStore } from '@/stores/aiAvailability';",
-    );
-    expect(appLayoutSource).toContain(
-      "import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';",
-    );
-    expect(appLayoutSource).toContain(
-      'const ROOT_INFRASTRUCTURE_SETTINGS_PATH = buildInfrastructureWorkspacePath();',
-    );
-    expect(appLayoutSource).toContain('settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH');
-    expect(appLayoutSource).not.toContain("settingsRoute: '/settings/workloads");
-    expect(appLayoutSource).not.toContain("settingsRoute: '/settings/infrastructure/platforms");
-    expect(appLayoutSource).toContain('type PrimaryRouteMemory = Partial');
-    expect(appLayoutSource).toContain('let primaryRouteMemory: PrimaryRouteMemory = {};');
-    expect(appLayoutSource).toContain('function resolvePrimaryNavigationRoute(');
-    expect(appLayoutSource).toContain('routeBelongsToPrimaryTab(remembered');
-    expect(appLayoutSource).not.toContain('primaryRouteMemory[props.activeOrgID');
-    expect(appLayoutSource).not.toContain('primaryRouteMemory[activeOrgID');
-    expect(appLayoutSource).toContain('<OrgSwitcher');
-    expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
-    expect(appLayoutSource).toContain(
-      "status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'",
-    );
-    expect(appLayoutSource).toContain("props.connectionStatus().tone === 'healthy'");
-    expect(appLayoutSource).toContain('const brandMotionActive = createMemo(');
-    expect(appLayoutSource).toContain('pulse-brand-lockup');
-    expect(appLayoutSource).toContain('animate-pulse-brand');
-    expect(appLayoutSource).toContain('pulse-brand-wordmark');
-    expect(appLayoutSource).toContain("'pb-safe-or-14 xl:pb-0'");
+  it('keeps the shell stylesheet contract for app chrome, brand motion and platform tables', () => {
     expect(appStylesSource).toContain('@utility pb-safe-or-14');
     expect(appStylesSource).toContain('.pulse-shell--full-width');
     expect(appStylesSource).toContain('.pulse-wide-data-surface.space-y-3');
@@ -736,14 +491,6 @@ describe('App architecture', () => {
       '.pulse-wide-data-surface .host-row,\n    .pulse-wide-data-surface .workload-row',
     );
     expect(appStylesSource).toContain('.pulse-footer > div');
-    expect(appLayoutSource).toContain('tabs mb-2 hidden xl:flex');
-    expect(appLayoutSource).toContain('xl:px-2 2xl:px-3');
-    expect(appLayoutSource).toContain('gap-1 2xl:gap-1.5');
-    expect(appLayoutSource).not.toContain('tabs mb-2 hidden lg:flex');
-    expect(appLayoutSource).not.toContain('dataUpdated: () => boolean');
-    expect(appLayoutSource).not.toContain('animate-pulse-logo');
-    expect(appRuntimeStateSource).not.toContain('dataUpdated');
-    expect(appRuntimeStateSource).not.toContain('DATA_FLASH');
     expect(appStylesSource).toContain('--pulse-brand-cycle: 3.4s;');
     expect(appStylesSource).toContain('@keyframes pulse-brand-wave');
     expect(appStylesSource).toContain(
@@ -783,222 +530,6 @@ describe('App architecture', () => {
     expect(appStylesSource).not.toContain('--color-grouped-table-row-bg: theme(');
     expect(appStylesSource).not.toContain('@keyframes pulse-brand-wordmark');
     expect(appStylesSource).not.toContain('text-shadow');
-    expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");
-    expect(appLayoutSource).toContain('Preview');
-    expect(appLayoutSource).not.toContain(
-      "import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';",
-    );
-    expect(appLayoutSource).not.toContain(
-      '<ReleaseCandidateBanner version={props.versionInfo()?.version} />',
-    );
-    expect(appLayoutSource).toContain("const blockedPrefixes = ['/settings', '/patrol'];");
-    expect(appLayoutSource).not.toContain("'/operations', '/patrol', '/ai'");
-    expect(appLayoutSource).toContain("route: '/patrol',");
-    expect(appLayoutSource).toContain("label: 'Patrol'");
-    expect(appLayoutSource).toContain("id: 'actions',");
-    expect(appLayoutSource).toContain("label: 'Actions',");
-    expect(appLayoutSource).toContain("route: '/actions',");
-    expect(appLayoutSource).toContain(
-      'const getNavigationActiveTab = () => getActiveTabForPath(location.pathname);',
-    );
-    expect(appLayoutSource).toContain(
-      "tooltip: 'Review active operational attention and recent Patrol checks'",
-    );
-    expect(appLayoutSource).toContain('const patrolAttentionCount = createMemo(');
-    expect(appLayoutSource).toContain('countLabel: patrolAttentionCountLabel()');
-    expect(appLayoutSource).toContain('countLabel: actionApprovalBadge()?.label');
-    expect(appLayoutSource).not.toContain("label: 'Needs Attention'");
-    expect(appLayoutSource).not.toContain("route: '/operations',");
-    expect(appLayoutSource).not.toContain('props.connected()');
-    expect(appLayoutSource).toContain('const utilityTabsSource = createMemo<UtilityTab[]>(() =>');
-    expect(appLayoutSource).toContain(
-      'type MobileNavBarPrimaryTab as PrimaryTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
-    );
-    expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
-    expect(appLayoutSource).toContain("} from '@/components/shared/mobileNavBarModel';");
-    expect(appLayoutSource).not.toContain('function getDesktopUtilityTabAriaLabel');
-    expect(appLayoutSource).not.toContain('return `${count} ${tab.label}`;');
-    expect(appLayoutSource).toContain('const primaryTabsSource = createMemo<PrimaryTab[]>(() =>');
-    expect(appLayoutSource).toContain("id: 'proxmox',");
-    expect(appLayoutSource).toContain("icon: getPlatformIcon('proxmox'),");
-    expect(appLayoutSource).toContain('const Icon = tab.icon;');
-    expect(appLayoutSource).toContain('const Icon = tab.icon;');
-    expect(appLayoutSource).toContain('aria-label={tab.label}');
-    expect(appLayoutSource).toContain('aria-label={getMobileNavTabAriaLabel(tab)}');
-    expect(appLayoutSource).toContain('aria-description={getMobileNavTabAriaDescription(tab)}');
-    expect(appLayoutSource).toContain(
-      '<span aria-hidden="true" class="inline-flex items-center justify-center">',
-    );
-    expect(appLayoutSource).toContain('<Icon class={NAV_TAB_ICON_CLASS} />');
-    expect(appLayoutSource).not.toContain('type PrimaryTab = {');
-    expect(appLayoutSource).not.toContain('type UtilityTab = {');
-    expect(appLayoutSource).not.toContain('const platformTabsDesktop = createMemo(() =>');
-    expect(appLayoutSource).not.toContain('const platformTabsMobile = createMemo(() =>');
-    expect(appLayoutSource).not.toContain(
-      "import { isMultiTenantEnabled } from '@/stores/license';",
-    );
-    expect(appLayoutSource).not.toContain('loadCommercialPosture');
-    expect(appLayoutSource).not.toContain('buildReleaseNotesUrl');
-    expect(appLayoutSource).not.toContain('buildV6RcFeedbackUrl');
-    expect(appLayoutSource).not.toContain('sessionPresentationPolicyResolved');
-    expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
-    expect(appLayoutSource).not.toContain('presentationPolicyHidesOrganizationSurfaces');
-    expect(appLayoutSource).not.toContain('presentationPolicyIsDemoMode');
-    expect(appLayoutSource).toContain(
-      'warmNavigationTarget(targetRoute);\n    navigate(targetRoute);',
-    );
-    expect(appLayoutSource).toContain('warmNavigationTarget(tab.route);\n    navigate(tab.route);');
-    expect(appLayoutSource).not.toContain('await preloadRouteModule(targetRoute);');
-    expect(appLayoutSource).not.toContain('await preloadRouteModule(tab.route);');
-    expect(appLayoutSource).toContain('onMouseEnter={() => warmNavigationTarget(');
-    expect(appLayoutSource).not.toContain('AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS');
-    expect(appLayoutSource).not.toContain('AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS');
-    expect(appLayoutSource).not.toContain('Pulse Assistant (⌘K)');
-    expect(appSource).not.toContain("eventBus.on('theme_changed'");
-    expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
-    expect(appSource).not.toContain("apiFetch('/api/security/status')");
-    expect(appLayoutSource).not.toContain("eventBus.on('theme_changed'");
-    expect(appLayoutSource).not.toContain("apiFetch('/api/security/status')");
-    expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
-    expect(appRuntimeStateSource).toContain(
-      "import { aiAvailabilityStore } from '@/stores/aiAvailability';",
-    );
-    expect(appRuntimeStateSource).toContain(
-      'const connectionStatus = createMemo<AppConnectionStatus>(() => {',
-    );
-    expect(appRuntimeStateSource).toContain('const showOrgSwitcher = createMemo(() => {');
-    expect(appRuntimeStateSource).toContain(
-      'const loadAuthenticatedBootstrapState = async (): Promise<boolean> => {',
-    );
-    expect(appRuntimeStateSource).toContain(
-      'const beginAuthenticatedRuntime = async (): Promise<boolean> => {',
-    );
-    expect(appRuntimeStateSource).toContain('if (!(await loadAuthenticatedBootstrapState())) {');
-    // The bootstrap probes the session once, and never through the full state
-    // payload: `/api/state` stays the oversized-snapshot recovery path only.
-    expect(appRuntimeStateSource.match(/apiFetch\('\/api\/state\/summary'/g)).toHaveLength(1);
-    expect(appRuntimeStateSource).not.toContain("apiFetch('/api/state',");
-    expect(appRuntimeStateSource).toContain('SettingsAPI.getRuntimeDisplay()');
-    expect(appRuntimeStateSource).not.toContain('SettingsAPI.getSystemSettings');
-    expect(appRuntimeStateSource).toContain(
-      'const [backendHealthy, setBackendHealthy] = createSignal(false);',
-    );
-    expect(appRuntimeStateSource).toContain('const checkBackendHealth = async () => {');
-    expect(appRuntimeStateSource).toContain('const loadOrganizations = async () =>');
-    expect(appRuntimeStateSource).toContain('const handleOrgSwitch = (nextOrgID: string) =>');
-    expect(appRuntimeStateSource).toContain('const handleOrganizationsChanged = () => {');
-    expect(appRuntimeStateSource).toContain(
-      "eventBus.on('organizations_changed', handleOrganizationsChanged);",
-    );
-    expect(appRuntimeStateSource).toContain(
-      "eventBus.off('organizations_changed', handleOrganizationsChanged);",
-    );
-    expect(appRuntimeStateSource).toContain(
-      "import {\n  isHostedModeEnabled,\n  isMultiTenantEnabled,\n  runtimeCapabilitiesLoaded,\n  loadRuntimeCapabilities,\n} from '@/stores/license';",
-    );
-    expect(appRuntimeStateSource).toContain(
-      "import { loadCommercialPosture } from '@/stores/licenseCommercial';",
-    );
-    expect(appRuntimeStateSource).toContain('presentationPolicyHidesOrganizationSurfaces');
-    expect(appRuntimeStateSource).toContain('presentationPolicyHidesUpgradePrompts');
-    expect(appRuntimeStateSource).toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
-    expect(appRuntimeStateSource).toContain('onMount(() => {');
-    expect(appRuntimeStateSource).toContain('onMount(async () => {');
-    expect(appRuntimeStateSource).toContain('if (!presentationPolicyHidesUpgradePrompts()) {');
-    expect(appRuntimeStateSource).toContain('void loadCommercialPosture();');
-    expect(appRuntimeStateSource).toContain('const hasLocalAuthBootstrapHint = (): boolean => {');
-    expect(appRuntimeStateSource).toContain(
-      'const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>',
-    );
-    expect(appRuntimeStateSource).toContain('const hasSSOCallbackSuccessHint = (): boolean => {');
-    expect(appRuntimeStateSource).toContain(
-      'isPreAuthLoginBootstrapPath(window.location.pathname) &&',
-    );
-    expect(appRuntimeStateSource).toContain('!hasLocalAuthBootstrapHint() &&');
-    expect(appRuntimeStateSource).toContain('!hasSSOCallbackSuccessHint()');
-    // Remember-me sessions ride an HttpOnly cookie with no per-tab artifacts,
-    // so the remembered-username hint must keep the /api/state probe reachable
-    // after a tab close (issue #1531).
-    expect(appRuntimeStateSource).toContain(
-      'window.localStorage.getItem(STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME)',
-    );
-    expect(appRuntimeStateSource).toContain('aiAvailabilityStore.setEnabled(');
-    expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
-    expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');
-    expect(appRuntimeStateSource).toContain('actionInboxStore.loadPendingActionCount()');
-    expect(appRuntimeStateSource).toContain('window.setInterval(refreshOpenWorkBadges, 30000)');
-    expect(appRuntimeStateSource).toContain(
-      "eventBus.on('theme_changed', handleRemoteThemeChange);",
-    );
-    expect(appRuntimeStateSource).toContain(
-      "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",
-    );
-    expect(appRuntimeStateSource).not.toContain('buildInfrastructurePath');
-    expect(appRuntimeStateSource).not.toContain('buildWorkloadsPath');
-    expect(appRuntimeStateSource).not.toContain("const ROOT_DASHBOARD_PATH = '/dashboard';");
-    expect(appRuntimeStateSource).not.toContain(
-      "import { startMetricsCollector } from '@/stores/metricsCollector';",
-    );
-    expect(appRuntimeStateSource).not.toContain('startMetricsCollector();');
-    expect(appRuntimeStateSource).not.toContain('function AppLayout(');
-    expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
-    expect(routePreloadSource).toContain('export const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
-    expect(routePreloadSource).toContain("id: 'standalone',");
-    expect(routePreloadSource).toContain("id: 'proxmox',");
-    expect(routePreloadSource).toContain("id: 'patrol',");
-    expect(routePreloadSource).toContain(
-      'const routePreloadCache = new Map<string, Promise<void>>();',
-    );
-    expect(routePreloadSource).toContain("import('@/pages/Standalone')");
-    expect(routePreloadSource).toContain("import('@/pages/Proxmox')");
-    expect(routePreloadSource).not.toContain("import('@/pages/Infrastructure')");
-    expect(routePreloadSource).not.toContain("import('@/pages/Workloads')");
-    expect(routePreloadSource).not.toContain("import('@/pages/Recovery')");
-    expect(routePreloadSource).not.toContain("import('@/pages/Storage')");
-    expect(routePreloadSource).not.toContain("import('@/pages/Ceph')");
-    expect(routePreloadSource).not.toContain("import('@/components/Workloads/WorkloadsSurface')");
-    expect(routePreloadSource).not.toContain("import('@/components/Storage/Storage')");
-    expect(routePreloadSource).not.toContain("import('@/components/Recovery/Recovery')");
-    expect(routePreloadSource).not.toContain("import('@/pages/RecoveryRoute')");
-    expect(appRuntimeContextSource).toContain(
-      "import { createContext, useContext } from 'solid-js';",
-    );
-    expect(appRuntimeContextSource).toContain(
-      'export const WebSocketContext = createContext<WebSocketStore>();',
-    );
-    expect(appRuntimeContextSource).toContain('export const useWebSocket = () => {');
-    expect(appRuntimeContextSource).toContain(
-      'export const DarkModeContext = createContext<() => boolean>();',
-    );
-  });
-
-  it('keeps dashboard and Explore boundaries out of the runtime home shell', () => {
-    const shellEntrySources = [
-      { name: 'App.tsx', source: appSource },
-      { name: 'AppLayout.tsx', source: appLayoutSource },
-      { name: 'RuntimeHome.tsx', source: runtimeHomeSource },
-      { name: 'routePreload.ts', source: routePreloadSource },
-    ];
-
-    for (const { name, source } of shellEntrySources) {
-      expect(source, name).not.toContain('/dashboard');
-      expect(source, name).not.toContain("'/explore'");
-      expect(source, name).not.toContain('"/explore"');
-      expect(source, name).not.toContain('DashboardPage');
-      expect(source, name).not.toContain('ExplorePage');
-      expect(source, name).not.toContain('getPatrolProtectionPosture');
-      expect(source, name).not.toContain('getMonitorContextPatrolProtectionPosture');
-      expect(source, name).not.toContain('Patrol protection posture');
-      expect(source, name).not.toContain('Proxmox Patrol coverage');
-      expect(source, name).not.toContain('Protection current');
-    }
-
-    expect(runtimeHomeSource).toContain('runtimeHome.openingWorkspace');
-    expect(runtimeHomeSource).not.toContain('aiIntelligenceStore');
-    expect(runtimeHomeSource).not.toContain('patrolOpenWork');
-    expect(appLayoutSource).toContain("label: 'Patrol'");
-    expect(appLayoutSource).toContain('countLabel: patrolAttentionCountLabel()');
-    expect(appLayoutSource).toContain("label: 'Actions'");
   });
 
   it('keeps alert hydration separate from tenant resource admission', () => {
@@ -1016,20 +547,6 @@ describe('App architecture', () => {
     expect(reset).toContain("setActiveAlertsHydrationStatus('pending')");
   });
 
-  it('drops platform admission when the tenant changes', () => {
-    const switchStart = appRuntimeStateSource.indexOf('const handleOrgSwitch');
-    expect(switchStart).toBeGreaterThan(-1);
-    const orgSwitch = appRuntimeStateSource.slice(switchStart, switchStart + 1200);
-
-    // Admission is tenant-scoped. Carrying the outgoing tenant's answer across
-    // a switch would render their platform tabs to the incoming tenant, so it
-    // is cleared before the replacement is requested.
-    const clearIndex = orgSwitch.indexOf('setPlatformAdmission(null)');
-    const refetchIndex = orgSwitch.indexOf('loadPlatformAdmission()');
-    expect(clearIndex).toBeGreaterThan(-1);
-    expect(refetchIndex).toBeGreaterThan(clearIndex);
-  });
-
   it('keeps licensed application branding inside the authenticated shell bootstrap', () => {
     // Asserted on the bootstrap's contents rather than one formatted line, so
     // a prettier line-wrap cannot read as branding leaving the bootstrap.
@@ -1044,13 +561,6 @@ describe('App architecture', () => {
     expect(authenticatedBootstrap).toContain('loadRuntimeDisplayAndLayout()');
     expect(authenticatedBootstrap).toContain('loadRuntimeBranding()');
     expect(authenticatedBootstrap).toContain('loadPlatformAdmission()');
-    expect(appLayoutSource).toContain("import { runtimeBranding } from '@/stores/systemSettings';");
-    expect(appLayoutSource).toContain(
-      "const browserBrandName = createMemo(() => customBrandName() || 'Pulse');",
-    );
-    expect(appLayoutSource).toContain('data-testid="custom-brand-logo"');
-    expect(appRuntimeStateSource).not.toContain('/api/license/commercial-posture');
-    expect(appRuntimeStateSource).not.toContain('/api/license/entitlements');
   });
 });
 

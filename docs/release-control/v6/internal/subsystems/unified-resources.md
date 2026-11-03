@@ -8621,8 +8621,8 @@ now sit on Overview and simply withdraw while the target is absent; the other
 tab bodies render their own availability notice while their tab is
 unavailable, so the selection can be retained and recovered without
 manufacturing a target. The
-`ResourceDetailDrawer.history.test.tsx` guard pins the single-resource reset
-boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
+`ResourceDetailDrawer.snapshot.test.tsx` render test pins the single-resource
+reset boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
 drawer at desktop and narrow widths: selecting Manage, dropping the merged
 metrics target, and restoring it must keep the selection and bring the Overview
 charts back. Its fixture, `browser-tests/pbs-host-history-correlation.tsx`,

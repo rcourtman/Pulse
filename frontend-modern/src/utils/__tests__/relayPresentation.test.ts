@@ -21,7 +21,6 @@ import {
   RELAY_SECONDARY_BUTTON_CLASS,
   RELAY_SETTINGS_DESCRIPTION,
 } from '@/utils/relayPresentation';
-import relayPresentationSource from '@/utils/relayPresentation.ts?raw';
 
 describe('relayPresentation', () => {
   it('returns muted not-enabled presentation when relay is disabled', () => {
@@ -117,15 +116,5 @@ describe('relayPresentation', () => {
     expect(RELAY_ACTIVATION_REQUIRED_LABEL).toBe('Activation required');
     expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('active Relay token');
     expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).not.toContain('Relay-capable plan');
-  });
-
-  it('does not retain retired Relay price or trial-era onboarding copy', () => {
-    expect(relayPresentationSource).not.toContain('RELAY_ONBOARDING_UPGRADE_LABEL');
-    expect(relayPresentationSource).not.toContain('Get Relay');
-    expect(relayPresentationSource).not.toContain('$39');
-    expect(relayPresentationSource).not.toContain('$49');
-    expect(relayPresentationSource).not.toContain('$99');
-    expect(relayPresentationSource).not.toContain('Start free trial');
-    expect(relayPresentationSource).not.toContain('Pro feature gate');
   });
 });

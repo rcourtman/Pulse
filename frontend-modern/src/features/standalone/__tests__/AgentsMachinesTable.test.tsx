@@ -38,6 +38,29 @@ vi.mock('@/api/monitoring', () => ({
   },
 }));
 
+const temperatureThresholds = vi.hoisted(() => ({
+  value: undefined as { warning: number; critical: number } | undefined,
+}));
+
+// The real alerts store, except that a test can pin the node temperature
+// thresholds the way a user's alert settings would.
+vi.mock('@/stores/alertsActivation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/alertsActivation')>();
+  return {
+    ...actual,
+    useAlertsActivation: () => {
+      const store = actual.useAlertsActivation();
+      return {
+        ...store,
+        getMetricThresholds: (...args: Parameters<typeof store.getMetricThresholds>) =>
+          args[1] === 'temperature' && temperatureThresholds.value
+            ? temperatureThresholds.value
+            : store.getMetricThresholds(...args),
+      };
+    },
+  };
+});
+
 // The websocket's activeAlerts is a Solid store, so rows must follow it live.
 const activeAlertsRef = vi.hoisted(() => ({ current: {} as Record<string, Alert> }));
 
@@ -154,6 +177,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  temperatureThresholds.value = undefined;
   cleanup();
   setActiveAlerts(reconcile({}));
   window.localStorage.clear();
@@ -1447,6 +1471,33 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('Disk /dev/sda Cold Standby')).toBeInTheDocument();
     expect(screen.getByText('standby')).toBeInTheDocument();
     expect(screen.getByText('1400 RPM')).toBeInTheDocument();
+  });
+
+  it('colors the machine temperature from the alert thresholds that apply to it', async () => {
+    temperatureThresholds.value = { warning: 50, critical: 60 };
+    const { container } = render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'warm-host',
+            name: 'Warm Host',
+            agent: { sensors: { temperatureCelsius: { 'cpu.package': 61 } } },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    await openMachineColumnPicker();
+    await fireEvent.click(screen.getByLabelText('Temp'));
+    const trigger = container.querySelector(
+      '[data-agents-machine-row="warm-host"] [data-agent-machine-temperature-trigger="true"]',
+    ) as HTMLElement;
+    // 61°C is below the default critical level, so the red text comes from
+    // the configured thresholds.
+    expect(within(trigger).getByText('61°C')).toHaveClass('text-red-600');
   });
 
   it('shows a retained disk temperature as last known, never as a current reading', async () => {

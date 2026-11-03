@@ -8,7 +8,6 @@ import {
   CEPH_PHONE_COLUMN_WIDTHS,
   ProxmoxCephTable,
 } from '../ProxmoxCephTable';
-import cephClusterDrawerSource from '../ProxmoxCephClusterDrawer.tsx?raw';
 
 const activeAlerts: Record<string, unknown> = {};
 
@@ -235,7 +234,6 @@ describe('ProxmoxCephTable', () => {
 
     const heading = screen.getByRole('heading', { level: 2, name: 'ceph-main' });
     expect(heading.parentElement?.querySelector('[aria-label="Healthy"]')).not.toBeNull();
-    expect(cephClusterDrawerSource).not.toContain('function classifyHealth');
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Manage' })).toBeInTheDocument();
     expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');

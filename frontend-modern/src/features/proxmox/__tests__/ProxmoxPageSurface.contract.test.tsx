@@ -6,10 +6,6 @@ import type { UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 import { ReplicationInventoryFormatError } from '../proxmoxReplicationInventory';
-import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
-import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
-import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
-import proxmoxRecoverableTableSource from '../ProxmoxRecoverableTable.tsx?raw';
 
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
@@ -276,7 +272,6 @@ describe('ProxmoxPageSurface contract', () => {
     expect(screen.getByTestId('storage-surface')).toBeInTheDocument();
     const props = mockStorageProps.mock.lastCall?.[0] as { routeActive?: boolean };
     expect(props.routeActive).toBe(true);
-    expect(proxmoxPageSurfaceSource).toContain("routeActive={activeTab() === 'storage'}");
   });
 
   it('surfaces stale agent-backed Proxmox nodes', () => {
@@ -375,7 +370,6 @@ describe('ProxmoxPageSurface contract', () => {
         search: mockWorkloadSearch,
       }),
     );
-    expect(proxmoxPageSurfaceSource).toContain('search={workloadsState.search}');
   });
 
   it('does not call a retained version from a stopped Proxmox agent currently running', () => {
@@ -496,34 +490,6 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
-  it('keeps Proxmox workload and backup filters free of a saved-views affordance', () => {
-    // Saved views persisted the page's URL query string to localStorage. The
-    // browser's own bookmarks already do that and survive a cleared cache, so
-    // the control was removed; PROXMOX_BACKUPS_QUERY_PARAMS keeps the backup
-    // toolbar URL-owned and therefore still shareable.
-    expect(proxmoxPageSurfaceSource).not.toContain('savedViewsKey');
-    expect(proxmoxBackupsTableSource).not.toContain('savedViewsKey');
-    expect(proxmoxBackupsTableSource).not.toContain('SavedViews');
-  });
-
-  it('keeps backup identity constrained and narrow restore scope readable', () => {
-    expect(proxmoxBackupServersTableSource).not.toContain(
-      'font-mono text-[10px] font-normal text-muted',
-    );
-    expect(proxmoxBackupServersTableSource).toContain(
-      "title={[row.serverName, row.datastore?.name].filter(Boolean).join(' · ')}",
-    );
-    // Date-feed rows stay on one line at every width: the identity truncates
-    // and full scope lives in the drawer. Real inventory/width/focus cases live
-    // in recoverableIdentityAccess.test.tsx, not this source-wiring check.
-    expect(proxmoxRecoverableTableSource).toContain(
-      'class="flex min-w-0 flex-1 items-baseline gap-1.5"',
-    );
-    expect(proxmoxRecoverableTableSource).toContain('data-backup-workload-connection');
-    expect(proxmoxRecoverableTableSource).not.toContain("whitespace-normal wrap-anywhere'");
-    expect(proxmoxRecoverableTableSource).not.toContain('data-backup-location');
-  });
-
   it('hydrates only the active source-scoped resource family', () => {
     setResources([
       makeResource({
@@ -564,9 +530,6 @@ describe('ProxmoxPageSurface contract', () => {
     expect(options[0].enabled).toBeUndefined();
     expect(options[1].enabled?.()).toBe(true);
     expect(options.slice(2).every((value) => value.enabled?.() === false)).toBe(true);
-    expect(proxmoxPageSurfaceSource).not.toContain('backgroundHydrationTabs');
-    expect(proxmoxPageSurfaceSource).not.toContain('requestIdleCallback');
-    expect(proxmoxPageSurfaceSource).toContain('resourceSource={storageResources}');
   });
 
   it('reuses guests and hydrates standalone PBS telemetry without duplicate candidates', () => {
@@ -654,23 +617,6 @@ describe('ProxmoxPageSurface contract', () => {
     }
   });
 
-  it('places workload controls beside the workload table they affect', () => {
-    const nodesTableIndex = proxmoxPageSurfaceSource.indexOf('<ProxmoxNodesTable');
-    const workloadFilterIndex = proxmoxPageSurfaceSource.indexOf('<WorkloadsFilter');
-    const workloadsSurfaceIndex = proxmoxPageSurfaceSource.indexOf('<WorkloadsSurface');
-
-    expect(nodesTableIndex).toBeGreaterThan(-1);
-    expect(workloadFilterIndex).toBeGreaterThan(nodesTableIndex);
-    expect(workloadsSurfaceIndex).toBeGreaterThan(workloadFilterIndex);
-    expect(proxmoxPageSurfaceSource).not.toContain('<ProxmoxBackupServersTable');
-    expect(proxmoxPageSurfaceSource).toContain(
-      '{...getWorkloadsMetricFilterProps(workloadsState)}',
-    );
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      'metricHoverMode={workloadsState.workloadMetricHoverMode}',
-    );
-  });
-
   it('renders the one workload toolbar above the guests table once workload state is ready', () => {
     setResources([makeResource({ id: 'vm-1', type: 'vm' })]);
 
@@ -710,17 +656,6 @@ describe('ProxmoxPageSurface contract', () => {
         showNestedExcludedWorkloads: true,
       }),
     );
-  });
-
-  it('keeps the bounded node preview before guests at every viewport', () => {
-    expect(proxmoxPageSurfaceSource).toContain('<section>\n        <ProxmoxNodesTable');
-    expect(proxmoxPageSurfaceSource).toContain('class="space-y-3 scroll-mt-4"');
-    expect(proxmoxPageSurfaceSource).not.toContain('order-2 lg:order-1');
-    expect(proxmoxPageSurfaceSource).not.toContain('order-1 space-y-3');
-    expect(proxmoxPageSurfaceSource).toContain('id="proxmox-guests-section"');
-    expect(proxmoxPageSurfaceSource).toContain('tableTitle={');
-    expect(proxmoxPageSurfaceSource).toContain('headingId="proxmox-guests-heading"');
-    expect(proxmoxPageSurfaceSource).not.toContain('class="flex items-center gap-2 px-1"');
   });
 
   it('keeps Patrol coverage off the Proxmox overview', () => {

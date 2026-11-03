@@ -30,6 +30,29 @@ const createContext = (
   ...overrides,
 });
 
+const PAID_FEATURE_TABS: readonly SettingsTab[] = [
+  'support-reporting',
+  'security-roles',
+  'security-users',
+  'security-audit',
+  'security-webhooks',
+  'system-relay',
+  'organization-overview',
+  'organization-access',
+  'organization-sharing',
+  'organization-billing',
+  'organization-billing-admin',
+];
+
+describe('paid-feature settings nav gates', () => {
+  it.each(PAID_FEATURE_TABS)('%s is hidden without its paid feature and shown with it', (tab) => {
+    const context = createContext({ hostedModeEnabled: true });
+
+    expect(shouldHideSettingsNavItem(tab, { ...context, hasFeature: () => false })).toBe(true);
+    expect(shouldHideSettingsNavItem(tab, { ...context, hasFeature: () => true })).toBe(false);
+  });
+});
+
 describe('admin-only settings nav gates', () => {
   it.each(ADMIN_ONLY_TABS)('$tab declares $capability', ({ tab, capability }) => {
     expect(getSettingsNavItem(tab)?.requiredCapability).toBe(capability);

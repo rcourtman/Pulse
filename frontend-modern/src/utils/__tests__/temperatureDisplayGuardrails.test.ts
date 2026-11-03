@@ -2,23 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import nodeDrawerOverviewSource from '@/components/Workloads/NodeDrawerOverview.tsx?raw';
 import temperatureGaugeSource from '@/components/shared/TemperatureGauge.tsx?raw';
-import dockerHostDrawerOverviewSource from '@/features/docker/DockerHostDrawerOverview.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
-import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 
+// Docker host and agent machine temperatures have render tests that use the
+// alert thresholds; these surfaces do not yet.
 describe('temperature display guardrails', () => {
   it('keeps colored temperature displays threshold-aware', () => {
     expect(proxmoxNodesTableSource).toContain('temperatureThresholds={temperatureThresholds()}');
     expect(nodeDrawerOverviewSource).toContain('getTemperatureTextClass(value, thresholds)');
-    expect(dockerHostDrawerOverviewSource).toContain('temperatureThresholds()');
-    expect(agentsMachinesTableSource).toContain('getAgentMachineTemperatureMetric');
-    expect(agentsMachinesTableSource).toContain('thresholds={temperatureThresholds()}');
-    expect(temperatureGaugeSource).toContain('props.metric');
-  });
-
-  it('does not reintroduce the previous local temperature severity calls', () => {
     expect(nodeDrawerOverviewSource).not.toContain('getTemperatureTextClass(value)');
-    expect(dockerHostDrawerOverviewSource).not.toContain('getTemperatureTextClass(temperature)');
-    expect(agentsMachinesTableSource).not.toContain('<TemperatureGauge value={value()} />');
+    expect(temperatureGaugeSource).toContain('props.metric');
   });
 });

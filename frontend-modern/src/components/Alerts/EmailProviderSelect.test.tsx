@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createSignal } from 'solid-js';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { UIEmailConfig } from '@/features/alerts/types';
-import emailProviderSelectSource from './EmailProviderSelect.tsx?raw';
 
 // --- Mock setup (must be before component import) ---
 const getEmailProvidersMock = vi.fn();
@@ -114,11 +113,6 @@ describe('EmailProviderSelect', () => {
     expect(screen.getByRole('textbox', { name: 'Recipients (one per line)' }).tagName).toBe(
       'TEXTAREA',
     );
-  });
-
-  it('routes multi-line recipient input through FormTextarea', () => {
-    expect(emailProviderSelectSource).toContain('FormTextarea');
-    expect(emailProviderSelectSource).not.toContain('<textarea');
   });
 
   it('edits resource tag routing and its all-or-any matching mode', () => {

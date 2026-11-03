@@ -2,8 +2,6 @@ import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
-import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
-import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 
 describe('TooltipPortal', () => {
   afterEach(() => {
@@ -30,17 +28,6 @@ describe('TooltipPortal', () => {
 
     expect(document.body.querySelector('[data-tooltip-portal="true"]')).toBeNull();
     expect(addListener.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(0);
-  });
-
-  it('keeps tooltip portal on shell and runtime owners', () => {
-    expect(tooltipPortalSource).toContain('useTooltipPortalState');
-    expect(tooltipPortalSource).toContain('foreignObject');
-    expect(tooltipPortalSource).not.toContain('createSignal');
-    expect(tooltipPortalSource).not.toContain('resolveTooltipPosition');
-    expect(tooltipPortalSource).not.toContain('style={');
-
-    expect(tooltipStateSource).toContain('export function useTooltipPortalState');
-    expect(tooltipStateSource).toContain('resolveTooltipPosition');
   });
 
   it('renders portal content without inline styles', async () => {

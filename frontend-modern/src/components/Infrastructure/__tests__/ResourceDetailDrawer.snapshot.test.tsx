@@ -166,6 +166,30 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('keeps the selected tab when a same-ID snapshot briefly drops it (#1723)', () => {
+    const pmg = () =>
+      snapshot({
+        id: 'pmg-a',
+        type: 'pmg',
+        name: 'PMG A',
+        displayName: 'PMG A',
+        platformType: 'proxmox-pmg',
+      });
+    const [resource, setResource] = createSignal(pmg());
+    render(() => <ResourceDetailDrawer resource={resource()} presentation="table-row" />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Mail' }));
+    expect(screen.getByRole('tab', { name: 'Mail' })).toHaveAttribute('aria-selected', 'true');
+
+    // A refresh that momentarily reports the resource without its Mail tab must
+    // not discard the operator's selection: the drawer resets to Overview only
+    // when it starts showing a different resource.
+    setResource(snapshot({ id: 'pmg-a', type: 'pbs', name: 'PMG A', displayName: 'PMG A' }));
+    expect(screen.queryByRole('tab', { name: 'Mail' })).not.toBeInTheDocument();
+    setResource(pmg());
+    expect(screen.getByRole('tab', { name: 'Mail' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'false');
+  });
+
   it('updates availability evidence in Overview instead of retaining the initial snapshot', () => {
     const initial = snapshot({
       type: 'network-endpoint',

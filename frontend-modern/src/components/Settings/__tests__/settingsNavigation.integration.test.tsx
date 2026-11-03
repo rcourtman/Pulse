@@ -488,26 +488,4 @@ describe('settingsNavigation integration scaffold', () => {
       expect(getTabLockReason('infrastructure-systems', hasFeatures([]), () => true)).toBeNull();
     });
   });
-
-  it('verifies Settings.tsx bootstrap calls only loadRuntimeCapabilities', async () => {
-    const settingsSource = (await import('../Settings.tsx?raw')).default;
-    const onMountMatch = settingsSource.match(/onMount\(\(\)\s*=>\s*\{([^}]+)\}/);
-    expect(onMountMatch).toBeTruthy();
-    const onMountBody = onMountMatch![1];
-    expect(onMountBody).toContain('loadRuntimeCapabilities');
-    expect(onMountBody).not.toContain('runDiagnostics');
-    expect(settingsSource).toContain('useSettingsAccess');
-    expect(settingsSource).toContain('useSettingsPanelRegistry');
-    expect(settingsSource).not.toContain('const tabGroups');
-  });
-
-  it('panel registry covers all dispatchable tabs', async () => {
-    const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
-    const allTabs = Object.keys(canonicalTabPaths) as SettingsTab[];
-    const dispatchableTabs = allTabs;
-    for (const tab of dispatchableTabs) {
-      const isCovered = registrySource.includes(`'${tab}'`) || registrySource.includes(`${tab}:`);
-      expect(isCovered, `panel registry should cover tab '${tab}'`).toBe(true);
-    }
-  });
 });

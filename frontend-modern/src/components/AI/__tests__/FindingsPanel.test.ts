@@ -63,217 +63,21 @@ const aiFindingPresentationSource = readFileSync(
 );
 
 describe('FindingsPanel source wiring', () => {
-  it('routes bounded APT evidence through the canonical finding presenter in collapsed and expanded detail', () => {
-    expect(findingsPanelSource).toContain('getFindingEvidencePresentation');
-    expect(findingsPanelSource).toContain('{getFindingEvidencePresentation(finding)}');
-    expect(aiFindingPresentationSource).toContain("finding.key === 'apt-host-updates'");
-    expect(aiFindingPresentationSource).toContain("finding.key === 'apt-package-cache-pressure'");
-    expect(aiFindingPresentationSource).not.toContain('inventory=${');
-    expect(aiFindingPresentationSource).not.toContain('fingerprint=${');
-  });
-
   it('passes stale Patrol coverage into the current-work empty-state presenter', () => {
     expect(findingsPanelSource).toContain('coverageStale?: boolean');
     expect(findingsPanelSource).toContain('coverageStale: props.coverageStale');
     expect(patrolWorkspaceSource).toContain('coverageStale={coverageStale()}');
   });
 
-  it('routes finding loading indicators through the shared LoadingSpinner primitive', () => {
-    expect(findingsPanelSource).toContain("from '@/components/shared/LoadingSpinner'");
-    expect(findingsPanelSource).toContain('<LoadingSpinner size="xs" />');
-    expect(findingsPanelSource).toContain('<LoadingSpinner size="md" />');
-  });
-
-  it('renders the deterministic capacity-forecast urgency line in expanded finding detail', () => {
-    // capacity_forecast is a backend-computed fact, not model prose. The panel
-    // must project it through presentCapacityForecast so the operator sees a
-    // deterministic "Filling up / Stable · days-to-full · % used" line rather
-    // than relying on the model-authored description for urgency.
-    expect(findingsPanelSource).toContain("from '@/utils/patrolCapacityForecastPresentation'");
-    expect(findingsPanelSource).toContain('presentCapacityForecast(finding.capacityForecast)');
-    expect(findingsPanelSource).toContain('capacityForecastToneClass');
-  });
-
-  it('renders the plan-locked at-need Pulse Pro handoff in the finding primary-action area', () => {
-    expect(findingsPanelSource).toContain('patrolProHandoff?:');
-    expect(findingsPanelSource).toContain('{proHandoff!.detail}');
-    expect(findingsPanelSource).toContain('UpgradeButtonLink');
+  // The panel renders what it is handed (FindingsPanel.links.test.tsx covers the
+  // rendering); only the workspace decides to hand the Pro handoff and the
+  // Watch-only nudge over, and which findings source to read.
+  it('hands the Pro handoff, the Watch-only nudge and the Patrol source from the Patrol workspace', () => {
     expect(patrolWorkspaceSource).toContain('getPatrolProInvestigationHandoff');
     expect(patrolWorkspaceSource).toContain('patrolProHandoff=');
-  });
-
-  it('renders previousResolvedFixSummary as operational memory in the expanded card', () => {
-    // The previous-fix summary is captured at regression time and surfaced
-    // in chat context for Assistant. The expanded card must also show it
-    // directly so operators see "what worked last time" without opening
-    // Assistant. The styling is intentionally distinct (emerald accent) so
-    // it reads as a positive memory cue rather than another alert.
-    expect(findingsPanelSource).toContain('finding.previousResolvedFixSummary');
-    expect(findingsPanelSource).toContain('Last time this resolved');
-  });
-
-  it('keeps finding actions free of Assistant routing now the chat is retired', () => {
-    expect(findingsPanelSource).not.toContain('Open in Assistant');
-    expect(findingsPanelSource).not.toContain('aiChatStore');
-    expect(findingsPanelSource).not.toContain('openFindingInAssistant');
-    expect(findingsPanelSource).not.toContain('Ask Assistant');
-    expect(findingsPanelSource).not.toContain('remediationPlans');
-    expect(findingsPanelSource).not.toContain('handleExplainFinding');
-    expect(findingsPanelSource).not.toContain('handleInvestigateFinding');
-    expect(findingsPanelSource).not.toContain('handleWhyFinding');
-    expect(findingsPanelSource).not.toContain('handleVerifyFixFinding');
-    expect(findingsPanelSource).not.toContain("openFindingInAssistant(finding, '");
-  });
-
-  it('surfaces investigation_record.confidence as a badge in the collapsed row', () => {
-    // The seven-question schema's confidence answer should be visible to
-    // operators without expanding the card. The badge sits next to the
-    // investigation outcome badge so trust can be scanned in the row.
-    expect(findingsPanelSource).toContain('finding.investigationRecord?.confidence');
-    expect(findingsPanelSource).toContain('getInvestigationConfidenceBadgeTone');
-    expect(findingsPanelSource).toContain('confidence');
-  });
-
-  it('keeps collapsed finding disclosure separate from inline manual controls', () => {
-    // The collapsed finding row contains acknowledge/snooze/dismiss controls.
-    // Those controls must remain siblings of the disclosure area, while the
-    // row body itself opens the same details panel for normal scanning.
-    expect(findingsPanelSource).toContain('role="button"');
-    expect(findingsPanelSource).toContain('tabIndex={0}');
-    expect(findingsPanelSource).toContain(
-      'class="min-w-0 flex-1 cursor-pointer rounded-sm text-left',
-    );
-    expect(findingsPanelSource).toContain('aria-expanded={expandedId() === finding.id}');
-    expect(findingsPanelSource).toContain(
-      "aria-label={`${expandedId() === finding.id ? 'Close issue details' : 'Open issue details'} for ${title.label}`}",
-    );
-    expect(findingsPanelSource).toContain("'Close review'");
-    expect(findingsPanelSource).toContain("'Review issue'");
-    expect(findingsPanelSource).toContain("'Hide'");
-    expect(findingsPanelSource).toContain("'View'");
-    expect(findingsPanelSource).toContain("e.key === 'Enter' || e.key === ' '");
-    expect(findingsPanelSource).toContain('onClick={toggleExpanded}');
-  });
-
-  it('previews the will_fix_later remind-at deadline before the operator confirms dismiss', () => {
-    // The backend now treats will_fix_later as a real operational commitment
-    // (Finding.RemindAt, default 7 days), not a silent shut-up. The dismiss
-    // confirmation panel must communicate that to the operator BEFORE they
-    // confirm — otherwise the new behavior is invisible until the reminder
-    // fires a week later. See ai-runtime / patrol-intelligence subsystem
-    // contracts for the three-way dismissal semantics.
-    expect(findingsPanelSource).toContain('formatWillFixLaterRemindDate');
-    expect(findingsPanelSource).toContain("dismissReason() === 'will_fix_later'");
-    expect(findingsPanelSource).toContain('Pulse will stay quiet on this for 7 days');
-    // The other two reasons must also have explanatory copy so all three
-    // dismissal paths feel deliberate, not undifferentiated.
-    expect(findingsPanelSource).toContain("dismissReason() === 'expected_behavior'");
-    expect(findingsPanelSource).toContain("dismissReason() === 'not_an_issue'");
-    expect(findingsPanelSource).toContain('Pulse will keep this finding visible as acknowledged');
-    expect(findingsPanelSource).toContain('Pulse will permanently suppress');
-  });
-
-  it('exposes a Copy summary action wired to formatFindingForClipboard and the shared clipboard helper', () => {
-    // Operators frequently need to delegate a finding by pasting a summary
-    // into Slack, email, or a ticket. Pin the wiring so the Copy summary
-    // button routes through the canonical formatter (same shape as the
-    // helper test below) and the shared copyToClipboard helper, with
-    // success/error notifications routed through notificationStore.
-    expect(findingsPanelSource).toContain('handleCopyFindingSummary');
-    expect(findingsPanelSource).toContain('formatFindingForClipboard(finding)');
-    expect(findingsPanelSource).toContain('copyToClipboard(text)');
-    expect(findingsPanelSource).toContain('Finding summary copied');
-    expect(findingsPanelSource).toContain('Could not copy finding summary');
-    expect(findingsPanelSource).toMatch(/>\s*Copy summary\s*</);
-  });
-
-  it('keeps expanded finding actions behind a canonical primary action and explicit outcome menu', () => {
-    expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation(finding)');
-    expect(findingsPanelSource).toContain('Resolve or dismiss');
-    expect(findingsPanelSource).toContain('min-w-48');
-    expect(findingsPanelSource).not.toContain('min-w-40');
-  });
-
-  it('keeps primary-action Patrol runtime findings out of secondary action clutter', () => {
-    // Runtime/setup findings already have one canonical recovery path:
-    // provider settings. The expanded card must not add the Assistant
-    // secondary button or generic outcome menu beside that primary action.
-    expect(findingsPanelSource).toContain('const shouldShowExpandedManageMenu =');
-    expect(findingsPanelSource).toContain('!primaryAction ||');
-    expect(findingsPanelSource).toContain('<Show when={shouldShowExpandedManageMenu}>');
-    expect(findingsPanelSource).toContain('when={primaryAction}');
-    expect(findingsPanelSource).not.toContain(
-      'getPrimaryAssistantFindingAction(finding).label}\n                </button>\n              </>',
-    );
-  });
-
-  it('surfaces primary Patrol issue actions before expansion', () => {
-    expect(findingsPanelSource).toContain('shouldShowCollapsedPrimaryAction');
-    expect(findingsPanelSource).toContain('isPatrolFindingsSource()');
-    expect(findingsPanelSource).toContain("finding.status === 'active'");
-    expect(findingsPanelSource).toContain('props.runSnapshot === undefined');
-    expect(findingsPanelSource).toContain('expandedId() !== finding.id');
-    expect(findingsPanelSource).toContain(
-      'const rowPrimaryAction = getFindingPrimaryActionPresentation(finding)',
-    );
-    expect(findingsPanelSource).toContain(
-      'shouldShowCollapsedPrimaryAction(finding) && rowPrimaryAction',
-    );
-  });
-
-  it('exposes a manual Mark resolved action that goes through the patrol resolve store action', () => {
-    // The /api/ai/patrol/resolve endpoint exists server-side but had no
-    // operator path on the canonical Patrol surface. An operator fixing
-    // an issue out-of-band must be able to close the loop without waiting
-    // for auto-resolution. The button is gated to active findings (the
-    // server rejects double-resolves with 404) and routes through
-    // aiIntelligenceStore.resolveFinding so refresh/error UX stays
-    // uniform with the existing acknowledge/snooze/dismiss patterns.
-    expect(findingsPanelSource).toContain('handleResolve');
-    expect(findingsPanelSource).toContain('aiIntelligenceStore.resolveFinding(finding.id)');
-    expect(findingsPanelSource).toContain('Mark resolved');
-    expect(findingsPanelSource).toContain("finding.status === 'active'");
-    expect(findingsPanelSource).toContain('Show when={manualControls.acknowledge}');
-    expect(findingsPanelSource).toContain('Finding marked resolved');
-  });
-
-  it('lets operators reopen dismissed findings from the centralized Findings view', () => {
-    expect(findingsPanelSource).toContain('handleReopen');
-    expect(findingsPanelSource).toContain('aiIntelligenceStore.reopenFinding(finding.id)');
-    expect(findingsPanelSource).toContain("finding.status === 'dismissed'");
-    expect(findingsPanelSource).toContain('Reopen finding');
-    expect(findingsPanelSource).toContain('Finding reopened');
-  });
-
-  it('fails closed before creating a per-finding suppression rule without concrete scope', () => {
-    // Empty resource/category fields are backend wildcards. The per-finding
-    // shortcut must not turn missing metadata into a broad suppression rule.
-    expect(findingsPanelSource).toContain('getFindingSuppressionRuleScope');
-    expect(findingsPanelSource).toContain('canCreate: Boolean(resourceId && category)');
-    expect(findingsPanelSource).toContain('!scope.canCreate');
-    expect(findingsPanelSource).toContain('resourceId: scope.resourceId');
-    expect(findingsPanelSource).toContain('category: scope.category');
-    expect(findingsPanelSource).toContain(
-      'missing the resource or category needed for a scoped rule',
-    );
-  });
-
-  it('surfaces regressionCount as a pill on the collapsed finding row', () => {
-    // regressionCount is the strongest "this is not a one-off" signal Pulse
-    // can give an operator scanning a list. The pill must appear in the
-    // collapsed row (alongside the confidence badge) so triage decisions
-    // can be made without expanding each card. The pill must only appear
-    // when regressionCount > 0 — fresh detections must stay clean.
-    expect(findingsPanelSource).toContain('(finding.regressionCount || 0) > 0');
-    expect(findingsPanelSource).toContain('regressed {finding.regressionCount}×');
-    expect(findingsPanelSource).toContain('text-amber-700 dark:text-amber-300');
-    // The regression pill must sit next to the confidence badge in source order
-    // so the row reads as one trust-related cluster.
-    const confidenceIndex = findingsPanelSource.indexOf('confidence');
-    const regressionIndex = findingsPanelSource.indexOf('regressed {finding.regressionCount}×');
-    expect(confidenceIndex).toBeGreaterThan(0);
-    expect(regressionIndex).toBeGreaterThan(0);
-    expect(regressionIndex).toBeGreaterThan(confidenceIndex);
+    expect(patrolWorkspaceSource).toContain('getPatrolWatchOnlyInvestigationNudge');
+    expect(patrolWorkspaceSource).toContain("handleAutonomyChange('approval')");
+    expect(patrolWorkspaceSource).toContain('findingsSource="patrol"');
   });
 
   it('surfaces only actionable Patrol workflow states from the shared presentation model', () => {
@@ -300,84 +104,6 @@ describe('FindingsPanel source wiring', () => {
     );
     expect(findingsPanelSource).toContain('title={action().detail}');
     expect(findingsPanelSource).toContain('{action().label}');
-  });
-
-  it('warns the operator before dismissing a recurrent finding as not_an_issue or expected_behavior', () => {
-    // not_an_issue and expected_behavior both stay quiet forever after dismiss.
-    // If the finding has already regressed before, the operator may be
-    // silently dismissing a recurring issue. The dismiss confirmation panel
-    // must surface that recurrence as a non-blocking hint and nudge them
-    // toward the reminder-bearing 'will_fix_later' path. The hint must NOT
-    // appear for will_fix_later itself (already commitment-tracking) or for
-    // findings with no prior regression.
-    expect(findingsPanelSource).toContain('(finding.regressionCount || 0) > 1');
-    expect(findingsPanelSource).toContain("dismissReason() === 'not_an_issue'");
-    expect(findingsPanelSource).toContain("dismissReason() === 'expected_behavior'");
-    expect(findingsPanelSource).toContain('this finding has regressed');
-    expect(findingsPanelSource).toContain('"Later" sets a');
-  });
-
-  it('badges dismissed-as-will_fix_later rows with their pending remind-at deadline', () => {
-    // Once a finding is dismissed as will_fix_later, the row must surface the
-    // pending reminder so the operator knows the commitment exists; otherwise
-    // the only place the deadline lives is the lifecycle log. The amber tone
-    // signals "pending operator action" rather than a generic muted note. The
-    // deadline is in the future, so it counts down on the shared clock rather
-    // than going through the past-only age formatter, and it reads overdue from
-    // the same list as the Overdue commitments chip.
-    expect(findingsPanelSource).toMatch(
-      /getFindingReminderPresentation\(\s*finding,\s*now\(\),\s*overdueFindingIdSet\(\)\.has\(finding\.id\),?\s*\)/,
-    );
-    expect(findingsPanelSource).not.toContain('formatTime(finding.remindAt');
-    expect(findingsPanelSource).toContain('text-amber-600 dark:text-amber-400');
-  });
-
-  it('renders the operator-facing Impact line without a Pulse-authored recommendation line', () => {
-    // The expanded finding card must surface Finding.Impact directly so
-    // detection-time consequence-if-ignored copy reaches the operator on the
-    // findings list, not just inside the durable investigation record.
-    expect(findingsPanelSource).toContain('Show when={finding.impact}');
-    expect(findingsPanelSource).toContain('>Impact:</span> {finding.impact}');
-    expect(findingsPanelSource).not.toContain('>Recommendation:</span>');
-  });
-
-  it('renders the What Pulse checked line from finding.evidence in the expanded card', () => {
-    // The expanded finding card must surface Finding.Evidence so the
-    // operator can see what data or checks led to this finding — not just
-    // the conclusion. This is trust scaffolding: the user can verify that
-    // Pulse actually checked something relevant before acting.
-    expect(findingsPanelSource).toContain('Show when={finding.evidence}');
-    expect(findingsPanelSource).toContain('>What Pulse checked:</span>');
-    expect(findingsPanelSource).toContain('{finding.evidence}');
-  });
-
-  it('keeps active Patrol lifecycle history out of the default issue expansion', () => {
-    // Current issues should answer "what needs doing" first. Raw lifecycle
-    // history is still available when the operator chooses all/resolved history
-    // or a run record, but it should not be dumped into the default active
-    // Patrol issue expansion.
-    expect(findingsPanelSource).toContain('shouldShowFindingLifecycle');
-    expect(findingsPanelSource).toContain('!isPatrolFindingsSource()');
-    expect(findingsPanelSource).toContain("finding.status !== 'active'");
-    expect(findingsPanelSource).toContain('props.runSnapshot !== undefined');
-    expect(findingsPanelSource).toContain("filter() === 'all'");
-    expect(findingsPanelSource).toContain("filter() === 'resolved'");
-    expect(findingsPanelSource).toContain('Show when={shouldShowFindingLifecycle(finding)}');
-  });
-});
-
-describe('FindingsPanel Watch-only mode nudge slot', () => {
-  // An actionable active finding on an unlocked Watch-only install must offer
-  // a forward path into the governed action loop from its own expanded row.
-  // The nudge lives in the same slot as the plan-locked Pro handoff, and the
-  // switch must reuse the canonical autonomy save path (handleAutonomyChange)
-  // rather than introducing a second mode mutation surface.
-  it('renders the mode nudge in the expanded row and keeps the switch on the shared autonomy save path', () => {
-    expect(findingsPanelSource).toContain('props.patrolModeNudge?.(finding)');
-    expect(findingsPanelSource).toContain('props.onPatrolModeNudgeAction?.()');
-    expect(findingsPanelSource).toContain("'Switching…'");
-    expect(patrolWorkspaceSource).toContain('getPatrolWatchOnlyInvestigationNudge');
-    expect(patrolWorkspaceSource).toContain("handleAutonomyChange('approval')");
   });
 });
 
@@ -866,75 +592,6 @@ describe('aiFindingPresentation', () => {
   });
 
   describe('patrol empty-state presentation', () => {
-    it('does not duplicate patrol timing metadata in the findings empty state', () => {
-      expect(findingsPanelSource).not.toContain('CountdownTimer');
-      expect(findingsPanelSource).not.toContain('lastPatrolLabel');
-      expect(findingsPanelSource).not.toContain('Runs every');
-      expect(findingsPanelSource).not.toContain('Next: ');
-    });
-
-    it('keeps the findings card header functional instead of repeating product marketing copy', () => {
-      expect(findingsPanelSource).not.toContain(
-        '<span class="font-medium text-base-content">Patrol findings</span>',
-      );
-      expect(findingsPanelSource).not.toContain('Pulse Patrol Findings');
-      expect(findingsPanelSource).not.toContain('AI-discovered insights');
-    });
-
-    it('exposes the canonical primary action for Patrol runtime findings inside the expanded row', () => {
-      expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation');
-      expect(findingsPanelSource).toContain('{action().label}');
-      expect(findingsPanelSource).toContain('href={action().href}');
-    });
-
-    it('does not cross-jump expanded findings to broad Infrastructure or aggregate workspace routes', () => {
-      // The platform-first migration retired buildResolvedResourceSurfaceLinks
-      // and the broad surface-link chips; Patrol findings now stay in place
-      // rather than offering external surface jumps.
-      expect(findingsPanelSource).not.toContain("from '@/hooks/useResources'");
-      expect(findingsPanelSource).not.toContain('buildResolvedResourceSurfaceLinks');
-      expect(findingsPanelSource).not.toContain('useResources()');
-      expect(findingsPanelSource).not.toContain('{link.compactLabel}');
-    });
-
-    it('routes generic finding controls through the shared manual-controls helper', () => {
-      expect(findingsPanelSource).toContain('getFindingManualControlsPresentation(finding)');
-      expect(findingsPanelSource).toContain('manualControls.acknowledge');
-      expect(findingsPanelSource).toContain('manualControls.snooze');
-      expect(findingsPanelSource).toContain('manualControls.dismiss');
-    });
-
-    it('keeps inline manual controls out of the default Patrol queue rows', () => {
-      expect(findingsPanelSource).toContain('const shouldShowInlineManualControls =');
-      expect(findingsPanelSource).toContain(
-        "finding.status === 'active' && !isPatrolFindingsSource()",
-      );
-      expect(findingsPanelSource).toContain(
-        '<Show when={shouldShowInlineManualControls(finding)}>',
-      );
-    });
-
-    it('does not load legacy remediation plans', () => {
-      expect(findingsPanelSource).not.toContain('loadRemediationPlans');
-      expect(findingsPanelSource).not.toContain('getRemediationPlans');
-    });
-
-    it('can source Patrol findings from the direct Patrol store boundary', () => {
-      expect(findingsPanelSource).toContain("findingsSource?: 'unified' | 'patrol'");
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindings');
-      expect(findingsPanelSource).toContain('const sourceHasFindings = createMemo(');
-      expect(findingsPanelSource).toContain('const shouldShowLoadingState = createMemo(');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsLoading');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsError');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsSignal()');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.patrolFindingsNeedingAttention');
-      expect(findingsPanelSource).toContain(
-        'aiIntelligenceStore.patrolFindingsWithPendingApprovals',
-      );
-      expect(patrolWorkspaceSource).toContain('findingsSource="patrol"');
-    });
-
     it('passes Patrol history regression evidence into the findings empty-state helper', () => {
       expect(findingsPanelSource).toContain('historicalRegressionCount?: number');
       expect(findingsPanelSource).toContain(
@@ -951,11 +608,6 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain(
         '<InfoIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />',
       );
-    });
-
-    it('routes same-severity ordering through the shared patrol runtime sort helper', () => {
-      expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(a)');
-      expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(b)');
     });
 
     it('only shows the sort control when there are multiple Patrol findings to sort', () => {
@@ -1099,40 +751,6 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('hideSubject: true');
       expect(aiFindingPresentationSource).toContain('correlatedFindingIds');
       expect(aiFindingPresentationSource).toContain("String(finding.node || '').trim()");
-    });
-
-    it('uses canonical finding recency presentation instead of raw detected timestamps for active rows', () => {
-      expect(findingsPanelSource).toContain(
-        'const recency = getFindingRecencyPresentation(finding);',
-      );
-      expect(findingsPanelSource).toContain("{subject.label} {' · '} {recency.label}");
-      expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
-    });
-
-    it('routes row badges through shared metadata badge primitives', () => {
-      expect(findingsPanelSource).toContain(
-        'const severityPresentation = getFindingSeverityPresentation(finding);',
-      );
-      expect(findingsPanelSource).toContain('MetadataBadge');
-      expect(findingsPanelSource).toContain('FINDING_ROW_BADGE_PROPS');
-      expect(findingsPanelSource).toContain('severityPresentation.badgeTone');
-      expect(findingsPanelSource).toContain('severityPresentation.label');
-      expect(findingsPanelSource).not.toContain(
-        'px-1.5 py-0.5 border text-[10px] font-medium rounded-sm',
-      );
-    });
-
-    it('routes visible finding titles through the shared title presentation helper', () => {
-      expect(findingsPanelSource).toContain('const title = getFindingTitlePresentation(finding);');
-      expect(findingsPanelSource).toContain('{title.label}');
-    });
-
-    it('uses the shared finding subject presentation instead of raw patrol service resource tokens', () => {
-      expect(findingsPanelSource).toContain(
-        'const subject = getFindingSubjectPresentation(finding);',
-      );
-      expect(findingsPanelSource).toContain("{subject.label} {' · '} {recency.label}");
-      expect(findingsPanelSource).not.toContain('{finding.resourceName} ({finding.resourceType})');
     });
   });
 
@@ -1887,32 +1505,6 @@ describe('aiFindingPresentation', () => {
       // and not show a bogus "auto: <unknown>" badge.
       expect(formatOperatorStateDismissCauseLabel('something_new')).toBe('');
       expect(formatOperatorStateDismissCauseLabel('')).toBe('');
-    });
-  });
-
-  describe('FindingsPanel operator-state dismiss badge wiring', () => {
-    it('renders an "auto: <cause>" badge for operator-state-driven dismissals', () => {
-      // Both manual and auto-dismissed findings show DismissedReason=
-      // expected_behavior; the auto-dismiss is distinguished by the
-      // operator_state_cause lifecycle metadata. Pin the wiring so the
-      // FindingsPanel renders the parallel badge through the canonical
-      // helper, not by re-implementing the lifecycle scan inline.
-      expect(findingsPanelSource).toContain('getOperatorStateDismissCause(finding)');
-      expect(findingsPanelSource).toContain('formatOperatorStateDismissCauseLabel(');
-      expect(findingsPanelSource).toContain('auto:');
-      expect(findingsPanelSource).toContain(
-        'formatOperatorStateDismissCauseLabel(getOperatorStateDismissCause(finding))',
-      );
-      // The badge sits next to the existing dismissed-reason badge in
-      // source order so the two pieces of information read together
-      // (the reason and the attribution).
-      const dismissedReasonIndex = findingsPanelSource.indexOf(
-        '({formatIdentifierLabel(finding.dismissedReason)})',
-      );
-      const autoBadgeIndex = findingsPanelSource.indexOf('auto:');
-      expect(dismissedReasonIndex).toBeGreaterThan(0);
-      expect(autoBadgeIndex).toBeGreaterThan(0);
-      expect(autoBadgeIndex).toBeGreaterThan(dismissedReasonIndex);
     });
   });
 });

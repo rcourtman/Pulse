@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import PricingHandoff from '@/pages/PricingHandoff';
-import pricingHandoffSource from '@/pages/PricingHandoff.tsx?raw';
 import { DEFAULT_LOCALE, loadLocaleCatalog, setActiveLocale } from '@/i18n';
 import {
   getSelfHostedPurchaseStartUrl,
@@ -83,14 +82,22 @@ describe('PricingHandoff', () => {
     );
   });
 
-  it('uses PageHeader without hiding the manual-redirect link on mobile', () => {
-    expect(pricingHandoffSource).toContain(
-      "import { PageHeader } from '@/components/shared/PageHeader';",
-    );
-    expect(pricingHandoffSource).toContain('<PageHeader');
-    expect(pricingHandoffSource).toContain('descriptionVisibility="always"');
-    expect(pricingHandoffSource).toContain('updateDocumentTitle={false}');
-    expect(pricingHandoffSource).not.toContain('<h1');
+  it('keeps the manual-redirect link visible on phones', () => {
+    window.history.replaceState({}, '', '/pricing?feature=unknown_pro_feature');
+
+    render(() => (
+      <Router>
+        <Route path="/pricing" component={PricingHandoff} />
+      </Router>
+    ));
+
+    // PageHeader hides its description below the sm breakpoint unless the
+    // caller asks for it always; this paragraph holds the only way to continue
+    // when the automatic redirect does not happen.
+    const link = screen.getByRole('link', { name: /continue to Pulse Account/i });
+    const description = link.closest('p');
+    expect(description).not.toBeNull();
+    expect(description).not.toHaveClass('hidden');
   });
 
   // The earlier 'retired monitored-system pricing handoffs' case has been
