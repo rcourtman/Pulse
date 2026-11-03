@@ -3320,6 +3320,10 @@ a new API state machine, queue contract, or verification-accounting field.
    projection and configuration export immediately. Assistant URL updates must
    resolve a provider per organization and refresh existing services after a
    monitor replacement; a default provider must not be shared across tenants.
+   Infrastructure update detection (`internal/api/update_detection.go`) and
+   scheduler health resolve the request organization's monitor and read state
+   on every request; an organization whose monitor cannot be resolved gets no
+   updates and no queued update check, never the default organization's.
    Deploy
    preflights and jobs share `handleDeployJobStatus` /
    `handleDeployJobEvents` in `internal/api/deploy_handlers.go`; recovery
