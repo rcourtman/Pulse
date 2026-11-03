@@ -93,6 +93,7 @@ type OrgHandlers struct {
 	rbacProvider *TenantRBACProvider
 	onDelete     func(ctx context.Context, orgID string) error
 	hostedMode   bool
+	accessPolicy *DefaultAuthorizationChecker
 }
 
 func NewOrgHandlers(
@@ -127,6 +128,24 @@ func (h *OrgHandlers) SetHostedMode(enabled bool) {
 		return
 	}
 	h.hostedMode = enabled
+}
+
+// SetAccessPolicy installs the organization access policy shared with tenant
+// selection, so the organization routes decide default-organization access the
+// same way.
+func (h *OrgHandlers) SetAccessPolicy(policy *DefaultAuthorizationChecker) {
+	if h == nil {
+		return
+	}
+	h.accessPolicy = policy
+}
+
+// organizationResponse adds the caller's capabilities that the client cannot
+// derive from membership. Instance administrators manage the default
+// organization's members without being members themselves.
+type organizationResponse struct {
+	*models.Organization
+	CanManageMembers bool `json:"canManageMembers,omitempty"`
 }
 
 type createOrganizationRequest struct {
@@ -196,7 +215,7 @@ func (h *OrgHandlers) HandleListOrgs(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		normalizeOrganization(org)
-		if h.canAccessOrg(username, token, org) {
+		if h.canAccessOrg(r, username, token, org) {
 			filtered = append(filtered, org)
 		}
 	}
@@ -266,7 +285,7 @@ func (h *OrgHandlers) HandleCreateOrg(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	if err := h.persistence.SaveOrganization(org); err != nil {
+	if err := h.saveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create organization", nil)
 		return
 	}
@@ -292,12 +311,16 @@ func (h *OrgHandlers) HandleGetOrg(w http.ResponseWriter, r *http.Request) {
 
 	username := auth.GetUser(r.Context())
 	token := getAPITokenRecordFromRequest(r)
-	if !h.canAccessOrg(username, token, org) {
+	if !h.canAccessOrg(r, username, token, org) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "User is not a member of the organization", nil)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, org)
+	response := organizationResponse{Organization: org}
+	if org.ID == "default" && token == nil {
+		response.CanManageMembers = h.canManageDefaultOrgMembers(r, username)
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *OrgHandlers) HandleUpdateOrg(w http.ResponseWriter, r *http.Request) {
@@ -346,7 +369,7 @@ func (h *OrgHandlers) HandleUpdateOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	org.DisplayName = req.DisplayName
-	if err := h.persistence.SaveOrganization(org); err != nil {
+	if err := h.saveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update organization", nil)
 		return
 	}
@@ -441,7 +464,7 @@ func (h *OrgHandlers) HandleListMembers(w http.ResponseWriter, r *http.Request) 
 
 	username := auth.GetUser(r.Context())
 	token := getAPITokenRecordFromRequest(r)
-	if !h.canAccessOrg(username, token, org) {
+	if !h.canAccessOrg(r, username, token, org) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "User is not a member of the organization", nil)
 		return
 	}
@@ -460,7 +483,7 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 
 	orgID := strings.TrimSpace(r.PathValue("id"))
 	if orgID == "default" {
-		writeErrorResponse(w, http.StatusBadRequest, "default_org_immutable", "Default organization members cannot be managed", nil)
+		h.handleAddDefaultOrgMember(w, r)
 		return
 	}
 
@@ -569,7 +592,7 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		} else {
 			org.PendingInvitations = append(org.PendingInvitations, invitation)
 		}
-		if err := h.persistence.SaveOrganization(org); err != nil {
+		if err := h.saveOrganization(org); err != nil {
 			writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
 			return
 		}
@@ -581,7 +604,7 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.persistence.SaveOrganization(org); err != nil {
+	if err := h.saveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
 		return
 	}
@@ -608,7 +631,7 @@ func (h *OrgHandlers) HandleRemoveMember(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if orgID == "default" {
-		writeErrorResponse(w, http.StatusBadRequest, "default_org_immutable", "Default organization members cannot be managed", nil)
+		h.handleRemoveDefaultOrgMember(w, r, memberUserID)
 		return
 	}
 
@@ -648,7 +671,7 @@ func (h *OrgHandlers) HandleRemoveMember(w http.ResponseWriter, r *http.Request)
 	}
 
 	org.Members = nextMembers
-	if err := h.persistence.SaveOrganization(org); err != nil {
+	if err := h.saveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "member_remove_failed", "Failed to update organization members", nil)
 		return
 	}
@@ -678,12 +701,22 @@ func (h *OrgHandlers) HandleListInvitations(w http.ResponseWriter, r *http.Reque
 		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
 		return
 	}
-	if !org.CanUserIDManage(username) {
+	canManage := org.CanUserIDManage(username)
+	if org.ID == "default" {
+		canManage = h.canManageDefaultOrgMembers(r, username)
+	}
+	if !canManage {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, normalizeOrganizationInvitations(org.PendingInvitations, org.Members))
+	invitations := normalizeOrganizationInvitations(org.PendingInvitations, org.Members)
+	if invitations == nil {
+		// An organization with no pending invitations lists none, not null;
+		// the access panel rejects a list that is not an array.
+		invitations = []models.OrganizationInvitation{}
+	}
+	writeJSON(w, http.StatusOK, invitations)
 }
 
 func (h *OrgHandlers) HandleRevokeInvitation(w http.ResponseWriter, r *http.Request) {
@@ -726,7 +759,7 @@ func (h *OrgHandlers) HandleRevokeInvitation(w http.ResponseWriter, r *http.Requ
 	}
 
 	org.PendingInvitations = append(org.PendingInvitations[:index], org.PendingInvitations[index+1:]...)
-	if err := h.persistence.SaveOrganization(org); err != nil {
+	if err := h.saveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization invitations", nil)
 		return
 	}
@@ -818,7 +851,7 @@ func (h *OrgHandlers) HandleAcceptMyInvitation(w http.ResponseWriter, r *http.Re
 	if memberIndex := findOrganizationMemberIndex(org.Members, username); memberIndex >= 0 {
 		if invitationIndex := findOrganizationInvitationIndex(org.PendingInvitations, username); invitationIndex >= 0 {
 			org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
-			if err := h.persistence.SaveOrganization(org); err != nil {
+			if err := h.saveOrganization(org); err != nil {
 				writeErrorResponse(w, http.StatusInternalServerError, "invite_accept_failed", "Failed to update organization membership", nil)
 				return
 			}
@@ -848,7 +881,7 @@ func (h *OrgHandlers) HandleAcceptMyInvitation(w http.ResponseWriter, r *http.Re
 		AddedBy: invitation.InvitedBy,
 	})
 	org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
-	if err := h.persistence.SaveOrganization(org); err != nil {
+	if err := h.saveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "invite_accept_failed", "Failed to update organization membership", nil)
 		return
 	}
@@ -893,7 +926,7 @@ func (h *OrgHandlers) HandleDeclineMyInvitation(w http.ResponseWriter, r *http.R
 	}
 
 	org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
-	if err := h.persistence.SaveOrganization(org); err != nil {
+	if err := h.saveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "invite_decline_failed", "Failed to update organization invitations", nil)
 		return
 	}
@@ -919,7 +952,7 @@ func (h *OrgHandlers) HandleListShares(w http.ResponseWriter, r *http.Request) {
 
 	username := auth.GetUser(r.Context())
 	token := getAPITokenRecordFromRequest(r)
-	if !h.canAccessOrg(username, token, org) {
+	if !h.canAccessOrg(r, username, token, org) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "User is not a member of the organization", nil)
 		return
 	}
@@ -949,7 +982,7 @@ func (h *OrgHandlers) HandleListIncomingShares(w http.ResponseWriter, r *http.Re
 
 	username := auth.GetUser(r.Context())
 	token := getAPITokenRecordFromRequest(r)
-	if !h.canAccessOrg(username, token, targetOrg) {
+	if !h.canAccessOrg(r, username, token, targetOrg) {
 		writeErrorResponse(w, http.StatusForbidden, "access_denied", "User is not a member of the organization", nil)
 		return
 	}
@@ -1033,7 +1066,7 @@ func (h *OrgHandlers) HandleAcceptIncomingShare(w http.ResponseWriter, r *http.R
 	share.AcceptedBy = username
 	sourceOrg.SharedResources[shareIndex] = share
 
-	if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
+	if err := h.saveOrganization(sourceOrg); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "share_accept_failed", "Failed to accept incoming share", nil)
 		return
 	}
@@ -1089,7 +1122,7 @@ func (h *OrgHandlers) HandleDeclineIncomingShare(w http.ResponseWriter, r *http.
 	}
 	sourceOrg.SharedResources = nextShares
 
-	if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
+	if err := h.saveOrganization(sourceOrg); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "share_decline_failed", "Failed to remove incoming share", nil)
 		return
 	}
@@ -1189,7 +1222,7 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 				normalizedShares[i].CreatedBy = username
 			}
 			sourceOrg.SharedResources = normalizedShares
-			if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
+			if err := h.saveOrganization(sourceOrg); err != nil {
 				writeErrorResponse(w, http.StatusInternalServerError, "share_create_failed", "Failed to save organization share", nil)
 				return
 			}
@@ -1211,7 +1244,7 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 	}
 	sourceOrg.SharedResources = append(normalizedShares, share)
 
-	if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
+	if err := h.saveOrganization(sourceOrg); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "share_create_failed", "Failed to save organization share", nil)
 		return
 	}
@@ -1268,7 +1301,7 @@ func (h *OrgHandlers) HandleDeleteShare(w http.ResponseWriter, r *http.Request) 
 	}
 
 	sourceOrg.SharedResources = nextShares
-	if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
+	if err := h.saveOrganization(sourceOrg); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "share_delete_failed", "Failed to delete organization share", nil)
 		return
 	}
@@ -1330,7 +1363,7 @@ func (h *OrgHandlers) requireMultiTenantGate(w http.ResponseWriter, r *http.Requ
 	return true
 }
 
-func (h *OrgHandlers) canAccessOrg(username string, token *config.APITokenRecord, org *models.Organization) bool {
+func (h *OrgHandlers) canAccessOrg(r *http.Request, username string, token *config.APITokenRecord, org *models.Organization) bool {
 	if org == nil {
 		return false
 	}
@@ -1341,9 +1374,30 @@ func (h *OrgHandlers) canAccessOrg(username string, token *config.APITokenRecord
 		return false
 	}
 	if org.ID == "default" {
-		return true
+		if h.accessPolicy == nil {
+			return true
+		}
+		return h.accessPolicy.userDefaultOrgAccess(r.Context(), username).Allowed
 	}
 	return org.CanUserIDAccess(username)
+}
+
+// defaultOrgMembersManaged reports whether the default organization has a
+// member list: only in shared-process multi-organization mode, where the
+// default organization is not open to every signed-in user.
+func (h *OrgHandlers) defaultOrgMembersManaged() bool {
+	return h.accessPolicy != nil && h.accessPolicy.defaultOrgRestricted()
+}
+
+// canManageDefaultOrgMembers reports whether the session user may change the
+// default organization's members. That is instance administration: a member
+// of the default organization, whatever their role, cannot grant access to
+// the instance's own estate.
+func (h *OrgHandlers) canManageDefaultOrgMembers(r *http.Request, username string) bool {
+	if !h.defaultOrgMembersManaged() || h.accessPolicy.instanceAdmin == nil {
+		return false
+	}
+	return h.accessPolicy.instanceAdmin(r.Context(), username)
 }
 
 func organizationRoleForUser(org *models.Organization, username string) models.OrganizationRole {
@@ -1575,4 +1629,192 @@ func isValidOrganizationID(orgID string) bool {
 		return false
 	}
 	return organizationIDPattern.MatchString(orgID)
+}
+
+// loadDefaultOrganizationMembers strictly loads the default organization's
+// metadata for a membership change. A missing org.json starts an empty member
+// list; any other failure stops the change rather than overwriting a file
+// that could not be read.
+func (h *OrgHandlers) loadDefaultOrganizationMembers() (*models.Organization, error) {
+	if h.persistence == nil {
+		return nil, errors.New("organization persistence is not configured")
+	}
+	org, err := h.persistence.LoadOrganizationStrict("default")
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		org = &models.Organization{ID: "default", DisplayName: "default"}
+	}
+	if org == nil {
+		return nil, errOrgNotFound
+	}
+	org.ID = "default"
+	if strings.TrimSpace(org.DisplayName) == "" {
+		org.DisplayName = org.ID
+	}
+	normalizeOrganization(org)
+	return org, nil
+}
+
+// requireDefaultOrgMemberManager admits an instance administrator to change
+// the default organization's members, and only in multi-organization mode.
+func (h *OrgHandlers) requireDefaultOrgMemberManager(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if !h.defaultOrgMembersManaged() {
+		writeErrorResponse(w, http.StatusBadRequest, "default_org_immutable", "Default organization members cannot be managed", nil)
+		return "", false
+	}
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return "", false
+	}
+	if username == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "authentication_required", "Authentication required", nil)
+		return "", false
+	}
+	if !h.canManageDefaultOrgMembers(r, username) {
+		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Instance administrator required to manage default organization members", nil)
+		return "", false
+	}
+	return username, true
+}
+
+// handleAddDefaultOrgMember grants a user access to the default organization.
+// An instance administrator's grant takes effect at once rather than as an
+// invitation. Default-organization members are viewers: instance RBAC roles
+// govern what they can do, and membership never confers organization
+// management.
+func (h *OrgHandlers) handleAddDefaultOrgMember(w http.ResponseWriter, r *http.Request) {
+	username, ok := h.requireDefaultOrgMemberManager(w, r)
+	if !ok {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, orgRequestBodyLimit)
+	var req inviteMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
+		return
+	}
+	req.UserID = strings.TrimSpace(req.UserID)
+	if req.UserID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_user", "Member user ID is required", nil)
+		return
+	}
+	if req.Role == "" {
+		req.Role = models.OrgRoleViewer
+	}
+	if models.NormalizeOrganizationRole(req.Role) != models.OrgRoleViewer {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_role", "Default organization members are viewers; instance roles control what they can do", nil)
+		return
+	}
+
+	defaultOrgMembershipMu.Lock()
+	defer defaultOrgMembershipMu.Unlock()
+	org, err := h.loadDefaultOrganizationMembers()
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+	if findOrganizationMemberIndex(org.Members, req.UserID) >= 0 {
+		writeJSON(w, http.StatusOK, organizationAccessMutationResponse{
+			Kind:   "member",
+			Member: organizationMemberPointer(org.Members, req.UserID),
+		})
+		return
+	}
+	if enforceUserLimitForMemberAdd(w, r.Context(), org) {
+		return
+	}
+
+	org.Members = append(org.Members, models.OrganizationMember{
+		UserID:  req.UserID,
+		Role:    models.OrgRoleViewer,
+		AddedAt: time.Now().UTC(),
+		AddedBy: username,
+	})
+	if index := findOrganizationInvitationIndex(org.PendingInvitations, req.UserID); index >= 0 {
+		org.PendingInvitations = append(org.PendingInvitations[:index], org.PendingInvitations[index+1:]...)
+	}
+	if err := h.persistence.SaveOrganization(org); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
+		return
+	}
+	log.Info().
+		Str("org_id", "default").
+		Str("user_id", req.UserID).
+		Str("granted_by", username).
+		Msg("Granted default organization access")
+
+	writeJSON(w, http.StatusOK, organizationAccessMutationResponse{
+		Kind:   "member",
+		Member: organizationMemberPointer(org.Members, req.UserID),
+	})
+}
+
+// handleRemoveDefaultOrgMember revokes a user's default-organization access.
+// Open WebSocket and SSE reads re-check the policy and end within
+// orgAccessRecheckInterval.
+func (h *OrgHandlers) handleRemoveDefaultOrgMember(w http.ResponseWriter, r *http.Request, memberUserID string) {
+	username, ok := h.requireDefaultOrgMemberManager(w, r)
+	if !ok {
+		return
+	}
+
+	defaultOrgMembershipMu.Lock()
+	defer defaultOrgMembershipMu.Unlock()
+	org, err := h.loadDefaultOrganizationMembers()
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+	index := findOrganizationMemberIndex(org.Members, memberUserID)
+	if index < 0 {
+		writeErrorResponse(w, http.StatusNotFound, "member_not_found", "Member not found", nil)
+		return
+	}
+	org.Members = append(org.Members[:index], org.Members[index+1:]...)
+	if org.OwnerUserID == memberUserID {
+		// Ownership of the default organization is not an access grant to
+		// keep; normalization would otherwise restore the member row.
+		org.OwnerUserID = ""
+	}
+	if err := h.persistence.SaveOrganization(org); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "member_remove_failed", "Failed to update organization members", nil)
+		return
+	}
+	log.Info().
+		Str("org_id", "default").
+		Str("user_id", memberUserID).
+		Str("revoked_by", username).
+		Msg("Revoked default organization access")
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// saveOrganization saves a handler's organization snapshot. The default
+// organization's members and owner are an access grant changed only under
+// defaultOrgMembershipMu, so a save from an older snapshot, such as a share or
+// invitation change, keeps the current members instead of restoring revoked
+// ones.
+func (h *OrgHandlers) saveOrganization(org *models.Organization) error {
+	if org == nil || org.ID != "default" {
+		return h.persistence.SaveOrganization(org)
+	}
+	defaultOrgMembershipMu.Lock()
+	defer defaultOrgMembershipMu.Unlock()
+	current, err := h.persistence.LoadOrganizationStrict("default")
+	switch {
+	case err == nil:
+		org.Members = current.Members
+		org.OwnerUserID = current.OwnerUserID
+	case errors.Is(err, os.ErrNotExist):
+		org.Members = nil
+		org.OwnerUserID = ""
+	default:
+		return err
+	}
+	return h.persistence.SaveOrganization(org)
 }

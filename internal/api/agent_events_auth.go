@@ -17,7 +17,9 @@ func (r *Router) handleAgentEvents(w http.ResponseWriter, req *http.Request) {
 func agentEventTokenRevalidator(cfg *config.Config, req *http.Request) func() bool {
 	revalidate := monitoringTokenSnapshotRevalidator(cfg, req)
 	if revalidate == nil {
-		return sessionReadRevalidator(req)
+		// A signed-in user's stream also follows the organization access
+		// policy, so lost membership or default access ends it.
+		return combineAuthorization(sessionReadRevalidator(req), orgAccessRevalidator(req))
 	}
 	admittedContext := req.Context()
 	return func() bool {

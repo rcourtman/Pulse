@@ -13723,3 +13723,18 @@ earlier raw object; that current-read object remains usable for the same live
 ID. A later full read, context withdrawal or deletion invalidates the old
 confirmation. The registered sequential scope-edit/revoke consumer regression
 and earlier-read rejection test cover both sides without ID-only admission.
+
+### Default-organization access policy
+
+`DefaultAuthorizationChecker.CheckAccessContext` is the one organization
+access policy for tenant selection, action authority, organization handlers,
+the WebSocket hub and long-lived reads. In shared-process multi-organization
+mode a signed-in user reaches the default organization only as an instance
+administrator (local admin, RBAC admin grant evaluated with inheritance and
+deny precedence, or a proxy principal admitted with the admin role) or as an
+explicit default member. A request that names no organization lands in the
+user's first organization, and `resolveTenantOrgID` returns the authorized
+organization so handlers agree with that decision. Other refusals of the
+default organization answer `default_org_access_denied`; the browser client
+clears that stale selection and retries reads only. WebSocket and SSE reads
+re-check the policy every 10 seconds. API-token bindings are unchanged.

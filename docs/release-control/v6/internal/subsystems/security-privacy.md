@@ -4271,3 +4271,14 @@ Registered `ReportingPanel.reader.test.tsx`, `useReportingPanelState.test.ts`,
 late body completion, same-reader refresh, refused-save retry, malformed inventory,
 confirmation, route props and existing reporting/delivery behaviour. Actual App
 Settings/API-client/browser proof remains required for the consuming surface.
+
+### Default-organization access in multi-organization mode
+
+`internal/api/router.go` now builds one organization access policy and hands it
+to tenant selection, action authority, the organization handlers and the
+WebSocket hub. In self-hosted multi-organization mode the default organization
+admits only instance administrators (local admin, an RBAC admin grant that
+honours inheritance and deny precedence, or a proxy user admitted with the
+admin role, bound to that username) and explicit members of its strictly
+loaded `org.json`. Live WebSocket, SSE and agent-event reads re-check the
+policy every 10 seconds. API-token bindings are unchanged.

@@ -18,7 +18,7 @@ import {
 } from '@/stores/sessionPresentationPolicy';
 import { getOrgID } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
-import { normalizeOrgScope } from '@/utils/orgScope';
+import { DEFAULT_ORG_SCOPE, normalizeOrgScope } from '@/utils/orgScope';
 import {
   getOrganizationAddMemberErrorMessage,
   getOrganizationAccessInvitationAcceptedMessage,
@@ -45,6 +45,11 @@ import { canManageOrg, normalizeRole } from '@/utils/orgUtils';
 interface OrganizationAccessPanelProps {
   currentUser?: string;
 }
+
+// Instance administrators manage the default organization's members without
+// belonging to it, so the server reports that capability directly.
+const canManageMembers = (org: Organization | null, currentUser?: string): boolean =>
+  org?.id === DEFAULT_ORG_SCOPE ? org.canManageMembers === true : canManageOrg(org, currentUser);
 
 export function useOrganizationAccessPanelState(props: OrganizationAccessPanelProps) {
   const [loading, setLoading] = createSignal(true);
@@ -77,7 +82,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     () =>
       hasCurrentAccess() &&
       !presentationPolicyIsReadOnly() &&
-      canManageOrg(org(), props.currentUser),
+      canManageMembers(org(), props.currentUser),
   );
   const canChangeAccess = () =>
     hasCurrentAccess() && !!props.currentUser && !presentationPolicyIsReadOnly() && !saving();
@@ -135,7 +140,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
       if (!orgData || orgData.id !== orgId) {
         throw new Error('Organization access returned a different selection');
       }
-      const manageable = canManageOrg(orgData, user);
+      const manageable = canManageMembers(orgData, user);
       const [memberData, invitationData, myInvitationData] = await Promise.all([
         OrgsAPI.listMembers(orgId, options),
         manageable ? OrgsAPI.listPendingInvitations(orgId, options) : Promise.resolve([]),

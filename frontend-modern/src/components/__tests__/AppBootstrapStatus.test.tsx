@@ -1,11 +1,86 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_BOOTSTRAP_SLOW_DELAY_MS, AppBootstrapStatus } from '@/components/AppBootstrapStatus';
 
+const orgsApi = vi.hoisted(() => ({
+  listMyInvitations: vi.fn(),
+  acceptMyInvitation: vi.fn(),
+  declineMyInvitation: vi.fn(),
+}));
+const client = vi.hoisted(() => ({ apiFetch: vi.fn(), clearAuth: vi.fn() }));
+
+vi.mock('@/api/orgs', () => ({ OrgsAPI: orgsApi }));
+vi.mock('@/utils/apiClient', () => client);
+
+const jsonResponse = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+const refuseEveryOrganization = () =>
+  client.apiFetch.mockImplementation(async (url: string) => {
+    if (url === '/api/state/summary') {
+      return jsonResponse(403, {
+        error: 'default_org_access_denied',
+        message: 'User is not a member of the default organization',
+      });
+    }
+    if (url === '/api/security/status') return jsonResponse(200, {});
+    return jsonResponse(200, { success: true });
+  });
+
 describe('AppBootstrapStatus', () => {
+  beforeEach(() => {
+    client.apiFetch.mockResolvedValue(new Response('unavailable', { status: 503 }));
+  });
+
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('offers pending invitations to a signed-in user with no organization', async () => {
+    refuseEveryOrganization();
+    orgsApi.listMyInvitations.mockResolvedValue([
+      {
+        orgId: 'acme',
+        orgDisplayName: 'Acme',
+        userId: 'bob',
+        role: 'viewer',
+        invitedAt: '2026-11-03T00:00:00Z',
+        invitedBy: 'alice',
+      },
+    ]);
+    render(() => <AppBootstrapStatus failed />);
+
+    expect(await screen.findByText('Acme')).toBeVisible();
+    expect(screen.getByRole('main')).toHaveAccessibleName('No organization access yet');
+    expect(screen.queryByRole('button', { name: 'Retry connection' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() =>
+      expect(client.apiFetch).toHaveBeenCalledWith(
+        '/api/logout',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+  });
+
+  it('tells a user without invitations who can grant access', async () => {
+    refuseEveryOrganization();
+    orgsApi.listMyInvitations.mockResolvedValue([]);
+    render(() => <AppBootstrapStatus failed />);
+
+    expect(
+      await screen.findByText('Ask a Pulse administrator to add you to an organization.'),
+    ).toBeVisible();
+  });
+
+  it('does not probe organization access while the bootstrap is still running', () => {
+    render(() => <AppBootstrapStatus />);
+    expect(client.apiFetch).not.toHaveBeenCalled();
   });
 
   it('names and announces the initial connection work', () => {

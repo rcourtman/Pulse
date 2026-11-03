@@ -587,3 +587,25 @@ func TestPublicURLTokenCapturePreservesTokenRefusals(t *testing.T) {
 		})
 	}
 }
+
+// The router builds one organization access policy and shares it with tenant
+// selection, action authority, the organization handlers and the WebSocket
+// hub, so they cannot disagree about who may use the default organization.
+func TestNewRouterSharesOrgAccessPolicy(t *testing.T) {
+	previous := IsMultiTenantEnabled()
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(previous) })
+	t.Setenv("PULSE_DEV", "true")
+
+	dataDir := t.TempDir()
+	router := newMultiTenantRouter(t, &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "admin"})
+	if router.orgAccess == nil || router.orgAccess.instanceAdmin == nil {
+		t.Fatal("router must build the shared organization access policy")
+	}
+	if !router.orgAccess.CheckAccess(nil, "admin", "default").Allowed {
+		t.Fatal("instance administrator must reach the default organization")
+	}
+	if router.orgAccess.CheckAccess(nil, "bob", "default").Allowed {
+		t.Fatal("a user without membership must not reach the default organization")
+	}
+}

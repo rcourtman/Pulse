@@ -126,7 +126,7 @@ func (a actionAuthority) authorizeActor(ctx context.Context, orgID string, actor
 	} else if actor.Kind != unified.ActionActorUser || !strings.EqualFold(strings.TrimSpace(auth.GetUser(ctx)), actor.SubjectID) {
 		return actionlifecycle.ErrApprovalActorNotHuman
 	}
-	if a.orgChecker == nil || !a.orgChecker.CheckAccess(token, actor.SubjectID, orgID).Allowed {
+	if a.orgChecker == nil || !a.orgChecker.CheckAccessContext(ctx, token, actor.SubjectID, orgID).Allowed {
 		return actionlifecycle.ErrActionAuthorizationDenied
 	}
 	return authorizeActionCapability(ctx, a.authorizer, capability)
