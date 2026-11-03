@@ -614,6 +614,19 @@ header) as shares of that width, and the name takes the rest; without a width
 the shared 40% identity share still applies. At 360px and up a 16-character
 guest name fits whole. Rows stay 32px and single-line.
 
+### PlatformResourceDetailTableRow can collapse its resource inspector (3 November 2026)
+
+`PlatformResourceDetailTableRow` takes an optional `collapseResource`
+(`title`, `summary`, `showLabel`, `hideLabel`). When set, the row's `context`
+answers the row and the canonical `ResourceDetailDrawer` sits inside a
+`ResourceDetailDrawerSupportDisclosure`, mounted only when opened, so its
+history reads start on demand. It starts collapsed every time the row opens,
+and the inspector gets no `onClose`, because "Hide" is its close and the row's
+own heading closes the row. Without it every caller is unchanged. The
+Backups datastore drawer is the one user: its context carries the canonical
+`ObjectDrawerHeader` and `DrawerSubjectHeading`, so the drawer keeps a subject
+heading and a close control while the server inspector is collapsed.
+
 ### Backup servers table drops its host columns (2 November 2026)
 
 `ProxmoxBackupServersTable` no longer renders Version, CPU, Memory or Uptime

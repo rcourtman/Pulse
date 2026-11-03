@@ -601,6 +601,8 @@ describe('shared primitive guardrails', () => {
     expect(platformResourceDetailTableRowSource).toContain('PlatformResourceDetailToggleButton');
     expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
     expect(platformResourceDetailTableRowSource).toContain('hideWhenRowTappableOnMobile');
+    // A collapsed resource inspector uses the canonical drawer disclosure.
+    expect(platformResourceDetailTableRowSource).toContain('ResourceDetailDrawerSupportDisclosure');
 
     for (const source of [guestRowSource, storagePoolRowSource, diskListSource]) {
       expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');

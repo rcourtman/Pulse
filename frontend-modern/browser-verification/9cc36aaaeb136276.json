@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "26f033091328307194e6014d65e13d40fa4adfcb",
+  "verified_at": "2026-11-03T22:00:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "843e80f6dc7964a59b69deeba43f1ca35b1be7044f7e2ea86f767b6444515f4f",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "39070dc8d6ef0fa71c7024da32fa20e196387544f99bb82b3dc71d869811c978"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock stack built from this exact working tree: Backup servers table with PBS datastore rows",
+    "Desktop 1280: datastore drawer 258px (was about 753px): heading with status dot and \"on <server>\", Datastore block with capacity and free space, jobs, backup entries and footer",
+    "Server section collapsed by default with its summary; no inspector tabs mounted until opened",
+    "Server shown: inspector with its 2 tabs, still exactly one \"Collapse <datastore> details\" control in the drawer",
+    "Phone 390: drawer 260px, no horizontal overflow; only the Server summary truncates"
+  ],
+  "interactions": [
+    "Expanded a datastore row and opened \"Show server\" (drawer 848px at 1024 wide)",
+    "Closed the row with the heading collapse control while the server was shown, then reopened it: Server collapsed again, drawer back to its compact height",
+    "Opened \"Show server\", then \"Hide server\": inspector tabs gone, compact height restored",
+    "Inspected the open drawer at 1280 and 390 with screenshots"
+  ]
+}

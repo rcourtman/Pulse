@@ -432,12 +432,12 @@ describe('ProxmoxBackupsTable', () => {
     ).not.toBe(offsite);
     fireEvent.click(offsite);
     const selected = screen.getByRole('region', { name: 'Selected PBS datastore' });
-    expect(within(selected).getByText('Datastore').closest('tr')).toHaveTextContent('offsite');
-    expect(within(selected).getByText('Backup reader').closest('tr')).toHaveTextContent('pbs-main');
+    expect(within(selected).getByRole('heading')).toHaveTextContent('offsite');
+    expect(selected).toHaveTextContent('on pbs-main');
     expect(within(selected).getByText('Capacity').closest('tr')).toHaveTextContent('25.0%');
     // The surrounding scan table is nowrap; the interpretation must wrap too,
     // not only the four fields protected by DetailSectionTable.wrapValues.
-    expect(within(selected).getByText(/Counts describe the loaded inventory/)).toHaveClass(
+    expect(within(selected).getByText(/Backup entries can include running/)).toHaveClass(
       'whitespace-normal',
     );
   });

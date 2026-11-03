@@ -1,5 +1,6 @@
 import { Show, createSignal, type Component, type JSX } from 'solid-js';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
+import { ResourceDetailDrawerSupportDisclosure } from '@/components/Infrastructure/ResourceDetailDrawerSupportDisclosure';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import type { Resource } from '@/types/resource';
@@ -111,6 +112,34 @@ export function createPlatformResourceLabelResolver(resources: () => readonly Re
   };
 }
 
+type CollapseResourceOptions = {
+  title: string;
+  summary?: string;
+  showLabel: string;
+  hideLabel: string;
+};
+
+// Mounted with the open row, so every opening starts collapsed again.
+const CollapsedResourceDisclosure: Component<{
+  options: CollapseResourceOptions;
+  children: JSX.Element;
+}> = (props) => {
+  const [shown, setShown] = createSignal(false);
+  return (
+    <ResourceDetailDrawerSupportDisclosure
+      title={props.options.title}
+      summary={props.options.summary}
+      expanded={shown()}
+      onToggle={() => setShown((value) => !value)}
+      showLabel={props.options.showLabel}
+      hideLabel={props.options.hideLabel}
+      dataTestId="platform-resource-detail-collapsed-resource"
+    >
+      {props.children}
+    </ResourceDetailDrawerSupportDisclosure>
+  );
+};
+
 export const PlatformResourceDetailTableRow: Component<{
   resource: Resource;
   open: boolean;
@@ -123,9 +152,29 @@ export const PlatformResourceDetailTableRow: Component<{
   initialShowHostDetails?: boolean;
   /** Row-specific evidence, separate from the canonical host/resource inspector. */
   context?: JSX.Element;
+  /**
+   * When the row is about something the resource holds (a datastore on a
+   * backup server), the context answers the row and the resource's own
+   * inspector waits behind this disclosure, mounted only when opened.
+   */
+  collapseResource?: CollapseResourceOptions;
   onResourceActionSettled?: () => void | Promise<void>;
   onClose?: () => void;
 }> = (props) => {
+  // A collapsed inspector sits under the row's own heading, which closes the
+  // row; its "Hide" control is the inspector's own close.
+  const drawer = (closesRow: boolean) => (
+    <ResourceDetailDrawer
+      resource={props.resource}
+      statusIndicator={props.statusIndicator}
+      presentation="table-row"
+      resolveResourceLabel={props.resolveResourceLabel}
+      initialShowAccessContext={props.initialShowAccessContext}
+      initialShowHostDetails={props.initialShowHostDetails}
+      onResourceActionSettled={props.onResourceActionSettled}
+      onClose={closesRow ? props.onClose : undefined}
+    />
+  );
   return (
     <Show when={props.open}>
       <InlineDetailTableRow
@@ -135,16 +184,13 @@ export const PlatformResourceDetailTableRow: Component<{
         data-inline-platform-resource-detail-for={props.resource.id}
       >
         {props.context}
-        <ResourceDetailDrawer
-          resource={props.resource}
-          statusIndicator={props.statusIndicator}
-          presentation="table-row"
-          resolveResourceLabel={props.resolveResourceLabel}
-          initialShowAccessContext={props.initialShowAccessContext}
-          initialShowHostDetails={props.initialShowHostDetails}
-          onResourceActionSettled={props.onResourceActionSettled}
-          onClose={props.onClose}
-        />
+        <Show when={props.collapseResource} fallback={drawer(true)}>
+          {(collapse) => (
+            <CollapsedResourceDisclosure options={collapse()}>
+              {drawer(false)}
+            </CollapsedResourceDisclosure>
+          )}
+        </Show>
       </InlineDetailTableRow>
     </Show>
   );

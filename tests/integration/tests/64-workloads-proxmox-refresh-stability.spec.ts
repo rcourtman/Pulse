@@ -409,6 +409,8 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
       "tr[data-inline-platform-resource-detail-for]",
     );
     await expect(detailRow).toBeVisible();
+    // The datastore drawer keeps its server's inspector behind a disclosure.
+    await detailRow.getByRole("button", { name: "Show server" }).click();
     const manageTab = detailRow.getByRole("tab", {
       name: "Manage",
       exact: true,
