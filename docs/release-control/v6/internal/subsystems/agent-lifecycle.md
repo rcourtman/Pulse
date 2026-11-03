@@ -10988,3 +10988,11 @@ replacement. Session withdrawal does not cancel independent agents, updates,
 deployments, backups or legacy executions, nor prove original recovery.
 `TestContractSessionReadLogoutBoundary` covers persisted logout and native
 HTTP/WS refusal; the API contract describes the credential and idle boundaries.
+
+### Agent event streams follow organization access
+
+`/api/agent/events` for a signed-in user now also re-checks the organization
+access policy, so a user who loses default-organization membership or
+instance administration stops receiving findings and approval events within
+10 seconds. Token streams keep their existing credential and binding checks.
+Agent enrollment, reports and command channels are unchanged.

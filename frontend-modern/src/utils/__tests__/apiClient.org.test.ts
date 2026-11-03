@@ -358,6 +358,74 @@ describe('apiClient org context', () => {
     expect(getOrgID()).toBeNull();
   });
 
+  it('clears a refused default selection and retries without org context', async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: 'default_org_access_denied',
+            message: 'User is not a member of the default organization',
+          }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+    setOrgID('default');
+    const response = await apiFetch('/api/state/summary');
+
+    expect(response.status).toBe(200);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const [, firstOptions] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((firstOptions.headers as Record<string, string>)['X-Pulse-Org-ID']).toBe('default');
+    const [, secondOptions] = mockFetch.mock.calls[1] as [string, RequestInit];
+    expect((secondOptions.headers as Record<string, string>)['X-Pulse-Org-ID']).toBeUndefined();
+    expect(getOrgID()).toBeNull();
+  });
+
+  it('does not retarget a write refused in the default organization', async () => {
+    mockFetch.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error: 'default_org_access_denied', message: 'denied' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+
+    setOrgID('default');
+    document.cookie = 'pulse_csrf=synthetic-csrf; Path=/';
+    const response = await apiFetch('/api/guests/metadata/vm-1', { method: 'PUT', body: '{}' });
+
+    expect(response.status).toBe(403);
+    // The write may be retried once with a refreshed CSRF token, but never
+    // without its organization or against the one the server would pick.
+    const writes = mockFetch.mock.calls.filter(([url]) => url === '/api/guests/metadata/vm-1');
+    expect(writes.length).toBeGreaterThan(0);
+    for (const [, options] of writes) {
+      expect((options as RequestInit).headers as Record<string, string>).toHaveProperty(
+        'X-Pulse-Org-ID',
+        'default',
+      );
+    }
+    expect(getOrgID()).toBe('default');
+  });
+
+  it('keeps the org selection for other 403 responses', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'access_denied', message: 'denied' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    setOrgID('tenant-a');
+    const response = await apiFetch('/api/state/summary');
+
+    expect(response.status).toBe(403);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(getOrgID()).toBe('tenant-a');
+  });
+
   it('honors HTTP-date Retry-After before retrying a 429 response', async () => {
     vi.useFakeTimers();
     const retryAfter = new Date(Date.now() + 5000).toUTCString();

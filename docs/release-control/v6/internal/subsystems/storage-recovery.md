@@ -9485,3 +9485,11 @@ replacement. Session withdrawal does not cancel independent agents, updates,
 deployments, backups or legacy executions, nor prove original recovery.
 `TestContractSessionReadLogoutBoundary` covers persisted logout and native
 HTTP/WS refusal; the API contract describes the credential and idle boundaries.
+
+### Default-organization access policy is not a storage path
+
+The default-organization access change in `internal/api/` adds no storage or
+recovery path beyond default-organization membership in the existing
+`org.json` and a one-time marker, `default-org-access-migration.json`, in the
+base data directory. The migration writes nothing when tenant metadata or RBAC
+assignments cannot be read, so recovery of those stores is unchanged.

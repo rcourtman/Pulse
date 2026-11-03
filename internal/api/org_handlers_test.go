@@ -1459,3 +1459,31 @@ func acceptIncomingShareForTest(t *testing.T, h *OrgHandlers, orgID, username, s
 	}
 	return share
 }
+
+// An organization with no pending invitations lists none as an empty array;
+// the access panel refuses a list that is not an array.
+func TestHandleListInvitationsListsNoneAsEmptyArray(t *testing.T) {
+	previous := IsMultiTenantEnabled()
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(previous) })
+	t.Setenv("PULSE_DEV", "true")
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID: "quiet", DisplayName: "Quiet", OwnerUserID: "alice",
+		Members: []models.OrganizationMember{{UserID: "alice", Role: models.OrgRoleOwner}},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+	h := NewOrgHandlers(persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/orgs/quiet/invitations", nil)
+	req = req.WithContext(internalauth.WithUser(req.Context(), "alice"))
+	req.SetPathValue("id", "quiet")
+	rec := httptest.NewRecorder()
+	h.HandleListInvitations(rec, req)
+
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Fatalf("listing invitations: %d %q, want an empty array", rec.Code, rec.Body.String())
+	}
+}

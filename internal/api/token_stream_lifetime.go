@@ -23,11 +23,12 @@ func retainTokenStreamAuthority(cfg *config.Config, scope string, instanceAdmin 
 func retainTokenStreamAuthorityForScopes(cfg *config.Config, scopes []string, instanceAdmin bool, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		revalidate := tokenStreamSnapshotRevalidator(cfg, r, scopes...)
-		sessionAllowed := sessionReadRevalidator(r)
+		sessionAllowed := combineAuthorization(sessionReadRevalidator(r), orgAccessRevalidator(r))
 		allowed := func() bool {
 			if revalidate == nil {
 				// Proxy/basic/bypass admission stays with the route. A
-				// session read retains its exact admitted session instance.
+				// session read retains its exact admitted session instance,
+				// and a signed-in user keeps the organization access policy.
 				return sessionAllowed == nil || sessionAllowed()
 			}
 			current, ok := revalidate()

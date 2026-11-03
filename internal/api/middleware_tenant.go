@@ -40,7 +40,36 @@ type TenantMiddlewareConfig struct {
 	HostedMode  bool
 }
 
+// resolveTenantOrgID returns the request's organization. Once TenantMiddleware
+// has authorized an organization, that decision wins: it may have chosen a
+// landing organization for a request that named none, and handlers must act on
+// the organization that was authorized, not re-derive one from the request.
 func resolveTenantOrgID(r *http.Request) string {
+	if r != nil {
+		// Read the context value directly: GetOrgID reports "default" when
+		// TenantMiddleware has not run, which must not mask the request's own
+		// selection or its org-bound token.
+		if authorized, ok := r.Context().Value(OrgIDContextKey).(string); ok && strings.TrimSpace(authorized) != "" {
+			return strings.TrimSpace(authorized)
+		}
+	}
+	return requestedTenantOrgID(r)
+}
+
+// requestNamesTenantOrg reports whether the request selected an organization
+// with the X-Pulse-Org-ID header or the organization cookie.
+func requestNamesTenantOrg(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID")) != "" {
+		return true
+	}
+	cookie, err := r.Cookie(CookieNameOrgID)
+	return err == nil && strings.TrimSpace(cookie.Value) != ""
+}
+
+func requestedTenantOrgID(r *http.Request) string {
 	orgID := ""
 	explicitOrg := false
 
@@ -97,7 +126,23 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 		// 2. Cookie: pulse_org_id (for browser session)
 		// 3. Fallback: "default" (for backward compatibility)
 
-		orgID := resolveTenantOrgID(r)
+		orgID := requestedTenantOrgID(r)
+
+		// Shared-process multi-organization mode limits the default
+		// organization. A signed-in user who did not name an organization and
+		// cannot use the default one lands in the first organization they
+		// belong to, so the app shell and bootstrap reads load in their own
+		// organization instead of failing.
+		policy, _ := m.authChecker.(contextAuthorizationChecker)
+		namedOrg := requestNamesTenantOrg(r)
+		if policy != nil && !namedOrg && orgID == "default" && !isAdminBypassRequest(r.Context()) &&
+			getAPITokenRecordFromRequest(r) == nil {
+			if userID := auth.GetUser(r.Context()); userID != "" {
+				if landing := policy.LandingOrgID(r.Context(), userID); landing != "" {
+					orgID = landing
+				}
+			}
+		}
 
 		var loadedOrg *models.Organization
 
@@ -183,14 +228,33 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			// If no auth context, the route's RequireAuth will handle authentication errors
 			if token != nil || userID != "" {
 				// Perform authorization check using the interface method
-				result := m.authChecker.CheckAccess(token, userID, orgID)
+				var result AuthorizationResult
+				if policy != nil {
+					result = policy.CheckAccessContext(r.Context(), token, userID, orgID)
+				} else {
+					result = m.authChecker.CheckAccess(token, userID, orgID)
+				}
+				// A signed-in user who cannot use the default organization may
+				// still load the app shell, see their sign-in state, list their
+				// organizations, handle invitations and sign out, including
+				// with a stale default selection. Those routes do not read
+				// default-org data.
+				if !result.Allowed && policy != nil && orgID == "default" && token == nil && orgNeutralBootstrapRequest(r) {
+					result = AuthorizationResult{Allowed: true, Reason: "Organization-neutral route"}
+				}
 				if !result.Allowed {
 					log.Warn().
 						Str("org_id", orgID).
 						Str("user_id", userID).
 						Str("reason", result.Reason).
 						Msg("Unauthorized access attempt to organization")
-					writeJSONError(w, http.StatusForbidden, "access_denied", result.Reason)
+					code := "access_denied"
+					if orgID == "default" && token == nil {
+						// Clients clear a stale default selection on this
+						// code and retry, landing in the user's own org.
+						code = "default_org_access_denied"
+					}
+					writeJSONError(w, http.StatusForbidden, code, result.Reason)
 					return
 				}
 			}
@@ -198,6 +262,7 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 
 		// 5. Inject into Context
 		ctx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+		ctx = withOrgAccessChecker(ctx, policy)
 
 		org := loadedOrg
 		if org == nil {

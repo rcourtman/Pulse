@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -15,6 +16,7 @@ import (
 
 	gorillawebsocket "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestNormalClientCloseIsNotAnError(t *testing.T) {
@@ -1554,5 +1556,66 @@ func TestClientWriterRevalidatesIdleConnection(t *testing.T) {
 	<-done
 	if calls.Load() != 1 {
 		t.Fatalf("idle authorization calls = %d, want 1", calls.Load())
+	}
+}
+
+type contextOrgAuthChecker struct {
+	allow    bool
+	calls    int
+	lastOrg  string
+	lastUser string
+	sawCtx   bool
+}
+
+func (c *contextOrgAuthChecker) CanAccessOrg(string, interface{}, string) bool {
+	panic("the hub must prefer the context-aware check")
+}
+
+func (c *contextOrgAuthChecker) CanAccessOrgContext(ctx context.Context, userID string, _ interface{}, orgID string) bool {
+	c.calls++
+	c.lastOrg = orgID
+	c.lastUser = userID
+	c.sawCtx = ctx != nil && auth.GetUser(ctx) == userID
+	return c.allow
+}
+
+// In multi-organization mode the default organization is not open to every
+// signed-in user, so the hub checks it like any other organization.
+func TestHandleWebSocket_ChecksDefaultOrgForSignedInUsers(t *testing.T) {
+	setAuditLogger(t, &testAuditLogger{})
+	hub := NewHub(nil)
+	checker := &contextOrgAuthChecker{allow: false}
+	hub.SetOrgAuthChecker(checker)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	req.Header.Set("X-Pulse-Org-ID", "default")
+	req = req.WithContext(auth.WithUser(req.Context(), "bob"))
+	rec := httptest.NewRecorder()
+	hub.HandleWebSocket(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status %d, want 403", rec.Code)
+	}
+	if checker.calls != 1 || checker.lastOrg != "default" || checker.lastUser != "bob" || !checker.sawCtx {
+		t.Fatalf("unexpected check: %+v", checker)
+	}
+}
+
+// An installation without authentication has no principal to check.
+func TestHandleWebSocket_SkipsDefaultOrgCheckWithoutPrincipal(t *testing.T) {
+	hub := NewHub(nil)
+	checker := &contextOrgAuthChecker{allow: false}
+	hub.SetOrgAuthChecker(checker)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	req.Header.Set("X-Pulse-Org-ID", "default")
+	rec := httptest.NewRecorder()
+	hub.HandleWebSocket(rec, req)
+
+	if checker.calls != 0 {
+		t.Fatalf("default org without a principal must not be checked, got %d calls", checker.calls)
+	}
+	if rec.Code == http.StatusForbidden {
+		t.Fatal("unauthenticated installation must not be refused by the org check")
 	}
 }
