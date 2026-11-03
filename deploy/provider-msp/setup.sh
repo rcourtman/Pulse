@@ -22,6 +22,11 @@ PULSE_PROVIDER_MSP_LICENSE_URL="${PULSE_PROVIDER_MSP_LICENSE_URL:-https://licens
 PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE="${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE:-0}"
 PULSE_PROVIDER_MSP_EVAL_EMAIL="${PULSE_PROVIDER_MSP_EVAL_EMAIL:-}"
 PULSE_PROVIDER_MSP_SIGNUP_SOURCE="${PULSE_PROVIDER_MSP_SIGNUP_SOURCE:-provider_msp_setup}"
+# The three values only a provider can supply. Seeded into a new .env; an
+# interactive run asks for any left blank before installing anything.
+PULSE_PROVIDER_MSP_DOMAIN="${PULSE_PROVIDER_MSP_DOMAIN:-}"
+PULSE_PROVIDER_MSP_ACME_EMAIL="${PULSE_PROVIDER_MSP_ACME_EMAIL:-}"
+PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN="${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN:-}"
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -508,6 +513,67 @@ falsy() {
   esac
 }
 
+# Values reach .env unquoted, so each is held to characters that compose and
+# set_env_value read literally: no whitespace, quotes, $, # or backslashes.
+valid_first_run_value() {
+  local key="$1" value="$2"
+  local label='[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+  local domain_re="^(${label}\\.)+[A-Za-z]{2,63}$"
+  local email_re="^[A-Za-z0-9._%+-]+@(${label}\\.)+[A-Za-z]{2,63}$"
+  local token_re='^[A-Za-z0-9_.+/=-]{20,255}$'
+  case "${key}" in
+    DOMAIN) [[ "${value}" =~ ${domain_re} ]] ;;
+    ACME_EMAIL) [[ "${value}" =~ ${email_re} ]] ;;
+    CF_DNS_API_TOKEN) [[ "${value}" =~ ${token_re} ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# Runs before Docker is installed, so the long unattended part of setup never
+# stops halfway for a file edit. An existing .env is never prompted for.
+collect_first_run_values() {
+  [[ -f "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env" ]] && return 0
+
+  if [[ -t 0 ]]; then
+    cat <<'EOF'
+
+Pulse Provider MSP needs three values. Leave any blank to edit .env yourself
+when setup pauses (for example to use a DNS provider other than Cloudflare).
+
+EOF
+    if [[ -z "${PULSE_PROVIDER_MSP_DOMAIN}" ]]; then
+      read -r -p "Domain for the portal, e.g. pulse.example.com: " PULSE_PROVIDER_MSP_DOMAIN
+    fi
+    if [[ -z "${PULSE_PROVIDER_MSP_ACME_EMAIL}" ]]; then
+      read -r -p "Email for certificate notices: " PULSE_PROVIDER_MSP_ACME_EMAIL
+    fi
+    if [[ -z "${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN}" ]]; then
+      read -r -s -p "Cloudflare API token with Zone Read and DNS Edit (hidden): " PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN
+      echo
+    fi
+  fi
+
+  local key var value
+  for key in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN; do
+    var="PULSE_PROVIDER_MSP_${key}"
+    value="${!var}"
+    if [[ -n "${value}" ]] && ! valid_first_run_value "${key}" "${value}"; then
+      die "${key} is not valid; check it and run setup.sh again"
+    fi
+  done
+
+  if [[ -n "${PULSE_PROVIDER_MSP_DOMAIN}" ]]; then
+    cat <<EOF
+
+Before the certificate is issued, point two DNS records at this host's public
+IP (A records; on Cloudflare, proxy status DNS only):
+  ${PULSE_PROVIDER_MSP_DOMAIN}      the portal
+  *.${PULSE_PROVIDER_MSP_DOMAIN}    one address per client
+
+EOF
+  fi
+}
+
 ensure_env_file() {
   local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
   if [[ -f "${env_path}" ]]; then
@@ -516,8 +582,22 @@ ensure_env_file() {
   fi
 
   log "no ${env_path}; creating from .env.example"
-  cp -n "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env.example" "${env_path}"
+  (umask 077 && cp -n "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env.example" "${env_path}")
   chmod 0600 "${env_path}"
+
+  local key var missing=0
+  for key in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN; do
+    var="PULSE_PROVIDER_MSP_${key}"
+    if [[ -n "${!var}" ]]; then
+      set_env_value "${key}" "${!var}" "${env_path}"
+    else
+      missing=1
+    fi
+  done
+  if [[ "${missing}" -eq 0 ]]; then
+    log "wrote DOMAIN, ACME_EMAIL and CF_DNS_API_TOKEN to ${env_path}"
+    return 0
+  fi
 
   cat <<EOF
 
@@ -787,11 +867,13 @@ Paths:
 
 Next step: create your operator account (prints your portal sign-in link):
   cd ${PULSE_PROVIDER_MSP_INSTALL_DIR}
-  docker compose run --rm control-plane provider-msp bootstrap \\
+  sudo docker compose run --rm control-plane provider-msp bootstrap \\
     --account-name "Example MSP" --owner-email owner@example.com
 
+Then open the link, choose Add client, and follow Install agents.
+
 Prove the platform before the first real client:
-  ./run-install-proof.sh --account-name "Example MSP" --owner-email owner@example.com
+  sudo ./run-install-proof.sh --account-name "Example MSP" --owner-email owner@example.com
 
 Portal (after bootstrap):
   https://${domain}/portal
@@ -803,7 +885,7 @@ cancellation.
 
 Day 2: portal sessions last 7 days. Re-run the bootstrap command above any
 time to print a fresh owner sign-in link, or use
-  docker compose run --rm control-plane provider-msp portal-link --email you@example.com
+  sudo docker compose run --rm control-plane provider-msp portal-link --email you@example.com
 for any invited teammate. Set RESEND_API_KEY in .env to enable emailed
 sign-in links instead.
 
@@ -822,6 +904,7 @@ main() {
   fi
 
   log "starting provider MSP first-time setup"
+  collect_first_run_values
   apt_install apt-transport-https
   install_docker_ce
   install_ops_tools
