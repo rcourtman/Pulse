@@ -587,6 +587,15 @@ its presentation module are deleted. Backup jobs is the page's one daily bar
 chart, so two look-alike bar charts never stack on one page. Earlier notes here
 about the chart's tooltip portal and day-control focus are historical.
 
+### Backup view tabs head the restore points, not the page (2 November 2026)
+
+On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,
+Coverage) now sit at the top of the restore-point block, below the Backup
+health and Backup jobs cards and the Backup servers table, so a tab reads as
+switching the list it heads rather than the whole page. The tabs keep their
+`nav` landmark and active-route state, so recovery focus that lands on the
+active view still finds it inside the inspection region.
+
 ### Compact Coverage columns give the name the slack (3 November 2026)
 
 `ProxmoxCoverageTable` takes `identityRows` (every row before filters) to find
@@ -597,15 +606,6 @@ for "Unknown" with its dot, age 52px for an "Unknown" age, job 34px for its
 header) as shares of that width, and the name takes the rest; without a width
 the shared 40% identity share still applies. At 360px and up a 16-character
 guest name fits whole. Rows stay 32px and single-line.
-
-### Backup view tabs head the restore points, not the page (2 November 2026)
-
-On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,
-Coverage) now sit at the top of the restore-point block, below the Backup
-health and Backup jobs cards and the Backup servers table, so a tab reads as
-switching the list it heads rather than the whole page. The tabs keep their
-`nav` landmark and active-route state, so recovery focus that lands on the
-active view still finds it inside the inspection region.
 
 ### Backup servers table drops its host columns (2 November 2026)
 
