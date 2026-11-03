@@ -1332,6 +1332,7 @@ type Monitor struct {
 	guestMetadataStore         *config.GuestMetadataStore
 	dockerMetadataStore        *config.DockerMetadataStore
 	dockerReportOrderStore     *config.DockerReportOrderStore
+	pbsJobFailureStore         *config.PBSJobFailureStore
 	hostMetadataStore          *config.HostMetadataStore
 	hostContinuityStore        *config.HostContinuityStore
 	hostAgentLifecycleMu       sync.RWMutex
@@ -1838,6 +1839,9 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if err := dockerReportOrderStore.LoadError(); err != nil {
 		return nil, fmt.Errorf("load Docker report order journal: %w", err)
 	}
+	// An unreadable record only loses carried PBS job failures; PBS reports
+	// them again on the jobs' next runs, so it never blocks startup.
+	pbsJobFailureStore := config.NewPBSJobFailureStore(cfg.DataPath, nil)
 
 	// Queued deliveries can run before a router exists. Restore the instance
 	// policy before creating workers, including for tenant persistence paths.
@@ -2021,6 +2025,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath, nil),
 		dockerMetadataStore:        config.NewDockerMetadataStore(cfg.DataPath, nil),
 		dockerReportOrderStore:     dockerReportOrderStore,
+		pbsJobFailureStore:         pbsJobFailureStore,
 		hostMetadataStore:          config.NewHostMetadataStore(cfg.DataPath, nil),
 		hostContinuityStore:        hostContinuityStore,
 		startTime:                  time.Now(),

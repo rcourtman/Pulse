@@ -10761,6 +10761,15 @@ through both monitor initialization paths, including explicit and legacy
 default organizations. These notifications refresh inventory presentation;
 they do not grant enrollment, removal, re-enrollment or command authority.
 
+### PBS job failure record preserves lifecycle authority (3 November 2026)
+
+The monitor now opens `config.PBSJobFailureStore` beside its other data-dir
+stores, so carried PBS job failures survive a Pulse restart. The record holds
+only PBS job results the poller already read; it adds no agent enrollment,
+credential, command, collection or remediation authority, never triggers a
+poll or a job, leaves agent records untouched, and a load failure only logs
+instead of blocking startup.
+
 ### PBS job failure carry preserves lifecycle authority (3 November 2026)
 
 `State.PBSJobHealthEvidence` is a read-only copy of the job results already

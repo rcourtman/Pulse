@@ -253,6 +253,31 @@ func carryPBSJobFailures(previous, current []models.PBSJobHealthEvidence, readFa
 	return out
 }
 
+// carryPBSJobFailuresForInstance carries failures from the instance's last
+// stored results, or, on the first poll after a restart when state holds none,
+// from the persisted failure record of the same server, and records what is
+// still failing. Records of connections no longer configured are dropped.
+func (m *Monitor) carryPBSJobFailuresForInstance(instanceID, host string, current []models.PBSJobHealthEvidence, readFailed bool) []models.PBSJobHealthEvidence {
+	previous := m.state.PBSJobHealthEvidence(instanceID)
+	if len(previous) == 0 {
+		previous = m.pbsJobFailureStore.Get(instanceID, host)
+	}
+	carried := carryPBSJobFailures(previous, current, readFailed)
+	if err := m.pbsJobFailureStore.Set(instanceID, host, carried); err != nil {
+		log.Warn().Err(err).Str("instance", instanceID).Msg("Failed to record PBS job failures")
+	}
+	if m.config != nil {
+		configured := make([]string, 0, len(m.config.PBSInstances))
+		for _, cfg := range m.config.PBSInstances {
+			configured = append(configured, PBSMonitorResourceID(cfg.Name))
+		}
+		if err := m.pbsJobFailureStore.Retain(configured); err != nil {
+			log.Warn().Err(err).Msg("Failed to prune PBS job failure record")
+		}
+	}
+	return carried
+}
+
 // pbsJobReportsOutcome says whether this poll observed how the job's newest
 // run ended: success, warning or failure, rather than running or an
 // unreadable state. It reads the run's own status, not the posture, so a
@@ -584,8 +609,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Str("instance", instanceName).
 				Msg("Failed to collect PBS job health evidence")
 		}
-		pbsInst.JobHealthEvidence = carryPBSJobFailures(
-			m.state.PBSJobHealthEvidence(pbsInst.ID),
+		pbsInst.JobHealthEvidence = m.carryPBSJobFailuresForInstance(
+			pbsInst.ID,
+			pbsInst.Host,
 			pbsJobHealthEvidenceFromFacts(jobFacts, time.Now()),
 			err != nil,
 		)

@@ -157,8 +157,16 @@ entry) makes a family unreadable; task-history trouble does not keep a
 removed job's failure. Recovery is judged from the run's own status, so a
 successful run first seen after its next schedule passed still clears the
 carry. A poll that fails before reading jobs keeps the instance's last job
-results in state, so the carry survives a PBS outage. Carried failures live
-in memory: a Pulse restart forgets them until PBS reports the job again.
+results in state, so the carry survives a PBS outage. Carried failures also
+survive a Pulse restart: `config.PBSJobFailureStore` keeps each instance's
+failures in `pbs_job_failures.json` in the data directory, with only the
+failed run's fields (no poll times, so an unchanged failure never rewrites the
+file), and the first poll after a restart, when state holds nothing for the
+instance, carries from it. A record is bound to the server's host, so a
+different server added under a reused connection name starts clean; records
+of connections no longer configured are dropped; each instance keeps at most
+256 failures, and a write that would exceed the record's 1 MiB read limit is
+refused. An unreadable record only logs and never blocks startup.
 `pbsJobHealthPosture` now ranks a failed last
 run above overdue, so a failed job that has also missed its next run reads
 failed, not late. `pbsTaskStatusOutcome` reads a PBS status the way
