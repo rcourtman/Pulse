@@ -700,12 +700,14 @@ class WorkflowScopeTest(unittest.TestCase):
         self.assertIn("scripts/release_control/browser_verification_guard.py", governance)
         self.assertNotIn("ci_browser_proof_only", governance)
 
-    def verdict(self, proof_only, results, scope="success"):
+    def verdict(self, proof_only, results, scope="success", *, run_probation="false", is_pull_request="false"):
         script = step_script(job_block(E2E.read_text(), "e2e-verdict"), "Check E2E results")
         script = interpolate(script, {"needs.scope.result": scope,
                                       **{f"needs.{job}.result": value for job, value in results.items()}})
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
-                              timeout=5, env={**os.environ, "PROOF_ONLY": proof_only})
+                              timeout=5, env={**os.environ, "PROOF_ONLY": proof_only,
+                                              "RUN_PROBATION": run_probation,
+                                              "IS_PULL_REQUEST": is_pull_request})
 
     def test_actual_verdict_names_receipt_skip_without_claiming_runtime_pass(self):
         result = self.verdict("true", dict.fromkeys(JOBS, "skipped"))
@@ -735,6 +737,25 @@ class WorkflowScopeTest(unittest.TestCase):
             for proof, state in (("true", "skipped"), ("false", "success")):
                 with self.subTest(scope=scope, proof=proof):
                     self.assertNotEqual(self.verdict(proof, dict.fromkeys(JOBS, state), scope).returncode, 0)
+
+    def test_unknown_probation_scope_cannot_report_runtime_success(self):
+        for selection in ("", "unknown", "true\nfalse"):
+            with self.subTest(selection=selection):
+                result = self.verdict("false", dict.fromkeys(JOBS, "success"),
+                                      run_probation=selection)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Probation coverage scope is unknown", result.stdout)
+
+    def test_selected_pr_probation_and_observational_branch_verdicts(self):
+        results = dict.fromkeys(JOBS, "success")
+        required = self.verdict("false", results, run_probation="true", is_pull_request="true")
+        self.assertEqual(required.returncode, 0, required.stdout + required.stderr)
+        self.assertIn("All stable and probation E2E shards", required.stdout)
+        self.assertNotEqual(self.verdict("false", {**results, "e2e": "failure"},
+                                        run_probation="true", is_pull_request="true").returncode, 0)
+        observational = self.verdict("false", results, run_probation="true")
+        self.assertEqual(observational.returncode, 0, observational.stdout + observational.stderr)
+        self.assertIn("Branch probation is observational", observational.stdout)
 
 
 if __name__ == "__main__":

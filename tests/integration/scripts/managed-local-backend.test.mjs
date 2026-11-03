@@ -493,6 +493,33 @@ test('normal stable configuration retains multi-tenant quarantine', () => {
   assert.match(result.stdout, /Total: 0 tests/);
 });
 
+test('weighted collection cannot impersonate a stable runtime gate or apply native sharding twice', () => {
+  for (const [tier, extra] of [['stable', []], ['', []], ['probation', ['--shard=1/8']]]) {
+    const result = spawnSync(process.execPath, [
+      'node_modules/@playwright/test/cli.js', 'test', '--config', 'playwright.config.ts', '--list', ...extra,
+    ], {
+      cwd: integrationRoot,
+      env: { ...process.env, PULSE_E2E_TIER: tier, PULSE_E2E_PROBATION_SHARD: '1/8' },
+      encoding: 'utf8',
+    });
+    assert.notEqual(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stderr, /Weighted probation allocation requires its tier and cannot be combined with --shard/);
+  }
+});
+
+test('backend fixture readiness retains its complete admission test under weighted collection', () => {
+  const result = spawnSync(process.execPath, [
+    'node_modules/@playwright/test/cli.js', 'test', '--config', 'fixture-readiness.config.ts', '--list',
+  ], {
+    cwd: integrationRoot,
+    env: { ...process.env, PULSE_E2E_TIER: 'probation', PULSE_E2E_PROBATION_SHARD: '1/8' },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Total: 1 test in 1 file/);
+  assert.match(result.stdout, /default-mock-ready\.spec\.ts/);
+});
+
 
 test('owned cookie state selects the supervisor path without changing direct-run fallback', async () => {
   const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');

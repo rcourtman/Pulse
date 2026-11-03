@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { useSettingsAccess } from '../useSettingsAccess';
+import { SettingsPageShell } from '../SettingsPageShell';
+import { useSettingsShellState } from '../useSettingsShellState';
+import type { SettingsTab } from '../settingsNavigationModel';
 
 const hasFeatureMock = vi.fn();
 const runtimeCapabilitiesLoadedMock = vi.fn();
@@ -127,6 +130,65 @@ describe('useSettingsAccess', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps a pressed nav item through refreshed capabilities and visibility', async () => {
+    const [revision, setRevision] = createSignal(0);
+    shouldHideSettingsNavItemMock.mockImplementation(
+      (tab: string) => revision() >= 2 && tab === 'organization-billing',
+    );
+    hasFeatureMock.mockReturnValue(true);
+    let menuOpen!: () => boolean;
+    render(() => {
+      const [activeTab, setActiveTab] = createSignal<SettingsTab>('organization-billing');
+      const shell = useSettingsShellState({ activeTab });
+      const access = useSettingsAccess({ activeTab, setActiveTab, searchQuery: shell.searchQuery });
+      shell.setIsMobileMenuOpen(true);
+      menuOpen = shell.isMobileMenuOpen;
+      return (
+        <SettingsPageShell
+          headerMeta={shell.headerMeta}
+          hasUnsavedChanges={() => false}
+          activeTabSaveBehavior={() => undefined}
+          saveSettings={vi.fn()}
+          discardChanges={vi.fn()}
+          isMobileMenuOpen={shell.isMobileMenuOpen}
+          setIsMobileMenuOpen={shell.setIsMobileMenuOpen}
+          sidebarCollapsed={shell.sidebarCollapsed}
+          setSidebarCollapsed={shell.setSidebarCollapsed}
+          searchQuery={shell.searchQuery}
+          setSearchQuery={shell.setSearchQuery}
+          filteredTabGroups={access.filteredTabGroups}
+          flatTabs={access.flatTabs}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isPro={() => true}
+        >
+          <div>Billing panel</div>
+        </SettingsPageShell>
+      );
+    });
+    const billing = await screen.findByRole('button', { name: 'Billing', current: 'page' });
+    expect(billing).not.toBeDisabled();
+    billing.focus();
+    fireEvent.mouseDown(billing);
+
+    setRevision(1);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Billing', current: 'page' })).toBe(billing);
+    });
+    expect(billing).toHaveFocus();
+    fireEvent.mouseUp(billing);
+    fireEvent.click(billing);
+    expect(menuOpen()).toBe(false);
+
+    setRevision(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(menuOpen()).toBe(true);
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Billing', current: 'page' })).toBeNull();
+    });
   });
 
   it('keeps an explicit organization route active when the tab contract still allows it', async () => {

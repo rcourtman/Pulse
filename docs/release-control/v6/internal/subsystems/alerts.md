@@ -950,6 +950,15 @@ explicit Save. The responsive table owner identifies the active layout.
 Retiring a row during a resize transfers the draft and metric focus instead
 of saving it. Both layouts focus the first supported numeric metric when
 editing starts from the resource action.
+The desktop row renderer passes each group's or resource's stable wrapper key
+to the canonical `PlatformWindowedRows` owner. A refreshed resource snapshot
+must update the mounted row without replacing its focused input or losing
+the row's focus-leave commit state. `ResourceTable.test.tsx` verifies the same
+physical input, retained draft, updated resource label and exactly one blur
+commit for grouped and ungrouped snapshots. The Core E2E threshold flow covers
+the wide desktop row boundary and explicit phone-card Save action, followed
+by configuration persistence, deletion and reload. Browser evidence remains
+separate from this deterministic refresh regression.
 Clearing an override shows the inherited metric state. When that default is
 Off, the badge remains Off and the table slider stays disabled. Enabling
 from that state stages the factory value in one toggle and leaves the group

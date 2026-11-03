@@ -1000,7 +1000,7 @@ size and archive digest. After load it verifies Linux amd64, the producer's
 image IDs and source revision labels on both built images. A missing, changed,
 foreign or failed bundle stops the job. Failed production stops fan-out and
 fails the final verdict; all eight stable shards and agent registration must
-still pass. Browser acquisition and test deadlines, probation rules, registry
+still pass. Browser acquisition and test deadlines, probation promotion rules, registry
 pins and production/release paths are unchanged. Provider refusals stay terminal:
 there is no login, alternate registry or pull retry.
 
@@ -1864,9 +1864,77 @@ halves may expose existing package-state coupling; actual split-suite proof and
 required CI, not a prediction, establish whether the partition is valid. Go test steps are not skipped for frontend-only changes, because Go tests
 read frontend sources (the `internal/api` contract tests, the
 `internal/unifiedresources` code standards walk of `frontend-modern/src`, and
-the `internal/telemetry` repository-wide wording scan). Core E2E runs its
-non-gating probation tier only outside pull requests, since promotion counts
-only main runs.
+the `internal/telemetry` repository-wide wording scan).
+
+### Core E2E validates changed probation coverage before landing
+
+Core E2E runs both tiers for pull requests that change a probation spec, the
+tier partition, or shared execution configuration. The complete changed-path
+set is selected before image production by
+`.github/scripts/e2e-probation-scope.mjs`, using `PROBATION_SPECS` as its source
+of truth. The selector accepts NUL-delimited paths and literal spec paths under
+the manifest's recursive prefix. Unsupported patterns fail admission. An
+unknown scope cannot produce a passing E2E verdict.
+
+Selected PR probation failures fail their shard and the E2E verdict. Both
+tiers of full selected PR qualification use Playwright's
+`--fail-on-flaky-tests`: a failed attempt followed by a passing retry still
+fails qualification. Existing retry counts and retained diagnostics stay in
+place. Stable-only PR runs retain their existing policy. Branch and manual
+runs keep probation observational. Promotion and demotion remain
+governed by `tests/integration/e2e-tiering.mjs`, and only executed main runs
+count toward promotion. Restoring a resolved quarantine through probation
+does not claim stable qualification. Required source checks and release gates
+retain their existing boundaries.
+
+Probation placement uses retained file/project runtimes instead of contiguous
+case-count ranges. `.github/scripts/e2e-probation-shards.mjs` assigns every
+eligible file/browser-project pair exactly once across the existing eight
+jobs, keeping each file's hooks and ordering together. The maximum observed
+rounded durations in `.github/scripts/e2e-probation-seconds.json` include
+retries and affect placement only; a new pair receives a finite default
+estimate. Stable sharding, browser projects, one worker per job, measurement
+sampling, the ten-minute Playwright deadline and twelve-minute step backstop
+remain unchanged. Empty project allocations use a never-match expression,
+never the default test selection. Invalid coordinates, non-probation use or
+combining weighted allocation with native sharding fail admission.
+
+`tests/integration/scripts/check-probation-shards.mjs` compares the real
+Playwright list for all probation cases with all eight allocated lists,
+checking the reported count and rejecting missing, duplicated or foreign
+identities. It runs before image fan-out.
+`scripts/tests/test_e2e_probation_shards.mjs` covers partitioning, deterministic
+placement, the long-file scheduling floor, new files/projects, invalid
+weights/coordinates, literal path escaping and empty-match containment.
+Passing selection proof does not replace a completed browser run with no
+unrun, interrupted, failed or flaky cases.
+
+`tests/integration/scripts/fixture-readiness.test.mjs` evaluates the actual
+workflow expressions for selected and stable-only PRs, branch and manual
+runs. `tests/integration/scripts/flaky-qualification.test.mjs` executes the
+installed pinned Playwright runner without a browser before image fan-out: a controlled failure followed by a passing retry succeeds under the
+ordinary policy, fails under full qualification, and a clean first attempt
+still succeeds. The image-distribution proof rejects missing or widened
+qualification flags while retaining producer and consumer admission. These
+controls prove exit and wiring semantics, not an application browser result.
+
+The image-distribution controls in `scripts/tests/test_e2e_test_images.py`
+require the actual partition check to block the producer and all consumers,
+and reject skipped or ignored proof. The managed-runtime controls in
+`tests/integration/scripts/managed-local-backend.test.mjs` list the actual
+configurations to retain complete fixture admission under weighted collection
+and reject stable, untiered or doubly sharded use. These controls accompany
+the workflow and shared configuration in the same source commit.
+
+`scripts/tests/test_e2e_probation_scope.mjs` exercises root and nested spec
+selection, stable and unrelated paths, execution configuration changes,
+unsupported patterns, and the CLI's NUL-delimited filename framing. The
+executable verdict controls in `scripts/tests/test_ci_browser_proof_only.py`
+exercise known and unknown probation scope, required PR results and
+observational branch results while retaining every existing success boundary.
+The existing image admission proof still validates the same-run producer and
+consumer boundary. Actual execution of both browser tiers supplies the
+source-bound journey result.
 
 ### Docker SDK dependency compatibility
 
@@ -2634,6 +2702,13 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 13a. `.github/workflows/compile-release-payload.yml`
 13b. `.github/workflows/qualify-secure-runtime-release.yml`
 14. `.github/workflows/build-and-test.yml`
+14b. `.github/workflows/test-e2e.yml`
+14c. `.github/scripts/e2e-probation-scope.mjs`
+14d. `.github/scripts/e2e-probation-shards.mjs`
+14e. `.github/scripts/e2e-probation-seconds.json`
+14f. `tests/integration/playwright.config.ts`
+14g. `tests/integration/scripts/check-probation-shards.mjs`
+14h. `tests/integration/scripts/flaky-qualification.test.mjs`
 14a. `scripts/release_control/run_go_package_slice.py`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`

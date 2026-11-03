@@ -1399,6 +1399,44 @@ describe('ResourceTable', () => {
       },
     );
 
+    it.each([false, true])(
+      'retains the focused threshold input and blur commit through fresh resource snapshots (grouped=%s)',
+      async (grouped) => {
+        mockIsMobile.mockReturnValue(false);
+        const [resources, setResources] = createSignal([makeResource({ id: 'vm-1' })]);
+        const [editingThresholds, setEditingThresholds] = createSignal<
+          Record<string, number | undefined>
+        >({ cpu: 80 });
+        const onSaveEdit = vi.fn();
+        render(() => (
+          <>
+            <button data-testid="outside-entry">Other action</button>
+            <ResourceTable
+              {...editorProps({ editingThresholds, setEditingThresholds, onSaveEdit })}
+              resources={grouped ? undefined : resources()}
+              groupedResources={grouped ? { cluster: resources() } : undefined}
+            />
+          </>
+        ));
+        const input = screen.getByRole('spinbutton');
+        input.focus();
+        fireEvent.input(input, { target: { value: '77' } });
+        expect(editingThresholds().cpu).toBe(77);
+
+        setResources([makeResource({ id: 'vm-1', name: 'Refreshed VM' })]);
+
+        await waitFor(() => expect(screen.getByRole('spinbutton')).toBe(input));
+        expect(input).toHaveFocus();
+        expect(input).toHaveValue(77);
+        expect(input.closest('tr')).toHaveTextContent('Refreshed VM');
+        expect(onSaveEdit).not.toHaveBeenCalled();
+        screen.getByTestId('outside-entry').focus();
+        expect(onSaveEdit).toHaveBeenCalledTimes(1);
+        expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
+        expect(editingThresholds().cpu).toBe(77);
+      },
+    );
+
     it('keeps the editor open when focus moves from the input to the off toggle', () => {
       // Tabbing to the toggle must not save and close the row before the toggle
       // can be operated.
