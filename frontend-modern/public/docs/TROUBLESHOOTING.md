@@ -557,6 +557,28 @@ restore, not by overwriting today's history. Follow
 
 ### Monitoring Data
 
+#### A NAS is shown as a Proxmox node
+
+First distinguish a wrong node association from disks appearing in a shared
+storage view. Agent-reported physical disks can appear there without making
+their host a Proxmox cluster member. Compare the affected host's existing Pulse
+node/Machines rows with Proxmox's own inventory; use consistent private aliases
+when reporting a mismatch, not full API responses or configuration files.
+
+An update that prevents new false matches may leave an older association in
+place. Pulse preserves links with unknown legacy provenance because they might
+have been an operator's choice; repeated names or addresses alone are not enough
+to discard one.
+
+When the two records are confirmed to be different machines, an administrator
+using an existing authenticated API integration can explicitly
+[unlink the agent from the node](API.md#agent-management), using the exact agent
+ID and the documented JSON body. This saves the separation while the agent keeps
+reporting; it is not removal or reinstallation. Check both machines' attribution
+and alert coverage afterwards. Do not grant broader access, rename hosts, delete
+saved state or reinstall to diagnose the association. If the target or link is
+uncertain, retain it and [report the mismatch](#-getting-help) instead.
+
 #### Unraid reports missing disks in empty slots
 
 Compare the same host's **existing** Unraid status with Pulse's disk inventory,
