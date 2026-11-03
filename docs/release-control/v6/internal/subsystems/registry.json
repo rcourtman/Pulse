@@ -1949,7 +1949,6 @@
               "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "tests/integration/tests/21-truenas-connections-workspace.spec.ts",
               "tests/integration/tests/22-vmware-connections-workspace.spec.ts"
             ]
@@ -2210,7 +2209,6 @@
             "exact_files": [
               "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
               "frontend-modern/src/utils/__tests__/aiCostPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/patrolRuntimePresentation.test.ts"
             ]
           },
@@ -2241,8 +2239,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/aiProviderHealthPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/aiProviderPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/aiProviderPresentation.test.ts"
             ]
           },
           {
@@ -6000,8 +5997,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts"
             ]
           },
           {
@@ -6057,7 +6053,6 @@
               "frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/useReportingPanelState.test.ts",
               "frontend-modern/src/routing/__tests__/routePreload.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/reportingResourceTypes.test.ts"
@@ -7438,7 +7433,6 @@
               "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
@@ -7572,7 +7566,6 @@
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
               "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
               "tests/integration/tests/18-patrol-runtime-state.spec.ts",
               "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
@@ -7590,8 +7583,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/utils/__tests__/aiPatrolSchedulePresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/aiPatrolSchedulePresentation.test.ts"
             ]
           },
           {
@@ -7621,7 +7613,6 @@
               "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/approvalState.test.ts",
               "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts"
             ]
           },
@@ -7664,7 +7655,6 @@
               "frontend-modern/src/components/patrol/__tests__/RunHistoryPanel.test.tsx",
               "frontend-modern/src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/patrolEmptyStatePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/patrolFormat.test.ts",
               "frontend-modern/src/utils/__tests__/patrolRunPresentation.test.ts",
@@ -8356,7 +8346,6 @@
               "frontend-modern/src/components/Settings/__tests__/settingsReadOnlyPanels.test.tsx",
               "frontend-modern/src/utils/__tests__/auditLogPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/auditWebhookPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/securityAuthPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/securityScorePresentation.test.ts"
             ]
@@ -8626,7 +8615,6 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/recoveryTransport.test.ts",
               "frontend-modern/src/hooks/__tests__/useProtectionPostures.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "tests/integration/tests/17-proxmox-backups-layout.spec.ts",
               "tests/integration/tests/90-operational-trust-protection-posture.spec.ts"
             ]
@@ -8659,8 +8647,7 @@
               "frontend-modern/src/features/storageBackups/__tests__/storageDomain.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts",
               "frontend-modern/src/features/storageBackups/__tests__/storagePagePresentation.test.ts",
-              "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/features/storageBackups/__tests__/storagePoolsTablePresentation.test.ts"
             ]
           },
           {
@@ -9105,7 +9092,6 @@
               "frontend-modern/src/routing/__tests__/resourceLinks.test.ts",
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/types/__tests__/resource.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/workloads.test.ts",
               "internal/unifiedresources/code_standards_test.go"
             ]

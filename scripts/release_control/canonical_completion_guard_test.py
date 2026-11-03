@@ -44,7 +44,6 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
     "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
     "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
     "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
     "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts",
@@ -2907,7 +2906,6 @@ None yet.
                         "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
                         "frontend-modern/src/utils/__tests__/approvalState.test.ts",
                         "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                         "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts",
                     ],
                 }
@@ -3267,7 +3265,6 @@ None yet.
             "environment-lock-primitives",
             [
                 "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
 
@@ -3277,7 +3274,6 @@ None yet.
             "environment-lock-primitives",
             [
                 "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
 
