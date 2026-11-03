@@ -543,18 +543,6 @@ function buildTriageState(issue, core, latestVersion) {
   };
 }
 
-function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
-  const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}`.toLowerCase() : null;
-  for (const label of [...nextLabels]) {
-    if (
-      /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/i.test(label) &&
-      label.toLowerCase() !== keep
-    ) {
-      nextLabels.delete(label);
-    }
-  }
-}
-
 // Apply only this event's classification delta. Replacing the complete label
 // set would overwrite Community changes made after the event was queued.
 async function applyLabelDelta(github, context, issue, before, after, core) {
@@ -795,10 +783,11 @@ async function syncLabels({ github, context, core }) {
     nextLabels.add(NEEDS_VERSION_LABEL);
   }
 
-  // A correction to unknown, incomplete or absent version evidence retires
-  // this synchronizer's old exact-version assertions too. It must not leave
-  // a known affected version beside its missing-version classification.
-  keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
+  // Affected-version labels can also record later comments, independent
+  // reproductions or Community's release-impact decisions. A form-only read
+  // cannot prove that any existing version is stale, even when the current
+  // declaration is unknown or corrected. Add the declared version above;
+  // leave retirement of every affected version to whole-thread review.
 
   // Retest labels are community-owned: version metadata cannot establish
   // relevant-fix availability or reconcile the live reporter conversation.
