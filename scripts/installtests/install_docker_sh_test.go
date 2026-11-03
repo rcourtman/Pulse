@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func currentReleaseVersion(t *testing.T) string {
@@ -383,6 +385,120 @@ func TestInstallDockerScriptPrefersExplicitPulseImage(t *testing.T) {
 	envText := string(envContent)
 	if !strings.Contains(envText, "PULSE_IMAGE=ghcr.io/example/pulse-enterprise:v9.9.9") {
 		t.Fatalf(".env did not preserve explicit image override:\n%s", envText)
+	}
+}
+
+// Execute the commands from both real Compose producers. Only the fixed
+// image-local script path is relocated; the shipped probe runs unchanged with
+// an inert wget double. These fixtures need neither Docker nor a live endpoint.
+func TestDockerComposeHealthcheckPreservesImageProbe(t *testing.T) {
+	generatedDir := t.TempDir()
+	runInstallDockerScript(t, generatedDir)
+	for name, composePath := range map[string]string{
+		"bundled":   repoFile("docker-compose.yml"),
+		"generated": filepath.Join(generatedDir, "docker-compose.yml"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			content, err := os.ReadFile(composePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var compose struct {
+				Services map[string]struct {
+					Healthcheck struct {
+						Test []string `yaml:"test"`
+					} `yaml:"healthcheck"`
+				} `yaml:"services"`
+			}
+			if err := yaml.Unmarshal(content, &compose); err != nil {
+				t.Fatalf("parse Compose healthcheck: %v", err)
+			}
+			command := compose.Services["pulse"].Healthcheck.Test
+			if len(command) != 2 || command[0] != "CMD-SHELL" {
+				t.Fatalf("expected a shell image-probe selector, got %q", command)
+			}
+			if strings.Count(command[1], "/docker-healthcheck.sh") != 2 {
+				t.Fatal("image-probe path boundary changed; update the explicit fixture")
+			}
+			for _, tc := range []struct {
+				name, helper, https string
+				httpExit, httpsExit int
+				wantExit            int
+				wantProbes          string
+			}{
+				{"http healthy", "shipped", "false", 0, 1, 0, "http\n"},
+				{"http unhealthy", "shipped", "false", 1, 0, 1, "http\n"},
+				{"https healthy", "shipped", "true", 1, 0, 0, "https\n"},
+				{"https numeric healthy", "shipped", "1", 1, 0, 0, "https\n"},
+				{"https unhealthy with healthy http", "shipped", "true", 0, 1, 1, "https\n"},
+				{"https numeric unhealthy with healthy http", "shipped", "1", 0, 1, 1, "https\n"},
+				{"unset uses http", "shipped", "", 0, 1, 0, "http\n"},
+				{"legacy healthy", "absent", "", 0, 1, 0, "http\n"},
+				{"legacy unhealthy", "absent", "", 1, 0, 1, "http\n"},
+				{"nonexecutable legacy helper", "nonexecutable", "", 0, 1, 0, "http\n"},
+				{"custom image failure", "custom", "", 0, 0, 17, ""},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					dir := t.TempDir()
+					helperPath := filepath.Join(dir, "docker-healthcheck.sh")
+					if tc.helper != "absent" {
+						helper, err := os.ReadFile(repoFile("docker-healthcheck.sh"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						mode := os.FileMode(0o700)
+						if tc.helper == "nonexecutable" {
+							mode = 0o600
+						}
+						if tc.helper == "custom" {
+							helper = []byte("#!/bin/sh\necho 'image probe refused' >&2\nexit 17\n")
+						}
+						if err := os.WriteFile(helperPath, helper, mode); err != nil {
+							t.Fatal(err)
+						}
+					}
+					writeTestStub(t, filepath.Join(dir, "wget"), `#!/bin/sh
+case "$*" in
+    *https://localhost:7655/api/health*) protocol=https; result="$HTTPS_RESULT";;
+    *http://localhost:7655/api/health*) protocol=http; result="$HTTP_RESULT";;
+    *) echo 'unexpected probe target' >&2; exit 93;;
+esac
+printf '%s\n' "$protocol" >> "$PROBE_LOG"
+exit "$result"
+`)
+					probeLog := filepath.Join(dir, "probes")
+					cmd := exec.Command("sh", "-c", strings.ReplaceAll(command[1], "/docker-healthcheck.sh", `"`+helperPath+`"`))
+					cmd.Env = []string{
+						"PATH=" + dir,
+						"HTTP_RESULT=" + strconv.Itoa(tc.httpExit),
+						"HTTPS_RESULT=" + strconv.Itoa(tc.httpsExit),
+						"PROBE_LOG=" + probeLog,
+					}
+					if tc.https != "" {
+						cmd.Env = append(cmd.Env, "HTTPS_ENABLED="+tc.https)
+					}
+					output, err := cmd.CombinedOutput()
+					exitCode := 0
+					if err != nil {
+						if exitErr, ok := err.(*exec.ExitError); ok {
+							exitCode = exitErr.ExitCode()
+						} else {
+							t.Fatalf("run healthcheck: %v", err)
+						}
+					}
+					probes, readErr := os.ReadFile(probeLog)
+					if readErr != nil && !os.IsNotExist(readErr) {
+						t.Fatal(readErr)
+					}
+					if exitCode != tc.wantExit || string(probes) != tc.wantProbes {
+						t.Fatalf("exit=%d probes=%q; want exit=%d probes=%q\n%s", exitCode, probes, tc.wantExit, tc.wantProbes, output)
+					}
+					if tc.helper == "custom" && !strings.Contains(string(output), "image probe refused") {
+						t.Fatalf("image probe diagnostic was lost: %s", output)
+					}
+				})
+			}
+		})
 	}
 }
 

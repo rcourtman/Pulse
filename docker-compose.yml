@@ -19,7 +19,8 @@ services:
       - TZ=${TZ:-UTC}
       - PULSE_DEPLOYMENT_METHOD=docker_compose
     healthcheck:
-      test: ["CMD-SHELL", "[ -x /docker-healthcheck.sh ] && /docker-healthcheck.sh || wget --quiet --tries=1 --spider http://localhost:7655/api/health"]
+      # A failed image probe must stay failed, not retry over a different protocol.
+      test: ["CMD-SHELL", "if [ -x /docker-healthcheck.sh ]; then exec /docker-healthcheck.sh; else exec wget --quiet --tries=1 --spider http://localhost:7655/api/health; fi"]
       interval: 30s
       timeout: 10s
       retries: 3
