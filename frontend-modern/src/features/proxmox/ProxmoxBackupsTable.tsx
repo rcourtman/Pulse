@@ -999,6 +999,7 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
             <ProxmoxCoverageTable
               rows={liveCoverageRows()}
+              identityRows={recoveryModel().coverageRows}
               hasAnyRows={liveTotalCount() > 0}
               emptyIcon={props.emptyIcon}
               emptyTitle="Nothing to check yet"

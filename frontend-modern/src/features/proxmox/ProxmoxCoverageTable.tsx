@@ -512,6 +512,9 @@ function coverageRestorePointDetails(artifact: RecoverableArtifact) {
 // guest's connection is independent of its restore-evidence reader below.
 export function ProxmoxCoverageTable(props: {
   rows: WorkloadCoverageRow[];
+  // Every row before search and filters, to tell namesakes apart. A filter
+  // that leaves one of two namesakes must not change how that row is named.
+  identityRows?: readonly WorkloadCoverageRow[];
   hasAnyRows: boolean;
   emptyIcon: JSX.Element;
   emptyTitle: string;
@@ -557,8 +560,9 @@ export function ProxmoxCoverageTable(props: {
     return rows;
   }, []);
   const observedWidth = useObservedElementWidth();
+  const containerWidth = () => props.layoutWidth?.() ?? observedWidth.width();
   const layoutMode = createMemo(() => {
-    const width = props.layoutWidth?.() ?? observedWidth.width();
+    const width = containerWidth();
     return typeof width === 'number' && width > 0 ? getCoverageLayoutForContainer(width) : 'full';
   });
   // Rows stay on one line at every width. The PVE connection is named inline
@@ -569,6 +573,20 @@ export function ProxmoxCoverageTable(props: {
       props.showWorkloadConnection ??
       hasMultipleConnections(props.rows.map((row) => getBackupWorkloadPVEConnection(row.workload))),
   );
+  // On a phone the name column is narrow; the VM id and connection beside the
+  // name cut it to a few letters. There they stay only for namesakes, the rows
+  // they tell apart; the disclosure label and the drawer always carry both.
+  const sharedNames = createMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of props.identityRows ?? props.rows) {
+      const name = (row.workload.name || row.workload.label).trim().toLowerCase();
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name));
+  });
+  const showIdentityBesideName = (row: WorkloadCoverageRow): boolean =>
+    layoutMode() !== 'compact' ||
+    sharedNames().has((row.workload.name || row.workload.label).trim().toLowerCase());
   const visibleColumns = createMemo(() =>
     getCoverageColumns(layoutMode(), {
       task: props.showTaskColumn,
@@ -614,7 +632,12 @@ export function ProxmoxCoverageTable(props: {
               <For each={visibleColumns()}>
                 {(column) => (
                   <col
-                    style={getCoverageColumnWidthStyle(column.id, layoutMode(), visibleColumnIds())}
+                    style={getCoverageColumnWidthStyle(
+                      column.id,
+                      layoutMode(),
+                      visibleColumnIds(),
+                      containerWidth() ?? undefined,
+                    )}
                     data-proxmox-backups-column={column.id}
                   />
                 )}
@@ -727,6 +750,7 @@ export function ProxmoxCoverageTable(props: {
                                 </span>
                                 <Show
                                   when={
+                                    showIdentityBesideName(row) &&
                                     !columnVisible('targetId') &&
                                     row.workload.name &&
                                     row.workload.name.trim() !==
@@ -740,6 +764,7 @@ export function ProxmoxCoverageTable(props: {
                                 </Show>
                                 <Show
                                   when={
+                                    showIdentityBesideName(row) &&
                                     showWorkloadConnection() &&
                                     getBackupWorkloadPVEConnection(row.workload)
                                   }
