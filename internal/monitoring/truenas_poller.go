@@ -1107,6 +1107,7 @@ func (p *TrueNASPoller) guestMetricHistory(orgID, resourceType, selectedID strin
 	defer cancel()
 
 	history := make(map[string]map[string][]MetricPoint)
+	owners := make(map[string]trueNASPollerProviderEntry)
 	for _, entry := range entries {
 		if selectedID != "" && entry.provider.SystemMetricResourceID() != selectedID {
 			continue
@@ -1153,7 +1154,17 @@ func (p *TrueNASPoller) guestMetricHistory(orgID, resourceType, selectedID strin
 			continue
 		}
 		history[resourceID] = converted
+		owners[resourceID] = entry
 	}
+	// An earlier provider can lose ownership while a later native read is
+	// outstanding. Fence the complete result, not just each individual read.
+	p.mu.Lock()
+	for resourceID, owner := range owners {
+		if !truenas.IsFeatureEnabled() || p.providersByOrg[orgID][owner.connectionID] != owner.provider {
+			delete(history, resourceID)
+		}
+	}
+	p.mu.Unlock()
 	if len(history) == 0 {
 		return nil
 	}
