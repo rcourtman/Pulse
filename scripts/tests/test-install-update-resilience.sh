@@ -17,8 +17,8 @@ set +e  # this test drives helpers that intentionally return non-zero
 SERVICE_NAME="pulse"
 
 # --- Deterministic stubs: no real sleeps, no real systemctl/timeout ---------
-sleep() { :; }
-timeout() { shift; "$@"; }  # drop the duration; run the wrapped (stubbed) command
+sleep() { : "$((SECONDS += $1))"; }
+timeout() { [[ "$1" != -k ]] || shift 2; shift; "$@"; } # service double only
 
 SYSTEMCTL_ACTIVE="no"
 START_ATTEMPTS=0
