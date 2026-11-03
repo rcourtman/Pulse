@@ -52,6 +52,8 @@ import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.t
 import storageSurfaceSource from '@/components/Storage/Storage.tsx?raw';
 import useWorkloadsStateSource from '@/components/Workloads/useWorkloadsState.ts?raw';
 import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
+import { render, screen } from '@solidjs/testing-library';
+import { PlatformResourceCounter } from '../sharedPlatformPage';
 
 const indexCssSource = readFileSync('src/index.css', 'utf8');
 
@@ -629,5 +631,24 @@ describe('platform overview layout guardrails', () => {
     expect(agentMachineTableModelSource).toMatch(
       /id:\s*'disk'[\s\S]{0,80}?label:\s*'Disk'[\s\S]{0,80}?kind:\s*'metric-bar'/,
     );
+  });
+});
+
+describe('PlatformResourceCounter', () => {
+  it('keeps what it does not count in the same live status', () => {
+    render(() =>
+      PlatformResourceCounter({
+        visible: 278,
+        total: 2981,
+        rowNoun: 'restore points',
+        detail: '2 running',
+      }),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('278 of 2981 restore points · 2 running');
+  });
+
+  it('shows only the count without a detail', () => {
+    render(() => PlatformResourceCounter({ visible: 1, total: 1, rowNoun: 'targets' }));
+    expect(screen.getAllByRole('status').at(-1)?.textContent?.trim()).toBe('1 target');
   });
 });

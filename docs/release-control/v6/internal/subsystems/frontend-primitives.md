@@ -11208,6 +11208,13 @@ exercises the parsed inventory and ordinary polling through the consuming date
 filter, preserving bounded reads. Backup/posture policy, source association,
 read cadence and guest operations are unchanged; this is not native recovery.
 
+### PlatformResourceCounter can name what it does not count (3 November 2026)
+
+`PlatformResourceCounter` takes an optional `detail` string, shown after the
+count inside the same live status ("2982 restore points · 33 running"). It is
+for rows a table lists but its noun does not cover, so the count can stay true
+to the noun. Callers without it are unchanged.
+
 ### Backup polling does not choose a different workspace
 
 Bare legacy Backups links retain the useful initial health-based view choice,

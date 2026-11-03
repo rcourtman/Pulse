@@ -9358,6 +9358,19 @@ exercises the parsed inventory and ordinary polling through the consuming date
 filter, preserving bounded reads. Backup/posture policy, source association,
 read cadence and guest operations are unchanged; this is not native recovery.
 
+### By date counts restore points and phone rows name the reason (3 November 2026)
+
+The By date counter read "3015 backup entries" while Backup health read "2982
+completed restore points", because the list also holds running and failed
+entries. The counter now counts completed restore points and names the rest
+beside them ("2982 restore points · 33 running"); a filter counts the same way
+("278 of 2981 restore points · 2 running"). Phone Coverage rows showed "Attn."
+for every problem. They now name the server's reason in a word or two
+(`compactBackupReasonLabel`: "Failed", "Overdue", "Verify late", "No backup"),
+beside the reason labels Backup health uses, and fall back to the state word
+for a row whose reason this build cannot name. The 80px phone cell keeps its
+width, so guest names lose nothing. Protection states and sorting are unchanged.
+
 ### Bare Backups entry chooses a view once, not on each health poll
 
 Historical since 3 November 2026: a bare entry now opens Coverage at once (see

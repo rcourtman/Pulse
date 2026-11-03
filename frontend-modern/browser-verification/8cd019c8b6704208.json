@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "6e4b11ceb82a876c76f3efa8f8ea28d4e63c180e",
+  "verified_at": "2026-11-03T22:40:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "a23ac7393ddd69d77784ea663fd4c4f16a0feaa84fb83445af23345490dc8fc2",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "9569b0390eea3f4efc29b9b0acf6baf6db4c6963815a2ae5aaab3bf634376a93",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "1ee11642f6bffcfb396c7712414878d341e54b77a0c97efef536bb36d45a0a7c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "7fc6d35f94794e860c61fc124a8836c4b81be173d1f381003555ea2af7e39330",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts": "08ce47a25baffcfac5f0613476fcd66fc9791248496daba1dc1db26ff8f42e2c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "e7d8e1948d80d2453c9b0e7f2e01cdaac50265809674c9743e1e7e1ef84654a5"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Mock stack built from this change: 2982 completed restore points and 33 running entries",
+    "Desktop By date counter reads \"2982 restore points \u00b7 33 running\", matching Backup health",
+    "Filtered By date counter reads \"278 of 2981 restore points \u00b7 2 running\"",
+    "Phone Coverage rows show the reason word \"Failed\" with rows at 32px and no horizontal overflow",
+    "Every reason word and fallback fits the 80px cell at 390 and 320 without clipping, measured by substituting each word into a live row, because the mock only shows some reasons in view",
+    "Name column keeps its width (207px at 390)",
+    "Desktop Coverage keeps \"Needs attention\" and \"932 targets\" unchanged",
+    "Phone screen reader text reads \"Needs attention: <explanation>\" and the short word is aria-hidden"
+  ],
+  "interactions": [
+    "Loaded Coverage fresh at 390 and 320 and measured the word cell",
+    "Switched to By date and read the counter beside the Backup health tail at 1280",
+    "Loaded By date with a search filter at 1280 and read the filtered counter"
+  ]
+}

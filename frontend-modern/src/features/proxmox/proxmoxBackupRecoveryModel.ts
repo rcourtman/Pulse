@@ -169,6 +169,23 @@ export function isCompletedRecoveryArtifact(artifact: RecoverableArtifact): bool
   return !artifact.running && !artifact.failed;
 }
 
+/**
+ * What a list holds beyond its completed restore points ("33 running · 1 failed").
+ * An entry both running and failed counts once, as running, as its row reads.
+ */
+export function describeIncompleteArtifacts(artifacts: readonly RecoverableArtifact[]): string {
+  const running = artifacts.filter((artifact) => artifact.running).length;
+  const failed = artifacts.filter((artifact) => !artifact.running && artifact.failed).length;
+  return [running > 0 ? `${running} running` : '', failed > 0 ? `${failed} failed` : '']
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export const restorePointCountNoun = (count: number, inventoryIncomplete: boolean): string => {
+  const noun = count === 1 ? 'restore point' : 'restore points';
+  return inventoryIncomplete ? `${noun} read` : noun;
+};
+
 // Zero is also the producer's missing-size placeholder. Keep it in the raw
 // inventory, but not as a measured zero in the recovery view (including sorts).
 function reportedSizeBytes(size: number | undefined): number | undefined {

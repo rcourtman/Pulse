@@ -1342,6 +1342,8 @@ export const PlatformResourceCounter: Component<{
   visible: number;
   total: number;
   rowNoun: string;
+  /** What the table lists beyond the counted rows, such as "2 running". */
+  detail?: string;
 }> = (props) => {
   const totalNoun = () => getPlatformResourceCountNoun(props.rowNoun, props.total);
   return (
@@ -1361,6 +1363,7 @@ export const PlatformResourceCounter: Component<{
       >
         {props.visible} of {props.total} {totalNoun()}
       </Show>
+      <Show when={props.detail}>{(detail) => <> · {detail()}</>}</Show>
     </span>
   );
 };

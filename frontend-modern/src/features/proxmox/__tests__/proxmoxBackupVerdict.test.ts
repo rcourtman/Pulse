@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { ProtectionPosture } from '@/types/recovery';
 import { protectionPolicy, protectionPosture } from '@/utils/__fixtures__/protectionPosture';
 import type { WorkloadCoverageRow, WorkloadRecoveryPosture } from '../proxmoxBackupRecoveryModel';
-import { backupExceptionGroupKey, buildBackupVerdict } from '../proxmoxBackupVerdict';
+import {
+  backupExceptionGroupKey,
+  buildBackupVerdict,
+  compactBackupReasonLabel,
+} from '../proxmoxBackupVerdict';
 
 const row = (
   label: string,
@@ -120,5 +124,29 @@ describe('backupExceptionGroupKey', () => {
     expect(backupExceptionGroupKey(row('d', 'unprotected', 'snapshots-only'))).toBe(
       'snapshots-only',
     );
+  });
+});
+
+describe('compactBackupReasonLabel', () => {
+  it.each([
+    ['attention', 'source-failed', 'Failed'],
+    ['unprotected', 'backup-future-dated', 'Bad date'],
+    ['attention', 'stale', 'Overdue'],
+    ['attention', 'verification-future-dated', 'Bad date'],
+    ['attention', 'verification-overdue', 'Verify late'],
+    ['unknown', 'history-partial', 'Partial'],
+    ['unknown', 'history-unreadable', "Can't read"],
+    ['unknown', 'no-history', 'Unknown'],
+    ['unprotected', 'snapshots-only', 'Snapshots'],
+    ['unprotected', 'no-backup', 'No backup'],
+  ] as const)('gives a %s row with reason %s a word for a phone row', (posture, reason, label) => {
+    expect(compactBackupReasonLabel(row('guest', posture, reason))).toBe(label);
+  });
+
+  it('names no reason it cannot back up', () => {
+    expect(compactBackupReasonLabel(row('guest', 'attention'))).toBeNull();
+    expect(compactBackupReasonLabel(row('guest', 'attention', 'from-a-newer-server'))).toBeNull();
+    expect(compactBackupReasonLabel(row('guest', 'protected', 'stale'))).toBeNull();
+    expect(compactBackupReasonLabel(row('guest', 'checking'))).toBeNull();
   });
 });
