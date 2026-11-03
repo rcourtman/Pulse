@@ -34,7 +34,44 @@ func assertDigestPinnedDockerStage(t *testing.T, dockerfile, prefix, suffix stri
 
 const alpine324RuntimeDigest = "be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a"
 
-const node24Amd64FrontendDigest = "06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53"
+const node24Amd64FrontendDigest = "8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85"
+
+const go12610AlpineBuilderDigest = "a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308"
+
+const go12610DevcontainerDigest = "670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c"
+
+func TestGoContainerBuildersUseGovernedToolchain(t *testing.T) {
+	// The devcontainer has a different OS base, but must retain the module's
+	// compiler patch. The server, control plane and mock share one Alpine image.
+	for _, fixture := range []struct {
+		path    string
+		pattern string
+		image   string
+	}{
+		{"Dockerfile", `(?m)^FROM --platform=linux/amd64 (\S+) AS backend-builder$`, "golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest},
+		{"deploy/provider-msp/Dockerfile.control-plane", `(?m)^FROM --platform=\$BUILDPLATFORM (\S+) AS builder$`, "golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest},
+		{"tests/integration/mock-github-server/Dockerfile", `(?m)^FROM (\S+) AS builder$`, "golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest},
+		{".devcontainer/Dockerfile", `(?m)^FROM (\S+)$`, "golang:1.26.10@sha256:" + go12610DevcontainerDigest},
+	} {
+		t.Run(fixture.path, func(t *testing.T) {
+			contents, err := os.ReadFile(repoFile(fixture.path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			matches := regexp.MustCompile(fixture.pattern).FindAllStringSubmatch(string(contents), -1)
+			if len(matches) != 1 || matches[0][1] != fixture.image {
+				t.Fatalf("Go build stage = %q; expected exactly one stage using %s", matches, fixture.image)
+			}
+		})
+	}
+	module, err := os.ReadFile(repoFile("go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`(?m)^toolchain go1\.26\.10$`).Match(module) {
+		t.Fatal("container compiler pins must match the governed go.mod toolchain")
+	}
+}
 
 func TestNode24FrontendBuilderDigestIsAligned(t *testing.T) {
 	pattern := regexp.MustCompile(`(?m)^FROM --platform=linux/amd64 node:24-alpine@sha256:([0-9a-f]{64}) AS frontend-builder$`)

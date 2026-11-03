@@ -1751,7 +1751,7 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		"FROM --platform=linux/amd64 node:24-alpine@sha256:" + node24Amd64FrontendDigest + " AS frontend-builder",
-		`FROM --platform=linux/amd64 golang:1.26.10-alpine@sha256:`,
+		"FROM --platform=linux/amd64 golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest + " AS backend-builder",
 		`FROM backend-builder AS release-assets-builder`,
 		`AS agent_runtime`,
 		`AS pulse-runtime-foundation`,
