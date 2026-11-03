@@ -33,6 +33,13 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
+const context = () =>
+  expect.objectContaining({
+    expectedOrgID: 'default',
+    signal: expect.any(AbortSignal),
+    retry: false,
+  });
+
 const safeVMwarePreview = () => ({
   current_count: 1,
   projected_count: 1,
@@ -150,6 +157,7 @@ describe('useVMwareSettingsPanelState', () => {
         username: 'administrator@vsphere.local',
         password: '********',
       }),
+      context(),
     );
     expect(VMwareAPI.updateConnection).toHaveBeenCalledWith(
       'conn-1',
@@ -161,6 +169,7 @@ describe('useVMwareSettingsPanelState', () => {
         insecureSkipVerify: false,
         enabled: true,
       }),
+      context(),
     );
     expect(result.dialogOpen()).toBe(false);
     expect(notificationStore.success).toHaveBeenCalledWith('VMware connection updated');
@@ -202,7 +211,7 @@ describe('useVMwareSettingsPanelState', () => {
 
     await result.testSavedConnection(result.connections()[0]);
 
-    expect(VMwareAPI.testSavedConnection).toHaveBeenCalledWith('conn-1');
+    expect(VMwareAPI.testSavedConnection).toHaveBeenCalledWith('conn-1', undefined, context());
     expect(VMwareAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith(
       'VMware connection successful for lab-vcenter',
@@ -243,6 +252,7 @@ describe('useVMwareSettingsPanelState', () => {
         password: '********',
         insecureSkipVerify: true,
       }),
+      context(),
     );
     expect(VMwareAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith('VMware connection successful');
@@ -325,6 +335,7 @@ describe('useVMwareSettingsPanelState', () => {
         username: 'administrator@vsphere.local',
         password: 'secret',
       }),
+      context(),
     );
     expect(notificationStore.success).toHaveBeenCalledWith('VMware connection added');
   });
@@ -537,6 +548,7 @@ describe('useVMwareSettingsPanelState', () => {
         username: 'administrator@vsphere.local',
         password: 'secret',
       }),
+      context(),
     );
     expect(preview?.additional_count).toBe(2);
     expect(result.monitoredSystemPreview()?.projected_count).toBe(3);
