@@ -183,6 +183,8 @@ export interface Node {
   cpuInfo: CPUInfo;
   /** Typed telemetry from a linked Unified Agent, when this PVE node is hybrid. */
   sensors?: HostSensorSummary;
+  /** Client-only projection of the linked agent's reporting lease, not PVE API health. */
+  sensorsStale?: boolean;
   temperature?: Temperature; // CPU/NVMe temperatures
   /**
    * The node's primary CPU temperature in Celsius, chosen by the backend

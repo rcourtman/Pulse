@@ -268,7 +268,7 @@ describe('NodeDrawer', () => {
     expect(details).not.toHaveAttribute('open');
     expect(within(details).getByText('12.9 W')).not.toBeVisible();
     fireEvent.click(within(details).getByText('Details'));
-    const hardware = within(details).getByText('Hardware').closest('tr')!;
+    const hardware = within(details).getByText('Hardware').closest('tbody')!;
     expect(hardware).toHaveTextContent('CPU Core Power6.2 W');
     expect(hardware).toHaveTextContent('CPU Package Power12.9 W');
     expect(hardware).toHaveTextContent('DRAM Power1.7 W');

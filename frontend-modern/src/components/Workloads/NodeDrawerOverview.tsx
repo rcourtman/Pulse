@@ -22,6 +22,10 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import type { Alert, Disk, HostGPUSensor, Node, Temperature } from '@/types/api';
+import {
+  buildPowerRows,
+  HOST_AGENT_STOPPED_REPORTING_REASON,
+} from '@/components/Infrastructure/resourceDetailMappers';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import { formatBytes, formatRelativeTime, normalizeDiskArray } from '@/utils/format';
@@ -287,6 +291,13 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     ...(loadAverageLabel() !== '-'
       ? [{ label: 'Load avg', value: loadAverageLabel() } satisfies NodeOverviewRow]
       : []),
+    ...buildPowerRows(props.node.sensors?.powerWatts).map((row) => ({
+      label: row.label,
+      value: props.node.sensorsStale ? `${row.value} (last known)` : row.value,
+      title: props.node.sensorsStale
+        ? `Last known reading, not current: ${HOST_AGENT_STOPPED_REPORTING_REASON}`
+        : row.valueTitle,
+    })),
   ];
 
   const memoryRows = (): NodeOverviewRow[] => [
