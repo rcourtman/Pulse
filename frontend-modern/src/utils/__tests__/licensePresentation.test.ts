@@ -104,6 +104,9 @@ describe('licensePresentation', () => {
       purchaseUnavailableActionLabel: 'Try again',
       recoverySectionTitle: 'License recovery',
       recoverySectionDescription: 'Paste a license key or clear the license on this install.',
+      mspReferralBody:
+        'Managing infrastructure for clients? Pulse MSP is a separate self-hosted install with an isolated workspace for each client. Evaluate two clients free for 60 days.',
+      mspReferralActionLabel: 'See Pulse MSP',
     });
   });
 

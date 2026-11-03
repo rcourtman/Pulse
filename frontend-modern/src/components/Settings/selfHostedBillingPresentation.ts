@@ -29,7 +29,14 @@ export interface SelfHostedProBillingPresentation {
   purchaseUnavailableActionLabel: string;
   recoverySectionTitle: string;
   recoverySectionDescription: string;
+  mspReferralBody: string;
+  mspReferralActionLabel: string;
 }
+
+// Pulse MSP is sold from pulserelay.pro, not from this install. The campaign
+// tag keeps visits that start here apart in the website funnel.
+export const PULSE_MSP_REFERRAL_URL =
+  'https://pulserelay.pro/msp?utm_source=pulse&utm_medium=app&utm_campaign=msp';
 
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
   navLabel: 'Plans & Billing',
@@ -65,4 +72,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   purchaseUnavailableActionLabel: 'Try again',
   recoverySectionTitle: 'License recovery',
   recoverySectionDescription: 'Paste a license key or clear the license on this install.',
+  mspReferralBody:
+    'Managing infrastructure for clients? Pulse MSP is a separate self-hosted install with an isolated workspace for each client. Evaluate two clients free for 60 days.',
+  mspReferralActionLabel: 'See Pulse MSP',
 };

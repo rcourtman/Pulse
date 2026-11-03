@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "126fb1fb4e112292ff1d99e48f44c61aafcfc1a1",
+  "verified_at": "2026-11-03T18:14:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+    "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "99745edb730017c5d7baa59c216de712da8cd4a00e42164df9a886a98793b157",
+    "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts": "c133583f0b661e8b2e632cdd83c19ac0508045dede36b3c581a7c418e5199062"
+  },
+  "routes": [
+    "/settings/system/billing/plan (lands on /settings/pulse-intelligence/billing/plan)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "production vite build of these exact staged bytes served by vite preview on pulse-dev, proxied to the pulse-perf-rig mock estate on :7699 (a free Community install: /api/security/status reported hideCommercial false and hideUpgrade true), viewed in the desktop app's built-in browser through an SSH tunnel and signed in with the rig's documented dev login",
+    "Plans & Billing, Plan tab: the Pulse MSP line renders once, last in the section, below License recovery, as muted text with an outline 'See Pulse MSP' button; the existing Available plans card, Community status line and recovery block are unchanged above it",
+    "1440 and 1024: text and button side by side in one row (526px by 77px at 1024), no horizontal page overflow (scrollWidth 1429 of 1440 and 1013 of 1024)",
+    "375 phone: text wraps above a full-height button, row inside the panel from x=19 to x=356, scrollWidth 375 of 375",
+    "hosted-mode and demo/white-label absence covered by ProLicensePanel unit tests (no hosted or demo rig was started)"
+  ],
+  "interactions": [
+    "read the rendered line and link from the DOM: href https://pulserelay.pro/msp?utm_source=pulse&utm_medium=app&utm_campaign=msp, target _blank, rel noopener noreferrer",
+    "scrolled the line into view at each width; did not click the link, so no synthetic visit reached the live website funnel"
+  ]
+}

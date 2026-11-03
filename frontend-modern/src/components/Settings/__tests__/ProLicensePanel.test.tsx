@@ -46,6 +46,7 @@ const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const presentationPolicyHidesCommercialSurfacesMock = vi.fn(() => false);
 const presentationPolicyHidesUpgradePromptsMock = vi.fn(() => true);
+const isHostedModeEnabledMock = vi.fn(() => false);
 const sessionPresentationPolicyResolvedMock = vi.fn(() => true);
 const useLocationMock = vi.fn(() => ({
   search: '',
@@ -103,6 +104,7 @@ vi.mock('@solidjs/router', async (importOriginal) => {
 });
 
 vi.mock('@/stores/license', () => ({
+  isHostedModeEnabled: () => isHostedModeEnabledMock(),
   isMultiTenantEnabled: () => true,
   loadRuntimeCapabilities: (...args: unknown[]) => loadRuntimeLicenseStatusMock(...args),
 }));
@@ -174,6 +176,8 @@ describe('ProLicensePanel', () => {
     notificationErrorMock.mockReset();
     presentationPolicyHidesCommercialSurfacesMock.mockReset();
     presentationPolicyHidesUpgradePromptsMock.mockReset();
+    isHostedModeEnabledMock.mockReset();
+    isHostedModeEnabledMock.mockReturnValue(false);
     sessionPresentationPolicyResolvedMock.mockReset();
     useLocationMock.mockReset();
     navigateMock.mockReset();
@@ -218,6 +222,40 @@ describe('ProLicensePanel', () => {
     renderPanel();
     return within(document.getElementById(SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID)!);
   };
+
+  describe('Pulse MSP referral', () => {
+    it('points free self-hosted installs at Pulse MSP with a tagged link', async () => {
+      // Free installs hide upgrade prompts elsewhere; Plans & Billing is opened on purpose.
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+      renderPanel();
+      const referral = await screen.findByTestId('pulse-msp-referral');
+      expect(referral).toHaveTextContent('Managing infrastructure for clients?');
+      expect(referral).toHaveTextContent('separate self-hosted install');
+      const link = within(referral).getByRole('link', { name: 'See Pulse MSP' });
+      expect(link).toHaveAttribute(
+        'href',
+        'https://pulserelay.pro/msp?utm_source=pulse&utm_medium=app&utm_campaign=msp',
+      );
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    it('stays out of hosted runtimes, which include MSP client workspaces', async () => {
+      isHostedModeEnabledMock.mockReturnValue(true);
+      renderPanel();
+      await waitFor(() =>
+        expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).not.toBeNull(),
+      );
+      expect(screen.queryByTestId('pulse-msp-referral')).toBeNull();
+    });
+
+    it('is hidden with the rest of the commercial surface in demo and white-label sessions', async () => {
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+      renderPanel();
+      await screen.findByText('License and billing details are hidden');
+      expect(screen.queryByTestId('pulse-msp-referral')).toBeNull();
+    });
+  });
 
   it('replaces an outage with same-key success and genuine refusal beside the recovery controls', async () => {
     const outage =
