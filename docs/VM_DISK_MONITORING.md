@@ -4,6 +4,9 @@ Pulse can read filesystem usage inside a Proxmox VM through the QEMU Guest
 Agent. Allocated virtual-disk size is not the same as used space inside the
 guest. LXC filesystem collection uses a different path.
 
+For a quiet VM **Disk I/O** chart alongside busy linked-agent disks, see
+[which readings the VM chart uses](#vm-disk-io-is-quiet-but-linked-agent-disks-are-busy).
+
 ## Backup safety
 
 **Do not run manual guest-agent probes during a backup, freeze or thaw.** A
@@ -318,6 +321,38 @@ missing disk value. The built-in `PVEAuditor` role cannot be modified; use a
 custom monitoring role if the required read privileges are absent.
 
 ## 🔧 Troubleshooting
+
+### VM Disk I/O is quiet but linked-agent disks are busy
+
+**Filesystem usage and Disk I/O measure different things.** Filesystem usage
+is occupied space, not read/write throughput or disk busy time. A linked
+**Pulse Agent** can supply filesystem usage and disk inventory, but that does
+not select the source of the VM's I/O charts.
+
+The Proxmox VM's **Disk I/O** chart uses the VM counters reported by Proxmox.
+Linking a Pulse Agent does not switch the VM’s live Disk I/O or stored Disk I/O
+history to that agent. There is no VM I/O source selector in this build.
+
+With USB storage or a PCIe HBA/NVMe device passed directly into the VM, storage
+activity can bypass QEMU's virtual-block-device accounting. A quiet Proxmox
+VM chart therefore does not establish that the guest’s disks are idle. This
+differs from a virtual SCSI/VirtIO disk whose traffic Proxmox can account for;
+the two views are not necessarily measuring the same devices.
+
+For that activity, use readings already available in the **Pulse Agent-backed
+machine or per-disk view**, or the guest's established storage monitoring.
+Compare the same guest, device, observation time and
+[History range](METRICS_HISTORY.md#read-a-history-panel). A temperature,
+SMART result or filesystem reading alone does not establish current I/O.
+Do not add Proxmox and agent totals, or sum partitions, RAID members and
+logical devices as if they were independent disks: the same traffic can be
+counted more than once.
+
+Use existing observations, not a new I/O stress test, guest-agent probe,
+restart or hardware reconfiguration. Do not widen token permissions or install
+another agent to change this chart's source. If a backup or unresponsive guest
+is involved, [Backup safety](#backup-safety) takes precedence; a busy or quiet
+chart does not establish thaw or successful workload writes.
 
 ### Current, retained and unavailable disk readings
 
