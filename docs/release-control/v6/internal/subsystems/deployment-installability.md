@@ -4969,6 +4969,27 @@ which have working defaults or are generated. PR #2212 reports a v6.4.1
 first-run 404 and a 200 after starting the platform; this assigned candidate
 has not repeated that live-host proof.
 
+### Provider MSP setup asks for its three values before installing
+
+Through v6.7.0, `deploy/provider-msp/setup.sh` installed Docker and then
+stopped, asking the provider to edit a root-only `.env` from a second session
+and press Enter. It now asks for `DOMAIN`, `ACME_EMAIL` and the Cloudflare
+token first (the token without echo), or takes them from
+`PULSE_PROVIDER_MSP_DOMAIN`, `PULSE_PROVIDER_MSP_ACME_EMAIL` and
+`PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN` for an unattended run, and seeds only a
+new `.env`, created with mode 0600. Each value is held to characters that
+compose and `set_env_value` read literally. A blank answer keeps the old
+edit-and-continue path for other DNS-01 providers. Setup names the two DNS
+records the certificate needs (`DOMAIN` and `*.DOMAIN`) and prints the
+bootstrap, portal-link and install-proof commands with `sudo`, because `.env`
+is readable by root only. `docs/MSP.md` chains the bundle download,
+signature, checksum, extraction and setup with `&&`, so a failed verification
+stops before anything runs as root.
+`TestProviderMSPSetupAsksForFirstRunValuesUpFront` and
+`TestProviderMSPEvaluationDocsUsePublishedSignedBundle` pin both. Checked on
+macOS bash 3.2 and bash 5 against a scratch install directory; not yet run on a
+fresh Ubuntu host.
+
 ### Provider MSP clients survive a support-container recreate
 
 Recreating the control plane or Traefik detaches it from each client's
