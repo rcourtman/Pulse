@@ -503,7 +503,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   const renderContainerRow = (resource: Resource): JSX.Element => {
-    const indicator = mapDockerContainerStatus(resource);
+    // REST reconciliation keeps this resource object and row alive. Read
+    // its current health verdict rather than retaining the first green dot.
+    const indicator = () => mapDockerContainerStatus(resource);
     const image = () => dockerTextValue(resource.docker?.image);
     const state = () => stateFor(resource);
     const stateWords = () => (
@@ -517,9 +519,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     );
     // Without a State column the words join the name only when the state
     // needs attention; a running or stopped container reads in its dot.
+    // Keep bounded failure words readable on phones: the neighbouring name
+    // can truncate first without turning the row back into two lines.
     const stateBesideName = () => (
       <span
-        class={`${getPlatformInlineStateClass(isPlatformAttentionVariant(state().tone))} ${dockerStateTextToneClass(state().tone)}`}
+        class={`${getPlatformInlineStateClass(isPlatformAttentionVariant(state().tone))} ${isPlatformAttentionVariant(state().tone) ? 'shrink-0' : ''} ${dockerStateTextToneClass(state().tone)}`}
         title={state().title}
         data-docker-container-state={state().tone ?? 'ok'}
       >
@@ -567,7 +571,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           return (
             <DockerResourceNameCell
               resource={resource}
-              indicator={indicator}
+              indicator={indicator()}
               detail={stateUnderName() ? stateBesideName() : undefined}
               detailToggle={
                 <PlatformResourceDetailToggleButton
