@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "a315a4878070098435213143ea6587f15dbda12e",
+  "verified_at": "2026-11-03T09:42:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts",
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "34e8518d04063bd0a4631f3d714b061616ac0b4d17f01700e33ad939f280374c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts": "37c55708e4097c9a3a478159b7b1a914e09c747fa9e2e4fd644470cd805db448",
+    "frontend-modern/src/routing/resourceLinks.ts": "7c92daf521b4842b44a8fe4d7831537c5ece251c09e62772b3cedf525febb084"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/backups",
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 607
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode built from this change on pulse-dev: 929 guests with every Backup health reason present",
+    "desktop and phone layouts, dark theme"
+  ],
+  "interactions": [
+    "from Proxmox Overview clicked the Backups section link: it points at /proxmox/backups/coverage and opens Coverage, listed first in the view tabs",
+    "opened the bare /proxmox/backups route: it redirects to /proxmox/backups/coverage at once",
+    "Backup health reads No successful backup, Snapshots only, no backup, No backup in 7 days, Last backup failed and Backup status unknown, each on one 32-33px row",
+    "clicked By date: the route is /proxmox/backups/date; clicked Last backup failed from there: Coverage opens filtered to reason=source-failed",
+    "at 375x812 the health rows stay single-line with no clipped labels and no horizontal page overflow"
+  ]
+}

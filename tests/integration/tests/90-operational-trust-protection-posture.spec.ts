@@ -51,7 +51,7 @@ async function openDesktopProxmoxBackups(page: Page) {
   });
   await expect(sections).toBeVisible({ timeout: 60_000 });
   await sections.getByRole("link", { name: "Backups", exact: true }).click();
-  await expect(page).toHaveURL(/\/proxmox\/backups\/date$/);
+  await expect(page).toHaveURL(/\/proxmox\/backups\/coverage$/);
 }
 
 test.describe("Operational trust protection posture", () => {

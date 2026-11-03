@@ -31,7 +31,7 @@ export interface BackupVerdict {
 const reasonLabel = (reason: string, policy: ProtectionPosturePolicy | null): string | null => {
   switch (reason) {
     case 'source-failed':
-      return 'Backup source reported a failure';
+      return 'Last backup failed';
     case 'backup-future-dated':
       return 'Backup dated in the future';
     case 'stale': {
@@ -49,7 +49,7 @@ const reasonLabel = (reason: string, policy: ProtectionPosturePolicy | null): st
     case 'history-unreadable':
       return 'Backup history unreadable';
     case 'no-history':
-      return 'No backup history';
+      return 'Backup status unknown';
     case 'snapshots-only':
       return 'Snapshots only, no backup';
     case 'no-backup':
