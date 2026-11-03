@@ -251,4 +251,21 @@ describe('VMware settings through the real API transport', () => {
       expect(result.form().hasStoredPassword).toBe(true);
     },
   );
+  it('refuses a stale draft mutation if organisation storage changed without an event', async () => {
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+    await ready(result);
+    result.openEditDialog(result.connections()[0]);
+    result.updateForm({ password: 'synthetic-old-org-draft', name: 'Old org unsaved name' });
+    setOrgID('south');
+    await result.saveCurrentForm();
+    await ready(result);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every(([, options]) => (options?.method || 'GET') === 'GET')).toBe(
+      true,
+    );
+    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-Pulse-Org-ID')).toBe('south');
+    expect(result.connections()[0].name).toBe('Replacement source');
+    expect(result.dialogOpen()).toBe(false);
+    expect(result.form().password).toBe('');
+  });
 });
