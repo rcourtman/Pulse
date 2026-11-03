@@ -108,7 +108,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// resource + operator-state + findings + audit calls.
 	r.mux.HandleFunc("/api/agent/resource-context/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ResourceContextCapabilityName,
-		r.agentContextHandler.HandleResourceContext,
+		retainAgentCommandResponseAuthority(r.config, r.agentContextHandler.HandleResourceContext),
 	))))
 	// Agent-consumable structured capability surface for a single resource.
 	// Companion to the resource-context bundle above: that renders capabilities
@@ -117,7 +117,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// and params without guessing.
 	r.mux.HandleFunc("/api/agent/resource-capabilities/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ListResourceCapabilitiesCapabilityName,
-		r.agentContextHandler.HandleResourceCapabilities,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.agentContextHandler.HandleResourceCapabilities),
 	))))
 	// Agent-consumable fleet triage view — thin per-resource rollups
 	// across the org so an agent can pick a focus in one read instead
@@ -126,14 +126,14 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// is "tell me everything about this one."
 	r.mux.HandleFunc("/api/agent/fleet-context", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.FleetContextCapabilityName,
-		r.agentContextHandler.HandleFleetContext,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.agentContextHandler.HandleFleetContext),
 	))))
 	// Agent-consumable change history — "what happened?" across the fleet,
 	// read from the existing resource change store. Companion to the fleet
 	// triage view above, which answers "where do I look now?".
 	r.mux.HandleFunc(agentcapabilities.RecentChangesCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ListRecentChangesCapabilityName,
-		retainAgentHistoryResponseAuthority(r.config, r.agentContextHandler.HandleRecentChanges),
+		retainAgentCommandResponseAuthority(r.config, r.agentContextHandler.HandleRecentChanges),
 	))))
 	// Agent-consumable metric history — "how did it move?" for one resource,
 	// served by the same history read the charts use.
@@ -146,13 +146,13 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// readiness projection for native UI and external agents.
 	r.mux.HandleFunc(agentcapabilities.PatrolControlStatusCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.PatrolControlStatusCapabilityName,
-		r.agentContextHandler.HandleOperationsLoopStatus,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.agentContextHandler.HandleOperationsLoopStatus),
 	))))
 	// Legacy operations-loop route kept for older external-agent clients. New
 	// clients should discover the Patrol control route from the manifest.
 	r.mux.HandleFunc(agentcapabilities.OperationsLoopStatusCompatibilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.OperationsLoopStatusCapabilityName,
-		r.agentContextHandler.HandleOperationsLoopStatus,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.agentContextHandler.HandleOperationsLoopStatus),
 	))))
 	// Agent capabilities manifest — discovery document. Unauthenticated
 	// because it only describes the agent surface; the capabilities
