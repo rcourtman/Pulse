@@ -18,6 +18,43 @@ def section(heading: str) -> str:
 
 
 class LoginTroubleshootingDocsTest(unittest.TestCase):
+    def test_unread_saved_settings_are_not_treated_as_removed_connections(self):
+        text = section('#### Signed in, but saved infrastructure settings are unavailable')
+        for expected in (
+            'Settings → Infrastructure → Manage', 'current account and organisation',
+            'does **not** establish that the connection was removed',
+            'Monitoring access and permission to manage saved connections are different',
+            'Retry saved configuration', 'read, not a save, connection test or removal',
+            'Reload before making changes', 'do not repeat a refused Test or Save',
+            'do not widen token scopes', 'bypass CSRF checks',
+            'A failed read does not prove an empty inventory',
+            'check the existing state before any further write',
+            'Do not remove and recreate the connection',
+            'replacement secrets', 'certificate verification, fingerprints and collection scope',
+            'not proof of polling', 'request path without query strings',
+            'do not run Diagnostics or replay a mutation', 'network exports private',
+        ):
+            with self.subTest(statement=expected):
+                self.assertIn(expected, text)
+        doc = (ROOT / 'docs/TROUBLESHOOTING.md').read_text(encoding='utf-8')
+        quick = doc.split('## Choose the affected workflow\n', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('#signed-in-but-saved-infrastructure-settings-are-unavailable', quick)
+
+    def test_saved_settings_recovery_matches_the_read_only_ui_action(self):
+        workspace = (ROOT / 'frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx').read_text()
+        panel = workspace.split('const renderUnavailableSavedConfiguration =', 1)[1].split(
+            'const renderConnectionSlot =', 1)[0]
+        self.assertIn('This does not confirm removal.', panel)
+        self.assertIn('Retry saved configuration', panel)
+        self.assertIn('onClick={() => void state.loadConnections()}', panel)
+        for action in ('saveConnection(', 'testConnection(', 'deleteConnection('):
+            self.assertNotIn(action, panel)
+        for platform in ('VMware', 'TrueNAS'):
+            hook = (ROOT / f'frontend-modern/src/components/Settings/use{platform}SettingsPanelState.ts').read_text()
+            self.assertIn('if (![401, 403].includes(apiErrorStatus(error) ?? 0)) return false;', hook)
+            self.assertIn('Reload before making changes.', hook)
+            self.assertIn("eventBus.on('org_switched'", hook)
+
     def test_local_credentials_use_actual_precedence_and_file_format(self):
         text = section('#### "Invalid username or password" after setup')
         for expected in (
