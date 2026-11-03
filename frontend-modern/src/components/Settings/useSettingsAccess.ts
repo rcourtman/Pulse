@@ -7,6 +7,7 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import {
   presentationPolicyHidesCommercialSurfaces,
@@ -25,7 +26,11 @@ import {
   isRuntimeCapabilityBlocked,
   runtimeCapabilitiesLoaded,
 } from '@/stores/license';
-import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsNavigationModel';
+import {
+  DEFAULT_SETTINGS_TAB,
+  type SettingsNavGroup,
+  type SettingsTab,
+} from './settingsNavigationModel';
 import { tabFeatureRequirements } from './settingsFeatureGates';
 import { getSettingsHeaderMeta } from './settingsHeaderMeta';
 import { getSettingsNavGroups, getSettingsNavItem } from './settingsNavCatalog';
@@ -165,7 +170,7 @@ export function useSettingsAccess({
       .filter((group) => group.items.length > 0),
   );
 
-  const filteredTabGroups = createMemo(() => {
+  const filteredTabGroupSnapshot = createMemo(() => {
     const q = searchQuery().trim().toLowerCase();
     const groups = visibleTabGroups();
     if (!q) {
@@ -187,6 +192,19 @@ export function useSettingsAccess({
       })
       .filter((group) => group.items.length > 0);
   });
+
+  // Capability reads rebuild the projection even when its IDs do not change.
+  // Retain those identities so a refresh cannot replace a pressed nav button
+  // before its click reaches the shell. Keep the catalog snapshots immutable.
+  const [navigationGroups, setNavigationGroups] = createStore<SettingsNavGroup[]>([]);
+  createEffect(() => {
+    const snapshot = filteredTabGroupSnapshot().map((group) => ({
+      ...group,
+      items: group.items.map(({ icon, ...data }) => ({ ...structuredClone(data), icon })),
+    }));
+    setNavigationGroups(reconcile(snapshot, { key: 'id' }));
+  });
+  const filteredTabGroups = () => navigationGroups;
 
   createEffect(() => {
     const current = activeTab();

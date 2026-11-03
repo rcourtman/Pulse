@@ -20,6 +20,25 @@
 
 ## Purpose
 
+### Settings navigation retains canonical item identity through refreshed capabilities
+
+`frontend-modern/src/components/Settings/useSettingsAccess.ts` owns the current
+route/visibility projection consumed by `SettingsPageShell`. Its filtered
+navigation retains group and item identity by the catalog's canonical `id`
+while reconciling fresh policy output. A capability response must not replace
+an unchanged button between pointer press and release or lose its focus.
+Route admission and discoverability continue to come from the existing
+settings visibility contracts; removed items leave the projection promptly.
+Catalog snapshots remain immutable. No navigation-local item cache or second
+visibility policy is introduced.
+
+`useSettingsAccess.test.tsx` joins the production access owner, shell state and
+rendered Settings shell, refreshes capabilities while the active Billing item
+is pressed, and verifies the same focused button closes the phone index. A
+subsequent visibility change removes the item. The canonical-shell E2E flow
+covers the normal desktop sidebar and phone open/select/close interactions.
+Actual browser evidence remains a separate source-bound receipt.
+
 ### Backups bars use the metric bar colours (2 November 2026)
 
 The Backup health rows (`ProxmoxBackupsCoverageStrip`) and the Backup jobs
@@ -2578,6 +2597,7 @@ removal/failure retention and containing publication remain separate evidence.
 97. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
 98. `frontend-modern/src/components/Settings/settingsTypes.ts`
 99. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+99. `frontend-modern/src/components/Settings/useSettingsAccess.ts`
 100. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
 101. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
 102. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`

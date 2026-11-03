@@ -5692,6 +5692,7 @@
         "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
         "frontend-modern/src/components/Settings/useDiscoverySettingsState.ts",
         "frontend-modern/src/components/Settings/useReportingPanelState.ts",
+        "frontend-modern/src/components/Settings/useSettingsAccess.ts",
         "frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts",
         "frontend-modern/src/components/Settings/useSettingsNavigation.ts",
         "frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx",
@@ -6453,6 +6454,19 @@
               "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.source-isolation.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.sparse.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.window.test.tsx"
+            ]
+          },
+          {
+            "id": "settings-navigation-refresh",
+            "label": "canonical Settings navigation identity and refreshed visibility proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/useSettingsAccess.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/useSettingsAccess.test.tsx"
             ]
           }
         ],
