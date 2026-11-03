@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "749a884113103684f65567cf2fc192f56e9647ea",
+  "verified_at": "2026-11-03T16:56:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesEditorDialog.tsx": "f2c74e0bc441d3570a7b925e70c61c749bd8f0edd9ea391e4605ab05fcce090f",
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "a3cd5c04cf0a398cb7ac51c5ddbf5272ec23610de7018205d6e0f7dbaedd5d28"
+  },
+  "routes": [
+    "/settings/security-users",
+    "/settings/security-roles"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 640
+    },
+    {
+      "width": 320,
+      "height": 568
+    },
+    {
+      "width": 844,
+      "height": 390
+    }
+  ],
+  "states": [
+    "Both existing access editors with six synthetic roles, saved assignments, twelve saved permission pairs and six editable permission rows; top and bottom scroll positions.",
+    "Save, Cancel and Close remain entirely in the viewport and hit-testable at desktop, phone and dark landscape sizes. All last form content remains reachable.",
+    "Synthetic HTTP save failures retain drafts/selected roles and leave both dismissal paths available; capability withdrawal removes the current reader's dialog and inventory."
+  ],
+  "interactions": [
+    "Open the correct saved user/role from the real Settings panel using Enter; scroll the real dialog body to its end.",
+    "Edit a role name and submit through the production state/API client to a synthetic refusing HTTP producer. Verify draft retention; Cancel via pointer in the final source.",
+    "Escape and current-reader capability withdrawal dismiss the real editors without successful access mutations."
+  ],
+  "browser": "Chromium 141.0.7390.37; Playwright 1.56.1 (matches integration lock)",
+  "notes": "Comparable parent/final SettingsPageShell, panels, state hooks, API client, dialogs and production CSS with identical synthetic fixtures and viewports. 74 baseline and 142 final checks; 12 comparable capture pairs all opened with the native image tool. Evidence-only page entry supplies an admitted synthetic reader, not full authenticated App/IdP/native account recovery. One initial role-fieldset layout failed browser scroll validation and was corrected before this final pass. No full App build or VM suite is claimed."
+}
