@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "base_sha": "f17f3a3e1be2bbc59afdb3b891e0b30f1f0930f3",
+  "verified_at": "2026-11-03T14:49:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "62b76167d4047408cfa5fcf934d709b93f7e151734316b2ef7c120ff2aaac391"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/thresholds"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 393,
+      "height": 727
+    },
+    {
+      "width": 390,
+      "height": 664
+    }
+  ],
+  "states": [
+    "Wide desktop table row editor",
+    "Phone card editor",
+    "Unsaved threshold override",
+    "Saved override",
+    "Reverted override absent after reload"
+  ],
+  "interactions": [
+    "Edit CPU threshold and move focus between controls without committing",
+    "Leave the desktop row to stage its draft, or use the phone card Save action",
+    "Persist exactly one override through Save Changes",
+    "Revert the override, save, reload and confirm it remains absent"
+  ],
+  "evidence": {
+    "scope": "Threshold editor browser verification only. The containing full-suite run still has unrelated Backups failures and a Settings navigation flaky case.",
+    "run": "https://github.com/rcourtman/Pulse/actions/runs/41653527901",
+    "head_sha": "f17f3a3e1be2bbc59afdb3b891e0b30f1f0930f3",
+    "checkout_sha": "1c0e83a7fefc2b1808510f4777e7e03db35291ba",
+    "browser_cases": [
+      {
+        "project": "chromium",
+        "job": 125980104784,
+        "passed_at": "2026-11-03T14:35:32.0290036Z"
+      },
+      {
+        "project": "mobile-chrome",
+        "job": 125980104621,
+        "passed_at": "2026-11-03T14:34:56.6020441Z"
+      },
+      {
+        "project": "mobile-safari",
+        "job": 125980104784,
+        "passed_at": "2026-11-03T14:38:01.0826991Z"
+      }
+    ],
+    "refresh_unit_regressions": {
+      "job": 125980240228,
+      "grouped": "passed",
+      "ungrouped": "passed",
+      "suite": "ResourceTable.test.tsx,154 tests passed"
+    }
+  }
+}
