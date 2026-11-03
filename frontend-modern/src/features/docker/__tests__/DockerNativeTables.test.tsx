@@ -968,10 +968,17 @@ describe('Docker native tables', () => {
         expect(resources[0]).toBe(initialResource);
         expect(container.querySelector('[data-docker-container-row="container-health"]')).toBe(row);
         expect(within(row as HTMLElement).getByTitle(label)).toHaveClass(colour);
-        expect(within(row as HTMLElement).getByText(label)).toHaveAttribute(
-          'data-docker-container-state',
-          health === 'unhealthy' ? 'danger' : health === 'starting' ? 'warning' : 'ok',
-        );
+        if (health === 'healthy' && width === WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH) {
+          // Wide tables drop the State column when every row is healthy;
+          // the still-mounted dot, asserted above, carries that verdict.
+          expect(within(row as HTMLElement).queryByText('Healthy')).not.toBeInTheDocument();
+          expect(screen.queryByRole('columnheader', { name: /State/ })).not.toBeInTheDocument();
+        } else {
+          expect(within(row as HTMLElement).getByText(label)).toHaveAttribute(
+            'data-docker-container-state',
+            health === 'unhealthy' ? 'danger' : health === 'starting' ? 'warning' : 'ok',
+          );
+        }
       }
 
       setResources(0, 'docker', 'containerState', 'exited');
