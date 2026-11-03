@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -16,11 +17,28 @@ import (
 type UpdateDetectionHandlers struct {
 	monitor   *monitoring.Monitor
 	readState unifiedresources.ReadState
+	// tenant resolves the request organization's monitor and read state. The
+	// router sets it so an organization never reads or queues commands against
+	// another organization's agents; the fixed fields serve a single monitor.
+	tenant func(context.Context) (*monitoring.Monitor, unifiedresources.ReadState)
 }
 
-// NewUpdateDetectionHandlers creates a new update detection handlers group.
+// NewUpdateDetectionHandlers creates handlers bound to one monitor.
 func NewUpdateDetectionHandlers(monitor *monitoring.Monitor, readState unifiedresources.ReadState) *UpdateDetectionHandlers {
 	return &UpdateDetectionHandlers{monitor: monitor, readState: readState}
+}
+
+// NewTenantUpdateDetectionHandlers creates handlers that resolve the monitor
+// and read state of each request's organization.
+func NewTenantUpdateDetectionHandlers(resolve func(context.Context) (*monitoring.Monitor, unifiedresources.ReadState)) *UpdateDetectionHandlers {
+	return &UpdateDetectionHandlers{tenant: resolve}
+}
+
+func (h *UpdateDetectionHandlers) sources(r *http.Request) (*monitoring.Monitor, unifiedresources.ReadState) {
+	if h.tenant != nil {
+		return h.tenant(r.Context())
+	}
+	return h.monitor, h.readState
 }
 
 // ContainerUpdateInfo represents a container with an available update
@@ -116,7 +134,8 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r
 		return
 	}
 
-	if h.monitor == nil {
+	monitor, readState := h.sources(r)
+	if monitor == nil {
 		if err := utils.WriteJSONResponse(w, emptyInfraUpdatesResponse()); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize empty updates response")
 		}
@@ -129,7 +148,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r
 	resourceTypeFilter := strings.ToLower(query.Get("resourceType"))
 
 	// Collect updates from Docker / Podman modules.
-	updates := h.collectDockerUpdates(agentIDFilter)
+	updates := collectDockerUpdates(readState, agentIDFilter)
 
 	// Filter by resource type if specified
 	if resourceTypeFilter != "" && resourceTypeFilter != string(infraUpdateResourceTypeDocker) {
@@ -153,13 +172,14 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdateForResource(w http.Respons
 		return
 	}
 
-	if h.monitor == nil {
+	monitor, readState := h.sources(r)
+	if monitor == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No update found for resource", nil)
 		return
 	}
 
 	// ResourceID format: docker:<agentId>/<containerId>
-	updates := h.collectDockerUpdates("")
+	updates := collectDockerUpdates(readState, "")
 	for _, update := range updates {
 		dockerResourceID := "docker:" + update.AgentID + "/" + update.ContainerID
 		if dockerResourceID == resourceID || update.ContainerID == resourceID {
@@ -181,14 +201,15 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 		return
 	}
 
-	if h.monitor == nil {
+	monitor, readState := h.sources(r)
+	if monitor == nil {
 		if err := utils.WriteJSONResponse(w, emptyInfraUpdatesSummaryResponse()); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize empty summary response")
 		}
 		return
 	}
 
-	updates := h.collectDockerUpdates("")
+	updates := collectDockerUpdates(readState, "")
 
 	// Aggregate by agent
 	summaries := make(map[string]infraUpdateAgentSummary)
@@ -225,7 +246,8 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 		return
 	}
 
-	if h.monitor == nil {
+	monitor, readState := h.sources(r)
+	if monitor == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Update detection not available", nil)
 		return
 	}
@@ -245,7 +267,7 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 
 	// Handle agent-level check
 	if req.AgentID != "" {
-		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(req.AgentID)
+		commandStatus, err := monitor.QueueDockerCheckUpdatesCommand(req.AgentID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "check_updates_failed", err.Error(), nil)
 			return
@@ -265,7 +287,7 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 	// Handle resource-level check (currently we just check the whole agent)
 	if req.ResourceID != "" {
 		// Try to find which agent this resource belongs to
-		updates := h.collectDockerUpdates("")
+		updates := collectDockerUpdates(readState, "")
 		var agentID string
 		for _, update := range updates {
 			if update.ContainerID == req.ResourceID || ("docker:"+update.AgentID+"/"+update.ContainerID) == req.ResourceID {
@@ -279,7 +301,7 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 			return
 		}
 
-		commandStatus, err := h.monitor.QueueDockerCheckUpdatesCommand(agentID)
+		commandStatus, err := monitor.QueueDockerCheckUpdatesCommand(agentID)
 		if err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "check_updates_failed", err.Error(), nil)
 			return
@@ -307,7 +329,8 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForAgent(w http.ResponseW
 		return
 	}
 
-	if h.monitor == nil {
+	monitor, readState := h.sources(r)
+	if monitor == nil {
 		response := emptyInfraUpdatesForAgentResponse()
 		response.AgentID = agentID
 		if err := utils.WriteJSONResponse(w, response.normalizeCollections()); err != nil {
@@ -316,7 +339,7 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForAgent(w http.ResponseW
 		return
 	}
 
-	updates := h.collectDockerUpdates(agentID)
+	updates := collectDockerUpdates(readState, agentID)
 
 	response := emptyInfraUpdatesForAgentResponse()
 	response.Updates = updates
@@ -329,19 +352,19 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForAgent(w http.ResponseW
 }
 
 // collectDockerUpdates gathers update information from Docker / Podman modules via ReadState.
-func (h *UpdateDetectionHandlers) collectDockerUpdates(agentIDFilter string) []ContainerUpdateInfo {
-	if h.readState == nil {
+func collectDockerUpdates(readState unifiedresources.ReadState, agentIDFilter string) []ContainerUpdateInfo {
+	if readState == nil {
 		return nil
 	}
 
 	// Build agent ID -> display name map for lookups.
 	agentNames := make(map[string]string)
-	for _, dh := range h.readState.DockerHosts() {
+	for _, dh := range readState.DockerHosts() {
 		agentNames[dh.HostSourceID()] = dh.Name()
 	}
 
 	var updates []ContainerUpdateInfo
-	for _, c := range h.readState.DockerContainers() {
+	for _, c := range readState.DockerContainers() {
 		agentID := c.HostSourceID()
 
 		// Filter by agent ID if specified.
