@@ -118,6 +118,44 @@ class AdminDocsTest(unittest.TestCase):
                 self.assertEqual((DOCS / f"{name}.md").read_bytes(),
                                  (ROOT / "frontend-modern/public/docs" / f"{name}.md").read_bytes())
 
+    def test_rbac_setup_guidance_matches_navigation_and_failure_states(self):
+        guide = (DOCS / "RBAC.md").read_text()
+        readable = " ".join(guide.replace("**", "").split())
+        frontend = ROOT / "frontend-modern/src"
+        navigation = (frontend / "components/Settings/settingsNavCatalog.ts").read_text()
+        for panel in ("roles", "users"):
+            with self.subTest(panel=panel):
+                entry = navigation.split(f"id: 'security-{panel}'", 1)[1].split("},", 1)[0]
+                self.assertIn("features: ['rbac']", entry)
+                self.assertIn("hideWhenUnavailable: true", entry)
+                self.assertIn(f"requiredCapability: '{panel}'", entry)
+        for label, source in (
+            ("Pro runtime missing", "utils/licensePresentation.ts"),
+            ("Open Pulse Pro downloads", "utils/licensePresentation.ts"),
+            ("Roles are unavailable for this session", "components/Settings/RolesPanel.tsx"),
+            ("User access is unavailable for this session", "components/Settings/UserAssignmentsPanel.tsx"),
+            ("Failed to load roles", "utils/rbacPresentation.ts"),
+            ("Failed to load user assignments", "utils/rbacPresentation.ts"),
+        ):
+            with self.subTest(label=label):
+                self.assertIn(label, readable)
+                self.assertIn(label, " ".join((frontend / source).read_text().split()))
+        for boundary in (
+            "active licence is not an administrator grant",
+            "licence and runtime status",
+            "do not buy a second licence or reset the data directory",
+            "independent administrator recovery path",
+            "next sign-in replaces manually assigned roles",
+            "#automatic-role-assignment-via-oidc",
+            "runtime's `rbac` capability and this session's permission",
+            "missing menu entry alone does not tell you which check failed",
+            "do not remove proxy role gating or widen an agent's token",
+            "not proof that no roles or users exist",
+            "Do not create or delete access records to test it",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, readable)
+
     def test_all_recipes_send_exact_methods_paths_and_bodies_with_each_header(self):
         with recording_server() as (port, requests):
             for name, operations in EXPECTED.items():

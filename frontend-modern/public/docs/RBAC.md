@@ -37,10 +37,37 @@ user merely because no local administrator is configured.
 
 ## Quick Start
 
-1. Activate a Pro, grandfathered Pro+, Cloud, MSP, or Enterprise/custom license in **Settings → Plans & Billing**.
+1. Confirm a Pro, grandfathered Pro+, Cloud, MSP, or Enterprise/custom license is active in **Settings → Plans & Billing**.
 2. Go to **Settings → Security → Roles**.
 3. Create roles with the permissions you need.
 4. Assign roles to users.
+
+An active licence is not an administrator grant. For self-hosted Pulse, the
+public Community runtime also does not gain Pro-only hooks when a licence is
+activated. Check **Settings → Plans & Billing** for both the licence and runtime
+status before changing access. If it shows **Pro runtime missing**, follow its
+**Open Pulse Pro downloads** action and the [plans guide](PULSE_PRO.md); do not
+buy a second licence or reset the data directory to clear this gate.
+
+Keep an independent administrator recovery path while changing roles. If OIDC
+group mappings are configured, the next sign-in replaces manually assigned
+roles with the mapped set. Review [automatic role assignment](#automatic-role-assignment-via-oidc)
+before relying on a manual assignment for continued access.
+
+### If Roles or Users is missing or unavailable
+
+- **Controls missing:** Settings navigation checks the runtime's `rbac`
+  capability and this session's permission to administer users. A missing menu
+  entry alone does not tell you which check failed. Check the licence/runtime
+  status above and use an account already authorised for user administration.
+- **Roles are unavailable for this session** or **User access is unavailable
+  for this session:** the panel cannot use this session's access. Have an
+  authorised administrator review the intended assignment; do not remove proxy
+  role gating or widen an agent's token to bypass a denial.
+- **Failed to load roles** or **Failed to load user assignments:** a failed
+  read is not proof that no roles or users exist. Use the panel's **Retry** for
+  that read when access is available. Do not create or delete access records to
+  test it, and keep tokens, cookies and full API responses out of reports.
 
 ---
 
