@@ -9,7 +9,6 @@ import {
   getInvestigationOutcomeLabel,
   getInvestigationStatusBadgeTone,
 } from '@/utils/aiFindingPresentation';
-import investigationSectionSource from '../InvestigationSection.tsx?raw';
 import InvestigationSection from '../InvestigationSection';
 
 const getInvestigationMock = vi.hoisted(() => vi.fn<() => Promise<Investigation>>());
@@ -49,17 +48,6 @@ describe('InvestigationSection', () => {
 
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps investigation loading indicators on the shared LoadingSpinner primitive', () => {
-    expect(investigationSectionSource).toContain('LoadingSpinner');
-  });
-
-  it('reads the investigation without suspending the page around a finding review', () => {
-    // The nearest Suspense boundary above a review is the app's route
-    // boundary, whose fallback replaces the page and loses the reader's place.
-    expect(investigationSectionSource).not.toContain('createResource');
-    expect(investigationSectionSource).toContain('createNonSuspendingQuery');
   });
 
   it('does not offer another run before the first read says what the run is doing', async () => {

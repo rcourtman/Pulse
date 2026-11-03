@@ -20,6 +20,12 @@ export const ActionDecisionPacket: Component<{
   const result = () => props.audit.result?.actionResultV2;
   const apt = () => getAPTActionPresentation(props.audit);
   const firstEvidence = () => result()?.verification.evidence?.[0];
+  // The execution summary is the plain sentence; the agent's raw report stays
+  // one click away for anyone diagnosing the action.
+  const agentDetails = () => {
+    const output = props.audit.result?.output?.trim();
+    return output && !apt() && output !== result()?.execution.summary?.trim() ? output : undefined;
+  };
   const originLabel = () => getActionOriginLabel(props.audit.origin);
   const resource = createMemo(() =>
     getActionResourcePresentation(props.audit.request.resourceId, props.audit.resource),
@@ -256,6 +262,12 @@ export const ActionDecisionPacket: Component<{
               </Show>
               <Show when={truth().execution.summary && !apt()}>
                 <p class="mt-2 text-sm">{truth().execution.summary}</p>
+              </Show>
+              <Show when={agentDetails()}>
+                <details class="mt-3 rounded-sm border border-border-subtle p-3 text-xs">
+                  <summary class="cursor-pointer font-medium">Agent details</summary>
+                  <p class="mt-2 break-words font-mono text-muted">{agentDetails()}</p>
+                </details>
               </Show>
             </div>
             <div

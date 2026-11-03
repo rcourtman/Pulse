@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "749a884113103684f65567cf2fc192f56e9647ea",
+  "verified_at": "2026-11-03T17:48:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "97f6719d06cdeec63e1610bda56b7ca26c6b9228737d50234a9e2a0e4dbf8f67",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "ca29105df4774ab40d29dcce415f7e06f36e9ad73cc7474e5cd908f29abbe9f9",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "6b8e5fd087e94024bf57bd69f4ce09bc6a496b3f44e77614ee1fa932c3964511"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/coverage?posture=unknown"
+  ],
+  "viewports": [
+    {
+      "width": 320,
+      "height": 740
+    },
+    {
+      "width": 360,
+      "height": 780
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1024,
+      "height": 607
+    }
+  ],
+  "states": [
+    "mock mode built from this change on pulse-dev: 929 guests, many sharing long prefixes such as checkout-web-*, including unknown-posture rows",
+    "phone widths and desktop, dark theme"
+  ],
+  "interactions": [
+    "at 390x844 the workload cells show whole names (checkout-web-110) with no VM id or connection beside them; columns measure 207/80/52/34px, rows 32px, no clipped names",
+    "at 360x780 none of 36 measured names clip (177/80/52/34px)",
+    "at 320x740 posture, age and job cells hold their content on all and on unknown rows (Unknown fits); 16-character names still truncate by one or two characters",
+    "at 1024px the operational layout is unchanged: names keep VM id and PVE connection beside them",
+    "no horizontal page overflow at any width"
+  ]
+}

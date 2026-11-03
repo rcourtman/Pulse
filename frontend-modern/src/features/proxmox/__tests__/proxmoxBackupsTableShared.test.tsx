@@ -3,10 +3,6 @@ import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { getMetadataBadgeClass } from '@/components/shared/MetadataBadge';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
-import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
-import proxmoxCoverageTableSource from '../ProxmoxCoverageTable.tsx?raw';
-import proxmoxRecoverableTableSource from '../ProxmoxRecoverableTable.tsx?raw';
-import proxmoxBackupsTableSharedSource from '../proxmoxBackupsTableShared.tsx?raw';
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
@@ -45,13 +41,6 @@ describe('proxmoxBackupsTableShared', () => {
     const [sharedBadge, backupBadge] = screen.getAllByText('Host');
     expect(backupBadge.className).toBe(sharedBadge.className);
     expect(backupBadge).toHaveAttribute('title', 'Host backup');
-  });
-
-  it('does not carry local VM/LXC/Host badge color branches', () => {
-    expect(proxmoxBackupsTableSharedSource).toContain('SharedWorkloadTypeBadge');
-    expect(proxmoxBackupsTableSharedSource).not.toContain('bg-indigo');
-    expect(proxmoxBackupsTableSharedSource).not.toContain('bg-teal');
-    expect(proxmoxBackupsTableSharedSource).not.toContain('bg-slate');
   });
 
   it('renders backup source and state chips through MetadataBadge', () => {
@@ -135,29 +124,6 @@ describe('proxmoxBackupsTableShared', () => {
     }
   });
 
-  it('keeps backup source and state chips on the shared MetadataBadge primitive', () => {
-    expect(proxmoxBackupsTableSharedSource).toContain('MetadataBadge');
-    expect(proxmoxBackupsTableSharedSource).toContain('PROXMOX_BACKUP_METADATA_BADGE_PROPS');
-    expect(proxmoxBackupsTableSharedSource).toContain('presentation().badgeTone');
-    expect(proxmoxBackupsTableSharedSource).not.toContain('presentation().badgeClassName');
-    expect(proxmoxBackupsTableSharedSource).not.toMatch(
-      /inline-flex items-center rounded-xs px-1\.5 py-0\.5 text-\[10px\] font-semibold/,
-    );
-  });
-
-  it('keeps backup byte-size cells on the shared platform table formatter', () => {
-    const sources = [
-      proxmoxBackupServersTableSource,
-      proxmoxCoverageTableSource,
-      proxmoxRecoverableTableSource,
-    ];
-
-    for (const source of sources) {
-      expect(source).toContain('formatPlatformTableBytesValue');
-      expect(source).not.toContain('formatBytes(');
-    }
-  });
-
   it('drops the age suffix in the phone projection and keeps the timestamp on hover', () => {
     const createdAt = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString();
     expect(formatCompactBackupAge(createdAt)).toBe('18h');
@@ -178,17 +144,6 @@ describe('proxmoxBackupsTableShared', () => {
     render(() => <ProxmoxBackupAgeText artifact={artifact} compact />);
     const age = screen.getByText('18h');
     expect(age.closest('[title]')?.getAttribute('title')).toContain(createdAt);
-  });
-
-  it('keeps backup age text on the shared relative-time primitive', () => {
-    expect(proxmoxBackupsTableSharedSource).toContain('PlatformTableRelativeTimeValue');
-    expect(proxmoxBackupsTableSharedSource).not.toContain('formatRelativeTime(');
-  });
-
-  it('keeps backup sort headers on the shared active-only indicator', () => {
-    expect(proxmoxBackupsTableSharedSource).toContain('getTableSortIndicator');
-    expect(proxmoxBackupsTableSharedSource).not.toContain('ArrowUpDownIcon');
-    expect(proxmoxBackupsTableSharedSource).not.toContain('SORT_ICON_CLASS');
   });
 
   it('keeps sortable headers in the same uppercase as their plain neighbours', () => {

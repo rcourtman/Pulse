@@ -1,7 +1,6 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import approvalBannerSource from '../ApprovalBanner.tsx?raw';
 import ApprovalBanner from '../ApprovalBanner';
 import type { ApprovalRequest } from '@/api/ai';
 
@@ -39,22 +38,6 @@ describe('ApprovalBanner', () => {
         <Route path="/" component={() => <ApprovalBanner />} />
       </Router>
     ));
-
-  it('keeps approval risk chips on the shared MetadataBadge primitive', () => {
-    expect(approvalBannerSource).toContain('MetadataBadge');
-    expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
-    expect(approvalBannerSource).toContain('firstApprovalRisk()!.badgeTone');
-    expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');
-    expect(approvalBannerSource).not.toMatch(/px-1\.5 py-0\.5 text-\[10px\] font-medium rounded/);
-  });
-
-  it('keeps the Actions handoff on the shared ButtonLink primitive', () => {
-    expect(approvalBannerSource).toContain('@/components/shared/Button');
-    expect(approvalBannerSource).toContain('<ButtonLink');
-    expect(approvalBannerSource).toContain('variant="warningSolid"');
-    expect(approvalBannerSource).not.toContain('approveInvestigationFix');
-    expect(approvalBannerSource).not.toContain('denyInvestigationFix');
-  });
 
   it('deep-links a single approval to its exact governed action review', () => {
     state.pendingApprovals = [approvalRequest({ plan: { actionId: 'action-single' } })];

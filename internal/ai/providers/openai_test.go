@@ -1033,6 +1033,9 @@ func TestOpenAIClient_Chat_DeepSeekPreservesReasoningContentForToolTurns(t *test
 		assert.Equal(t, "assistant", got.Messages[1].Role)
 		assert.Equal(t, "I need current state first.", got.Messages[1].ReasoningContent)
 		require.Len(t, got.Messages[1].ToolCalls, 1)
+		assert.Equal(t, "tool", got.Messages[2].Role)
+		assert.Equal(t, "call-1", got.Messages[2].ToolCallID)
+		assert.Equal(t, "healthy", got.Messages[2].Content)
 
 		_ = json.NewEncoder(w).Encode(openaiResponse{
 			ID:    "chatcmpl-deepseek-reasoning",
@@ -1067,13 +1070,13 @@ func TestOpenAIClient_Chat_DeepSeekPreservesReasoningContentForToolTurns(t *test
 }
 
 func TestOpenAIClient_ChatStream_DeepSeekPreservesReasoningContentForToolTurns(t *testing.T) {
+	received := make(chan openaiStreamRequest, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got openaiStreamRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		require.Len(t, got.Messages, 3)
-		assert.Equal(t, "assistant", got.Messages[1].Role)
-		assert.Equal(t, "I need current state first.", got.Messages[1].ReasoningContent)
-		require.Len(t, got.Messages[1].ToolCalls, 1)
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode stream request: %v", err)
+		}
+		received <- got
 
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
@@ -1100,6 +1103,15 @@ func TestOpenAIClient_ChatStream_DeepSeekPreservesReasoningContentForToolTurns(t
 		},
 	}, func(event StreamEvent) {})
 	require.NoError(t, err)
+
+	got := <-received
+	require.Len(t, got.Messages, 3)
+	assert.Equal(t, "assistant", got.Messages[1].Role)
+	assert.Equal(t, "I need current state first.", got.Messages[1].ReasoningContent)
+	require.Len(t, got.Messages[1].ToolCalls, 1)
+	assert.Equal(t, "tool", got.Messages[2].Role)
+	assert.Equal(t, "call-1", got.Messages[2].ToolCallID)
+	assert.Equal(t, "healthy", got.Messages[2].Content)
 }
 
 func TestOpenAIClient_ChatStream_Errors(t *testing.T) {

@@ -2,8 +2,9 @@
 """Canonical subsystem completion guard.
 
 Blocks commits when staged runtime changes touch a canonical subsystem but the
-matching subsystem contract file and required verification artifact are not
-staged in the same commit.
+matching subsystem contract file is not staged in the same commit, or when no
+registered proof verifies the change: a proof counts when it is staged or when
+it already exercises each touched runtime file (see proof_coverage.py).
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from typing import Dict, List, Sequence, Set
 
 import browser_verification_guard
 from control_plane import DEFAULT_CONTROL_PLANE
+import proof_coverage
 from repo_file_io import git_env, load_repo_json, merged_in_paths
 from subsystem_contracts import load_contract_index, referenced_contracts_for_path
 
@@ -484,6 +486,81 @@ def staged_verification_files_for_requirement(rule: dict, requirement: dict, sta
     return sorted(set(matches))
 
 
+def candidate_proof_files(requirement: dict, *, revision: str | None) -> List[str]:
+    """Registered proofs for a requirement as they exist in the evaluated tree."""
+    candidates = set(requirement.get("exact_files", []))
+    test_prefixes = list(requirement.get("test_prefixes", []))
+    if test_prefixes:
+        candidates.update(
+            path
+            for path in proof_coverage.git_tracked_paths(revision, test_prefixes, repo_root=REPO_ROOT)
+            if is_test_or_fixture(path)
+        )
+    return sorted(candidates)
+
+
+def uncovered_runtime_files_for_requirement(
+    requirement: dict,
+    read: proof_coverage.TextReader,
+    *,
+    revision: str | None,
+) -> List[str]:
+    """Touched runtime files that no existing registered proof exercises.
+
+    A registered proof that already imports (or compiles with) the touched file
+    and runs in CI verifies the change without being edited, so the guard no
+    longer asks for a staged diff to it. Requiring that diff is what turned
+    proof files into piles of source-text pins.
+    """
+    if requirement.get("path_policy_gap"):
+        return list(requirement.get("touched_runtime_files", []))
+    candidates = candidate_proof_files(requirement, revision=revision)
+    return [
+        path
+        for path in requirement.get("touched_runtime_files", [])
+        if not proof_coverage.covering_proof_files(path, candidates, read)
+    ]
+
+
+def missing_verification_requirements(
+    impacted: Dict[str, dict],
+    staged_files: Sequence[str],
+    *,
+    revision: str | None = None,
+    read: proof_coverage.TextReader | None = None,
+) -> Dict[str, dict]:
+    """Requirements met neither by a staged proof nor by an existing covering proof.
+
+    `revision` selects the tree the proofs are read from: the index when None
+    (a commit being made), the evaluated commit otherwise (CI and pre-push).
+    """
+    owned_reader = proof_coverage.GitTextReader(revision, repo_root=REPO_ROOT) if read is None else None
+    reader = read or owned_reader
+    missing_verification: Dict[str, dict] = {}
+    try:
+        for subsystem_id, data in impacted.items():
+            missing_requirements: List[dict] = []
+            for requirement in data.get("verification_requirements", []):
+                if staged_verification_files_for_requirement(data, requirement, staged_files):
+                    continue
+                uncovered = uncovered_runtime_files_for_requirement(
+                    requirement, reader, revision=revision
+                )
+                if uncovered:
+                    missing_requirements.append(
+                        {**requirement, "uncovered_runtime_files": uncovered}
+                    )
+            if missing_requirements:
+                missing_verification[subsystem_id] = {
+                    **data,
+                    "missing_requirements": missing_requirements,
+                }
+    finally:
+        if owned_reader is not None:
+            owned_reader.close()
+    return missing_verification
+
+
 def git_blob_text(spec: str) -> str:
     result = subprocess.run(
         ["git", "show", spec],
@@ -657,6 +734,14 @@ def format_missing_requirements(
             exact_files = sorted(requirement.get("exact_files", []))
             test_prefixes = sorted(requirement.get("test_prefixes", []))
             allow_same_subsystem_tests = bool(requirement.get("allow_same_subsystem_tests", False))
+            uncovered = sorted(requirement.get("uncovered_runtime_files", []))
+            if uncovered:
+                lines.append("  no acceptable proof below already exercises:")
+                for path in uncovered:
+                    lines.append(f"    {path}")
+                lines.append(
+                    "  make one of them import and test each file (Go: compile with or import its package), or stage a change to one"
+                )
             if exact_files:
                 lines.append("  acceptable exact proof files include:")
                 for path in exact_files:
@@ -679,7 +764,8 @@ def format_missing_requirements(
             "A staged contract file only counts if its staged diff changes a substantive contract section,",
             "not just `Contract Metadata` or cosmetic noise.",
             "Each touched runtime path must also satisfy the first matching",
-            "verification policy from that subsystem's registry entry.",
+            "verification policy from that subsystem's registry entry: an acceptable",
+            "proof that already exercises the path counts unchanged; otherwise stage one.",
         ]
     )
     return "\n".join(lines)
@@ -721,18 +807,11 @@ def check_staged_contracts(
         if contract_path in staged_set
         if not staged_contract_has_substantive_change(contract_path, diff_base, revision)
     }
-    missing_verification: Dict[str, dict] = {}
-    for subsystem_id, data in impacted.items():
-        missing_requirements = [
-            requirement
-            for requirement in data.get("verification_requirements", [])
-            if not staged_verification_files_for_requirement(data, requirement, staged_files)
-        ]
-        if missing_requirements:
-            missing_verification[subsystem_id] = {
-                **data,
-                "missing_requirements": missing_requirements,
-            }
+    missing_verification = missing_verification_requirements(
+        impacted,
+        staged_files,
+        revision=governance_revision,
+    )
     if not missing_contracts and not insufficient_contract_updates and not missing_verification:
         return 0
 

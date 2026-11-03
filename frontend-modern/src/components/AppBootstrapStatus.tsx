@@ -1,6 +1,11 @@
-import { Show, createSignal, onCleanup, onMount, type Component } from 'solid-js';
+import { Show, createResource, createSignal, onCleanup, onMount, type Component } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { NoOrganizationAccess } from '@/components/NoOrganizationAccess';
+import {
+  probeNoOrganizationAccess,
+  signOutWithoutOrganization,
+} from '@/stores/organizationAccessBootstrap';
 
 export const APP_BOOTSTRAP_SLOW_DELAY_MS = 10_000;
 
@@ -12,6 +17,12 @@ interface AppBootstrapStatusProps {
 
 export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) => {
   const [isSlow, setIsSlow] = createSignal(false);
+  // A signed-in user with no usable organization is not a connection failure:
+  // offer their invitations instead.
+  const [noOrganizationAccess] = createResource(
+    () => props.failed || undefined,
+    probeNoOrganizationAccess,
+  );
 
   onMount(() => {
     const timeout = window.setTimeout(
@@ -30,50 +41,61 @@ export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) =>
   };
 
   return (
-    <main
-      class="flex min-h-screen items-center justify-center px-4 py-8 text-base-content"
-      aria-labelledby="app-bootstrap-title"
+    <Show
+      when={props.failed && noOrganizationAccess() === true}
+      fallback={renderConnectionStatus()}
     >
-      <div class="w-full max-w-md rounded-md border border-border bg-surface p-6 text-center shadow-xs sm:p-8">
-        <Show when={!props.failed}>
-          <LoadingSpinner size="xl" tone="info" class="mb-4" />
-        </Show>
-        <h1 id="app-bootstrap-title" class="text-lg font-semibold tracking-tight">
-          {props.failed ? 'Could not check your session' : 'Connecting to Pulse'}
-        </h1>
-        <p
-          class="mt-2 text-sm leading-6 text-muted"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <Show
-            when={props.failed}
-            fallback={
-              <Show when={isSlow()} fallback="Checking your session and preparing the workspace.">
-                Pulse is taking longer than expected to respond. The server may still be starting or
-                busy.
-              </Show>
-            }
-          >
-            Pulse could not check your session. Your saved sign-in details have not been cleared.
-          </Show>
-        </p>
-        <Show when={props.failed || isSlow()}>
-          <div class="mt-5 border-t border-border pt-5">
-            <p class="mb-4 text-sm leading-6 text-muted">
-              {props.failed
-                ? 'Check that Pulse is available, then retry the connection.'
-                : 'You can keep waiting, or retry the connection.'}
-            </p>
-            <Button variant="primary" size="md" onClick={retry}>
-              Retry connection
-            </Button>
-          </div>
-        </Show>
-      </div>
-    </main>
+      <NoOrganizationAccess onSignOut={signOutWithoutOrganization} />
+    </Show>
   );
+
+  function renderConnectionStatus() {
+    return (
+      <main
+        class="flex min-h-screen items-center justify-center px-4 py-8 text-base-content"
+        aria-labelledby="app-bootstrap-title"
+      >
+        <div class="w-full max-w-md rounded-md border border-border bg-surface p-6 text-center shadow-xs sm:p-8">
+          <Show when={!props.failed}>
+            <LoadingSpinner size="xl" tone="info" class="mb-4" />
+          </Show>
+          <h1 id="app-bootstrap-title" class="text-lg font-semibold tracking-tight">
+            {props.failed ? 'Could not check your session' : 'Connecting to Pulse'}
+          </h1>
+          <p
+            class="mt-2 text-sm leading-6 text-muted"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <Show
+              when={props.failed}
+              fallback={
+                <Show when={isSlow()} fallback="Checking your session and preparing the workspace.">
+                  Pulse is taking longer than expected to respond. The server may still be starting
+                  or busy.
+                </Show>
+              }
+            >
+              Pulse could not check your session. Your saved sign-in details have not been cleared.
+            </Show>
+          </p>
+          <Show when={props.failed || isSlow()}>
+            <div class="mt-5 border-t border-border pt-5">
+              <p class="mb-4 text-sm leading-6 text-muted">
+                {props.failed
+                  ? 'Check that Pulse is available, then retry the connection.'
+                  : 'You can keep waiting, or retry the connection.'}
+              </p>
+              <Button variant="primary" size="md" onClick={retry}>
+                Retry connection
+              </Button>
+            </div>
+          </Show>
+        </div>
+      </main>
+    );
+  }
 };
 
 export default AppBootstrapStatus;

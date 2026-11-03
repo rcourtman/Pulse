@@ -547,8 +547,14 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		`PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"`,
 		`releases/download/${PULSE_VERSION}`,
 		"ssh-keygen -Y verify",
-		`-s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}"`,
-		`sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"`,
+		// Chained, so a failed signature or checksum stops before tar or setup.
+		`-s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}" &&`,
+		`sha256sum -c "${PULSE_MSP_BUNDLE}.sha256" &&`,
+		"tar -xzf \"${PULSE_MSP_BUNDLE}\" &&",
+		// The portal and client workspaces need both records, and the default
+		// DNS-01 token needs both permissions.
+		"`*.DOMAIN` (each client workspace",
+		"Zone / Zone / Read and Zone / DNS / Edit",
 		"The licence request omits an email address unless you export",
 		"`PULSE_PROVIDER_MSP_EVAL_EMAIL` before running `setup.sh`",
 		"address is included in the request",
@@ -708,6 +714,49 @@ func TestProviderMSPSetupLeavesPlatformRunning(t *testing.T) {
 		}
 	}
 	assertContainsAll(t, first, "DOMAIN", "ACME_EMAIL", "CF_DNS_API_TOKEN")
+}
+
+// Setup used to stop after installing Docker and ask the provider to edit a
+// root-only .env from a second session. It now asks for the three values a
+// provider must supply before installing anything, keeps the token off the
+// screen, accepts them from the environment for unattended runs, names the
+// two DNS records the certificate needs, and prints day-2 commands with sudo
+// because .env is readable by root only.
+func TestProviderMSPSetupAsksForFirstRunValuesUpFront(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	script := string(scriptBytes)
+
+	if !strings.Contains(script, "  collect_first_run_values\n  apt_install apt-transport-https\n") {
+		t.Fatal("setup must collect first-run values before installing packages")
+	}
+	assertContainsAll(t, script,
+		`PULSE_PROVIDER_MSP_DOMAIN="${PULSE_PROVIDER_MSP_DOMAIN:-}"`,
+		`PULSE_PROVIDER_MSP_ACME_EMAIL="${PULSE_PROVIDER_MSP_ACME_EMAIL:-}"`,
+		`PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN="${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN:-}"`,
+		`read -r -s -p "Cloudflare API token`,
+		`[[ -f "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env" ]] && return 0`,
+		`die "${key} is not valid; check it and run setup.sh again"`,
+		`(umask 077 && cp -n "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env.example" "${env_path}")`,
+		`set_env_value "${key}" "${!var}" "${env_path}"`,
+		"  ${PULSE_PROVIDER_MSP_DOMAIN}      the portal",
+		"  *.${PULSE_PROVIDER_MSP_DOMAIN}    one address per client",
+	)
+	// Values reach .env unquoted, so the token pattern must exclude every
+	// character compose or awk -v would interpret.
+	assertContainsAll(t, script, `local token_re='^[A-Za-z0-9_.+/=-]{20,255}$'`)
+
+	summary := script[strings.Index(script, "Pulse Provider MSP is running."):]
+	summary = summary[:strings.Index(summary, "EOF")]
+	assertContainsAll(t, summary,
+		"  sudo docker compose run --rm control-plane provider-msp bootstrap",
+		"  sudo ./run-install-proof.sh",
+		"  sudo docker compose run --rm control-plane provider-msp portal-link",
+		"choose Add client, and follow Install agents",
+	)
+	assertNotContainsAny(t, summary, "\n  docker compose run", "\n  ./run-install-proof.sh")
 }
 
 // Setup pins the images in .env to digests once, so an upgrade used to re-pull

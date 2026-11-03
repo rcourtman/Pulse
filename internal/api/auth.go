@@ -1394,8 +1394,8 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 
 	// Check proxy auth
 	if cfg.ProxyAuthSecret != "" {
-		if valid, username, _ := CheckProxyAuth(cfg, r); valid && username != "" {
-			return attachUserContext(r, username)
+		if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid && username != "" {
+			return attachProxyPrincipal(attachUserContext(r, username), username, isAdmin)
 		}
 	}
 

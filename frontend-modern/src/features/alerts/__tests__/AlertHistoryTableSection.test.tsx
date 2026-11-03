@@ -72,4 +72,34 @@ describe('AlertHistoryTableSection layout', () => {
     setIsMobile(true);
     expect(layout()).toHaveAttribute('data-alert-history-layout', 'cards');
   });
+
+  // "Timestamp" needed 93px and ended in an ellipsis in the time track, so the
+  // first column is headed "Time", as on the phone card. Each track carries its
+  // own width so message, the column that says what happened, is not held to the
+  // same share as the time.
+  it('heads the first column Time and gives every column its own width track', () => {
+    const { container } = render(() => <AlertHistoryTableSection state={state} />);
+
+    const headings = Array.from(container.querySelectorAll('thead th')).map((th) =>
+      th.textContent?.trim(),
+    );
+    expect(headings[0]).toBe('Time');
+    expect(headings).not.toContain('Timestamp');
+    expect(container.querySelector('thead th')).toHaveClass('alert-history-timestamp-column');
+
+    const tracks = Array.from(
+      container.querySelectorAll('table.alert-history-responsive-table col'),
+    ).map((col) => col.className.split(' ').pop());
+    expect(tracks).toEqual([
+      'alert-history-timestamp-track',
+      'alert-history-resource-track',
+      'alert-history-type-track',
+      'alert-history-severity-track',
+      'alert-history-message-track',
+      'alert-history-duration-track',
+      'alert-history-status-track',
+      'alert-history-node-track',
+      'alert-history-actions-track',
+    ]);
+  });
 });

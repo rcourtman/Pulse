@@ -636,3 +636,24 @@ describe('audit webhook reader lifetime', () => {
     expect(showWarning).not.toHaveBeenCalled();
   });
 });
+
+describe('audit webhook alert-notifications signpost (#1344)', () => {
+  // The only webhook page in Settings carries security events, not alert
+  // delivery, so it must point to alert notifications in every state.
+  const signpostLink = () => screen.findByRole('link', { name: 'alert notifications' });
+
+  it('links the enabled panel to alert notifications', async () => {
+    await openPanel();
+
+    expect(screen.getByText(/These carry security events only/)).toBeInTheDocument();
+    expect(await signpostLink()).toHaveAttribute('href', '/alerts/notifications');
+  });
+
+  it('links the feature-gated panel to alert notifications', async () => {
+    setEnabled(false);
+    render(() => <AuditWebhookPanel />);
+
+    expect(await screen.findByText(/These carry security events only/)).toBeInTheDocument();
+    expect(await signpostLink()).toHaveAttribute('href', '/alerts/notifications');
+  });
+});

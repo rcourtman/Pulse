@@ -17,7 +17,9 @@ import {
 // "Did last night's backups run, and is that normal?" in the platform
 // overview's vocabulary: last-24-hour outcome pills in the header strip and
 // one stacked bar per day for the last 14 days. Days Pulse did not fully
-// observe are outlined, never drawn as clean empty days.
+// observe are outlined, never drawn as clean empty days. Each window is named
+// where it is shown, so the pills never read as the chart's totals: the pills
+// say "Last 24h", and the chart's axis runs from its first day to Today.
 
 type Outcome = keyof BackupJobsCounts;
 
@@ -102,12 +104,7 @@ export const ProxmoxBackupJobsCard: Component<{ jobs: BackupJobsPayload }> = (pr
   return (
     <TableCard class="flex h-full flex-col" data-backup-jobs={props.jobs.historyState}>
       <TableCardHeader
-        title={
-          <span class="inline-flex items-center gap-2 whitespace-nowrap">
-            Backup jobs
-            <span class="hidden font-medium normal-case tracking-normal sm:inline">14 days</span>
-          </span>
-        }
+        title={<span class="whitespace-nowrap">Backup jobs</span>}
         actions={
           <Show
             when={!unavailable()}
@@ -117,7 +114,11 @@ export const ProxmoxBackupJobsCard: Component<{ jobs: BackupJobsPayload }> = (pr
               class="inline-flex flex-wrap items-center justify-end gap-1.5"
               data-backup-jobs-last24h
             >
-              <span class="hidden text-[10px] font-medium text-muted sm:inline">24h</span>
+              {/* The window is named at every width; phones get the short form. */}
+              <span class="text-[10px] font-medium text-muted">
+                <span class="sm:hidden">24h</span>
+                <span class="hidden sm:inline">Last 24h</span>
+              </span>
               <For each={pills()}>
                 {(outcome) => (
                   <span
@@ -138,9 +139,10 @@ export const ProxmoxBackupJobsCard: Component<{ jobs: BackupJobsPayload }> = (pr
               <Show when={last().historyState !== 'complete'}>
                 <span
                   class="text-[10px] font-medium text-muted"
-                  title="Pulse did not observe the whole window"
+                  title="Pulse did not see the whole last 24 hours, so these counts may be low"
+                  data-backup-jobs-incomplete
                 >
-                  partial
+                  incomplete data
                 </span>
               </Show>
             </span>

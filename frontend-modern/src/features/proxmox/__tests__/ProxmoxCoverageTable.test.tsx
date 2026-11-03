@@ -70,6 +70,77 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
+  it('gives a phone row its full name, keeping the VM id only for namesakes', () => {
+    const guest = (key: string, name: string, vmid: string, node: string) =>
+      ({
+        ...row,
+        key,
+        workload: { ...row.workload, key, name, vmid, node, label: `${name} (VM ${vmid})` },
+      }) as WorkloadCoverageRow;
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[
+          guest('a', 'checkout-web-02', '101', 'pve1'),
+          guest('b', 'db', '200', 'pve1'),
+          guest('c', 'db', '201', 'pve2'),
+        ]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={null}
+        onToggleExpand={() => {}}
+        layoutWidth={() => 375}
+        showTaskColumn
+      />
+    ));
+    const nameCell = (name: RegExp) => screen.getByRole('button', { name }).closest('td')!;
+    // A unique name stands alone, so the narrow column holds it in full; its
+    // disclosure label still names the VM.
+    expect(nameCell(/Expand details for checkout-web-02/)).toHaveTextContent(/^checkout-web-02$/);
+    expect(
+      screen.getByRole('button', { name: /Expand details for checkout-web-02 \(VM 101\)/ }),
+    ).toBeInTheDocument();
+    // Namesakes keep the id that tells them apart.
+    expect(nameCell(/Expand details for db \(VM 200\)/)).toHaveTextContent('VM 200');
+    expect(nameCell(/Expand details for db \(VM 201\)/)).toHaveTextContent('VM 201');
+  });
+
+  it("keeps a namesake's VM id on a phone when a filter hides its twin, across letter case", () => {
+    const guest = (key: string, name: string, vmid: string) =>
+      ({
+        ...row,
+        key,
+        workload: { ...row.workload, key, name, vmid, label: `${name} (VM ${vmid})` },
+      }) as WorkloadCoverageRow;
+    const all = [guest('b', 'DB', '200'), guest('c', 'db ', '201'), guest('d', 'web', '300')];
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[all[0], all[2]]}
+        identityRows={all}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={null}
+        onToggleExpand={() => {}}
+        layoutWidth={() => 375}
+        showTaskColumn
+      />
+    ));
+    const nameCell = (name: RegExp) => screen.getByRole('button', { name }).closest('td')!;
+    // "DB" and "db " are the same name to a reader; the filtered-out twin
+    // still counts, so the visible one keeps its id.
+    expect(nameCell(/Expand details for DB \(VM 200\)/)).toHaveTextContent('VM 200');
+    expect(nameCell(/Expand details for web \(VM 300\)/)).toHaveTextContent(/^web$/);
+  });
+
   it('keeps a visible native phone disclosure through row activation and refresh [visible-coverage-disclosure]', () => {
     const [rows, setRows] = createSignal([row]);
     const [expanded, setExpanded] = createSignal<string | null>(null);
@@ -298,7 +369,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).toContain('Posture▲');
     expect(headers).toContain('Last backup');
     // Per-source ages are expansion detail at every width.
-    expect(headers).not.toContain('PBS snapshot');
+    expect(headers).not.toContain('PBS backup');
     expect(headers).not.toContain('Guest snapshot');
     expect(headers).not.toContain('PVE file');
     expect(headers).not.toContain('Task');
@@ -726,9 +797,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     ));
 
     // The cell says None and the full reason sits on hover, so it cannot
-    // truncate to "No PBS snapshot or PVE b…".
+    // truncate to "No PBS backup or PVE b…".
     const empty = (title: string) => document.querySelector(`td span[title="${title}"]`);
-    for (const title of ['No PBS snapshot or PVE backup file', 'No recent task']) {
+    for (const title of ['No PBS backup or PVE backup file', 'No recent task']) {
       expect(empty(title)).toHaveTextContent(/^None$/);
     }
   });
@@ -758,7 +829,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       span.getAttribute('title'),
     );
     expect(titles).toContain(
-      'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.',
+      'No PBS backup or PVE backup file. A guest snapshot is not a separate backup, so it does not count.',
     );
     expect(titles).toContain(
       'This backup does not match a guest Pulse currently monitors, so it is not rated.',
@@ -967,7 +1038,7 @@ describe('Coverage absence requires readable, complete history', () => {
       posture: 'unprotected',
       protectionPosture: { ...completePosture, state: 'unprotected', coverage: 'none' },
     });
-    expect(screen.getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(/^None$/);
+    expect(screen.getByTitle('No PBS backup or PVE backup file')).toHaveTextContent(/^None$/);
     expect(screen.getByRole('status')).toHaveTextContent(
       'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
     );
@@ -996,7 +1067,7 @@ describe('Coverage absence requires readable, complete history', () => {
       expect(screen.getByRole('status')).toHaveTextContent(
         'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
       );
-      expect(screen.getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent('None');
+      expect(screen.getByTitle('No PBS backup or PVE backup file')).toHaveTextContent('None');
       // No lastSuccessfulPointAt is expected for a guest snapshot. Nor may the
       // notice synthesize a raw snapshot, date or completed backup from prose.
       expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();

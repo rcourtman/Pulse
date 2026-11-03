@@ -230,7 +230,5 @@ describe('APT action presentation', () => {
     expect(source).not.toMatch(
       /(?:type|enum)\s+APT(?:Execution|Verification|Evidence|Health|Recovery|Compensation)/,
     );
-    expect(source).toContain("import type { ActionAuditRecord } from '@/types/actionAudit'");
-    expect(source).toContain('actionResultV2?.verification');
   });
 });

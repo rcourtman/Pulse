@@ -4,7 +4,6 @@ import { Login } from '@/components/Login';
 // Compile the real lazy destination before timed assertions; do not mock setup
 // or make module transformation part of the read-recovery deadline.
 import '@/components/SetupWizard';
-import loginSource from '@/components/Login.tsx?raw';
 import { SESSION_STORAGE_KEYS, STORAGE_KEYS } from '@/utils/localStorage';
 
 // Mock fetch globally
@@ -603,15 +602,5 @@ describe('Login', () => {
       expect(screen.queryByPlaceholderText('Username')).not.toBeInTheDocument();
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
-  });
-
-  it('routes login loading indicators through the shared LoadingSpinner primitive', () => {
-    expect(loginSource).toContain("from '@/components/shared/LoadingSpinner'");
-    expect(loginSource).toContain('<LoadingSpinner size="lg" tone="info"');
-    expect(loginSource).toContain('<LoadingSpinner size="button" tone="inverse"');
-    expect(loginSource).not.toContain(
-      'animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4',
-    );
-    expect(loginSource).not.toContain('class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"');
   });
 });

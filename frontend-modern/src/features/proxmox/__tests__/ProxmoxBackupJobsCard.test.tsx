@@ -73,6 +73,32 @@ describe('ProxmoxBackupJobsCard', () => {
     expect(items[0]).toHaveTextContent('no backups (not fully observed)');
   });
 
+  it("names the pills' window, and only that window, in the header", () => {
+    const { container } = render(() => <ProxmoxBackupJobsCard jobs={payload()} />);
+    const header = container.querySelector('[data-backup-jobs-last24h]')!;
+    expect(header).toHaveTextContent(/^24hLast 24h/);
+    // The chart's span is on its axis; a "14 days" title beside the 24-hour
+    // pills read as if they were the chart's totals.
+    expect(container).not.toHaveTextContent('14 days');
+    expect(container.querySelector('[data-backup-jobs-incomplete]')).toBeNull();
+  });
+
+  it('says plainly when Pulse saw only part of the last 24 hours', () => {
+    const { container } = render(() => (
+      <ProxmoxBackupJobsCard
+        jobs={payload({
+          last24h: { historyState: 'partial', counts: counts(12), failures: [] },
+        })}
+      />
+    ));
+    const tag = container.querySelector('[data-backup-jobs-incomplete]');
+    expect(tag).toHaveTextContent(/^incomplete data$/);
+    expect(tag).toHaveAttribute(
+      'title',
+      'Pulse did not see the whole last 24 hours, so these counts may be low',
+    );
+  });
+
   it('says so when no backup ran in the last 24 hours', () => {
     const { container } = render(() => (
       <ProxmoxBackupJobsCard

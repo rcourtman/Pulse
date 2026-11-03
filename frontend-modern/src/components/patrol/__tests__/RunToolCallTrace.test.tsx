@@ -3,7 +3,6 @@ import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getToolCallsLoadingState } from '@/utils/patrolRunPresentation';
-import runToolCallTraceSource from '../RunToolCallTrace.tsx?raw';
 import { RunToolCallTrace } from '../RunToolCallTrace';
 
 const getPatrolRunWithToolCallsMock = vi.hoisted(() => vi.fn());
@@ -16,13 +15,6 @@ describe('RunToolCallTrace', () => {
   beforeEach(() => {
     resetCreateNonSuspendingQueryCacheForTest();
     getPatrolRunWithToolCallsMock.mockReset();
-  });
-
-  it('reads tool calls through the non-suspending query', () => {
-    // The nearest Suspense boundary above Patrol history is the app's route
-    // boundary, whose fallback replaces the page and loses the reader's place.
-    expect(runToolCallTraceSource).not.toContain('createResource');
-    expect(runToolCallTraceSource).toContain('createNonSuspendingQuery');
   });
 
   it('keeps the page around the run history while tool calls load', async () => {
@@ -62,15 +54,6 @@ describe('RunToolCallTrace', () => {
 
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps tool-call result chips on the shared MetadataBadge primitive', () => {
-    expect(runToolCallTraceSource).toContain('MetadataBadge');
-    expect(runToolCallTraceSource).toContain('LoadingSpinner');
-    expect(runToolCallTraceSource).toContain('RUN_TOOL_CALL_BADGE_PROPS');
-    expect(runToolCallTraceSource).toContain('getToolCallResultBadgeTone');
-    expect(runToolCallTraceSource).not.toContain('getToolCallResultBadgeClass');
-    expect(runToolCallTraceSource).not.toMatch(/px-1\.5 py-0\.5 rounded text-\[10px\] font-medium/);
   });
 
   it('loads tool calls for the selected run directly by id', async () => {

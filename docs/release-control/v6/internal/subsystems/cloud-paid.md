@@ -3982,3 +3982,12 @@ withhold saved links until the read succeeds. It is not erasure of every copy
 already held elsewhere, live IdP or original administrator recovery. Registered
 metadata-lifetime, Workloads consumer and runtime tests cover the boundaries;
 desktop/narrow browser proof must exercise the actual platform consumer.
+
+### Organization bootstrap without default access
+
+Hosted runtimes keep the open default organization; this only changes
+self-hosted multi-organization mode. There, browser bootstrap recovers from a
+refused default selection by clearing it and retrying reads, and a user with no
+usable organization gets the invitation screen instead of a connection
+failure. Hosted tenant selection, subscription gating and paid capabilities
+are unchanged.

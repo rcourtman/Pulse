@@ -251,14 +251,19 @@ func TestMultiTenantListOrgsShowsOnlyMemberOrganizations(t *testing.T) {
 		return ids
 	}
 
-	if got := listVisibleOrgIDs("alice"); !slices.Equal(got, []string{"default", "org-a", "org-shared"}) {
-		t.Fatalf("visible orgs for alice = %v, want %v", got, []string{"default", "org-a", "org-shared"})
+	// Multi-organization mode limits the default organization to instance
+	// administrators and its members, so tenant members do not see it.
+	if got := listVisibleOrgIDs("alice"); !slices.Equal(got, []string{"org-a", "org-shared"}) {
+		t.Fatalf("visible orgs for alice = %v, want %v", got, []string{"org-a", "org-shared"})
 	}
-	if got := listVisibleOrgIDs("bob"); !slices.Equal(got, []string{"default", "org-b", "org-shared"}) {
-		t.Fatalf("visible orgs for bob = %v, want %v", got, []string{"default", "org-b", "org-shared"})
+	if got := listVisibleOrgIDs("bob"); !slices.Equal(got, []string{"org-b", "org-shared"}) {
+		t.Fatalf("visible orgs for bob = %v, want %v", got, []string{"org-b", "org-shared"})
 	}
-	if got := listVisibleOrgIDs("charlie"); !slices.Equal(got, []string{"default"}) {
-		t.Fatalf("visible orgs for charlie = %v, want %v", got, []string{"default"})
+	if got := listVisibleOrgIDs("charlie"); len(got) != 0 {
+		t.Fatalf("visible orgs for charlie = %v, want none", got)
+	}
+	if got := listVisibleOrgIDs("admin"); !slices.Equal(got, []string{"default"}) {
+		t.Fatalf("visible orgs for admin = %v, want %v", got, []string{"default"})
 	}
 }
 

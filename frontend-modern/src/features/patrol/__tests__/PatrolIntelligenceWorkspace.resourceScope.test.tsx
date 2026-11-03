@@ -132,7 +132,7 @@ const activeFindings = () => fixture.read().filter((finding) => finding.status =
 
 // The latest check failed and its evidence is stale, so the unscoped queue
 // shows both Patrol check groups.
-const makeState = () =>
+const makeState = (overrides: Record<string, unknown> = {}) =>
   ({
     activeTab: () => 'findings',
     autoFixLocked: () => false,
@@ -178,6 +178,7 @@ const makeState = () =>
     setSelectedRun: vi.fn(),
     shouldShowPatrolSetupOnly: () => false,
     triggerPatrolDisabledReason: () => '',
+    ...overrides,
   }) as unknown as PatrolIntelligenceState;
 
 const workGroupLabels = () =>
@@ -240,6 +241,40 @@ describe('PatrolIntelligenceWorkspace resource scope', () => {
     expect(screen.getByText('2 actions awaiting your approval')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Needs Attention \(4\)$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Approvals \(2\)$/ })).toBeInTheDocument();
+  });
+
+  it('shows the work groups only once there is open work or a group beyond stale coverage', () => {
+    // The last check was clean but is overdue, so stale coverage is the only
+    // group Patrol has. Alone it is not open work.
+    const staleOnly = {
+      patrolPendingApprovalCount: () => 0,
+      patrolRunHistory: {
+        value: () => [
+          {
+            completed_at: '2026-10-20T08:00:00Z',
+            error_count: 0,
+            resources_checked: 12,
+            status: 'completed',
+          },
+        ],
+        loading: () => false,
+      },
+      patrolStatus: () => ({
+        error_count: 0,
+        next_patrol_at: '2026-10-20T14:00:00Z',
+        running: false,
+      }),
+    };
+
+    fixture.read = () => [];
+    render(() => <PatrolIntelligenceWorkspace state={makeState(staleOnly)} />);
+    expect(screen.queryByRole('list', { name: 'Patrol work groups' })).not.toBeInTheDocument();
+    cleanup();
+
+    // With one open issue the same stale coverage joins the list.
+    fixture.read = () => [fixture.findings[2]];
+    render(() => <PatrolIntelligenceWorkspace state={makeState(staleOnly)} />);
+    expect(workGroupLabels()).toEqual(['Coverage stale']);
   });
 
   it('follows a findings refresh and the end of the scope', () => {

@@ -2,12 +2,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import { SearchInput } from '@/components/shared/SearchInput';
-import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
-import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
-import searchInputEnhancementsSource from '@/components/shared/SearchInputEnhancements.tsx?raw';
-import searchInputEnhancementsModelSource from '@/components/shared/searchInputEnhancementsModel.ts?raw';
-import searchInputEnhancementsStateSource from '@/components/shared/useSearchInputEnhancements.ts?raw';
-import searchInputStateSource from '@/components/shared/useSearchInputState.ts?raw';
 
 const SearchHarness = (props: {
   typeToSearch?: boolean;
@@ -38,52 +32,6 @@ describe('SearchInput', () => {
   afterEach(() => {
     cleanup();
     window.localStorage.clear();
-  });
-
-  it('keeps search input on shell, runtime, and model owners', () => {
-    expect(searchInputSource).toContain('useSearchInputState');
-    expect(searchInputSource).not.toContain('let searchInputEl: HTMLInputElement');
-    expect(searchInputSource).not.toContain('useTypeToSearch');
-    expect(searchInputSource).not.toContain('useSearchInputEnhancements');
-    expect(searchInputSource).not.toContain(
-      'enhancements.isSimple() ? props.shortcutHint : undefined',
-    );
-
-    expect(searchInputStateSource).toContain('export function useSearchInputState');
-    expect(searchInputStateSource).toContain('let searchInputEl: HTMLInputElement');
-    expect(searchInputStateSource).toContain('useTypeToSearch');
-    expect(searchInputStateSource).toContain('useSearchInputEnhancements');
-    expect(searchInputStateSource).toContain('getSearchInputShortcutHint');
-    expect(searchInputStateSource).toContain('shouldSearchInputShowTrailingControls');
-
-    expect(searchInputModelSource).toContain('getSearchInputShortcutHint');
-    expect(searchInputModelSource).toContain('shouldSearchInputShowTrailingControls');
-    expect(searchInputModelSource).toContain('export interface SearchInputProps');
-
-    expect(searchInputEnhancementsSource).toContain('getSearchHistoryToggleButtonClass');
-    expect(searchInputEnhancementsSource).toContain('getSearchHistoryToggleTitle');
-    expect(searchInputEnhancementsSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
-    expect(searchInputEnhancementsSource).not.toContain('Show recent searches');
-    expect(searchInputEnhancementsSource).not.toContain('No recent searches yet');
-    expect(searchInputEnhancementsSource).not.toContain('Clear history');
-    expect(searchInputEnhancementsSource).not.toContain('hover:bg-blue-50');
-
-    expect(searchInputStateSource).toContain('useSearchInputEnhancements');
-
-    expect(searchInputEnhancementsStateSource).toContain('createSearchHistoryManager');
-    expect(searchInputEnhancementsStateSource).toContain(
-      "options.history?.emptyMessage ?? 'Searches you run will appear here.'",
-    );
-    expect(searchInputEnhancementsStateSource).not.toContain('Show recent searches');
-
-    expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleButtonClass');
-    expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleTitle');
-    expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
-    expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
-    expect(searchInputEnhancementsModelSource).toContain('w-full max-w-lg');
-    expect(searchInputEnhancementsModelSource).not.toContain('left-0 right-0 top-full');
-    expect(searchInputEnhancementsModelSource).toContain('h-11 w-11');
-    expect(searchInputEnhancementsModelSource).toContain('sm:h-7 sm:w-7');
   });
 
   it('caps the history menu on wide search surfaces without narrowing mobile layouts', () => {

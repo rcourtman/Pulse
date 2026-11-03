@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvestigationSession } from '@/api/ai';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import type { PatrolActionReference } from '@/types/actionAudit';
-import approvalSectionSource from '../ApprovalSection.tsx?raw';
 import ApprovalSection from '../ApprovalSection';
 
 const getInvestigationMock = vi.hoisted(() => vi.fn());
@@ -80,23 +79,6 @@ describe('ApprovalSection typed action handoff', () => {
         />
       </Router>
     ));
-
-  it('keeps Patrol contextual while routing mutations to the canonical Actions review', () => {
-    expect(approvalSectionSource).toContain('@/features/actions/actionRouting');
-    expect(approvalSectionSource).toContain('buildActionReviewPath');
-    expect(approvalSectionSource).not.toContain('@/api/resourceActions');
-    expect(approvalSectionSource).not.toContain('decideAction');
-    expect(approvalSectionSource).not.toContain('executeAction');
-    expect(approvalSectionSource).not.toContain('approveInvestigationFix');
-    expect(approvalSectionSource).not.toContain('proposed_fix.commands');
-  });
-
-  it('reads the governed action through the non-suspending query', () => {
-    // The nearest Suspense boundary above a review is the app's route
-    // boundary, whose fallback replaces the page and loses the reader's place.
-    expect(approvalSectionSource).not.toContain('createResource');
-    expect(approvalSectionSource).toContain('createNonSuspendingQuery');
-  });
 
   it('keeps the page around a finding review while the governed action loads', async () => {
     let finishRead: (value: InvestigationSession) => void = () => {};

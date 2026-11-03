@@ -2,35 +2,10 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TagInput } from './TagInput';
-import tagInputSource from './TagInput.tsx?raw';
-import tagInputModelSource from './tagInputModel.ts?raw';
-import tagInputStateSource from './useTagInputState.ts?raw';
 
 describe('TagInput', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps tag input on shell, runtime, and model owners', () => {
-    expect(tagInputSource).toContain('useTagInputState');
-    expect(tagInputSource).toContain('getTagInputPlaceholder');
-    expect(tagInputSource).not.toContain('createSignal');
-    expect(tagInputSource).not.toContain('querySelector');
-    expect(tagInputSource).not.toContain('Backspace');
-    expect(tagInputSource).not.toContain('addTag');
-
-    expect(tagInputStateSource).toContain('export function useTagInputState');
-    expect(tagInputStateSource).toContain('createSignal');
-    expect(tagInputStateSource).toContain('createMemo');
-    expect(tagInputStateSource).toContain('inputRef?.focus');
-    expect(tagInputStateSource).toContain("event.key === 'Backspace'");
-    expect(tagInputStateSource).toContain('commitTag');
-
-    expect(tagInputModelSource).toContain('TAG_INPUT_DELIMITER_KEYS');
-    expect(tagInputModelSource).toContain('isTagInputCommitKey');
-    expect(tagInputModelSource).toContain('getTagInputPlaceholder');
-    expect(tagInputModelSource).toContain('getNextTagsAfterRemove');
-    expect(tagInputModelSource).toContain('getTagInputRemoveTitle');
   });
 
   it('adds tags on enter and removes the last one on backspace when empty', () => {

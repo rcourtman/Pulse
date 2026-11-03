@@ -1,34 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 
 import { ResourceActionHistory } from '../ResourceActionHistory';
 import type { ActionAuditRecord } from '@/types/actionAudit';
 
-const sourceText = readFileSync(resolve(__dirname, '..', 'ResourceActionHistory.tsx'), 'utf-8');
-
 describe('ResourceActionHistory verification rendering', () => {
-  it('renders the post-dispatch verification outcome on each audit row when ran=true', () => {
-    // The broker's read-after-write verification outcome lives on
-    // result.verification (ActionVerificationResult). The audit history row
-    // must surface it without implying independent evidence. Pin the wiring
-    // so the surface cannot silently regress to an output-only render.
-    expect(sourceText).toContain('shouldRenderActionAuditVerification(props.audit)');
-    expect(sourceText).toContain('Legacy check passed (source unclassified)');
-    expect(sourceText).toContain('Legacy check failed (source unclassified)');
-  });
-
-  it('shows the verification command and output verbatim when present', () => {
-    // The verification command (e.g. "systemctl is-active 'nginx'") is
-    // operator-trusted context, not just internal plumbing — it must be
-    // rendered so the operator can see exactly what Pulse read back, not
-    // just a yes/no.
-    expect(sourceText).toContain('v.command');
-    expect(sourceText).toContain('v.output');
-    expect(sourceText).toContain('v.note');
-  });
-
   it('renders exactly one verification row for ran=true and omits ran=false', () => {
     cleanup();
     render(() =>
@@ -79,6 +55,8 @@ describe('ResourceActionHistory verification rendering', () => {
     expect(approvalRow?.lastElementChild).toHaveClass('text-right', 'lg:text-left');
     expect(actionHistory.getAllByText('Legacy check passed (source unclassified)')).toHaveLength(1);
     expect(actionHistory.getByText("systemctl is-active 'nginx'")).toBeInTheDocument();
+    expect(actionHistory.getByText('active')).toBeInTheDocument();
+    expect(actionHistory.getByText('service reported active')).toBeInTheDocument();
     expect(actionHistory.queryByText('should not render')).toBeNull();
     expect(actionHistory.queryByText('sensitive output')).toBeNull();
   });

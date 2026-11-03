@@ -193,25 +193,57 @@ export const getCoverageColumns = (
   });
 };
 
+// Coverage's phone rows carry only the name in their identity cell, and guest
+// names often share a long prefix ("checkout-web-110"), so cutting their ends
+// hides what tells them apart. The cells beside it hold short, fixed content,
+// measured at 320px: "Unknown" with its dot, an "Unknown" age, the job dot
+// under "Job". When the table knows its width they take exactly that and the
+// name takes the rest, instead of a fixed share that wastes room at 360px and
+// up. A 302px table still leaves the other cells whole.
+const COVERAGE_COMPACT_CELL_WIDTH_PX: Partial<Record<CoverageColumnId, number>> = {
+  posture: 80,
+  latest: 52,
+  task: 34,
+};
+
+const compactCoverageWidthStyle = (
+  columnId: CoverageColumnId,
+  visibleColumnIds: readonly CoverageColumnId[],
+  containerWidth: number,
+): JSX.CSSProperties => {
+  const share = (px: number) => (px / containerWidth) * 100;
+  if (columnId !== 'workload') {
+    const px = COVERAGE_COMPACT_CELL_WIDTH_PX[columnId];
+    return px ? { width: `${Number(share(px).toFixed(2))}%` } : {};
+  }
+  const taken = visibleColumnIds
+    .filter((id) => id !== 'workload')
+    .reduce((sum, id) => sum + share(COVERAGE_COMPACT_CELL_WIDTH_PX[id] ?? 0), 0);
+  return { width: `${Number(Math.max(0, 100 - taken).toFixed(2))}%` };
+};
+
 export const getCoverageColumnWidthStyle = (
   columnId: CoverageColumnId,
   layout: ProxmoxBackupsTableLayoutMode,
   visibleColumnIds: readonly CoverageColumnId[],
+  containerWidth?: number,
 ): JSX.CSSProperties =>
-  getPlatformTableWeightedColumnWidthStyle(
-    columnId,
-    COVERAGE_WEIGHTS[layout],
-    visibleColumnIds,
-    layout === 'compact' || layout === 'basic'
-      ? {
-          columnId: 'workload',
-          widthPercent:
-            layout === 'compact'
-              ? PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT
-              : PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
-        }
-      : undefined,
-  );
+  layout === 'compact' && typeof containerWidth === 'number' && containerWidth > 0
+    ? compactCoverageWidthStyle(columnId, visibleColumnIds, containerWidth)
+    : getPlatformTableWeightedColumnWidthStyle(
+        columnId,
+        COVERAGE_WEIGHTS[layout],
+        visibleColumnIds,
+        layout === 'compact' || layout === 'basic'
+          ? {
+              columnId: 'workload',
+              widthPercent:
+                layout === 'compact'
+                  ? PLATFORM_TABLE_NARROW_IDENTITY_WIDTH_PERCENT
+                  : PLATFORM_TABLE_PHONE_IDENTITY_WIDTH_PERCENT,
+            }
+          : undefined,
+      );
 
 export const RECOVERABLE_COLUMNS: readonly BackupTableColumn<RecoverableColumnId>[] = [
   { id: 'workload', label: 'Workload', kind: 'name' },

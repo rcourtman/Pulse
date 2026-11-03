@@ -226,11 +226,26 @@ describe('TableRow text selection', () => {
 
 describe('TableBody', () => {
   it('keeps the shared table wrapper CSP-safe', () => {
-    expect(tableSource).toContain('touch-scroll');
-    expect(tableSource).toContain('table-scroll-shell');
-    expect(tableSource).toContain('min-w-0 max-w-full');
     expect(tableSource).not.toContain('style={{');
     expect(tableSource).not.toContain('style={');
+  });
+
+  it('keeps the table wrapper touch-scrollable and inside its container', () => {
+    render(() => (
+      <Table>
+        <tbody>
+          <tr>
+            <td>wrapped row</td>
+          </tr>
+        </tbody>
+      </Table>
+    ));
+
+    expect(screen.getByText('wrapped row').closest('.table-scroll-shell')).toHaveClass(
+      'touch-scroll',
+      'min-w-0',
+      'max-w-full',
+    );
   });
 
   it('exposes an explicit phone page-scroll owner variant', () => {

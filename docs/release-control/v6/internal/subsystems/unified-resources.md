@@ -23,6 +23,14 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backups names PBS restore points as backups (3 November 2026)
+
+The Backups source presentation reads PBS items from the same PBS resource
+and backup inventory as before, and now labels them "PBS backup(s)" rather
+than "PBS snapshot(s)", so "snapshot" on that page means only a Proxmox VE
+guest snapshot. Source kinds (`pbs`, `archive`, `snapshot`), filter values,
+URLs, resource identity and what counts as protection are unchanged.
+
 ### Resource memory and disk percentages validate their byte pair (2 November 2026)
 
 `getMemoryPercent` and `getDiskPercent` in `frontend-modern/src/types/resource.ts`
@@ -35,6 +43,14 @@ reading. Drawer callers already pass the value through `finiteMetric`; the
 unused `topByMemory` sort ranks no reading as 0. `resource.test.ts` and
 `ResourceDetailDrawer.history.test.tsx` cover measured zero, invalid pairs and
 percentage-only readings.
+
+### Phone Coverage names namesakes from every row (3 November 2026)
+
+The compact Coverage table now judges which workloads share a name across
+every Coverage row before search and filters (`identityRows`), using the same
+workload identity it already reads, and keeps the VM id and PVE connection
+beside the name only for those. Workload identity, connection data and the
+disclosure label are unchanged.
 
 ### Compact Proxmox node Disk cells show the fullest disk (2 November 2026)
 
@@ -8621,8 +8637,8 @@ now sit on Overview and simply withdraw while the target is absent; the other
 tab bodies render their own availability notice while their tab is
 unavailable, so the selection can be retained and recovered without
 manufacturing a target. The
-`ResourceDetailDrawer.history.test.tsx` guard pins the single-resource reset
-boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
+`ResourceDetailDrawer.snapshot.test.tsx` render test pins the single-resource
+reset boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
 drawer at desktop and narrow widths: selecting Manage, dropping the merged
 metrics target, and restoring it must keep the selection and bring the Overview
 charts back. Its fixture, `browser-tests/pbs-host-history-correlation.tsx`,

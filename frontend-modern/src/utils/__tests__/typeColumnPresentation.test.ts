@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import { TYPE_COLUMN_LABEL } from '@/utils/typeColumnContract';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
@@ -12,10 +11,6 @@ const sourceFiles = import.meta.glob(['../../**/*.ts', '../../**/*.tsx'], {
 describe('typeColumnPresentation', () => {
   it('returns the canonical Type column label', () => {
     expect(getTypeColumnLabel()).toBe(TYPE_COLUMN_LABEL);
-  });
-
-  it('keeps fixed runtime Type headers on the shared label utility', () => {
-    expect(alertHistoryTableSectionSource).toContain('getTypeColumnLabel()');
   });
 
   it('limits runtime Type header label helper imports to the known allowlist', () => {

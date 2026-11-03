@@ -14,11 +14,17 @@ vi.mock('@/components/Alerts/InvestigateAlertButton', () => ({
   InvestigateAlertButton: () => null,
 }));
 
+vi.mock('../AlertResourceIncidentsPanel', () => ({
+  AlertResourceIncidentsPanel: () => <div data-testid="resource-incidents-panel" />,
+}));
+
 const NOW = Date.parse('2026-10-06T19:00:00Z');
 
-function createState() {
+function createState(resourceIncidentRowKey: string | null = null) {
   const [expandedIncidents] = createSignal(new Set<string>());
-  const [resourceIncidentPanel] = createSignal(null);
+  const [resourceIncidentPanel] = createSignal<{ rowKey: string } | null>(
+    resourceIncidentRowKey ? { rowKey: resourceIncidentRowKey } : null,
+  );
   return {
     getIncidentRowKey: (alert: HistoryItem) => `${alert.id}-row`,
     expandedIncidents,
@@ -45,11 +51,11 @@ const historyItem = (overrides: Partial<HistoryItem>): HistoryItem => ({
   ...overrides,
 });
 
-const renderRow = (alert: HistoryItem) =>
+const renderRow = (alert: HistoryItem, state: AlertHistoryState = createState()) =>
   render(() => (
     <table>
       <tbody>
-        <AlertHistoryTableAlertRow alert={alert} state={createState()} />
+        <AlertHistoryTableAlertRow alert={alert} state={state} />
       </tbody>
     </table>
   ));
@@ -200,5 +206,32 @@ describe('AlertHistoryTableAlertRow', () => {
   it('uses the compact status badge in the table row', () => {
     renderRow(historyItem({ status: 'acknowledged' }));
     expect(screen.getByText('acknowledged')).toHaveClass('text-[11px]', 'px-1.5');
+  });
+
+  // The incidents panel opens under the row that asked for it. Rendered at page
+  // level it sat thousands of pixels above a reader scrolled into the history, so
+  // the row button read as inert (#1687).
+  it('opens the resource incidents panel under only the row that asked for it', () => {
+    const alert = historyItem({});
+    const asked = renderRow(alert, createState(`${alert.id}-row`));
+    expect(screen.getByTestId('resource-incidents-panel')).toBeInTheDocument();
+    asked.unmount();
+
+    renderRow(alert, createState('some-other-row'));
+    expect(screen.queryByTestId('resource-incidents-panel')).not.toBeInTheDocument();
+  });
+
+  it('explains a moved alert in the status badge title', () => {
+    const closeDetail =
+      'Moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    renderRow(historyItem({ status: 'moved', closeDetail }));
+
+    expect(screen.getByTitle(closeDetail)).toBeInTheDocument();
+  });
+
+  it('marks the time cell so the density rules can hide it', () => {
+    const { container } = renderRow(historyItem({}));
+
+    expect(container.querySelector('td.alert-history-timestamp-column')).not.toBeNull();
   });
 });

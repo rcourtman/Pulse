@@ -6,10 +6,6 @@ import {
   showTooltip,
   hideTooltip,
 } from '@/components/shared/Tooltip';
-import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
-import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
-import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
-import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 
 describe('Tooltip', () => {
   afterEach(() => {
@@ -32,37 +28,6 @@ describe('Tooltip', () => {
 
     showTooltip('touch detail', 120, 80);
     expect(screen.queryByText('touch detail')).toBeNull();
-  });
-
-  it('keeps tooltip on shell, runtime, and model owners', () => {
-    expect(tooltipSource).toContain('useTooltipState');
-    expect(tooltipSource).toContain('createTooltipSystemState');
-    expect(tooltipSource).toContain('foreignObject');
-    expect(tooltipSource).not.toContain('createSignal');
-    expect(tooltipSource).not.toContain('requestAnimationFrame');
-    expect(tooltipSource).not.toContain('sanitizeTooltipContent');
-    expect(tooltipSource).not.toContain('resolveTooltipPosition');
-    expect(tooltipSource).not.toContain('style={');
-
-    expect(tooltipPortalSource).toContain('useTooltipPortalState');
-    expect(tooltipPortalSource).toContain('foreignObject');
-    expect(tooltipPortalSource).not.toContain('createSignal');
-    expect(tooltipPortalSource).not.toContain('resolveTooltipPosition');
-    expect(tooltipPortalSource).not.toContain('style={');
-
-    expect(tooltipStateSource).toContain('export function useTooltipState');
-    expect(tooltipStateSource).toContain('export function useTooltipPortalState');
-    expect(tooltipStateSource).toContain('export function createTooltipSystemState');
-    expect(tooltipStateSource).toContain('createSignal');
-    expect(tooltipStateSource).toContain('requestAnimationFrame');
-    expect(tooltipStateSource).toContain('tooltipInstance');
-    expect(tooltipStateSource).toContain('resolveTooltipPosition');
-    expect(tooltipStateSource).toContain('sanitizeTooltipContent');
-
-    expect(tooltipModelSource).toContain('export function sanitizeTooltipContent');
-    expect(tooltipModelSource).toContain('export function resolveTooltipPosition');
-    expect(tooltipModelSource).toContain("export type TooltipAlignment = 'left' | 'center'");
-    expect(tooltipModelSource).toContain("export type TooltipDirection = 'up' | 'down'");
   });
 
   it('sanitizes tooltip content through the model owner', async () => {

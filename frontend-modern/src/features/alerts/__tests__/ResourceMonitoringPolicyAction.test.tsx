@@ -191,4 +191,46 @@ describe('ResourceMonitoringPolicyAction', () => {
       );
     });
   });
+
+  it('keeps a recurring maintenance window and its descendant scope when the policy changes', async () => {
+    const recurrence = {
+      timezone: 'Europe/London',
+      weekdays: ['sunday'],
+      startMinute: 120,
+      endMinute: 240,
+    };
+    operatorStateMock.get.mockResolvedValue({
+      canonicalId: 'vm:101',
+      monitoringMode: 'normal',
+      lifecycleState: 'active',
+      intentionallyOffline: false,
+      neverAutoRemediate: false,
+      autoRemediationPolicy: { enabled: false, capabilityNames: [] },
+      maintenanceRecurrence: recurrence,
+      maintenanceScope: 'resource_and_descendants',
+      setAt: '2026-08-11T09:00:00Z',
+    });
+    operatorStateMock.set.mockResolvedValue({});
+    render(() => (
+      <ResourceMonitoringPolicyAction
+        resourceId="vm:101"
+        resourceName="legacy-lxc"
+        resourceType="system-container"
+      />
+    ));
+
+    fireEvent.click(screen.getByText('Monitoring'));
+    fireEvent.click(screen.getByText('Mute all attention'));
+
+    await waitFor(() => {
+      expect(operatorStateMock.set).toHaveBeenCalledWith(
+        'vm:101',
+        expect.objectContaining({
+          monitoringMode: 'muted',
+          maintenanceRecurrence: recurrence,
+          maintenanceScope: 'resource_and_descendants',
+        }),
+      );
+    });
+  });
 });

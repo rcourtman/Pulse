@@ -47,9 +47,7 @@ describe('completed backup count guidance', () => {
   it('ships the current labels and separates inventory, job and list scope', () => {
     expect(read('frontend-modern/public/docs/RECOVERY.md')).toBe(read('docs/RECOVERY.md'));
     const copy = text();
-    const tableSource = read('frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx');
     // The restore points carry no per-day chart; the guide must not describe one.
-    expect(tableSource).not.toContain('BackupActivityChart');
     for (const label of ['Completed restore points per day', 'Known restore volume per day']) {
       expect(copy).not.toContain(label);
     }

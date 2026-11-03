@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "080f051c28249d3a307436f30c4974001ee16785",
+  "verified_at": "2026-11-03T15:59:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "0e86cede8577b867c440615bb3b4a603ea553c105e313307a5b1e38ba2b234c0",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "6aca2bf59422a4082d3d635426a141d5522d6459ddc6734b9ca28d9a8351cb13",
+    "frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts": "3cc651152904c596925536c9ca1fb27c639ecf195f04210ea0bdc9eaca1639e3",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts": "842ab130cfb57438ae5fa6b125e50da0dccad59fa2d9e2259e0c97ea131015fa"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 607
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode built from this change on pulse-dev: PBS backups, PVE backup files and guest snapshots across 929 guests",
+    "desktop and phone layouts, dark theme"
+  ],
+  "interactions": [
+    "Backup health header reads 360 with PBS backups; the health reasons read No successful backup, Only guest snapshots, No backup in 7 days, Last backup failed, Backup status unknown",
+    "the source filter offers PBS backups from Proxmox Backup Server (hover: which calls these backup snapshots), PVE backup files and Guest snapshots; no PBS snapshot text remains on the page",
+    "expanding a PBS row shows Source PBS backup and the summary PBS backup in primary-vault / root",
+    "at 375x812 the health rows are 32-33px and unclipped, By date rows are 37px and the page has no horizontal overflow"
+  ]
+}

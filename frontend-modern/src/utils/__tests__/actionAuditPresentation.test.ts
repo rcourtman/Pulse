@@ -191,4 +191,29 @@ describe('actionAuditPresentation', () => {
       }),
     ).toMatchObject({ label: 'Verification outcome recorded' });
   });
+
+  it('pairs a contradicted check with the plain sentence saying what Pulse saw', () => {
+    expect(
+      getActionAuditVerificationOutcomePresentation({
+        result: {
+          success: true,
+          actionResultV2: {
+            version: 2,
+            execution: { status: 'succeeded', summary: 'Docker restarted the container.' },
+            verification: {
+              status: 'contradicted',
+              evidenceClass: 'independent',
+              summary: 'The container restarted, but its health check is failing. Check its logs.',
+            },
+            compensation: { support: 'unavailable', status: 'not_available' },
+          },
+        },
+      }),
+    ).toMatchObject({
+      label: 'Outcome contradicted',
+      detail: 'Pulse checked afterwards, and what it found did not match the expected result.',
+      evidenceSummary:
+        'The container restarted, but its health check is failing. Check its logs. Source: Independent observer.',
+    });
+  });
 });

@@ -5091,6 +5091,17 @@ reserved: the inventory makes no all-time completeness claim. The empty
 Coverage table reads "Nothing to check yet". Which workloads each reason
 selects is unchanged.
 
+### Phone Coverage rows keep the workload name whole (3 November 2026)
+
+On a phone the Coverage name cell also carried the VM id and the PVE
+connection, which cut names to a few letters ("ch..."), so every
+"checkout-web-*" guest looked the same. In the compact layout a row now
+shows the name alone unless another Coverage row shares it, judged across
+every row before search and filters so a filter never changes how a row is
+named; namesakes keep the VM id and connection that tell them apart. The
+disclosure label and the row drawer always carry both. Wider layouts are
+unchanged.
+
 ### Backup health reason rows show they open Coverage (2 November 2026)
 
 Each Backup health reason row was already a button that filters Coverage to
@@ -5156,6 +5167,22 @@ it read as the datastore and its backups being fine. Connection health is on
 the server header; phones keep a State column for the datastore's job result,
 a job problem or a fill forecast.
 
+### On Backups, "snapshot" means a guest snapshot (3 November 2026)
+
+The page used "snapshot" for two opposite things: PBS restore points, which
+are backups, and guest snapshots, which are not and never count as
+protection. PBS items are now "PBS backups" everywhere the page names them:
+the source filter, record details, the Backup health header ("N with PBS
+backups"), the loading and empty copy, and the Coverage "No PBS backup or PVE
+backup file" cell, whose hover now says "A guest snapshot is not a separate
+backup". A PBS backup with no verification result shows "Backup", not
+"Snapshot", in the By date state column. Guest snapshots keep "Snapshot",
+the `snapshots-only` health reason reads "Only guest snapshots", and the empty
+list says items appear "when available" rather than "once backups run",
+since backup jobs do not make guest snapshots. The PBS filter's hover notes
+that PBS itself calls these backup snapshots. Source kinds, filters, URLs and
+what counts as protection are unchanged.
+
 ### Backup servers rows are named by their datastore (2 November 2026)
 
 The Backup servers table keeps one row per datastore, but each row is now
@@ -5209,6 +5236,17 @@ into view when their top is below the fold (phones), honouring reduced motion,
 and leaves the page where it is when the list already shows; clearing a filter
 never scrolls. `ProxmoxBackupsTable.test.tsx` pins the section order and both
 scroll cases.
+
+### Backup jobs names each time window where it is shown (3 November 2026)
+
+The card's title read "Backup jobs 14 days" while its outcome pills counted
+the last 24 hours, and the pills' "24h" prefix was hidden on phones, so the
+pills read as the chart's totals. The title is now "Backup jobs", the pills
+are prefixed "Last 24h" ("24h" on phones, keeping the header on one line),
+and the chart's own axis, first day to Today, gives its span. When Pulse did
+not see the whole last 24 hours the pills carry "incomplete data" (was
+"partial") with the hover "Pulse did not see the whole last 24 hours, so
+these counts may be low". Counts, windows and history states are unchanged.
 
 ### Backup jobs show 14 days of retained outcomes beside Backup health (2 November 2026)
 
@@ -9500,3 +9538,11 @@ replacement. Session withdrawal does not cancel independent agents, updates,
 deployments, backups or legacy executions, nor prove original recovery.
 `TestContractSessionReadLogoutBoundary` covers persisted logout and native
 HTTP/WS refusal; the API contract describes the credential and idle boundaries.
+
+### Default-organization access policy is not a storage path
+
+The default-organization access change in `internal/api/` adds no storage or
+recovery path beyond default-organization membership in the existing
+`org.json` and a one-time marker, `default-org-access-migration.json`, in the
+base data directory. The migration writes nothing when tenant metadata or RBAC
+assignments cannot be read, so recovery of those stores is unchanged.

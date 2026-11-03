@@ -1,10 +1,15 @@
-import type { OrganizationRole } from '@/api/orgs';
+import type { Organization, OrganizationRole } from '@/api/orgs';
 import { Component, For, Show } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
 import { getOrganizationAccessManageRequiredMessage } from '@/utils/organizationSettingsPresentation';
+import { DEFAULT_ORG_SCOPE } from '@/utils/orgScope';
 import type { useOrganizationAccessPanelState } from './useOrganizationAccessPanelState';
+
+// Adding someone to the default organization grants access at once, and its
+// members are viewers: instance roles decide what they can do.
+const isDefaultOrg = (org: Organization) => org.id === DEFAULT_ORG_SCOPE;
 
 interface OrganizationAccessManagementSectionProps {
   currentUser?: string;
@@ -19,7 +24,9 @@ export const OrganizationAccessManagementSection: Component<
       <>
         <Show when={props.state.canManageCurrentOrg()}>
           <div class="rounded-md border border-border p-4 space-y-3">
-            <h4 class="text-sm font-semibold text-base-content">Invite Member</h4>
+            <h4 class="text-sm font-semibold text-base-content">
+              {isDefaultOrg(currentOrg()) ? 'Add Member' : 'Invite Member'}
+            </h4>
             <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
               <input
                 type="text"
@@ -40,9 +47,10 @@ export const OrganizationAccessManagementSection: Component<
                 selectBaseClass="rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               >
                 <For
-                  each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
-                    (option) =>
-                      option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser,
+                  each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter((option) =>
+                    isDefaultOrg(currentOrg())
+                      ? option.value === 'viewer'
+                      : option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser,
                   )}
                 >
                   {(option) => <option value={option.value}>{option.label}</option>}
@@ -55,7 +63,7 @@ export const OrganizationAccessManagementSection: Component<
                 onClick={props.state.inviteMember}
                 disabled={props.state.saving()}
               >
-                {props.state.saving() ? 'Saving...' : 'Invite'}
+                {props.state.saving() ? 'Saving...' : isDefaultOrg(currentOrg()) ? 'Add' : 'Invite'}
               </Button>
             </div>
           </div>

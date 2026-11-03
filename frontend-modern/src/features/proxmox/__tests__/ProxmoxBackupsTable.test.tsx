@@ -13,9 +13,6 @@ import {
   identityTask,
 } from '../__fixtures__/backupIdentity';
 import { buildBackupServerRows, ProxmoxBackupServersTable } from '../ProxmoxBackupServersTable';
-import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
-import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
-import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
@@ -558,7 +555,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('LXC').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getByText('2 PBS files')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /pbs snapshots/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pbs backups/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /pve backup files/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /guest snapshots/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Archives' })).not.toBeInTheDocument();
@@ -632,16 +629,6 @@ describe('ProxmoxBackupsTable', () => {
     // the protected count and reason rows.
     expect(healthSummary.parentElement).toHaveClass('hidden', 'sm:inline');
 
-    expect(proxmoxBackupsTableSource).toContain('<PlatformSectionTabs');
-    expect(proxmoxBackupsTableSource).not.toContain('FilterSegmentedControl');
-    expect(proxmoxBackupsTableSource).toContain('buildProxmoxBackupsPath');
-    expect(proxmoxBackupsTableSource).toContain('trailingControls={');
-    expect(proxmoxBackupsTableSource).toContain('<PlatformResourceCounter');
-    expect(proxmoxBackupServersTableSource).toContain(
-      '<PlatformResponsiveTableLabel\n                    compact="Bkps"',
-    );
-    expect(proxmoxBackupServersTableSource).not.toContain('compact="#"');
-
     // The two route-backed sections exist...
     expect(screen.getByRole('navigation', { name: /backup views/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute(
@@ -673,7 +660,7 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findAllByText('pbs-docker');
     expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByPlaceholderText(/search backups by workload/i)).toHaveValue('pbs-docker');
-    expect(screen.getByRole('button', { name: /pbs snapshots/i })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /pbs backups/i })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -1226,108 +1213,6 @@ describe('ProxmoxBackupsTable', () => {
       TABLE_CARD_FRAME_CLASS,
     );
     expect(emptyStateHeading.closest('.border-dashed')).not.toBeNull();
-  });
-
-  it('routes top-level loading and error states through shared platform primitives', () => {
-    expect(proxmoxBackupsTableSource).toContain('PlatformErrorState');
-    expect(proxmoxBackupsTableSource).toContain('PlatformTableLoadingState');
-    expect(proxmoxBackupsTableSource).toContain('title="Could not load Proxmox backup inventory"');
-    expect(proxmoxBackupsTableSource).toContain('title="Loading Proxmox backup inventory"');
-    expect(proxmoxBackupsTableSource).not.toContain(
-      'inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover',
-    );
-  });
-
-  it('keeps PBS backup count and capacity cells on shared platform primitives', () => {
-    const directLocaleCountCall = 'row.backupCount.' + 'toLocale' + 'String()';
-    const directDatastorePercentRound = 'Math.round(pct() ?? 0)}' + '%';
-
-    expect(proxmoxBackupServersTableSource).toContain('PlatformTableNumberValue');
-    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableIntegerValue');
-    expect(proxmoxBackupServersTableSource).toContain('PlatformTablePercentValue');
-    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTablePercentValue');
-    expect(proxmoxBackupServersTableSource).not.toContain(directLocaleCountCall);
-    expect(proxmoxBackupServersTableSource).not.toContain(directDatastorePercentRound);
-  });
-
-  it('routes PBS server expansion through the canonical resource drawer', () => {
-    expect(proxmoxBackupServersTableSource).toContain('PlatformResourceDetailTableRow');
-    expect(proxmoxBackupServersTableSource).toContain('resource={row.resource}');
-    expect(proxmoxBackupServersTableSource).toContain('initialShowHostDetails');
-    expect(proxmoxBackupServersTableSource).toContain('uniquelyCorrelatedAgent');
-    // A single agent can surface as both a PVE guest and a standalone host row;
-    // collapse those by agent identity, and keep declining genuinely ambiguous
-    // matches.
-    expect(proxmoxBackupServersTableSource).toContain('correlatedAgentKey');
-    expect(proxmoxBackupServersTableSource).toContain(
-      'if (byAgentKey.size !== 1) return undefined;',
-    );
-    expect(proxmoxBackupServersTableSource).toContain(
-      'metricsTarget: agent.metricsTarget ?? server.metricsTarget',
-    );
-    // A refresh that briefly omits the correlated host row must not flip the
-    // drawer target to the PBS service key; retain the resolved host per server
-    // and reuse it only across the omission.
-    expect(proxmoxBackupServersTableSource).toContain('createPbsCorrelationRetention');
-    expect(proxmoxBackupServersTableSource).toContain('hasCorrelationCandidate');
-    expect(proxmoxBackupServersTableSource).toContain(
-      'buildBackupServerRows(props.servers, props.backups ?? [], retention)',
-    );
-    expect(proxmoxBackupServersTableSource).not.toContain(
-      '<span class="font-medium text-base-content">Server:</span>',
-    );
-  });
-
-  it('keeps backup coverage fed by Proxmox VM/LXC guests when Overview demotes app containers', () => {
-    expect(proxmoxPageSurfaceSource).toContain(
-      'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
-    expect(proxmoxPageSurfaceSource).toContain('workloads={model().guests}');
-    expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
-  });
-
-  it('keeps Overview guest totals aligned with the filtered Workloads collection', () => {
-    // Guest totals now render as the shared toolbar inventory counts, fed by
-    // the workloads state whose collection already excludes demoted app
-    // containers. They must never come from the raw model summary counts.
-    expect(proxmoxPageSurfaceSource).toContain('inventoryStats={workloadsState.inventoryStats}');
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      'currentModel().summary.runningGuestCount} running',
-    );
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      'currentModel().summary.stoppedGuestCount} stopped',
-    );
-  });
-
-  it('keeps the overview node and guest regions on one canonical resource snapshot', () => {
-    expect(proxmoxPageSurfaceSource).toContain('const overviewResources = useUnifiedResources({');
-    expect(proxmoxPageSurfaceSource).toContain("cacheKey: 'proxmox-overview'");
-    expect(proxmoxPageSurfaceSource).toContain('resourceSnapshot={() =>');
-    expect(proxmoxPageSurfaceSource).toContain(
-      'resourceSnapshotRefetch={() => overviewResources.refetch()}',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('useWorkloadsState({');
-    expect(proxmoxPageSurfaceSource).toContain('resourceSnapshot: props.resourceSnapshot');
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      'useWorkloads({ enabled: () => workloadsEnabled() })',
-    );
-  });
-
-  it('keeps the shared storage surface scoped to the whole Proxmox product family', () => {
-    expect(proxmoxPageSurfaceSource).toContain("const PROXMOX_PLATFORM_FILTER = 'proxmox-all';");
-    expect(proxmoxPageSurfaceSource).toContain('forcedSourceFilter={PROXMOX_PLATFORM_FILTER}');
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      "const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';",
-    );
-  });
-
-  it('keeps Patrol coverage out of Proxmox evidence surfaces', () => {
-    expect(proxmoxPageSurfaceSource).not.toContain('getMonitorContextPatrolProtectionPosture');
-    expect(proxmoxPageSurfaceSource).not.toContain('getPatrolRunHistory(1)');
-    expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Proxmox Patrol coverage"');
-    expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Patrol protection posture"');
-    expect(proxmoxBackupsTableSource).not.toContain('Proxmox Patrol coverage');
   });
 });
 
@@ -2018,7 +1903,7 @@ describe('backup-date-evidence connected inventory', () => {
     window.history.replaceState({}, '', '/?view=date');
     supply('2026-10-04T11:59:00Z', true);
     mount();
-    const toggle = await screen.findByRole('button', { name: /Expand details.*PBS snapshot/ });
+    const toggle = await screen.findByRole('button', { name: /Expand details.*PBS backup/ });
     await fireEvent.click(toggle);
     toggle.focus();
     const panel = screen.getByTestId('proxmox-recoverable-detail');
@@ -2344,7 +2229,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
         'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
       ),
     );
-    expect(within(rowElement()).getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(
+    expect(within(rowElement()).getByTitle('No PBS backup or PVE backup file')).toHaveTextContent(
       'None',
     );
     expect(sourceCalls('pve')).toHaveLength(1);
@@ -2572,7 +2457,7 @@ describe('completed restore-point summary', () => {
   it('does not claim PBS restore coverage for an incomplete-only inventory', async () => {
     const { container } = mountInventory(true);
     const summary = await screen.findByText(/0 completed restore points · 1 running · 1 failed/);
-    expect(summary).not.toHaveTextContent('with PBS snapshots');
+    expect(summary).not.toHaveTextContent('with PBS backups');
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
     expect(
       screen.getByRole('cell', { name: `${getRecoveryFullDateLabel('2026-10-04')} 2 entries` }),
@@ -3322,7 +3207,7 @@ describe('By-date restore-point scope', () => {
       />
     ));
     const toggle = await screen.findByRole('button', {
-      name: /^Expand details for east-100 \(VM 100\) · PVE connection: east · PBS snapshot/,
+      name: /^Expand details for east-100 \(VM 100\) · PVE connection: east · PBS backup/,
     });
     // With one PVE connection and one reader the row stays a single line;
     // the disclosure still names both scopes before it is opened.
@@ -3352,13 +3237,13 @@ describe('By date recovery evidence limits', () => {
       explanation: /shares the guest's storage.*not a separate backup/,
     },
     {
-      name: 'verified PBS snapshot',
+      name: 'verified PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ protected: true })],
       explanation: /Verified is the provider's reported backup check, not a tested restore/,
     },
     {
-      name: 'unverified PBS snapshot',
+      name: 'unverified PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ verified: false })],
       explanation: /not reported as verified.*does not establish a successful restore/,
@@ -3379,19 +3264,19 @@ describe('By date recovery evidence limits', () => {
       explanation: /Verified is the provider's reported backup check, not a tested restore/,
     },
     {
-      name: 'running PBS snapshot',
+      name: 'running PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: true })],
       explanation: /incomplete and may still be in progress.*not a completed restore point/,
     },
     {
-      name: 'incomplete PBS snapshot with unread write activity',
+      name: 'incomplete PBS backup with unread write activity',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true })],
       explanation: /incomplete and may still be in progress.*not a completed restore point/,
     },
     {
-      name: 'failed PBS snapshot',
+      name: 'failed PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: false })],
       explanation: /No current writer is reported.*not a completed restore point/,

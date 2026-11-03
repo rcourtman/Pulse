@@ -3,13 +3,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import * as ts from 'typescript';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
-import standalonePageModelSource from '@/features/standalone/standalonePageModel.ts?raw';
 import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
 import dockerAlertsTableSource from '@/features/docker/DockerAlertsTable.tsx?raw';
 import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
-import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
-import platformHostScopeSource from '@/features/platformPage/PlatformHostScope.tsx?raw';
 import dockerImagesTableSource from '@/features/docker/DockerImagesTable.tsx?raw';
 import dockerNetworksTableSource from '@/features/docker/DockerNetworksTable.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
@@ -34,36 +31,22 @@ import kubernetesPodsTableSource from '@/features/kubernetes/KubernetesPodsTable
 import kubernetesPolicyTableSource from '@/features/kubernetes/KubernetesPolicyTable.tsx?raw';
 import kubernetesServicesTableSource from '@/features/kubernetes/KubernetesServicesTable.tsx?raw';
 import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorageTable.tsx?raw';
-// The backups page owns the scope controls and delegates dense table rendering
-// to current per-view components; the shared-primitive guardrail follows those
-// current table owners.
-import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
-import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
-import platformResourceDetailRowSource from '@/features/platformPage/PlatformResourceDetailTableRow.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
-import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
-import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
-import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
-import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
-import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
-import platformSearchSuggestionsSource from '@/features/platformPage/platformSearchSuggestions.ts?raw';
 import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
 import truenasAppsTableSource from '@/features/truenas/TrueNASAppsTable.tsx?raw';
 import truenasNetworkSharesTableSource from '@/features/truenas/TrueNASNetworkSharesTable.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTable.tsx?raw';
-import truenasServicesTableSource from '@/features/truenas/TrueNASServicesTable.tsx?raw';
 import truenasStorageTopologyTableSource from '@/features/truenas/TrueNASStorageTopologyTable.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.tsx?raw';
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
-import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
 import storageSurfaceSource from '@/components/Storage/Storage.tsx?raw';
@@ -71,87 +54,6 @@ import useWorkloadsStateSource from '@/components/Workloads/useWorkloadsState.ts
 import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 
 const indexCssSource = readFileSync('src/index.css', 'utf8');
-
-const platformTableSources = [
-  agentsMachinesTableSource,
-  dockerAlertsTableSource,
-  dockerContainersTableSource,
-  dockerHostsTableSource,
-  dockerImagesTableSource,
-  dockerVolumesTableSource,
-  dockerNetworksTableSource,
-  dockerStorageUsageTableSource,
-  dockerSwarmNodesTableSource,
-  dockerServicesTableSource,
-  dockerTasksTableSource,
-  dockerSecretsTableSource,
-  dockerConfigsTableSource,
-  kubernetesAlertsTableSource,
-  kubernetesAutoscalingTableSource,
-  kubernetesClustersTableSource,
-  kubernetesConfigTableSource,
-  kubernetesControllersTableSource,
-  kubernetesNodesTableSource,
-  kubernetesPodsTableSource,
-  kubernetesDeploymentsTableSource,
-  kubernetesEventsTableSource,
-  kubernetesNetworkingTableSource,
-  kubernetesPolicyTableSource,
-  kubernetesServicesTableSource,
-  kubernetesStorageTableSource,
-  truenasAlertsTableSource,
-  truenasAppsTableSource,
-  truenasNetworkSharesTableSource,
-  truenasProtectionTableSource,
-  truenasServicesTableSource,
-  truenasStorageTopologyTableSource,
-  truenasSystemsTableSource,
-  truenasVirtualMachinesTableSource,
-  vsphereActivityTableSource,
-  vsphereAlertsTableSource,
-  vsphereDatastoresTableSource,
-  vsphereHostsTableSource,
-  vsphereNetworksTableSource,
-];
-
-const platformShellTableSources = [
-  ...platformTableSources,
-  proxmoxNodesTableSource,
-  proxmoxBackupServersTableSource,
-  proxmoxCoverageTableSource,
-  proxmoxRecoverableTableSource,
-  proxmoxCephTableSource,
-  proxmoxMailGatewayTableSource,
-  proxmoxReplicationTableSource,
-];
-
-const platformToolbarTableSources = [
-  agentsMachinesTableSource,
-  dockerContainersTableSource,
-  dockerHostsTableSource,
-  dockerImagesTableSource,
-  dockerVolumesTableSource,
-  dockerNetworksTableSource,
-  dockerSwarmNodesTableSource,
-  dockerServicesTableSource,
-  dockerTasksTableSource,
-  dockerSecretsTableSource,
-  dockerConfigsTableSource,
-  kubernetesAutoscalingTableSource,
-  kubernetesClustersTableSource,
-  kubernetesConfigTableSource,
-  kubernetesControllersTableSource,
-  kubernetesNodesTableSource,
-  kubernetesPodsTableSource,
-  kubernetesDeploymentsTableSource,
-  kubernetesEventsTableSource,
-  kubernetesNetworkingTableSource,
-  kubernetesPolicyTableSource,
-  kubernetesServicesTableSource,
-  kubernetesStorageTableSource,
-  truenasSystemsTableSource,
-  vsphereHostsTableSource,
-];
 
 const overviewSurfaceSources = [
   standalonePageSurfaceSource,
@@ -161,25 +63,6 @@ const overviewSurfaceSources = [
   truenasPageSurfaceSource,
   vmwarePageSurfaceSource,
 ];
-
-const proxmoxDetailTableSources = [
-  proxmoxCephTableSource,
-  proxmoxMailGatewayTableSource,
-  proxmoxReplicationTableSource,
-];
-
-const proxmoxBespokeTableSources = [
-  proxmoxCoverageTableSource,
-  proxmoxRecoverableTableSource,
-  proxmoxBackupServersTableSource,
-  proxmoxCephTableSource,
-  proxmoxMailGatewayTableSource,
-  proxmoxReplicationTableSource,
-];
-
-// The Ceph cluster drawer shows its pools and daemons as detail-section
-// cards, so only the Mail Gateway's node and domain tables remain here.
-const proxmoxInlineDetailTableSources = [proxmoxMailGatewayDrawerSource];
 
 type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
 
@@ -257,139 +140,10 @@ function enclosingTab(tag: ts.Node): string | undefined {
 }
 
 describe('platform overview layout guardrails', () => {
-  it('keeps selected datastore context outside the canonical host inspector', () => {
-    const resourceRow = proxmoxBackupServersTableSource.match(
-      /<PlatformResourceDetailTableRow\b[\s\S]*?\n\s*\/>/,
-    )?.[0];
-    expect(resourceRow).toContain('resource={row.resource}');
-    expect(resourceRow).toContain('<BackupServerDatastoreContext');
-    expect(resourceRow).not.toMatch(/resource=\{\{[\s\S]*?datastore/);
-    const contextAt = platformResourceDetailRowSource.indexOf('{props.context}');
-    const inspectorAt = platformResourceDetailRowSource.indexOf('<ResourceDetailDrawer');
-    expect(contextAt).toBeGreaterThan(-1);
-    expect(inspectorAt).toBeGreaterThan(contextAt);
-    // A store is row evidence, never another canonical resource/History target.
-    expect(platformResourceDetailRowSource.slice(inspectorAt)).not.toContain('props.context');
-    expect(platformResourceDetailRowSource.slice(inspectorAt)).toContain(
-      'resource={props.resource}',
-    );
-  });
-  it('keeps attention summaries canonical without a competing estate panel', () => {
-    for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
-      expect(source).toContain('withPlatformStatusCounts');
-      expect(source).not.toContain('PlatformAttentionSummary');
-    }
-    for (const source of overviewSurfaceSources) {
-      expect(source).not.toContain('PlatformEstateOverview');
-      expect(source).not.toContain('PlatformAttentionSummary');
-    }
-    expect(proxmoxPageSurfaceSource).toContain('inventoryStats={workloadsState.inventoryStats}');
-    expect(vmwarePageSurfaceSource).toContain('inventoryStats={workloadsState.inventoryStats}');
-  });
-
-  it('keeps platform inventory tables on the shared dense table styling contract', () => {
-    expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_CARD_CLASS');
-    expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
-    expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_BODY_CLASS');
-    expect(sharedPlatformPageSource).toContain('getPlatformTableHeadClass');
-    expect(sharedPlatformPageSource).toContain('getPlatformTableCellClass');
-    expect(sharedPlatformPageSource).toContain('getPlatformTableResponsiveMinWidthClass');
-    expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS');
-    expect(sharedPlatformPageSource).toContain('PlatformTableToolbar');
-    expect(sharedPlatformPageSource).toContain('PlatformTableLoadingState');
-    expect(sharedPlatformPageSource).toContain('PlatformTableShell');
-    expect(sharedPlatformPageSource).toContain('createPlatformTableFilterState');
-    expect(sharedPlatformPageSource).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
-
-    for (const source of platformShellTableSources) {
-      expect(source).toContain('PlatformTableShell');
-      // Headers resolve their canonical kind-based class either directly
-      // (getPlatformTableHeadClassForKind) or through the shared sortable
-      // header component, which applies the same helper internally.
-      expect(
-        source.includes('getPlatformTableHeadClass') ||
-          source.includes('PlatformSortableTableHead'),
-        'table headers must use getPlatformTableHeadClassForKind or PlatformSortableTableHead',
-      ).toBe(true);
-      expect(source).toContain('getPlatformTableCellClass');
-      expect(source).not.toContain('TableCard class={PLATFORM_TABLE_CARD_CLASS}');
-      expect(source).not.toContain('TableCardHeader');
-      expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
-      expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
-    }
-
-    for (const source of platformToolbarTableSources) {
-      expect(source).toContain('PlatformTableToolbar');
-      expect(source).toContain('createPlatformTableFilterState');
-      expect(source).toContain('searchSuggestions=');
-      expect(source).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
-      expect(source).not.toContain('ViewOptionsMenu');
-      expect(source).not.toContain("from '@/components/shared/SearchInput'");
-      expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
-      // Forbid a bespoke search signal (`const [search, setSearch] = createSignal`)
-      // — tables must read search from createPlatformTableFilterState. The comma
-      // keeps URL-backed scope state (`const [searchParams, ...] = useSearchParams`)
-      // out of the net, since that is shared-FilterBar plumbing, not a rogue box.
-      expect(source).not.toContain('const [search, ');
-    }
-
-    expect(platformSearchSuggestionsSource).toContain('buildPlatformResourceSearchSuggestions');
-    expect(platformSearchSuggestionsSource).not.toContain('platformData');
-  });
-
-  it('keeps Proxmox detail tables on the shared platform table primitives', () => {
-    for (const source of proxmoxBespokeTableSources) {
-      expect(source).toContain('PlatformTableShell');
-      expect(source).toContain('getPlatformTableHeadClassForKind');
-      expect(source).toContain('getPlatformTableCellClassForKind');
-      expect(source).not.toContain('TableCard class={PLATFORM_TABLE_CARD_CLASS}');
-      expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
-      expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
-      expect(source).not.toContain('border-collapse text-xs');
-      expect(source).not.toContain('bg-surface-alt text-muted border-b border-border');
-    }
-
-    for (const source of proxmoxDetailTableSources) {
-      expect(source).toContain('PlatformTableToolbar');
-      expect(source).not.toContain("from '@/components/shared/SearchInput'");
-      expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
-    }
-  });
-
-  it('keeps Proxmox inline detail tables on shared platform table primitives', () => {
-    for (const source of proxmoxInlineDetailTableSources) {
-      expect(source).toContain('PlatformDetailTable');
-      expect(source).toContain('PlatformDetailTableHeader');
-      expect(source).toContain('PlatformDetailTableBody');
-      expect(source).toContain('getPlatformTableHeadClassForKind');
-      expect(source).toContain('getPlatformTableCellClassForKind');
-      expect(source).not.toMatch(
-        /import \{[^}]*\bTable\b[^}]*\} from '@\/components\/shared\/Table'/,
-      );
-      expect(source).not.toMatch(
-        /import \{[^}]*\bTableHeader\b[^}]*\} from '@\/components\/shared\/Table'/,
-      );
-      expect(source).not.toMatch(
-        /import \{[^}]*\bTableBody\b[^}]*\} from '@\/components\/shared\/Table'/,
-      );
-      expect(source).not.toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
-      expect(source).not.toContain('PLATFORM_TABLE_BODY_CLASS');
-      expect(source).not.toContain('<table');
-      expect(source).not.toContain('<thead');
-      expect(source).not.toContain('<tbody');
-      expect(source).not.toContain('divide-y divide-border-subtle');
-    }
-    // Ceph pools and daemons are shared detail-section cards, not a hand list.
-    expect(proxmoxCephClusterDrawerSource).toContain('<TechnicalDetailsSection');
-    expect(proxmoxCephClusterDrawerSource).not.toContain('<dl');
-    expect(proxmoxCephClusterDrawerSource).not.toContain('<table');
-  });
-
   it('keeps Mail Gateway drawer tables prioritized for narrow inline details', () => {
     expect(proxmoxMailGatewayDrawerSource).toContain(
       '<PlatformDetailTable class="min-w-0 table-fixed text-xs">',
     );
-    expect(sharedPlatformPageSource).toContain('phoneVerticalScrollOwner="page"');
     expect(proxmoxMailGatewayDrawerSource).toContain(
       'platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[15%]',
     );
@@ -512,17 +266,6 @@ describe('platform overview layout guardrails', () => {
     );
   });
 
-  it('keeps Docker image references readable by their repository and tag', () => {
-    // References that share a registry and namespace differ only at the end, so
-    // every image cell truncates the shared head and keeps name:tag visible.
-    expect(dockerImagesTableSource).toMatch(/<DockerResourceNameCell[\s\S]{0,80}?imageReference/);
-    for (const source of [dockerContainersTableSource, dockerServicesTableSource]) {
-      expect(source).toContain(
-        '<DockerImageReferenceText reference={image()} class="max-w-full" />',
-      );
-    }
-  });
-
   it('keeps platform summary cells truncating inside their own column', () => {
     // A capped inline-block (max-w-52 truncate) ignored the column width, so a
     // long value spilled past a narrow cell without an ellipsis and sat above
@@ -637,70 +380,19 @@ describe('platform overview layout guardrails', () => {
     );
   });
 
-  it('keeps provider overview pages in the parent-table plus child-inventory stack', () => {
+  it('keeps provider overview tables on their tuned layout widths', () => {
     for (const source of overviewSurfaceSources) {
       expect(source).toMatch(/<div[^>]*class="[^"]*\bspace-y-4\b[^"]*"/);
-      expect(source).toContain('<PlatformSectionTabs');
-      expect(source).toContain('<PlatformTableLoadingState');
-      expect(source).toContain('PlatformTableEmptyState');
-      expect(source).toContain('PlatformErrorState');
     }
 
-    expect(proxmoxPageSurfaceSource).toContain('<ProxmoxNodesTable');
-    expect(proxmoxPageSurfaceSource).not.toContain('<ProxmoxBackupServersTable');
-    expect(proxmoxPageSurfaceSource).toContain('<WorkloadsSurface');
-    expect(proxmoxPageSurfaceSource).toContain(
-      "const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const",
-    );
-    expect(proxmoxPageSurfaceSource).toContain(
-      'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
-    expect(dockerPageSurfaceSource).toContain('<DockerHostsTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerContainersTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerImagesTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerVolumesTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerNetworksTable');
-    expect(dockerNetworksTableSource).toContain('DOCKER_NETWORK_COLUMN_WIDTH_CLASS');
     expect(dockerNetworksTableSource).toContain("attached: 'w-[25%]'");
     expect(dockerNetworksTableSource).toContain("driver: 'w-[15%]'");
     expect(dockerNetworksTableSource).toContain("attention: 'w-[15%]'");
-    expect(dockerPageSurfaceSource).not.toContain('<WorkloadsSurface');
-    expect(dockerPageSurfaceSource).toContain('<DockerSwarmNodesTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerServicesTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerTasksTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerSecretsTable');
-    expect(dockerPageSurfaceSource).toContain('<DockerConfigsTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesClustersTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesNodesTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesPodsTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesDeploymentsTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesControllersTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesServicesTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesStorageTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesNetworkingTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesConfigTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesPolicyTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesAutoscalingTable');
-    expect(kubernetesPageSurfaceSource).toContain('<KubernetesEventsTable');
-    expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
-    expect(truenasPageSurfaceSource).toContain('<TrueNASAlertsTable');
-    expect(truenasPageSurfaceSource).toContain('<TrueNASVirtualMachinesTable');
-    expect(truenasPageSurfaceSource).toContain('<TrueNASAppsTable');
-    expect(truenasPageSurfaceSource).toContain('<TrueNASStorageTopologyTable');
-    expect(truenasPageSurfaceSource).toContain('<TrueNASProtection');
-    expect(truenasPageSurfaceSource).toContain('platform: TRUENAS_PLATFORM_FILTER');
-    expect(truenasPageSurfaceSource).toContain(
-      'source=truenas&type=agent,vm,app-container,network-share,storage,physical_disk',
-    );
-    expect(truenasPageSurfaceSource).not.toContain('forcedView="pools"');
-    expect(truenasPageSurfaceSource).not.toContain('<RecoverySurface');
-    expect(truenasPageSurfaceSource).not.toContain('<StorageSurface');
-    expect(truenasPageSurfaceSource).not.toContain('<WorkloadsSurface');
-    expect(truenasPageSurfaceSource).not.toContain('<TrueNASDisksTable');
     expect(truenasAppsTableSource).toContain('md:min-w-[960px]');
+    // These classes are the TSX half of the container-query rebalancing in
+    // src/index.css (th.truenas-app-*-column); jsdom cannot render container
+    // queries, so renaming one silently kills the CSS.
     expect(truenasAppsTableSource).toContain('truenas-app-name-column');
-    expect(truenasAppsTableSource).toContain('truenas-app-name-value');
     expect(truenasAppsTableSource).toContain('truenas-app-containers-column');
     expect(truenasAppsTableSource).toContain('truenas-app-updates-column');
     expect(truenasAppsTableSource).toContain(
@@ -712,60 +404,18 @@ describe('platform overview layout guardrails', () => {
     expect(truenasAppsTableSource).toContain(
       '<PlatformResponsiveTableLabel compact="I" full="Image" />',
     );
-    expect(kubernetesServicesTableSource).toContain('kubernetes-service-name-column');
-    expect(kubernetesServicesTableSource).toContain('kubernetes-service-name-value');
-    expect(kubernetesServicesTableSource).toContain('kubernetes-service-ports-column');
-    expect(kubernetesNetworkingTableSource).toContain('kubernetes-network-name-column');
-    expect(kubernetesNetworkingTableSource).toContain('kubernetes-network-name-value');
-    expect(kubernetesNetworkingTableSource).toContain('kubernetes-network-ports-column');
-    expect(truenasAppsTableSource).not.toContain('Volumes');
     expect(truenasNetworkSharesTableSource).toContain('md:min-w-[960px]');
-    expect(truenasNetworkSharesTableSource).not.toMatch(
-      /getPlatformTableHeadClassForKind\('text'\)[\s\S]{0,200}?Dataset/,
-    );
-    expect(truenasProtectionTableSource).not.toContain('Signal');
     expect(truenasProtectionTableSource).toContain('md:min-w-[960px]');
     expect(truenasStorageTopologyTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toMatch(
       /class="hidden sm:table-cell md:w-\[26%\]"[\s\S]{0,120}?Flags/,
     );
-    expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
-    expect(vmwarePageSurfaceSource).toContain('<VsphereAlertsTable');
-    expect(vmwarePageSurfaceSource).toContain("activeTab() === 'health'");
-    expect(vmwarePageSurfaceSource).not.toContain('<VsphereVirtualMachinesTable');
-    expect(vmwarePageSurfaceSource).toContain('<WorkloadsSurface');
-    expect(vmwarePageSurfaceSource).toContain('forcedPlatform={VMWARE_PLATFORM_FILTER}');
-    expect(vmwarePageSurfaceSource).toContain('forcedViewMode="vm"');
-    expect(vmwarePageSurfaceSource).toContain('suppressTypeFilter');
-    expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
-    expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
     expect(vsphereNetworksTableSource).toMatch(
       /sortKey="vms"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[5%\]"/,
     );
-    expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
-    expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');
-    expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');
-    expect(proxmoxPageSurfaceSource).toContain('suppressNodeFilter');
-    expect(proxmoxReplicationTableSource).toContain('REPLICATION_COLUMN_WIDTH_CLASS');
     expect(proxmoxReplicationTableSource).toContain("guest: 'w-[20%]'");
     expect(proxmoxReplicationTableSource).toContain("fails: 'w-[4%]'");
-    expect(standalonePageSurfaceSource).toContain('<AgentsMachinesTable');
-    expect(standalonePageSurfaceSource).not.toContain('InfrastructureSummary');
-    expect(standalonePageSurfaceSource).not.toContain('StickySummarySection');
-    expect(standalonePageSurfaceSource).not.toContain('ChartVisibilityToggleButton');
-    expect(standalonePageSurfaceSource).not.toContain('FilterBar');
-    expect(standalonePageSurfaceSource).not.toContain('UnifiedResourceTable');
-    expect(agentsMachinesTableSource).toContain('PlatformResourceDetailTableRow');
-    expect(agentsMachinesTableSource).not.toContain('ResourceDetailDrawer');
-    expect(standalonePageModelSource).not.toContain('buildAgentsPageFilterModel');
-    expect(standalonePageModelSource).not.toContain('buildStandalonePageFilterModel');
-  });
-
-  it('keeps TrueNAS overview inventory in tables instead of summary cards', () => {
-    expect(truenasPageSurfaceSource).toContain('<TrueNASSystemsTable');
-    expect(truenasPageSurfaceSource).not.toContain('TrueNASInventorySummary');
-    expect(truenasPageSurfaceSource).not.toContain('data-truenas-summary-tile');
   });
 
   it('keeps secondary overview tables from rendering duplicate standalone toolbars', () => {
@@ -791,16 +441,9 @@ describe('platform overview layout guardrails', () => {
       ['ProxmoxPageSurface', proxmoxPageSurfaceSource],
       ['VmwarePageSurface', vmwarePageSurfaceSource],
     ];
-    expect(platformHostScopeSource, 'the shared title is an accessible heading').toContain('<h2');
     for (const [name, source] of surfacesWithSharedToolbar) {
       const filterCount = (source.match(/<WorkloadsFilter\b/g) ?? []).length;
       expect(filterCount, `${name} should render exactly one <WorkloadsFilter>`).toBe(1);
-      expect(source, `${name} names its workloads table even in kiosk`).toContain('tableTitle={');
-      // The shared host-scoped title renders the heading, so a scoped table
-      // names its host the same way on every platform.
-      expect(source, `${name} uses the shared table heading`).toContain(
-        '<PlatformHostScopedTableTitle',
-      );
       expect(
         source.indexOf('<WorkloadsFilter'),
         `${name} filter precedes the surface`,
@@ -971,11 +614,9 @@ describe('platform overview layout guardrails', () => {
     expect(vsphereHostsTableSource).toMatch(
       /sortKey="vms"[\s\S]{0,180}?class="platform-table-mobile-w-10 w-\[12%\] md:w-\[4%\]"[\s\S]{0,80}?VMs/,
     );
-    expect(vsphereHostsTableSource).toContain('hidden md:table-cell');
     // AgentsMachinesTable uses a column-config pattern: kind helpers are
     // applied dynamically in the table render, with labels living in the
     // model. Assert against the model's column declarations.
-    expect(agentsMachinesTableSource).toMatch(/getPlatformTableHeadClassForKind\(kind\(\)\)/);
     expect(agentMachineTableModelSource).toMatch(
       /id:\s*'machine'[\s\S]{0,80}?label:\s*'Machine'[\s\S]{0,80}?kind:\s*'name'/,
     );
@@ -987,29 +628,6 @@ describe('platform overview layout guardrails', () => {
     );
     expect(agentMachineTableModelSource).toMatch(
       /id:\s*'disk'[\s\S]{0,80}?label:\s*'Disk'[\s\S]{0,80}?kind:\s*'metric-bar'/,
-    );
-  });
-
-  it('keeps recovery view and filter state with the platform tab that owns the rows', () => {
-    // No aggregate Recovery page or shared recovery serializer exists, so each
-    // platform tab owns its recovery state (storage-recovery forbidden path 9).
-    // The Proxmox Backups view switch is navigation above the filter bar.
-    const sectionTabsAt = proxmoxBackupsTableSource.indexOf('<PlatformSectionTabs');
-    const filterBarAt = proxmoxBackupsTableSource.indexOf('<FilterBar');
-    expect(sectionTabsAt).toBeGreaterThan(-1);
-    expect(filterBarAt).toBeGreaterThan(sectionTabsAt);
-    // The restore points carry no activity chart, so no day or range state.
-    expect(proxmoxBackupsTableSource).not.toContain('BackupActivityChart');
-    expect(proxmoxBackupsTableSource).not.toMatch(/PROXMOX_BACKUPS_QUERY_PARAMS\.range\b/);
-    for (const call of proxmoxBackupsTableSource.match(/setSearchParams\([^;]*/g) ?? []) {
-      expect(call).not.toMatch(/\brange\b|chartRange/);
-    }
-    // The TrueNAS Protection table keeps search, status and sort out of the URL.
-    expect(truenasProtectionTableSource).not.toContain('useSearchParams');
-    expect(truenasProtectionTableSource).not.toContain('@/routing/resourceLinks');
-    expect(truenasProtectionTableSource).toContain('createPlatformTableFilterState({');
-    expect(truenasProtectionTableSource).toMatch(
-      /createPlatformTableSortState\(\{\s*storageKey: 'truenasProtection'/,
     );
   });
 });

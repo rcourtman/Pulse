@@ -55,17 +55,6 @@ func saveEnabledTestAIConfig(t *testing.T, persistence *config.ConfigPersistence
 	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
 }
 
-func TestAIHandlersUseSafeRemediationCommercialCopy(t *testing.T) {
-	files := []string{"ai_handlers.go", "router_routes_ai_relay.go"}
-	for _, file := range files {
-		source, err := os.ReadFile(file)
-		require.NoError(t, err)
-		text := string(source)
-		require.NotContains(t, text, "Pulse Patrol Auto-Fix requires Pulse Pro")
-		require.NotContains(t, text, "Auto-Fix requires Pulse Pro")
-	}
-}
-
 func TestOrchestratorChatAdapterCarriesTypedInvestigationScope(t *testing.T) {
 	source, err := os.ReadFile("ai_handlers.go")
 	require.NoError(t, err)
@@ -117,51 +106,6 @@ func TestAISettingsHandler_AnthropicOAuthSetupFailsClosed(t *testing.T) {
 			require.Equal(t, "unsupported_anthropic_oauth", resp.Error)
 			require.Contains(t, resp.Message, "Configure an Anthropic API key")
 		})
-	}
-}
-
-func TestAIHandlersDelegateApprovedToolInvocationParsingToSharedCapabilities(t *testing.T) {
-	source, err := os.ReadFile("ai_handlers.go")
-	require.NoError(t, err)
-	aiHandlers := string(source)
-	for _, fragment := range []string{
-		"isMCPToolCall",
-		"parseMCPToolCall",
-		"splitToolArgs",
-	} {
-		require.NotContains(t, aiHandlers, fragment)
-	}
-
-	source, err = os.ReadFile("router_routes_ai_relay.go")
-	require.NoError(t, err)
-	relay := string(source)
-	require.Contains(t, relay, "agentcapabilities.ParseTextToolInvocation(command)")
-	require.NotContains(t, relay, "func parseMCPToolCall(")
-	require.NotContains(t, relay, "func splitToolArgs(")
-	require.NotContains(t, relay, "func isMCPToolCall(")
-}
-
-func TestAIHandlersUseSharedPatrolFindingAgentErrorCodes(t *testing.T) {
-	source, err := os.ReadFile("ai_handlers.go")
-	require.NoError(t, err)
-	aiHandlers := string(source)
-
-	for _, constant := range []string{
-		"agentcapabilities.AgentErrCodePatrolUnavailable",
-		"agentcapabilities.AgentErrCodeInvalidFindingRequest",
-		"agentcapabilities.AgentErrCodeFindingNotFound",
-		"agentcapabilities.AgentErrCodeFindingActionNotAllowed",
-	} {
-		require.Contains(t, aiHandlers, constant)
-	}
-
-	for _, literal := range []string{
-		`writeJSONError(w, http.StatusServiceUnavailable, "` + agentcapabilities.AgentErrCodePatrolUnavailable + `"`,
-		`writeJSONErrorWithDetails(w, http.StatusBadRequest, "` + agentcapabilities.AgentErrCodeInvalidFindingRequest + `"`,
-		`writeJSONError(w, http.StatusNotFound, "` + agentcapabilities.AgentErrCodeFindingNotFound + `"`,
-		`writeJSONError(w, http.StatusConflict, "` + agentcapabilities.AgentErrCodeFindingActionNotAllowed + `"`,
-	} {
-		require.NotContains(t, aiHandlers, literal)
 	}
 }
 
@@ -3059,18 +3003,6 @@ func TestHandleInvestigateAlert_AcceptsCanonicalAlertIdentifier(t *testing.T) {
 	require.NotContains(t, rec.Header().Get("Content-Type"), "text/event-stream")
 }
 
-func TestHandleInvestigateAlert_ForcesApprovalBoundExecuteRequest(t *testing.T) {
-	t.Parallel()
-
-	source, err := os.ReadFile("ai_handlers.go")
-	require.NoError(t, err)
-	text := string(source)
-
-	require.Contains(t, text, "autonomousMode := false")
-	require.Contains(t, text, "AutonomousMode:         &autonomousMode")
-	require.Contains(t, text, "RequireCommandApproval: true")
-}
-
 func TestHandleInvestigateAlert_UsesVisibleIdleProgressStream(t *testing.T) {
 	setMockModeForTest(t, true)
 	withLegacyAssistantStreamIdleInterval(t, 2*time.Millisecond)
@@ -3667,21 +3599,6 @@ func TestAISettingsHandler_PatrolPreflight_RejectsInvalidProviderName(t *testing
 	handler.HandlePatrolPreflight(rec, req)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestAISettingsHandler_PatrolPreflight_DelegatesDeadlineToAIRuntime(t *testing.T) {
-	source, err := os.ReadFile("ai_handlers.go")
-	require.NoError(t, err)
-	text := string(source)
-	start := strings.Index(text, "func (h *AISettingsHandler) HandlePatrolPreflight(")
-	require.NotEqual(t, -1, start)
-	end := strings.Index(text[start:], "\nfunc ")
-	if end < 0 {
-		end = len(text) - start
-	}
-	body := text[start : start+end]
-	require.Contains(t, body, "RunPatrolToolPreflight(r.Context(), body.Provider, body.Model)")
-	require.NotContains(t, body, "context.WithTimeout")
 }
 
 func TestAISettingsHandler_PatrolModelReadiness_MethodNotAllowed(t *testing.T) {

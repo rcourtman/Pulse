@@ -49,31 +49,8 @@ describe('usePatrolIntelligenceState', () => {
     vi.clearAllMocks();
   });
 
-  it('bounds manual sync UI state with a generation-aware timeout', () => {
-    const manualRefreshStart = patrolIntelligenceStateSource.indexOf(
-      'async function handleRefreshPatrol()',
-    );
-    const manualRefreshBody = patrolIntelligenceStateSource.slice(
-      manualRefreshStart,
-      patrolIntelligenceStateSource.indexOf(
-        'async function consumeRoutePatrolControlStarterHandoff()',
-        manualRefreshStart,
-      ),
-    );
-
+  it('bounds manual sync UI state with a timeout', () => {
     expect(PATROL_MANUAL_SYNC_TIMEOUT_MS).toBe(5000);
-    expect(patrolIntelligenceStateSource).toContain('let manualRefreshRequestId = 0;');
-    expect(manualRefreshBody).toContain('const requestId = ++manualRefreshRequestId;');
-    expect(manualRefreshBody).toContain('}, PATROL_MANUAL_SYNC_TIMEOUT_MS);');
-    expect(manualRefreshBody).toContain('if (requestId === manualRefreshRequestId) {');
-    expect(manualRefreshBody).toContain('setIsManualRefreshRunning(false);');
-    expect(manualRefreshBody).toContain('clearManualRefreshTimeout();');
-  });
-
-  it('ignores load results that a newer background load superseded', () => {
-    expect(patrolIntelligenceStateSource).toContain('let refreshRequestId = 0;');
-    expect(patrolIntelligenceStateSource).toContain('const requestId = ++refreshRequestId;');
-    expect(patrolIntelligenceStateSource).toContain('if (requestId === refreshRequestId) {');
   });
 
   it('refuses paid Patrol modes in the state owner while governed fixes are locked', () => {
@@ -110,84 +87,6 @@ describe('usePatrolIntelligenceState', () => {
     ).toBe('Patrol is already running.');
   });
 
-  it('fails soft when Patrol data refreshes reject', () => {
-    expect(patrolIntelligenceStateSource).toContain('const [patrolLoadError, setPatrolLoadError]');
-    expect(patrolIntelligenceStateSource).toContain('rememberPatrolLoadError');
-    expect(patrolIntelligenceStateSource).toContain('Promise.allSettled([');
-    expect(patrolIntelligenceStateSource).toContain(
-      "logger.debug('[Patrol] Failed to refresh Patrol data'",
-    );
-    expect(patrolIntelligenceStateSource).toContain('patrolLoadError,');
-  });
-
-  it('keeps manual status sync bounded to visible Patrol reads', () => {
-    const loadAllDataStart = patrolIntelligenceStateSource.indexOf('async function loadAllData()');
-    const loadAllDataEnd = patrolIntelligenceStateSource.indexOf(
-      'async function loadVisiblePatrolData()',
-      loadAllDataStart,
-    );
-    const loadAllDataBody = patrolIntelligenceStateSource.slice(loadAllDataStart, loadAllDataEnd);
-    const manualRefreshStart = patrolIntelligenceStateSource.indexOf(
-      'async function handleRefreshPatrol()',
-    );
-    const manualRefreshEnd = patrolIntelligenceStateSource.indexOf(
-      'async function consumeRoutePatrolControlStarterHandoff()',
-      manualRefreshStart,
-    );
-    const manualRefreshBody = patrolIntelligenceStateSource.slice(
-      manualRefreshStart,
-      manualRefreshEnd,
-    );
-
-    expect(patrolIntelligenceStateSource).toContain('async function loadVisiblePatrolData()');
-    expect(patrolIntelligenceStateSource).toContain('refetchPatrolStatus()');
-    expect(patrolIntelligenceStateSource).toContain(
-      'aiIntelligenceStore.loadPatrolFindings({ includeResolved: true })',
-    );
-    expect(patrolIntelligenceStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');
-    expect(patrolIntelligenceStateSource).toContain(
-      'patrolRunHistory.refetch({ background: true })',
-    );
-    expect(patrolIntelligenceStateSource).toContain(
-      'function loadSupportingPatrolDataInBackground()',
-    );
-    expect(loadAllDataBody).not.toContain('PATROL_MANUAL_SYNC_TIMEOUT_MS');
-    expect(manualRefreshBody).toContain('await loadVisiblePatrolData();');
-    expect(manualRefreshBody).toContain('loadSupportingPatrolDataInBackground();');
-    expect(manualRefreshBody).toContain('PATROL_MANUAL_SYNC_TIMEOUT_MS');
-    expect(manualRefreshBody).not.toContain('await loadAllData();');
-  });
-
-  it('keeps MCP readiness out of first-party Patrol workflow state', () => {
-    expect(patrolIntelligenceStateSource).not.toContain('agentCapabilitiesManifest');
-    expect(patrolIntelligenceStateSource).not.toContain('fetchAgentCapabilitiesManifest');
-    expect(patrolIntelligenceStateSource).not.toContain('getAgentMCPOperationsLoopReadiness');
-    expect(patrolIntelligenceStateSource).not.toContain('mcpOperationsLoopReadiness');
-  });
-
-  it('keeps legacy operations-loop status out of Patrol workspace state', () => {
-    expect(patrolIntelligenceStateSource).not.toContain('fetchAgentOperationsLoopStatus');
-    expect(patrolIntelligenceStateSource).not.toContain('AgentOperationsLoopStatus');
-    expect(patrolIntelligenceStateSource).not.toContain('const [patrolWorkStatus');
-    expect(patrolIntelligenceStateSource).not.toContain('const [patrolWorkStatusChecked');
-    expect(patrolIntelligenceStateSource).not.toContain('loadPatrolWorkStatus');
-    expect(patrolIntelligenceStateSource).not.toContain('patrolWorkStatus,');
-    expect(patrolIntelligenceStateSource).not.toContain('patrolWorkStatusChecked,');
-  });
-
-  it('consumes route-backed Patrol mode starters before the initial status load', () => {
-    expect(patrolIntelligenceStateSource).toContain("typeof window === 'undefined'");
-    expect(patrolIntelligenceStateSource).toContain('window.location.search');
-    expect(patrolIntelligenceStateSource).toContain('window.history.replaceState');
-    expect(patrolIntelligenceStateSource).toContain('parsePatrolControlStarter');
-    expect(patrolIntelligenceStateSource).toContain('PATROL_CONTROL_STARTER');
-    expect(patrolIntelligenceStateSource).toContain('PATROL_CONTROL_STARTER_QUERY_PARAM');
-    expect(patrolIntelligenceStateSource).toContain('recordPatrolControlStarterActivity()');
-    expect(patrolIntelligenceStateSource).toContain(
-      'await consumeRoutePatrolControlStarterHandoff();',
-    );
-  });
-
   it('records route-backed Patrol mode starters with the shared content-free activity route', async () => {
     recordWorkflowPromptActivityMock.mockResolvedValueOnce(undefined);
 
@@ -197,17 +96,6 @@ describe('usePatrolIntelligenceState', () => {
       name: 'pulse_operations_loop',
       surface: 'patrol_control',
     });
-  });
-
-  it('records successful direct Patrol mode changes as first-party starters', () => {
-    expect(patrolIntelligenceStateSource).toContain('const controlLocked = autoFixLocked();');
-    expect(patrolIntelligenceStateSource).toContain('const shouldRecordPatrolControlStarter');
-    expect(patrolIntelligenceStateSource).toContain('!controlLocked &&');
-    expect(patrolIntelligenceStateSource).toContain('await updatePatrolAutonomySettings({');
-    expect(patrolIntelligenceStateSource).toContain('if (shouldRecordPatrolControlStarter) {');
-    expect(patrolIntelligenceStateSource).toContain('await recordPatrolControlStarterActivity();');
-    expect(patrolIntelligenceStateSource).toContain('await loadVisiblePatrolData();');
-    expect(patrolIntelligenceStateSource).not.toContain('await loadPatrolWorkStatus();');
   });
 
   it('keeps Patrol mode starter recording non-blocking when the marker route fails', async () => {
@@ -263,8 +151,5 @@ describe('usePatrolIntelligenceState', () => {
       'provider_not_configured',
     );
     expect(resolvePatrolBlockedActionCause('', '')).toBeUndefined();
-    expect(patrolIntelligenceStateSource).toContain(
-      'const blockedCause = createMemo(() => patrolStatus()?.blocked_cause);',
-    );
   });
 });

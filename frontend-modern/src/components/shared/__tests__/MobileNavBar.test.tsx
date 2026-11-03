@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSignal, type Component } from 'solid-js';
 import { createStableTabList, utilityNavTabEquals } from '@/components/shared/stableNavTabs';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
-import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
-import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import {
   MobileNavBar,
   type MobileNavBarPrimaryTab,
@@ -57,34 +55,10 @@ function makeUtility(
 }
 
 describe('MobileNavBar', () => {
-  it('keeps the mobile nav on shell, runtime, and model owners', () => {
-    expect(mobileNavBarSource).toContain('useMobileNavBarState');
-    expect(mobileNavBarSource).toContain('getMobileNavTabButtonClass');
-    expect(mobileNavBarSource).toContain('role="menu"');
-    expect(mobileNavBarSource).toContain('<a');
+  it('keeps the phone bottom nav above the safe area and hidden from the desktop breakpoint', () => {
+    // jsdom cannot resolve breakpoints or env(safe-area-inset-bottom), so the
+    // classes are the only place a regression shows.
     expect(mobileNavBarSource).toContain('pb-safe xl:hidden');
-    expect(mobileNavBarSource).not.toContain('createSignal');
-    expect(mobileNavBarSource).not.toContain('requestAnimationFrame');
-    expect(mobileNavBarSource).not.toContain('overflow-x-auto');
-
-    expect(mobileNavBarStateSource).toContain('createSignal');
-    expect(mobileNavBarStateSource).toContain("document.addEventListener('pointerdown'");
-    expect(mobileNavBarStateSource).toContain("event.key === 'Escape'");
-    expect(mobileNavBarStateSource).toContain('export function useMobileNavBarState');
-    expect(mobileNavBarStateSource).not.toContain('scrollIntoView');
-
-    expect(mobileNavBarModelSource).toContain('buildMobileNavBarLayout');
-    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavPrimaryTabs');
-    expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
-    expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
-    expect(mobileNavBarModelSource).toContain("'proxmox'");
-    expect(mobileNavBarModelSource).toContain("'docker'");
-    expect(mobileNavBarModelSource).toContain("'kubernetes'");
-    expect(mobileNavBarModelSource).toContain("'truenas'");
-    expect(mobileNavBarModelSource).toContain("'vmware'");
-    expect(mobileNavBarModelSource).not.toContain("'workloads'");
-    expect(mobileNavBarModelSource).not.toContain("'storage'");
-    expect(mobileNavBarModelSource).not.toContain("'recovery'");
   });
 
   it('renders a dedicated platform switcher and keeps More for secondary utilities', async () => {

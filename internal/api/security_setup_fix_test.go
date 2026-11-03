@@ -812,3 +812,52 @@ func TestValidateBcryptHash(t *testing.T) {
 		})
 	}
 }
+
+// The instance-admin grant uses the same policy evaluation as route
+// authorization: inherited roles count, an explicit deny wins, and a
+// conditional grant needs its attributes.
+func TestSessionUserHasRBACAdminGrantFollowsPolicyEvaluation(t *testing.T) {
+	manager, err := internalauth.NewSQLiteManager(internalauth.SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new sqlite manager: %v", err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+	original := internalauth.GetManager()
+	internalauth.SetManager(manager)
+	t.Cleanup(func() { internalauth.SetManager(original) })
+
+	roles := []internalauth.Role{
+		{ID: "ops-admin", Name: "Ops admin", Permissions: []internalauth.Permission{{Action: "admin", Resource: "*"}}},
+		{ID: "ops-lead", Name: "Ops lead", ParentID: "ops-admin"},
+		{ID: "no-admin", Name: "No admin", Permissions: []internalauth.Permission{{Action: "admin", Resource: "*", Effect: internalauth.EffectDeny}}},
+		{ID: "tagged-admin", Name: "Tagged admin", Permissions: []internalauth.Permission{{Action: "admin", Resource: "*", Conditions: map[string]string{"tag": "lab"}}}},
+	}
+	for _, role := range roles {
+		if err := manager.SaveRole(role); err != nil {
+			t.Fatalf("save role %s: %v", role.ID, err)
+		}
+	}
+	assign := func(user string, roleIDs ...string) {
+		t.Helper()
+		if err := manager.UpdateUserRoles(user, roleIDs); err != nil {
+			t.Fatalf("assign %s: %v", user, err)
+		}
+	}
+	assign("direct", "ops-admin")
+	assign("inherited", "ops-lead")
+	assign("denied", "ops-admin", "no-admin")
+	assign("conditional", "tagged-admin")
+
+	if !sessionUserHasRBACAdminGrant("direct") {
+		t.Fatal("direct admin grant must count")
+	}
+	if !sessionUserHasRBACAdminGrant("inherited") {
+		t.Fatal("inherited admin grant must count")
+	}
+	if sessionUserHasRBACAdminGrant("denied") {
+		t.Fatal("an explicit admin deny must win over an allow")
+	}
+	if sessionUserHasRBACAdminGrant("conditional") {
+		t.Fatal("a conditional admin grant must not apply without its attributes")
+	}
+}

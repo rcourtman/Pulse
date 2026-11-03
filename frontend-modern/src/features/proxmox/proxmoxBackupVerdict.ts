@@ -51,7 +51,7 @@ const reasonLabel = (reason: string, policy: ProtectionPosturePolicy | null): st
     case 'no-history':
       return 'Backup status unknown';
     case 'snapshots-only':
-      return 'Snapshots only, no backup';
+      return 'Only guest snapshots';
     case 'no-backup':
       return 'No successful backup';
     default:

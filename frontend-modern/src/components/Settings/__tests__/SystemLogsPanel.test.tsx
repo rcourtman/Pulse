@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SystemLogsPanel } from '../SystemLogsPanel';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
 import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
-import systemLogsPanelStateSource from '../useSystemLogsPanelState.ts?raw';
 
 vi.mock('../useSystemLogsPanelState', () => ({
   useSystemLogsPanelState: () => ({
@@ -30,34 +29,15 @@ vi.mock('../useSystemLogsPanelState', () => ({
 afterEach(cleanup);
 
 describe('SystemLogsPanel architecture', () => {
-  it('keeps system logs split into shell and runtime owners', () => {
-    expect(systemLogsPanelSource).toContain('./useSystemLogsPanelState');
-    expect(systemLogsPanelSource).not.toContain('createSignal(');
-    expect(systemLogsPanelSource).not.toContain('new EventSource(');
-    expect(systemLogsPanelSource).not.toContain("apiFetchJSON('/api/logs/level'");
-    expect(systemLogsPanelStateSource).toContain('new EventSource');
-    expect(systemLogsPanelStateSource).toContain("apiFetchJSON('/api/logs/level'");
-    expect(systemLogsPanelStateSource).toContain("anchor.href = '/api/logs/download'");
-    expect(systemLogsPanelStateSource).toContain('eventSource === source');
-    expect(systemLogsPanelStateSource).toContain('expectedOrgID: acceptedReader.org');
-    expect(systemLogsPanelStateSource).toContain('retry: false');
-    expect(systemLogsPanelStateSource).not.toContain('notificationStore');
-  });
-
   it('keeps support-page controls touch-sized on phones', () => {
     expect(diagnosticsPanelSource).toContain('min-h-11 sm:min-h-9 min-w-11 sm:min-w-10');
     expect(diagnosticsPanelSource).toContain('flex min-h-11 sm:min-h-9 items-center');
     expect(systemLogsPanelSource).toContain('form-select min-h-11 sm:min-h-9');
     expect(systemLogsPanelSource).toContain('min-h-11 sm:min-h-9 min-w-11 sm:min-w-9');
-    expect(systemLogsPanelSource).toContain('size="settingsAction"');
   });
 
-  it('keeps new lines immediately readable and support download on the themed button', () => {
+  it('keeps new log lines immediately readable', () => {
     expect(systemLogsPanelSource).not.toContain('animate-enter');
-    expect(systemLogsPanelSource).toContain('<Button');
-    expect(systemLogsPanelSource).toContain('variant="primaryFlat"');
-    expect(systemLogsPanelSource).not.toContain('bg-primary-600');
-    expect(systemLogsPanelSource).toContain('SYSTEM_LOGS_PANEL_COPY.bufferHelp');
   });
 
   it('preserves accessible scope and privacy descriptions on the composed controls', () => {

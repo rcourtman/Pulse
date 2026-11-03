@@ -115,6 +115,29 @@ describe('Proxmox backups responsive table presentation', () => {
     ).toEqual({
       width: '40%',
     });
+    // With a measured table, the short phone cells take what they need and
+    // the name, the only identity on a phone row, takes the rest.
+    const compactIds = ids(getCoverageColumns('compact', withTasks));
+    expect(getCoverageColumnWidthStyle('posture', 'compact', compactIds, 342)).toEqual({
+      width: '23.39%',
+    });
+    expect(getCoverageColumnWidthStyle('workload', 'compact', compactIds, 342)).toEqual({
+      width: '51.46%',
+    });
+    expect(getCoverageColumnWidthStyle('workload', 'compact', compactIds, 302)).toEqual({
+      width: '45.03%',
+    });
+    // Without the Job column its room goes to the name.
+    const noJob = compactIds.filter((id) => id !== 'task');
+    expect(getCoverageColumnWidthStyle('workload', 'compact', noJob, 342)).toEqual({
+      width: '61.4%',
+    });
+    // An unknown or zero width keeps the shared phone share.
+    for (const width of [undefined, 0]) {
+      expect(getCoverageColumnWidthStyle('workload', 'compact', compactIds, width)).toEqual({
+        width: '40%',
+      });
+    }
     expect(ids(getCoverageColumns('operational', withTasks))).toEqual([
       'workload',
       'type',

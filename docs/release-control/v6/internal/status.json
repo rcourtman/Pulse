@@ -10122,6 +10122,38 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "registered-proofs-read-source-as-text",
+      "summary": "The completion guard accepts a registered proof that already exercises a touched runtime file (proof_coverage.py: Go package compile or import, TS/JS module import, Python import, exact path for non-code files), so most runtime commits no longer need a proof edit. About 490 owned frontend runtime files are reached by their policies' registered proofs only through Vite ?raw or readFileSync source reads, which are pins rather than coverage, so changes to them still require a staged proof edit and keep the incentive to add source-text assertions. Close by registering behavioural tests that import those files in their path policies' exact_files (many such tests exist unregistered, for example frontend-modern/src/components/shared/Button.tsx consumers) or by adding them, then retire the source-read proofs the ratchet in source-text-test-audit.mjs already caps. subsystem_lookup.py --pretty shows per file whether an existing proof covers it.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-11-03",
+      "lane_ids": [
+        "L6",
+        "L8"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/scripts/source-text-test-audit.mjs",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/proof_coverage.py",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [

@@ -344,23 +344,26 @@ export const getActionAuditVerificationOutcomePresentation = (audit: {
         truth.evidenceClass === 'independent'
           ? [
               'Confirmed by independent observer',
-              'An observer in a different trust domain confirmed the intended state.',
+              'A separate check after the action confirmed the expected result.',
             ]
           : truth.evidenceClass === 'agent_attested'
             ? [
                 'Confirmed by executing agent',
-                'The same agent trust domain that executed the action reported the intended state.',
+                'The agent that ran the action reported the expected result.',
               ]
             : [
                 'Confirmation lacks an evidence source',
                 'The record says confirmed but provides no evidence source. Do not treat it as independently verified.',
               ],
-      contradicted: ['Outcome contradicted', 'Observed evidence contradicted the intended state.'],
+      contradicted: [
+        'Outcome contradicted',
+        'Pulse checked afterwards, and what it found did not match the expected result.',
+      ],
       inconclusive: [
         'Outcome inconclusive',
-        'Available evidence could not establish the intended state.',
+        'Pulse could not tell whether this action had the expected result.',
       ],
-      not_attempted: ['Outcome not verified', 'No outcome verification was attempted.'],
+      not_attempted: ['Outcome not verified', 'Pulse did not check the result of this action.'],
     } as const;
     const [label, detail] = statusCopy[truth.status];
     return {

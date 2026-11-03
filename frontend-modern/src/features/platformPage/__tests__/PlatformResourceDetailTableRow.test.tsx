@@ -44,6 +44,13 @@ describe('platform resource row context', () => {
       'Selected datastore',
     );
     expect(document.getElementById('selected-row')).toContainElement(screen.getByRole('region'));
+    // Row evidence reads above the canonical inspector, never below it.
+    expect(
+      screen
+        .getByRole('region')
+        .compareDocumentPosition(screen.getByTestId('canonical-resource-inspector')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByTestId('canonical-resource-inspector')).toHaveTextContent('canonical-host');
     setOpen(false);
     expect(screen.queryByRole('region')).toBeNull();

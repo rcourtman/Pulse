@@ -587,6 +587,13 @@ its presentation module are deleted. Backup jobs is the page's one daily bar
 chart, so two look-alike bar charts never stack on one page. Earlier notes here
 about the chart's tooltip portal and day-control focus are historical.
 
+### Backups source labels keep "snapshot" for guest snapshots (3 November 2026)
+
+`proxmoxBackupSourcePresentation` names PBS items "PBS backup(s)" in every
+label (filter, detail, fallback, timeline) and gives a PBS item with no
+verification result the state "Backup"; the guest snapshot source keeps
+"Snapshot". One word, one meaning on the page.
+
 ### Backup view tabs head the restore points, not the page (2 November 2026)
 
 On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,
@@ -595,6 +602,17 @@ health and Backup jobs cards and the Backup servers table, so a tab reads as
 switching the list it heads rather than the whole page. The tabs keep their
 `nav` landmark and active-route state, so recovery focus that lands on the
 active view still finds it inside the inspection region.
+
+### Compact Coverage columns give the name the slack (3 November 2026)
+
+`ProxmoxCoverageTable` takes `identityRows` (every row before filters) to find
+namesakes, and in the compact layout shows the VM id and connection beside the
+name only for them. In the compact layout, once the table knows its width,
+the cells beside the name take their measured needs at 320px (posture 80px
+for "Unknown" with its dot, age 52px for an "Unknown" age, job 34px for its
+header) as shares of that width, and the name takes the rest; without a width
+the shared 40% identity share still applies. At 360px and up a 16-character
+guest name fits whole. Rows stay 32px and single-line.
 
 ### Backup servers table drops its host columns (2 November 2026)
 
@@ -638,6 +656,13 @@ default view. They keep the same route-backed links and `aria-current`. The
 Backup health reasons "No backup history" and "Backup source reported a
 failure" become "Backup status unknown" and "Last backup failed"; each still
 shares one 32px row with its count and bar at phone width.
+
+### Backup jobs header names the pills' window at every width (3 November 2026)
+
+`ProxmoxBackupJobsCard` drops the "14 days" title suffix and always labels the
+header pills with their window: "Last 24h" from `sm` up, "24h" below, so a
+375px header stays one 21px line with three pills. The incomplete-window tag
+reads "incomplete data".
 
 ### Backup jobs card composes the overview primitives (2 November 2026)
 
@@ -4978,10 +5003,9 @@ production table, router and styles; it does not qualify full-app scrolling.
    and register the consumer in
    `frontend-modern/scripts/shared-template-registry.json` instead of adding
    feature-local colored panel shells. Compact settings notices must use the
-   shared `scale="compact"` density and keep proof in both
-   `frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
-   and
-   `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
+   shared `scale="compact"` density, with the registry entry as proof
+   (`frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
+   runs the audit).
    Connection-editor status, feature-disabled, delete-error, and probe-result
    notices are part of the same settings callout boundary: the editor and
    credential slots own the source-specific lifecycle or API meaning, while
@@ -6881,6 +6905,11 @@ patterns, while `frontend-modern/scripts/shared-template-audit.mjs` enforces
 that registry. Future repeated-affordance migrations must add or extend a
 registry rule as part of the same change that extracts or adopts the shared
 primitive.
+Bans on local patterns live in that registry or in
+`frontend-modern/eslint.config.js`, not in tests that read component source
+with `?raw` or `readFileSync` and assert a string is absent.
+`frontend-modern/scripts/source-text-test-audit.mjs` holds each test file's
+source-read count to its baseline, and a new test file starts at zero.
 Button-styled commercial upgrade CTAs are one of those registry-backed
 templates. `frontend-modern/src/components/shared/UpgradeLink.tsx` owns
 `UpgradeButtonLink`, and the registry requires gated settings, audit, agent

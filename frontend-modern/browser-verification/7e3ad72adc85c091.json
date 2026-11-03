@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "02dbae7b6cab82ca8eb361911b564bbcd92bdb2c",
+  "verified_at": "2026-11-03T15:56:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/orgs.ts",
+    "frontend-modern/src/components/AppBootstrapStatus.tsx",
+    "frontend-modern/src/components/NoOrganizationAccess.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts",
+    "frontend-modern/src/stores/organizationAccessBootstrap.ts",
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/orgs.ts": "cac8ceea932563f16e91c2cfc67c412cb029c9950ea827043663fd3335077031",
+    "frontend-modern/src/components/AppBootstrapStatus.tsx": "b81c75ccc789bf1dea66f2a9b8ed0082ae7ee067ff2d9044168d34fd05ac27c0",
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "fbacac743066e6a595d7f45ec087293da40fe27dc4a7be69b048868ee46d8514",
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "540dd5fcadf8917097f086b24296036db9f8dbf8d9ab4a6cb9af7255484970cb",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "0ac41c35bc8e40cf1468995cd70c556ba3cc5f0db8188894e19ecc4c485715c9",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "24dbaac47b70a58d5202378dcc07704d5594a33995c2463243d35aeabf9f50aa",
+    "frontend-modern/src/stores/organizationAccessBootstrap.ts": "b321ed0f7bffa304b2866b7accf8d30983fc9e7234a265216a39e1fbe62b305e",
+    "frontend-modern/src/utils/apiClient.ts": "097df9a93714ba1aed3b610cb63ffd9f354138c68adeecc2fe92dfaa725581f5"
+  },
+  "routes": [
+    "/settings/organization/access",
+    "/proxmox/overview",
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "branch fix/default-org-access applied to origin/main 02dbae7b6c, built with npm run build and go build ./cmd/pulse on pulse-dev",
+    "mock mode, PULSE_MULTI_TENANT_ENABLED=true, proxy authentication with a role header; org acme owned by alice with member bob and a pending invitation for carol",
+    "three proxy identities on separate hostnames: rcadmin with the admin role, bob and carol with viewer roles",
+    "rig proxy added multi_tenant to /api/license/runtime-capabilities, which a dev build without a license omits; backend checks were unmodified",
+    "dark theme, desktop and phone layouts"
+  ],
+  "interactions": [
+    "rcadmin opened Settings > Organization > Access for the default organization: Add Member form with a Viewer-only role, no role picker on member rows",
+    "rcadmin added dave: toast \"Added dave as viewer.\", row listed as viewer; removed dave with Remove and the row disappeared",
+    "bob opened / with no org selection and landed in Acme; the org chip showed only Acme, no default organization",
+    "bob with a stale pulse_org_id=default cookie and session selection reloaded: /api/state/summary returned 403 default_org_access_denied, the client cleared the selection, the retry returned 200 and the app stayed in Acme",
+    "carol, invited but not a member, saw \"No organization access yet\" with her Acme invitation, Accept, Decline, Check again and Sign out, at 1440x1000 and 375x812 with no horizontal overflow",
+    "after the bootstrap failed, AppBootstrapStatus probed /api/state/summary, saw default_org_access_denied and showed the invitation screen instead of the connection error",
+    "carol clicked Sign out: POST /api/logout returned 200 and the page returned to /; the rig has no proxy logout URL, so the proxy signed her straight back in to the same screen",
+    "carol clicked Accept at 375x812: POST /api/org-invitations/acme/accept returned 200, the app reloaded and, after the Acme tenant runtime cold-started, opened the Acme overview",
+    "found and fixed during the pass: GET /api/orgs/{id}/invitations returned null for an organization with no pending invitations, which the access panel rejected"
+  ]
+}

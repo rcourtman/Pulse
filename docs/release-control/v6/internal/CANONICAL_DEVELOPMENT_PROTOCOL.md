@@ -606,7 +606,8 @@ must include:
 
 1. the matching subsystem contract update
 2. any dependent subsystem contract whose `Canonical Files`, `Shared Boundaries`, or `Extension Points` explicitly reference a touched runtime path
-3. at least one matching verification artifact update
+3. a matching verification artifact: a registered proof that already exercises
+   each touched runtime file, or a staged update to one
 
 A staged contract file only counts when its diff changes a substantive contract
 section. Update the owning statement of current behavior, responsibility, shared
@@ -642,6 +643,18 @@ approved test-prefix matches, or non-test contract/type files. An arbitrary
 test elsewhere in the same subsystem is never proof on its own: the registry
 audit keeps `allow_same_subsystem_tests` false, because it would accept any
 test the subsystem owns rather than the ones a path policy names.
+
+A registered proof counts without being edited when it already exercises the
+touched runtime file in the tree being judged (the index before a commit, the
+commit itself in CI): a Go test compiled with or importing the file's package,
+a TypeScript or JavaScript test importing the module, a Python test importing
+it, or, for docs, workflows, scripts and data files, a test naming the file's
+path. Reading a code file's source as text (`readFileSync`, Vite `?raw`) is
+not coverage, and a type-only import does not run the module. CI's test jobs
+run the proof, so an existing covering test is the verification. Only a change
+no registered proof exercises needs a staged proof, so do not add a source-text
+assertion to a proof file to satisfy the guard; make a proof import and test
+the file instead. `subsystem_lookup.py --pretty` names the covering proofs.
 
 For changes to a declared contract, cross-subsystem dependencies are not
 advisory. If a touched runtime path is named in another subsystem contract's

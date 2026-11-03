@@ -4,38 +4,12 @@ import Sun from 'lucide-solid/icons/sun';
 import Moon from 'lucide-solid/icons/moon';
 import { createSignal } from 'solid-js';
 import { FilterButtonGroup, type FilterOption } from './FilterButtonGroup';
-import filterButtonGroupSource from './FilterButtonGroup.tsx?raw';
 import filterButtonGroupModelSource from './filterButtonGroupModel.ts?raw';
-import filterButtonGroupStateSource from './useFilterButtonGroupState.ts?raw';
 import { getFilterButtonGroupCompactLabel } from './filterButtonGroupModel';
 
 describe('FilterButtonGroup', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps shell, runtime, and model owners split', () => {
-    expect(filterButtonGroupSource).toContain('useFilterButtonGroupState');
-    expect(filterButtonGroupSource).toContain('getFilterButtonGroupClass');
-    expect(filterButtonGroupSource).toContain('getFilterButtonGroupButtonClass');
-    expect(filterButtonGroupSource).toContain('getFilterButtonGroupCompactLabel');
-    expect(filterButtonGroupSource).not.toContain("label.split(' ').pop()");
-    expect(filterButtonGroupSource).not.toContain('props.onChange(option.value)');
-    expect(filterButtonGroupSource).not.toContain('groupClassByVariant');
-
-    expect(filterButtonGroupStateSource).toContain('export function useFilterButtonGroupState');
-    expect(filterButtonGroupStateSource).toContain('createMemo');
-    expect(filterButtonGroupStateSource).toContain('props.onChange(option.value)');
-    expect(filterButtonGroupStateSource).toContain('props.disabled || option.disabled');
-
-    expect(filterButtonGroupModelSource).toContain('resolveFilterButtonGroupVariant');
-    expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupClass');
-    expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
-    expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
-    expect(filterButtonGroupModelSource).toContain("prominent: 'grid grid-cols-1 gap-2'");
-    expect(filterButtonGroupModelSource).toContain('segmented:');
-    expect(filterButtonGroupModelSource).toContain('compact:');
-    expect(filterButtonGroupModelSource).toContain('inline-flex items-center gap-1');
   });
 
   it('keeps all-scope options meaningful in compact layouts', () => {

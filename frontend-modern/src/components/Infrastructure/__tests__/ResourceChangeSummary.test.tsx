@@ -103,6 +103,31 @@ describe('ResourceChangeSummary', () => {
     expect(screen.queryByText('Proxmox adapter')).toBeNull();
     expect(screen.queryByText('Heuristic')).toBeNull();
   });
+
+  it('labels an alert that moved to its agent as a move, not a recovery', () => {
+    const reason =
+      'Alert moved to pve1 (Host Agent). This is not a recovery: check the agent for the current reading.';
+    render(() => (
+      <ResourceChangeSummary
+        title="Recent changes"
+        changes={[
+          {
+            id: 'moved-change',
+            resourceId: 'node:pve1',
+            kind: 'alert_resolved',
+            reason,
+            observedAt: '2026-10-06T15:00:00Z',
+            sourceType: 'heuristic',
+            confidence: 'high',
+            metadata: { alert_resolution: 'moved_to_agent', alert_type: 'memory' },
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText('Alert moved')).toBeInTheDocument();
+    expect(screen.queryByText('Alert resolved')).toBeNull();
+  });
 });
 
 afterEach(() => {

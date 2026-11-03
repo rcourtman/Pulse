@@ -30,7 +30,6 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
     "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
     "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
-    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
     "tests/integration/tests/18-patrol-runtime-state.spec.ts",
     "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
@@ -44,7 +43,6 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
     "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
     "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
     "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
     "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts",
@@ -2780,7 +2778,6 @@ class SubsystemLookupTest(unittest.TestCase):
             "environment-lock-primitives",
             [
                 "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
 
@@ -2792,7 +2789,6 @@ class SubsystemLookupTest(unittest.TestCase):
             "environment-lock-primitives",
             [
                 "frontend-modern/src/utils/__tests__/environmentLockPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
             ],
         )
 
@@ -2952,7 +2948,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
                 "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
@@ -3154,7 +3149,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
                 "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
@@ -3194,7 +3188,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
                 "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
                 "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/orgUtils.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
@@ -3631,7 +3624,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/approvalState.test.ts",
                 "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts",
             ],
         )
@@ -3663,7 +3655,6 @@ class SubsystemLookupTest(unittest.TestCase):
                 "frontend-modern/src/utils/__tests__/approvalRiskPresentation.test.ts",
                 "frontend-modern/src/utils/__tests__/approvalState.test.ts",
                 "frontend-modern/src/utils/__tests__/findingAlertIdentity.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
                 "frontend-modern/src/utils/__tests__/remediationPresentation.test.ts",
             ],
         )
