@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { HistoryLockPlanLink } from './HistoryLockPlanLink';
 import { LoadingSpinner } from './LoadingSpinner';
 import type { HistoryChartState } from './useHistoryChartState';
 
@@ -78,6 +79,7 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
           <p class="text-sm text-muted text-center max-w-[220px] mb-4">
             Historical data beyond {props.chart.lockDays()} days requires a higher license plan.
           </p>
+          <HistoryLockPlanLink class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
         </div>
       </Show>
     </>

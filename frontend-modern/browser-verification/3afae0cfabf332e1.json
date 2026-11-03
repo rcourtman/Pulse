@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "94a368de87f1454a50ad598a2ba4a18e25fc4456",
+  "verified_at": "2026-11-03T14:09:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx",
+    "frontend-modern/src/components/shared/HistoryLockPlanLink.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "2b104a2aafa9a09eed23c212d951eebfa734e8111485245464aa7eba82c1e5b6",
+    "frontend-modern/src/components/shared/HistoryChartOverlay.tsx": "9502b2546fd282097042dd6ce436d66885d5ee4e1524e8a42195d4467b3d3fa6",
+    "frontend-modern/src/components/shared/HistoryLockPlanLink.tsx": "17f721459cd9d8c52faff52702683eca2d3cbd9ed5cf52dc3f7a53bc6d41ac80"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 860
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Free self-hosted install, mock mode, served presentationPolicy hideCommercial=false hideUpgrade=true, max_history_days=7",
+    "Guest drawer (edge-proxy-01 LXC) at 30 days: lock reads \"30 days history requires a higher license plan. This instance's plan retains 7 days.\" followed by a Plans & Billing link to /settings/pulse-intelligence/billing/plan",
+    "Proxmox node drawer (London Edge Standalone) at 90 days: same lock and link; Latest readings strip still shown below",
+    "Plan page reached from the lock shows Current plan: Community and the Pulse Pro card with View plans and 90-day metric history",
+    "375px phone width: link wraps inside the lock text, document width 375 (no horizontal scroll)",
+    "No commercial-posture request and no 30-day history read observed after opening the lock",
+    "HistoryChartOverlay lock not reachable live: HistoryChart is not rendered by any app route on this base; covered by HistoryLockPlanLink.test.tsx"
+  ],
+  "interactions": [
+    "Opened guest drawer from the Proxmox guests table and chose 30 days in History range",
+    "Followed the Plans & Billing link from the guest drawer lock (in-app navigation to the plan page)",
+    "Opened the node drawer and chose 90 days in History range",
+    "Resized to 375x812 and scrolled the lock into view"
+  ]
+}

@@ -5308,13 +5308,19 @@ production table, router and styles; it does not qualify full-app scrolling.
     page takeover between tabs.
 39. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
     `settingsNavCatalog.ts`, `settingsNavVisibility.ts`, shared upgrade link
-    primitives, trial banners, monitored-system warning banners, history-lock
-    overlays, and Patrol lock helpers must honor `presentationPolicy.hideUpgrade`
+    primitives, trial banners, monitored-system warning banners, and Patrol
+    lock helpers must honor `presentationPolicy.hideUpgrade`
     by hiding paid prompts by default on ordinary self-hosted installs. Direct
     activation/recovery routes may render their owned content, but sidebar
     discovery, trial CTAs, plan upsells, monitored-system limit pressure,
     feature upgrade links, and plan-lock Patrol banners must require hosted
-    mode, explicit handoff, or active entitlement. Cloud interest links from
+    mode, explicit handoff, or active entitlement. A lock the operator opens
+    is not a proactive prompt: plan-locked lines in Settings and the locked
+    long-range history states (`HistoryChartOverlay` and the guest drawer
+    history lock, both through
+    `frontend-modern/src/components/shared/HistoryLockPlanLink.tsx`) link to
+    Plans & Billing whenever `presentationPolicy.hideCommercial` is false,
+    and stay text only under demo and white-label runtimes. Cloud interest links from
     self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
