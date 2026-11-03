@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import tarfile
 import unittest
+import zipfile
 
 import yaml
 
@@ -174,7 +175,7 @@ class FrontendEmbedTransfer(unittest.TestCase):
         self.assertEqual(upload["with"], {
             "name": "ci-frontend-embed-${{ github.sha }}-${{ github.run_attempt }}",
             "path": "${{ runner.temp }}/frontend-embed.tar", "if-no-files-found": "error",
-            "retention-days": 1, "compression-level": 0,
+            "retention-days": 1, "compression-level": 6,
         })
         self.assertEqual(download["uses"], "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333")
         self.assertEqual(download["with"], {
@@ -342,8 +343,22 @@ class FrontendEmbedTransfer(unittest.TestCase):
             if mutation == "wrong digest": digest = "f" * 64
             if mutation == "missing digest": digest = ""
             if mutation == "malformed digest": digest = "not-a-digest"
+            # Model only the upload/download ZIP envelope, not GitHub itself.
+            # The existing exact producer tar/digest and safe consumer shell
+            # still own admission; compression must preserve their bytes.
+            original_packet = packet.read_bytes()
+            wire = runner / "artifact.zip"
+            level = self.producer["Transfer the validated frontend embed"]["with"]["compression-level"]
+            with zipfile.ZipFile(wire, "w", compression=zipfile.ZIP_DEFLATED,
+                                 compresslevel=level) as archive:
+                archive.write(packet, arcname=packet.name)
+            self.assertLess(wire.stat().st_size, len(original_packet),
+                            "the public HTML/JavaScript tar must not use uncompressed artifact storage")
             target = runner / "frontend-embed"; target.mkdir()
-            packet.rename(target / packet.name)
+            with zipfile.ZipFile(wire) as archive:
+                self.assertEqual(archive.namelist(), [packet.name])
+                (target / packet.name).write_bytes(archive.read(packet.name))
+            self.assertEqual((target / packet.name).read_bytes(), original_packet)
             if mutation == "missing packet": (target / packet.name).unlink()
             env["EXPECTED_EMBED_SHA256"] = digest
             if mutation == "consumer source": env["EXPECTED_SOURCE_SHA"] = "b" * 40
