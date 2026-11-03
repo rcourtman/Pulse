@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "f5942b881bee5bb618097dea964a5ab3a6d61d19",
+  "verified_at": "2026-11-03T01:23:34.092Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "05b2c79349aaff60b527718004fcd99cd501288a13cf0da6caada3ca1b027207",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "d58975b3700c7adfda5c0cdb3b6571708316eb1b72366febb33b8d7464e47b53",
+    "frontend-modern/src/types/api.ts": "0a96312ed9f3035953db2ce40d4b1981a5f80458a5d7a0d1a9426beffdf32ea5",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "cabb4ae44a94bbea8db73fcf9e3f205622b5c4e2a649063599366c8ec8fe8a23"
+  },
+  "routes": [
+    "/tmp/power-proof/index.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Evidence-only mount of production ProxmoxNodesTable, nodeFromResource and NodeDrawer/NodeDrawerOverview using synthetic canonical /api/state snapshots; no module replacements, full App or appliance claim.",
+    "Package/core/DRAM power appears under existing Hardware Details without a fabricated Celsius value; absent/API-only readings add no power rows.",
+    "A silent linked agent retains qualified last-known watts while Proxmox remains healthy; current snapshot recovers; measured zero is retained.",
+    "32 Chromium checks; all eight desktop/narrow current/silent/missing/API-only captures opened with the native image tool.",
+    "First browser run failed before assertions when a broad API fixture route intercepted /src/api/alerts.ts; that MIME failure is retained separately. Only the fixture matcher changed; production bytes are unchanged.",
+    "Synthetic empty-history range labels show 21 January due fixture timestamps; this pass makes no history-axis/date claim."
+  ],
+  "interactions": [
+    "Opened the actual node row disclosure, focused the native Details summary and pressed Enter at 1440\u00d71000 and 390\u00d7844.",
+    "Read successive synthetic snapshots through the fixture refresh control: 12.9 W -> 9.5 W plus measured 0.0 W -> last-known values -> absent sensor withdrawal -> fresh recovery; Details remains open.",
+    "Selected an independent peer and an API-only node; no first-node power leaked or was invented.",
+    "Read-only local GET fixtures, zero page/console errors, no page-wide horizontal overflow."
+  ],
+  "browser": {
+    "client": "Playwright 1.56.1",
+    "chromium": "141.0.7390.37"
+  }
+}
