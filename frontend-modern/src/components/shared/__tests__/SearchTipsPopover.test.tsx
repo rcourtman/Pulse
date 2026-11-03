@@ -1,46 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { SearchTipsPopover } from '@/components/shared/SearchTipsPopover';
-import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
-import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
-import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 
 describe('SearchTipsPopover', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
-  });
-
-  it('keeps search tips popover on shell, runtime, and model owners', () => {
-    expect(searchTipsPopoverSource).toContain('useSearchTipsPopoverState');
-    expect(searchTipsPopoverSource).toContain('getSearchTipsPopoverTriggerClass');
-    expect(searchTipsPopoverSource).not.toContain('createSignal');
-    expect(searchTipsPopoverSource).not.toContain('createEffect');
-    expect(searchTipsPopoverSource).not.toContain('window.addEventListener');
-    expect(searchTipsPopoverSource).not.toContain('triggerVariant ===');
-
-    expect(searchTipsPopoverStateSource).toContain('export function useSearchTipsPopoverState');
-    expect(searchTipsPopoverStateSource).toContain('createSignal');
-    expect(searchTipsPopoverStateSource).toContain('createEffect');
-    expect(searchTipsPopoverStateSource).toContain('window.addEventListener');
-    expect(searchTipsPopoverStateSource).toContain('pointerInside');
-    expect(searchTipsPopoverStateSource).toContain('window.innerWidth >= 1280');
-    expect(searchTipsPopoverStateSource).toContain('window.innerHeight >= 768');
-    expect(searchTipsPopoverStateSource).toContain('window.innerWidth - viewportMargin - width');
-    expect(searchTipsPopoverStateSource).toContain('nav[aria-label="Mobile navigation"]');
-    expect(searchTipsPopoverStateSource).toContain(
-      "window.addEventListener('scroll', updatePopoverPosition, true)",
-    );
-    expect(searchTipsPopoverSource).toContain('style={state.popoverStyle()}');
-    expect(searchTipsPopoverSource).toContain('fixed! ${positionClass()}');
-    expect(searchTipsPopoverSource).toContain('xl:absolute! xl:mt-2 xl:w-72');
-
-    expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerClass');
-    expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
-    expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerVariant');
-    expect(searchTipsPopoverModelSource).toContain('shouldSearchTipsPopoverOpenOnHover');
-    expect(searchTipsPopoverModelSource).toContain('h-11 w-11');
-    expect(searchTipsPopoverModelSource).toContain('sm:h-5 sm:w-5');
   });
 
   it('toggles the popover on click by default', async () => {

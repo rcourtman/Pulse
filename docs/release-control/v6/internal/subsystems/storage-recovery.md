@@ -5103,6 +5103,21 @@ keeps its columns aligned. Rows stay 32px, the accessible names are unchanged,
 and the phone bar narrows from 5rem to 4rem to make room. Which workloads each
 reason selects is unchanged.
 
+### Failed PBS jobs are datastore problems, with an alert (3 November 2026)
+
+A PBS sync, verify, prune or garbage-collection job whose newest run failed on
+a datastore is now that datastore's problem, not a guest's. Backup health lists
+it in its own "Datastores with failed jobs" rows below the guest reasons ("Sync
+failed", the datastore count, the names), and each row brings the Backup
+servers table into view. The guest verdict is unchanged: in the #1815 case the
+guest's primary backup succeeded and stays protected while the failed copy to
+the second store shows and alerts on its own. The rows and the alert use the
+Jobs column's judgment (`summarizeDatastoreJobs`): only a failure pinned to the
+datastore counts, the newest run of each job speaks, and storeless task history
+or a late, warned or unknown job never does. Durable PBS task history, a Tasks
+view, secondary-copy lag and PBS jobs in the 14-day Backup jobs chart remain
+open under the cross-system task outcomes entry.
+
 ### Task history no longer marks a datastore job family unknown (2 November 2026)
 
 `summarizeDatastoreJobs` treats a family as unread for every datastore only
@@ -5210,6 +5225,17 @@ into view when their top is below the fold (phones), honouring reduced motion,
 and leaves the page where it is when the list already shows; clearing a filter
 never scrolls. `ProxmoxBackupsTable.test.tsx` pins the section order and both
 scroll cases.
+
+### Backup jobs names each time window where it is shown (3 November 2026)
+
+The card's title read "Backup jobs 14 days" while its outcome pills counted
+the last 24 hours, and the pills' "24h" prefix was hidden on phones, so the
+pills read as the chart's totals. The title is now "Backup jobs", the pills
+are prefixed "Last 24h" ("24h" on phones, keeping the header on one line),
+and the chart's own axis, first day to Today, gives its span. When Pulse did
+not see the whole last 24 hours the pills carry "incomplete data" (was
+"partial") with the hover "Pulse did not see the whole last 24 hours, so
+these counts may be low". Counts, windows and history states are unchanged.
 
 ### Backup jobs show 14 days of retained outcomes beside Backup health (2 November 2026)
 
@@ -9501,3 +9527,11 @@ replacement. Session withdrawal does not cancel independent agents, updates,
 deployments, backups or legacy executions, nor prove original recovery.
 `TestContractSessionReadLogoutBoundary` covers persisted logout and native
 HTTP/WS refusal; the API contract describes the credential and idle boundaries.
+
+### Default-organization access policy is not a storage path
+
+The default-organization access change in `internal/api/` adds no storage or
+recovery path beyond default-organization membership in the existing
+`org.json` and a one-time marker, `default-org-access-migration.json`, in the
+base data directory. The migration writes nothing when tenant metadata or RBAC
+assignments cannot be read, so recovery of those stores is unchanged.

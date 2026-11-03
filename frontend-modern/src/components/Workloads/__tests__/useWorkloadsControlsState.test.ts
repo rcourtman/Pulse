@@ -71,6 +71,42 @@ describe('useWorkloadsControlsState', () => {
     }
   });
 
+  // Platform pages show several workload tables under one toggle, so the page owns
+  // the choice: the table follows it and reports changes instead of saving its own.
+  it('follows the page-owned display mode and history range and reports changes to the page', () => {
+    const [mode, setMode] = createSignal<'bars' | 'sparklines'>('sparklines');
+    const [range] = createSignal<'1h' | '12h' | '24h' | '7d'>('24h');
+    const onMode = vi.fn();
+    const onRange = vi.fn();
+
+    createRoot((dispose) => {
+      const [showFilters, setShowFilters] = createSignal(false);
+      const state = useWorkloadsControlsState({
+        viewMode: () => 'all' as ViewMode,
+        showFilters,
+        setShowFilters,
+        metricDisplayMode: mode,
+        onMetricDisplayModeChange: onMode,
+        metricHistoryRange: range,
+        onMetricHistoryRangeChange: onRange,
+      });
+
+      expect(state.workloadMetricDisplayMode()).toBe('sparklines');
+      expect(state.workloadMetricHistoryRange()).toBe('24h');
+      setMode('bars');
+      expect(state.workloadMetricDisplayMode()).toBe('bars');
+
+      state.setWorkloadMetricDisplayMode('sparklines');
+      state.setWorkloadMetricHistoryRange('7d');
+      expect(onMode).toHaveBeenCalledWith('sparklines');
+      expect(onRange).toHaveBeenCalledWith('7d');
+      // The page has not applied either change, so the table must not have either.
+      expect(state.workloadMetricDisplayMode()).toBe('bars');
+      expect(state.workloadMetricHistoryRange()).toBe('24h');
+      dispose();
+    });
+  });
+
   it('only offers columns the compact table can present without horizontal scrolling', () => {
     setCompactViewport();
     createRoot((dispose) => {

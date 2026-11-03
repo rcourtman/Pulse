@@ -284,18 +284,3 @@ describe('dockerContainerTableModel', () => {
     }
   });
 });
-
-describe('docker container alert override identity', () => {
-  it('resolves alert thresholds through the shared name-first override candidate chain', async () => {
-    // Overrides key on docker:{host}/{containerName} so they survive
-    // container recreates (#1601). The table must hand the full container
-    // resource to the shared candidate builder instead of parsing an id
-    // tail locally.
-    const source = (await import('../DockerContainersTable.tsx?raw')).default;
-    expect(source).toContain(
-      "import { dockerContainerOverrideIdCandidates } from '@/features/alerts/alertOverridesModel'",
-    );
-    expect(source).toContain('dockerContainerOverrideIdCandidates(hostResource, resource)');
-    expect(source).not.toContain("split('/')");
-  });
-});

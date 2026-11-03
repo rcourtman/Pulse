@@ -2189,3 +2189,50 @@ func TestHostUpdateEvidenceSurvivesCanonicalAdapterViewAndClone(t *testing.T) {
 		t.Fatal("absent updater status became evidence")
 	}
 }
+
+// #1815: the guest's backup to the primary store succeeded, then the sync that
+// copies it to the second store failed. The failure belongs to the store the
+// sync writes to, as its own incident, and leaves the primary store clean.
+func TestResourceFromPBSDatastoreRaisesIncidentForFailedSync(t *testing.T) {
+	now := time.Date(2026, 11, 3, 6, 0, 0, 0, time.UTC)
+	sync := pbsJobEvidence("s-offsite", "sync", "offsite", "critical", now.Add(-time.Hour))
+	sync.Remote = "pbs-main"
+	instance := models.PBSInstance{
+		ID:       "pbs-1",
+		Name:     "pbs-main",
+		LastSeen: now,
+		JobHealthEvidence: []models.PBSJobHealthEvidence{
+			pbsJobEvidence("backup:vm/100", "backup", "main", "healthy", now.Add(-2*time.Hour)),
+			sync,
+		},
+	}
+
+	offsite, _ := resourceFromPBSDatastore(instance, models.PBSDatastore{Name: "offsite", Status: "available", Total: 100, Used: 10})
+	if len(offsite.Incidents) != 1 {
+		t.Fatalf("expected one job incident on the sync's store, got %+v", offsite.Incidents)
+	}
+	incident := offsite.Incidents[0]
+	if incident.Code != PBSJobFailedIncidentCode || incident.Severity != storagehealth.RiskWarning {
+		t.Fatalf("incident = %+v, want a warning %s", incident, PBSJobFailedIncidentCode)
+	}
+	if want := "Sync job s-offsite failed on datastore offsite (copying from pbs-main)"; incident.Summary != want {
+		t.Fatalf("summary = %q, want %q", incident.Summary, want)
+	}
+	if incident.NativeID != "pbs-datastore:offsite:job:sync:s-offsite" {
+		t.Fatalf("native id = %q", incident.NativeID)
+	}
+	if !incident.StartedAt.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("started at = %v, want the failed run's end", incident.StartedAt)
+	}
+	if offsite.Status != StatusWarning {
+		t.Fatalf("status = %q, want %q", offsite.Status, StatusWarning)
+	}
+	if got := IncidentCategoryForResource(&offsite, incident); got != IncidentCategoryRecoverability {
+		t.Fatalf("category = %q, want %q", got, IncidentCategoryRecoverability)
+	}
+
+	main, _ := resourceFromPBSDatastore(instance, models.PBSDatastore{Name: "main", Status: "available", Total: 100, Used: 10})
+	if len(main.Incidents) != 0 || main.Status != StatusOnline {
+		t.Fatalf("primary store must stay clean, got status %q incidents %+v", main.Status, main.Incidents)
+	}
+}

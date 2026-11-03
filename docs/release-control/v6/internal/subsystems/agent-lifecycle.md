@@ -306,6 +306,22 @@ Enrollment, receipt freshness, removal, correlation and stored observations keep
 their existing semantics. The host disk recording and API presence regressions
 cover this distinction; they do not establish installed guest recovery.
 
+### A host without command access hands over the host-side step (3 November 2026)
+
+Settings → Infrastructure → Manage on an agent whose `commandsEnabled` is not
+true shows a Remote commands section instead of a bare "Not enabled" card. It
+says Pulse cannot apply container updates or other actions on that host, that
+command access is granted on the host rather than from Pulse, and names the
+installer option. Its button closes the dialog, sets the shared install state's
+command-access choice through `setEnableCommands(true)` (the same atomic
+token/flag path as the checkbox) and opens the agent installer, so the option
+arrives ticked; it is disabled while a token is minting because that path
+ignores a change mid-mint. Attached agents of a platform source show the same
+section. Pulse still offers no in-app switch: a `monitoring-only` ceiling is
+local by design, so a compromised Pulse cannot grant itself execution. The
+locked Docker update pill points at this dialog. `InfrastructureWorkspace.test.tsx`
+pins the section and the preset installer navigation.
+
 ### Command access is a named token-step choice, not a legacy option (21 October 2026)
 
 The installer's command-access checkbox reads **Allow Pulse to run commands on
@@ -329,7 +345,7 @@ use the only working route: Docker updates dispatch through the agent command
 session, the separate action runner's container actions are unqualified, and
 rootful Docker under the safe collector profile carries no update checks or
 actions. The label is owned by `getUnifiedAgentCommandAccessOptionLabel`, which
-the locked Docker update pill and the Proxmox setup guide also read, so copy
+a host's Remote commands section and the Proxmox setup guide also read, so copy
 that sends users to it cannot drift from the checkbox.
 `InfrastructureInstallerSection.test.tsx` pins the checkbox in the token step
 with its root-access and replacement descriptions.
@@ -10745,6 +10761,14 @@ through both monitor initialization paths, including explicit and legacy
 default organizations. These notifications refresh inventory presentation;
 they do not grant enrollment, removal, re-enrollment or command authority.
 
+### PBS job failure carry preserves lifecycle authority (3 November 2026)
+
+`State.PBSJobHealthEvidence` is a read-only copy of the job results already
+stored for one PBS instance, read by the PBS poller to carry a failed job
+across polls. It adds no agent enrollment, credential, command, collection or
+remediation authority, never triggers a poll or a job, and leaves agent
+records untouched.
+
 ### Backup jobs history preserves lifecycle authority (2 November 2026)
 
 `GET /api/backups/jobs` reads current tenant inventory and retained `pve-task:`
@@ -10988,3 +11012,11 @@ replacement. Session withdrawal does not cancel independent agents, updates,
 deployments, backups or legacy executions, nor prove original recovery.
 `TestContractSessionReadLogoutBoundary` covers persisted logout and native
 HTTP/WS refusal; the API contract describes the credential and idle boundaries.
+
+### Agent event streams follow organization access
+
+`/api/agent/events` for a signed-in user now also re-checks the organization
+access policy, so a user who loses default-organization membership or
+instance administration stops receiving findings and approval events within
+10 seconds. Token streams keep their existing credential and binding checks.
+Agent enrollment, reports and command channels are unchanged.

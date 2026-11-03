@@ -32,6 +32,11 @@ establish the observations in the selected stored range. For a PBS host, use
 the [Backup Server chart](PBS.md#pbs-is-connected-but-history-stays-empty),
 not its datastore or the VM that happens to host it.
 
+For a Proxmox VM, linking a Pulse Agent does not select agent I/O for the VM's
+live or stored Disk I/O chart. Passed-through storage can be busy while the
+Proxmox VM chart is quiet; compare the [VM and agent measurement sources](VM_DISK_MONITORING.md#vm-disk-io-is-quiet-but-linked-agent-disks-are-busy)
+before treating that trace as an idle guest.
+
 Start with the existing chart, not a restart or a storage change. A current
 reading does not prove that it was stored, and a selected time range does not
 prove continuous coverage. **Window start** and **Window end** bound the

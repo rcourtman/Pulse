@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
-import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
-import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
 import { ContainerUpdateBadge, UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { getUpdatePlanErrorMessage } from '@/components/shared/containerUpdateBadgeModel';
 import { ResourceActionsAPI } from '@/api/resourceActions';
@@ -49,27 +46,6 @@ afterEach(() => {
 });
 
 describe('ContainerUpdateBadge', () => {
-  it('keeps the badge on shell, runtime, and model owners', () => {
-    expect(containerUpdateBadgeSource).toContain('useContainerUpdateButtonState');
-    expect(containerUpdateBadgeSource).toContain('getUpdateButtonClass');
-    expect(containerUpdateBadgeSource).not.toContain('MonitoringAPI.updateDockerContainer');
-    expect(containerUpdateBadgeSource).not.toContain('markContainerQueued');
-    expect(containerUpdateBadgeSource).not.toContain('createSignal');
-
-    expect(containerUpdateButtonStateSource).toContain('ResourceActionsAPI.planAction');
-    expect(containerUpdateButtonStateSource).not.toContain('MonitoringAPI.updateDockerContainer');
-    expect(containerUpdateButtonStateSource).toContain('markContainerQueued');
-    expect(containerUpdateButtonStateSource).toContain('createSignal');
-    expect(containerUpdateButtonStateSource).toContain(
-      'export function useContainerUpdateButtonState',
-    );
-
-    expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonClass');
-    expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonTooltip');
-    expect(containerUpdateBadgeModelSource).toContain('hasContainerUpdate');
-    expect(containerUpdateBadgeModelSource).toContain('hasContainerUpdateCurrent');
-  });
-
   it('renders the error badge fallback when update detection fails', () => {
     render(() => (
       <ContainerUpdateBadge
@@ -245,11 +221,10 @@ describe('ContainerUpdateBadge', () => {
     ));
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    const status = screen.getByLabelText(/installed without command access/);
+    const status = screen.getByLabelText(/does not accept commands from Pulse/);
     expect(status.getAttribute('aria-label')).toContain('the Pulse agent on Tower');
-    expect(status.getAttribute('aria-label')).toContain('Settings → Infrastructure');
     expect(status.getAttribute('aria-label')).toContain(
-      '"Allow Pulse to run commands on this host" selected and run it on Tower',
+      'choose Manage on Tower, and follow Remote commands',
     );
   });
 

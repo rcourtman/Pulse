@@ -4,6 +4,7 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
+import { DEFAULT_ORG_SCOPE } from '@/utils/orgScope';
 import { formatOrgDate, normalizeRole } from '@/utils/orgUtils';
 import { getOrganizationAccessEmptyState } from '@/utils/organizationSettingsPresentation';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -37,7 +38,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
               const isOwner = () => member.userId === currentOrg().ownerUserId;
               return (
                 <Show
-                  when={props.state.canManageCurrentOrg()}
+                  when={props.state.canManageCurrentOrg() && currentOrg().id !== DEFAULT_ORG_SCOPE}
                   fallback={<OrganizationRoleBadge role={role} />}
                 >
                   <FormSelect

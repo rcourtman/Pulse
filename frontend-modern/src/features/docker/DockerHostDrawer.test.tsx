@@ -14,6 +14,29 @@ const listActionAudits = vi.hoisted(() =>
   })),
 );
 
+const temperatureThresholds = vi.hoisted(() => ({
+  value: undefined as { warning: number; critical: number } | undefined,
+}));
+
+// The real alerts store, except that a test can pin the node temperature
+// thresholds the way a user's alert settings would.
+vi.mock('@/stores/alertsActivation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/alertsActivation')>();
+  return {
+    ...actual,
+    useAlertsActivation: () => {
+      const store = actual.useAlertsActivation();
+      return {
+        ...store,
+        getMetricThresholds: (...args: Parameters<typeof store.getMetricThresholds>) =>
+          args[1] === 'temperature' && temperatureThresholds.value
+            ? temperatureThresholds.value
+            : store.getMetricThresholds(...args),
+      };
+    },
+  };
+});
+
 vi.mock('@/api/actionAudit', () => ({ ActionAuditAPI: { listActionAudits } }));
 vi.mock('@/api/resourceOperatorState', () => ({
   getResourceOperatorState: vi.fn().mockResolvedValue(null),
@@ -78,6 +101,7 @@ afterEach(() => {
   cleanup();
   resetAIRuntimeState();
   vi.clearAllMocks();
+  temperatureThresholds.value = undefined;
   for (const id of Object.keys(wsActiveAlerts)) delete wsActiveAlerts[id];
 });
 
@@ -325,6 +349,26 @@ describe('DockerHostDrawer inventory', () => {
       expect(cell).toHaveClass('whitespace-normal');
       expect(cell).not.toHaveClass('truncate');
     }
+  });
+
+  it('colors the CPU temperature from the alert thresholds that apply to the host', () => {
+    const reading = { ...inventoryHost(), temperature: 55 } as Resource;
+
+    render(() => <DockerHostDrawer host={reading} />);
+    const details = screen.getByTestId('docker-host-technical-details');
+    expect(
+      within(details)
+        .getByText(/^55\s*°C$/)
+        .closest('td')?.className ?? '',
+    ).not.toContain('text-rose-700');
+    cleanup();
+
+    // Above the host's critical threshold the reading is lifted out of Details.
+    temperatureThresholds.value = { warning: 40, critical: 50 };
+    render(() => <DockerHostDrawer host={reading} />);
+    expect(
+      within(screen.getByTestId('docker-host-drawer-exceptions')).getByText(/^55\s*°C$/),
+    ).toHaveClass('text-rose-700');
   });
 
   it('lifts an offline host and states sizes, not used amounts that would read as live', () => {

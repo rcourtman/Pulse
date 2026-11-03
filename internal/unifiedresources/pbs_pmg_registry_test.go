@@ -866,3 +866,89 @@ func TestStatusFromStorageStateCoversPBSAndPVEVocabulary(t *testing.T) {
 		}
 	}
 }
+
+func pbsJobEvidence(id, family, store, posture string, endedAt time.Time) models.PBSJobHealthEvidence {
+	return models.PBSJobHealthEvidence{
+		ID:             id,
+		Family:         family,
+		Store:          store,
+		Enabled:        true,
+		LastRunEndtime: endedAt.Unix(),
+		Posture:        posture,
+		Freshness:      models.PBSJobHealthFreshness{LastRunEndTime: endedAt},
+	}
+}
+
+func TestPBSDatastoreJobIncidentsFollowTheNewestRunOfEachJob(t *testing.T) {
+	now := time.Date(2026, 11, 3, 6, 0, 0, 0, time.UTC)
+	recovered := models.PBSInstance{JobHealthEvidence: []models.PBSJobHealthEvidence{
+		pbsJobEvidence("v-1", "verify", "main", "critical", now.Add(-48*time.Hour)),
+		pbsJobEvidence("v-1", "verify", "main", "healthy", now.Add(-time.Hour)),
+	}}
+	if got := pbsDatastoreJobIncidents(recovered, "main"); len(got) != 0 {
+		t.Fatalf("a job whose newest run succeeded must not raise an incident, got %+v", got)
+	}
+
+	regressed := models.PBSInstance{JobHealthEvidence: []models.PBSJobHealthEvidence{
+		pbsJobEvidence("v-1", "verify", "main", "healthy", now.Add(-48*time.Hour)),
+		pbsJobEvidence("v-1", "verify", "main", "critical", now.Add(-time.Hour)),
+	}}
+	got := pbsDatastoreJobIncidents(regressed, "main")
+	if len(got) != 1 || got[0].Summary != "Verify job v-1 failed on datastore main" {
+		t.Fatalf("expected the newest failed run to speak, got %+v", got)
+	}
+}
+
+func TestPBSDatastoreJobIncidentsOnlyCountFailuresPinnedToTheStore(t *testing.T) {
+	now := time.Date(2026, 11, 3, 6, 0, 0, 0, time.UTC)
+	disabled := pbsJobEvidence("p-off", "prune", "main", "critical", now)
+	disabled.Enabled = false
+	instance := models.PBSInstance{JobHealthEvidence: []models.PBSJobHealthEvidence{
+		// Storeless task history cannot be pinned to one datastore.
+		pbsJobEvidence("sync:task", "sync", "", "critical", now),
+		pbsJobEvidence("s-other", "sync", "other", "critical", now),
+		disabled,
+		// Backup outcomes belong to guest protection posture.
+		pbsJobEvidence("backup:vm/100", "backup", "main", "critical", now),
+		// Late, warned and unknown are not failures.
+		pbsJobEvidence("v-late", "verify", "main", "warning", now),
+		pbsJobEvidence("p-unknown", "prune", "main", "unknown", now),
+	}}
+	if got := pbsDatastoreJobIncidents(instance, "main"); len(got) != 0 {
+		t.Fatalf("expected no incidents, got %+v", got)
+	}
+}
+
+func TestPBSDatastoreJobIncidentsNameGarbageCollectionByStore(t *testing.T) {
+	now := time.Date(2026, 11, 3, 6, 0, 0, 0, time.UTC)
+	instance := models.PBSInstance{JobHealthEvidence: []models.PBSJobHealthEvidence{
+		pbsJobEvidence("garbage:main", "garbage", "main", "critical", now),
+		pbsJobEvidence("p-1", "prune", "main", "critical", now),
+	}}
+	got := pbsDatastoreJobIncidents(instance, "main")
+	if len(got) != 2 {
+		t.Fatalf("expected one incident per failed job, got %+v", got)
+	}
+	if got[0].Summary != "Garbage collection failed on datastore main" || got[1].Summary != "Prune job p-1 failed on datastore main" {
+		t.Fatalf("summaries = %q, %q", got[0].Summary, got[1].Summary)
+	}
+	// A PBS outage drops the datastore from a poll; confirmed recovery keeps
+	// that from reading as the job recovering.
+	if got[0].RecoveryConfirmationsRequired != 2 {
+		t.Fatalf("recovery confirmations = %d, want 2", got[0].RecoveryConfirmationsRequired)
+	}
+}
+
+// PBS job ids are unique only within a family; a later successful verify job
+// named like a failed sync must not hide the sync, in either input order.
+func TestPBSDatastoreJobIncidentsKeepFamiliesSharingAJobID(t *testing.T) {
+	now := time.Date(2026, 11, 3, 6, 0, 0, 0, time.UTC)
+	sync := pbsJobEvidence("daily", "sync", "main", "critical", now.Add(-2*time.Hour))
+	verify := pbsJobEvidence("daily", "verify", "main", "healthy", now.Add(-time.Hour))
+	for _, evidence := range [][]models.PBSJobHealthEvidence{{sync, verify}, {verify, sync}} {
+		got := pbsDatastoreJobIncidents(models.PBSInstance{JobHealthEvidence: evidence}, "main")
+		if len(got) != 1 || got[0].NativeID != "pbs-datastore:main:job:sync:daily" {
+			t.Fatalf("expected the failed sync alone, got %+v", got)
+		}
+	}
+}

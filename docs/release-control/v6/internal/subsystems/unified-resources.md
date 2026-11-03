@@ -230,6 +230,30 @@ narrow browser proof exercises the same producer through the inventory consumer
 with native interactions and inspected pixels. No API, provider, guest, polling,
 auth, resource identity or protection-policy change, nor installed recovery claim.
 
+### PBS datastores carry failed jobs as incidents (3 November 2026)
+
+`resourceFromPBSDatastore` appends one `pbs_job_failed` incident per sync,
+verify, prune or GC job whose newest run failed on that datastore
+(`pbsDatastoreJobIncidents`). Severity is warning, the category is
+recoverability, the native id is `pbs-datastore:<store>:job:<family>:<job id>`
+(PBS job ids are unique only within a family), and the
+summary names the job and a sync's remote without times, because incidents
+merge on their summary. The existing unified-incident pipeline raises a
+`backup-storage-incident` alert on the datastore and clears it after two
+polls that see the job's newest run succeed (`RecoveryConfirmationsRequired`
+2). A PBS outage drops the datastore from a poll, which with confirmed
+recovery reads as unknown, so the alert neither clears nor notifies again
+when PBS returns. The storage disable switch and per-resource overrides
+apply. Storeless task history, disabled jobs, backup-family jobs and warning,
+late or unknown runs raise nothing. So the alert neither flaps nor clears
+early, the PBS poller carries a job's last completed failure
+(`carryPBSJobFailures`) through polls that report no newer outcome: a run in
+progress (PBS drops the previous result meanwhile), an overdue or unreadable
+job, or a failed read. It clears on an observed success or warning, or when a
+complete read drops or disables the job. A failed last run now outranks
+overdue in `pbsJobHealthPosture`. Mock PBS instances now report job results,
+with one failed sync on the secondary server.
+
 ### Storeless PBS task history is not an unread job family (2 November 2026)
 
 The Backups Jobs column reads `PBSJobHealthEvidence.evidenceScope`: a
@@ -8605,8 +8629,8 @@ now sit on Overview and simply withdraw while the target is absent; the other
 tab bodies render their own availability notice while their tab is
 unavailable, so the selection can be retained and recovered without
 manufacturing a target. The
-`ResourceDetailDrawer.history.test.tsx` guard pins the single-resource reset
-boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
+`ResourceDetailDrawer.snapshot.test.tsx` render test pins the single-resource
+reset boundary, and `scripts/check-drawer-tab-retention.cjs` exercises the rendered
 drawer at desktop and narrow widths: selecting Manage, dropping the merged
 metrics target, and restoring it must keep the selection and bring the Overview
 charts back. Its fixture, `browser-tests/pbs-host-history-correlation.tsx`,

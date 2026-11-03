@@ -4,6 +4,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PatrolAutonomyLevel } from '@/api/patrol';
+import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import {
   PATROL_CONTROL_ANCHOR,
   PATROL_CONTROL_PATH,
@@ -102,6 +103,17 @@ describe('PatrolIntelligenceHeader Patrol mode placement', () => {
 
     fireEvent.click(within(selector).getByRole('button', { name: 'Safe auto-fix' }));
     expect(handleAutonomyChange).toHaveBeenCalledWith('assisted');
+  });
+
+  it('offers one Patrol mode selector and routes configuration to Patrol settings', () => {
+    const { state } = createState();
+    renderHeader(state);
+
+    expect(screen.getAllByRole('group', { name: 'Patrol mode' })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Open Patrol settings' })).toHaveAttribute(
+      'href',
+      settingsTabPath('system-ai-patrol'),
+    );
   });
 
   it('shows plan-locked installs one inline Patrol mode line instead of a selector', () => {

@@ -1,4 +1,13 @@
-import { batch, createEffect, createRoot, createSignal } from 'solid-js';
+import { render } from '@solidjs/testing-library';
+import {
+  batch,
+  createComponent,
+  createEffect,
+  createRenderEffect,
+  createRoot,
+  createSignal,
+  Suspense,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useWorkloadsSource from '../useWorkloads.ts?raw';
 import { guestDiskDeferrals } from '@/components/Workloads/__fixtures__/guestDiskDeferrals';
@@ -610,9 +619,52 @@ describe('useWorkloads', () => {
     disposeSecond();
   });
 
-  it('keeps workload refreshes out of app-level Suspense', () => {
-    expect(useWorkloadsSource).not.toContain('createResource');
-    expect(useWorkloadsSource).toContain('createSignal<WorkloadGuest[]>');
+  it('keeps loads and polls out of the app-level Suspense fallback', async () => {
+    const firstRead = deferred<unknown>();
+    apiFetchJSONMock.mockReturnValueOnce(firstRead.promise);
+    let result!: ReturnType<UseWorkloadsModule['useWorkloads']>;
+    const { container, unmount } = render(() =>
+      createComponent(Suspense, {
+        fallback: 'Loading view...',
+        get children() {
+          return createComponent(() => {
+            result = useWorkloads(() => true);
+            const node = document.createTextNode('');
+            createRenderEffect(() => {
+              node.data = `workloads:${result.workloads().length}`;
+            });
+            return node;
+          }, {});
+        },
+      }),
+    );
+    try {
+      await flushAsync();
+      // The first read is in flight: the surface shows its own loading state
+      // and the route keeps its page.
+      expect(result.loading()).toBe(true);
+      expect(container.textContent).not.toContain('Loading view...');
+
+      firstRead.resolve({ data: [sampleResource], meta: { totalPages: 1 } });
+      await waitForWorkloadCount(() => result.workloads().length);
+      expect(container.textContent).toBe('workloads:1');
+
+      const pollRead = deferred<unknown>();
+      apiFetchJSONMock.mockReturnValueOnce(pollRead.promise);
+      await advanceAndFlush(5_000);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+      // The poll is in flight: the last table stays on screen.
+      expect(container.textContent).toBe('workloads:1');
+
+      pollRead.resolve({
+        data: [sampleResource, { ...sampleResource, id: 'cluster-a-pve1-102', vmid: 102 }],
+        meta: { totalPages: 1 },
+      });
+      await waitForWorkloadCount(() => result.workloads().length, 2);
+      expect(container.textContent).toBe('workloads:2');
+    } finally {
+      unmount();
+    }
   });
 
   it('projects authoritative LXC and QEMU CPU once regardless of agent sources or cores', async () => {

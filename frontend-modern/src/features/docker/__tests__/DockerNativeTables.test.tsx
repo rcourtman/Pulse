@@ -23,6 +23,26 @@ vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
   useWebSocket: () => ({ activeAlerts: {} }),
 }));
 
+// Pass-through spy on the real threshold lookup, so a test can see which
+// override ids a table asked for.
+const getMetricThresholdsSpy = vi.hoisted(() => vi.fn());
+vi.mock('@/stores/alertsActivation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores/alertsActivation')>();
+  return {
+    ...actual,
+    useAlertsActivation: () => {
+      const store = actual.useAlertsActivation();
+      return {
+        ...store,
+        getMetricThresholds: (...args: Parameters<typeof store.getMetricThresholds>) => {
+          getMetricThresholdsSpy(...args);
+          return store.getMetricThresholds(...args);
+        },
+      };
+    },
+  };
+});
+
 vi.mock('@/api/resourceActions', () => ({
   ResourceActionsAPI: {
     planAction: vi.fn().mockResolvedValue({
@@ -124,11 +144,19 @@ vi.mock('@/stores/systemSettings', () => ({
 // jsdom has no ResizeObserver; stub the shared metric cells like the
 // DockerHostsTable tests do.
 vi.mock('@/components/shared/responsive', () => ({
-  ResponsiveMetricCell: (props: { type: string; isRunning?: boolean; resourceId?: string }) => (
+  ResponsiveMetricCell: (props: {
+    type: string;
+    isRunning?: boolean;
+    resourceId?: string;
+    thresholds?: { warning: number; critical: number } | null;
+  }) => (
     <div
       data-testid={`responsive-${props.type}-metric`}
       data-resource-id={props.resourceId ?? ''}
       data-running={String(props.isRunning)}
+      data-thresholds={
+        props.thresholds ? `${props.thresholds.warning}/${props.thresholds.critical}` : ''
+      }
     />
   ),
 }));
@@ -1453,6 +1481,43 @@ describe('Docker native tables', () => {
     expect(screen.getByTitle('Healthy')).toHaveClass('bg-emerald-500');
   });
 
+  it('keeps the repository and tag of a container image visible', () => {
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
+
+    const { container } = renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-ghcr',
+            type: 'app-container',
+            name: 'backup-coordinator',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              image: 'ghcr.io/pulse-demo/backup-coordinator:2026.04',
+              containerState: 'running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    // The container image cell shares the head/tail reference rendering with the
+    // images and services tables: the shared registry head truncates, the
+    // repository:tag tail stays visible, and the full reference is on the title.
+    const reference = container.querySelector<HTMLElement>('[data-docker-image-reference]');
+    expect(reference).not.toBeNull();
+    expect(reference).toHaveAttribute('title', 'ghcr.io/pulse-demo/backup-coordinator:2026.04');
+    expect(reference).toHaveTextContent('ghcr.io/pulse-demo/backup-coordinator:2026.04');
+    expect(reference?.querySelector('[data-docker-image-reference-tail]')).toHaveTextContent(
+      'backup-coordinator:2026.04',
+    );
+  });
+
   it('keeps the repository and tag of a registry-prefixed image name visible', () => {
     const { container } = render(() => (
       <DockerImagesTable
@@ -2562,5 +2627,49 @@ describe('Docker native tables', () => {
       '/docker/overview?q=edge-web',
     );
     expect(detail.getByText('Network ID')).toBeInTheDocument();
+  });
+
+  it('looks container alert thresholds up by name-first override ids, so a recreated container keeps its overrides (#1601)', () => {
+    const host = makeResource({
+      id: 'host-1',
+      type: 'docker-host',
+      name: 'edge-01',
+      status: 'online',
+      docker: { hostname: 'edge-01' },
+    });
+
+    for (const containerId of ['container-before', 'container-after-recreate']) {
+      getMetricThresholdsSpy.mockClear();
+      renderInRouter(() => (
+        <DockerContainersTable
+          resources={[
+            makeResource({
+              id: containerId,
+              type: 'app-container',
+              name: 'edge-web',
+              status: 'running',
+              docker: { hostname: 'edge-01', image: 'nginx:latest', containerState: 'running' },
+            }),
+          ]}
+          hosts={[host]}
+          emptyIcon={<span />}
+          emptyTitle="No containers"
+          emptyDescription="No containers"
+          showToolbar={false}
+        />
+      ));
+
+      const cpuLookups = getMetricThresholdsSpy.mock.calls.filter(
+        ([scope, metric]) => scope === 'docker' && metric === 'cpu',
+      );
+      expect(cpuLookups.length).toBeGreaterThan(0);
+      for (const [, , resourceIds] of cpuLookups) {
+        // The durable key is host id + container name, whatever the runtime id
+        // is now; the old id forms trail as lookup fallbacks.
+        expect((resourceIds as string[])[0]).toBe('docker:host-1/edge-web');
+        expect(resourceIds).toContain(`docker:host-1/${containerId}`);
+      }
+      cleanup();
+    }
   });
 });

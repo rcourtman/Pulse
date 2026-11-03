@@ -3,6 +3,7 @@ import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FilterHeader,
+  FilterMobileToggleButton,
   FilterPopoverTrigger,
   FilterToolbarPanel,
   FilterSegmentedControl,
@@ -13,11 +14,6 @@ import {
   filterPanelClass,
   resolveFilterSelectDomValue,
 } from './FilterToolbar';
-import toggleSource from './Toggle.tsx?raw';
-import toggleModelSource from './toggleModel.ts?raw';
-import toggleStateSource from './useToggleState.ts?raw';
-import filterToolbarSource from './FilterToolbar.tsx?raw';
-import subtabsSource from './Subtabs.tsx?raw';
 
 describe('FilterHeader', () => {
   afterEach(() => {
@@ -33,17 +29,6 @@ describe('FilterHeader', () => {
 
     expect(screen.getByTestId('search')).toBeInTheDocument();
     expect(container.querySelector('.flex.w-full.items-center.gap-2')).not.toBeNull();
-  });
-
-  it('keeps clipped in-page tab controls visibly scrollable on phones', () => {
-    expect(subtabsSource).toContain('overflow-x-auto');
-    expect(subtabsSource).toContain('canScrollLeft');
-    expect(subtabsSource).toContain('canScrollRight');
-    expect(subtabsSource).toContain('scrollTabs(-1)');
-    expect(subtabsSource).toContain('scrollTabs(1)');
-    expect(subtabsSource).toContain('sm:hidden');
-    expect(subtabsSource).toContain('useActiveHorizontalRailItemVisibility');
-    expect(subtabsSource).not.toContain('.scrollIntoView');
   });
 
   it('keeps segmented controls on value callbacks while forwarding div attributes', async () => {
@@ -167,34 +152,6 @@ describe('FilterHeader', () => {
     ).toBe(false);
   });
 
-  it('keeps shared toggle behavior on shell, runtime, and model owners', () => {
-    expect(toggleSource).toContain('useToggleState');
-    expect(toggleSource).toContain('getToggleTrackClass');
-    expect(toggleSource).toContain('getToggleKnobClass');
-    expect(toggleSource).not.toContain('defaultPrevented');
-    expect(toggleSource).not.toContain('toggleSizeConfig');
-    expect(toggleSource).not.toContain('handleClick =');
-
-    expect(toggleStateSource).toContain('export function useToggleState');
-    expect(toggleStateSource).toContain('defaultPrevented');
-    expect(toggleStateSource).toContain('currentTarget: { checked: next }');
-    expect(toggleStateSource).toContain('props.onChange?.(event)');
-    expect(toggleStateSource).toContain('props.onToggle?.()');
-
-    expect(toggleModelSource).toContain('toggleSizeConfig');
-    expect(toggleModelSource).toContain('resolveToggleSize');
-    expect(toggleModelSource).toContain('getToggleTrackClass');
-    expect(toggleModelSource).toContain('getToggleKnobClass');
-    expect(toggleModelSource).toContain('ToggleChangeEvent');
-  });
-
-  it('keeps labelled filter selects on the shared FormSelect primitive', () => {
-    expect(filterToolbarSource).toContain("import { FormSelect } from './FormSelect';");
-    expect(filterToolbarSource).toContain('<FormSelect');
-    expect(filterToolbarSource).not.toContain('<select');
-    expect(filterToolbarSource).not.toContain('MutationObserver');
-  });
-
   it('keeps controlled select state when options materialize asynchronously', async () => {
     const [options, setOptions] = createSignal<{ value: string; label: string }[]>([]);
 
@@ -283,8 +240,15 @@ describe('FilterHeader', () => {
     expect(filterPanelClass).toContain('z-80');
     expect(filterPanelClass).not.toContain('w-[min(40rem,calc(100vw-2rem))]');
     expect(filterPanelDefaultWidthClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
-    expect(filterToolbarSource).toContain("'flex min-h-11 items-center gap-1.5");
-    expect(filterToolbarSource).toContain('sm:h-7 sm:min-h-0');
+  });
+
+  it('keeps the mobile Filters button a phone-sized touch target with its active count', () => {
+    render(() => <FilterMobileToggleButton count={2} />);
+
+    const button = screen.getByRole('button', { name: /Filters/ });
+    expect(button).toHaveClass('min-h-11');
+    expect(button).toHaveClass('sm:min-h-10');
+    expect(button).toHaveTextContent('2');
   });
 
   it('keeps peer popover triggers aligned and exposes their disclosure state', () => {
@@ -325,10 +289,5 @@ describe('FilterHeader', () => {
     expect(panel).toHaveClass('w-56');
     expect(panel).toHaveClass('max-w-[calc(100vw-2rem)]');
     expect(panel).not.toHaveClass('w-[min(40rem,calc(100vw-2rem))]');
-  });
-
-  it('keeps persistent view preferences out of viewport-docked toolbar panels', () => {
-    expect(filterToolbarSource).not.toContain('filterBottomNavAwarePanelClass');
-    expect(filterToolbarSource).not.toContain('filter-bottom-nav-aware-panel');
   });
 });

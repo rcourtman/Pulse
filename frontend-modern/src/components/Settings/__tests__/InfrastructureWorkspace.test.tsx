@@ -65,6 +65,7 @@ const emptyFleetMember = vi.hoisted(
     }) as Pick<InfrastructureSystemMemberRow, 'fleetSignals' | 'fleetHighlights'>,
 );
 const navigateSpy = vi.hoisted(() => vi.fn());
+const setEnableCommandsSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
 
 const originalResizeObserver = globalThis.ResizeObserver;
@@ -130,6 +131,7 @@ vi.mock('../useInfrastructureOperationsState', () => ({
     customCaPath: () => '',
     insecureMode: () => false,
     selectedAgentUrl: () => 'http://pulse',
+    setEnableCommands: setEnableCommandsSpy,
     getAgentConnectionUpgradeCommand: (connection: Connection, installFlags: string[] = []) =>
       `upgrade ${connection.id}${installFlags.length > 0 ? ` ${installFlags.join(' ')}` : ''}`,
     getAgentConnectionUpgradeCommandRequiresToken: () => false,
@@ -1688,6 +1690,66 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('x86_64')).toBeInTheDocument();
     expect(screen.getByText('Remote commands')).toBeInTheDocument();
     expect(screen.getAllByText('Enabled').length).toBeGreaterThan(0);
+  });
+
+  it('hands an agent without command access the host-side step and the preset installer', async () => {
+    const towerAgent = connectionFixture({
+      id: 'agent:tower',
+      type: 'agent',
+      name: 'Tower',
+      address: 'Tower',
+      surfaces: ['host', 'docker'],
+      scope: { host: true } as any,
+      source: 'agent',
+      agentVersion: '6.0.3',
+      agentIdentity: { hostname: 'tower', platform: 'linux' },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+
+    connectionState.connections = [towerAgent];
+    connectionState.rows = [
+      {
+        id: towerAgent.id,
+        ownerType: 'agent',
+        name: 'Tower',
+        subtitle: 'via Pulse Agent',
+        source: 'agent',
+        host: 'tower',
+        coverageLabels: ['Host telemetry'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '0s ago',
+        ...emptyFleetRow,
+        enabled: true,
+        canEdit: false,
+        canPause: false,
+        canRemove: true,
+        isAgent: true,
+        isCluster: false,
+        attachedConnections: [],
+        members: [],
+        connection: towerAgent,
+      },
+    ];
+
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('Tower')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Manage$/i }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    const section = screen.getByRole('region', { name: 'Remote commands' });
+    expect(section).toHaveTextContent('Remote commands are off');
+    expect(section).toHaveTextContent('Command access is granted on the host, not from Pulse');
+    expect(section).toHaveTextContent('Allow Pulse to run commands on this host');
+
+    navigateSpy.mockClear();
+    fireEvent.click(within(section).getByRole('button', { name: 'Get install command' }));
+    expect(setEnableCommandsSpy).toHaveBeenCalledWith(true);
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent', {
+      scroll: false,
+    });
   });
 
   it('shows attached Pulse Agent augmentation details on a grouped platform source', async () => {

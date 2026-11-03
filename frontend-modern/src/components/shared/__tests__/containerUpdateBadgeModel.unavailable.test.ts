@@ -15,10 +15,9 @@ const disconnected = {
 describe('locked update explanation', () => {
   it('names a missing command access and where to turn it on', () => {
     const text = getUpdateUnavailableExplanation({ ...disconnected, hostCommandsEnabled: false });
-    expect(text).toContain('the Pulse agent on Tower was installed without command access');
-    expect(text).toContain('Settings → Infrastructure');
+    expect(text).toContain('the Pulse agent on Tower does not accept commands from Pulse');
     expect(text).toContain(
-      '"Allow Pulse to run commands on this host" selected and run it on Tower',
+      'open Settings → Infrastructure, choose Manage on Tower, and follow Remote commands',
     );
     expect(text).not.toContain('advanced');
     expect(text).not.toContain('not connected');
@@ -27,7 +26,7 @@ describe('locked update explanation', () => {
   it('tells a lost command channel apart from missing access', () => {
     const text = getUpdateUnavailableExplanation({ ...disconnected, hostCommandsEnabled: true });
     expect(text).toContain('the command channel to the Pulse agent on Tower is not connected');
-    expect(text).not.toContain('Allow Pulse to run commands');
+    expect(text).not.toContain('Remote commands');
   });
 
   it("falls back to the server's reason when command access is unknown", () => {

@@ -695,3 +695,18 @@ Registered `ReportingPanel.reader.test.tsx`, `useReportingPanelState.test.ts`,
 late body completion, same-reader refresh, refused-save retry, malformed inventory,
 confirmation, route props and existing reporting/delivery behaviour. Actual App
 Settings/API-client/browser proof remains required for the consuming surface.
+
+### Default organization in shared-process multi-organization mode
+
+With `PULSE_MULTI_TENANT_ENABLED=true` on a self-hosted (not hosted) runtime,
+the default organization is open only to instance administrators and to
+explicit members in its `org.json`, loaded strictly. Other signed-in users no
+longer reach it by header, cookie or socket. Instance administrators manage
+its members from Organization access: an add takes effect at once, members
+are viewers, and membership never grants organization management. The first
+start in this mode seeds RBAC-assigned users who belong to no other
+organization and records `default-org-access-migration.json`. A signed-in
+user with no usable organization sees their pending invitations at bootstrap.
+Single-tenant and hosted runtimes keep the open default organization.
+`TestOrgHandlers_DefaultOrgMembersInSharedMultiOrgMode` and the
+`org_access_policy_test.go` suite cover these rules.

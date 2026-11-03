@@ -172,6 +172,7 @@ type Router struct {
 	lifecycleMu               sync.Mutex
 	lifecycleStopped          bool
 	hostedMode                bool
+	orgAccess                 *DefaultAuthorizationChecker // organization access policy every caller shares
 	stripeWebhookHandlers     *StripeWebhookHandlers
 	patrolLifecycleMu         sync.Mutex
 	startedPatrolOrgs         map[string]bool
@@ -262,8 +263,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		startedPatrolOrgs:               make(map[string]bool),
 	}
 	r.ensureChartService()
+	r.orgAccess = newOrgAccessChecker(cfg, r.multiTenant, r.hostedMode)
 	if r.wsHub != nil {
 		r.wsHub.SetTrustedProxyChecker(isTrustedProxyIP)
+		r.wsHub.SetOrgAuthChecker(r.orgAccess)
 	}
 	if r.hostedMode {
 		// Use defaults: 2000 req/min per org.
@@ -289,6 +292,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	} else {
 		auth.SetManager(defaultRBACManager)
 		log.Info().Msg("Canonical RBAC store initialized")
+		if err := migrateDefaultOrgAccess(r.multiTenant, defaultRBACManager, r.config, r.hostedMode); err != nil {
+			log.Error().Err(err).Msg("Default organization access migration failed; it will retry on the next start")
+		}
 	}
 
 	// Initialize SSO service managers
@@ -331,14 +337,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 
 	// Create tenant middleware with authorization checker.
 	// In hosted mode, tenant routing uses subscription lifecycle checks instead of FeatureMultiTenant.
-	var orgLoader OrganizationLoader
-	if r.multiTenant != nil {
-		orgLoader = NewMultiTenantOrganizationLoader(r.multiTenant)
-	}
-	authChecker := NewAuthorizationChecker(orgLoader)
 	tenantMiddleware := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
 		Persistence: r.multiTenant,
-		AuthChecker: authChecker,
+		AuthChecker: r.orgAccess,
 		HostedMode:  r.hostedMode,
 	})
 
@@ -521,8 +522,7 @@ func (r *Router) setupRoutes() {
 		}
 		reconcile(r.monitor)
 	})
-	actionOrgChecker := NewAuthorizationChecker(NewMultiTenantOrganizationLoader(r.multiTenant))
-	actionAuth := actionAuthority{authorizer: r.authorizer, orgChecker: actionOrgChecker}
+	actionAuth := actionAuthority{authorizer: r.authorizer, orgChecker: r.orgAccess}
 	r.resourceHandlers.SetActionAuthorizers(actionAuth, actionAuth)
 	r.attentionHandlers.SetActionDependencies(r.resourceHandlers, actionAuth)
 	r.maintenanceSentinel = r.buildMaintenanceVerificationSentinel()
@@ -627,6 +627,7 @@ func (r *Router) setupRoutes() {
 	rbacProvider := r.rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	orgHandlers.SetHostedMode(r.hostedMode)
+	orgHandlers.SetAccessPolicy(r.orgAccess)
 	orgHandlers.SetOnDelete(func(ctx context.Context, orgID string) error {
 		return r.CleanupTenant(ctx, orgID)
 	})

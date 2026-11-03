@@ -659,7 +659,7 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
 - **Command execution enabled** on the agent — it is disabled by default. Either:
   - start the agent with `--enable-commands` (or `PULSE_ENABLE_COMMANDS=true`), or
   - tick **Allow Pulse to run commands on this host** in the token step of **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission. Pulse can then run commands as root on that host: this is the full-trust combined profile, not a least-privilege setting
-  - an agent installed without it cannot be switched on from Pulse; run the new install command on the host
+  - an agent installed without it cannot be switched on from Pulse; run the new install command on the host. On the host's **Manage** dialog in **Settings → Infrastructure**, **Remote commands** opens the installer with this option already ticked
 - **Admin approval**: every lifecycle action requires confirmation by an admin in the UI before it runs. The agent then verifies the container's state before the change and confirms it actually reached the requested state afterwards.
 
 ### Limitations

@@ -1093,6 +1093,53 @@ describe('AISettings Ollama provider options', () => {
       );
     });
   });
+
+  it('offers the server-authored suggested model as the Ollama pull command', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      model: 'ollama:llama3',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+      providers: [
+        {
+          id: 'ollama',
+          display_name: 'Ollama',
+          description: 'Local models',
+          protocol: 'ollama',
+          requires_api_key: false,
+          user_configurable: true,
+          gateway: false,
+          configured: true,
+          env_vars: [],
+          suggested_model: 'served-model:7b',
+          suggested_model_note: 'Needs 8 GB of free memory.',
+        },
+      ],
+    });
+
+    renderComponent();
+    fireEvent.click(await screen.findByRole('button', { name: /ollama/i }));
+
+    expect(await screen.findByText('ollama pull served-model:7b')).toBeInTheDocument();
+    expect(screen.getByText('Needs 8 GB of free memory.')).toBeInTheDocument();
+  });
+
+  it('shows no Ollama pull command when the server suggests no model', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      model: 'ollama:llama3',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+    });
+
+    renderComponent();
+    fireEvent.click(await screen.findByRole('button', { name: /ollama/i }));
+
+    await screen.findByLabelText('Ollama Keep Alive');
+    expect(screen.queryByText(/ollama pull/)).not.toBeInTheDocument();
+  });
 });
 
 describe('AISettings OpenAI-compatible provider lifecycle', () => {
@@ -1455,6 +1502,49 @@ describe('AISettings provider save failure context', () => {
     });
     expect(await screen.findByRole('button', { name: 'Check Patrol model' })).toBeInTheDocument();
   });
+
+  it('shows the last persisted readiness result and its age after a reload without re-running the check', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: 'ollama:qwen3:8b',
+      patrol_model: 'ollama:qwen3:8b',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+      patrol_model_readiness: {
+        probe_version: 'patrol-readiness/v1',
+        success: true,
+        status: 'pass',
+        provider: 'ollama',
+        model: 'qwen3:8b',
+        duration_ms: 9_100,
+        max_verified_mode: 'monitor',
+        summary: 'Verified for Watch only on this install.',
+        recommendation: 'Keep higher autonomy disabled until an extended canary passes.',
+        dimensions: {
+          connectivity: { status: 'pass', summary: 'Connected.' },
+          tool_protocol: { status: 'pass', summary: 'Passed.', attempts: 3, passed: 3 },
+          context_quality: { status: 'pass', summary: 'Passed.', attempts: 2, passed: 2 },
+          latency: { status: 'pass', summary: 'Passed.', warm_p50_ms: 1_000 },
+        },
+        modes: {
+          monitor: { status: 'verified', summary: 'Verified.' },
+          approval: { status: 'not_suitable', summary: 'Continuation failed.' },
+          assisted: { status: 'not_assessed', summary: 'Extended canary required.' },
+          full: { status: 'not_assessed', summary: 'Governed canary required.' },
+        },
+        recorded_at: '2026-07-13T08:00:00Z',
+        recorded_at_unix: Math.floor(Date.now() / 1000) - 2 * 60 * 60,
+      },
+    });
+
+    renderComponent('patrol');
+
+    expect(await screen.findByText('Verified for Watch only')).toBeInTheDocument();
+    expect(screen.getByText(/last evaluated 2h ago/)).toBeInTheDocument();
+    expect(runPatrolModelReadinessMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('AISettings provider setup flow', () => {
@@ -1553,6 +1643,44 @@ describe('AISettings provider setup flow', () => {
     expect(String(notificationErrorMock.mock.calls.at(-1)?.[0] ?? '')).toContain(
       'Unable to save Provider & Models settings.',
     );
+  });
+
+  it.each([
+    ['Codex plan', 'codex_subscription_enabled'],
+    ['Claude plan', 'claude_subscription_enabled'],
+  ])('sets up the %s as a credential-free local login', async (optionName, enabledField) => {
+    updateSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      [enabledField]: true,
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    const setupDialog = await screen.findByRole('dialog', {
+      name: 'Set up Pulse Intelligence',
+    });
+    fireEvent.click(within(setupDialog).getByRole('button', { name: new RegExp(optionName) }));
+
+    expect(
+      within(setupDialog).getByText(/No API key or OAuth token is stored in Pulse/),
+    ).toBeInTheDocument();
+    expect(setupDialog.querySelector('input')).toBeNull();
+
+    fireEvent.click(within(setupDialog).getByRole('button', { name: 'Enable Pulse Intelligence' }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith({
+        enabled: true,
+        [enabledField]: true,
+      });
+    });
   });
 
   it('keeps legacy quickstart-only installs on the provider setup path', async () => {

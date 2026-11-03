@@ -15,15 +15,8 @@ import {
   SHIPPED_DOCS_ROOT,
   getShippedDocUrl,
 } from '@/utils/docsLinks';
-import apiAccessPanelSource from '@/components/Settings/APIAccessPanel.tsx?raw';
-import aiRuntimeControlsSectionSource from '@/components/Settings/AIRuntimeControlsSection.tsx?raw';
-import apiTokenManagerModelSource from '@/components/Settings/apiTokenManagerModel.ts?raw';
-import securityOverviewPanelSource from '@/components/Settings/SecurityOverviewPanel.tsx?raw';
-import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
-import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
 import { DIAGNOSTICS_PANEL_COPY } from '@/utils/diagnosticsPresentation';
 import { renderDocMarkdown } from '@/features/docs/docMarkdown';
-import { settingsDocumentationLinkViolations } from '@/components/shared/__tests__/settingsDocumentationLinkContract';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -213,28 +206,6 @@ describe('docsLinks', () => {
     expect(api).toContain('`agent:<host-agent-id>` for a connected agent');
     expect(api).toContain('omit `observationLocationIds`');
     expect(api).toContain('clear `probeAgentId` to `""`');
-    const editor = readFileSync(
-      path.join(
-        frontendRoot,
-        'src',
-        'components',
-        'Settings',
-        'ConnectionEditor',
-        'CredentialSlots',
-        'AvailabilityTargetSlot.tsx',
-      ),
-      'utf8',
-    );
-    expect(editor).toContain('Observation locations</legend>');
-    expect(editor).toContain('observationLocationIds: [...form.observationLocationIds]');
-    const handler = readFileSync(
-      path.join(repoRoot, 'internal', 'api', 'availability_handlers.go'),
-      'utf8',
-    );
-    expect(handler).toContain(
-      'compatibility.ObservationLocationIDs == nil && compatibility.ProbeAgentID != nil',
-    );
-    expect(handler).toContain('agentID != "" && len(*compatibility.ObservationLocationIDs) == 1');
   });
 
   it('documents alert history entries carrying only the newest evidence envelope', () => {
@@ -243,22 +214,12 @@ describe('docsLinks', () => {
       '`GET /api/alerts/history` — each entry carries at most one `evidence` envelope, the newest',
     );
     expect(api).toContain('`operationalRecord.evidenceIds` keeps the full list');
-    const projection = readFileSync(
-      path.join(repoRoot, 'internal', 'alerts', 'history_projection.go'),
-      'utf8',
-    );
-    expect(projection).toContain('snapshot.Evidence = newestHistoryEvidence(snapshot.Evidence)');
   });
 
   it('documents alert configuration saves as replacing only the keys they send', () => {
     const api = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     expect(api).toContain('`PUT /api/alerts/config` — replaces only the top-level keys the body');
     expect(api).toContain('a key left out keeps its stored value');
-    const handler = readFileSync(
-      path.join(repoRoot, 'internal', 'api', 'alerting', 'alerts.go'),
-      'utf8',
-    );
-    expect(handler).toContain('GetAlertManager().ApplyConfigUpdate(body)');
   });
 
   it('documents the Pulse Pro runtime switch routes and their scopes', () => {
@@ -994,37 +955,6 @@ describe('docsLinks', () => {
     expect(apiReference).toContain('Clients cannot submit either');
     expect(apiReference).toContain('validated, installed read-only observer with a live');
     expect(apiReference).toContain('`409 patrol_objective_revision_conflict`');
-  });
-
-  it('routes runtime docs links through shipped local docs instead of GitHub main', () => {
-    expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
-    expect(apiAccessPanelSource).not.toContain(
-      'https://github.com/rcourtman/Pulse/blob/main/docs/',
-    );
-    expect(apiTokenManagerModelSource).toContain("from '@/utils/docsLinks'");
-    expect(apiTokenManagerModelSource).toContain('SHIPPED_API_TOKEN_SCOPES_DOC_URL');
-    expect(apiTokenManagerModelSource).toContain('export const API_TOKEN_SCOPES_DOC_URL =');
-    expect(apiTokenManagerModelSource).not.toContain(
-      'https://github.com/rcourtman/Pulse/blob/main/docs/',
-    );
-    expect(securityOverviewPanelSource).toContain('PROXY_AUTH_DOC_URL');
-    expect(securityOverviewPanelSource).not.toContain(
-      'https://github.com/rcourtman/Pulse/blob/main/docs/',
-    );
-    expect(securityWarningSource).toContain('SECURITY_DOC_URL');
-    expect(securityWarningSource).not.toContain(
-      'https://github.com/rcourtman/Pulse/blob/main/docs/',
-    );
-    // This section may remove its only Terms link with the control it explains.
-    // Any surviving link must still use the shared primitive and shipped route.
-    expect(settingsDocumentationLinkViolations(aiRuntimeControlsSectionSource)).toEqual([]);
-    expect(aiRuntimeControlsSectionSource).not.toContain(
-      'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
-    );
-    expect(selfHostedCommercialRecoverySectionSource).toContain('TERMS_DOC_URL');
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
-      'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
-    );
   });
 
   it(

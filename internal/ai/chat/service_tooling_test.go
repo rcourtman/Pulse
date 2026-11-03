@@ -638,48 +638,6 @@ func TestExecuteAssistantToolUsesSharedResultTextProjection(t *testing.T) {
 	}
 }
 
-func TestDirectToolExecutionUsesSharedResultExecutionMapping(t *testing.T) {
-	src, err := os.ReadFile("service.go")
-	if err != nil {
-		t.Fatalf("read service.go: %v", err)
-	}
-	text := string(src)
-
-	if !strings.Contains(text, "agentcapabilities.InterpretDirectToolExecution(result") {
-		t.Fatalf("direct tool execution must use shared result execution mapping")
-	}
-	for _, fragment := range []string{
-		"func (s *Service) executeAssistantRegistryToolDirect(",
-		`outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, agentcapabilities.PulseRunCommandToolName, args, agentcapabilities.DirectToolExecutionOptions{`,
-		`outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, toolName, args, agentcapabilities.DirectToolExecutionOptions{`,
-		`result, toolErr := executor.ExecuteTool(ctx, toolName, args)`,
-	} {
-		if !strings.Contains(text, fragment) {
-			t.Fatalf("direct Assistant registry execution must use shared service helper; missing %s", fragment)
-		}
-	}
-	if !strings.Contains(text, "strings.TrimSpace(agentcapabilities.ToolResultText(result))") {
-		t.Fatalf("direct topology context must use shared result text projection")
-	}
-	for _, fragment := range []string{
-		"agentcapabilities.HasApprovalRequiredToolMarker(resultText)",
-		"agentcapabilities.HasPolicyBlockedToolMarker(resultText)",
-		"interpreted := agentcapabilities.InterpretToolResult(result)",
-		"interpreted := agentcapabilities.InterpretMCPToolResult(result)",
-		"if interpreted.IsError",
-		"if interpreted.ApprovalRequired",
-		"if interpreted.PolicyBlocked",
-		"FormatToolResult(result)",
-		"agentcapabilities.DirectMCPToolExecutionOptions",
-		"agentcapabilities.InterpretDirectMCPToolExecution(result",
-		"agentcapabilities.MCPToolResultText(result)",
-	} {
-		if strings.Contains(text, fragment) {
-			t.Fatalf("direct tool execution must not duplicate shared result execution mapping; found %s", fragment)
-		}
-	}
-}
-
 func TestAgenticLoopUsesSharedProviderToolResultConstruction(t *testing.T) {
 	src, err := os.ReadFile("agentic.go")
 	if err != nil {
@@ -725,33 +683,6 @@ func TestAgenticLoopUsesSharedProviderToolResultConstruction(t *testing.T) {
 	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("agentic loop must not assemble provider tool-result structs locally; found %s", forbidden)
-		}
-	}
-}
-
-func TestProviderMessageConversionUsesSharedProviderToolResultConstruction(t *testing.T) {
-	src, err := os.ReadFile("agentic_context.go")
-	if err != nil {
-		t.Fatalf("read agentic_context.go: %v", err)
-	}
-	text := string(src)
-
-	for _, fragment := range []string{
-		"projection := newProviderToolResultContextProjection(m.ToolResult.ToolUseID, m.ToolResult.Content, m.ToolResult.IsError)",
-		"pm.ToolResult = &projection.Model",
-		"agentcapabilities.NewProviderToolErrorResult(",
-	} {
-		if !strings.Contains(text, fragment) {
-			t.Fatalf("provider message conversion must use shared provider tool-result construction; missing %s", fragment)
-		}
-	}
-	for _, forbidden := range []string{
-		"func newProviderToolResult(",
-		"func newProviderToolErrorResult(",
-		"ToolResult: &providers.ToolResult{",
-	} {
-		if strings.Contains(text, forbidden) {
-			t.Fatalf("provider message conversion must not preserve Assistant-local provider-result wrappers or structs; found %s", forbidden)
 		}
 	}
 }

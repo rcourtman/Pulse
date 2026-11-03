@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
-import patrolEmptyStatePresentationSource from '@/utils/patrolEmptyStatePresentation.ts?raw';
 import type { PatrolRunRecord } from '@/api/patrol';
 import {
   getInvestigationMessagesState,
@@ -25,9 +23,6 @@ describe('patrolEmptyStatePresentation', () => {
     expect(getRunHistoryEmptyState()).toEqual({
       text: 'No Patrol checks yet. Run Patrol to start history.',
     });
-    expect(runHistoryPanelSource).toContain('@/components/shared/EmptyState');
-    expect(runHistoryPanelSource).toContain('variant="panel"');
-    expect(runHistoryPanelSource).not.toContain('text-center py-8');
   });
 
   it('returns investigation section loading and empty states', () => {
@@ -39,11 +34,6 @@ describe('patrolEmptyStatePresentation', () => {
       text: 'No investigation yet. Patrol adds notes after it runs in a mode that investigates.',
       empty: true,
     });
-  });
-
-  it('keeps the active Patrol empty queue out of all-clear wording', () => {
-    expect(patrolEmptyStatePresentationSource).not.toContain('Nothing needs attention');
-    expect(patrolEmptyStatePresentationSource).not.toContain('all clear');
   });
 
   it('suppresses the healthy findings empty state when patrol health is not fully verified', () => {

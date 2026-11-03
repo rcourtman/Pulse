@@ -175,6 +175,79 @@ describe('useWorkloadTableMetricHistory', () => {
     expect(setItemSpy).not.toHaveBeenCalled();
   });
 
+  // A sparkline under a new History range must never keep drawing the old
+  // range's data while the new range loads, for either estate summary.
+  it.each([
+    ['guests', 'getWorkloadCharts', 'guest=11 node=none', 'guest=12 node=none'],
+    ['nodes', 'getInfrastructureSummaryCharts', 'guest=none node=22', 'guest=none node=23'],
+  ] as const)(
+    'clears the old range from the %s summary while the new range is pending',
+    async (series, route, oneHourValues, twelveHourValues) => {
+      const [range, setRange] = createSignal<WorkloadTableMetricHistoryRange>('1h');
+      let release12h!: () => void;
+      const pending12h = new Promise<void>((resolve) => {
+        release12h = resolve;
+      });
+      const bump = (requested: string | undefined) => (requested === '12h' ? 1 : 0);
+      const workloadSpy = vi
+        .spyOn(ChartsAPI, 'getWorkloadCharts')
+        .mockImplementation(async (requested) => {
+          if (requested === '12h') await pending12h;
+          return {
+            data: { [guest.id]: { cpu: point(11 + bump(requested)) } },
+            dockerData: {},
+            guestTypes: {},
+            timestamp: 2,
+            stats: { oldestDataTimestamp: 1 },
+          };
+        });
+      const infrastructureSpy = vi
+        .spyOn(ChartsAPI, 'getInfrastructureSummaryCharts')
+        .mockImplementation(async (requested) => {
+          if (requested === '12h') await pending12h;
+          return {
+            nodeData: { [node.id]: { cpu: point(22 + bump(requested)) } },
+            timestamp: 2,
+            stats: { oldestDataTimestamp: 1 },
+          };
+        });
+      const spy = route === 'getWorkloadCharts' ? workloadSpy : infrastructureSpy;
+
+      function RangedSeriesProbe() {
+        const reader = useWorkloadTableMetricHistory({
+          enabled: () => true,
+          range,
+          series,
+        });
+        const latest = (values: ReturnType<typeof reader.getGuestMetricSeries>) =>
+          values[0]?.points.at(-1)?.value ?? 'none';
+        return (
+          <div data-testid="series-values">
+            {`guest=${latest(reader.getGuestMetricSeries(guest, 'cpu'))} node=${latest(
+              reader.getNodeMetricSeries(node, 'cpu'),
+            )}`}
+          </div>
+        );
+      }
+
+      render(() => <RangedSeriesProbe />);
+      await waitFor(() => {
+        expect(screen.getByTestId('series-values')).toHaveTextContent(oneHourValues);
+      });
+
+      setRange('12h');
+      await waitFor(() => {
+        expect(spy).toHaveBeenCalledWith('12h', expect.any(AbortSignal), expect.anything());
+      });
+      expect(screen.getByTestId('series-values')).toHaveTextContent('guest=none node=none');
+
+      release12h();
+      await waitFor(() => {
+        expect(screen.getByTestId('series-values')).toHaveTextContent(twelveHourValues);
+      });
+    },
+  );
+
   it('bounds slow-estate warming and prioritizes a distant active guest', async () => {
     const guests = Array.from({ length: 500 }, (_, index) => ({
       ...guest,

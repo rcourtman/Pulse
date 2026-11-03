@@ -36,8 +36,8 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
       closeOnBackdrop={false}
       ariaLabel={props.editingRole ? 'Edit role' : 'New role'}
     >
-      <div class="w-full max-h-[92vh] overflow-hidden">
-        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
+      <div class="flex min-h-0 w-full flex-col">
+        <div class="flex shrink-0 items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
           <h3 class="text-lg font-semibold text-base-content">
             {props.editingRole ? 'Edit Role' : 'New Role'}
           </h3>
@@ -53,140 +53,139 @@ export const RolesEditorDialog: Component<RolesEditorDialogProps> = (props) => (
           </button>
         </div>
 
-        <fieldset
-          disabled={props.saving}
-          class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto"
-        >
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="space-y-1">
-              <label for="role-editor-id" class="block text-sm font-medium text-base-content">
-                Role ID
-              </label>
-              <input
-                id="role-editor-id"
-                type="text"
-                value={props.formId}
-                onInput={(event) => props.onFormIdInput(event.currentTarget.value)}
-                placeholder="e.g., custom-auditor"
-                disabled={!!props.editingRole}
-                class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900/25 disabled:opacity-50"
-              />
+        <div class="min-h-0 overflow-y-auto">
+          <fieldset disabled={props.saving} class="px-4 sm:px-6 py-4 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="space-y-1">
+                <label for="role-editor-id" class="block text-sm font-medium text-base-content">
+                  Role ID
+                </label>
+                <input
+                  id="role-editor-id"
+                  type="text"
+                  value={props.formId}
+                  onInput={(event) => props.onFormIdInput(event.currentTarget.value)}
+                  placeholder="e.g., custom-auditor"
+                  disabled={!!props.editingRole}
+                  class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900/25 disabled:opacity-50"
+                />
+              </div>
+              <div class="space-y-1">
+                <label for="role-editor-name" class="block text-sm font-medium text-base-content">
+                  Role Name
+                </label>
+                <input
+                  id="role-editor-name"
+                  type="text"
+                  value={props.formName}
+                  onInput={(event) => props.onFormNameInput(event.currentTarget.value)}
+                  placeholder="e.g., Custom Auditor"
+                  class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900/25"
+                />
+              </div>
             </div>
             <div class="space-y-1">
-              <label for="role-editor-name" class="block text-sm font-medium text-base-content">
-                Role Name
-              </label>
-              <input
-                id="role-editor-name"
-                type="text"
-                value={props.formName}
-                onInput={(event) => props.onFormNameInput(event.currentTarget.value)}
-                placeholder="e.g., Custom Auditor"
-                class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900/25"
-              />
-            </div>
-          </div>
-          <div class="space-y-1">
-            <label
-              for="role-editor-description"
-              class="block text-sm font-medium text-base-content"
-            >
-              Description
-            </label>
-            <input
-              id="role-editor-description"
-              type="text"
-              value={props.formDescription}
-              onInput={(event) => props.onFormDescriptionInput(event.currentTarget.value)}
-              placeholder="Brief description of this role's purpose"
-              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900/25"
-            />
-          </div>
-
-          <div class="space-y-3 pt-2">
-            <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <span class="block text-sm font-medium text-base-content">Permissions</span>
-              <button
-                type="button"
-                onClick={props.onAddPermission}
-                class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 flex items-center gap-1"
+              <label
+                for="role-editor-description"
+                class="block text-sm font-medium text-base-content"
               >
-                <Plus class="w-3 h-3" /> Add Permission
-              </button>
+                Description
+              </label>
+              <input
+                id="role-editor-description"
+                type="text"
+                value={props.formDescription}
+                onInput={(event) => props.onFormDescriptionInput(event.currentTarget.value)}
+                placeholder="Brief description of this role's purpose"
+                class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-900/25"
+              />
             </div>
 
-            <div class="space-y-2">
-              <For each={props.formPermissions}>
-                {(permission, index) => (
-                  <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <FormSelect
-                      label={`Permission ${index() + 1} action`}
-                      labelClass="sr-only"
-                      fieldBaseClass="contents"
-                      value={permission.action}
-                      onChange={(event) =>
-                        props.onUpdatePermission(index(), 'action', event.currentTarget.value)
-                      }
-                      selectBaseClass="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
-                    >
-                      <Show
-                        when={
-                          !RBAC_PERMISSION_ACTIONS.some((action) => action === permission.action)
-                        }
-                      >
-                        <option value={permission.action}>{permission.action}</option>
-                      </Show>
-                      <For each={RBAC_PERMISSION_ACTIONS}>
-                        {(action) => <option value={action}>{action}</option>}
-                      </For>
-                    </FormSelect>
-                    <span class="hidden sm:inline text-slate-400 text-sm">:</span>
-                    <FormSelect
-                      label={`Permission ${index() + 1} resource`}
-                      labelClass="sr-only"
-                      fieldBaseClass="contents"
-                      value={permission.resource}
-                      onChange={(event) =>
-                        props.onUpdatePermission(index(), 'resource', event.currentTarget.value)
-                      }
-                      selectBaseClass="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
-                    >
-                      <Show
-                        when={
-                          !RBAC_PERMISSION_RESOURCES.some(
-                            (resource) => resource === permission.resource,
-                          )
-                        }
-                      >
-                        <option value={permission.resource}>{permission.resource}</option>
-                      </Show>
-                      <For each={RBAC_PERMISSION_RESOURCES}>
-                        {(resource) => <option value={resource}>{resource}</option>}
-                      </For>
-                    </FormSelect>
-                    <button
-                      type="button"
-                      onClick={() => props.onRemovePermission(index())}
-                      disabled={props.formPermissions.length <= 1}
-                      aria-label="Remove permission"
-                      title="Remove permission"
-                      class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
-                    >
-                      <Trash2 class="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </fieldset>
-        <Show when={props.actionError}>
-          <InlineNotice tone="danger" role="alert" aria-live="polite">
-            {props.actionError}
-          </InlineNotice>
-        </Show>
+            <div class="space-y-3 pt-2">
+              <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span class="block text-sm font-medium text-base-content">Permissions</span>
+                <button
+                  type="button"
+                  onClick={props.onAddPermission}
+                  class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 flex items-center gap-1"
+                >
+                  <Plus class="w-3 h-3" /> Add Permission
+                </button>
+              </div>
 
-        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
+              <div class="space-y-2">
+                <For each={props.formPermissions}>
+                  {(permission, index) => (
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <FormSelect
+                        label={`Permission ${index() + 1} action`}
+                        labelClass="sr-only"
+                        fieldBaseClass="contents"
+                        value={permission.action}
+                        onChange={(event) =>
+                          props.onUpdatePermission(index(), 'action', event.currentTarget.value)
+                        }
+                        selectBaseClass="w-full sm:flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-base-content"
+                      >
+                        <Show
+                          when={
+                            !RBAC_PERMISSION_ACTIONS.some((action) => action === permission.action)
+                          }
+                        >
+                          <option value={permission.action}>{permission.action}</option>
+                        </Show>
+                        <For each={RBAC_PERMISSION_ACTIONS}>
+                          {(action) => <option value={action}>{action}</option>}
+                        </For>
+                      </FormSelect>
+                      <span class="hidden sm:inline text-slate-400 text-sm">:</span>
+                      <FormSelect
+                        label={`Permission ${index() + 1} resource`}
+                        labelClass="sr-only"
+                        fieldBaseClass="contents"
+                        value={permission.resource}
+                        onChange={(event) =>
+                          props.onUpdatePermission(index(), 'resource', event.currentTarget.value)
+                        }
+                        selectBaseClass="w-full sm:flex-1 rounded-md border bg-surface px-2 py-1.5 text-sm text-base-content"
+                      >
+                        <Show
+                          when={
+                            !RBAC_PERMISSION_RESOURCES.some(
+                              (resource) => resource === permission.resource,
+                            )
+                          }
+                        >
+                          <option value={permission.resource}>{permission.resource}</option>
+                        </Show>
+                        <For each={RBAC_PERMISSION_RESOURCES}>
+                          {(resource) => <option value={resource}>{resource}</option>}
+                        </For>
+                      </FormSelect>
+                      <button
+                        type="button"
+                        onClick={() => props.onRemovePermission(index())}
+                        disabled={props.formPermissions.length <= 1}
+                        aria-label="Remove permission"
+                        title="Remove permission"
+                        class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
+                      >
+                        <Trash2 class="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </fieldset>
+          <Show when={props.actionError}>
+            <InlineNotice tone="danger" role="alert" aria-live="polite">
+              {props.actionError}
+            </InlineNotice>
+          </Show>
+        </div>
+
+        <div class="grid shrink-0 grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-border">
           <button
             type="button"
             onClick={props.onClose}

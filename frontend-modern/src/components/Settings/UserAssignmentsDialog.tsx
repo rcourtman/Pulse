@@ -33,8 +33,8 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
       closeOnBackdrop={false}
       ariaLabel={`Manage access: ${props.editingUser ? getUserIdentityDisplayName(props.editingUser) : 'user'}`}
     >
-      <div class="w-full max-h-[92vh] overflow-hidden">
-        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
+      <div class="flex min-h-0 w-full flex-col">
+        <div class="flex shrink-0 items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-border">
           <div>
             <h3 class="text-lg font-semibold text-base-content">
               Manage Access:{' '}
@@ -63,7 +63,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
           </button>
         </div>
 
-        <div class="px-4 sm:px-6 py-6 space-y-8 max-h-[70vh] overflow-y-auto">
+        <div class="min-h-0 overflow-y-auto px-4 sm:px-6 py-6 space-y-8">
           <Show when={props.actionError}>
             {(message) => (
               <InlineNotice tone="danger" role="alert" aria-live="polite">
@@ -164,7 +164,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-border bg-surface-alt rounded-b-xl">
+        <div class="grid shrink-0 grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-border bg-surface-alt rounded-b-xl">
           <button
             type="button"
             onClick={props.onClose}

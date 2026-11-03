@@ -9,76 +9,17 @@ import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabil
 import { WorkloadsSurface, type WorkloadsSurfaceProps } from '../WorkloadsSurface';
 import { useWorkloadsState, type WorkloadsStateOptions } from '../useWorkloadsState';
 import { WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH, getGuestColumnStyle } from '../guestRowModel';
-import workloadsSource from '../WorkloadsSurface.tsx?raw';
-import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
-import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
-import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
-import workloadsWorkloadTableSource from '../WorkloadsTable.tsx?raw';
-import metricDisplayModeSegmentedControlSource from '../MetricDisplayModeSegmentedControl.tsx?raw';
-import workloadPanelSource from '../WorkloadPanel.tsx?raw';
 import workloadWebLinksActionSource from '../WorkloadWebLinksAction.tsx?raw';
-import workloadWebLinksStateSource from '../useWorkloadWebLinksState.ts?raw';
-import workloadTableHeaderSource from '../WorkloadTableHeader.tsx?raw';
-import workloadsFilterModelSource from '../workloadsFilterModel.ts?raw';
-import workloadsControlsStateSource from '../useWorkloadsControlsState.ts?raw';
-import workloadsGuestMetadataStateSource from '../useWorkloadGuestMetadataState.ts?raw';
-import workloadSelectionModelSource from '../workloadSelectionModel.ts?raw';
-import workloadsSelectionStateSource from '../useWorkloadSelectionState.ts?raw';
-import workloadsWorkloadDerivedStateSource from '../useWorkloadsDerivedState.ts?raw';
-import workloadsWorkloadFilterOptionsSource from '../useWorkloadFilterOptions.ts?raw';
-import workloadFilterConfigModelSource from '../workloadFilterConfigModel.ts?raw';
-import workloadRouteModelSource from '../workloadRouteModel.ts?raw';
-import workloadRouteStateModelSource from '../workloadRouteStateModel.ts?raw';
-import workloadUrlSyncModelSource from '../workloadUrlSyncModel.ts?raw';
-import workloadColumnLayoutUrlSource from '../workloadColumnLayoutUrl.ts?raw';
-import workloadColumnWidthsSource from '../workloadColumnWidths.ts?raw';
-import workloadsWorkloadViewportSyncSource from '../useWorkloadViewportSync.ts?raw';
-import workloadsWorkloadRouteStateSource from '../useWorkloadRouteState.ts?raw';
-import workloadsWorkloadUrlSyncSource from '../useWorkloadUrlSync.ts?raw';
 import workloadsStateSource from '../useWorkloadsState.ts?raw';
-import workloadTableMetricHistoryStateSource from '../useWorkloadTableMetricHistory.ts?raw';
-import workloadInventorySourceIssuesSource from '../workloadInventorySourceIssues.ts?raw';
-import groupedTableWindowingSource from '../useGroupedTableWindowing.ts?raw';
-import thresholdSliderSource from '../ThresholdSlider.tsx?raw';
-import thresholdSliderModelSource from '../thresholdSliderModel.ts?raw';
-import thresholdSliderStateSource from '../useThresholdSliderState.ts?raw';
-import enhancedCpuBarSource from '../EnhancedCPUBar.tsx?raw';
-import enhancedCpuBarModelSource from '../enhancedCpuBarModel.ts?raw';
-import enhancedCpuBarStateSource from '../useEnhancedCPUBarState.ts?raw';
-import stackedDiskBarSource from '../StackedDiskBar.tsx?raw';
-import stackedDiskBarModelSource from '../stackedDiskBarModel.ts?raw';
-import stackedDiskBarStateSource from '../useStackedDiskBarState.ts?raw';
-import stackedMemoryBarSource from '../StackedMemoryBar.tsx?raw';
-import stackedMemoryBarModelSource from '../stackedMemoryBarModel.ts?raw';
-import stackedMemoryBarStateSource from '../useStackedMemoryBarState.ts?raw';
-import diskListSource from '../DiskList.tsx?raw';
-import diskListModelSource from '../diskListModel.ts?raw';
-import diskListStateSource from '../useDiskListState.ts?raw';
-import metricBarSource from '../MetricBar.tsx?raw';
-import metricBarModelSource from '../metricBarModel.ts?raw';
-import metricBarStateSource from '../useMetricBarState.ts?raw';
-import guestDrawerSource from '../GuestDrawer.tsx?raw';
-import guestDrawerManageSource from '../GuestDrawerManage.tsx?raw';
-import guestDrawerHistorySource from '../GuestDrawerHistory.tsx?raw';
 import guestDrawerOverviewSource from '../GuestDrawerOverview.tsx?raw';
-import guestDrawerModelSource from '../guestDrawerModel.ts?raw';
-import nodeDrawerSource from '../NodeDrawer.tsx?raw';
 import nodeDrawerOverviewSource from '../NodeDrawerOverview.tsx?raw';
-import nodeDrawerModelSource from '../nodeDrawerModel.ts?raw';
-import guestRowSource from '../GuestRow.tsx?raw';
-import guestRowCellsSource from '../GuestRowCells.tsx?raw';
-import guestDrawerStateSource from '../useGuestDrawerState.ts?raw';
-import guestRowModelSource from '../guestRowModel.tsx?raw';
-import guestRowStateSource from '../useGuestRowState.ts?raw';
-import workloadSelectorsSource from '../workloadSelectors.ts?raw';
-import workloadTopologySource from '../workloadTopology.ts?raw';
 import {
   filterWorkloads,
   createWorkloadSortComparator,
   groupWorkloads,
   computeWorkloadStats,
 } from '../workloadSelectors';
-import { getKubernetesContextKey } from '../workloadTopology';
+import { getKubernetesContextKey, workloadNodeScopeId } from '../workloadTopology';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
@@ -198,11 +139,16 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   },
 }));
 
+const metricHistoryMocks = vi.hoisted(() => ({ options: [] as Array<{ series: string }> }));
+
 vi.mock('../useWorkloadTableMetricHistory', () => ({
-  useWorkloadTableMetricHistory: () => ({
-    getGuestMetricSeries: () => [],
-    getNodeMetricSeries: () => [],
-  }),
+  useWorkloadTableMetricHistory: (options: { series: string }) => {
+    metricHistoryMocks.options.push(options);
+    return {
+      getGuestMetricSeries: () => [],
+      getNodeMetricSeries: () => [],
+    };
+  },
 }));
 
 vi.mock('@/api/connections', () => ({
@@ -405,75 +351,6 @@ function PageOwnedWorkloadsSurface(
   );
 }
 
-describe('Workloads platform-page embed contract', () => {
-  it('exposes metric-display-mode + history-range override hooks so platform pages can share the toggle across multiple tables', async () => {
-    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
-    expect(stateSource).toContain('metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;');
-    expect(stateSource).toContain(
-      'onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;',
-    );
-    expect(stateSource).toContain(
-      'metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;',
-    );
-    expect(stateSource).toContain(
-      'onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;',
-    );
-    expect(stateSource).toContain('metricDisplayMode: props.metricDisplayMode,');
-    expect(stateSource).toContain('onMetricDisplayModeChange: props.onMetricDisplayModeChange,');
-
-    const controlsSource = (await import('../useWorkloadsControlsState.ts?raw')).default;
-    // The controls layer must short-circuit to the page-provided accessor +
-    // change handler when supplied; the internal persistent signal stays as
-    // the fallback so standalone usage keeps working.
-    expect(controlsSource).toContain('options.metricDisplayMode ?? internalMetricDisplayMode');
-    expect(controlsSource).toContain('options.onMetricDisplayModeChange');
-    expect(controlsSource).toContain('options.metricHistoryRange ?? internalMetricHistoryRange');
-
-    const proxmoxSource = (await import('../../../features/proxmox/ProxmoxPageSurface.tsx?raw'))
-      .default;
-    expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE');
-    expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE');
-    expect(proxmoxSource).toContain('metricDisplayMode={metricDisplayMode}');
-    expect(proxmoxSource).toContain('{...getWorkloadsMetricFilterProps(workloadsState)}');
-    expect(proxmoxSource).toContain('onMetricDisplayModeChange: props.setMetricDisplayMode,');
-    expect(proxmoxSource).toContain('metricHistoryRange={metricHistoryRange}');
-    expect(proxmoxSource).not.toContain(
-      'setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}',
-    );
-    expect(proxmoxSource).toContain('onMetricHistoryRangeChange: props.setMetricHistoryRange,');
-
-    const nodesTableSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
-      .default;
-    expect(nodesTableSource).toContain('useWorkloadTableMetricHistory');
-    expect(nodesTableSource).toContain('MetricMiniSparkline');
-    expect(nodesTableSource).toContain('isSparklineMode');
-    // The hosts table draws node rows only: it polls the infrastructure
-    // summary and leaves guest history to the embedded workloads reader.
-    expect(nodesTableSource).toContain("series: 'nodes',");
-  });
-
-  it('keeps grouped host rows as dividers and host drawers on the platform hosts table', async () => {
-    const stateSource = (await import('../useWorkloadsState.ts?raw')).default;
-    expect(stateSource).not.toContain('groupNodeDrawerMode');
-    expect(stateSource).not.toContain('summaryGroupScopes');
-
-    const selectionSource = (await import('../useWorkloadSelectionState.ts?raw')).default;
-    expect(selectionSource).not.toContain('hoveredGroupScope');
-    expect(selectionSource).not.toContain('focusedGroupScope');
-
-    const panelSource = (await import('../WorkloadPanel.tsx?raw')).default;
-    expect(panelSource).not.toContain('NodeDrawer');
-    expect(panelSource).not.toContain('handleGroupFocusToggle');
-    expect(panelSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
-    expect(panelSource).toContain("trProps={{ 'data-summary-group-id': groupKey }}");
-
-    const proxmoxNodesSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
-      .default;
-    expect(proxmoxNodesSource).toContain('NodeDrawer');
-    expect(proxmoxNodesSource).toContain('data-inline-detail-for={node.id}');
-  });
-});
-
 describe('Workloads performance contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -534,19 +411,59 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Baseline structural contracts', () => {
-    it('binds every workload toolbar to the complete canonical metric-control contract', () => {
-      expect(workloadsFilterModelSource).toContain('getWorkloadsMetricFilterProps');
-      expect(workloadsFilterModelSource).toContain('metricHistoryHintVisible');
-      // The owning platform pages render the only workload toolbars; the
-      // embedded surface renders none.
-      expect(workloadsSource).not.toContain('<WorkloadsFilter');
-      expect(workloadsSource).not.toContain("from './WorkloadsFilter'");
-      for (const pageSource of [proxmoxPageSurfaceSource, vmwarePageSurfaceSource]) {
-        expect(pageSource).toContain('{...getWorkloadsMetricFilterProps(workloadsState)}');
-        expect(pageSource).not.toContain(
-          'metricDisplayMode={workloadsState.workloadMetricDisplayMode}',
-        );
-      }
+    // The Trends toggle on the Workloads surface draws guest rows only: grouped
+    // node rows render no metric cells, so it must not poll the infrastructure
+    // summary the hosts table owns.
+    it('reads only guest metric history so Trends does not poll the infrastructure summary', () => {
+      metricHistoryMocks.options.length = 0;
+      const view = renderHook(() => useWorkloadsState({}));
+
+      const requested = metricHistoryMocks.options.map((options) => options.series);
+      expect(requested).toContain('guests');
+      expect(requested).not.toContain('nodes');
+      view.cleanup();
+    });
+
+    // useWorkloadViewportSync measures dividers and summaryTableFocus keeps a click
+    // on one from clearing the open drawer, both through this attribute. A group
+    // with a Proxmox host resource renders the host NodeGroupHeader row; a group
+    // without one renders the plain group row. Both must carry it.
+    it('tags every group divider row with its group id', async () => {
+      mockLocationSearch = '?type=all';
+      mockInfrastructureResources = [
+        {
+          id: 'agent-node-a',
+          type: 'agent',
+          name: 'node-a',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          proxmox: { instance: 'node-a', node: 'node-a' },
+        } as Resource,
+      ];
+      mockWorkloads = [
+        makeGuest(1, { name: 'on-node-a', node: 'node-a', instance: 'node-a' }),
+        makeGuest(2, { name: 'on-node-b', node: 'node-b', instance: 'node-b' }),
+      ];
+
+      const { container } = render(() => (
+        <PageOwnedWorkloadsSurface forcedGroupingMode="grouped" />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelectorAll('tr[data-summary-group-id]')).toHaveLength(2);
+      });
+      const scopeFor = (name: string) => workloadNodeScopeId({ instance: name, node: name });
+      const dividers = Array.from(container.querySelectorAll('tr[data-summary-group-id]'));
+      expect(dividers.map((row) => row.getAttribute('data-summary-group-id'))).toEqual([
+        scopeFor('node-a'),
+        scopeFor('node-b'),
+      ]);
+      // Only the host header row carries the host status dot, so this proves the
+      // first divider is the NodeGroupHeader path and the second the plain row.
+      expect(dividers[0].textContent).toContain('node-a');
+      expect(dividers[0].querySelector('[role="img"][aria-label]')).not.toBeNull();
+      expect(dividers[1].textContent).toContain('node-b');
+      expect(dividers[1].querySelector('[role="img"][aria-label]')).toBeNull();
     });
 
     it('keeps the workloads route visible when websocket connectivity degrades but REST workload data is healthy', async () => {
@@ -892,31 +809,6 @@ describe('Workloads performance contract', () => {
   });
 
   describe('Workload windowing contracts', () => {
-    it('keeps grouped virtual height stable and owns the back-to-top control in viewport sync', () => {
-      expect(workloadsWorkloadDerivedStateSource).toContain('estimatedGroupHeaderHeight');
-      expect(workloadsWorkloadDerivedStateSource).toContain('countGroupStartsBefore');
-      expect(workloadsWorkloadDerivedStateSource).toContain('guestIndexAtVirtualOffset');
-      expect(workloadsWorkloadDerivedStateSource).toContain('WORKLOADS_TABLE_DIVIDER_HEIGHT');
-      expect(groupedTableWindowingSource).toContain('rowIndexAtOffset');
-      expect(groupedTableWindowingSource).toContain('targetRunway');
-      expect(groupedTableWindowingSource).toContain('trailingRunway');
-      expect(workloadPanelSource).toContain('groupGuests()[0] === fullGroupGuests()[0]');
-      expect(workloadPanelSource).toContain('class="h-0 p-0! border-0! leading-0"');
-      expect(workloadPanelSource).toContain('<For each={props.visibleGroupKeys()}');
-      expect(workloadPanelSource).toContain('<For each={groupGuestIds()}');
-      expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
-      expect(workloadsWorkloadViewportSyncSource).toContain(
-        'SCROLL_TO_TOP_VISIBILITY_THRESHOLD_PX',
-      );
-      expect(workloadsWorkloadViewportSyncSource).toContain('bindWindowedPageScrollEvents');
-      expect(workloadsWorkloadViewportSyncSource).not.toContain("addEventListener('touch");
-      expect(workloadsWorkloadViewportSyncSource).toContain('wheelDeltaInPixels');
-      expect(workloadsWorkloadViewportSyncSource).toContain(
-        "scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })",
-      );
-      expect(workloadsSource).toContain('data-testid="workloads-scroll-to-top"');
-    });
-
     it('Profile M: caps mounted guest rows when windowing is active', async () => {
       mockLocationSearch = '?type=all';
       mockWorkloads = makeGuests(PROFILES.M);
@@ -1198,543 +1090,20 @@ describe('Workloads performance contract', () => {
       expect(screen.getByTestId('drawer-nested-context')).toHaveTextContent('Docker 1');
     });
 
-    it('routes org scope normalization through the shared helper', () => {
-      expect(workloadsSource).toContain('useWorkloadsState');
-      expect(workloadsStateSource).toContain('useWorkloadGuestMetadataState');
-      expect(workloadsGuestMetadataStateSource).toContain('normalizeOrgScope(getOrgID())');
-      expect(workloadsStateSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
-      expect(workloadsStateSource).not.toContain('const normalizeOrgScope =');
-    });
-
-    it('reads guests and Proxmox nodes only from the workloads query or page snapshot', () => {
-      // The state always runs its workloads query, so its options carry no
-      // enable flag and no caller-supplied guest or node arrays.
-      expect(workloadsStateSource).not.toMatch(/^ {2}(?:vms|containers|nodes|useWorkloads)\??:/m);
-      expect(workloadsStateSource).not.toContain('props.useWorkloads');
-      expect(workloadsStateSource).not.toContain('props.nodes');
-    });
-
-    it('keeps hot-path workloads state in the shared workloads state owner', () => {
-      expect(workloadsSource).toContain('useWorkloadsState');
-      // The owning page builds the state and the surface requires it; the
-      // overview layout guardrails check the surface imports only its type.
-      expect(workloadsSource).toContain('  state: WorkloadsState;');
-      expect(workloadsSource).toContain('WorkloadsTable');
-      expect(workloadsSource).not.toContain('const [search, setSearch] = createSignal(');
-      expect(workloadsStateSource).toContain('useWorkloadsControlsState');
-      expect(workloadsStateSource).toContain('useWorkloadGuestMetadataState');
-      expect(workloadsStateSource).toContain('useWorkloadSelectionState');
-      expect(workloadsStateSource).toContain('useWorkloadsDerivedState');
-      expect(workloadsStateSource).toContain('useWorkloadRouteState');
-      expect(workloadsStateSource).toContain('buildWorkloadInventorySourceIssues');
-      expect(workloadsStateSource).toContain('RuntimeInventorySourcesAPI.list()');
-      expect(workloadsStateSource).toContain(
-        'inventorySourcesSnapshot.refetch({ background: true })',
-      );
-      expect(workloadsStateSource).not.toContain('ConnectionsAPI');
-      expect(workloadsStateSource).not.toContain('ConnectionsListResponse');
-      expect(workloadsStateSource).not.toContain('workloads-connections:');
-      expect(workloadInventorySourceIssuesSource).toContain('WORKLOAD_CAPABLE_TYPES');
-      expect(workloadInventorySourceIssuesSource).not.toContain('formatConnectionErrorMessage');
-      expect(workloadsStateSource).toContain('createWorkloadSortComparator');
-      expect(workloadsStateSource).toContain('filterWorkloads(params)');
-      expect(workloadsStateSource).not.toContain('useBreakpoint');
-      expect(workloadsStateSource).not.toContain('useColumnVisibility');
-      expect(workloadsStateSource).not.toContain('blurFocusedTypeToSearch');
-      expect(workloadsStateSource).not.toContain("from './GuestRow'");
-      expect(workloadsStateSource).not.toContain('GuestMetadataAPI.getAllMetadata()');
-      expect(workloadsStateSource).not.toContain('buildWorkloadsPath({');
-      expect(workloadsStateSource).not.toContain('parseWorkloadsLinkSearch');
-      expect(workloadsStateSource).not.toContain('const [selectedGuestId, setSelectedGuestIdRaw]');
-      expect(workloadsStateSource).not.toContain('const [hoveredWorkloadId, setHoveredWorkloadId]');
-      expect(workloadsStateSource).not.toContain('groupWorkloads(');
-      expect(workloadsStateSource).not.toContain('computeWorkloadStats(');
-      expect(workloadsStateSource).not.toContain('computeWorkloadIOEmphasis(');
-      expect(workloadsStateSource).not.toContain('buildNodeByInstance(');
-      expect(workloadsStateSource).not.toContain('buildGuestParentNodeMap(');
-      expect(workloadsStateSource).not.toContain('useGroupedTableWindowing');
-      expect(workloadsGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
-      expect(workloadsGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
-      expect(workloadsGuestMetadataStateSource).toContain(
-        'window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT',
-      );
-      expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadUrlSync');
-      expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');
-      expect(workloadsWorkloadRouteStateSource).not.toContain('window.location.pathname');
-      expect(workloadsWorkloadRouteStateSource).not.toContain('window.location.search');
-      expect(workloadsControlsStateSource).not.toContain('window.location.pathname');
-      expect(workloadsControlsStateSource).not.toContain('window.location.search');
-      expect(workloadsWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
-      expect(workloadsWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
-      expect(workloadsWorkloadRouteStateSource).not.toContain(
-        'const [handledTypeParam, setHandledTypeParam]',
-      );
-      expect(workloadsWorkloadRouteStateSource).not.toContain(
-        'const [workloadsRouteActive, setWorkloadsRouteActive] = createSignal(false)',
-      );
-      expect(workloadsWorkloadRouteStateSource).not.toContain(
-        'const workloadNodeOptions = createMemo',
-      );
-      expect(workloadsWorkloadRouteStateSource).not.toContain(
-        'const containerRuntimeFilterConfig = createMemo',
-      );
-      expect(workloadsWorkloadRouteStateSource).toContain("from './workloadRouteStateModel'");
-      expect(workloadsWorkloadRouteStateSource).toContain(
-        'resolveWorkloadsWorkloadNodeSelection({',
-      );
-      expect(workloadsWorkloadRouteStateSource).toContain('WORKLOADS_WORKLOAD_ROUTE_RESET_STATE');
-      expect(workloadsWorkloadRouteStateSource).toContain('isWorkloadsRoute,');
-      expect(workloadsWorkloadFilterOptionsSource).toContain("from './workloadFilterConfigModel'");
-      expect(workloadsWorkloadFilterOptionsSource).toMatch(
-        /const workloadNodeOptions = createMemo\(\(\) =>\s*buildWorkloadNodeOptions\(\s*platformScopedGuests\(\),/,
-      );
-      expect(workloadsWorkloadFilterOptionsSource).not.toContain(
-        'const onContextChange = (value: string) =>',
-      );
-      expect(workloadsWorkloadFilterOptionsSource).toContain(
-        'buildWorkloadsContainerRuntimeFilterConfig({',
-      );
-      expect(workloadsWorkloadFilterOptionsSource).toContain('buildWorkloadsHostFilterConfig({');
-      expect(workloadsWorkloadFilterOptionsSource).toContain(
-        'buildWorkloadsNamespaceFilterConfig({',
-      );
-      expect(workloadFilterConfigModelSource).toContain(
-        'export const buildWorkloadsContainerRuntimeFilterConfig',
-      );
-      expect(workloadFilterConfigModelSource).toContain(
-        'export const buildWorkloadsHostFilterConfig',
-      );
-      expect(workloadFilterConfigModelSource).toContain(
-        "WORKLOADS_KUBERNETES_CONTEXT_FILTER_LABEL = 'K8s cluster'",
-      );
-      expect(workloadFilterConfigModelSource).toContain("getAllFilterOptionLabel('K8s clusters')");
-      expect(workloadFilterConfigModelSource).toContain('WORKLOAD_TYPE_OPTIONS');
-      expect(workloadFilterConfigModelSource).toContain(
-        'export const buildWorkloadsNamespaceFilterConfig',
-      );
-      expect(workloadRouteModelSource).toContain('export const deserializeWorkloadViewMode');
-      expect(workloadRouteModelSource).toContain("normalizeWorkloadViewModeParam(raw) ?? 'all'");
-      expect(workloadRouteModelSource).not.toContain(
-        'export const buildWorkloadsContainerRuntimeFilterConfig',
-      );
-      expect(workloadRouteModelSource).not.toContain('export const buildWorkloadsHostFilterConfig');
-      expect(workloadRouteModelSource).not.toContain(
-        'export const buildWorkloadsNamespaceFilterConfig',
-      );
-      expect(workloadRouteStateModelSource).toContain(
-        'export const WORKLOADS_WORKLOAD_ROUTE_RESET_STATE',
-      );
-      expect(workloadRouteStateModelSource).toContain(
-        'export const resolveWorkloadsWorkloadNodeSelection',
-      );
-      expect(workloadRouteStateModelSource).toContain(
-        'export const deserializeWorkloadsContainerRuntime',
-      );
-      expect(workloadsWorkloadUrlSyncSource).not.toContain('buildWorkloadsPath({');
-      expect(workloadsWorkloadUrlSyncSource).not.toContain('normalizeWorkloadViewModeParam');
-      expect(workloadsWorkloadUrlSyncSource).not.toContain('parseWorkloadsLinkSearch');
-      expect(workloadsWorkloadUrlSyncSource).toContain("from './workloadRouteModel'");
-      expect(workloadsWorkloadUrlSyncSource).toContain("from './workloadUrlSyncModel'");
-      expect(workloadsWorkloadUrlSyncSource).toContain(
-        'const [handledTypeParam, setHandledTypeParam]',
-      );
-      expect(workloadsWorkloadUrlSyncSource).toContain(
-        'if (normalized === handledPlatformParam()) return;',
-      );
-      expect(workloadsWorkloadUrlSyncSource).toContain(
-        'const currentSelected = untrack(() => options.selectedPlatform());',
-      );
-      expect(workloadsWorkloadUrlSyncSource).toContain('parseWorkloadsWorkloadUrlParams');
-      expect(workloadsWorkloadUrlSyncSource).toContain(
-        'resolveWorkloadsManagedWorkloadsNavigateTarget({',
-      );
-      expect(workloadUrlSyncModelSource).toContain('parseWorkloadsLinkSearch(search)');
-      expect(workloadUrlSyncModelSource).toContain('buildWorkloadsRouteSearch({');
-      expect(workloadUrlSyncModelSource).toContain(
-        'resolveWorkloadsManagedWorkloadsNavigateTarget',
-      );
-      expect(workloadUrlSyncModelSource).toContain('resolveWorkloadsWorkloadRuntimeParam');
-      expect(workloadUrlSyncModelSource).toContain('normalizeWorkloadViewModeParam(params.type)');
-      expect(workloadsControlsStateSource).toContain('useBreakpoint');
-      expect(workloadsControlsStateSource).toContain('useColumnVisibility');
-      expect(workloadsControlsStateSource).toContain('usePersistentSignal');
-      expect(workloadsControlsStateSource).toContain('WORKLOADS_METRIC_HISTORY_RANGE');
-      expect(workloadsControlsStateSource).toContain('blurFocusedTypeToSearch');
-      expect(workloadsControlsStateSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
-      expect(workloadsWorkloadDerivedStateSource).toContain('groupWorkloads(');
-      expect(workloadsWorkloadDerivedStateSource).toContain('computeWorkloadStats(');
-      expect(workloadsWorkloadDerivedStateSource).toContain('computeWorkloadIOEmphasis(');
-      expect(workloadsWorkloadDerivedStateSource).toContain("from './workloadTopology'");
-      expect(workloadsWorkloadDerivedStateSource).toContain('buildNodeByInstance(');
-      expect(workloadsWorkloadDerivedStateSource).toContain('buildGuestParentNodeMap(');
-      expect(workloadsWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
-      expect(workloadsWorkloadDerivedStateSource).toContain('useWorkloadViewportSync');
-      expect(workloadsWorkloadDerivedStateSource).not.toContain('window.addEventListener');
-      expect(workloadsWorkloadDerivedStateSource).not.toContain('getBoundingClientRect');
-      expect(workloadsWorkloadViewportSyncSource).toContain('bindWindowedPageScrollEvents');
-      expect(workloadsWorkloadViewportSyncSource).toContain('getBoundingClientRect');
-      expect(workloadsWorkloadViewportSyncSource).toContain('groupedWindowing.onScroll');
-      expect(workloadsWorkloadRouteStateSource).not.toContain("from './workloadTopology'");
-      expect(workloadRouteModelSource).toContain("from './workloadTopology'");
-      expect(workloadRouteModelSource).toContain('workloadHostScopeId');
-      expect(workloadRouteModelSource).toContain('getKubernetesContextKey');
-      expect(workloadsSelectionStateSource).toContain(
-        'const [selectedGuestId, setSelectedGuestIdRaw]',
-      );
-      expect(workloadsSelectionStateSource).toContain(
-        'const [hoveredWorkloadId, setHoveredWorkloadId]',
-      );
-      expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
-      expect(workloadsSelectionStateSource).not.toContain('useNavigate');
-      expect(workloadsSelectionStateSource).not.toContain('createRouteStateNavigateScheduler');
-      expect(workloadsSelectionStateSource).not.toContain(
-        'resolveWorkloadsSelectionNavigateTarget',
-      );
-      expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
-      expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
-      expect(workloadSelectionModelSource).toContain('getCanonicalWorkloadId');
-      expect(workloadSelectionModelSource).toContain('resolveWorkloadResourceSelection');
-      expect(workloadSelectionModelSource).not.toContain('resolveWorkloadsSelectionNavigateTarget');
-      expect(workloadSelectionModelSource).toContain('workloadsHasHoveredWorkload');
-      expect(groupedTableWindowingSource).toContain('DEFAULT_WINDOW_SIZE');
-      expect(groupedTableWindowingSource).toContain('DEFAULT_ENABLE_THRESHOLD');
-      expect(groupedTableWindowingSource).toContain('targetRunway');
-      expect(groupedTableWindowingSource).toContain('getVisibleSlice');
-      expect(groupedTableWindowingSource).toContain('onScroll');
-      expect(groupedTableWindowingSource).toContain('revealIndex');
-      expect(workloadsStateSource).not.toContain('const DEFAULT_WINDOW_SIZE =');
-      expect(workloadsStateSource).not.toContain('const DEFAULT_ENABLE_THRESHOLD =');
-      expect(workloadsStateSource).not.toContain('targetRunway');
-      expect(workloadsSource).not.toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
-      expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
-      expect(workloadPanelSource).toContain('groupGuestById().get(keyedGuestId)');
-      expect(workloadPanelSource).toContain('data-summary-group-id');
-      expect(workloadPanelSource).not.toContain('setHoveredWorkloadGroupScope');
-      expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
-      expect(workloadPanelSource).toContain('class={getGroupedTableRowClass()}');
-      expect(workloadPanelSource).not.toContain('getInteractiveGroupedTableRowClass');
-      expect(workloadPanelSource).not.toContain('cursor-pointer bg-surface-alt');
-      expect(workloadsWorkloadTableSource).not.toContain(
-        'createMemo(() => getCanonicalWorkloadId(guest()))',
-      );
-      expect(workloadsStateSource).not.toContain('const guestId = () => {');
-    });
-
-    it('keeps workloads filter state in canonical workloads filter owners', () => {
-      // WorkloadsFilter migrated to FilterBar — the filter component now
-      // composes the chip catalog directly and reads useBreakpoint locally,
-      // so the legacy useWorkloadsFilterState hook is no longer in the
-      // render path. Defaults/derivations stay in workloadsFilterModel.
-      expect(workloadsFilterSource).toContain('FilterBar');
-      expect(workloadsFilterSource).toContain('useBreakpoint');
-      expect(workloadsFilterSource).toContain('hasActiveWorkloadsFilters');
-      expect(workloadsFilterSource).toContain('DEFAULT_WORKLOADS_SORT_KEY');
-      expect(workloadsSource).not.toContain('SummaryScopeBar');
-      expect(workloadsSource).not.toContain('searchTrailing={pinnedScopeFallback()}');
-      expect(workloadsSource).not.toContain('mobileTrailing={pinnedScopeFallback()}');
-      expect(workloadsSource).toContain('setClearSurfaceRootRef');
-      expect(workloadsSource).toContain('setTableRootRef={state.setTableRootRef}');
-      expect(workloadsSource).toContain('data-testid="workloads-interaction-surface"');
-      for (const pageSource of [proxmoxPageSurfaceSource, vmwarePageSurfaceSource]) {
-        expect(pageSource).toContain(
-          'onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}',
-        );
-      }
-      expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
-      expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
-      expect(workloadsWorkloadTableSource).toContain('TableCard');
-      expect(workloadsWorkloadTableSource).toContain(
-        '<TableCardHeader title={props.title} actions={props.actions} />',
-      );
-      expect(workloadsSource).toContain('<WorkloadWebLinksAction');
-      expect(workloadsSource).toContain('guests: state.filteredGuests,');
-      expect(workloadsSource).toContain("kind: 'workloads',");
-      expect(workloadPanelSource).toContain(
-        'getWorkloadGuestMetadataRecord(guest(), props.guestMetadata())',
-      );
-      // The bulk link panel and its row model load on first open, outside the
-      // WorkloadsSurface chunk, and only mount while the editor is open.
+    // Bundle shape, not behaviour: nothing in jsdom notices a lazy chunk turning
+    // eager, so these stay as source guards on the entry files.
+    it('keeps the web-links dialog, physical disks and drawer history charts in lazy chunks', () => {
       expect(workloadWebLinksActionSource).toContain(
         "lazy(() => import('./WorkloadWebLinksDialog'))",
       );
       expect(workloadWebLinksActionSource).toContain('<Show when={open()}>');
-      // Type-only imports are erased, so the row model stays in the lazy chunk.
       expect(workloadWebLinksActionSource).not.toMatch(
         /^import (?!type )[^;]*from '\.\/(workloadWebLinksModel|useWorkloadWebLinksState)';/m,
       );
-      expect(workloadWebLinksStateSource).toContain('keepStableWorkloadWebLinkRows(');
-      expect(workloadsSource).toContain('<TableCardHeader title={props.tableTitle} />');
-      expect(workloadsSource).toContain('title={props.tableTitle}');
-      expect(workloadsWorkloadTableSource).toContain(
-        'workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}',
-      );
-      expect(workloadsFilterSource).toContain('MetricDisplayModeSegmentedControl');
-      expect(workloadsFilterSource).toContain('MetricHoverModeSegmentedControl');
-      expect(workloadsFilterSource).toContain('Row hover');
-      expect(workloadsFilterSource).toContain('viewOptions={');
-      expect(workloadsFilterSource).not.toContain('ViewOptionsMenu');
-      expect(workloadsFilterSource).toContain('MetricHistoryRangeSegmentedControl');
-      expect(workloadsFilterSource).toContain('label="History"');
-      expect(workloadsFilterSource).toContain('<ColumnPicker');
-      expect(workloadsFilterSource).toContain('inline');
-      expect(workloadsFilterSource).toContain('showAddFilterLabel={false}');
-      expect(workloadsFilterSource).not.toContain('label="Memory %"');
-      expect(workloadsFilterSource).toContain('metricHistoryRange');
-      expect(metricDisplayModeSegmentedControlSource).toContain(
-        'WORKLOAD_TABLE_HISTORY_RANGES.map',
-      );
-      expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Sparkline range"');
-      expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Row hover behavior"');
-      expect(metricDisplayModeSegmentedControlSource).toContain('justify-start');
-      expect(workloadTableHeaderSource).toContain('getWorkloadColumnHeaderLabel');
-      expect(workloadTableHeaderSource).toContain('`${defaultLabel} · Host`');
-      expect(workloadsFilterSource).toContain('pinnedSelectionActive');
-      expect(workloadsFilterSource).toContain('Clear selection');
-      expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
-      expect(workloadsFilterSource).not.toContain("props.setSortKey('name')");
-      expect(workloadsFilterSource).toContain('searchTrailing={props.searchTrailing}');
-      // useWorkloadsFilterState hook retired in the cleanup commit; the
-      // canonical defaults / activity helpers now live in workloadsFilterModel.
-      expect(workloadsFilterModelSource).toContain('export const countActiveWorkloadsFilters');
-      expect(workloadsFilterModelSource).toContain('export const hasActiveWorkloadsFilters');
-      expect(workloadsFilterModelSource).toContain(
-        "DEFAULT_WORKLOADS_SORT_KEY: WorkloadsSortKey = 'type'",
-      );
-      expect(workloadsFilterModelSource).toContain('searchTrailing?: JSX.Element;');
-      expect(workloadsFilterModelSource).toContain('utilityActions?: JSX.Element;');
-      expect(workloadsFilterModelSource).toContain('mobileTrailing?: JSX.Element;');
-      expect(workloadsStateSource).toContain('useWorkloadRouteState');
-      expect(workloadsStateSource).toContain('range: workloadMetricHistoryRange');
-      // Grouped node rows render no metric cells, so Trends on the Workloads
-      // surface must not poll the infrastructure summary.
-      expect(workloadsStateSource).toContain("series: 'guests',");
-      expect(workloadTableMetricHistoryStateSource).toContain(
-        'ChartsAPI.getWorkloadCharts(parsed.range, signal',
-      );
-      expect(workloadTableMetricHistoryStateSource).toContain(
-        'ChartsAPI.getInfrastructureSummaryCharts(parsed.range, signal',
-      );
-      expect(workloadTableMetricHistoryStateSource).not.toContain('localStorage');
-      expect(workloadTableMetricHistoryStateSource).toContain(
-        "if (options.series !== 'guests' || !options.enabled()) return null;",
-      );
-      expect(workloadTableMetricHistoryStateSource).toContain(
-        "options.series === 'nodes' && options.enabled() ? buildHistoryScope(options.range()) : null",
-      );
-      expect(
-        workloadTableMetricHistoryStateSource.match(/retainPreviousValueOnSourceChange: false/g),
-      ).toHaveLength(2);
-      expect(workloadTableMetricHistoryStateSource).toContain('ChartsAPI.getMetricsHistory');
-      expect(workloadTableMetricHistoryStateSource).toContain('options.activeGuest?.()');
-      expect(workloadTableMetricHistoryStateSource).toContain('options.onDemand?.()');
-      expect(workloadTableMetricHistoryStateSource).toContain('ROW_HISTORY_PREFETCH_CONCURRENCY');
-      expect(workloadTableMetricHistoryStateSource).toContain('ROW_HISTORY_CACHE_MAX_ENTRIES');
-      expect(workloadTableMetricHistoryStateSource).toContain('pendingRowHistory.unshift');
-      expect(workloadTableMetricHistoryStateSource).toContain(
-        'maxPoints: WORKLOAD_TABLE_HISTORY_MAX_POINTS',
-      );
-      expect(workloadsStateSource).toContain('filterWorkloads(params)');
-      expect(workloadsStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');
-      expect(workloadsStateSource).not.toContain('useGroupedTableWindowing');
-      expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadUrlSync');
-      expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');
-      expect(workloadsWorkloadRouteStateSource).toContain('containerRuntimeFilterConfig');
-      expect(workloadsWorkloadRouteStateSource).toContain('hostFilterConfig');
-      expect(workloadsWorkloadRouteStateSource).toContain('namespaceFilterConfig');
-      expect(workloadsWorkloadDerivedStateSource).toContain('useGroupedTableWindowing');
-      expect(workloadsWorkloadDerivedStateSource).toContain('useWorkloadViewportSync');
-    });
-
-    it('keeps threshold slider runtime and derivations in canonical slider owners', () => {
-      expect(thresholdSliderSource).toContain('useThresholdSliderState');
-      expect(thresholdSliderSource).not.toContain('const [thumbPosition, setThumbPosition] =');
-      expect(thresholdSliderSource).not.toContain('const handleMouseDown = () => {');
-      expect(thresholdSliderSource).not.toContain('formatTemperature(');
-      expect(thresholdSliderStateSource).toContain('window.addEventListener');
-      expect(thresholdSliderStateSource).toContain('document.addEventListener');
-      expect(thresholdSliderStateSource).toContain('onCleanup');
-      expect(thresholdSliderModelSource).toContain('export function getThresholdSliderPosition');
-      expect(thresholdSliderModelSource).toContain('export function getThresholdSliderTitle');
-      expect(thresholdSliderModelSource).toContain('export function getThresholdSliderLabel');
-    });
-
-    it('keeps stacked disk bar runtime and derivations in canonical owners', () => {
-      expect(stackedDiskBarSource).toContain('useStackedDiskBarState');
-      expect(stackedDiskBarSource).toContain('metric-fill-geometry');
-      expect(stackedDiskBarSource).toContain('metric-fill-divider');
-      expect(stackedDiskBarSource).toContain('AnimatedNumber');
-      expect(stackedDiskBarModelSource).toContain('displayPercentValue');
-      expect(stackedDiskBarSource).not.toContain('style={{');
-      expect(stackedDiskBarSource).not.toContain('style={');
-      expect(stackedDiskBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
-      expect(stackedDiskBarSource).not.toContain('const tooltipContent = createMemo(() => {');
-      expect(stackedDiskBarSource).not.toContain('const SEGMENT_COLORS =');
-      expect(stackedDiskBarStateSource).toContain('new ResizeObserver');
-      expect(stackedDiskBarStateSource).toContain('useTooltip');
-      expect(stackedDiskBarModelSource).toContain(
-        'export function buildStackedDiskBarPresentation',
-      );
-      expect(stackedDiskBarModelSource).toContain('const SEGMENT_COLORS');
-      expect(stackedDiskBarModelSource).toContain('tooltipTitle');
-    });
-
-    it('keeps stacked memory bar runtime and derivations in canonical owners', () => {
-      expect(stackedMemoryBarSource).toContain('useStackedMemoryBarState');
-      expect(stackedMemoryBarSource).toContain('metric-fill-geometry');
-      expect(stackedMemoryBarSource).toContain('metric-fill-divider');
-      expect(stackedMemoryBarSource).toContain('AnimatedNumber');
-      expect(stackedMemoryBarModelSource).toContain('displayPercentValue');
-      expect(stackedMemoryBarSource).not.toContain('style={{');
-      expect(stackedMemoryBarSource).not.toContain('style={');
-      expect(stackedMemoryBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
-      expect(stackedMemoryBarSource).not.toContain('const segments = createMemo(() => {');
-      expect(stackedMemoryBarSource).not.toContain('const MEMORY_COLORS =');
-      expect(stackedMemoryBarStateSource).toContain('new ResizeObserver');
-      expect(stackedMemoryBarStateSource).toContain('useTooltip');
-      expect(stackedMemoryBarModelSource).toContain(
-        'export function buildStackedMemoryBarPresentation',
-      );
-      expect(stackedMemoryBarModelSource).toContain('const MEMORY_COLORS');
-      expect(stackedMemoryBarModelSource).toContain('tooltipRows');
-    });
-
-    it('keeps metric bar runtime and derivations in canonical owners', () => {
-      expect(metricBarSource).toContain('useMetricBarState');
-      expect(metricBarSource).toContain('AnimatedNumber');
-      expect(metricBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
-      expect(metricBarSource).not.toContain('const progressColorClass = createMemo(() => {');
-      expect(metricBarSource).not.toContain('const showSublabel = createMemo(() => {');
-      expect(metricBarStateSource).toContain('new ResizeObserver');
-      expect(metricBarModelSource).toContain('export function buildMetricBarPresentation');
-      expect(metricBarModelSource).toContain('estimateTextWidth');
-      expect(metricBarModelSource).toContain('getMetricColorClass');
-    });
-
-    it('keeps enhanced CPU bar runtime and derivations in canonical owners', () => {
-      expect(enhancedCpuBarSource).toContain('useEnhancedCPUBarState');
-      expect(enhancedCpuBarSource).toContain('metric-fill-geometry');
-      expect(enhancedCpuBarSource).toContain('AnimatedNumber');
-      expect(enhancedCpuBarSource).not.toContain('style={{');
-      expect(enhancedCpuBarSource).not.toContain('style={');
-      expect(enhancedCpuBarSource).not.toContain('const tip = useTooltip()');
-      expect(enhancedCpuBarSource).not.toContain('const barColor = createMemo(() =>');
-      expect(enhancedCpuBarSource).not.toContain('const anomalyRatio = createMemo(() =>');
-      expect(enhancedCpuBarStateSource).toContain('useTooltip');
-      expect(enhancedCpuBarModelSource).toContain(
-        'export function buildEnhancedCPUBarPresentation',
-      );
-      expect(enhancedCpuBarModelSource).toContain('getMetricColorClass');
-      expect(enhancedCpuBarModelSource).toContain('tooltipUsageClass');
-    });
-
-    it('keeps guest row contract and hot-path state in canonical row owners', () => {
-      expect(guestRowSource).toContain('useGuestRowState');
-      expect(guestRowSource).toContain("from './GuestRowCells'");
-      expect(guestRowSource).not.toContain('style={{');
-      expect(guestRowSource).toContain('style={getGuestColumnStyle(');
-      expect(guestRowSource).toContain('props.workloadTableLayoutMode');
-      expect(guestRowSource).toContain('props.visibleColumnIds');
-      expect(guestRowSource).toContain('ResourceNameWithWebInterfaceLink');
-      expect(guestRowSource).not.toContain('target="_blank"');
-      expect(guestRowSource).not.toContain('data-workload-col="link"');
-      expect(guestRowSource).not.toContain('Open related infrastructure');
-      expect(guestRowSource).not.toContain('export const GUEST_COLUMNS');
-      expect(guestRowSource).not.toContain('const guestId = createMemo(');
-      expect(guestRowSource).not.toContain('function NetworkInfoCell(');
-      expect(guestRowSource).not.toContain('function OSInfoCell(');
-      expect(guestRowSource).not.toContain('function BackupStatusCell(');
-      expect(guestRowSource).toContain('thresholds={cpuThresholds()}');
-      expect(guestRowSource).toContain('thresholds={memoryThresholds()}');
-      expect(guestRowSource).toContain('thresholds={diskThresholds()}');
-      expect(guestRowStateSource).toContain('getWorkloadAlertThresholdScope');
-      expect(guestRowStateSource).toContain('getMetricThresholds');
-      expect(guestRowModelSource).toContain('export const GUEST_COLUMNS');
-      expect(guestRowModelSource).toContain('export const VIEW_MODE_COLUMNS');
-      expect(guestRowStateSource).toContain('getCanonicalWorkloadId');
-      expect(guestRowStateSource).toContain('buildMetricKey');
-      // The legacy /infrastructure cross-jump was retired; guest row state no
-      // longer needs anything from resourceLinks.
-      expect(guestRowStateSource).not.toContain("from '@/routing/resourceLinks'");
-      expect(guestRowStateSource).toContain("from './workloadTopology'");
-      expect(guestRowStateSource).not.toContain('./infrastructureLink');
-      expect(guestRowModelSource).not.toContain("id: 'link'");
-      expect(guestRowModelSource).not.toContain("'link'");
-      expect(guestRowStateSource).not.toContain('rowStyle');
-      expect(guestRowStateSource).not.toContain('box-shadow');
-      expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
-      // Wrapping-tolerant: prettier may break the export list across lines.
-      expect(guestRowCellsSource).toMatch(/export \{[^}]*\bAvailabilityProbeCell\b/);
-      expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
-      expect(guestRowCellsSource).toContain('function OSInfoCell(');
-      expect(guestRowCellsSource).toContain('useTooltip');
-    });
-
-    it('keeps guest drawer runtime and derivations in canonical drawer owners', () => {
-      expect(guestDrawerSource).toContain('useGuestDrawerState');
-      expect(guestDrawerSource).toContain('GuestDrawerOverview');
-      // The charts live on Overview; there is no History tab to carry a picker.
-      expect(guestDrawerSource).not.toContain('GuestDrawerHistoryRangeSelect');
-      expect(guestDrawerSource).not.toContain("label: 'History'");
-      expect(guestDrawerSource).toContain('ObjectDrawerHeader');
-      expect(guestDrawerSource).not.toContain('Open related infrastructure');
-      expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');
-      expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
-      expect(guestDrawerHistorySource).toContain('h-7 min-h-11 py-0 text-[11px] sm:min-h-0');
-      expect(guestDrawerHistorySource).toContain('onPointerMove={handleHoverMove}');
-      expect(guestDrawerHistorySource).toContain('currentMetrics');
-      expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
-      expect(guestDrawerHistorySource).toContain('props.groups ?? GUEST_DRAWER_HISTORY_GROUPS');
-      expect(guestDrawerHistorySource).toContain('flex min-h-[154px] flex-col');
-      expect(guestDrawerHistorySource).toContain('relative min-h-24 flex-1');
-      expect(guestDrawerHistorySource).not.toContain('relative h-24');
-      expect(nodeDrawerSource).toContain('NodeDrawerOverview');
-      expect(nodeDrawerSource).not.toContain('GuestDrawerHistoryRangeSelect');
-      expect(nodeDrawerSource).not.toContain("label: 'History'");
-      expect(nodeDrawerSource).toContain('getNodeDrawerHistoryGroups');
-      expect(nodeDrawerOverviewSource).toContain('Hardware');
-      expect(nodeDrawerOverviewSource).toContain('Telemetry');
-      expect(nodeDrawerOverviewSource).toContain('Thermals');
-      expect(nodeDrawerModelSource).toContain('HOST_METRICS_HISTORY_GROUPS');
-      expect(nodeDrawerModelSource).toContain("group.id !== 'disk-io'");
-      expect(nodeDrawerModelSource).not.toContain("id: 'thermals'");
-      expect(workloadPanelSource).not.toContain('NodeDrawer');
-      expect(workloadPanelSource).not.toContain('data-inline-node-detail-for');
-      expect(workloadPanelSource).toContain('data-inline-detail-for={guestId()}');
-      expect(workloadPanelSource).toContain('onClose={() => props.setSelectedGuestId(null)}');
-      expect(guestDrawerSource).not.toContain('const guestId = () =>');
-      expect(guestDrawerSource).not.toContain('const infrastructureHref = () =>');
-      expect(guestDrawerSource).not.toContain('Filesystems');
-      expect(guestDrawerSource).not.toContain('WebInterfaceUrlField');
-      expect(guestDrawerStateSource).toContain('getCanonicalWorkloadId');
-      expect(guestDrawerStateSource).toContain('historyRange');
-      expect(guestDrawerStateSource).not.toContain('buildInfrastructureHrefForWorkload');
-      expect(guestDrawerStateSource).not.toContain("from '@/routing/resourceLinks'");
-      expect(guestDrawerStateSource).not.toContain('createResource');
-      expect(guestDrawerStateSource).toContain("from './workloadTopology'");
-      expect(guestDrawerStateSource).not.toContain('./infrastructureLink');
-      expect(guestDrawerStateSource).toContain('getWebInterfaceTargetLabelForWorkload');
-      expect(guestDrawerStateSource).toContain('guestOsSummary');
-      expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
-      expect(guestDrawerModelSource).toContain('export const normalizeGuestDrawerTags');
-      expect(guestDrawerOverviewSource).not.toContain('WebInterfaceUrlField');
-      expect(guestDrawerManageSource).toContain('WebInterfaceUrlField');
-      expect(guestDrawerManageSource).toContain('ResourceOperatorStateSection');
-      expect(guestDrawerOverviewSource).toContain('buildWorkloadsDiskPresentation');
-      expect(guestDrawerOverviewSource).toContain('Filesystems');
-      // Linked physical disks load with an open agent guest's drawer, so the
-      // disk presentation module stays out of the WorkloadsSurface chunk.
       expect(guestDrawerOverviewSource).toContain("import('./GuestPhysicalDisks')");
       expect(guestDrawerOverviewSource).not.toMatch(
         /^import (?!type )[^;]*from '\.\/GuestPhysicalDisks';/m,
       );
-      // Filesystems render as their own section in front of the collapsed
-      // Details, so mount points never share a card row with short sections.
-      // Tags render as facts-strip chips, not as a detail section.
-      const filesystemsSectionIndex = guestDrawerOverviewSource.indexOf("label: 'Filesystems'");
-      expect(filesystemsSectionIndex).toBeGreaterThan(-1);
-      expect(guestDrawerOverviewSource).not.toContain("label: 'Tags'");
-      expect(guestDrawerOverviewSource).toContain('dataTestId="guest-drawer-filesystems"');
-      // The Overview charts load with an open drawer, outside the table chunk.
       expect(guestDrawerOverviewSource).toContain("import('./GuestDrawerHistory')");
       expect(guestDrawerOverviewSource).not.toMatch(
         /^import (?!type )[^;]*from '\.\/GuestDrawerHistory';/m,
@@ -1743,107 +1112,6 @@ describe('Workloads performance contract', () => {
       expect(nodeDrawerOverviewSource).not.toMatch(
         /^import (?!type )[^;]*from '\.\/GuestDrawerHistory';/m,
       );
-      // Filesystem rows delegate full-path presentation to the shared renderer.
-      const filesystemSectionSource = guestDrawerOverviewSource.slice(
-        filesystemsSectionIndex,
-        guestDrawerOverviewSource.indexOf('label:', filesystemsSectionIndex + 1),
-      );
-      expect(filesystemSectionSource).toContain("layout: 'stacked'");
-      expect(filesystemSectionSource).toContain('wrap: true');
-      // Both filesystem paths and their longer freshness explanation need
-      // the card's full width. Do not couple that layout to a global count.
-      expect(guestDrawerOverviewSource).toContain(
-        "makeDetailRow('Status', diskStatusMessage, { layout: 'stacked', wrap: true })",
-      );
-
-      expect(guestDrawerOverviewSource).toContain('TechnicalDetailsSection');
-      expect(nodeDrawerOverviewSource).toContain('TechnicalDetailsSection');
-      const retiredInfoCardFrameClass = [
-        'rounded-sm border border-border',
-        'bg-surface p-3 shadow-xs',
-      ].join(' ');
-      expect(guestDrawerOverviewSource).not.toContain(retiredInfoCardFrameClass);
-      expect(nodeDrawerOverviewSource).not.toContain(retiredInfoCardFrameClass);
-      expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
-      expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
-      expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');
-      expect(workloadTopologySource).toContain('export const buildNodeByInstance');
-      expect(workloadTopologySource).toContain('export const buildGuestParentNodeMap');
-    });
-
-    it('keeps workloads shell rendering in canonical section owners', () => {
-      expect(workloadsSource).toContain('WorkloadsTable');
-      expect(workloadsSource).not.toContain('TableHeader');
-      expect(workloadsSource).not.toContain('NodeGroupHeader');
-      expect(workloadsWorkloadTableSource).toContain('WorkloadTableHeader');
-      expect(workloadsWorkloadTableSource).toContain('WorkloadPanel');
-      expect(workloadsWorkloadTableSource).not.toContain('style={{');
-      expect(workloadsWorkloadTableSource).toContain('style={getGuestColumnWidthStyle(');
-      expect(workloadsWorkloadTableSource).toContain(
-        "WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS = 'min-w-0'",
-      );
-      expect(workloadsWorkloadTableSource).toContain('workload-table--mobile');
-      expect(workloadsWorkloadTableSource).toContain('WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS');
-      expect(workloadsWorkloadTableSource).toContain('props.workloadTableLayoutMode()');
-      expect(workloadsWorkloadTableSource).toContain('props.workloadTableVisibleColumnIds()');
-      expect(workloadsWorkloadTableSource).toContain('workload-table--manual-widths');
-      expect(workloadsWorkloadTableSource).toContain('props.workloadTableManualWidth()');
-      expect(workloadsWorkloadTableSource).toContain('<colgroup>');
-      expect(workloadsWorkloadTableSource).not.toContain('<TableHead');
-      expect(workloadsWorkloadTableSource).not.toContain('NodeGroupHeader');
-      expect(workloadsWorkloadTableSource).not.toMatch(/from\s+['"]\.\/GuestDrawer['"]/);
-      expect(workloadTableHeaderSource).toContain('TableHead');
-      expect(workloadTableHeaderSource).toContain('col.sortKey as WorkloadSortKey');
-      expect(workloadTableHeaderSource).toContain('getTableSortIndicator');
-      expect(guestRowModelSource).toContain(
-        "id: 'info', label: 'Info', width: '100px', sortKey: 'info'",
-      );
-      expect(workloadSelectorsSource).toContain("sortKey === 'info'");
-      expect(workloadSelectorsSource).toContain('getWorkloadInfoValue');
-      expect(workloadTableHeaderSource).toContain('style={getGuestColumnStyle(');
-      expect(workloadTableHeaderSource).toContain('props.workloadTableLayoutMode()');
-      expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');
-      expect(workloadTableHeaderSource).toContain('aria-hidden="true"');
-      expect(workloadTableHeaderSource).toContain('<span class="sr-only">{label()}</span>');
-      expect(workloadTableHeaderSource).toContain('data-workload-col-resizer={col.id}');
-      expect(workloadTableHeaderSource).toContain('event.currentTarget.setPointerCapture');
-      expect(workloadTableHeaderSource).toContain('onPointerCancel={onPointerCancel}');
-      expect(workloadColumnWidthsSource).toContain(
-        'const MANUAL_SIZING_LAYOUT_MODES: ReadonlySet<WorkloadTableLayoutMode>',
-      );
-      expect(workloadColumnWidthsSource).toContain("'tablet'");
-      expect(workloadColumnWidthsSource).toContain("'compact'");
-      expect(workloadColumnWidthsSource).toContain("'wide'");
-      expect(workloadColumnWidthsSource).not.toContain("'phone'");
-      expect(workloadColumnWidthsSource).toContain('sumWorkloadColumnWidths');
-      expect(workloadColumnLayoutUrlSource).toContain(
-        "export const WORKLOAD_COLUMNS_URL_PARAM = 'cols'",
-      );
-      expect(workloadColumnLayoutUrlSource).toContain('resolveWorkloadColumnLayoutEntries');
-      expect(workloadTableHeaderSource).not.toContain('style={{');
-      expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
-      expect(workloadPanelSource).toContain('NodeGroupHeader');
-      expect(workloadPanelSource).toContain('GuestDrawer');
-      expect(workloadPanelSource).toContain('groupGuests().map(getCanonicalWorkloadId)');
-      expect(workloadPanelSource).not.toContain('createSummaryInteractiveRowPreviewHandlers');
-      expect(workloadPanelSource).not.toContain('resolveSummaryGroupMemberInteractionState');
-      expect(workloadPanelSource).toContain('getGroupedTableRowCellClass');
-      expect(workloadPanelSource).not.toContain('style={{');
-      expect(workloadPanelSource).not.toContain('style={');
-      expect(workloadPanelSource).not.toContain('kind="scope"');
-      expect(workloadPanelSource).not.toContain('leadingAction={');
-      expect(workloadsSelectionStateSource).not.toContain('WorkloadGroupScope');
-      expect(workloadsWorkloadTableSource).not.toContain('SummaryWorkloadGroupScope');
-      expect(workloadPanelSource).not.toContain('TableHead');
-    });
-
-    it('keeps disk-list runtime and derivations in canonical disk-list owners', () => {
-      expect(diskListSource).toContain('useDiskListState');
-      expect(diskListSource).not.toContain('const getUsagePercent =');
-      expect(diskListSource).not.toContain('const getDiskStatusTooltip =');
-      expect(diskListStateSource).toContain('getWorkloadGuestDiskStatusMessage');
-      expect(diskListModelSource).toContain('export const buildWorkloadsDiskPresentation');
-      expect(diskListModelSource).toContain('export const getWorkloadsDiskUsagePercent');
     });
 
     it('filterWorkloads returns all guests when no filters active', () => {

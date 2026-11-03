@@ -610,3 +610,32 @@ func TestTokenStreamWriterPreservesDeadlineControlWithoutEscape(t *testing.T) {
 		t.Fatal("withdrawn control reached transport or retained live request")
 	}
 }
+
+// A signed-in user's stream follows the organization access policy: a user who
+// cannot use the request's organization is refused before anything streams.
+func TestRetainTokenStreamAuthorityAppliesOrgAccessPolicy(t *testing.T) {
+	installTestRBACManager(t)
+	enableSharedMultiOrgForTest(t)
+	persistence, checker := newOrgAccessFixture(t, false)
+	saveDefaultOrgMembers(t, persistence, "dave")
+
+	streamed := 0
+	handler := retainTokenStreamAuthority(&config.Config{}, config.ScopeMonitoringRead, false, func(w http.ResponseWriter, r *http.Request) {
+		streamed++
+		w.WriteHeader(http.StatusOK)
+	})
+	serve := func(user string) int {
+		req := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)
+		ctx := context.WithValue(internalauth.WithUser(req.Context(), user), OrgIDContextKey, "default")
+		rec := httptest.NewRecorder()
+		handler(rec, req.WithContext(withOrgAccessChecker(ctx, checker)))
+		return rec.Code
+	}
+
+	if code := serve("dave"); code != http.StatusOK || streamed != 1 {
+		t.Fatalf("default member stream: status %d, streamed %d", code, streamed)
+	}
+	if code := serve("bob"); code != http.StatusUnauthorized || streamed != 1 {
+		t.Fatalf("tenant-only user stream: status %d, streamed %d, want refusal", code, streamed)
+	}
+}

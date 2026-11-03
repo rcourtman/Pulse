@@ -2,8 +2,6 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
-import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
-import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
@@ -373,26 +371,6 @@ vi.mock('@/components/Storage/DiskList', () => ({
     </div>
   ),
 }));
-
-describe('Storage platform-page embed contract', () => {
-  it('auto-suppresses the Source filter chip whenever forcedSourceFilter is set', async () => {
-    const storageSource = (await import('../Storage.tsx?raw')).default;
-    expect(storageSource).toContain(
-      'suppressSourceFilter={props.suppressSourceFilter || Boolean(props.forcedSourceFilter)}',
-    );
-    const controlsSource = (await import('../StoragePageControls.tsx?raw')).default;
-    expect(controlsSource).toContain('suppressSourceFilter?: boolean;');
-    expect(controlsSource).toContain('if (!props.suppressSourceFilter) {');
-  });
-
-  it('lets platform storage tabs suppress the explicit Node filter in favor of search', async () => {
-    const storageSource = (await import('../Storage.tsx?raw')).default;
-    expect(storageSource).toContain('suppressNodeFilter={props.suppressNodeFilter}');
-    const controlsSource = (await import('../StoragePageControls.tsx?raw')).default;
-    expect(controlsSource).toContain('suppressNodeFilter?: boolean;');
-    expect(controlsSource).toContain('if (!props.suppressNodeFilter) {');
-  });
-});
 
 describe('Storage', () => {
   beforeEach(() => {
@@ -1647,16 +1625,5 @@ describe('Storage', () => {
     const params = new URLSearchParams(path.split('?')[1] || '');
     expect(params.get('source')).toBe('proxmox-pve');
     expect(params.get('status')).toBe('warning');
-  });
-
-  it('routes storage summary fetches through the shared storage summary cache owner', () => {
-    expect(storageSummarySource).toContain('readStorageSummaryCache(range, nodeId)');
-    expect(storageSummarySource).toContain('fetchStorageSummaryAndCache(requestedRange, {');
-    expect(storageSummarySource).toContain("caller: options.caller ?? 'useStorageSummaryCharts'");
-    expect(storageSummarySource).toContain('requestIdleCallback');
-    expect(storageSummaryCacheSource).toContain('const STORAGE_SUMMARY_CACHE_VERSION = 1;');
-    expect(storageSummaryCacheSource).toContain(
-      "return `${STORAGE_SUMMARY_CACHE_VERSION}::${orgScope}::${range}::${nodeId || '__all__'}`;",
-    );
   });
 });

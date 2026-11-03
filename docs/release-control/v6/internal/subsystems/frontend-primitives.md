@@ -614,6 +614,16 @@ the widest datastore share. The table therefore no longer consumes
 from that rule's required consumers. The memory cell's multi-line "Last known"
 qualifier went with it, so every row is now single-line by construction.
 
+### Backup health lists datastore job failures in their own rows (3 November 2026)
+
+`ProxmoxBackupsCoverageStrip` takes `datastoreProblems` and renders them as a
+separate "Datastores with failed jobs" list under the guest rows, on the same
+row grid: amber dot, "Sync failed", a datastore-count pill, and the datastore
+names where a reason row's share bar sits, since a datastore is not a share of
+rated guests. Rows stay 32px and single-line; names truncate on phones and the
+accessible name and title carry them in full. The list renders even when no
+guests are rated.
+
 ### Datastore fill forecast stays on one row line (2 November 2026)
 
 `ProxmoxBackupServersTable` shows a PBS datastore's fill forecast as the
@@ -635,6 +645,13 @@ default view. They keep the same route-backed links and `aria-current`. The
 Backup health reasons "No backup history" and "Backup source reported a
 failure" become "Backup status unknown" and "Last backup failed"; each still
 shares one 32px row with its count and bar at phone width.
+
+### Backup jobs header names the pills' window at every width (3 November 2026)
+
+`ProxmoxBackupJobsCard` drops the "14 days" title suffix and always labels the
+header pills with their window: "Last 24h" from `sm` up, "24h" below, so a
+375px header stays one 21px line with three pills. The incomplete-window tag
+reads "incomplete data".
 
 ### Backup jobs card composes the overview primitives (2 November 2026)
 
@@ -870,6 +887,14 @@ names the installer option through `getUnifiedAgentCommandAccessOptionLabel`
 ("Allow Pulse to run commands on this host") and the host to run the new
 install command on, instead of the retired "legacy combined command profile"
 wording and its advanced-options path.
+
+Superseded 3 November 2026: the pill now says the host's agent "does not
+accept commands from Pulse" (an absent `commandsEnabled` reads as false, so it
+no longer claims how the agent was installed) and sends users to Settings →
+Infrastructure → Manage on that host → Remote commands, which names the option
+and opens the installer with it ticked. The pill no longer reads the shared
+label itself. `containerUpdateBadgeModel.unavailable.test.ts` and
+`ContainerUpdateBadge.test.tsx` pin the wording.
 
 ### Container update control offers only what the server advertises (21 October 2026)
 
@@ -4967,10 +4992,9 @@ production table, router and styles; it does not qualify full-app scrolling.
    and register the consumer in
    `frontend-modern/scripts/shared-template-registry.json` instead of adding
    feature-local colored panel shells. Compact settings notices must use the
-   shared `scale="compact"` density and keep proof in both
-   `frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
-   and
-   `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
+   shared `scale="compact"` density, with the registry entry as proof
+   (`frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
+   runs the audit).
    Connection-editor status, feature-disabled, delete-error, and probe-result
    notices are part of the same settings callout boundary: the editor and
    credential slots own the source-specific lifecycle or API meaning, while
@@ -6870,6 +6894,11 @@ patterns, while `frontend-modern/scripts/shared-template-audit.mjs` enforces
 that registry. Future repeated-affordance migrations must add or extend a
 registry rule as part of the same change that extracts or adopts the shared
 primitive.
+Bans on local patterns live in that registry or in
+`frontend-modern/eslint.config.js`, not in tests that read component source
+with `?raw` or `readFileSync` and assert a string is absent.
+`frontend-modern/scripts/source-text-test-audit.mjs` holds each test file's
+source-read count to its baseline, and a new test file starts at zero.
 Button-styled commercial upgrade CTAs are one of those registry-backed
 templates. `frontend-modern/src/components/shared/UpgradeLink.tsx` owns
 `UpgradeButtonLink`, and the registry requires gated settings, audit, agent

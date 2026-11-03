@@ -34,6 +34,7 @@ tmp=""
 checksums_tmp=""
 signature_tmp=""
 allowed_signers=""
+install_stage=""
 
 log() {
     printf '[install-mcp] %s\n' "$*"
@@ -46,6 +47,23 @@ err() {
 
 require_cmd() {
     command -v "$1" >/dev/null 2>&1 || err "missing required command: $1"
+}
+
+cleanup() {
+    local path
+    for path in "${tmp}" "${checksums_tmp}" "${signature_tmp}" "${allowed_signers}"; do
+        [ -z "${path}" ] || rm -f -- "${path}"
+    done
+    if [ -n "${install_stage}" ]; then
+        rm -f -- "${install_stage}/pulse-mcp"
+        rmdir "${install_stage}" 2>/dev/null || true
+    fi
+}
+
+check_destination() {
+    if [ -L "$1" ] || { [ -e "$1" ] && [ ! -f "$1" ]; }; then
+        err "install destination is not a regular file: $1; left unchanged"
+    fi
 }
 
 detect_platform() {
@@ -120,12 +138,15 @@ main() {
     require_cmd curl
     require_cmd uname
     require_cmd install
+    require_cmd mv
     require_cmd ssh-keygen
 
-    local platform install_dir base bin_name url checksums_url
+    local platform install_dir destination base bin_name url checksums_url
     local signature_url expected actual matches
     platform="$(detect_platform)"
     install_dir="$(choose_install_dir)"
+    destination="${install_dir}/pulse-mcp"
+    check_destination "${destination}"
     base="$(resolve_release_base)"
     bin_name="pulse-mcp-${platform}"
     url="${base}/${bin_name}"
@@ -135,7 +156,7 @@ main() {
     log "downloading: ${url}"
 
     tmp="$(mktemp -t pulse-mcp.XXXXXX)"
-    trap 'rm -f "${tmp}"' EXIT
+    trap cleanup EXIT
 
     if ! curl -fsSL --retry 3 "${url}" -o "${tmp}"; then
         err "download failed: ${url}
@@ -160,7 +181,6 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     checksums_tmp="$(mktemp -t pulse-mcp-sums.XXXXXX)"
     signature_tmp="$(mktemp -t pulse-mcp-signature.XXXXXX)"
     allowed_signers="$(mktemp -t pulse-mcp-signers.XXXXXX)"
-    trap 'rm -f "${tmp}" "${checksums_tmp}" "${signature_tmp}" "${allowed_signers}"' EXIT
 
     if ! curl -fsSL --retry 3 "${checksums_url}" -o "${checksums_tmp}"; then
         err "could not fetch checksums.txt; refusing unverified install"
@@ -191,8 +211,28 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     fi
     log "sha256 verified"
 
-    install -m 0755 "${tmp}" "${install_dir}/pulse-mcp"
-    log "installed: ${install_dir}/pulse-mcp"
+    # A failed copy must not truncate or remove a working adapter. Stage on
+    # the destination filesystem, verify the copied bytes, then publish with
+    # a single rename. This is not a concurrent-writer or power-loss guarantee.
+    if ! install_stage="$(mktemp -d "${install_dir}/.pulse-mcp.XXXXXX")"; then
+        err "could not prepare the install directory; existing adapter left unchanged"
+    fi
+    if ! install -m 0755 "${tmp}" "${install_stage}/pulse-mcp"; then
+        err "could not stage the adapter; existing adapter left unchanged"
+    fi
+    actual="$(${sha_cmd} "${install_stage}/pulse-mcp" | awk '{print tolower($1)}')"
+    if [ "${expected}" != "${actual}" ]; then
+        err "staged adapter checksum mismatch; existing adapter left unchanged"
+    fi
+    check_destination "${destination}"
+    if ! mv -f "${install_stage}/pulse-mcp" "${destination}"; then
+        err "could not publish the adapter; check the existing installation"
+    fi
+    if [ -e "${install_stage}/pulse-mcp" ] || [ -L "${install_stage}/pulse-mcp" ] ||
+        [ -L "${destination}" ] || [ ! -f "${destination}" ]; then
+        err "could not confirm adapter publication; installation is incomplete"
+    fi
+    log "installed: ${destination}"
 
     case ":${PATH}:" in
         *":${install_dir}:"*) ;;

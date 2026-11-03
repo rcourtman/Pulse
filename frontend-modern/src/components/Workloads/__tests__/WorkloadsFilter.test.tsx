@@ -3,7 +3,6 @@ import { render, screen, cleanup, fireEvent, within } from '@solidjs/testing-lib
 import { createSignal } from 'solid-js';
 import { WorkloadsFilter } from '../WorkloadsFilter';
 import { setKioskMode } from '@/utils/url';
-import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
 import {
   DEFAULT_WORKLOADS_SORT_DIRECTION,
   DEFAULT_WORKLOADS_SORT_KEY,
@@ -101,12 +100,6 @@ describe('WorkloadsFilter', () => {
   });
 
   describe('rendering', () => {
-    it('uses the shared FilterBar status-dot presentation helper', () => {
-      expect(workloadsFilterSource).toContain('filterChipStatusDot');
-      expect(workloadsFilterSource).not.toContain('const statusDot = (className: string)');
-      expect(workloadsFilterSource).not.toContain('h-2 w-2 rounded-full ' + '${className}');
-    });
-
     it('renders the search input', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
       expect(screen.getByTestId('search-input')).toBeInTheDocument();

@@ -40,6 +40,8 @@ export interface Organization {
   createdAt?: string;
   ownerUserId?: string;
   members?: OrganizationMember[];
+  /** Set on the default organization when the caller may change its members. */
+  canManageMembers?: boolean;
 }
 
 export interface OrganizationShare {

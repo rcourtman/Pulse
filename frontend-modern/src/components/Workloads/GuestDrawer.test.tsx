@@ -13,9 +13,6 @@ import type { Alert, Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { getWorkloadMetadataId } from '@/utils/workloads';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
-import guestDrawerSource from './GuestDrawer.tsx?raw';
-import guestDrawerManageSource from './GuestDrawerManage.tsx?raw';
-import guestDrawerOverviewSource from './GuestDrawerOverview.tsx?raw';
 import { getGuestDrawerAlertAttention, getGuestDrawerHistoryRangeBounds } from './guestDrawerModel';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -491,11 +488,16 @@ describe('GuestDrawer', () => {
     );
   });
 
-  it('keeps canonical resource policy out of Overview and mounts it on demand in Manage', () => {
-    expect(guestDrawerOverviewSource).not.toContain('<ResourceOperatorStateSection');
-    expect(guestDrawerManageSource).toContain('<ResourceOperatorStateSection');
-    expect(guestDrawerSource).toContain("activeTab() === 'manage'");
-    expect(guestDrawerManageSource).toContain('data-testid="guest-manage-tab"');
+  it('keeps operator overrides out of Overview and mounts them on demand in Manage', () => {
+    solidRender(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
+
+    expect(screen.queryByText('Operator overrides')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('guest-manage-tab')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+
+    const manage = screen.getByTestId('guest-manage-tab');
+    expect(within(manage).getByRole('region', { name: 'Operator overrides' })).toBeInTheDocument();
   });
 
   it('opens with additive context and the active problem before technical inventory', () => {

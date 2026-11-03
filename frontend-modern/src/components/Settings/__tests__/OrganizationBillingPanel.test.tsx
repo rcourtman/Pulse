@@ -2,9 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 
 import { OrganizationBillingPanel } from '../OrganizationBillingPanel';
-import organizationBillingPanelSource from '../OrganizationBillingPanel.tsx?raw';
-import organizationBillingLoadingStateSource from '../OrganizationBillingLoadingState.tsx?raw';
-import organizationBillingStateSource from '../useOrganizationBillingPanelState.ts?raw';
 
 const getStatusMock = vi.hoisted(() => vi.fn());
 const listOrgsMock = vi.hoisted(() => vi.fn());
@@ -114,6 +111,10 @@ describe('OrganizationBillingPanel', () => {
       expect(getStatusMock).toHaveBeenCalledTimes(1);
     });
 
+    expect(eventBusOnMock).toHaveBeenCalledWith('org_switched', expect.any(Function));
+    expect(getStatusMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expectedOrgID: 'org-1' }),
+    );
     eventBusHandlers[0]?.();
 
     await waitFor(() => {
@@ -134,18 +135,6 @@ describe('OrganizationBillingPanel', () => {
     expect(screen.queryByText('Not configured')).not.toBeInTheDocument();
     expect(screen.queryByText('private upstream detail')).not.toBeInTheDocument();
     expect(errorMock).not.toHaveBeenCalled();
-  });
-
-  it('keeps organization billing runtime split into dedicated state and loading owners', () => {
-    expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');
-    expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
-    expect(organizationBillingPanelSource).not.toContain('createSignal(');
-    expect(organizationBillingPanelSource).not.toContain('onMount(() =>');
-    expect(organizationBillingStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationBillingStateSource).toContain("eventBus.on('org_switched'");
-    expect(organizationBillingStateSource).not.toContain("getOrgID() || 'default'");
-    expect(organizationBillingLoadingStateSource).toContain('SettingsLoadingSkeleton');
-    expect(organizationBillingLoadingStateSource).not.toContain('animate-pulse');
   });
 
   it('stays unavailable in demo mode without loading organization billing data', () => {

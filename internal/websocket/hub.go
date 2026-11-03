@@ -595,6 +595,12 @@ type OrgAuthChecker interface {
 	CanAccessOrg(userID string, token interface{}, orgID string) bool
 }
 
+// OrgAuthContextChecker is an OrgAuthChecker whose decision can depend on
+// request-bound authority, such as a proxy-authenticated administrator.
+type OrgAuthContextChecker interface {
+	CanAccessOrgContext(ctx context.Context, userID string, token interface{}, orgID string) bool
+}
+
 // MultiTenantCheckResult contains the result of a multi-tenant check.
 type MultiTenantCheckResult struct {
 	Allowed        bool
@@ -1105,30 +1111,38 @@ func (h *Hub) HandleWebSocketWithAuthorization(w http.ResponseWriter, r *http.Re
 				return
 			}
 		}
+	}
 
-		// Authorization check - auth context should already be set by AuthContextMiddleware
-		if authChecker != nil {
-			// Get user and token from context (set by AuthContextMiddleware)
-			userID := getUserFromContext(r.Context())
-			token := getAPITokenFromContext(r.Context())
+	// Authorization check - auth context should already be set by
+	// AuthContextMiddleware. Non-default organizations always require it. The
+	// default organization is checked whenever a principal is present: in
+	// multi-organization mode it is not open to every signed-in user, while an
+	// installation without authentication has no principal to check.
+	userID := getUserFromContext(r.Context())
+	token := getAPITokenFromContext(r.Context())
+	if authChecker != nil && (orgID != "default" || userID != "" || token != nil) {
+		allowed := false
+		if contextChecker, ok := authChecker.(OrgAuthContextChecker); ok {
+			allowed = contextChecker.CanAccessOrgContext(r.Context(), userID, token, orgID)
+		} else {
+			allowed = authChecker.CanAccessOrg(userID, token, orgID)
+		}
+		if !allowed {
+			audit.Log(
+				"websocket_org_access_denied",
+				userID,
+				extractPeerIP(r.RemoteAddr),
+				r.URL.Path,
+				false,
+				fmt.Sprintf("org_id=%s", orgID),
+			)
 
-			if !authChecker.CanAccessOrg(userID, token, orgID) {
-				audit.Log(
-					"websocket_org_access_denied",
-					userID,
-					extractPeerIP(r.RemoteAddr),
-					r.URL.Path,
-					false,
-					fmt.Sprintf("org_id=%s", orgID),
-				)
-
-				log.Warn().
-					Str("org_id", orgID).
-					Str("user_id", userID).
-					Msg("WebSocket connection denied - unauthorized org access")
-				http.Error(w, "Unauthorized to access organization", http.StatusForbidden)
-				return
-			}
+			log.Warn().
+				Str("org_id", orgID).
+				Str("user_id", userID).
+				Msg("WebSocket connection denied - unauthorized org access")
+			http.Error(w, "Unauthorized to access organization", http.StatusForbidden)
+			return
 		}
 	}
 

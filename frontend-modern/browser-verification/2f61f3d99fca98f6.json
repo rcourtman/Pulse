@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "94a368de87f1454a50ad598a2ba4a18e25fc4456",
+  "verified_at": "2026-11-03T14:10:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "ebaa5b5812e21e19ff7791945a71933fd17119c6967f9f49e99e682c99b643b1",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "a6a9e59af671c4a232962e1740be9323e1f6c3cc9a1c135fc22023309909395b"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=agent",
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Manage dialog for a mock agent host without command access shows the Remote commands are off section and no Not enabled info card",
+    "Phone width: section and full-width 44px Get install command button fit with no horizontal page scroll",
+    "Add Pulse Agent installer opened from the section shows Allow Pulse to run commands on this host already ticked",
+    "Docker page locked update pills (11 containers) carry the new does not accept commands from Pulse explanation naming Manage on the host"
+  ],
+  "interactions": [
+    "Opened Manage on agent:host-linux-1 from the infrastructure ledger",
+    "Clicked Get install command and confirmed the route and checkbox state",
+    "Read the locked update pill explanations on the Docker page"
+  ]
+}

@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AvailabilityTargetsAPI, type AvailabilityTarget } from '@/api/availabilityTargets';
-import availabilitySettingsPanelSource from '../AvailabilitySettingsPanel.tsx?raw';
 import { AvailabilitySettingsPanel } from '../AvailabilitySettingsPanel';
 
 const routeState = vi.hoisted(() => ({
@@ -103,9 +102,23 @@ describe('AvailabilitySettingsPanel', () => {
 
   afterEach(() => cleanup());
 
-  it('keeps large target inventories on the shared bounded list renderer', () => {
-    expect(availabilitySettingsPanelSource).toContain('PlatformWindowedList');
-    expect(availabilitySettingsPanelSource).toContain('estimatedItemHeight={92}');
+  it('mounts a bounded window of a large target inventory', async () => {
+    vi.mocked(AvailabilityTargetsAPI.list).mockResolvedValue(
+      Array.from({ length: 80 }, (_, index) => ({
+        id: `target-${index}`,
+        name: `Target ${index}`,
+        address: `host-${index}.local`,
+        protocol: 'tcp' as const,
+        port: 1000 + index,
+        enabled: true,
+      })),
+    );
+
+    const { container } = render(() => <AvailabilitySettingsPanel />);
+
+    const rows = await screen.findAllByText(/^Target \d+$/);
+    expect(rows.length).toBeLessThan(80);
+    expect(container.querySelectorAll('[data-platform-window-spacer]')).toHaveLength(2);
   });
 
   it('lists monitor-only MQTT and HTTP endpoint checks in the monitoring home', async () => {

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import resourcePickerSource from '../ResourcePicker.tsx?raw';
 import { ResourcePicker, type SelectedResource } from '../ResourcePicker';
 
 let mockResources: Resource[] = [];
@@ -222,9 +221,19 @@ describe('ResourcePicker', () => {
     ).toBe(false);
     expect(showWarningMock).not.toHaveBeenCalled();
   });
-  it('keeps large resource inventories on the shared bounded list renderer', () => {
-    expect(resourcePickerSource).toContain('PlatformWindowedList');
-    expect(resourcePickerSource).toContain('estimatedItemHeight={56}');
+
+  it('mounts a bounded window of a large resource inventory', () => {
+    mockResources = Array.from({ length: 61 }, (_, index) =>
+      makeResource({ id: `vm-${index}`, name: `VM ${index}`, displayName: `VM ${index}` }),
+    );
+    const { container } = render(() => (
+      <ResourcePicker maxSelection={null} selected={() => []} onSelectionChange={vi.fn()} />
+    ));
+
+    const rows = screen.getAllByText(/^VM \d+$/);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(61);
+    expect(container.querySelectorAll('[data-platform-window-spacer]')).toHaveLength(2);
   });
 
   it('keeps the initial hydration state distinct from a genuinely empty estate', () => {

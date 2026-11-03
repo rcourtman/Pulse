@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
-import runHistoryEntrySource from '../RunHistoryEntry.tsx?raw';
 import { RunHistoryEntry } from '../RunHistoryEntry';
 
 const { findingsPanelState } = vi.hoisted(() => ({
@@ -369,11 +368,6 @@ describe('RunHistoryEntry', () => {
   });
 
   it('keeps technical run trace behind an explicit details disclosure', () => {
-    expect(runHistoryEntrySource).toContain('const [showTechnicalDetails');
-    expect(runHistoryEntrySource).toContain('Technical details');
-    expect(runHistoryEntrySource).toContain('onToggle={(event) => setShowTechnicalDetails');
-    expect(runHistoryEntrySource).toContain('<Show when={showTechnicalDetails()}>');
-
     render(() => (
       <RunHistoryEntry
         run={{

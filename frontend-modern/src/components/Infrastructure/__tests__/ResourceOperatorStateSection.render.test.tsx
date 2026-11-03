@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import type { ResourceCapability } from '@/types/resource';
 
@@ -115,4 +115,56 @@ describe('maintenance schedule timestamps', () => {
       expect(badge.parentElement).toHaveTextContent(/attention.*paused/i);
     },
   );
+});
+
+describe('operator override validation', () => {
+  it('keeps Save window disabled until a one-time window ends after it starts', async () => {
+    apiClientMock.apiFetchJSON.mockResolvedValue({ canonicalId: 'schedule-validation' });
+    render(() => <ResourceOperatorStateSection resourceId="schedule-validation" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schedule window' }));
+    const saveWindow = screen.getByRole('button', { name: 'Save window' });
+    const start = screen.getByLabelText('Start') as HTMLInputElement;
+    const end = screen.getByLabelText('End') as HTMLInputElement;
+    expect(saveWindow).toBeEnabled();
+
+    fireEvent.input(end, { target: { value: '2000-01-01T00:00' } });
+    expect(screen.getByText('End must be after start.')).toBeInTheDocument();
+    expect(saveWindow).toBeDisabled();
+
+    const hoursBetween = () =>
+      (new Date(end.value).getTime() - new Date(start.value).getTime()) / 3_600_000;
+    fireEvent.click(screen.getByRole('button', { name: '4h' }));
+    expect(screen.queryByText('End must be after start.')).not.toBeInTheDocument();
+    expect(saveWindow).toBeEnabled();
+    expect(hoursBetween()).toBe(4);
+
+    fireEvent.click(screen.getByRole('button', { name: '1h' }));
+    expect(hoursBetween()).toBe(1);
+    // Daylight saving can make a calendar day 23 or 25 hours.
+    fireEvent.click(screen.getByRole('button', { name: '24h' }));
+    expect(hoursBetween()).toBeGreaterThanOrEqual(23);
+    expect(hoursBetween()).toBeLessThanOrEqual(25);
+  });
+
+  it('keeps Save overrides disabled while automatic actions are limited to no action', async () => {
+    apiClientMock.apiFetchJSON.mockResolvedValue({ canonicalId: 'auto-validation' });
+    render(() => (
+      <ResourceOperatorStateSection
+        resourceId="auto-validation"
+        capabilities={RESTART_CAPABILITY}
+      />
+    ));
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Limit automatic actions for this resource' }),
+    );
+    expect(screen.getByText('Select at least one eligible capability.')).toBeInTheDocument();
+    const save = screen.getByRole('button', { name: 'Save overrides' });
+    expect(save).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Restart/ }));
+    expect(screen.queryByText('Select at least one eligible capability.')).not.toBeInTheDocument();
+    expect(save).toBeEnabled();
+  });
 });

@@ -358,26 +358,26 @@ versioned provider archive, checksum, and SSH signature before changing the
 version below.
 
 Download the versioned asset, verify it with Pulse's pinned release key, and
-only then extract and run the guided setup:
+only then extract and run the guided setup. The commands are chained, so a
+failed download, signature or checksum stops before anything is extracted or
+run as root:
 
 ```bash
 export PULSE_VERSION=v6.7.0
 export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
 export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
 
-curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}"
-curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}.sha256"
-curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}.sshsig"
-
+curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}" &&
+curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}.sha256" &&
+curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}.sshsig" &&
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
   -n pulse-install \
-  -s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}"
-sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"
-
-tar -xzf "${PULSE_MSP_BUNDLE}"
-cd "pulse-provider-msp-${PULSE_VERSION}"
+  -s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}" &&
+sha256sum -c "${PULSE_MSP_BUNDLE}.sha256" &&
+tar -xzf "${PULSE_MSP_BUNDLE}" &&
+cd "pulse-provider-msp-${PULSE_VERSION}" &&
 sudo -E bash ./setup.sh
 ```
 
@@ -386,11 +386,23 @@ The licence request omits an email address unless you export
 address is included in the request.
 
 The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
-ports 80 and 443 free. Install `curl`, `openssh-client`, `coreutils`, and `tar`
-before the verification step. The wildcard certificate is issued over DNS-01
-with Cloudflare as the default provider (`CF_DNS_API_TOKEN`); any other
+ports 80 and 443 free; 2 vCPU, 4 GB RAM and 40 GB of disk is enough for an
+evaluation. Install `curl`, `openssh-client`, `coreutils`, and `tar` before the
+verification step. Point two DNS records at the host's public IP: the domain
+you choose for `DOMAIN` (the portal, at `https://DOMAIN/portal`) and
+`*.DOMAIN` (each client workspace, at `https://<client-id>.DOMAIN`). On
+Cloudflare, set both to DNS only. The wildcard certificate is issued over
+DNS-01 with Cloudflare as the default provider (`CF_DNS_API_TOKEN`, a token
+with Zone / Zone / Read and Zone / DNS / Edit on that zone); any other
 Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
 and putting that provider's credential variables in `dns-credentials.env`.
+
+When setup pauses for `DOMAIN`, `ACME_EMAIL` and `CF_DNS_API_TOKEN`, edit
+`/opt/pulse-provider-msp/.env` from a second session with `sudo`, because the
+file is readable by root only, then press Enter. It ends with
+`Pulse Provider MSP is running.` and the bootstrap command that prints your
+portal sign-in link; run that command with `sudo` as well. In the portal,
+**Add client** and then **Install agents** walk the first client to live data.
 
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
 2-client evaluation licence. The bundle sends the public half of the

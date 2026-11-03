@@ -354,4 +354,35 @@ describe('OrgsAPI', () => {
       );
     });
   });
+
+  describe('default organization members', () => {
+    it('keeps the server-reported member management capability', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        id: 'default',
+        displayName: 'default',
+        canManageMembers: true,
+      });
+
+      const result = await OrgsAPI.get('default');
+
+      expect(result.canManageMembers).toBe(true);
+    });
+
+    it('adds a default organization member through the members route', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        kind: 'member',
+        member: { userId: 'bob', role: 'viewer' },
+      });
+
+      await OrgsAPI.inviteMember('default', { userId: 'bob', role: 'viewer' });
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/orgs/default/members',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ userId: 'bob', role: 'viewer' }),
+        }),
+      );
+    });
+  });
 });

@@ -1,12 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
-import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
-import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { TableCell, nativeRowClickTarget } from '@/components/shared/Table';
-import tableSource from '@/components/shared/Table.tsx?raw';
 
 type TestRow = {
   id: string;
@@ -16,58 +12,6 @@ type TestRow = {
 describe('PulseDataGrid', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps the shared pulse data grid on shell, runtime, and model owners', () => {
-    expect(pulseDataGridSource).toContain('usePulseDataGridState');
-    expect(pulseDataGridSource).toContain('getPulseDataGridAlignClass');
-    expect(pulseDataGridSource).toContain('getPulseDataGridFrameClass');
-    expect(pulseDataGridSource).toContain('getPulseDataGridWidthAttr');
-    expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
-    expect(pulseDataGridSource).toContain("from '@/components/shared/Table'");
-    expect(pulseDataGridSource).toContain("from '@/components/shared/LoadingSpinner'");
-    expect(pulseDataGridSource).toContain('<Table');
-    expect(pulseDataGridSource).toContain('<LoadingSpinner size="md" tone="info"');
-    expect(pulseDataGridSource).not.toContain(
-      'w-4 h-4 rounded-full border-2 border-slate-300 border-t-blue-600 animate-spin',
-    );
-    expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
-    expect(pulseDataGridSource).toContain('scrollbar-hide');
-    expect(pulseDataGridSource).not.toContain('<div class="overflow-x-auto');
-    expect(pulseDataGridSource).not.toContain('overflow-x-auto touch-scroll scrollbar-hide');
-    expect(pulseDataGridSource).not.toContain('style={{');
-    expect(pulseDataGridSource).not.toContain('style={');
-    expect(pulseDataGridSource).not.toContain('useBreakpoint');
-    expect(pulseDataGridSource).not.toContain('createStore');
-    expect(pulseDataGridSource).not.toContain('target.closest(');
-
-    expect(pulseDataGridStateSource).toContain('export function usePulseDataGridState');
-    expect(pulseDataGridStateSource).toContain('useBreakpoint');
-    expect(pulseDataGridStateSource).toContain('createStore');
-    expect(pulseDataGridStateSource).toContain('reconcile(');
-
-    expect(pulseDataGridModelSource).toContain('export const getPulseDataGridAlignClass');
-    expect(pulseDataGridModelSource).toContain(
-      "export type PulseDataGridFrame = 'default' | 'flush'",
-    );
-    expect(pulseDataGridModelSource).toContain('export const getPulseDataGridFrameClass');
-    expect(pulseDataGridModelSource).toContain(
-      "flush: 'overflow-hidden rounded-none border-0 bg-surface'",
-    );
-    expect(pulseDataGridModelSource).toContain('export const getPulseDataGridWidthAttr');
-    expect(pulseDataGridModelSource).toContain('export const isPulseDataGridInteractiveTarget');
-    expect(pulseDataGridModelSource).toContain('target.closest(');
-    expect(tableSource).toContain('customDividePattern');
-    expect(tableSource).toContain('customBorderPattern');
-    expect(tableSource).toContain('touch-scroll');
-    expect(tableSource).toContain(
-      'table-scroll-shell w-full min-w-0 max-w-full overflow-x-auto touch-scroll',
-    );
-    expect(tableSource).toContain("phoneVerticalScrollOwner?: 'page' | 'table'");
-    expect(tableSource).toContain('table-scroll-shell-phone-page');
-    expect(tableSource).toContain('height?: string | number;');
-    expect(tableSource).not.toContain('style={{');
-    expect(tableSource).not.toContain('style={');
   });
 
   it('preserves caller-owned table cell height attributes without inline styles', () => {

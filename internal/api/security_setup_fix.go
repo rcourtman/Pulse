@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -271,10 +272,12 @@ func sessionUserCarriesAdminPrivileges(cfg *config.Config, sessionUser string) b
 	return false
 }
 
-// sessionUserHasRBACAdminGrant reports whether the user's effective RBAC
-// permissions include an allow of the admin action on all resources — the
-// shape of the built-in Administrator role that SSO group role mappings
-// assign. A missing manager or empty assignment simply reports false.
+// sessionUserHasRBACAdminGrant reports whether the user's RBAC policy allows
+// the admin action on all resources — the shape of the built-in Administrator
+// role that SSO group role mappings assign. It is the same evaluation route
+// authorization uses: inherited roles count, an explicit deny wins, and a
+// conditional grant does not apply without its attributes. A missing manager
+// or empty assignment simply reports false.
 func sessionUserHasRBACAdminGrant(username string) bool {
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -284,15 +287,9 @@ func sessionUserHasRBACAdminGrant(username string) bool {
 	if manager == nil {
 		return false
 	}
-	for _, perm := range manager.GetUserPermissions(username) {
-		if strings.EqualFold(perm.Effect, internalauth.EffectDeny) {
-			continue
-		}
-		if perm.Action == "admin" && perm.Resource == "*" {
-			return true
-		}
-	}
-	return false
+	ctx := internalauth.WithUser(context.Background(), username)
+	allowed, err := internalauth.NewPolicyEvaluator(manager).Authorize(ctx, "admin", "*")
+	return err == nil && allowed
 }
 
 // ensureSettingsScope guards instance administration. A token caller needs the
