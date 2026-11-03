@@ -614,11 +614,12 @@ handle_install_interrupt() {
     exit "${1:-1}"
 }
 
-# Wrapper for systemctl commands that might hang in unprivileged containers
+# A TERM-only timeout can wait forever for a stuck manager. Bound its process
+# group too; killing this client does not establish the service's actual state.
 safe_systemctl() {
     local action="$1"
     shift
-    timeout 5 systemctl "$action" "$@" 2>/dev/null || {
+    timeout -k 1 5 systemctl "$action" "$@" 2>/dev/null || {
         if [[ "$action" == "daemon-reload" ]]; then
             # daemon-reload hanging is common in unprivileged containers, silent fail is OK
             return 0
@@ -637,7 +638,7 @@ safe_systemctl() {
 stop_pulse_for_replacement() {
     local service_name="$1"
     local state=""
-    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+    if ! state=$(timeout -k 1 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
         print_error "Could not read Pulse service state ($service_name); refusing binary replacement"
         return 1
     fi
@@ -656,7 +657,7 @@ stop_pulse_for_replacement() {
         print_error "Could not stop Pulse ($service_name); refusing binary replacement. Check service state before retrying."
         return 1
     fi
-    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+    if ! state=$(timeout -k 1 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
         print_error "Could not confirm Pulse stopped ($service_name); refusing binary replacement"
         return 1
     fi
@@ -5239,17 +5240,25 @@ ensure_systemd_service_installed() {
 # (#1323: on unprivileged LXC the installer's restart can silently fail).
 PULSE_WAS_ACTIVE="false"
 
-# Poll until the service is active, up to timeout_seconds (default 20).
+# Poll within one elapsed-time budget (default 20 seconds), including manager
+# reads and sleeps. Each client gets at most five seconds, capped by the budget,
+# plus a one-second forced-stop grace. A late active reply cannot pass admission.
 wait_for_service_active() {
     local service_name=$1
     local timeout_seconds="${2:-20}"
-    local elapsed=0
+    [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 1
+    local started_at=$SECONDS elapsed=0 probe_seconds
     while (( elapsed < timeout_seconds )); do
-        if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
-            return 0
+        probe_seconds=$((timeout_seconds - elapsed))
+        (( probe_seconds <= 5 )) || probe_seconds=5
+        if timeout -k 1 "$probe_seconds" systemctl is-active --quiet "$service_name" 2>/dev/null; then
+            (( SECONDS - started_at < timeout_seconds )) && return 0
+            return 1
         fi
+        elapsed=$((SECONDS - started_at))
+        (( elapsed < timeout_seconds )) || break
         sleep 1
-        ((elapsed += 1))
+        elapsed=$((SECONDS - started_at))
     done
     return 1
 }
@@ -5296,7 +5305,7 @@ start_pulse() {
     # cat covers units living elsewhere.
     if command -v systemctl >/dev/null 2>&1 \
         && [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]] \
-        && ! timeout 5 systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+        && ! timeout -k 1 5 systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
         print_error "systemd unit ${SERVICE_NAME}.service does not exist; Pulse was not started"
         print_info "Re-run the installer to recreate the service unit"
         return 1
@@ -5324,7 +5333,7 @@ start_pulse() {
         print_info "Installed files and configuration have been retained; check the service before retrying:"
         print_info "  systemctl status $SERVICE_NAME"
         print_info "  journalctl -u $SERVICE_NAME -n 50"
-        timeout 5 journalctl -u "$SERVICE_NAME" -n 20 2>/dev/null || true
+        timeout -k 1 5 journalctl -u "$SERVICE_NAME" -n 20 2>/dev/null || true
         return 1
     fi
 
