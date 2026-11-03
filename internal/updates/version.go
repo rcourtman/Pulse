@@ -578,12 +578,8 @@ func GetDeploymentType() string {
 	}
 
 	// Check for ProxmoxVE LXC installation (has update command)
-	if fileExists("/bin/update") {
-		// Read file directly instead of using exec.Command
-		data, err := os.ReadFile("/bin/update")
-		if err == nil && (strings.Contains(string(data), "pulse.sh") || strings.Contains(string(data), "install.sh")) {
-			return "proxmoxve"
-		}
+	if data, err := os.ReadFile("/bin/update"); err == nil && isProxmoxVEUpdateHelper(string(data)) {
+		return "proxmoxve"
 	}
 
 	// Check for systemd service to determine installation type
@@ -609,6 +605,20 @@ func GetDeploymentType() string {
 	}
 
 	return "manual"
+}
+
+// communityScriptsPulseEntrypoint matches the community-scripts update
+// bootstrap generated for the Pulse LXC. Since September 2026 that bootstrap
+// names the app only through this export; it no longer contains ct/pulse.sh.
+var communityScriptsPulseEntrypoint = regexp.MustCompile(`(?m)^export UPDATE_SCRIPT_NAME="pulse"\s*$`)
+
+// isProxmoxVEUpdateHelper reports whether /bin/update classifies this install
+// as proxmoxve: the Pulse installer's helper (which native hosts also carry),
+// or the community-scripts updater in its old direct-pull or bootstrap form.
+func isProxmoxVEUpdateHelper(content string) bool {
+	return strings.Contains(content, "pulse.sh") ||
+		strings.Contains(content, "install.sh") ||
+		communityScriptsPulseEntrypoint.MatchString(content)
 }
 
 // dockerUpdatesAllowed returns true when Docker environments should expose update functionality.

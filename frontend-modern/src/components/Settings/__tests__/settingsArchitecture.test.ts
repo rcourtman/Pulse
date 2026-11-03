@@ -700,6 +700,11 @@ describe('settings architecture guardrails', () => {
     expect(securityAuthPanelSource).not.toContain(
       'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border',
     );
+    // Restart guidance comes from the shared presenter for every deployment
+    // type, not from a hand-written block per type.
+    expect(securityAuthPanelSource).toContain('{restartInstruction().label}');
+    expect(securityAuthPanelSource).not.toContain('deploymentType ===');
+    expect(securityAuthPanelSource).not.toContain('ProxmoxVE console');
 
     expect(rolesPanelSource).toContain(
       "import { ActionIconButton, Button } from '@/components/shared/Button';",

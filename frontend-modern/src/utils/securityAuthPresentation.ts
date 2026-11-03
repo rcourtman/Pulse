@@ -19,7 +19,6 @@ export const SECURITY_AUTH_RESTART_TIP =
 export interface SecurityAuthRestartInstruction {
   label: string;
   command?: string;
-  secondaryLabel?: string;
 }
 
 export function getSecurityAuthRestartInstruction(
@@ -27,9 +26,11 @@ export function getSecurityAuthRestartInstruction(
 ): SecurityAuthRestartInstruction {
   switch (deploymentType) {
     case 'proxmoxve':
+      // Not `update`: the community-scripts helper exits without restarting
+      // Pulse when no newer release exists. LXC consoles are root shells, and
+      // older ProxmoxVE installs still run pulse-backend.service.
       return {
-        label: 'Type update in your ProxmoxVE console',
-        secondaryLabel: 'Or restart manually with:',
+        label: 'Restart the service as root (older installs use pulse-backend):',
         command: 'systemctl restart pulse',
       };
     case 'docker':

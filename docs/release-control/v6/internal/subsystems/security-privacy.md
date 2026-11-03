@@ -3117,6 +3117,11 @@ restart guidance after auth changes. When `securityAuthPresentation.ts`
 describes the development deployment, it must point at the canonical managed
 runtime control surface (`npm run dev:restart` from the repo root), not a
 stale `pulse-hot-dev` service name or any lane-local restart folklore.
+For the ProxmoxVE deployment it must give `systemctl restart pulse` as root and
+name the older `pulse-backend` unit, never the community-scripts `update`
+helper, which exits without restarting Pulse when no newer release exists.
+`SecurityAuthPanel.tsx` renders that instruction's label and optional command
+once for every deployment type rather than through per-type blocks.
 `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` must
 continue to carry the direct `security-settings-surfaces` proof path together
 with the API-contract token-management proof instead of borrowing coverage only

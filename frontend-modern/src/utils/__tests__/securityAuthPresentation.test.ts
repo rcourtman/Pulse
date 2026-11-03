@@ -31,8 +31,7 @@ describe('securityAuthPresentation', () => {
       command: 'docker restart pulse',
     });
     expect(getSecurityAuthRestartInstruction('proxmoxve')).toEqual({
-      label: 'Type update in your ProxmoxVE console',
-      secondaryLabel: 'Or restart manually with:',
+      label: 'Restart the service as root (older installs use pulse-backend):',
       command: 'systemctl restart pulse',
     });
     expect(getSecurityAuthRestartInstruction('development')).toEqual({
