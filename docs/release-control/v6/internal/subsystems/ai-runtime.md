@@ -4281,6 +4281,20 @@ findings. The field persists as `resource_criticality` and may affect
 same-severity Patrol attention ordering only; it must not mutate
 `Finding.Severity` or bypass severity escalation/resolution rules.
 
+The operator-state projection runs outside the findings mutex. An external
+adapter waiting on storage or reading findings must not prevent Patrol shutdown
+from saving findings already accepted by the store. Before applying the result,
+`FindingsStore.Add` rechecks the provider revision and the retained resource
+identity used by identity-free updates; replacement or rebinding requires a new
+projection. A pending lookup is not an accepted finding. This does not turn a
+blocked external call into a completed investigation or claim its result was
+flushed. `TestPatrolService_StopWhileOperatorStateLookupBlocked` exercises the
+shutdown save against real config persistence; the provider replacement and
+removal cases in `TestFindingsStore_AddUsesCurrentOperatorStateProvider` reject
+stale suppression and allow the current provider to read the store.
+`TestFindingsStore_AddRefreshesReboundOperatorResource` covers a retained
+identity changing while an identity-free update is waiting on its projection.
+
 The approval store exposes `SetOnApprovalCreated(cb)` so the API
 layer can install a fire-and-forget callback that runs after every
 successful `CreateApproval` (the approval is already persisted at

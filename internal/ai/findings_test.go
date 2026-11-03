@@ -1711,6 +1711,145 @@ func TestFinding_RemindAt_RoundTripsThroughJSON(t *testing.T) {
 	}
 }
 
+func TestFindingsStore_AddUsesCurrentOperatorStateProvider(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		name := "remove"
+		if replace {
+			name = "replace"
+		}
+		t.Run(name, func(t *testing.T) {
+			store := NewFindingsStore()
+			entered, release := make(chan struct{}), make(chan struct{})
+			store.SetResourceOperatorStateProvider(ResourceOperatorStateProviderFunc(func(string, time.Time) (ResourceOperatorStateProjection, bool) {
+				close(entered)
+				<-release
+				return ResourceOperatorStateProjection{IntentionallyOffline: true, Criticality: "high"}, true
+			}))
+			addDone, changed := make(chan struct{}), make(chan struct{})
+			go func() {
+				store.Add(&Finding{ID: "f1", ResourceID: "vm:101", Title: "Unavailable", Severity: FindingSeverityInfo})
+				close(addDone)
+			}()
+			defer func() {
+				close(release)
+				select {
+				case <-changed:
+				case <-time.After(3 * time.Second):
+					t.Error("provider change did not finish")
+				}
+				select {
+				case <-addDone:
+				case <-time.After(3 * time.Second):
+					t.Error("finding add did not finish")
+				}
+			}()
+			select {
+			case <-entered:
+			case <-time.After(3 * time.Second):
+				t.Fatal("operator-state lookup did not start")
+			}
+			go func() {
+				var next ResourceOperatorStateProvider
+				if replace {
+					next = ResourceOperatorStateProviderFunc(func(string, time.Time) (ResourceOperatorStateProjection, bool) {
+						// A provider may read the store while projecting state.
+						store.GetSummary()
+						return ResourceOperatorStateProjection{Criticality: "low"}, true
+					})
+				}
+				store.SetResourceOperatorStateProvider(next)
+				close(changed)
+			}()
+			select {
+			case <-changed:
+			case <-time.After(3 * time.Second):
+				t.Error("provider cannot be replaced while its previous lookup is blocked")
+				return
+			}
+			// Release the old result, then wait for the new projection to commit.
+			release <- struct{}{}
+			select {
+			case <-addDone:
+			case <-time.After(3 * time.Second):
+				t.Error("provider re-entry blocked finding add")
+				return
+			}
+			got := store.Get("f1")
+			if got == nil || got.DismissedReason != "" {
+				t.Fatalf("stale provider suppressed the finding: %+v", got)
+			}
+			want := ""
+			if replace {
+				want = "low"
+			}
+			if got.ResourceCriticality != want {
+				t.Errorf("criticality = %q, want %q from current provider", got.ResourceCriticality, want)
+			}
+		})
+	}
+}
+
+func TestFindingsStore_AddRefreshesReboundOperatorResource(t *testing.T) {
+	store := NewFindingsStore()
+	store.Add(&Finding{ID: "f1", ResourceID: "vm:100", Title: "Unavailable", Severity: FindingSeverityInfo})
+	entered, release := make(chan struct{}), make(chan struct{})
+	store.SetResourceOperatorStateProvider(ResourceOperatorStateProviderFunc(func(id string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+		if id == "vm:100" {
+			close(entered)
+			<-release
+			return ResourceOperatorStateProjection{IntentionallyOffline: true, Criticality: "high"}, true
+		}
+		return ResourceOperatorStateProjection{Criticality: "low"}, id == "vm:101"
+	}))
+	addDone, rebound := make(chan struct{}), make(chan error, 1)
+	go func() {
+		store.Add(&Finding{ID: "f1", Title: "Unavailable", Severity: FindingSeverityInfo})
+		close(addDone)
+	}()
+	defer func() {
+		close(release)
+		select {
+		case <-addDone:
+		case <-time.After(3 * time.Second):
+			t.Error("finding add did not finish")
+			return
+		}
+		if err := store.ForceSave(); err != nil {
+			t.Error(err)
+		}
+	}()
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("operator-state lookup did not start")
+	}
+	go func() {
+		rebound <- store.SetPersistence(&recordingPersistence{findings: map[string]*Finding{
+			"f1": {ID: "f1", ResourceID: "vm:101", Title: "Unavailable", Severity: FindingSeverityInfo},
+		}})
+	}()
+	select {
+	case err := <-rebound:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("retained identity cannot change during an external lookup")
+		return
+	}
+	release <- struct{}{}
+	select {
+	case <-addDone:
+	case <-time.After(3 * time.Second):
+		t.Error("finding add did not finish after identity changed")
+		return
+	}
+	got := store.Get("f1")
+	if got == nil || got.ResourceID != "vm:101" || got.ResourceCriticality != "low" || got.DismissedReason != "" {
+		t.Fatalf("finding committed a stale resource projection: %+v", got)
+	}
+}
+
 func TestFindingsStore_Add_AutoAcknowledgesDuringMaintenanceWindow(t *testing.T) {
 	// When the operator has set a maintenance window covering the
 	// finding's resource, the new-finding path must auto-dismiss the
