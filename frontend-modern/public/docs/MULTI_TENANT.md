@@ -107,11 +107,22 @@ shown in Pulse. `name` and `description` are not the creation fields.
 
 ### Switching Organizations
 
-Use the **Org Switcher** dropdown in the header. When you switch:
+Use the **Org Switcher** in the header to select an organization. Pulse clears
+organization-scoped monitoring and AI state, reconnects the live data stream,
+and requests the selected organization's data. This is not a new sign-in, a
+transfer of saved infrastructure or a grant of membership.
 
-- All pages reload with the new organization's data.
-- AI chat history is reset (each org has its own context).
-- Caches are invalidated and re-fetched.
+Before switching, finish or deliberately discard any unsaved edit. If a change
+is still being saved, or its result is uncertain, keep the selection unchanged
+and follow [unconfirmed changes](#a-settings-change-could-not-be-confirmed).
+Drafts must not be carried into a different organization.
+
+Check the header selection and, once loaded, the organization ID in
+**Settings → Organization → Overview** before editing. Display names can be
+similar; use the stable ID to distinguish them. The **Organization switched**
+message is not confirmation that the selected organization’s data loaded or
+that the current user can edit it. Follow [switch recovery](#organization-data-not-loading-after-switch)
+if the data or controls are unavailable.
 
 ### Managing Members
 
@@ -247,9 +258,50 @@ Activate an Enterprise license with the `multi_tenant` capability in **Settings 
 
 ### Organization data not loading after switch
 
-1. Hard-refresh the browser (`Ctrl+Shift+R`).
-2. Check the Org Switcher dropdown — ensure the correct org is selected.
-3. Check Pulse logs for tenant middleware errors.
+1. **Keep the working administrator session.** Check the header selection
+   against the intended organization, then the stable ID in **Overview** when
+   it loads. If the intended organization is missing from the switcher, an
+   existing owner or admin can check saved membership in their own session.
+   Do not switch to another organization or grant a wider role just to make a
+   failed request pass. Instance roles and organization membership are separate;
+   see [RBAC setup and recovery](RBAC.md#quick-start).
+2. **Distinguish unread from empty.** An unavailable panel is not proof that saved
+   infrastructure, members or shares were removed. In the affected Organization
+   panel, use its read-only recovery control:
+   - **Reload organization** reads saved organization details.
+   - **Reload access** reads saved members and invitations.
+   - **Reload sharing** reads saved incoming and outgoing shares.
+
+   Check that the panel identifies the intended organization and finishes
+   loading successfully before making changes. These controls do not repeat
+   a rename, invitation, role change or sharing change.
+3. **Do not rebuild missing-looking state.** If Pulse reports **Failed to load
+   organizations. Using default.**, the fallback selection is not evidence that
+   another organization's data moved to Default. Do not recreate infrastructure
+   there, delete saved configuration or clear browser storage to diagnose it.
+   A refused read (401/403) is not an empty list; keep the intended account and
+   scope rather than substituting a broader token or changing access rules.
+
+A hard refresh cannot restore membership or prove that a save failed, and it
+can discard an unsaved draft. Do not sign out of the working administrator
+session, restart Pulse or reinstall agents as a first response to this error.
+
+#### A settings change could not be confirmed
+
+A failed response does not prove that a write failed. Keep the same
+organization; do not start a competing change while one is still in progress.
+Once it has settled, use the relevant **Reload** control above to inspect saved
+state before deciding whether another change is needed. Do not resend an
+invitation, repeat a rename or role/share change, or replay it after switching
+accounts or organizations. If the saved result still cannot be read, leave
+further changes alone rather than guessing or overwriting it.
+
+For an unresolved failure, record the Pulse version, affected panel, time,
+organization ID or consistent private alias, and the visible error. Review any
+existing logs privately and share only a relevant redacted excerpt. Keep member
+identities, resource inventories, tokens, cookies, HAR files and **Copy as cURL**
+output private; do not enable Debug logging or weaken HTTPS or scoped access
+just to collect a report.
 
 ### Shared resources not appearing
 
