@@ -1,12 +1,36 @@
 services:
   traefik:
     image: ${TRAEFIK_IMAGE:?TRAEFIK_IMAGE must be set to a digest-pinned image}
+    # Traefik takes its static configuration from exactly one source, and a
+    # mounted traefik.yml wins over flags and TRAEFIK_* variables. The bundle
+    # used to mount one with admin@example.com, which Let's Encrypt refuses,
+    # so no install could obtain a certificate and ACME_EMAIL and
+    # ACME_DNS_PROVIDER were silently ignored. The flags carry the .env values.
+    command:
+      - --api.dashboard=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.middlewares=security-headers@file
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
+      - --providers.file.filename=/etc/traefik/traefik-dynamic.yml
+      - --providers.file.watch=true
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}
+      - --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}
+      - --certificatesresolvers.le.acme.storage=/etc/traefik/acme/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
+      - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ${PULSE_PROVIDER_MSP_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
-      - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik-dynamic.yml:/etc/traefik/traefik-dynamic.yml:ro
       - acme-data:/etc/traefik/acme
     # The edge container gets only ACME/DNS material, never the operator .env:
@@ -17,10 +41,6 @@ services:
         required: false
     environment:
       - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}
-      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}
-      - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}
-      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
-      - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${ACME_EMAIL}
     networks:
       - pulse-provider-msp
     restart: unless-stopped

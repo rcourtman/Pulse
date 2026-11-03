@@ -404,6 +404,19 @@ file is readable by root only, then press Enter. It ends with
 portal sign-in link; run that command with `sudo` as well. In the portal,
 **Add client** and then **Install agents** walk the first client to live data.
 
+**v6.7.0 only:** the bundle's `traefik.yml` gives Let's Encrypt
+`admin@example.com`, which it refuses, so no certificate is issued and the
+portal refuses TLS. Once setup finishes, copy your `ACME_EMAIL` into that file
+and restart Traefik:
+
+```bash
+cd /opt/pulse-provider-msp && e=$(sudo sed -n 's/^ACME_EMAIL=//p' .env | tail -n 1 | tr -d "\"'" | sed 's/[&/\]/\\&/g') && sudo sed -i "s/admin@example.com/$e/" traefik.yml && sudo docker compose restart traefik
+```
+
+With a DNS provider other than Cloudflare, also change both
+`provider: cloudflare` lines in that file. Later bundles read both values from
+`.env` and report after setup whether the certificate was issued.
+
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
 2-client evaluation licence. The bundle sends the public half of the
 signing key generated on your host, a setup-stage marker, and a signup-source

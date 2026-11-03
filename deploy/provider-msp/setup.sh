@@ -27,6 +27,7 @@ PULSE_PROVIDER_MSP_SIGNUP_SOURCE="${PULSE_PROVIDER_MSP_SIGNUP_SOURCE:-provider_m
 PULSE_PROVIDER_MSP_DOMAIN="${PULSE_PROVIDER_MSP_DOMAIN:-}"
 PULSE_PROVIDER_MSP_ACME_EMAIL="${PULSE_PROVIDER_MSP_ACME_EMAIL:-}"
 PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN="${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN:-}"
+PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS="${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS:-180}"
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -153,7 +154,6 @@ install_deploy_bundle() {
 
   local required=(
     "docker-compose.yml"
-    "traefik.yml"
     "traefik-dynamic.yml"
     ".env.example"
     "run-install-proof.sh"
@@ -199,7 +199,6 @@ error: missing deploy bundle files next to setup.sh.
 
 This script needs these files present on disk:
   - docker-compose.yml
-  - traefik.yml
   - traefik-dynamic.yml
   - .env.example
   - run-install-proof.sh
@@ -212,7 +211,9 @@ EOF
   fi
 
   install -m 0644 "${src_dir}/docker-compose.yml" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/docker-compose.yml"
-  install -m 0644 "${src_dir}/traefik.yml" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/traefik.yml"
+  # Traefik's static configuration lives in docker-compose.yml; an installed
+  # traefik.yml would only mislead whoever edits it.
+  rm -f "${PULSE_PROVIDER_MSP_INSTALL_DIR}/traefik.yml"
   install -m 0644 "${src_dir}/traefik-dynamic.yml" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/traefik-dynamic.yml"
   install -m 0644 "${src_dir}/.env.example" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env.example"
   install -m 0755 "${src_dir}/run-install-proof.sh" "${PULSE_PROVIDER_MSP_INSTALL_DIR}/run-install-proof.sh"
@@ -822,6 +823,80 @@ start_provider_services() {
   die "control plane did not reach running state; inspect: cd ${PULSE_PROVIDER_MSP_INSTALL_DIR} && docker compose logs control-plane"
 }
 
+# What a provider must fix when Traefik reports an ACME failure, in their terms.
+explain_acme_failure() {
+  case "$1" in
+    *invalidContact*)
+      echo "Let's Encrypt refused ACME_EMAIL. Use a real address; example.com and similar are refused." ;;
+    *rateLimited*)
+      echo "Let's Encrypt is rate limiting this domain. Wait for the time in the message, then retry." ;;
+    *[Cc]loudflare*)
+      echo "Cloudflare refused the DNS change. CF_DNS_API_TOKEN needs Zone / Zone / Read and Zone / DNS / Edit on the zone that holds DOMAIN." ;;
+    *NXDOMAIN*|*"time limit exceeded"*|*propagat*)
+      echo "The DNS challenge record was not visible in time. Check that DOMAIN is in the zone the token can edit." ;;
+    *)
+      echo "Read the Traefik message below." ;;
+  esac
+}
+
+# A running stack is not a usable one: until the wildcard certificate exists,
+# Traefik refuses TLS for the portal and every client address (sniStrict), so
+# browsers and agents see only a handshake error. Wait for it, check the two
+# DNS records, and say what to fix. Setup still finishes either way.
+PORTAL_CERTIFICATE_READY=0
+PORTAL_READINESS_REPORT=""
+check_portal_readiness() {
+  local env_path domain waited acme_error="" reason name missing=() missing_list
+  env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  domain="$(env_value DOMAIN "${env_path}")"
+  [[ "${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}" =~ ^[0-9]+$ ]] \
+    || die "PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS must be a whole number of seconds"
+
+  log "waiting up to ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s for the certificate for ${domain} and *.${domain}"
+  for (( waited = 0; waited <= PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS; waited += 5 )); do
+    if timeout 10 openssl s_client -connect 127.0.0.1:443 -servername "${domain}" </dev/null 2>/dev/null \
+      | openssl x509 -noout -ext subjectAltName 2>/dev/null | grep -qF "DNS:*.${domain}"; then
+      PORTAL_CERTIFICATE_READY=1
+      break
+    fi
+    acme_error="$( (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose logs --no-color traefik 2>/dev/null) \
+      | grep -F "Unable to obtain ACME certificate" | tail -n 1 \
+      | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/.*error=//' -e 's/ ACME CA=.*//' -e 's/^"//' -e 's/"$//' \
+      | cut -c1-400 || true)"
+    [[ -n "${acme_error}" ]] && break
+    sleep 5
+  done
+
+  for name in "${domain}" "pulse-dns-check.${domain}"; do
+    timeout 10 getent ahostsv4 "${name}" >/dev/null 2>&1 || missing+=("${name}")
+  done
+
+  if [[ "${PORTAL_CERTIFICATE_READY}" -eq 1 && "${#missing[@]}" -eq 0 ]]; then
+    PORTAL_READINESS_REPORT="Certificate: issued for ${domain} and *.${domain}."
+  else
+    PORTAL_READINESS_REPORT="NOT READY YET:"
+    if [[ "${PORTAL_CERTIFICATE_READY}" -ne 1 ]]; then
+      if [[ -n "${acme_error}" ]]; then
+        reason="$(explain_acme_failure "${acme_error}")"
+      else
+        reason="No certificate after ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s and no error from Traefik yet; it may still arrive."
+      fi
+      PORTAL_READINESS_REPORT+=$'\n'"  - No TLS certificate yet, so browsers and agents cannot connect."
+      PORTAL_READINESS_REPORT+=$'\n'"    ${reason}"
+      [[ -n "${acme_error}" ]] && PORTAL_READINESS_REPORT+=$'\n'"    Traefik said: ${acme_error}"
+    fi
+    if [[ "${#missing[@]}" -ne 0 ]]; then
+      # setup.sh sets IFS to newline and tab, so join the names by hand.
+      missing_list="$(printf '%s, ' "${missing[@]}")"
+      PORTAL_READINESS_REPORT+=$'\n'"  - This host cannot resolve ${missing_list%, }. Browsers and agents need A records"
+      PORTAL_READINESS_REPORT+=$'\n'"    for ${domain} and *.${domain} pointing here (on Cloudflare, DNS only)."
+    fi
+    PORTAL_READINESS_REPORT+=$'\n'"  Correct any wrong value with: sudo nano ${env_path}"
+    PORTAL_READINESS_REPORT+=$'\n'"  then retry with: cd ${PULSE_PROVIDER_MSP_INSTALL_DIR} && sudo docker compose up -d --force-recreate traefik control-plane"
+  fi
+  printf '\n%s\n\n' "${PORTAL_READINESS_REPORT}"
+}
+
 run_install_proof_if_requested() {
   local mode
   mode="$(echo "${PULSE_PROVIDER_MSP_RUN_INSTALL_PROOF}" | tr '[:upper:]' '[:lower:]')"
@@ -859,6 +934,8 @@ print_summary() {
   cat <<EOF
 
 Pulse Provider MSP is running.
+
+${PORTAL_READINESS_REPORT}
 
 Paths:
   - Deploy dir: ${PULSE_PROVIDER_MSP_INSTALL_DIR}
@@ -927,6 +1004,7 @@ main() {
   ensure_eval_license
   validate_compose_config
   start_provider_services
+  check_portal_readiness
   run_install_proof_if_requested
   print_summary
 }
