@@ -19245,8 +19245,8 @@ func TestContract_AgentEventsStreamPublishesOnFindingCreated(t *testing.T) {
 		t.Fatalf("read router.go: %v", err)
 	}
 	src := string(source)
-	if !strings.Contains(src, "PublishFindingCreated(AgentEventFindingCreatedPayload{") {
-		t.Error("router.go must publish finding.created events to the agent stream when a new finding is added")
+	if !strings.Contains(src, "PublishFindingCreated(orgID, AgentEventFindingCreatedPayload{") {
+		t.Error("router.go must publish finding.created events, scoped to the Patrol's organization, to the agent stream when a new finding is added")
 	}
 	if !strings.Contains(src, "isNew && r.agentEventBroadcaster != nil && f.DismissedReason == \"\"") {
 		t.Error("publish gate must fire only when isNew, broadcaster wired, and finding not auto-dismissed by operator-state — otherwise the stream contradicts the suppression contract")
@@ -23097,9 +23097,9 @@ func TestContract_AgentOperationsLoopStatusEndpointSurfacesStableShape(t *testin
 		"return telemetry.ClassifyPulseIntelligencePatrolControlProof(telemetry.PulseIntelligencePatrolControlProofInput{",
 		"ContextualCollaborationCount: agentOperationsLoopContextualCollaborationCount(status)",
 		"type AgentAggregateFindingsProvider interface {",
-		"ActiveFindingCount() int",
+		"ActiveFindingCount(orgID string) int",
 		"if aggregateProvider, ok := h.findingsProvider.(AgentAggregateFindingsProvider); ok {",
-		"aggregateProvider.ActiveFindingCount()",
+		"aggregateProvider.ActiveFindingCount(orgID)",
 		"case status.PendingApprovalCount > 0:",
 		"Review pending Patrol approvals before treating previous verified work as current.",
 		"case status.ActiveFindingCount > 0 && hasVerifiedOutcome:",
@@ -28754,7 +28754,8 @@ func TestContract_PulseMCPReadmeIntroNamesPublishedReadTools(t *testing.T) {
 }
 
 // Change events reach only subscribers in the organization whose monitor
-// recorded them; untagged events still reach everyone.
+// recorded them, and finding events only those in the organization whose
+// Patrol raised them.
 func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 	b := NewAgentEventBroadcaster()
 	producer, _ := newTestAgentChangeEventProducer(b)
@@ -28782,7 +28783,9 @@ func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 	producer.observer("tenant-b", nil)(unifiedresources.ResourceChange{ID: "foreign", ResourceID: "vm-b", Kind: unifiedresources.ChangeAlertFired})
 	producer.observer("", nil)(unifiedresources.ResourceChange{ID: "default-org", ResourceID: "vm-d", Kind: unifiedresources.ChangeAlertFired})
 	producer.observer("tenant-a", nil)(unifiedresources.ResourceChange{ID: "own", ResourceID: "vm-a", Kind: unifiedresources.ChangeAlertFired})
-	b.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "untagged-finding"})
+	b.PublishFindingCreated("tenant-b", AgentEventFindingCreatedPayload{FindingID: "foreign-finding"})
+	b.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "default-finding"})
+	b.PublishFindingCreated("tenant-a", AgentEventFindingCreatedPayload{FindingID: "own-finding"})
 
 	got := make(chan string, 1)
 	go func() {
@@ -28791,7 +28794,7 @@ func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 		for scanner.Scan() {
 			collected.WriteString(scanner.Text())
 			collected.WriteString("\n")
-			if strings.Contains(collected.String(), "untagged-finding") {
+			if strings.Contains(collected.String(), "own-finding") {
 				got <- collected.String()
 				return
 			}
@@ -28802,7 +28805,7 @@ func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 		if !strings.Contains(stream, "event: alert.fired") || !strings.Contains(stream, `"changeId":"own"`) {
 			t.Fatalf("own organization's alert missing from stream:\n%s", stream)
 		}
-		for _, foreign := range []string{`"changeId":"foreign"`, `"changeId":"default-org"`} {
+		for _, foreign := range []string{`"changeId":"foreign"`, `"changeId":"default-org"`, "foreign-finding", "default-finding"} {
 			if strings.Contains(stream, foreign) {
 				t.Fatalf("stream leaked %s:\n%s", foreign, stream)
 			}

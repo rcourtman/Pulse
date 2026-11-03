@@ -293,32 +293,33 @@ type AgentResourceCapabilities struct {
 // AgentFindingsProvider returns active findings as agent-stable snapshots and
 // count-only aggregate evidence. The implementation lives outside this package
 // (the patrol service holds the canonical findings store); this interface keeps
-// the api layer free of an `internal/ai` import.
+// the api layer free of an `internal/ai` import. Every read names the request
+// organization; implementations return only that organization's findings.
 type AgentFindingsProvider interface {
-	ActiveFindingsForResource(resourceID string) []AgentResourceFindingSnapshot
+	ActiveFindingsForResource(resourceID, orgID string) []AgentResourceFindingSnapshot
 }
 
 type AgentAggregateFindingsProvider interface {
-	ActiveFindingCount() int
+	ActiveFindingCount(orgID string) int
 }
 
 type agentFindingsProvider struct {
-	activeForResource func(resourceID string) []AgentResourceFindingSnapshot
-	activeCount       func() int
+	activeForResource func(resourceID, orgID string) []AgentResourceFindingSnapshot
+	activeCount       func(orgID string) int
 }
 
-func (p agentFindingsProvider) ActiveFindingsForResource(resourceID string) []AgentResourceFindingSnapshot {
+func (p agentFindingsProvider) ActiveFindingsForResource(resourceID, orgID string) []AgentResourceFindingSnapshot {
 	if p.activeForResource == nil {
 		return nil
 	}
-	return p.activeForResource(resourceID)
+	return p.activeForResource(resourceID, orgID)
 }
 
-func (p agentFindingsProvider) ActiveFindingCount() int {
+func (p agentFindingsProvider) ActiveFindingCount(orgID string) int {
 	if p.activeCount == nil {
 		return 0
 	}
-	return p.activeCount()
+	return p.activeCount(orgID)
 }
 
 // AgentApprovalsProvider returns still-pending approvals as
@@ -532,7 +533,7 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 	// Active findings — in-memory lookup via the patrol findings store
 	// adapter wired at startup.
 	if h.findingsProvider != nil {
-		bundle.ActiveFindings = h.findingsProvider.ActiveFindingsForResource(resourceID)
+		bundle.ActiveFindings = h.findingsProvider.ActiveFindingsForResource(resourceID, orgID)
 		if bundle.ActiveFindings == nil {
 			bundle.ActiveFindings = []AgentResourceFindingSnapshot{}
 		}
@@ -754,7 +755,7 @@ func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.
 			summary.MaintenanceWindowActive = state.IsInMaintenanceAt(now)
 		}
 		if h.findingsProvider != nil {
-			findings := h.findingsProvider.ActiveFindingsForResource(canonical)
+			findings := h.findingsProvider.ActiveFindingsForResource(canonical, orgID)
 			summary.Findings = countFleetFindingsBySeverity(findings)
 		}
 		if count, ok := pendingByResource[canonical]; ok {
@@ -899,14 +900,14 @@ func (h *AgentContextHandler) HandleOperationsLoopStatus(w http.ResponseWriter, 
 	for _, resource := range registry.List() {
 		canonical := unified.CanonicalResourceID(resource.ID)
 		if h.findingsProvider != nil {
-			status.ActiveFindingCount += len(h.findingsProvider.ActiveFindingsForResource(canonical))
+			status.ActiveFindingCount += len(h.findingsProvider.ActiveFindingsForResource(canonical, orgID))
 		}
 		if pending := pendingByResource[canonical]; pending > 0 {
 			status.PendingApprovalCount += pending
 		}
 	}
 	if aggregateProvider, ok := h.findingsProvider.(AgentAggregateFindingsProvider); ok {
-		if aggregateActive := aggregateProvider.ActiveFindingCount(); aggregateActive > status.ActiveFindingCount {
+		if aggregateActive := aggregateProvider.ActiveFindingCount(orgID); aggregateActive > status.ActiveFindingCount {
 			status.ActiveFindingCount = aggregateActive
 		}
 	}

@@ -6290,6 +6290,23 @@ even for a resource ID that also exists in another organization.
 `TestSummarizeToolReadsOnlyItsOrganizationsMetrics` and
 `TestReportEngineReadsOnlyTheRequestOrganizationsMetrics` hold this.
 
+Patrol's organization-scoped surfaces resolve their sources from the Patrol's
+own organization, never the default organization's. Baseline learning reads
+the organization's monitor inventory and metrics history on every pass,
+`/api/ai/intelligence/anomalies` joins the request organization's baselines to
+that organization's read state, new-finding notifications use the
+organization's own notification manager, guest reachability probes discover
+and dispatch only to the organization's own agents, and `finding.created` agent
+events reach only that organization's subscribers. The instance relay's mobile
+push carries only the default organization's findings, as it carries only the
+default organization's alerts. An organization whose monitor or AI service
+cannot be resolved gets nothing rather than default-organization data.
+`TestRoutedAnomaliesUseRequestOrganizationResources`,
+`TestLearnBaselinesUsesOrganizationInventory`,
+`TestPatrolFindingNotificationManagerNeverFallsBackToDefault`,
+`TestStartPatrolForContextKeepsTenantFindingsOffInstanceRelay` and
+`TestAgentExecProber_StaysInsideItsOrganization` hold this.
+
 The same canonical AI runtime now also records user-chat token
 usage to the cost ledger. `chat.Service.ExecuteStream` was a
 long-standing gap: the agentic loop accumulated token counts via

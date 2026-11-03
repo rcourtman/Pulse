@@ -720,7 +720,10 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 
 	// ReadState is the canonical resource read surface for AI intelligence endpoints.
 	// If this isn't wired, we can't reliably join baselines to live resources.
-	rs := h.readState
+	// Resolve it for the request organization: the baselines above belong to
+	// that organization's Patrol, and another organization's resources must
+	// never be joined to them.
+	rs := h.readStateForOrg(GetOrgID(r.Context()))
 	if rs == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"anomalies": []interface{}{},

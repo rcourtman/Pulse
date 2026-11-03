@@ -28,6 +28,10 @@ type DeployHandlers struct {
 	store      *deploy.Store
 	monitor    *monitoring.Monitor
 	execServer *agentexec.Server
+	// tenantMonitor resolves the request organization's monitor. The router
+	// sets it so candidates and preflights never read another organization's
+	// cluster nodes; without it the fixed monitor serves every request.
+	tenantMonitor func(context.Context) *monitoring.Monitor
 
 	// resolvePublicURL derives the Pulse URL for agent reachability checks.
 	resolvePublicURL func(req *http.Request) string
@@ -67,6 +71,19 @@ func NewDeployHandlers(
 		persistence:      persistence,
 		sseSubs:          make(map[string]*deploySSESub),
 	}
+}
+
+// SetMonitorResolver makes candidates and preflights read the cluster nodes of
+// each request's organization.
+func (h *DeployHandlers) SetMonitorResolver(resolve func(context.Context) *monitoring.Monitor) {
+	h.tenantMonitor = resolve
+}
+
+func (h *DeployHandlers) monitorFor(r *http.Request) *monitoring.Monitor {
+	if h.tenantMonitor != nil {
+		return h.tenantMonitor(r.Context())
+	}
+	return h.monitor
 }
 
 // --- Candidates ---
@@ -109,7 +126,7 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	readState := h.monitor.GetUnifiedReadStateOrSnapshot()
+	readState := h.monitorFor(r).GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "state_unavailable", "Resource state is unavailable", nil)
 		return
@@ -249,7 +266,7 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 	}
 
 	// Resolve cluster nodes from read-state.
-	readState := h.monitor.GetUnifiedReadStateOrSnapshot()
+	readState := h.monitorFor(r).GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "state_unavailable", "Resource state is unavailable", nil)
 		return

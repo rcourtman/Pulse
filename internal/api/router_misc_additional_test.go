@@ -455,7 +455,7 @@ func TestLearnBaselines_WithData(t *testing.T) {
 	router := &Router{monitor: monitor}
 	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
 
-	router.learnBaselines(store, history)
+	router.learnBaselines(store, monitor)
 
 	if store.ResourceCount() == 0 {
 		t.Fatalf("expected baselines to be learned")

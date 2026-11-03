@@ -71,7 +71,7 @@ func dialAndRegisterAgent(t *testing.T, serverURL, agentID, hostname string) *we
 }
 
 func TestAgentExecProber_PingGuestsNilServer(t *testing.T) {
-	prober := NewAgentExecProber(nil)
+	prober := NewAgentExecProber(nil, "")
 	_, err := prober.PingGuests(context.Background(), "agent-1", []string{"10.0.0.1"})
 	if err == nil || !strings.Contains(err.Error(), "not available") {
 		t.Fatalf("expected nil-server error, got: %v", err)
@@ -79,7 +79,7 @@ func TestAgentExecProber_PingGuestsNilServer(t *testing.T) {
 }
 
 func TestAgentExecProber_PingGuestsEmptyIPs(t *testing.T) {
-	prober := NewAgentExecProber(agentexec.NewServer(func(string, string, string) bool { return true }))
+	prober := NewAgentExecProber(agentexec.NewServer(func(string, string, string) bool { return true }), "")
 	results, err := prober.PingGuests(context.Background(), "agent-1", nil)
 	if err != nil {
 		t.Fatalf("PingGuests with empty ips returned error: %v", err)
@@ -99,7 +99,7 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 	conn := dialAndRegisterAgent(t, ts.URL, "agent-1", "node-a")
 	defer conn.Close()
 
-	prober := NewAgentExecProber(server)
+	prober := NewAgentExecProber(server, "")
 	if agentID, ok := prober.GetAgentForHost("node-a"); !ok || agentID != "agent-1" {
 		t.Fatalf("GetAgentForHost(node-a) = (%q, %v), want (agent-1, true)", agentID, ok)
 	}
@@ -189,8 +189,31 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 	}
 }
 
+func TestAgentExecProber_StaysInsideItsOrganization(t *testing.T) {
+	server := agentexec.NewServer(func(string, string, string) bool { return true })
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(w, r)
+	}))
+	defer ts.Close()
+
+	conn := dialAndRegisterAgent(t, ts.URL, "agent-1", "node-a")
+	defer conn.Close()
+
+	prober := NewAgentExecProber(server, "org-a")
+	if agentID, ok := prober.GetAgentForHost("node-a"); ok {
+		t.Fatalf("org-a resolved a default-organization agent %q", agentID)
+	}
+	// The agent never replies, so a dispatch that reached it would fail by
+	// timing out; only the organization check reports it as not connected.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := prober.PingGuests(ctx, "agent-1", []string{"10.0.0.1"}); err == nil || !strings.Contains(err.Error(), "agent-1 not connected") {
+		t.Fatalf("expected org-a not to reach the default-organization agent, got %v", err)
+	}
+}
+
 func TestAgentExecProber_RejectsInvalidPingTargets(t *testing.T) {
-	prober := NewAgentExecProber(agentexec.NewServer(func(string, string, string) bool { return true }))
+	prober := NewAgentExecProber(agentexec.NewServer(func(string, string, string) bool { return true }), "")
 
 	_, err := prober.PingGuests(context.Background(), "agent-1", []string{"10.0.0.1; rm -rf /"})
 	if err == nil || !strings.Contains(err.Error(), "invalid ping target") {

@@ -49,6 +49,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -569,6 +570,13 @@ func (r *Router) setupRoutes() {
 	// cross-tenant pending requests don't leak into an agent context
 	// read for the wrong org.
 	r.agentContextHandler.SetApprovalsProvider(agentApprovalStoreProvider{})
+	// Wire active findings the same way: each read resolves the request
+	// organization's Patrol, so one organization never sees another's
+	// findings or counts.
+	r.agentContextHandler.SetFindingsProvider(agentFindingsProvider{
+		activeForResource: r.agentActiveFindingsForResource,
+		activeCount:       r.agentActiveFindingCount,
+	})
 	r.agentEventBroadcaster = NewAgentEventBroadcaster()
 	r.agentChangeEvents = newAgentChangeEventProducer(r.agentEventBroadcaster, defaultResourceStatusEventWindow)
 	if r.resourceHandlers != nil && r.agentEventBroadcaster != nil {
@@ -711,6 +719,9 @@ func (r *Router) setupRoutes() {
 		r.deployStore = deployStore
 		if r.monitor != nil {
 			r.deployHandlers = NewDeployHandlers(deployStore, r.monitor, r.agentExecServer, r.resolvePublicURL, r.config, r.persistence)
+			r.deployHandlers.SetMonitorResolver(func(ctx context.Context) *monitoring.Monitor {
+				return r.resolveMonitorForOrg(GetOrgID(ctx))
+			})
 		}
 	}
 
@@ -2029,7 +2040,9 @@ func (r *Router) patrolCtx(ctx context.Context, orgID string) context.Context {
 	if ctx == nil {
 		return context.WithValue(context.Background(), OrgIDContextKey, orgID)
 	}
-	if existing := strings.TrimSpace(GetOrgID(ctx)); existing != "" {
+	// GetOrgID reports "default" for an untagged context, so check for the tag
+	// itself: an untagged context must take orgID, not the default organization.
+	if existing, ok := ctx.Value(OrgIDContextKey).(string); ok && strings.TrimSpace(existing) != "" {
 		return ctx
 	}
 	return context.WithValue(ctx, OrgIDContextKey, orgID)
@@ -2273,7 +2286,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 				aiService.SetBaselineStore(baselineStore)
 
 				// Start background baseline learning loop
-				go r.startBaselineLearning(ctx, baselineStore, metricsHistory)
+				go r.startBaselineLearning(ctx, orgID, baselineStore)
 			}
 		}
 	}
@@ -2388,7 +2401,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 				// quiet about this resource. Fire-and-forget — slow
 				// subscribers don't block the patrol loop.
 				if isNew && r.agentEventBroadcaster != nil && f.DismissedReason == "" {
-					r.agentEventBroadcaster.PublishFindingCreated(AgentEventFindingCreatedPayload{
+					r.agentEventBroadcaster.PublishFindingCreated(orgID, AgentEventFindingCreatedPayload{
 						FindingID:    f.ID,
 						ResourceID:   f.ResourceID,
 						ResourceName: f.ResourceName,
@@ -2402,66 +2415,6 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			patrol.SetUnifiedFindingResolver(func(findingID string) {
 				unifiedStore.Resolve(findingID)
 			})
-			// Wire the agent-consumable findings adapter so the bundled
-			// context endpoint can return active findings without the
-			// api package importing internal/ai. The closure captures
-			// the patrol service and projects each Finding into the
-			// agent-stable snapshot shape; agents see the situated
-			// picture without any internal type leakage.
-			if r.agentContextHandler != nil {
-				r.agentContextHandler.SetFindingsProvider(
-					agentFindingsProvider{
-						activeForResource: func(resourceID string) []AgentResourceFindingSnapshot {
-							if patrol == nil {
-								return nil
-							}
-							findings := patrol.GetFindings()
-							if findings == nil {
-								return nil
-							}
-							active := findings.GetByResource(resourceID)
-							if len(active) == 0 {
-								return []AgentResourceFindingSnapshot{}
-							}
-							out := make([]AgentResourceFindingSnapshot, 0, len(active))
-							for _, f := range active {
-								snapshot := AgentResourceFindingSnapshot{
-									ID:                         f.ID,
-									Title:                      f.Title,
-									Severity:                   string(f.Severity),
-									Category:                   string(f.Category),
-									Description:                f.Description,
-									Impact:                     f.Impact,
-									Recommendation:             f.Recommendation,
-									RegressionCount:            f.RegressionCount,
-									PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
-								}
-								if !f.DetectedAt.IsZero() {
-									snapshot.DetectedAt = f.DetectedAt.Format(time.RFC3339)
-								}
-								if !f.LastSeenAt.IsZero() {
-									snapshot.LastSeenAt = f.LastSeenAt.Format(time.RFC3339)
-								}
-								if f.InvestigationRecord != nil && f.InvestigationRecord.Confidence != "" {
-									snapshot.Confidence = string(f.InvestigationRecord.Confidence)
-								}
-								out = append(out, snapshot)
-							}
-							return out
-						},
-						activeCount: func() int {
-							if patrol == nil {
-								return 0
-							}
-							findings := patrol.GetFindings()
-							if findings == nil {
-								return 0
-							}
-							return len(findings.GetActive(ai.FindingSeverityWarning))
-						},
-					},
-				)
-			}
 			// Wire per-resource operator-state into the findings runtime so
 			// new findings raised against a resource the operator has
 			// flagged (maintenance window or intentionally offline) get
@@ -2472,17 +2425,21 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			// `internal/unifiedresources` import.
 			patrol.GetFindings().SetResourceOperatorStateProvider(r.patrolResourceOperatorStateProvider(orgID))
 
-			// Wire push notifications: patrol findings → relay client (best-effort)
-			patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {
-				r.relayMu.RLock()
-				client := r.relayClient
-				r.relayMu.RUnlock()
-				if client != nil {
-					if err := client.SendPushNotification(n); err != nil {
-						log.Debug().Err(err).Str("type", n.Type).Msg("Push notification send failed")
+			// Wire push notifications: patrol findings → relay client (best-effort).
+			// Relay pairs mobile devices with the instance and, like alert
+			// pushes, carries only the default organization's events.
+			if orgID == "default" {
+				patrol.SetPushNotifyCallback(func(n relay.PushNotificationPayload) {
+					r.relayMu.RLock()
+					client := r.relayClient
+					r.relayMu.RUnlock()
+					if client != nil {
+						if err := client.SendPushNotification(n); err != nil {
+							log.Debug().Err(err).Str("type", n.Type).Msg("Push notification send failed")
+						}
 					}
-				}
-			})
+				})
+			}
 
 			// Wire finding notifications: new warning+ patrol findings go to
 			// the operator's alert notification channels (email, webhooks,
@@ -2496,10 +2453,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 				if cfg == nil || !cfg.PatrolFindingTriggersNotification(string(f.Severity)) {
 					return
 				}
-				if r.monitor == nil {
-					return
-				}
-				if nm := r.monitor.GetNotificationManager(); nm != nil {
+				if nm := r.patrolFindingNotificationManager(orgID); nm != nil {
 					nm.SendAlert(patrolFindingNotificationAlert(f))
 				}
 			})
@@ -2743,7 +2697,7 @@ func (r *Router) initializeAIIntelligenceServices(ctx context.Context, orgID, da
 
 		// Wire guest prober for pre-patrol reachability checks via Unified Agents
 		if r.agentExecServer != nil {
-			patrol.SetGuestProber(ai.NewAgentExecProber(r.agentExecServer))
+			patrol.SetGuestProber(ai.NewAgentExecProber(r.agentExecServer, orgID))
 		}
 
 		// NOTE: Unified finding callback is wired in StartPatrol after findings persistence is loaded
@@ -3849,10 +3803,89 @@ func (r *Router) handleGetRelayStatus(w http.ResponseWriter, req *http.Request) 
 	json.NewEncoder(w).Encode(client.Status())
 }
 
+// patrolFindingNotificationManager returns the notification manager that
+// delivers orgID's Patrol findings: that organization's own, never the default
+// organization's when orgID's monitor cannot be resolved.
+func (r *Router) patrolFindingNotificationManager(orgID string) *notifications.NotificationManager {
+	monitor := r.resolveMonitorForOrg(orgID)
+	if monitor == nil {
+		return nil
+	}
+	return monitor.GetNotificationManager()
+}
+
+// patrolFindingsForOrg returns orgID's Patrol findings store, or nil when that
+// organization has no AI service yet. It never constructs a service and never
+// falls back to the default organization's.
+func (r *Router) patrolFindingsForOrg(orgID string) *ai.FindingsStore {
+	if r == nil || r.aiSettingsHandler == nil {
+		return nil
+	}
+	service := r.aiSettingsHandler.ExistingAIService(r.patrolCtx(context.Background(), orgID))
+	if service == nil {
+		return nil
+	}
+	patrol := service.GetPatrolService()
+	if patrol == nil {
+		return nil
+	}
+	return patrol.GetFindings()
+}
+
+// agentActiveFindingsForResource projects orgID's active findings for one
+// resource into the agent-stable snapshot shape, so the bundled context
+// endpoint can return them without the api package exposing internal/ai types.
+func (r *Router) agentActiveFindingsForResource(resourceID, orgID string) []AgentResourceFindingSnapshot {
+	findings := r.patrolFindingsForOrg(orgID)
+	if findings == nil {
+		return nil
+	}
+	active := findings.GetByResource(resourceID)
+	if len(active) == 0 {
+		return []AgentResourceFindingSnapshot{}
+	}
+	out := make([]AgentResourceFindingSnapshot, 0, len(active))
+	for _, f := range active {
+		snapshot := AgentResourceFindingSnapshot{
+			ID:                         f.ID,
+			Title:                      f.Title,
+			Severity:                   string(f.Severity),
+			Category:                   string(f.Category),
+			Description:                f.Description,
+			Impact:                     f.Impact,
+			Recommendation:             f.Recommendation,
+			RegressionCount:            f.RegressionCount,
+			PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
+		}
+		if !f.DetectedAt.IsZero() {
+			snapshot.DetectedAt = f.DetectedAt.Format(time.RFC3339)
+		}
+		if !f.LastSeenAt.IsZero() {
+			snapshot.LastSeenAt = f.LastSeenAt.Format(time.RFC3339)
+		}
+		if f.InvestigationRecord != nil && f.InvestigationRecord.Confidence != "" {
+			snapshot.Confidence = string(f.InvestigationRecord.Confidence)
+		}
+		out = append(out, snapshot)
+	}
+	return out
+}
+
+// agentActiveFindingCount counts orgID's active warning-or-worse findings.
+func (r *Router) agentActiveFindingCount(orgID string) int {
+	findings := r.patrolFindingsForOrg(orgID)
+	if findings == nil {
+		return 0
+	}
+	return len(findings.GetActive(ai.FindingSeverityWarning))
+}
+
 // startBaselineLearning runs a background loop that learns baselines from metrics history
-// This enables anomaly detection by understanding what "normal" looks like for each resource
-func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
-	if store == nil || metricsHistory == nil {
+// This enables anomaly detection by understanding what "normal" looks like for each resource.
+// Each pass resolves orgID's monitor, so an organization learns only from its
+// own inventory and metrics history, never the default organization's.
+func (r *Router) startBaselineLearning(ctx context.Context, orgID string, store *ai.BaselineStore) {
+	if store == nil {
 		return
 	}
 
@@ -3868,7 +3901,7 @@ func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineSt
 	case <-ctx.Done():
 		return
 	case <-initialDelay.C:
-		r.learnBaselines(store, metricsHistory)
+		r.learnBaselines(store, r.resolveMonitorForOrg(orgID))
 	}
 
 	log.Info().Msg("Baseline learning loop started")
@@ -3883,21 +3916,22 @@ func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineSt
 			log.Info().Msg("Baseline learning loop stopped")
 			return
 		case <-ticker.C:
-			r.learnBaselines(store, metricsHistory)
+			r.learnBaselines(store, r.resolveMonitorForOrg(orgID))
 		}
 	}
 }
 
-// learnBaselines updates baselines for all resources from metrics history.
-// Uses ReadState typed views — the legacy GetState fallback was removed
-// after ReadState became the sole state access mechanism (SRC-03e+).
-func (r *Router) learnBaselines(store *ai.BaselineStore, metricsHistory *monitoring.MetricsHistory) {
-	if r.monitor == nil {
+// learnBaselines updates baselines for all of monitor's resources from its
+// metrics history. Uses ReadState typed views — the legacy GetState fallback
+// was removed after ReadState became the sole state access mechanism (SRC-03e+).
+func (r *Router) learnBaselines(store *ai.BaselineStore, monitor *monitoring.Monitor) {
+	if store == nil || monitor == nil {
 		return
 	}
 
-	readState := r.monitor.GetUnifiedReadState()
-	if readState == nil {
+	readState := monitor.GetUnifiedReadState()
+	metricsHistory := monitor.GetMetricsHistory()
+	if readState == nil || metricsHistory == nil {
 		return
 	}
 

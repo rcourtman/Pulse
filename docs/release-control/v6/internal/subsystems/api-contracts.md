@@ -3324,6 +3324,11 @@ a new API state machine, queue contract, or verification-accounting field.
    scheduler health resolve the request organization's monitor and read state
    on every request; an organization whose monitor cannot be resolved gets no
    updates and no queued update check, never the default organization's.
+   Agent resource context, fleet context and Patrol-control status read active
+   findings through one provider that resolves the request organization's
+   Patrol per read (`ActiveFindingsForResource(resourceID, orgID)`), and
+   deploy candidates and preflights read the request organization's cluster
+   nodes; neither falls back to the default organization.
    Deploy
    preflights and jobs share `handleDeployJobStatus` /
    `handleDeployJobEvents` in `internal/api/deploy_handlers.go`; recovery
