@@ -117,7 +117,7 @@ mv() {
   case "$FAULT" in rename|recovery_start|recovery_inactive) return 1 ;; esac
   command mv "$@"
 }
-sleep() { :; }
+sleep() { : "$((SECONDS += $1))"; }
 
 apt-get() { return 0; }
 go() { echo 'go version go1.99.0 linux/amd64'; }

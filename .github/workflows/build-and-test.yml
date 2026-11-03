@@ -80,7 +80,29 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
+          # Classification compares two trees, not repository history. Fetching
+          # every branch/tag exhausted this job's five-minute admission budget.
+          fetch-depth: 1
+
+      - name: Fetch exact comparison base
+        env:
+          COMPARISON_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$COMPARISON_BASE" =~ ^[0-9a-f]{40}$ ]] ||
+             [[ "$COMPARISON_BASE" == 0000000000000000000000000000000000000000 ]]; then
+            echo "No comparison base; retaining complete runtime checks."
+            exit 0
+          fi
+          if git cat-file -e "${COMPARISON_BASE}^{commit}" 2>/dev/null; then
+            exit 0
+          fi
+          # No branch/tag inventory, persisted credential, or unbounded fetch.
+          # An unavailable base keeps the classifier's existing all-checks path.
+          if ! timeout --kill-after=5s 60s git -c protocol.version=2 fetch \
+               --no-tags --no-recurse-submodules --depth=1 origin "$COMPARISON_BASE"; then
+            echo "::warning::Comparison base fetch failed; retaining complete runtime checks if unavailable."
+          fi
 
       # Reject deterministic docs drift before queuing builds/tests. Keep the
       # independent per-push secret scan and Public docs check unchanged.
