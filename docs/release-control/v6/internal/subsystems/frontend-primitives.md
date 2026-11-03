@@ -8578,6 +8578,14 @@ rendering remains in
 `frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and shared
 metric normalization remains in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`.
+The desktop threshold table gives its resource/group wrapper keys to the
+canonical `PlatformWindowedRows` renderer. Fresh resource objects update the
+existing keyed row instead of replacing its focused metric input and local
+focus-leave commit state. The grouped and ungrouped refresh regressions in
+`ResourceTable.test.tsx` verify physical input identity, draft retention,
+current resource labels and one commit when focus leaves the row. This uses
+the shared renderer's existing identity contract rather than a table-local
+cache or a second windowing owner.
 Desktop rows and mobile resource cards also share one alert-delay handoff:
 their timer action emits the canonical resource id plus the first supported
 CPU, memory, or disk signal, while `ThresholdsTab.tsx` owns selection state and

@@ -32,7 +32,10 @@ test.describe.serial('Core E2E flows', () => {
     expect(stateRes.ok()).toBeTruthy();
   });
 
-  test('Alerts page - create and delete threshold override', async ({ page }) => {
+  test('Alerts page - create and delete threshold override', async ({ page, isMobile }) => {
+    // Exercise the desktop row commit boundary as well as the phone card
+    // Save action covered by the mobile projects.
+    if (!isMobile) await page.setViewportSize({ width: 1920, height: 1080 });
     await ensureAuthenticated(page);
 
     await page.goto('/alerts/overview');
@@ -137,6 +140,7 @@ test.describe.serial('Core E2E flows', () => {
       .getByRole('button', { name: /^Cancel (editing|threshold edits)$/ })
       .first();
     await expect(cancelButton).toBeVisible();
+    if (!isMobile) await expect(cancelButton.locator('xpath=ancestor::tr')).toHaveCount(1);
     const editorContainer = cancelButton.locator(
       'xpath=ancestor::*[.//input[@type="number"]][1]',
     );
@@ -153,8 +157,10 @@ test.describe.serial('Core E2E flows', () => {
     // draft until Save. Move focus outside the editor, including its slider,
     // and wait for the active layout's actual commit boundary.
     await page.getByPlaceholder('Search resources...').focus();
-    const commitMobileEdit = page.getByRole('button', {
-      name: `Save threshold edits for ${resourceName}`,
+    // Resource labels can refresh while the draft is open. Keep the action
+    // scoped to this editor rather than a captured presentation name.
+    const commitMobileEdit = editorContainer.getByRole('button', {
+      name: /^Save threshold edits for /,
     });
     await expect(unsaved.or(commitMobileEdit).first()).toBeVisible();
     if (await commitMobileEdit.isVisible().catch(() => false)) {
