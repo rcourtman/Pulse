@@ -228,6 +228,12 @@ Do not copy credentials, private diagnostics, or personal data into a child
 issue; summarize only the minimum sanitized evidence needed to preserve the
 operator problem.
 
+A single explicit no-topic response, including "None that I know of.", does
+not declare another topic. Ordinary inline formatting does not change that
+meaning. Additional prose, a later paragraph or attached evidence still needs
+review; do not ignore it because the field starts with "None". An empty
+declaration never clears an existing review for topics raised elsewhere.
+
 ## Automation boundary
 
 The label synchronizer detects the structured form field deterministically and

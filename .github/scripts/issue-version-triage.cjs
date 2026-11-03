@@ -249,6 +249,7 @@ function isActionableTopicValue(value, report) {
     "no",
     "none",
     "none known",
+    "none that i know of",
     "not applicable",
   ]).has(normalized);
 }
