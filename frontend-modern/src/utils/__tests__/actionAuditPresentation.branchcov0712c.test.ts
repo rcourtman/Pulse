@@ -148,7 +148,7 @@ describe('getActionAuditVerificationOutcomePresentation — actionResultV2 verif
     );
     expect(presentation).toStrictEqual({
       label: 'Confirmed by independent observer',
-      detail: 'An observer in a different trust domain confirmed the intended state.',
+      detail: 'A separate check after the action confirmed the expected result.',
       evidenceSummary: 'readback matched Source: Independent observer.',
       className:
         'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
@@ -167,7 +167,7 @@ describe('getActionAuditVerificationOutcomePresentation — actionResultV2 verif
     );
     expect(presentation).toStrictEqual({
       label: 'Confirmed by executing agent',
-      detail: 'The same agent trust domain that executed the action reported the intended state.',
+      detail: 'The agent that ran the action reported the expected result.',
       evidenceSummary:
         'No additional verification summary. Source: Executing agent (agent-attested).',
       className:
@@ -202,7 +202,7 @@ describe('getActionAuditVerificationOutcomePresentation — actionResultV2 verif
     );
     expect(presentation).toStrictEqual({
       label: 'Outcome contradicted',
-      detail: 'Observed evidence contradicted the intended state.',
+      detail: 'Pulse checked afterwards, and what it found did not match the expected result.',
       evidenceSummary: 'observed state differed Source: Independent observer.',
       className:
         'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
@@ -218,7 +218,7 @@ describe('getActionAuditVerificationOutcomePresentation — actionResultV2 verif
     );
     expect(presentation).toStrictEqual({
       label: 'Outcome inconclusive',
-      detail: 'Available evidence could not establish the intended state.',
+      detail: 'Pulse could not tell whether this action had the expected result.',
       evidenceSummary:
         'No additional verification summary. Source: Executing agent (agent-attested).',
       className:
@@ -235,7 +235,7 @@ describe('getActionAuditVerificationOutcomePresentation — actionResultV2 verif
     );
     expect(presentation).toStrictEqual({
       label: 'Outcome not verified',
-      detail: 'No outcome verification was attempted.',
+      detail: 'Pulse did not check the result of this action.',
       evidenceSummary: 'No additional verification summary. Source: No evidence source.',
       className:
         'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "8c248d45a0eca4037812c60cb9491125a0a846bd",
+  "verified_at": "2026-11-03T16:02:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
+    "frontend-modern/src/utils/actionAuditPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "bd547cb644bafb7e936b2f0d793a768c51aaee28a586fb7897a7d7cdc29c9516",
+    "frontend-modern/src/utils/actionAuditPresentation.ts": "111949116f58a54ca7a5228530595d889e964273f66f9c0dafb59f2f1e946182"
+  },
+  "routes": [
+    "/docker (container actions menu -> Review restart -> action review dialog)",
+    "/docker on a phone (container row drawer -> Review restart -> action review dialog)",
+    "/docker?host=<docker host> (host drawer Overview and Manage tabs)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Pulse server and pulse-agent built from this tree (origin/main 94a368de87 plus this change), frontend served by the Vite dev server from the same tree on pulse-dev; one real Docker host agent with the command channel enabled, a fresh data dir, telemetry off.",
+    "Two busybox containers on the real Docker daemon: vrig-web (wget health check, page removed so it is unhealthy; a restart recreates the page) and vrig-broken (health check always fails).",
+    "Restart of vrig-web at 1280x800: Execution card 'Succeeded' with 'Docker restarted the container.' and a collapsed 'Agent details' disclosure; Verification card 'Confirmed by independent observer', 'Source: Independent observer', 'The container restarted and is running and healthy.' and a collapsed 'Evidence details'.",
+    "Agent details expanded: monospace raw report 'Container lifecycle: phase=complete; mutation started=true; mutation completed=true; readback ran=true; before=running/unknown; after=running/unknown'; it collapses again on a second click.",
+    "Restart of vrig-broken at 390x844: Execution 'Succeeded' with 'Docker restarted the container.'; Verification 'Outcome contradicted', 'Reason: Postcondition Contradicted', 'The container restarted, but its health check is failing. Check its logs.'; the expanded agent report wraps inside the card, and the document and dialog have no horizontal overflow (scrollWidth 390 = innerWidth).",
+    "The vrig-broken restart first showed the existing 'Receipt pending' state (server lifecycle timeout of 2m equals the agent health wait); 'Check for receipt' reconciled it to the outcome above. That timing is unchanged by this change.",
+    "The Docker host drawer's action history lists host-level actions only, so the reworded ResourceActionHistory detail lines are covered by actionAuditPresentation unit tests rather than this pass."
+  ],
+  "interactions": [
+    "Sign in, open /docker, open the vrig-web actions menu, choose Review restart, Approve and run, read Recorded outcome, expand and collapse Agent details, scroll to Verification and Recovery.",
+    "Expand the Docker host row, open the host drawer Overview and Manage tabs.",
+    "At 390x844: open the vrig-broken row drawer, Review restart, Approve and run, Check for receipt until the outcome records, scroll the dialog to Recorded outcome, expand Agent details, check horizontal overflow."
+  ]
+}
