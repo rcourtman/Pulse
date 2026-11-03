@@ -2593,7 +2593,7 @@ print_warn() { echo "WARN: $*"; }
 print_error() { echo "ERROR: $*"; }
 print_success() { echo "SUCCESS: $*"; }
 safe_systemctl() { return 0; }
-timeout() { shift; "$@"; }
+timeout() { [[ "$1" != -k ]] || shift 2; shift; "$@"; }
 sleep() { :; }
 journalctl() { return 0; }
 ensure_pulse_running_after_update() { return 0; }
@@ -3067,6 +3067,21 @@ func TestRootInstallStartupRequiresActiveReadback(t *testing.T) {
 		"test_missing_unit_stops_before_enable_or_start",
 		"test_all_five_main_paths_stop_before_marker_or_completion_in_or_list",
 		"test_all_five_main_paths_complete_only_after_active_readback",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+}
+
+// Real timeout and elapsed-clock controls use only an ordinary-user fake
+// manager and its pipe-holding child, never systemd or an installed workload.
+func TestRootInstallServiceDeadlines(t *testing.T) {
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_service_deadlines.py"), "ServiceDeadlines", []string{
+		"test_startup_budget_includes_slow_manager_reads",
+		"test_active_response_after_budget_cannot_pass",
+		"test_startup_kills_term_ignoring_manager_and_child",
+		"test_stop_command_kills_term_ignoring_manager_and_child",
+		"test_uncertain_initial_state_never_stops_or_restarts_service",
+		"test_uncertain_post_stop_state_never_restarts_or_admits_replacement",
+		"test_fast_active_and_confirmed_stop_still_succeed",
+		"test_invalid_budget_does_not_start_a_manager",
 	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
 }
 
