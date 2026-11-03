@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 
 import type { Alert, Node } from '@/types/api';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
@@ -248,6 +249,78 @@ describe('NodeDrawer', () => {
     expect(
       sensors.getByText('NVIDIA RTX A6000 · 63°C · 42% · 8.00 GB / 48.0 GB'),
     ).toBeInTheDocument();
+  });
+
+  it('shows linked-agent RAPL watts under Hardware in node Details, without inventing heat', () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          temperature: undefined,
+          cpuTemperature: undefined,
+          sensors: {
+            powerWatts: { cpu_core: 6.1511, cpu_package: 12.87716, dram: 1.74011 },
+          },
+        })}
+      />
+    ));
+
+    const details = screen.getByTestId('node-technical-details') as HTMLDetailsElement;
+    expect(details).not.toHaveAttribute('open');
+    expect(within(details).getByText('12.9 W')).not.toBeVisible();
+    fireEvent.click(within(details).getByText('Details'));
+    const hardware = within(details).getByText('Hardware').closest('tr')!;
+    expect(hardware).toHaveTextContent('CPU Core Power6.2 W');
+    expect(hardware).toHaveTextContent('CPU Package Power12.9 W');
+    expect(hardware).toHaveTextContent('DRAM Power1.7 W');
+    expect(within(details).queryByText(/°[CF]/)).toBeNull();
+    expect(within(details).getByText('12.9 W')).toBeVisible();
+  });
+
+  it('shows measured zero power but omits non-finite and absent readings', () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          sensors: {
+            powerWatts: { cpu_core: 0, cpu_package: Number.NaN, dram: Number.POSITIVE_INFINITY },
+          },
+        })}
+      />
+    ));
+
+    const details = openTechnicalDetails();
+    expect(details.getByText('CPU Core Power')).toBeVisible();
+    expect(details.getByText('0.0 W')).toBeVisible();
+    expect(details.queryByText('CPU Package Power')).toBeNull();
+    expect(details.queryByText('DRAM Power')).toBeNull();
+  });
+
+  it('refreshes power, qualifies a silent agent, and withdraws missing sensors in the open drawer', () => {
+    const [node, setNode] = createSignal(
+      makeNode({ sensors: { powerWatts: { cpu_package: 12.9 } } }),
+    );
+    render(() => <NodeDrawer node={node()} />);
+    const details = screen.getByTestId('node-technical-details') as HTMLDetailsElement;
+    details.open = true;
+    expect(within(details).getByText('12.9 W')).toBeVisible();
+
+    setNode({ ...node(), sensors: { powerWatts: { cpu_package: 9.5 } } });
+    expect(within(details).queryByText('12.9 W')).toBeNull();
+    expect(within(details).getByText('9.5 W')).toBeVisible();
+
+    // Proxmox can stay online after its linked host agent stops reporting.
+    setNode({ ...node(), sensorsStale: true });
+    expect(within(details).getByText('9.5 W (last known)')).toHaveAttribute(
+      'title',
+      'Last known reading, not current: host agent stopped reporting',
+    );
+    setNode({ ...node(), sensorsStale: false });
+    expect(within(details).getByText('9.5 W')).toBeVisible();
+    expect(within(details).queryByText(/last known/)).toBeNull();
+
+    setNode({ ...node(), sensors: undefined });
+    expect(within(details).queryByText('CPU Package Power')).toBeNull();
+    expect(screen.getByTestId('node-technical-details')).toBe(details);
+    expect(details.open).toBe(true);
   });
 
   it('puts the active alert problem before context and visible inventory', () => {

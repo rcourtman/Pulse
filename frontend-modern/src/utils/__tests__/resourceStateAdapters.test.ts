@@ -442,6 +442,31 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.sensors?.gpu).toEqual([gpu]);
   });
 
+  it('keeps linked-agent power and its own freshness on the projected PVE node', () => {
+    const powerWatts = { cpu_package: 12.87716, cpu_core: 6.1511, dram: 1.74011 };
+    const nodeResource = {
+      ...createNodeResource({}),
+      status: 'online',
+      proxmox: { nodeName: 'pve-node-2', connectionHealth: 'healthy' },
+      agent: { agentId: 'pve-agent', stale: false, sensors: { powerWatts } },
+    } as Resource;
+    const node = nodeFromResource(nodeResource);
+    expect(node?.sensors?.powerWatts).toEqual(powerWatts);
+    expect(node?.sensorsStale).toBe(false);
+
+    const silent = nodeFromResource({
+      ...nodeResource,
+      agent: { ...nodeResource.agent, stale: true },
+    } as Resource);
+    expect(silent?.status).toBe('online');
+    expect(silent?.sensors?.powerWatts).toEqual(powerWatts);
+    expect(silent?.sensorsStale).toBe(true);
+
+    const withdrawn = nodeFromResource({ ...nodeResource, agent: undefined } as Resource);
+    expect(withdrawn?.sensors).toBeUndefined();
+    expect(withdrawn?.sensorsStale).toBe(false);
+  });
+
   it('maps PBS display and host identity through shared resource helpers', () => {
     const instance = pbsInstanceFromResource(
       createServiceResource('pbs', {
