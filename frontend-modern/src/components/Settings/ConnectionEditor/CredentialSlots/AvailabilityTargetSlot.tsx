@@ -1,4 +1,6 @@
-import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { apiErrorStatus } from '@/api/responseUtils';
+import { getOrgID } from '@/utils/apiClient';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
@@ -93,6 +95,9 @@ interface AvailabilityHTTPHeaderForm {
 }
 
 export interface AvailabilityTargetSlotProps {
+  reader?: { org: string; isCurrent: () => boolean };
+  onAccessRejected?: () => void;
+  blocked?: boolean;
   editingTargetId?: string | null;
   onCancel: () => void;
   onSaved: () => void;
@@ -309,6 +314,19 @@ const initialPresetForTargetKind = (
 
 export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (props) => {
   const { resources } = useResources();
+  const org = props.reader?.org ?? (getOrgID() || 'default');
+  const controller = new AbortController();
+  let disposed = false;
+  const isCurrent = () =>
+    !disposed &&
+    !controller.signal.aborted &&
+    (props.reader?.isCurrent() ?? true) &&
+    (getOrgID() || 'default') === org;
+  const requestOptions = () => ({ expectedOrgID: org, signal: controller.signal, retry: false });
+  onCleanup(() => {
+    disposed = true;
+    controller.abort();
+  });
 
   const linkableResources = createMemo<Resource[]>(() =>
     resources().filter((r) => r.type !== 'network-endpoint'),
@@ -343,6 +361,8 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   const [selectedPreset, setSelectedPreset] = createSignal<AvailabilityTargetPresetID>(
     initialPresetForTargetKind(props.initialTargetKind),
   );
+  const [savedReadReady, setSavedReadReady] = createSignal(!props.editingTargetId);
+  const [readError, setReadError] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
@@ -459,44 +479,64 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     setForm((current) => applyAvailabilityTargetPreset(current, presetId));
   };
 
-  onMount(async () => {
-    void loadRuntimeCapabilities();
+  const loadSavedTarget = async () => {
+    if (!isCurrent() || loading()) return;
     const targetId = props.editingTargetId?.trim();
     if (!targetId) return;
     setLoading(true);
-    setError(null);
+    setReadError(false);
     try {
-      const targets = await AvailabilityTargetsAPI.list();
+      const targets = await AvailabilityTargetsAPI.list(requestOptions());
+      if (!isCurrent()) return;
       const target = targets.find((item) => item.id === targetId);
       if (!target) {
-        setError('The saved availability target could not be found.');
+        setReadError(true);
         return;
       }
       setForm(formFromTarget(target));
+      setSavedReadReady(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load availability target.');
+      if (!isCurrent()) return;
+      setReadError(true);
+      if ([401, 403].includes(apiErrorStatus(err) ?? 0)) props.onAccessRejected?.();
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
+  };
+  onMount(() => {
+    void loadRuntimeCapabilities();
+    void loadSavedTarget();
   });
 
   const handleTest = async () => {
+    if (!isCurrent() || !savedReadReady() || isBusy()) return;
     setTesting(true);
     setError(null);
     setTestResult(null);
     try {
-      const result = await AvailabilityTargetsAPI.test(payloadFromForm(form()));
+      const result = await AvailabilityTargetsAPI.test(payloadFromForm(form()), requestOptions());
+      if (!isCurrent()) return;
       setTestResult(result);
-      queueMicrotask(revealFeedback);
+      queueMicrotask(() => {
+        if (isCurrent()) revealFeedback();
+      });
     } catch (err) {
+      if (!isCurrent()) return;
+      if ([401, 403].includes(apiErrorStatus(err) ?? 0)) {
+        props.onAccessRejected?.();
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Availability test failed.');
-      queueMicrotask(revealFeedback);
+      queueMicrotask(() => {
+        if (isCurrent()) revealFeedback();
+      });
     } finally {
-      setTesting(false);
+      if (isCurrent()) setTesting(false);
     }
   };
 
   const handleSave = async () => {
+    if (!isCurrent() || !savedReadReady() || isBusy()) return;
     setSaving(true);
     setError(null);
     setTestResult(null);
@@ -504,12 +544,17 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     try {
       const targetId = props.editingTargetId?.trim();
       if (targetId) {
-        await AvailabilityTargetsAPI.update(targetId, payload);
+        await AvailabilityTargetsAPI.update(targetId, payload, requestOptions());
       } else {
-        await AvailabilityTargetsAPI.create(payload);
+        await AvailabilityTargetsAPI.create(payload, requestOptions());
       }
-      props.onSaved();
+      if (isCurrent()) props.onSaved();
     } catch (err) {
+      if (!isCurrent()) return;
+      if ([401, 403].includes(apiErrorStatus(err) ?? 0)) {
+        props.onAccessRejected?.();
+        return;
+      }
       if (
         payload.observationLocationIds?.some((locationId) =>
           locationId.startsWith(AGENT_OBSERVATION_LOCATION_PREFIX),
@@ -522,694 +567,730 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
       }
       setError(err instanceof Error ? err.message : 'Failed to save availability target.');
     } finally {
-      setSaving(false);
+      if (isCurrent()) setSaving(false);
     }
   };
 
-  const isBusy = () => loading() || saving() || testing() || Boolean(props.deletePending);
+  const isBusy = () =>
+    !isCurrent() ||
+    loading() ||
+    saving() ||
+    testing() ||
+    Boolean(props.blocked || props.deletePending || props.togglePending);
   const isEditing = () => Boolean(props.editingTargetId);
 
   return (
-    <div class="flex min-h-full flex-col gap-6">
-      <Show when={loading()}>
-        <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-sm text-muted">
-          Loading target…
-        </div>
-      </Show>
-
-      <div class="grid gap-4 sm:grid-cols-2">
-        <FormSelect
-          label="Preset"
-          value={selectedPreset()}
-          onChange={(event) =>
-            handlePresetChange(event.currentTarget.value as AvailabilityTargetPresetID)
-          }
-          fieldClass="sm:col-span-2"
-        >
-          <option value={CUSTOM_AVAILABILITY_PRESET_ID}>Custom endpoint</option>
-          {AVAILABILITY_TARGET_PRESETS.map((preset) => (
-            <option value={preset.id}>{preset.label}</option>
-          ))}
-        </FormSelect>
-        <FormSelect
-          label="Target type"
-          value={form().targetKind}
-          onChange={(event) =>
-            updateForm({ targetKind: event.currentTarget.value as AvailabilityTargetKind })
-          }
-        >
-          <option value="machine">Machine or server</option>
-          <option value="service">Service endpoint</option>
-          <option value="device">Device or controller</option>
-        </FormSelect>
-        <label class={formField}>
-          <span class={formLabel}>Name</span>
-          <input
-            class={formControl}
-            value={form().name}
-            onInput={(event) => updateForm({ name: event.currentTarget.value })}
-            placeholder={namePlaceholder()}
-          />
-        </label>
-        <FormSelect
-          label="Probe"
-          value={form().protocol}
-          onChange={(event) =>
-            updateForm({ protocol: event.currentTarget.value as AvailabilityProbeProtocol })
-          }
-        >
-          <option value="icmp">ICMP ping</option>
-          <option value="tcp">TCP port</option>
-          <option value="udp">UDP datagram</option>
-          <option value="http">HTTP</option>
-          <option value="https">HTTPS</option>
-        </FormSelect>
-        <label class={`${formField} sm:col-span-2`}>
-          <span class={formLabel}>
-            {form().protocol === 'http' || form().protocol === 'https' ? 'URL or host' : 'Address'}
-          </span>
-          <input
-            class={formControl}
-            value={form().address}
-            onInput={(event) => updateForm({ address: event.currentTarget.value })}
-            placeholder={addressPlaceholder()}
-          />
-          <span class={formHelpText}>
-            {form().protocol === 'icmp'
-              ? 'Use a hostname or IP address. Pulse will run one ping per poll.'
-              : form().protocol === 'tcp'
-                ? 'Use a hostname or IP address and the port to open.'
-                : form().protocol === 'udp'
-                  ? 'Use a hostname or unicast IP. UDP checks send one small datagram per poll.'
-                  : 'Use a full URL or hostname, then define the accepted application response below.'}
-          </span>
-        </label>
-        <FormSelect
-          label="Link to resource (optional)"
-          value={form().linkedResourceId}
-          onChange={(event) => updateForm({ linkedResourceId: event.currentTarget.value })}
-          fieldClass="sm:col-span-2"
-          help="Link this check to a known resource so its status appears on that resource's row. Leave empty to attach only when its IP address or full hostname has one exact match."
-        >
-          <option value="">Attach on one exact address match (recommended)</option>
-          <Show when={linkedResourceMissing()}>
-            <option value={form().linkedResourceId}>
-              {form().linkedResourceId} (not currently discovered)
-            </option>
-          </Show>
-          <For each={groupedLinkableResources()}>
-            {([platform, items]) => (
-              <optgroup label={getSourcePlatformLabel(platform)}>
-                <For each={items}>
-                  {(resource) => {
-                    const typeLabel = getResourceTypeLabel(resource.type);
-                    return (
-                      <option value={resource.id}>
-                        {getPreferredInfrastructureDisplayName(resource)}
-                        {typeLabel ? ` (${typeLabel})` : ''}
-                      </option>
-                    );
-                  }}
-                </For>
-              </optgroup>
-            )}
-          </For>
-        </FormSelect>
-        <fieldset class="space-y-3 sm:col-span-2">
-          <legend class={formLabel}>Observation locations</legend>
-          <p class={formHelpText}>
-            One logical check can be observed from several networks. Pulse keeps each path separate
-            and shows disagreement instead of turning one path failure into a universal outage.
+    <Show
+      when={savedReadReady()}
+      fallback={
+        <div class="space-y-4">
+          <p role={readError() ? 'alert' : 'status'} class="text-sm text-muted">
+            {loading()
+              ? 'Loading saved availability check…'
+              : 'The saved availability check could not be loaded. Retry only reads its current configuration; it does not change the check.'}
           </p>
-          <div class="grid gap-2 sm:grid-cols-2" data-observation-location-picker>
-            <For each={observationLocationOptions()}>
-              {(option) => {
-                const selected = () => form().observationLocationIds.includes(option.id);
-                const locked = () => option.kind === 'agent' && externalProbeLocked();
-                return (
-                  <label class="flex items-start gap-3 rounded-md border border-border bg-surface px-3 py-3 text-sm">
+          <div class="flex flex-wrap gap-2">
+            <Button variant="outline" size="settingsAction" onClick={props.onCancel}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="settingsAction"
+              onClick={() => void loadSavedTarget()}
+              disabled={loading()}
+            >
+              Retry saved check
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div class="flex min-h-full flex-col gap-6">
+        <Show when={loading()}>
+          <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-sm text-muted">
+            Loading target…
+          </div>
+        </Show>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <FormSelect
+            label="Preset"
+            value={selectedPreset()}
+            onChange={(event) =>
+              handlePresetChange(event.currentTarget.value as AvailabilityTargetPresetID)
+            }
+            fieldClass="sm:col-span-2"
+          >
+            <option value={CUSTOM_AVAILABILITY_PRESET_ID}>Custom endpoint</option>
+            {AVAILABILITY_TARGET_PRESETS.map((preset) => (
+              <option value={preset.id}>{preset.label}</option>
+            ))}
+          </FormSelect>
+          <FormSelect
+            label="Target type"
+            value={form().targetKind}
+            onChange={(event) =>
+              updateForm({ targetKind: event.currentTarget.value as AvailabilityTargetKind })
+            }
+          >
+            <option value="machine">Machine or server</option>
+            <option value="service">Service endpoint</option>
+            <option value="device">Device or controller</option>
+          </FormSelect>
+          <label class={formField}>
+            <span class={formLabel}>Name</span>
+            <input
+              class={formControl}
+              value={form().name}
+              onInput={(event) => updateForm({ name: event.currentTarget.value })}
+              placeholder={namePlaceholder()}
+            />
+          </label>
+          <FormSelect
+            label="Probe"
+            value={form().protocol}
+            onChange={(event) =>
+              updateForm({ protocol: event.currentTarget.value as AvailabilityProbeProtocol })
+            }
+          >
+            <option value="icmp">ICMP ping</option>
+            <option value="tcp">TCP port</option>
+            <option value="udp">UDP datagram</option>
+            <option value="http">HTTP</option>
+            <option value="https">HTTPS</option>
+          </FormSelect>
+          <label class={`${formField} sm:col-span-2`}>
+            <span class={formLabel}>
+              {form().protocol === 'http' || form().protocol === 'https'
+                ? 'URL or host'
+                : 'Address'}
+            </span>
+            <input
+              class={formControl}
+              value={form().address}
+              onInput={(event) => updateForm({ address: event.currentTarget.value })}
+              placeholder={addressPlaceholder()}
+            />
+            <span class={formHelpText}>
+              {form().protocol === 'icmp'
+                ? 'Use a hostname or IP address. Pulse will run one ping per poll.'
+                : form().protocol === 'tcp'
+                  ? 'Use a hostname or IP address and the port to open.'
+                  : form().protocol === 'udp'
+                    ? 'Use a hostname or unicast IP. UDP checks send one small datagram per poll.'
+                    : 'Use a full URL or hostname, then define the accepted application response below.'}
+            </span>
+          </label>
+          <FormSelect
+            label="Link to resource (optional)"
+            value={form().linkedResourceId}
+            onChange={(event) => updateForm({ linkedResourceId: event.currentTarget.value })}
+            fieldClass="sm:col-span-2"
+            help="Link this check to a known resource so its status appears on that resource's row. Leave empty to attach only when its IP address or full hostname has one exact match."
+          >
+            <option value="">Attach on one exact address match (recommended)</option>
+            <Show when={linkedResourceMissing()}>
+              <option value={form().linkedResourceId}>
+                {form().linkedResourceId} (not currently discovered)
+              </option>
+            </Show>
+            <For each={groupedLinkableResources()}>
+              {([platform, items]) => (
+                <optgroup label={getSourcePlatformLabel(platform)}>
+                  <For each={items}>
+                    {(resource) => {
+                      const typeLabel = getResourceTypeLabel(resource.type);
+                      return (
+                        <option value={resource.id}>
+                          {getPreferredInfrastructureDisplayName(resource)}
+                          {typeLabel ? ` (${typeLabel})` : ''}
+                        </option>
+                      );
+                    }}
+                  </For>
+                </optgroup>
+              )}
+            </For>
+          </FormSelect>
+          <fieldset class="space-y-3 sm:col-span-2">
+            <legend class={formLabel}>Observation locations</legend>
+            <p class={formHelpText}>
+              One logical check can be observed from several networks. Pulse keeps each path
+              separate and shows disagreement instead of turning one path failure into a universal
+              outage.
+            </p>
+            <div class="grid gap-2 sm:grid-cols-2" data-observation-location-picker>
+              <For each={observationLocationOptions()}>
+                {(option) => {
+                  const selected = () => form().observationLocationIds.includes(option.id);
+                  const locked = () => option.kind === 'agent' && externalProbeLocked();
+                  return (
+                    <label class="flex items-start gap-3 rounded-md border border-border bg-surface px-3 py-3 text-sm">
+                      <input
+                        class={formCheckbox}
+                        type="checkbox"
+                        checked={selected()}
+                        disabled={
+                          locked() || (selected() && form().observationLocationIds.length === 1)
+                        }
+                        onChange={(event) =>
+                          toggleObservationLocation(option.id, event.currentTarget.checked)
+                        }
+                      />
+                      <span class="min-w-0">
+                        <span class="block font-medium text-foreground">{option.label}</span>
+                        <span class="block text-xs text-muted">
+                          {option.kind === 'pulse'
+                            ? 'Local Pulse path'
+                            : 'Connected Pulse Agent path'}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                }}
+              </For>
+              <For each={missingObservationLocations()}>
+                {(locationId) => (
+                  <label class="flex items-start gap-3 rounded-md border border-warning/40 bg-warning/5 px-3 py-3 text-sm">
                     <input
                       class={formCheckbox}
                       type="checkbox"
-                      checked={selected()}
-                      disabled={
-                        locked() || (selected() && form().observationLocationIds.length === 1)
-                      }
+                      checked
+                      disabled={form().observationLocationIds.length === 1}
                       onChange={(event) =>
-                        toggleObservationLocation(option.id, event.currentTarget.checked)
+                        toggleObservationLocation(locationId, event.currentTarget.checked)
                       }
                     />
                     <span class="min-w-0">
-                      <span class="block font-medium text-foreground">{option.label}</span>
-                      <span class="block text-xs text-muted">
-                        {option.kind === 'pulse'
-                          ? 'Local Pulse path'
-                          : 'Connected Pulse Agent path'}
+                      <span class="block font-medium text-foreground">
+                        {agentIdFromObservationLocation(locationId) || locationId}
                       </span>
+                      <span class="block text-xs text-warning">Not currently connected</span>
                     </span>
                   </label>
-                );
-              }}
-            </For>
-            <For each={missingObservationLocations()}>
-              {(locationId) => (
-                <label class="flex items-start gap-3 rounded-md border border-warning/40 bg-warning/5 px-3 py-3 text-sm">
-                  <input
-                    class={formCheckbox}
-                    type="checkbox"
-                    checked
-                    disabled={form().observationLocationIds.length === 1}
-                    onChange={(event) =>
-                      toggleObservationLocation(locationId, event.currentTarget.checked)
-                    }
-                  />
-                  <span class="min-w-0">
-                    <span class="block font-medium text-foreground">
-                      {agentIdFromObservationLocation(locationId) || locationId}
-                    </span>
-                    <span class="block text-xs text-warning">Not currently connected</span>
-                  </span>
-                </label>
-              )}
-            </For>
-          </div>
-          <Show when={externalProbeLocked()}>
-            <p class={formHelpText}>{getExternalProbeLockedHelpText()}</p>
-          </Show>
-          <Show when={externalProbeLocked()}>
-            <div class="rounded-md border border-border bg-surface-alt p-4">
-              <FeatureGateSection
-                title={getExternalProbeGateTitle()}
-                body={getExternalProbeGateBody()}
-                upgradeDestination={getUpgradeActionDestination(EXTERNAL_PROBE_FEATURE)}
-                showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
-              />
-            </div>
-          </Show>
-        </fieldset>
-        <Show when={form().protocol !== 'icmp'}>
-          <label class={formField}>
-            <span class={formLabel}>Port</span>
-            <input
-              class={formControl}
-              inputMode="numeric"
-              value={form().port}
-              onInput={(event) => updateForm({ port: event.currentTarget.value })}
-              placeholder={portPlaceholder()}
-            />
-          </label>
-        </Show>
-        <Show when={form().protocol === 'http' || form().protocol === 'https'}>
-          <label class={formField}>
-            <span class={formLabel}>Path override</span>
-            <input
-              class={formControl}
-              value={form().path}
-              onInput={(event) => updateForm({ path: event.currentTarget.value })}
-              placeholder="/health"
-            />
-          </label>
-        </Show>
-        <Show when={form().protocol === 'http' || form().protocol === 'https'}>
-          <section class="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
-            <div>
-              <h3 class="text-sm font-semibold text-base-content">
-                What proves this service is working?
-              </h3>
-              <p class="mt-1 text-xs text-muted">
-                Pulse records whether the endpoint answered separately from whether this response
-                contract passed. Response bodies and credentials are never stored as evidence.
-              </p>
-            </div>
-
-            <div class="grid gap-4 sm:grid-cols-3">
-              <FormSelect
-                label="Request method"
-                value={form().httpMethod}
-                onChange={(event) =>
-                  updateForm({ httpMethod: event.currentTarget.value as AvailabilityHTTPMethod })
-                }
-              >
-                <option value="HEAD">HEAD</option>
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-              </FormSelect>
-              <label class={formField}>
-                <span class={formLabel}>Accepted status from</span>
-                <input
-                  class={formControl}
-                  inputMode="numeric"
-                  value={form().httpStatusMin}
-                  onInput={(event) => updateForm({ httpStatusMin: event.currentTarget.value })}
-                  placeholder="200"
-                />
-              </label>
-              <label class={formField}>
-                <span class={formLabel}>Accepted status to</span>
-                <input
-                  class={formControl}
-                  inputMode="numeric"
-                  value={form().httpStatusMax}
-                  onInput={(event) => updateForm({ httpStatusMax: event.currentTarget.value })}
-                  placeholder="399"
-                />
-              </label>
-            </div>
-
-            <Show when={form().httpMethod === 'POST'}>
-              <div class={formField}>
-                <FormTextarea
-                  label="Request body (optional)"
-                  textareaBaseClass={`${formControl} min-h-24 sm:min-h-24 font-mono text-xs`}
-                  help="Up to 8 KiB. Kept out of history and test output."
-                  value={form().httpBody}
-                  onInput={(event) =>
-                    updateForm({
-                      httpBody: event.currentTarget.value,
-                      httpBodyConfigured: false,
-                      httpBodyTouched: true,
-                    })
-                  }
-                  placeholder={
-                    form().httpBodyConfigured
-                      ? 'Stored securely — leave blank to keep it'
-                      : '{"operation":"health"}'
-                  }
-                />
-                <Show when={form().httpBodyConfigured && !form().httpBodyTouched}>
-                  <div>
-                    <button
-                      type="button"
-                      class="text-xs font-medium text-error hover:underline"
-                      onClick={() =>
-                        updateForm({
-                          httpBody: '',
-                          httpBodyConfigured: false,
-                          httpBodyTouched: true,
-                        })
-                      }
-                    >
-                      Remove stored body
-                    </button>
-                  </div>
-                </Show>
-              </div>
-            </Show>
-
-            <div class="grid gap-4 sm:grid-cols-2">
-              <FormSelect
-                label="Authentication"
-                value={form().httpAuthType}
-                onChange={(event) =>
-                  updateForm({
-                    httpAuthType: event.currentTarget.value as AvailabilityHTTPAuthType,
-                  })
-                }
-              >
-                <option value="none">None</option>
-                <option value="basic">Basic authentication</option>
-                <option value="bearer">Bearer token</option>
-              </FormSelect>
-              <Show when={form().httpAuthType === 'basic'}>
-                <label class={formField}>
-                  <span class={formLabel}>Username</span>
-                  <input
-                    class={formControl}
-                    value={form().httpUsername}
-                    autocomplete="username"
-                    onInput={(event) => updateForm({ httpUsername: event.currentTarget.value })}
-                  />
-                </label>
-                <label class={formField}>
-                  <span class={formLabel}>Password</span>
-                  <input
-                    class={formControl}
-                    type="password"
-                    autocomplete="new-password"
-                    value={form().httpPassword}
-                    onInput={(event) =>
-                      updateForm({
-                        httpPassword: event.currentTarget.value,
-                        httpPasswordConfigured: false,
-                      })
-                    }
-                    placeholder={
-                      form().httpPasswordConfigured
-                        ? 'Stored securely — leave blank to keep it'
-                        : 'Required'
-                    }
-                  />
-                </label>
-              </Show>
-              <Show when={form().httpAuthType === 'bearer'}>
-                <label class={formField}>
-                  <span class={formLabel}>Bearer token</span>
-                  <input
-                    class={formControl}
-                    type="password"
-                    autocomplete="new-password"
-                    value={form().httpBearerToken}
-                    onInput={(event) =>
-                      updateForm({
-                        httpBearerToken: event.currentTarget.value,
-                        httpBearerTokenConfigured: false,
-                      })
-                    }
-                    placeholder={
-                      form().httpBearerTokenConfigured
-                        ? 'Stored securely — leave blank to keep it'
-                        : 'Required'
-                    }
-                  />
-                </label>
-              </Show>
-            </div>
-
-            <div class="space-y-3">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <div class={formLabel}>Request headers</div>
-                  <div class={formHelpText}>
-                    Optional operator-defined headers. Values are write-only.
-                  </div>
-                </div>
-                <Button variant="outline" size="settingsAction" onClick={addHTTPHeader}>
-                  Add header
-                </Button>
-              </div>
-              <For each={form().httpHeaders}>
-                {(header, index) => (
-                  <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                    <label class={formField}>
-                      <span class={formLabel}>Header name</span>
-                      <input
-                        class={formControl}
-                        value={header.name}
-                        onInput={(event) =>
-                          updateHTTPHeader(index(), { name: event.currentTarget.value })
-                        }
-                        placeholder="X-Health-Check"
-                      />
-                    </label>
-                    <label class={formField}>
-                      <span class={formLabel}>Header value</span>
-                      <input
-                        class={formControl}
-                        type="password"
-                        value={header.value}
-                        onInput={(event) =>
-                          updateHTTPHeader(index(), {
-                            value: event.currentTarget.value,
-                            valueConfigured: false,
-                          })
-                        }
-                        placeholder={
-                          header.valueConfigured
-                            ? 'Stored securely — leave blank to keep it'
-                            : 'Value'
-                        }
-                      />
-                    </label>
-                    <Button
-                      variant="dangerOutline"
-                      size="settingsAction"
-                      onClick={() => removeHTTPHeader(index())}
-                    >
-                      Remove
-                    </Button>
-                  </div>
                 )}
               </For>
             </div>
+            <Show when={externalProbeLocked()}>
+              <p class={formHelpText}>{getExternalProbeLockedHelpText()}</p>
+            </Show>
+            <Show when={externalProbeLocked()}>
+              <div class="rounded-md border border-border bg-surface-alt p-4">
+                <FeatureGateSection
+                  title={getExternalProbeGateTitle()}
+                  body={getExternalProbeGateBody()}
+                  upgradeDestination={getUpgradeActionDestination(EXTERNAL_PROBE_FEATURE)}
+                  showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
+                />
+              </div>
+            </Show>
+          </fieldset>
+          <Show when={form().protocol !== 'icmp'}>
+            <label class={formField}>
+              <span class={formLabel}>Port</span>
+              <input
+                class={formControl}
+                inputMode="numeric"
+                value={form().port}
+                onInput={(event) => updateForm({ port: event.currentTarget.value })}
+                placeholder={portPlaceholder()}
+              />
+            </label>
+          </Show>
+          <Show when={form().protocol === 'http' || form().protocol === 'https'}>
+            <label class={formField}>
+              <span class={formLabel}>Path override</span>
+              <input
+                class={formControl}
+                value={form().path}
+                onInput={(event) => updateForm({ path: event.currentTarget.value })}
+                placeholder="/health"
+              />
+            </label>
+          </Show>
+          <Show when={form().protocol === 'http' || form().protocol === 'https'}>
+            <section class="space-y-4 rounded-lg border border-border p-4 sm:col-span-2">
+              <div>
+                <h3 class="text-sm font-semibold text-base-content">
+                  What proves this service is working?
+                </h3>
+                <p class="mt-1 text-xs text-muted">
+                  Pulse records whether the endpoint answered separately from whether this response
+                  contract passed. Response bodies and credentials are never stored as evidence.
+                </p>
+              </div>
 
-            <Show when={form().httpMethod !== 'HEAD'}>
-              <div class="grid gap-4 sm:grid-cols-2">
+              <div class="grid gap-4 sm:grid-cols-3">
+                <FormSelect
+                  label="Request method"
+                  value={form().httpMethod}
+                  onChange={(event) =>
+                    updateForm({ httpMethod: event.currentTarget.value as AvailabilityHTTPMethod })
+                  }
+                >
+                  <option value="HEAD">HEAD</option>
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                </FormSelect>
                 <label class={formField}>
-                  <span class={formLabel}>Response contains text (optional)</span>
+                  <span class={formLabel}>Accepted status from</span>
                   <input
                     class={formControl}
-                    value={form().httpTextContains}
-                    onInput={(event) => updateForm({ httpTextContains: event.currentTarget.value })}
-                    placeholder="healthy"
+                    inputMode="numeric"
+                    value={form().httpStatusMin}
+                    onInput={(event) => updateForm({ httpStatusMin: event.currentTarget.value })}
+                    placeholder="200"
                   />
                 </label>
-                <div />
                 <label class={formField}>
-                  <span class={formLabel}>JSON path (optional)</span>
+                  <span class={formLabel}>Accepted status to</span>
                   <input
                     class={formControl}
-                    value={form().httpJSONPath}
-                    onInput={(event) => updateForm({ httpJSONPath: event.currentTarget.value })}
-                    placeholder="data.status"
-                  />
-                  <span class={formHelpText}>
-                    Dot fields and bounded array indexes are supported.
-                  </span>
-                </label>
-                <label class={formField}>
-                  <span class={formLabel}>JSON value equals (optional)</span>
-                  <input
-                    class={formControl}
-                    value={form().httpJSONEquals}
-                    onInput={(event) => updateForm({ httpJSONEquals: event.currentTarget.value })}
-                    placeholder="ok"
+                    inputMode="numeric"
+                    value={form().httpStatusMax}
+                    onInput={(event) => updateForm({ httpStatusMax: event.currentTarget.value })}
+                    placeholder="399"
                   />
                 </label>
               </div>
-            </Show>
-          </section>
-        </Show>
-        <Show when={form().protocol === 'https'}>
+
+              <Show when={form().httpMethod === 'POST'}>
+                <div class={formField}>
+                  <FormTextarea
+                    label="Request body (optional)"
+                    textareaBaseClass={`${formControl} min-h-24 sm:min-h-24 font-mono text-xs`}
+                    help="Up to 8 KiB. Kept out of history and test output."
+                    value={form().httpBody}
+                    onInput={(event) =>
+                      updateForm({
+                        httpBody: event.currentTarget.value,
+                        httpBodyConfigured: false,
+                        httpBodyTouched: true,
+                      })
+                    }
+                    placeholder={
+                      form().httpBodyConfigured
+                        ? 'Stored securely — leave blank to keep it'
+                        : '{"operation":"health"}'
+                    }
+                  />
+                  <Show when={form().httpBodyConfigured && !form().httpBodyTouched}>
+                    <div>
+                      <button
+                        type="button"
+                        class="text-xs font-medium text-error hover:underline"
+                        onClick={() =>
+                          updateForm({
+                            httpBody: '',
+                            httpBodyConfigured: false,
+                            httpBodyTouched: true,
+                          })
+                        }
+                      >
+                        Remove stored body
+                      </button>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
+
+              <div class="grid gap-4 sm:grid-cols-2">
+                <FormSelect
+                  label="Authentication"
+                  value={form().httpAuthType}
+                  onChange={(event) =>
+                    updateForm({
+                      httpAuthType: event.currentTarget.value as AvailabilityHTTPAuthType,
+                    })
+                  }
+                >
+                  <option value="none">None</option>
+                  <option value="basic">Basic authentication</option>
+                  <option value="bearer">Bearer token</option>
+                </FormSelect>
+                <Show when={form().httpAuthType === 'basic'}>
+                  <label class={formField}>
+                    <span class={formLabel}>Username</span>
+                    <input
+                      class={formControl}
+                      value={form().httpUsername}
+                      autocomplete="username"
+                      onInput={(event) => updateForm({ httpUsername: event.currentTarget.value })}
+                    />
+                  </label>
+                  <label class={formField}>
+                    <span class={formLabel}>Password</span>
+                    <input
+                      class={formControl}
+                      type="password"
+                      autocomplete="new-password"
+                      value={form().httpPassword}
+                      onInput={(event) =>
+                        updateForm({
+                          httpPassword: event.currentTarget.value,
+                          httpPasswordConfigured: false,
+                        })
+                      }
+                      placeholder={
+                        form().httpPasswordConfigured
+                          ? 'Stored securely — leave blank to keep it'
+                          : 'Required'
+                      }
+                    />
+                  </label>
+                </Show>
+                <Show when={form().httpAuthType === 'bearer'}>
+                  <label class={formField}>
+                    <span class={formLabel}>Bearer token</span>
+                    <input
+                      class={formControl}
+                      type="password"
+                      autocomplete="new-password"
+                      value={form().httpBearerToken}
+                      onInput={(event) =>
+                        updateForm({
+                          httpBearerToken: event.currentTarget.value,
+                          httpBearerTokenConfigured: false,
+                        })
+                      }
+                      placeholder={
+                        form().httpBearerTokenConfigured
+                          ? 'Stored securely — leave blank to keep it'
+                          : 'Required'
+                      }
+                    />
+                  </label>
+                </Show>
+              </div>
+
+              <div class="space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class={formLabel}>Request headers</div>
+                    <div class={formHelpText}>
+                      Optional operator-defined headers. Values are write-only.
+                    </div>
+                  </div>
+                  <Button variant="outline" size="settingsAction" onClick={addHTTPHeader}>
+                    Add header
+                  </Button>
+                </div>
+                <For each={form().httpHeaders}>
+                  {(header, index) => (
+                    <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                      <label class={formField}>
+                        <span class={formLabel}>Header name</span>
+                        <input
+                          class={formControl}
+                          value={header.name}
+                          onInput={(event) =>
+                            updateHTTPHeader(index(), { name: event.currentTarget.value })
+                          }
+                          placeholder="X-Health-Check"
+                        />
+                      </label>
+                      <label class={formField}>
+                        <span class={formLabel}>Header value</span>
+                        <input
+                          class={formControl}
+                          type="password"
+                          value={header.value}
+                          onInput={(event) =>
+                            updateHTTPHeader(index(), {
+                              value: event.currentTarget.value,
+                              valueConfigured: false,
+                            })
+                          }
+                          placeholder={
+                            header.valueConfigured
+                              ? 'Stored securely — leave blank to keep it'
+                              : 'Value'
+                          }
+                        />
+                      </label>
+                      <Button
+                        variant="dangerOutline"
+                        size="settingsAction"
+                        onClick={() => removeHTTPHeader(index())}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  )}
+                </For>
+              </div>
+
+              <Show when={form().httpMethod !== 'HEAD'}>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class={formField}>
+                    <span class={formLabel}>Response contains text (optional)</span>
+                    <input
+                      class={formControl}
+                      value={form().httpTextContains}
+                      onInput={(event) =>
+                        updateForm({ httpTextContains: event.currentTarget.value })
+                      }
+                      placeholder="healthy"
+                    />
+                  </label>
+                  <div />
+                  <label class={formField}>
+                    <span class={formLabel}>JSON path (optional)</span>
+                    <input
+                      class={formControl}
+                      value={form().httpJSONPath}
+                      onInput={(event) => updateForm({ httpJSONPath: event.currentTarget.value })}
+                      placeholder="data.status"
+                    />
+                    <span class={formHelpText}>
+                      Dot fields and bounded array indexes are supported.
+                    </span>
+                  </label>
+                  <label class={formField}>
+                    <span class={formLabel}>JSON value equals (optional)</span>
+                    <input
+                      class={formControl}
+                      value={form().httpJSONEquals}
+                      onInput={(event) => updateForm({ httpJSONEquals: event.currentTarget.value })}
+                      placeholder="ok"
+                    />
+                  </label>
+                </div>
+              </Show>
+            </section>
+          </Show>
+          <Show when={form().protocol === 'https'}>
+            <div class="flex items-center rounded-md border border-border bg-surface-alt px-4 py-3">
+              <label class="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  class={formCheckbox}
+                  checked={form().monitorCertificate}
+                  onChange={(event) =>
+                    updateForm({ monitorCertificate: event.currentTarget.checked })
+                  }
+                />
+                <span class="text-sm text-base-content">Monitor TLS certificate validity</span>
+              </label>
+            </div>
+            <label class={formField}>
+              <span class={formLabel}>Expiry warning (days)</span>
+              <input
+                class={formControl}
+                aria-label="Expiry warning (days)"
+                inputMode="numeric"
+                value={form().certificateExpiryWarningDays}
+                disabled={!form().monitorCertificate}
+                onInput={(event) =>
+                  updateForm({ certificateExpiryWarningDays: event.currentTarget.value })
+                }
+                placeholder="30"
+              />
+              <span class={formHelpText}>
+                Raise an alert when the certificate enters this expiry window.
+              </span>
+            </label>
+          </Show>
+          <Show when={form().protocol === 'udp'}>
+            <FormSelect
+              label="UDP result policy"
+              value={form().udpMode}
+              onChange={(event) =>
+                updateForm({ udpMode: event.currentTarget.value as AvailabilityUDPMode })
+              }
+              help="Response required is alert-safe. Open or filtered reports silence as indeterminate and only fails on an explicit port-unreachable response."
+            >
+              <option value="response_required">Require a response</option>
+              <option value="open_or_filtered">Accept open or filtered</option>
+            </FormSelect>
+            <label class={formField}>
+              <span class={formLabel}>Request payload</span>
+              <input
+                class={formControl}
+                value={form().udpRequest}
+                onInput={(event) => updateForm({ udpRequest: event.currentTarget.value })}
+                placeholder={form().udpMode === 'response_required' ? 'PING' : 'Optional'}
+              />
+              <span class={formHelpText}>UTF-8 bytes, up to 512 bytes.</span>
+            </label>
+            <label class={`${formField} sm:col-span-2`}>
+              <span class={formLabel}>Expected response (optional)</span>
+              <input
+                class={formControl}
+                value={form().udpExpectedResponse}
+                onInput={(event) => updateForm({ udpExpectedResponse: event.currentTarget.value })}
+                placeholder="PONG"
+              />
+              <span class={formHelpText}>
+                When set, the response must match these UTF-8 bytes exactly.
+              </span>
+            </label>
+          </Show>
+          <label class={formField}>
+            <span class={formLabel}>Poll interval (seconds)</span>
+            <input
+              class={formControl}
+              inputMode="numeric"
+              value={form().pollIntervalSeconds}
+              onInput={(event) => updateForm({ pollIntervalSeconds: event.currentTarget.value })}
+              placeholder="60"
+            />
+          </label>
+          <label class={formField}>
+            <span class={formLabel}>Timeout (milliseconds)</span>
+            <input
+              class={formControl}
+              inputMode="numeric"
+              value={form().timeoutMillis}
+              onInput={(event) => updateForm({ timeoutMillis: event.currentTarget.value })}
+              placeholder="2000"
+            />
+          </label>
+          <label class={formField}>
+            <span class={formLabel}>Failure threshold</span>
+            <input
+              class={formControl}
+              inputMode="numeric"
+              value={form().failureThreshold}
+              onInput={(event) => updateForm({ failureThreshold: event.currentTarget.value })}
+              placeholder="2"
+            />
+            <span class={formHelpText}>
+              Consecutive failures before the target is treated as down.
+            </span>
+          </label>
           <div class="flex items-center rounded-md border border-border bg-surface-alt px-4 py-3">
             <label class="flex items-center gap-3">
               <input
                 type="checkbox"
                 class={formCheckbox}
-                checked={form().monitorCertificate}
-                onChange={(event) =>
-                  updateForm({ monitorCertificate: event.currentTarget.checked })
-                }
+                checked={form().enabled}
+                onChange={(event) => updateForm({ enabled: event.currentTarget.checked })}
               />
-              <span class="text-sm text-base-content">Monitor TLS certificate validity</span>
+              <span class="text-sm text-base-content">Enable this availability target</span>
             </label>
           </div>
-          <label class={formField}>
-            <span class={formLabel}>Expiry warning (days)</span>
-            <input
-              class={formControl}
-              aria-label="Expiry warning (days)"
-              inputMode="numeric"
-              value={form().certificateExpiryWarningDays}
-              disabled={!form().monitorCertificate}
-              onInput={(event) =>
-                updateForm({ certificateExpiryWarningDays: event.currentTarget.value })
-              }
-              placeholder="30"
-            />
-            <span class={formHelpText}>
-              Raise an alert when the certificate enters this expiry window.
-            </span>
-          </label>
-        </Show>
-        <Show when={form().protocol === 'udp'}>
-          <FormSelect
-            label="UDP result policy"
-            value={form().udpMode}
-            onChange={(event) =>
-              updateForm({ udpMode: event.currentTarget.value as AvailabilityUDPMode })
-            }
-            help="Response required is alert-safe. Open or filtered reports silence as indeterminate and only fails on an explicit port-unreachable response."
-          >
-            <option value="response_required">Require a response</option>
-            <option value="open_or_filtered">Accept open or filtered</option>
-          </FormSelect>
-          <label class={formField}>
-            <span class={formLabel}>Request payload</span>
-            <input
-              class={formControl}
-              value={form().udpRequest}
-              onInput={(event) => updateForm({ udpRequest: event.currentTarget.value })}
-              placeholder={form().udpMode === 'response_required' ? 'PING' : 'Optional'}
-            />
-            <span class={formHelpText}>UTF-8 bytes, up to 512 bytes.</span>
-          </label>
-          <label class={`${formField} sm:col-span-2`}>
-            <span class={formLabel}>Expected response (optional)</span>
-            <input
-              class={formControl}
-              value={form().udpExpectedResponse}
-              onInput={(event) => updateForm({ udpExpectedResponse: event.currentTarget.value })}
-              placeholder="PONG"
-            />
-            <span class={formHelpText}>
-              When set, the response must match these UTF-8 bytes exactly.
-            </span>
-          </label>
-        </Show>
-        <label class={formField}>
-          <span class={formLabel}>Poll interval (seconds)</span>
-          <input
-            class={formControl}
-            inputMode="numeric"
-            value={form().pollIntervalSeconds}
-            onInput={(event) => updateForm({ pollIntervalSeconds: event.currentTarget.value })}
-            placeholder="60"
-          />
-        </label>
-        <label class={formField}>
-          <span class={formLabel}>Timeout (milliseconds)</span>
-          <input
-            class={formControl}
-            inputMode="numeric"
-            value={form().timeoutMillis}
-            onInput={(event) => updateForm({ timeoutMillis: event.currentTarget.value })}
-            placeholder="2000"
-          />
-        </label>
-        <label class={formField}>
-          <span class={formLabel}>Failure threshold</span>
-          <input
-            class={formControl}
-            inputMode="numeric"
-            value={form().failureThreshold}
-            onInput={(event) => updateForm({ failureThreshold: event.currentTarget.value })}
-            placeholder="2"
-          />
-          <span class={formHelpText}>
-            Consecutive failures before the target is treated as down.
-          </span>
-        </label>
-        <div class="flex items-center rounded-md border border-border bg-surface-alt px-4 py-3">
-          <label class="flex items-center gap-3">
-            <input
-              type="checkbox"
-              class={formCheckbox}
-              checked={form().enabled}
-              onChange={(event) => updateForm({ enabled: event.currentTarget.checked })}
-            />
-            <span class="text-sm text-base-content">Enable this availability target</span>
-          </label>
         </div>
-      </div>
 
-      <div ref={feedbackElement} class="scroll-mb-56 space-y-2 sm:scroll-mb-24">
-        <Show when={testResult()}>
-          {(result) => (
-            <CalloutCard
-              role={result().success ? 'status' : 'alert'}
-              tone={
-                result().outcome === 'indeterminate'
-                  ? 'warning'
-                  : result().success
-                    ? 'success'
-                    : 'danger'
-              }
-              scale="compact"
-              padding="sm"
-              description={
-                result().outcome === 'indeterminate'
-                  ? `No UDP rejection was received in ${result().latencyMillis} ms. The port is open or filtered, not proven reachable.`
-                  : result().success
-                    ? availabilityTestSuccessDescription(result())
-                    : availabilityTestFailureDescription(result())
-              }
-            />
-          )}
-        </Show>
+        <div ref={feedbackElement} class="scroll-mb-56 space-y-2 sm:scroll-mb-24">
+          <Show when={testResult()}>
+            {(result) => (
+              <CalloutCard
+                role={result().success ? 'status' : 'alert'}
+                tone={
+                  result().outcome === 'indeterminate'
+                    ? 'warning'
+                    : result().success
+                      ? 'success'
+                      : 'danger'
+                }
+                scale="compact"
+                padding="sm"
+                description={
+                  result().outcome === 'indeterminate'
+                    ? `No UDP rejection was received in ${result().latencyMillis} ms. The port is open or filtered, not proven reachable.`
+                    : result().success
+                      ? availabilityTestSuccessDescription(result())
+                      : availabilityTestFailureDescription(result())
+                }
+              />
+            )}
+          </Show>
 
-        <Show when={error()}>
-          {(message) => (
-            <CalloutCard
-              role="alert"
-              tone="danger"
-              scale="compact"
-              padding="sm"
-              description={message()}
-            />
-          )}
-        </Show>
+          <Show when={error()}>
+            {(message) => (
+              <CalloutCard
+                role="alert"
+                tone="danger"
+                scale="compact"
+                padding="sm"
+                description={message()}
+              />
+            )}
+          </Show>
 
-        <Show when={props.deleteError}>
-          {(message) => (
-            <CalloutCard
-              role="alert"
-              tone="danger"
-              scale="compact"
-              padding="sm"
-              description={message()}
-            />
-          )}
-        </Show>
+          <Show when={props.deleteError}>
+            {(message) => (
+              <CalloutCard
+                role="alert"
+                tone="danger"
+                scale="compact"
+                padding="sm"
+                description={message()}
+              />
+            )}
+          </Show>
 
-        <Show when={props.deleteConfirming}>
-          <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
-            Click remove again to confirm. Historical resource data and alerts remain available.
-          </div>
-        </Show>
-      </div>
+          <Show when={props.deleteConfirming}>
+            <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
+              Click remove again to confirm. Historical resource data and alerts remain available.
+            </div>
+          </Show>
+        </div>
 
-      <div class="sticky bottom-0 -mx-4 mt-auto border-t border-border bg-surface px-4 py-3 shadow-[0_-8px_16px_rgba(15,23,42,0.04)]">
-        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex flex-col gap-2 sm:flex-row">
-            <Button
-              variant="outline"
-              size="settingsAction"
-              onClick={props.onCancel}
-              disabled={isBusy()}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              size="settingsAction"
-              onClick={handleTest}
-              disabled={isBusy()}
-            >
-              {testing() ? 'Testing…' : 'Test probe'}
-            </Button>
-          </div>
-          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Show when={isEditing() && props.onToggleEnabled}>
+        <div class="sticky bottom-0 -mx-4 mt-auto border-t border-border bg-surface px-4 py-3 shadow-[0_-8px_16px_rgba(15,23,42,0.04)]">
+          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-col gap-2 sm:flex-row">
               <Button
                 variant="outline"
                 size="settingsAction"
-                onClick={props.onToggleEnabled}
-                disabled={isBusy() || props.togglePending}
-              >
-                {props.togglePending
-                  ? props.connectionEnabled
-                    ? 'Pausing…'
-                    : 'Resuming…'
-                  : props.connectionEnabled
-                    ? 'Pause target'
-                    : 'Resume target'}
-              </Button>
-            </Show>
-            <Show when={isEditing() && props.onDelete}>
-              <Button
-                variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
-                size="settingsAction"
-                onClick={props.onDelete}
+                onClick={props.onCancel}
                 disabled={isBusy()}
               >
-                {props.deletePending
-                  ? 'Removing…'
-                  : props.deleteConfirming
-                    ? 'Click again to confirm'
-                    : 'Remove target'}
+                Cancel
               </Button>
-            </Show>
-            <Button
-              variant="primary"
-              size="settingsAction"
-              onClick={handleSave}
-              disabled={isBusy()}
-            >
-              {saving() ? 'Saving…' : isEditing() ? 'Save target' : addButtonLabel()}
-            </Button>
+              <Button
+                variant="outline"
+                size="settingsAction"
+                onClick={handleTest}
+                disabled={isBusy()}
+              >
+                {testing() ? 'Testing…' : 'Test probe'}
+              </Button>
+            </div>
+            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Show when={isEditing() && props.onToggleEnabled}>
+                <Button
+                  variant="outline"
+                  size="settingsAction"
+                  onClick={props.onToggleEnabled}
+                  disabled={isBusy() || props.togglePending}
+                >
+                  {props.togglePending
+                    ? props.connectionEnabled
+                      ? 'Pausing…'
+                      : 'Resuming…'
+                    : props.connectionEnabled
+                      ? 'Pause target'
+                      : 'Resume target'}
+                </Button>
+              </Show>
+              <Show when={isEditing() && props.onDelete}>
+                <Button
+                  variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
+                  size="settingsAction"
+                  onClick={props.onDelete}
+                  disabled={isBusy()}
+                >
+                  {props.deletePending
+                    ? 'Removing…'
+                    : props.deleteConfirming
+                      ? 'Click again to confirm'
+                      : 'Remove target'}
+                </Button>
+              </Show>
+              <Button
+                variant="primary"
+                size="settingsAction"
+                onClick={handleSave}
+                disabled={isBusy()}
+              >
+                {saving() ? 'Saving…' : isEditing() ? 'Save target' : addButtonLabel()}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Show>
   );
 };

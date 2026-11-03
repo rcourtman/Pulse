@@ -133,6 +133,14 @@ export function buildSettingsPanelRegistryContext(
       ]),
       canRead: settingsCapabilities()?.reportingRead === true,
     }),
+    getAvailabilityPanelProps: () => ({
+      currentUser: currentUser(),
+      accessKey: JSON.stringify([
+        params.securityStatus()?.apiTokenHint,
+        params.securityStatus()?.tokenScopes?.slice().sort(),
+      ]),
+      canRead: settingsCapabilities()?.availabilityRead === true,
+    }),
     getDiagnosticsPanelProps: () => ({
       currentUser: currentUser(),
       accessKey: JSON.stringify([

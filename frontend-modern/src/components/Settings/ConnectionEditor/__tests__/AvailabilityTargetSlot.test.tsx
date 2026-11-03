@@ -114,6 +114,11 @@ describe('AvailabilityTargetSlot', () => {
           port: 6053,
           enabled: true,
         }),
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
       ),
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
@@ -146,6 +151,11 @@ describe('AvailabilityTargetSlot', () => {
           address: 'mac-mini.local',
           protocol: 'icmp',
           enabled: true,
+        }),
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
         }),
       ),
     );
@@ -184,6 +194,11 @@ describe('AvailabilityTargetSlot', () => {
         expect.objectContaining({
           linkedResourceId: 'docker-service:api',
         }),
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
       ),
     );
   });
@@ -213,6 +228,11 @@ describe('AvailabilityTargetSlot', () => {
           udpRequest: 'PING',
           udpExpectedResponse: 'PONG',
         }),
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
+        }),
       ),
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
@@ -240,6 +260,11 @@ describe('AvailabilityTargetSlot', () => {
           protocol: 'https',
           certificateMonitoringDisabled: false,
           certificateExpiryWarningDays: 45,
+        }),
+        expect.objectContaining({
+          expectedOrgID: 'default',
+          retry: false,
+          signal: expect.any(AbortSignal),
         }),
       ),
     );
@@ -447,6 +472,11 @@ describe('AvailabilityTargetSlot', () => {
             probeAgentId: '',
             observationLocationIds: ['pulse:local', 'agent:host-edge-01'],
           }),
+          expect.objectContaining({
+            expectedOrgID: 'default',
+            retry: false,
+            signal: expect.any(AbortSignal),
+          }),
         ),
       );
     });
@@ -481,6 +511,11 @@ describe('AvailabilityTargetSlot', () => {
           expect.objectContaining({
             probeAgentId: '',
             observationLocationIds: ['pulse:local'],
+          }),
+          expect.objectContaining({
+            expectedOrgID: 'default',
+            retry: false,
+            signal: expect.any(AbortSignal),
           }),
         ),
       );

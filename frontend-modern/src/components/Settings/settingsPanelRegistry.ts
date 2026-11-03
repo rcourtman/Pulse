@@ -11,6 +11,7 @@ import type { SecurityOverviewPanel as SecurityOverviewPanelType } from './Secur
 import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthPanel';
 import type { RelaySettingsPanel as RelaySettingsPanelType } from './RelaySettingsPanel';
 import type { ReportingPanel as ReportingPanelType } from './ReportingPanel';
+import type { AvailabilitySettingsPanelProps } from './AvailabilitySettingsPanel';
 import type { AuditWebhookPanel as AuditWebhookPanelType } from './AuditWebhookPanel';
 import type AuditLogPanelType from './AuditLogPanel';
 import type { RolesPanel as RolesPanelType } from './RolesPanel';
@@ -50,6 +51,7 @@ export interface SettingsPanelRegistryContext {
   getSecurityAuthPanelProps: () => Parameters<typeof SecurityAuthPanelType>[0];
   getRelayPanelProps: () => Parameters<typeof RelaySettingsPanelType>[0];
   getReportingPanelProps: () => Parameters<typeof ReportingPanelType>[0];
+  getAvailabilityPanelProps: () => AvailabilitySettingsPanelProps;
   getDiagnosticsPanelProps: () => DiagnosticsPanelProps;
   getSystemLogsPanelProps: () => SystemLogsPanelProps;
   getAuditWebhookPanelProps: () => Parameters<typeof AuditWebhookPanelType>[0];
@@ -67,6 +69,7 @@ export const createSettingsPanelRegistry = (
   },
   'monitoring-availability': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.AvailabilitySettingsPanel,
+    getProps: context.getAvailabilityPanelProps,
   },
   'system-general': {
     component: context.systemGeneralPanel,
