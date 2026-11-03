@@ -373,7 +373,8 @@ class E2EImageWorkflowTest(unittest.TestCase):
         self.assertNotIn("registry", producer.split("steps:", 1)[0])
         for job in ("e2e", "agent-registration"):
             consumer = job_block(workflow, job)
-            self.assertIn("needs: [tier-selection, test-images]", consumer)
+            dependencies = "scope, tier-selection, test-images" if job == "e2e" else "tier-selection, test-images"
+            self.assertIn(f"needs: [{dependencies}]", consumer)
             self.assertIn("PULSE_E2E_SEED_IMAGE: pulse-e2e-seed:test", consumer)
             self.assertIn("artifact-ids: ${{ needs.test-images.outputs.artifact-id }}", consumer)
             self.assertIn("PULSE_E2E_MANIFEST_SHA256: ${{ needs.test-images.outputs.manifest-sha256 }}", consumer)
@@ -436,6 +437,7 @@ class E2EImageWorkflowTest(unittest.TestCase):
     def test_rebuild_cross_run_and_ignored_admission_mutants_rejected(self):
         source = WORKFLOW.read_text()
         for old, new in (
+            ("needs: [scope, tier-selection, test-images]", "needs: [scope, tier-selection]"),
             ("needs: [tier-selection, test-images]", "needs: tier-selection"),
             ("artifact-ids: ${{ needs.test-images.outputs.artifact-id }}", "name: latest-test-images"),
             ('python3 scripts/e2e_test_images.py load "$RUNNER_TEMP/pulse-e2e-images"', 'docker build -t pulse:test .'),

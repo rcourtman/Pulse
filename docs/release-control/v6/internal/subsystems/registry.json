@@ -4724,6 +4724,7 @@
         ".github/scripts/check-demo-reachability.sh",
         ".github/scripts/demo-runtime-transaction.py",
         ".github/scripts/dispatch-demo-runtime.py",
+        ".github/scripts/e2e-probation-scope.mjs",
         ".github/scripts/internal-api-test-seconds.txt",
         ".github/scripts/record-internal-api-test-seconds.py",
         ".github/scripts/recover-demo-runtime.sh",
@@ -5514,6 +5515,19 @@
             "exact_files": [
               "scripts/tests/test_browser_os_packages.py",
               "scripts/tests/test_playwright_acquisition.py"
+            ]
+          },
+          {
+            "id": "e2e-probation-scope",
+            "label": "changed probation spec and configuration selection proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/scripts/e2e-probation-scope.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_e2e_probation_scope.mjs"
             ]
           },
           {

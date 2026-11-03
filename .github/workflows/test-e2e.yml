@@ -12,6 +12,8 @@ on:
       - 'tests/integration/**'
       - 'Dockerfile'
       - '.github/workflows/test-e2e.yml'
+      - '.github/scripts/e2e-probation-scope.mjs'
+      - 'scripts/tests/test_e2e_probation_scope.mjs'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
       - 'scripts/browser_os_packages.py'
@@ -34,6 +36,8 @@ on:
       - 'tests/integration/**'
       - 'Dockerfile'
       - '.github/workflows/test-e2e.yml'
+      - '.github/scripts/e2e-probation-scope.mjs'
+      - 'scripts/tests/test_e2e_probation_scope.mjs'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
       - 'scripts/browser_os_packages.py'
@@ -58,11 +62,12 @@ permissions:
 
 jobs:
   scope:
-    name: Detect browser receipt-only changes
+    name: Detect E2E coverage scope
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       proof_only: ${{ steps.diff.outputs.proof_only }}
+      run_probation: ${{ steps.diff.outputs.run_probation }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,15 +81,29 @@ jobs:
       - name: Validate browser receipt-only CI admission
         run: python3 scripts/tests/test_ci_browser_proof_only.py
 
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+
+      - name: Validate changed probation coverage selection
+        run: node --test scripts/tests/test_e2e_probation_scope.mjs
+
       - name: Read the complete tree diff
         id: diff
         env:
           DIFF_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           DIFF_HEAD: ${{ github.sha }}
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
         run: |
           set -euo pipefail
           proof_only=$(python3 scripts/ci_browser_proof_only.py --base "$DIFF_BASE" --head "$DIFF_HEAD")
           echo "proof_only=$proof_only" >> "$GITHUB_OUTPUT"
+          run_probation=true
+          if [ "$IS_PULL_REQUEST" = "true" ]; then
+            run_probation=$(git diff --name-only -z "$DIFF_BASE" "$DIFF_HEAD" | node .github/scripts/e2e-probation-scope.mjs)
+          fi
+          echo "run_probation=$run_probation" >> "$GITHUB_OUTPUT"
 
   tier-selection:
     name: Validate E2E tier selection
@@ -295,7 +314,7 @@ jobs:
 
   e2e:
     name: Playwright Core E2E (shard ${{ matrix.shard }}/8)
-    needs: [tier-selection, test-images]
+    needs: [scope, tier-selection, test-images]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -420,8 +439,8 @@ jobs:
 
       # Two-tier run (see PROBATION_SPECS in tests/integration/e2e-tiering.mjs
       # for the tier mechanism and the promotion/demotion rule). The stable tier
-      # is the gate; the probation tier reuses the same containers but reports
-      # through continue-on-error so a probation flake cannot paint main red.
+      # is always required. A PR changing probation coverage runs and enforces
+      # both tiers. Branch runs retain probation as observational evidence.
       - name: Run stable-tier E2E suite
         id: stable
         working-directory: tests/integration
@@ -469,13 +488,12 @@ jobs:
       # Runs even when the stable tier failed (its data still counts toward
       # promotion), but not when the stable tier was skipped — that means the
       # environment never came up and every probation spec would fail on it.
-      # Pull requests skip it. It cannot gate a PR, and the promotion rule in
-      # e2e-tiering.mjs counts only main runs, so on a PR it only held each
-      # of the eight shard runners for about eight more minutes.
-      - name: Run probation-tier E2E suite (non-gating)
+      # PRs changing a probation spec or its execution configuration must prove
+      # that coverage before landing. Promotion still counts only main runs.
+      - name: Run probation-tier E2E suite
         id: probation
-        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.stable.conclusion != 'skipped' }}
-        continue-on-error: true
+        if: ${{ !cancelled() && needs.scope.outputs.run_probation == 'true' && steps.stable.conclusion != 'skipped' }}
+        continue-on-error: ${{ github.event_name != 'pull_request' }}
         # A broken probation surface can otherwise consume the entire 60m job
         # budget through retries and cancel the job before continue-on-error
         # can make the observational result non-gating. Playwright's own
@@ -499,11 +517,15 @@ jobs:
 
       - name: Report probation-tier outcome
         if: ${{ !cancelled() && steps.probation.outcome != 'skipped' }}
+        env:
+          PROBATION_REQUIRED: ${{ github.event_name == 'pull_request' }}
         run: |
+          mode=observational
+          if [ "$PROBATION_REQUIRED" = "true" ]; then mode=required; fi
           if [ "${{ steps.probation.outcome }}" = "failure" ]; then
-            echo "⚠️ Probation tier FAILED on shard ${{ matrix.shard }} (non-gating; see the playwright-report-probation artifact). A probation spec's 10-consecutive-green promotion count restarts." >> "$GITHUB_STEP_SUMMARY"
+            echo "Probation tier FAILED on shard ${{ matrix.shard }} ($mode). See the retained probation report." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Probation tier passed on shard ${{ matrix.shard }} (non-gating)." >> "$GITHUB_STEP_SUMMARY"
+            echo "Probation tier passed on shard ${{ matrix.shard }} ($mode)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Collect container logs
@@ -522,8 +544,8 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      # continue-on-error keeps the job green on a probation failure, so
-      # failure() never fires for these; key off the step outcome instead.
+      # Branch probation failures are observational. Preserve diagnostics by
+      # step outcome for both observational and required probation runs.
       - name: Upload probation Playwright report
         if: ${{ !cancelled() && (steps.probation.outcome == 'failure' || hashFiles('tests/integration/test-results-probation/**/trace.zip', 'tests/integration/test-results-probation/**/test-failed-*.png') != '') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -686,14 +708,13 @@ jobs:
       - agent-registration
     if: always()
     steps:
-      # The e2e shards fail only on stable-tier failures: the probation tier
-      # runs behind continue-on-error inside each shard, so its failures are
-      # reported (shard summaries + probation artifacts) without reaching
-      # this verdict. Mechanism and promotion rule: PROBATION_SPECS in
-      # tests/integration/e2e-tiering.mjs.
+      # Changed-coverage PRs require both tiers. Branch probation remains
+      # observational. Promotion still uses executed main runs only.
       - name: Check E2E results
         env:
           PROOF_ONLY: ${{ needs.scope.outputs.proof_only }}
+          RUN_PROBATION: ${{ needs.scope.outputs.run_probation }}
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
         run: |
           if [ "${{ needs.scope.result }}" != "success" ]; then
             echo "E2E change-scope admission did not pass."
@@ -715,6 +736,10 @@ jobs:
             echo "E2E change scope is unknown; no runtime success is established."
             exit 1
           fi
+          case "$RUN_PROBATION" in
+            true|false) ;;
+            *) echo "Probation coverage scope is unknown."; exit 1 ;;
+          esac
           if [ "${{ needs.tier-selection.result }}" != "success" ]; then
             echo "E2E tier selection is invalid (result: ${{ needs.tier-selection.result }})"
             exit 1
@@ -724,11 +749,15 @@ jobs:
             exit 1
           fi
           if [ "${{ needs.e2e.result }}" != "success" ]; then
-            echo "Stable-tier E2E shards did not all pass (result: ${{ needs.e2e.result }})"
+            echo "Required E2E tiers did not all pass (result: ${{ needs.e2e.result }})"
             exit 1
           fi
           if [ "${{ needs.agent-registration.result }}" != "success" ]; then
             echo "Agent registration lifecycle did not pass (result: ${{ needs.agent-registration.result }})"
             exit 1
           fi
-          echo "All stable-tier E2E shards and the agent registration lifecycle passed (probation tier is non-gating)"
+          if [ "$IS_PULL_REQUEST" = "true" ] && [ "$RUN_PROBATION" = "true" ]; then
+            echo "All stable and probation E2E shards and the agent registration lifecycle passed."
+          else
+            echo "All stable E2E shards and the agent registration lifecycle passed. Branch probation is observational."
+          fi

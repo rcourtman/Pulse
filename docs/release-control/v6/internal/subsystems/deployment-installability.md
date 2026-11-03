@@ -1000,7 +1000,7 @@ size and archive digest. After load it verifies Linux amd64, the producer's
 image IDs and source revision labels on both built images. A missing, changed,
 foreign or failed bundle stops the job. Failed production stops fan-out and
 fails the final verdict; all eight stable shards and agent registration must
-still pass. Browser acquisition and test deadlines, probation rules, registry
+still pass. Browser acquisition and test deadlines, probation promotion rules, registry
 pins and production/release paths are unchanged. Provider refusals stay terminal:
 there is no login, alternate registry or pull retry.
 
@@ -1864,9 +1864,31 @@ halves may expose existing package-state coupling; actual split-suite proof and
 required CI, not a prediction, establish whether the partition is valid. Go test steps are not skipped for frontend-only changes, because Go tests
 read frontend sources (the `internal/api` contract tests, the
 `internal/unifiedresources` code standards walk of `frontend-modern/src`, and
-the `internal/telemetry` repository-wide wording scan). Core E2E runs its
-non-gating probation tier only outside pull requests, since promotion counts
-only main runs.
+the `internal/telemetry` repository-wide wording scan).
+
+### Core E2E validates changed probation coverage before landing
+
+Core E2E runs both tiers for pull requests that change a probation spec, the
+tier partition, or shared execution configuration. The complete changed-path
+set is selected before image production by
+`.github/scripts/e2e-probation-scope.mjs`, using `PROBATION_SPECS` as its source
+of truth. The selector accepts NUL-delimited paths and literal spec paths under
+the manifest's recursive prefix. Unsupported patterns fail admission. An
+unknown scope cannot produce a passing E2E verdict.
+
+Selected PR probation failures fail their shard and the E2E verdict. Branch
+and manual runs keep probation observational. Promotion and demotion remain
+governed by `tests/integration/e2e-tiering.mjs`, and only executed main runs
+count toward promotion. Restoring a resolved quarantine through probation
+does not claim stable qualification. Required source checks and release gates
+retain their existing boundaries.
+
+`scripts/tests/test_e2e_probation_scope.mjs` exercises root and nested spec
+selection, stable and unrelated paths, execution configuration changes,
+unsupported patterns, and the CLI's NUL-delimited filename framing. The
+existing image admission proof still validates the same-run producer and
+consumer boundary. Actual execution of both browser tiers supplies the
+source-bound journey result.
 
 ### Docker SDK dependency compatibility
 
@@ -2634,6 +2656,8 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 13a. `.github/workflows/compile-release-payload.yml`
 13b. `.github/workflows/qualify-secure-runtime-release.yml`
 14. `.github/workflows/build-and-test.yml`
+14b. `.github/workflows/test-e2e.yml`
+14c. `.github/scripts/e2e-probation-scope.mjs`
 14a. `scripts/release_control/run_go_package_slice.py`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
