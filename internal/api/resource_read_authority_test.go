@@ -188,8 +188,14 @@ func TestResourceReadsStoreOnlyEntrancesKeepAdmission(t *testing.T) {
 			f.current(t, "", "header", http.StatusUnauthorized)
 			f.current(t, snapshotAuthorityToken, "header", http.StatusForbidden)
 			wire := f.current(t, snapshotAuthorityControl, "header", http.StatusOK)
-			if strings.Contains(path, "timeline") && (!strings.Contains(wire.Body, `"recentChanges":[]`) || !strings.Contains(wire.Body, `"count":0`)) {
-				t.Fatalf("timeline lost empty evidence: %s", wire.Body)
+			if strings.Contains(path, "timeline") {
+				var timeline struct {
+					Count         int               `json:"count"`
+					RecentChanges []json.RawMessage `json:"recentChanges"`
+				}
+				if json.Unmarshal([]byte(wire.Body), &timeline) != nil || timeline.Count != 0 || len(timeline.RecentChanges) != 0 || !strings.Contains(wire.Body, `"recentChanges":`) {
+					t.Fatalf("timeline lost empty evidence: %s", wire.Body)
+				}
 			}
 		})
 	}
