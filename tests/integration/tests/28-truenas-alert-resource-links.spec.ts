@@ -217,7 +217,21 @@ test.describe("TrueNAS alert resource links", () => {
       .filter({ has: page.getByRole("button", { name: /^Resource incidents for / }) })
       .first();
     await expect(alertItem).toBeVisible();
-    await alertItem.getByRole("button", { name: /^Resource incidents for / }).click();
+    const resourceAction = alertItem.getByRole("button", { name: /^Resource incidents for / });
+    if (isMobile) {
+      // A visible card can end behind the fixed bottom navigation. Scroll the
+      // action into the usable viewport before exercising the real pointer path.
+      await resourceAction.evaluate((action) => action.scrollIntoView({ block: "center" }));
+      await expect.poll(() => resourceAction.evaluate((action) => {
+        const bounds = action.getBoundingClientRect();
+        const target = document.elementFromPoint(
+          bounds.x + bounds.width / 2,
+          bounds.y + bounds.height / 2,
+        );
+        return target !== null && action.contains(target);
+      })).toBe(true);
+    }
+    await resourceAction.click();
 
     // Cross-link affordances into the retired standalone routes were removed
     // with platform-first navigation; the canonical handoff is the resource
