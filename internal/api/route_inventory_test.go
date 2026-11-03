@@ -963,7 +963,7 @@ func TestAgentEventTokenLifecycleDeleteThroughHTTP(t *testing.T) {
 	if err != nil || len(persisted) != 1 || persisted[0].ID == id {
 		t.Fatalf("revocation was not persisted: %v, %d tokens", err, len(persisted))
 	}
-	router.agentEventBroadcaster.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "after-durable-revoke"})
+	router.agentEventBroadcaster.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "after-durable-revoke"})
 	primary.wantClosed(t)
 
 	req, _ = http.NewRequest(http.MethodGet, server.URL+"/api/agent/events", nil)

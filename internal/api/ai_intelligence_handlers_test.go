@@ -500,3 +500,31 @@ func TestHandleGetBaselines_ResourceIDFilter(t *testing.T) {
 		t.Fatal("expected baselines field in response")
 	}
 }
+
+// Anomalies join the request organization's baselines to that organization's
+// resources only, never the default organization's inventory.
+func TestRoutedAnomaliesUseRequestOrganizationResources(t *testing.T) {
+	rig := newTenantPatrolRig(t)
+	defaultNodeID := readStateNodeID(t, rig.defaultMonitor)
+	tenantNodeID := readStateNodeID(t, rig.tenantMonitor)
+
+	// The tenant's store holds a baseline for a default-org resource ID too,
+	// as a colliding source ID would; only its own node may be reported.
+	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
+	addBaseline(t, store, tenantNodeID, "node", "cpu", 10)
+	addBaseline(t, store, defaultNodeID, "node", "cpu", 10)
+	rig.tenantService.SetBaselineStore(store)
+
+	var payload struct {
+		Anomalies []map[string]any `json:"anomalies"`
+	}
+	rig.get(t, "/api/ai/intelligence/anomalies", "org-a", &payload)
+	if len(payload.Anomalies) == 0 {
+		t.Fatalf("expected the tenant node's anomaly, got none")
+	}
+	for _, anomaly := range payload.Anomalies {
+		if anomaly["resource_id"] != tenantNodeID || anomaly["resource_name"] != "org-a-node" {
+			t.Fatalf("tenant anomalies leaked another organization's resource: %+v", payload.Anomalies)
+		}
+	}
+}

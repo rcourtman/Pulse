@@ -420,7 +420,7 @@ func TestAgentEventTokenLifecycleMCPConsumer(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("MCP stream never connected")
 	}
-	router.agentEventBroadcaster.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "before-revocation"})
+	router.agentEventBroadcaster.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "before-revocation"})
 	select {
 	case n := <-notifications:
 		if n.Method != "notifications/finding.created" || !strings.Contains(string(n.Params), "before-revocation") {

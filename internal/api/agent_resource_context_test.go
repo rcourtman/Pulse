@@ -24,14 +24,14 @@ type staticFindingsProvider struct {
 	activeCount *int
 }
 
-func (s staticFindingsProvider) ActiveFindingsForResource(resourceID string) []AgentResourceFindingSnapshot {
+func (s staticFindingsProvider) ActiveFindingsForResource(resourceID, _ string) []AgentResourceFindingSnapshot {
 	if s.byResource == nil {
 		return nil
 	}
 	return s.byResource[resourceID]
 }
 
-func (s staticFindingsProvider) ActiveFindingCount() int {
+func (s staticFindingsProvider) ActiveFindingCount(string) int {
 	if s.activeCount != nil {
 		return *s.activeCount
 	}

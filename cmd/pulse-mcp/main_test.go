@@ -1634,10 +1634,10 @@ func (s mcpFleetSnapshot) UnifiedResourceSnapshot() ([]unified.Resource, time.Ti
 
 type mcpFleetFindings map[string][]api.AgentResourceFindingSnapshot
 
-func (f mcpFleetFindings) ActiveFindingsForResource(id string) []api.AgentResourceFindingSnapshot {
+func (f mcpFleetFindings) ActiveFindingsForResource(id, _ string) []api.AgentResourceFindingSnapshot {
 	return f[id]
 }
-func (f mcpFleetFindings) ActiveFindingCount() int {
+func (f mcpFleetFindings) ActiveFindingCount(string) int {
 	count := 0
 	for _, findings := range f {
 		count += len(findings)

@@ -19,7 +19,7 @@ func TestAgentEventBroadcaster_SubscribeReceivesPublishedEvents(t *testing.T) {
 	events, unsubscribe := b.Subscribe()
 	defer unsubscribe()
 
-	b.PublishFindingCreated(AgentEventFindingCreatedPayload{
+	b.PublishFindingCreated("", AgentEventFindingCreatedPayload{
 		FindingID:  "f1",
 		ResourceID: "vm:101",
 		Severity:   "warning",
@@ -50,7 +50,7 @@ func TestAgentEventBroadcaster_UnsubscribeStopsDelivery(t *testing.T) {
 
 	// After unsubscribe the channel must be closed; receive should
 	// drain whatever was buffered then return zero-value with !ok.
-	b.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "f-after"})
+	b.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "f-after"})
 
 	select {
 	case _, open := <-events:
@@ -69,7 +69,7 @@ func TestAgentEventBroadcaster_FanOutToMultipleSubscribers(t *testing.T) {
 	a2, unsub2 := b.Subscribe()
 	defer unsub2()
 
-	b.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "fan-out"})
+	b.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "fan-out"})
 
 	deadline := time.After(time.Second)
 	for _, ch := range []<-chan AgentEvent{a1, a2} {
@@ -98,7 +98,7 @@ func TestAgentEventBroadcaster_DropsForSlowSubscriber(t *testing.T) {
 		// not block; if it did the goroutine would not finish and
 		// the test would time out.
 		for i := 0; i < 200; i++ {
-			b.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "spam"})
+			b.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "spam"})
 		}
 		close(done)
 	}()
@@ -117,7 +117,7 @@ func TestAgentEventBroadcaster_AssignsMonotonicIDs(t *testing.T) {
 	defer unsub()
 
 	for i := 0; i < 3; i++ {
-		b.PublishFindingCreated(AgentEventFindingCreatedPayload{FindingID: "mono"})
+		b.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "mono"})
 	}
 
 	var ids []uint64
@@ -192,7 +192,7 @@ func TestHandleAgentEvents_StreamsConnectedAndPublishedEvents(t *testing.T) {
 
 	// Publish a finding event so the read loop sees content beyond
 	// the connected event.
-	b.PublishFindingCreated(AgentEventFindingCreatedPayload{
+	b.PublishFindingCreated("", AgentEventFindingCreatedPayload{
 		FindingID: "f-stream",
 		Severity:  "critical",
 		Title:     "Streamed",

@@ -363,10 +363,13 @@ func writeAgentSSEEvent(w http.ResponseWriter, event AgentEvent) {
 // finding is added; the implementation enriches the event with the
 // canonical timestamp and a reference to the broadcaster, keeping
 // the call site free of broadcaster plumbing.
-func (b *AgentEventBroadcaster) PublishFindingCreated(payload AgentEventFindingCreatedPayload) {
+// The event reaches only orgID's subscribers: a finding belongs to the
+// organization whose Patrol raised it.
+func (b *AgentEventBroadcaster) PublishFindingCreated(orgID string, payload AgentEventFindingCreatedPayload) {
 	b.Publish(AgentEvent{
 		Kind:    AgentEventFindingCreated,
 		Payload: payload,
+		orgID:   normalizeAgentEventOrgID(orgID),
 	})
 }
 

@@ -23,12 +23,15 @@ type guestPingProbeResult struct {
 
 // agentExecProber implements GuestProber using the agent execution server.
 type agentExecProber struct {
-	server *agentexec.Server
+	server         *agentexec.Server
+	organizationID string
 }
 
-// NewAgentExecProber creates a GuestProber that runs ping commands via connected agents.
-func NewAgentExecProber(server *agentexec.Server) GuestProber {
-	return &agentExecProber{server: server}
+// NewAgentExecProber creates a GuestProber that runs ping commands via
+// organizationID's connected agents. It never discovers or dispatches to
+// another organization's agents; empty means the default organization.
+func NewAgentExecProber(server *agentexec.Server, organizationID string) GuestProber {
+	return &agentExecProber{server: server, organizationID: organizationID}
 }
 
 // GetAgentForHost returns the agent ID for a given hostname, if connected.
@@ -36,7 +39,7 @@ func (p *agentExecProber) GetAgentForHost(hostname string) (string, bool) {
 	if p.server == nil {
 		return "", false
 	}
-	return p.server.GetAgentForHost(hostname)
+	return p.server.GetAgentForHostForOrganization(p.organizationID, hostname)
 }
 
 // PingGuests pings a list of IPs from a specific agent and returns results.
@@ -82,7 +85,7 @@ func (p *agentExecProber) PingGuests(ctx context.Context, agentID string, ips []
 				return
 			}
 
-			result, err := p.server.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+			result, err := p.server.ExecuteCommand(agentexec.WithOrganizationID(ctx, p.organizationID), agentID, agentexec.ExecuteCommandPayload{
 				RequestID:  uuid.New().String(),
 				Command:    pingCommandForIP(ip),
 				TargetType: "agent",
