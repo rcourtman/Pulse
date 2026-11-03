@@ -147,31 +147,53 @@ func pbsJobHealthFreshness(fact pbs.JobHealthEvidence, observedAt time.Time) mod
 }
 
 func pbsJobHealthPosture(fact pbs.JobHealthEvidence, freshness models.PBSJobHealthFreshness) (string, string) {
-	status := strings.ToLower(strings.TrimSpace(firstNonEmptyString(fact.TaskStatus, fact.LastRunState)))
 	if fact.Error != "" {
 		return "unknown", strings.TrimSpace(fact.Confidence)
 	}
+	outcome := pbsTaskStatusOutcome(firstNonEmptyString(fact.TaskStatus, fact.LastRunState))
 	// A failed last run outranks a missed next one: an overdue job whose last
 	// run failed is still failed, not merely late.
-	if strings.Contains(status, "fail") || strings.Contains(status, "error") {
+	if outcome == "failed" {
 		return "critical", "last-run-failed"
 	}
 	if freshness.State == "overdue" {
 		return "warning", "job-overdue"
 	}
-	switch {
-	case status == "":
+	switch outcome {
+	case "":
 		return "unknown", "no-run-observed"
-	case strings.Contains(status, "ok") || strings.Contains(status, "success"):
+	case "ok":
 		return "healthy", "last-run-success"
-	case strings.Contains(status, "running"):
+	case "running":
 		return "healthy", "running"
-	case strings.Contains(status, "warn"):
+	case "warning":
 		return "warning", "last-run-warning"
-	case strings.Contains(status, "fail") || strings.Contains(status, "error"):
-		return "critical", "last-run-failed"
 	default:
-		return "unknown", "last-run-state-" + strings.ReplaceAll(status, " ", "-")
+		return "unknown", "last-run-state-unknown"
+	}
+}
+
+// pbsTaskStatusOutcome reads a PBS task or job status the way Proxmox's own UI
+// does (proxmox-widget-toolkit parse_task_status). PBS writes "OK",
+// "WARNINGS: <n>", "unknown", or, for a failure, the error message itself with
+// no prefix, such as "remote 'offsite' does not exist" or "broken pipe".
+// Matching words like "error" missed failures that lack them, and matching
+// "ok" called "broken pipe" a success.
+func pbsTaskStatusOutcome(status string) string {
+	lower := strings.ToLower(strings.TrimSpace(status))
+	switch {
+	case lower == "":
+		return ""
+	case lower == "ok":
+		return "ok"
+	case strings.HasPrefix(lower, "warnings:"):
+		return "warning"
+	case lower == "unknown":
+		return "unknown"
+	case lower == "running":
+		return "running"
+	default:
+		return "failed"
 	}
 }
 

@@ -154,7 +154,12 @@ failure clears on an observed success or warning, or when a complete read
 drops or disables the job. Jobs are keyed by family plus id, since PBS ids are
 unique only within a family. `pbsJobHealthPosture` now ranks a failed last
 run above overdue, so a failed job that has also missed its next run reads
-failed, not late. This keeps the datastore job alert from flapping (#1815).
+failed, not late. `pbsTaskStatusOutcome` reads a PBS status the way
+Proxmox's own UI does (`parse_task_status`): exactly "OK" is success, a
+"WARNINGS:" prefix is a warning, "unknown" is unknown, empty is no observed
+run, and any other text is a failure, because PBS records a failed run as
+the bare error message. Substring matching had called "broken pipe" a
+success and left failures without the words "fail" or "error" unknown. This keeps the datastore job alert from flapping (#1815).
 Mock PBS instances report job results with one failed secondary sync.
 
 ### PBS job run status comes from the admin endpoints (2 November 2026)

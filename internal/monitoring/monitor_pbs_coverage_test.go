@@ -950,3 +950,31 @@ func TestPBSJobHealthPostureRanksAFailedRunAboveOverdue(t *testing.T) {
 		t.Fatalf("freshness/posture = %s %s/%s, want overdue critical/last-run-failed", got.Freshness.State, got.Posture, got.PostureReason)
 	}
 }
+
+// PBS reports a failed run as the bare error message. Every message that is
+// not OK, a WARNINGS count or unknown is a failure, whatever words it holds.
+func TestPBSJobHealthPostureReadsStatusLikeProxmox(t *testing.T) {
+	observedAt := time.Unix(1700010000, 0)
+	cases := []struct {
+		status, posture, reason string
+	}{
+		{"OK", "healthy", "last-run-success"},
+		{"ok", "healthy", "last-run-success"},
+		{"WARNINGS: 2", "warning", "last-run-warning"},
+		{"unknown", "unknown", "last-run-state-unknown"},
+		{"", "unknown", "no-run-observed"},
+		{"remote 'offsite' does not exist", "critical", "last-run-failed"},
+		{"broken pipe", "critical", "last-run-failed"},
+		{"token lookup timed out", "critical", "last-run-failed"},
+		{"connection error", "critical", "last-run-failed"},
+	}
+	for _, tc := range cases {
+		evidence := pbsJobHealthEvidenceFromFacts([]pbs.JobHealthEvidence{{
+			ID: "s-1", Family: "sync", Store: "offsite", Enabled: true,
+			LastRunState: tc.status, LastRunEndtime: 1700009000,
+		}}, observedAt)
+		if got := evidence[0]; got.Posture != tc.posture || got.PostureReason != tc.reason {
+			t.Fatalf("status %q: posture = %s/%s, want %s/%s", tc.status, got.Posture, got.PostureReason, tc.posture, tc.reason)
+		}
+	}
+}
