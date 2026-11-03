@@ -13,7 +13,10 @@ on:
       - 'Dockerfile'
       - '.github/workflows/test-e2e.yml'
       - '.github/scripts/e2e-probation-scope.mjs'
+      - '.github/scripts/e2e-probation-shards.mjs'
+      - '.github/scripts/e2e-probation-seconds.json'
       - 'scripts/tests/test_e2e_probation_scope.mjs'
+      - 'scripts/tests/test_e2e_probation_shards.mjs'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
       - 'scripts/browser_os_packages.py'
@@ -37,7 +40,10 @@ on:
       - 'Dockerfile'
       - '.github/workflows/test-e2e.yml'
       - '.github/scripts/e2e-probation-scope.mjs'
+      - '.github/scripts/e2e-probation-shards.mjs'
+      - '.github/scripts/e2e-probation-seconds.json'
       - 'scripts/tests/test_e2e_probation_scope.mjs'
+      - 'scripts/tests/test_e2e_probation_shards.mjs'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
       - 'scripts/browser_os_packages.py'
@@ -87,7 +93,7 @@ jobs:
           node-version: '24'
 
       - name: Validate changed probation coverage selection
-        run: node --test scripts/tests/test_e2e_probation_scope.mjs
+        run: node --test scripts/tests/test_e2e_probation_scope.mjs scripts/tests/test_e2e_probation_shards.mjs
 
       - name: Read the complete tree diff
         id: diff
@@ -157,6 +163,10 @@ jobs:
       - name: Validate stable/probation project accounting
         working-directory: tests/integration
         run: npm run check:e2e-tiers
+
+      - name: Prove complete probation shard allocation
+        working-directory: tests/integration
+        run: node scripts/check-probation-shards.mjs
 
       - name: Validate stable failure reporting
         working-directory: tests/integration
@@ -508,11 +518,12 @@ jobs:
           PULSE_E2E_PERF: "1"
           PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"
           PULSE_E2E_TIER: "probation"
+          PULSE_E2E_PROBATION_SHARD: ${{ matrix.shard }}/8
           PULSE_E2E_REPORT_DIR: playwright-report-probation
           PULSE_E2E_RESULTS_DIR: test-results-probation
           PULSE_MULTI_TENANT_ENABLED: "true"
         run: >-
-          npm test -- --shard=${{ matrix.shard }}/8 --pass-with-no-tests
+          npm test -- --pass-with-no-tests
           --max-failures=5 --global-timeout=600000
 
       - name: Report probation-tier outcome

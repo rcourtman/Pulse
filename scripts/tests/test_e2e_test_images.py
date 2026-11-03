@@ -282,6 +282,35 @@ class E2EImageBundleTest(unittest.TestCase):
 
 
 class E2EImageWorkflowTest(unittest.TestCase):
+    def assert_partition_admission(self, workflow):
+        selection = job_block(workflow, "tier-selection")
+        command = "run: node scripts/check-probation-shards.mjs"
+        self.assertEqual(selection.count(command), 1)
+        start = selection.rindex("      - name:", 0, selection.index(command))
+        end = selection.find("\n      - name:", selection.index(command))
+        proof = selection[start:end if end >= 0 else None]
+        self.assertIn("working-directory: tests/integration", proof)
+        self.assertLess(selection.index("npm ci"), start)
+        for ignored in ("continue-on-error", "if:", "||"):
+            self.assertNotIn(ignored, proof)
+        # The actual enumeration proof must block the single image producer
+        # and every downstream consumer, rather than run beside fan-out.
+        self.assert_workflow(workflow)
+
+    def test_complete_partition_proof_blocks_image_fanout(self):
+        source = WORKFLOW.read_text()
+        self.assert_partition_admission(source)
+        command = "run: node scripts/check-probation-shards.mjs"
+        for replacement in (
+            "run: echo omitted",
+            command + " || true",
+            "if: false\n        " + command,
+            "continue-on-error: true\n        " + command,
+        ):
+            with self.subTest(mutation=replacement):
+                with self.assertRaises(AssertionError):
+                    self.assert_partition_admission(source.replace(command, replacement))
+
     def test_browser_fixture_budgets_are_explicit_bounded_and_dev_only(self):
         source = IMAGES.COMPOSE.read_text().split("\n  pulse-test:\n", 1)[1]
         source = source.split("\nvolumes:\n", 1)[0]

@@ -4,6 +4,7 @@ import {
   QUARANTINED_SPECS,
 } from './e2e-tiering.mjs';
 import { preferredBrowserBaseURL } from './tests/runtime-defaults';
+import { probationProjectMatches } from '../../.github/scripts/e2e-probation-shards.mjs';
 
 const E2E_TIER = String(process.env.PULSE_E2E_TIER || '')
   .trim()
@@ -25,7 +26,7 @@ const RESULTS_DIR = process.env.PULSE_E2E_RESULTS_DIR || 'test-results';
  * Playwright configuration for Pulse update integration tests
  * See https://playwright.dev/docs/test-configuration
  */
-export default defineConfig({
+const config = defineConfig({
   testDir: './tests',
 
   ...(E2E_TIER === 'probation' ? { testMatch: PROBATION_SPECS } : {}),
@@ -145,3 +146,17 @@ export default defineConfig({
   // We use docker-compose instead, managed via npm scripts
   webServer: undefined,
 });
+
+const probationShard = process.env.PULSE_E2E_PROBATION_SHARD;
+if (probationShard !== undefined) {
+  if (E2E_TIER !== 'probation' || process.argv.some((argument) => /^--shard(?:=|$)/.test(argument))) {
+    throw new Error('Weighted probation allocation requires its tier and cannot be combined with --shard');
+  }
+  const matches = probationProjectMatches(probationShard, config.projects!.map((project) => project.name!));
+  config.projects = config.projects!.map((project) => ({
+    ...project,
+    testMatch: matches.get(project.name!)!,
+  }));
+}
+
+export default config;

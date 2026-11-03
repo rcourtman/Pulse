@@ -4725,6 +4725,8 @@
         ".github/scripts/demo-runtime-transaction.py",
         ".github/scripts/dispatch-demo-runtime.py",
         ".github/scripts/e2e-probation-scope.mjs",
+        ".github/scripts/e2e-probation-seconds.json",
+        ".github/scripts/e2e-probation-shards.mjs",
         ".github/scripts/internal-api-test-seconds.txt",
         ".github/scripts/record-internal-api-test-seconds.py",
         ".github/scripts/recover-demo-runtime.sh",
@@ -4885,6 +4887,7 @@
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
         "tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs",
+        "tests/integration/scripts/check-probation-shards.mjs",
         "tests/integration/scripts/hosted-mobile-token-runtime.mjs",
         "tests/integration/scripts/hosted-tenant-runtime.mjs",
         "tests/integration/scripts/managed-dev-runtime.mjs",
@@ -5585,6 +5588,22 @@
             "exact_files": [
               "tests/integration/scripts/settings-scroll-audit.test.mjs",
               "tests/integration/tests/05-settings-mobile-audit.spec.ts"
+            ]
+          },
+          {
+            "id": "e2e-probation-shards",
+            "label": "complete runtime-balanced probation file/project allocation proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/scripts/e2e-probation-seconds.json",
+              ".github/scripts/e2e-probation-shards.mjs",
+              "tests/integration/playwright.config.ts",
+              "tests/integration/scripts/check-probation-shards.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_e2e_probation_shards.mjs"
             ]
           }
         ],

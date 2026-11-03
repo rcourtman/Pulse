@@ -1,0 +1,232 @@
+{
+  "version": 1,
+  "description": "Maximum observed file/project seconds across the retained runs. Printed durations are rounded and include retries. Skipped-only pairs use zero. New pairs receive the allocator default; durations only affect placement.",
+  "sources": [
+    {
+      "run": 41604034457,
+      "job": 125817485698,
+      "timed_results": 88,
+      "skipped_results": 4
+    },
+    {
+      "run": 41604034457,
+      "job": 125817485610,
+      "timed_results": 76,
+      "skipped_results": 1
+    },
+    {
+      "run": 41604034457,
+      "job": 125817485643,
+      "timed_results": 34,
+      "skipped_results": 25
+    },
+    {
+      "run": 41604034457,
+      "job": 125817486476,
+      "timed_results": 50,
+      "skipped_results": 26
+    },
+    {
+      "run": 41604034457,
+      "job": 125817485618,
+      "timed_results": 11,
+      "skipped_results": 59
+    },
+    {
+      "run": 41604034457,
+      "job": 125817485490,
+      "timed_results": 27,
+      "skipped_results": 43
+    },
+    {
+      "run": 41604034457,
+      "job": 125817485555,
+      "timed_results": 51,
+      "skipped_results": 20
+    },
+    {
+      "run": 41604034457,
+      "job": 125817485508,
+      "timed_results": 22,
+      "skipped_results": 53
+    },
+    {
+      "run": 41636160751,
+      "job": 125920411971,
+      "timed_results": 47,
+      "skipped_results": 3
+    },
+    {
+      "run": 41636160751,
+      "job": 125920412148,
+      "timed_results": 76,
+      "skipped_results": 1
+    },
+    {
+      "run": 41636160751,
+      "job": 125920412375,
+      "timed_results": 34,
+      "skipped_results": 25
+    },
+    {
+      "run": 41636160751,
+      "job": 125920412382,
+      "timed_results": 50,
+      "skipped_results": 26
+    },
+    {
+      "run": 41636160751,
+      "job": 125920412505,
+      "timed_results": 11,
+      "skipped_results": 59
+    },
+    {
+      "run": 41636160751,
+      "job": 125920412195,
+      "timed_results": 27,
+      "skipped_results": 43
+    },
+    {
+      "run": 41636160751,
+      "job": 125920412072,
+      "timed_results": 52,
+      "skipped_results": 20
+    },
+    {
+      "run": 41636160751,
+      "job": 125920412469,
+      "timed_results": 22,
+      "skipped_results": 53
+    }
+  ],
+  "seconds_by_project_file": {
+    "chromium": {
+      "tests/integration/tests/01-core-e2e.spec.ts": 20.9,
+      "tests/integration/tests/02-navigation-perf.spec.ts": 25.8,
+      "tests/integration/tests/05-settings-mobile-audit.spec.ts": 121.768,
+      "tests/integration/tests/06-theme-visual.spec.ts": 7.275,
+      "tests/integration/tests/100-interaction-stability.spec.ts": 450.5,
+      "tests/integration/tests/11-first-session.spec.ts": 24.2,
+      "tests/integration/tests/15-settings-shell-consistency.spec.ts": 13.076,
+      "tests/integration/tests/20-local-doc-links.spec.ts": 13.7,
+      "tests/integration/tests/21-truenas-connections-workspace.spec.ts": 9.3,
+      "tests/integration/tests/28-truenas-alert-resource-links.spec.ts": 5,
+      "tests/integration/tests/39-vmware-resource-detail-drawer.spec.ts": 3.5,
+      "tests/integration/tests/40-vmware-storage-source-filter.spec.ts": 4,
+      "tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts": 3.2,
+      "tests/integration/tests/43-platform-mock-runtime.spec.ts": 12.3,
+      "tests/integration/tests/44-workloads-chart-spacing.spec.ts": 13,
+      "tests/integration/tests/45-workloads-memory-tail.spec.ts": 12.2,
+      "tests/integration/tests/46-storage-summary-continuity.spec.ts": 6.5,
+      "tests/integration/tests/47-inline-selection-scroll-stability.spec.ts": 27.6,
+      "tests/integration/tests/49-demo-scenario-curation.spec.ts": 56.6,
+      "tests/integration/tests/50-storage-physical-disk-io-history.spec.ts": 13.4,
+      "tests/integration/tests/52-ai-settings-provider-setup.spec.ts": 10.8,
+      "tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts": 3.874,
+      "tests/integration/tests/55-self-hosted-upgrade-return.spec.ts": 18.7,
+      "tests/integration/tests/56-pulse-account-upgrade-bootstrap.spec.ts": 0.808,
+      "tests/integration/tests/59-self-hosted-plans-entitlement-summary.spec.ts": 10.5,
+      "tests/integration/tests/59-workloads-column-layout.spec.ts": 19.2,
+      "tests/integration/tests/62-storage-growth-column.spec.ts": 5,
+      "tests/integration/tests/64-workloads-proxmox-refresh-stability.spec.ts": 49.5,
+      "tests/integration/tests/68-infrastructure-onboarding.spec.ts": 35.2,
+      "tests/integration/tests/68-platform-pages-shell.spec.ts": 42.587,
+      "tests/integration/tests/70-self-hosted-manual-activation-success.spec.ts": 3.1,
+      "tests/integration/tests/75-agent-integrations-surface-contract.spec.ts": 4.4,
+      "tests/integration/tests/77-msp-isolation.spec.ts": 10.926,
+      "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts": 14.2,
+      "tests/integration/tests/79-update-flow.spec.ts": 3.182,
+      "tests/integration/tests/81-actions-inbox.spec.ts": 15.91,
+      "tests/integration/tests/90-operational-trust-protection-posture.spec.ts": 5.6,
+      "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts": 6.354,
+      "tests/integration/tests/91-proxmox-node-display-names.spec.ts": 7.1,
+      "tests/integration/tests/92-operational-trust-availability-facet.spec.ts": 4.796
+    },
+    "mobile-chrome": {
+      "tests/integration/tests/01-core-e2e.spec.ts": 20.1,
+      "tests/integration/tests/02-navigation-perf.spec.ts": 0,
+      "tests/integration/tests/04-mobile.spec.ts": 38,
+      "tests/integration/tests/05-settings-mobile-audit.spec.ts": 175.862,
+      "tests/integration/tests/06-theme-visual.spec.ts": 0,
+      "tests/integration/tests/100-interaction-stability.spec.ts": 0,
+      "tests/integration/tests/11-first-session.spec.ts": 2,
+      "tests/integration/tests/15-settings-shell-consistency.spec.ts": 15.484,
+      "tests/integration/tests/20-local-doc-links.spec.ts": 0,
+      "tests/integration/tests/21-truenas-connections-workspace.spec.ts": 0,
+      "tests/integration/tests/28-truenas-alert-resource-links.spec.ts": 3.5,
+      "tests/integration/tests/39-vmware-resource-detail-drawer.spec.ts": 0,
+      "tests/integration/tests/40-vmware-storage-source-filter.spec.ts": 0,
+      "tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts": 2.9,
+      "tests/integration/tests/43-platform-mock-runtime.spec.ts": 0,
+      "tests/integration/tests/44-workloads-chart-spacing.spec.ts": 0,
+      "tests/integration/tests/45-workloads-memory-tail.spec.ts": 0,
+      "tests/integration/tests/46-storage-summary-continuity.spec.ts": 0,
+      "tests/integration/tests/47-inline-selection-scroll-stability.spec.ts": 0,
+      "tests/integration/tests/49-demo-scenario-curation.spec.ts": 0,
+      "tests/integration/tests/50-storage-physical-disk-io-history.spec.ts": 0,
+      "tests/integration/tests/52-ai-settings-provider-setup.spec.ts": 0,
+      "tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts": 3.323,
+      "tests/integration/tests/55-self-hosted-upgrade-return.spec.ts": 0,
+      "tests/integration/tests/56-pulse-account-upgrade-bootstrap.spec.ts": 0,
+      "tests/integration/tests/59-self-hosted-plans-entitlement-summary.spec.ts": 0,
+      "tests/integration/tests/59-workloads-column-layout.spec.ts": 0,
+      "tests/integration/tests/62-storage-growth-column.spec.ts": 0,
+      "tests/integration/tests/64-workloads-proxmox-refresh-stability.spec.ts": 24.3,
+      "tests/integration/tests/68-infrastructure-onboarding.spec.ts": 19.6,
+      "tests/integration/tests/68-platform-pages-shell.spec.ts": 0,
+      "tests/integration/tests/70-self-hosted-manual-activation-success.spec.ts": 0,
+      "tests/integration/tests/75-agent-integrations-surface-contract.spec.ts": 4.3,
+      "tests/integration/tests/77-msp-isolation.spec.ts": 0,
+      "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts": 0,
+      "tests/integration/tests/79-update-flow.spec.ts": 3.394,
+      "tests/integration/tests/81-actions-inbox.spec.ts": 15.505,
+      "tests/integration/tests/90-operational-trust-protection-posture.spec.ts": 5.1,
+      "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts": 9.4,
+      "tests/integration/tests/91-proxmox-node-display-names.spec.ts": 7.4,
+      "tests/integration/tests/92-operational-trust-availability-facet.spec.ts": 0
+    },
+    "mobile-safari": {
+      "tests/integration/tests/01-core-e2e.spec.ts": 38,
+      "tests/integration/tests/02-navigation-perf.spec.ts": 0,
+      "tests/integration/tests/04-mobile.spec.ts": 71.6,
+      "tests/integration/tests/05-settings-mobile-audit.spec.ts": 205.2,
+      "tests/integration/tests/06-theme-visual.spec.ts": 0,
+      "tests/integration/tests/100-interaction-stability.spec.ts": 0,
+      "tests/integration/tests/11-first-session.spec.ts": 2.9,
+      "tests/integration/tests/15-settings-shell-consistency.spec.ts": 44.4,
+      "tests/integration/tests/20-local-doc-links.spec.ts": 0,
+      "tests/integration/tests/21-truenas-connections-workspace.spec.ts": 0,
+      "tests/integration/tests/28-truenas-alert-resource-links.spec.ts": 29.2,
+      "tests/integration/tests/39-vmware-resource-detail-drawer.spec.ts": 0,
+      "tests/integration/tests/40-vmware-storage-source-filter.spec.ts": 0,
+      "tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts": 5.7,
+      "tests/integration/tests/43-platform-mock-runtime.spec.ts": 0,
+      "tests/integration/tests/44-workloads-chart-spacing.spec.ts": 0,
+      "tests/integration/tests/45-workloads-memory-tail.spec.ts": 0,
+      "tests/integration/tests/46-storage-summary-continuity.spec.ts": 0,
+      "tests/integration/tests/47-inline-selection-scroll-stability.spec.ts": 0,
+      "tests/integration/tests/49-demo-scenario-curation.spec.ts": 0,
+      "tests/integration/tests/50-storage-physical-disk-io-history.spec.ts": 0,
+      "tests/integration/tests/52-ai-settings-provider-setup.spec.ts": 0,
+      "tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts": 6.9,
+      "tests/integration/tests/55-self-hosted-upgrade-return.spec.ts": 0,
+      "tests/integration/tests/56-pulse-account-upgrade-bootstrap.spec.ts": 0,
+      "tests/integration/tests/59-self-hosted-plans-entitlement-summary.spec.ts": 0,
+      "tests/integration/tests/59-workloads-column-layout.spec.ts": 0,
+      "tests/integration/tests/62-storage-growth-column.spec.ts": 0,
+      "tests/integration/tests/64-workloads-proxmox-refresh-stability.spec.ts": 31.7,
+      "tests/integration/tests/68-infrastructure-onboarding.spec.ts": 48,
+      "tests/integration/tests/68-platform-pages-shell.spec.ts": 0,
+      "tests/integration/tests/70-self-hosted-manual-activation-success.spec.ts": 0,
+      "tests/integration/tests/75-agent-integrations-surface-contract.spec.ts": 7.9,
+      "tests/integration/tests/77-msp-isolation.spec.ts": 0,
+      "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts": 0,
+      "tests/integration/tests/79-update-flow.spec.ts": 5.846,
+      "tests/integration/tests/81-actions-inbox.spec.ts": 27.2,
+      "tests/integration/tests/90-operational-trust-protection-posture.spec.ts": 7.8,
+      "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts": 23.2,
+      "tests/integration/tests/91-proxmox-node-display-names.spec.ts": 15,
+      "tests/integration/tests/92-operational-trust-availability-facet.spec.ts": 0
+    }
+  }
+}

@@ -30,7 +30,7 @@ test('stable-only specs, product changes and unrelated matching filenames keep t
 });
 
 test('tier, workflow and shared fixture changes require probation coverage', () => {
-  for (const file of ['tests/integration/e2e-tiering.mjs', 'tests/integration/playwright.config.ts', '.github/workflows/test-e2e.yml', 'tests/integration/tests/helpers.ts']) {
+  for (const file of ['tests/integration/e2e-tiering.mjs', 'tests/integration/playwright.config.ts', '.github/workflows/test-e2e.yml', 'tests/integration/tests/helpers.ts', '.github/scripts/e2e-probation-shards.mjs', '.github/scripts/e2e-probation-seconds.json', 'scripts/tests/test_e2e_probation_shards.mjs', 'tests/integration/scripts/check-probation-shards.mjs']) {
     assert.equal(requiresProbationRun([file], probation), true);
   }
 });
