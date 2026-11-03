@@ -2363,18 +2363,18 @@ test("queued label sync cannot overwrite newer Community label decisions", async
     assert.equal(live.has("needs-retest-on-latest"), communityAdded);
     assert.ok(live.has("operator-reviewed"));
     assert.ok(live.has("affects-6.0.1"));
-    assert.ok(!live.has("affects-6.0.0"));
+    assert.ok(live.has("affects-6.0.0"));
     assert.ok(!live.has("needs-version-info"));
   }
 });
 
-test("version-label removal tolerates an absent label but propagates access failures", async () => {
+test("missing-version retirement tolerates an absent label but propagates access failures", async () => {
   for (const status of [404, 403]) {
     const { github } = createGithub();
     github.rest.issues.removeLabel = async () => { throw Object.assign(new Error("API failure"), { status }); };
     const run = syncLabels({ github, core: createCore(), context: createContext({ issue: {
       number: 1200, title: "Bug", body: "## Pulse version\n6.0.1\n",
-      labels: [{ name: "bug" }, { name: "affects-6.0.0" }],
+      labels: [{ name: "bug" }, { name: "affects-6.0.0" }, { name: "needs-version-info" }],
     } }) });
     if (status === 404) await assert.doesNotReject(run);
     else await assert.rejects(run, { status: 403 });
@@ -2382,7 +2382,8 @@ test("version-label removal tolerates an absent label but propagates access fail
 });
 
 // Different software versions can coexist in the same upgrade report. Only
-// the affected server field may determine the affects-* label.
+// the affected server field may add an affects-* label; existing labels can
+// reflect separate observations and need whole-thread review before removal.
 test("stable-to-preview intake keeps baseline, agent and platform versions out of labels", async () => {
   for (const [running, expected] of [
     ["6.5.0-rc.1", "affects-6.5.0-rc.1"],
@@ -2794,7 +2795,7 @@ test("a delayed known-version event leaves already unknown metadata and affected
   await syncLabels({ github, context: createContext({ action: "edited", issue: eventIssue }), core: createCore() });
   assert.equal(calls.addLabels.length, 0);
   assert.deepEqual(calls.removeLabel.map(call => call.name), []);
-  assert.equal(calls.getIssue.length, 2 + calls.removeLabel.length, "an already classified unknown version has no metadata delta");
+  assert.equal(calls.getIssue.length, 1, "an already classified unknown version has no metadata delta");
   assert.equal(calls.createComment.length, 0);
 });
 
@@ -2807,7 +2808,7 @@ test("an already unknown version needs no write even when affected versions exis
     return { data: {} };
   };
   await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
-  assert.equal(calls.getIssue.length, 2 + calls.removeLabel.length);
+  assert.equal(calls.getIssue.length, 1);
   assert.equal(calls.addLabels.length, 0);
   assert.equal(calls.removeLabel.length, 0);
 });
@@ -3073,7 +3074,7 @@ test("the silent consumer respects linked legacy versions while preserving Commu
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.getEvents, []);
     assert.deepEqual(calls.paginate, []);
-    assert.equal(calls.getIssue.length, 2 + calls.removeLabel.length);
+    assert.equal(calls.getIssue.length, (additions.length ? 2 : 1) + calls.removeLabel.length);
   }
 });
 
@@ -3157,7 +3158,7 @@ test("the label consumer accepts a linked version without fetching links or cont
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.equal(calls.getIssue.length, 2 + calls.removeLabel.length);
+    assert.equal(calls.getIssue.length, (expected ? 2 : 1) + calls.removeLabel.length);
   }
 });
 
@@ -4299,18 +4300,15 @@ test("post-write reads follow the provider's label identities, not requested spe
   assert.ok(fixture.read().labels.some(label => label.name === "AFFECTS-6.7.0"));
 });
 
-for (const after of ["add"]) {
-  test(`a failed read after a completed ${after} stops without replay or rollback`, async () => {
-    const fail = (_current, github) => {
-      github.rest.issues.get = async () => { throw Object.assign(new Error("read denied"), { status: 403 }); };
-    };
-    const fixture = midWriteFixture({ afterAdd: fail });
-    await assert.rejects(fixture.run(), error => error.status === 403);
-    assert.deepEqual(fixture.calls.added, ["affects-6.7.0"]);
-    assert.deepEqual(fixture.calls.removed, []);
-    assert.equal(fixture.calls.comments, 0);
-  });
-}
+test("a failed read after a completed addition stops before retirement without replay or rollback", async () => {
+  const fixture = midWriteFixture({ afterAdd: (_current, github) => {
+    github.rest.issues.get = async () => { throw Object.assign(new Error("read denied"), { status: 403 }); };
+  } });
+  await assert.rejects(fixture.run(), error => error.status === 403);
+  assert.deepEqual(fixture.calls.added, ["affects-6.7.0"]);
+  assert.deepEqual(fixture.calls.removed, []);
+  assert.equal(fixture.calls.comments, 0);
+});
 
 for (const [name, marker, sibling] of [
   ["unordered", "-", "-"],
@@ -4387,7 +4385,7 @@ for (const action of ["opened", "edited", "reopened"]) {
       assert.deepEqual(calls.removeLabel.map(call => call.name), []);
       assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
         withAffectedVersions(issue, [...preserved, desired].sort()));
-      assert.equal(calls.getIssue.length, 3, "keep the pre-write and per-removal live reads");
+      assert.equal(calls.getIssue.length, 2, "keep the pre-write live read for the single addition");
       assert.deepEqual(calls.createComment, []);
       assert.deepEqual(calls.getLatestRelease, []);
       assert.deepEqual(calls.getEvents, []);
