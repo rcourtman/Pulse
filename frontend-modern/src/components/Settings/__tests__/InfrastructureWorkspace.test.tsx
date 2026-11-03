@@ -2,6 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
+import { TrueNASAPI } from '@/api/truenas';
+import { VMwareAPI } from '@/api/vmware';
+import { useTrueNASSettingsPanelState } from '../useTrueNASSettingsPanelState';
+import { useVMwareSettingsPanelState } from '../useVMwareSettingsPanelState';
 import { eventBus } from '@/stores/events';
 import {
   agentAttachmentProblem,
@@ -41,6 +45,11 @@ const ledgerReadState = vi.hoisted(() => ({
   reload: vi.fn(),
 }));
 const nodeCredentialSlotState = vi.hoisted(() => ({ mountCount: 0 }));
+const savedCredentialSlotMounts = vi.hoisted(() => ({
+  truenas: 0,
+  vmware: 0,
+  useRealSlots: false,
+}));
 const emptyFleetRow = vi.hoisted(
   () =>
     ({
@@ -206,13 +215,42 @@ vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
   },
 }));
 
-vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', () => ({
-  TrueNASCredentialSlot: () => <div data-testid="truenas-section">truenas</div>,
-}));
+vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot')
+    >();
+  return {
+    TrueNASCredentialSlot: (props: Parameters<typeof actual.TrueNASCredentialSlot>[0]) => {
+      savedCredentialSlotMounts.truenas += 1;
+      if (savedCredentialSlotMounts.useRealSlots)
+        return <actual.TrueNASCredentialSlot {...props} />;
+      return (
+        <div data-testid="truenas-section" data-editing-id={props.editingConnection?.id}>
+          <input aria-label="Synthetic credential draft" />
+        </div>
+      );
+    },
+  };
+});
 
-vi.mock('../ConnectionEditor/CredentialSlots/VMwareCredentialSlot', () => ({
-  VMwareCredentialSlot: () => <div data-testid="vmware-section">vmware</div>,
-}));
+vi.mock('../ConnectionEditor/CredentialSlots/VMwareCredentialSlot', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('../ConnectionEditor/CredentialSlots/VMwareCredentialSlot')
+    >();
+  return {
+    VMwareCredentialSlot: (props: Parameters<typeof actual.VMwareCredentialSlot>[0]) => {
+      savedCredentialSlotMounts.vmware += 1;
+      if (savedCredentialSlotMounts.useRealSlots) return <actual.VMwareCredentialSlot {...props} />;
+      return (
+        <div data-testid="vmware-section" data-editing-id={props.editingConnection?.id}>
+          <input aria-label="Synthetic credential draft" />
+        </div>
+      );
+    },
+  };
+});
 
 vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
@@ -325,6 +363,9 @@ describe('InfrastructureWorkspace', () => {
       () => {},
     );
     nodeCredentialSlotState.mountCount = 0;
+    savedCredentialSlotMounts.useRealSlots = false;
+    savedCredentialSlotMounts.truenas = 0;
+    savedCredentialSlotMounts.vmware = 0;
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       writable: true,
@@ -334,6 +375,7 @@ describe('InfrastructureWorkspace', () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     restoreResizeObserver();
   });
 
@@ -1236,6 +1278,228 @@ describe('InfrastructureWorkspace', () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  it.each([
+    ['truenas', 401],
+    ['truenas', 403],
+    ['truenas', 404],
+    ['truenas', 503],
+    ['truenas', 200],
+    ['vmware', 401],
+    ['vmware', 403],
+    ['vmware', 404],
+    ['vmware', 503],
+    ['vmware', 200],
+  ] as const)(
+    'keeps the real %s consumer open after read status %s withdraws its draft and recovers afresh',
+    async (type, status) => {
+      savedCredentialSlotMounts.useRealSlots = true;
+      const api = type === 'truenas' ? TrueNASAPI : VMwareAPI;
+      const saved = {
+        id: 'source-1',
+        name: 'Saved source',
+        host: 'source.example.invalid',
+        username: 'monitor',
+        apiKey: '********',
+        password: '********',
+        useHttps: true,
+        insecureSkipVerify: false,
+        fingerprint: 'SHA256:synthetic-pin',
+        enabled: true,
+        monitorVms: true,
+        monitorHosts: true,
+        monitorDatastores: true,
+        monitorDatasets: true,
+        monitorPools: true,
+        monitorReplication: true,
+      };
+      const list = vi.spyOn(api, 'listConnections').mockImplementation(async () => [{ ...saved }]);
+      const update = vi.spyOn(api, 'updateConnection');
+      const remove = vi.spyOn(api, 'deleteConnection');
+      const create = vi.spyOn(api, 'createConnection');
+      connectionState.connections = [
+        connectionFixture({ id: `${type}:source-1`, type, name: 'Saved source' }),
+      ];
+      let state!:
+        | ReturnType<typeof useTrueNASSettingsPanelState>
+        | ReturnType<typeof useVMwareSettingsPanelState>;
+      render(() => {
+        state = type === 'truenas' ? useTrueNASSettingsPanelState() : useVMwareSettingsPanelState();
+        return (
+          <InfrastructureWorkspace
+            {...baseProps()}
+            {...{ [type === 'truenas' ? 'trueNASSettings' : 'vmwareSettings']: state }}
+          />
+        );
+      });
+      await waitFor(() => expect(state.connections()).toHaveLength(1));
+      fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+      const dialog = screen.getByRole('dialog');
+      const name = within(dialog).getByRole('textbox', { name: 'Name' });
+      const storedSecretPlaceholder =
+        type === 'truenas'
+          ? 'Saved API key retained unless replaced'
+          : 'Saved password retained unless replaced';
+      const secret = within(dialog).getByPlaceholderText(storedSecretPlaceholder);
+      fireEvent.input(name, { target: { value: 'Unconfirmed name' } });
+      fireEvent.input(secret, { target: { value: 'synthetic-unsaved-secret' } });
+      await state.loadConnections();
+      expect(within(dialog).getByRole('textbox', { name: 'Name' })).toBe(name);
+      expect(name).toHaveValue('Unconfirmed name');
+      expect(secret).toHaveValue('synthetic-unsaved-secret');
+      if (status === 200) list.mockResolvedValueOnce([]);
+      else list.mockRejectedValueOnce({ status, message: 'synthetic private failure' });
+      await state.loadConnections();
+      await waitFor(() => expect(within(dialog).queryByRole('textbox')).toBeNull());
+      expect(screen.getByRole('dialog')).toBe(dialog);
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('is unavailable');
+      expect(dialog).not.toHaveTextContent('synthetic private failure');
+      expect(state.form()).toMatchObject({ name: '', password: '' });
+      expect(state.dialogOpen()).toBe(false);
+      expect(within(dialog).queryByRole('button', { name: 'Save changes' })).toBeNull();
+      expect(within(dialog).queryByRole('button', { name: 'Test connection' })).toBeNull();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Retry saved configuration' }));
+      await waitFor(() =>
+        expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveValue('Saved source'),
+      );
+      const recoveredSecret = within(dialog).getByPlaceholderText(storedSecretPlaceholder);
+      expect(recoveredSecret).toHaveValue('');
+      expect(recoveredSecret).toHaveAttribute(
+        'placeholder',
+        type === 'truenas'
+          ? 'Saved API key retained unless replaced'
+          : 'Saved password retained unless replaced',
+      );
+      expect(screen.getByRole('dialog')).toBe(dialog);
+      expect(state.form()).toMatchObject({
+        host: saved.host,
+        username: saved.username,
+        insecureSkipVerify: false,
+        ...(type === 'truenas'
+          ? {
+              useHttps: true,
+              fingerprint: saved.fingerprint,
+              monitorPools: true,
+              monitorDatasets: true,
+              monitorReplication: true,
+            }
+          : { monitorVms: true, monitorHosts: true, monitorDatastores: true }),
+      });
+      expect(update).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+
+  describe.each([
+    ['truenas', 'TrueNAS', 'trueNASSettings'],
+    ['vmware', 'VMware', 'vmwareSettings'],
+  ] as const)('%s saved configuration', (type, platform, propName) => {
+    it.each([401, 403, 503, 404, 200])(
+      'keeps a %s unavailable read distinct from removal and explicitly recovers the same source',
+      async (status) => {
+        connectionState.connections = [
+          connectionFixture({ id: `${type}:source-1`, type, name: 'Saved source' }),
+        ];
+        const [connections, setConnections] = createSignal<any[]>([]);
+        const [loading, setLoading] = createSignal(false);
+        const loadConnections = vi.fn(() => setLoading(true));
+        renderWorkspace({
+          [propName]: {
+            closeDialog: vi.fn(),
+            connections,
+            loading,
+            loadingError: () => (status === 200 ? null : `HTTP ${status}: private detail`),
+            featureDisabled: () => status === 404,
+            loadConnections,
+          },
+        });
+        fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+        const dialog = screen.getByRole('dialog');
+        expect(within(dialog).getByRole('alert')).toHaveTextContent(
+          `Saved ${platform} configuration for Saved source is unavailable`,
+        );
+        expect(dialog).toHaveTextContent('does not confirm removal');
+        expect(dialog).not.toHaveTextContent('already been removed');
+        expect(dialog).not.toHaveTextContent('private detail');
+        expect(within(dialog).queryByTestId(`${type}-section`)).toBeNull();
+        expect(loadConnections).not.toHaveBeenCalled();
+        const retry = within(dialog).getByRole('button', { name: 'Retry saved configuration' });
+        fireEvent.click(retry);
+        expect(retry).toBeDisabled();
+        expect(within(dialog).getByRole('status')).toHaveTextContent(
+          `Reading saved ${platform} configuration for Saved source`,
+        );
+        expect(loadConnections).toHaveBeenCalledTimes(1);
+        // A completed empty read, or a namesake with another ID, still cannot
+        // establish that this selected connection was removed.
+        setLoading(false);
+        setConnections([{ id: 'another-source', name: 'Saved source' }]);
+        expect(within(dialog).queryByTestId(`${type}-section`)).toBeNull();
+        expect(within(dialog).getByRole('alert')).toBeInTheDocument();
+        fireEvent.click(retry);
+        setConnections([{ id: 'source-1', name: 'Saved source' }]);
+        setLoading(false);
+        await waitFor(() =>
+          expect(within(dialog).getByTestId(`${type}-section`)).toHaveAttribute(
+            'data-editing-id',
+            'source-1',
+          ),
+        );
+        expect(screen.getByRole('dialog')).toBe(dialog);
+        expect(loadConnections).toHaveBeenCalledTimes(2);
+        expect(ledgerReadState.reload).not.toHaveBeenCalled();
+      },
+    );
+
+    it('reacts to withdrawn inventory without remounting an unchanged credential draft on polls', async () => {
+      connectionState.connections = [
+        connectionFixture({ id: `${type}:source-1`, type, name: 'Saved source' }),
+      ];
+      const [connections, setConnections] = createSignal<any[]>([{ id: 'source-1' }]);
+      const [loading, setLoading] = createSignal(false);
+      renderWorkspace({
+        [propName]: { closeDialog: vi.fn(), connections, loading, loadConnections: vi.fn() },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+      const dialog = screen.getByRole('dialog');
+      const draft = within(dialog).getByRole('textbox', { name: 'Synthetic credential draft' });
+      fireEvent.input(draft, { target: { value: 'synthetic-unsaved-secret' } });
+      setLoading(true);
+      setConnections([{ id: 'source-1' }]);
+      setLoading(false);
+      expect(within(dialog).getByRole('textbox')).toBe(draft);
+      expect(draft).toHaveValue('synthetic-unsaved-secret');
+      expect(savedCredentialSlotMounts[type]).toBe(1);
+      setConnections([]);
+      expect(within(dialog).queryByRole('textbox')).toBeNull();
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('is unavailable');
+      expect(screen.getByRole('dialog')).toBe(dialog);
+    });
+
+    it('reports an initial pending read and recovers without closing Manage', async () => {
+      connectionState.connections = [
+        connectionFixture({ id: `${type}:source-1`, type, name: 'Saved source' }),
+      ];
+      const [connections, setConnections] = createSignal<any[]>([]);
+      const [loading, setLoading] = createSignal(true);
+      renderWorkspace({
+        [propName]: { closeDialog: vi.fn(), connections, loading, loadConnections: vi.fn() },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByRole('status')).toHaveTextContent(`Reading saved ${platform}`);
+      expect(
+        within(dialog).getByRole('button', { name: 'Retry saved configuration' }),
+      ).toBeDisabled();
+      setConnections([{ id: 'source-1' }]);
+      setLoading(false);
+      await waitFor(() =>
+        expect(within(dialog).getByTestId(`${type}-section`)).toBeInTheDocument(),
+      );
+      expect(screen.getByRole('dialog')).toBe(dialog);
+    });
   });
 
   it('opens the manage dialog directly from an existing source card', async () => {

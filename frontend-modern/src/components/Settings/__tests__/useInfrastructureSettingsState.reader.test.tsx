@@ -85,12 +85,21 @@ describe('Infrastructure settings VMware reader wiring', () => {
     const old = state.connections()[0];
     state.openEditDialog(old);
     state.updateForm({ password: 'synthetic-draft' });
-    const first = vi.mocked(VMwareAPI.listConnections).mock.calls[0][0]!;
+    let release!: (value: VMwareConnection[]) => void;
+    vi.mocked(VMwareAPI.listConnections).mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    const reading = state.loadConnections();
+    const pending = vi.mocked(VMwareAPI.listConnections).mock.calls[1][0]!;
     setUser('reader-b');
-    await waitFor(() => expect(VMwareAPI.listConnections).toHaveBeenCalledTimes(2));
-    expect(first.signal?.aborted).toBe(true);
+    await waitFor(() => expect(VMwareAPI.listConnections).toHaveBeenCalledTimes(3));
+    expect(pending.signal?.aborted).toBe(true);
     expect(state.dialogOpen()).toBe(false);
     expect(state.form().password).toBe('');
+    release([old]);
+    await reading;
     await waitFor(() => expect(state.loading()).toBe(false));
     state.openEditDialog(old);
     expect(state.dialogOpen()).toBe(false);

@@ -328,6 +328,16 @@ export function useTrueNASSettingsPanelState({
       if (!isCurrent()) return;
       batch(() => {
         setConnections(nextConnections);
+        if (
+          editingConnectionId() &&
+          !nextConnections.some((connection) => connection.id === editingConnectionId())
+        )
+          resetDialogState();
+        if (
+          pendingDeleteConnection() &&
+          !nextConnections.some((connection) => connection.id === pendingDeleteConnection()?.id)
+        )
+          resetDeleteDialogState();
         setAccessRejected(false);
         setFeatureDisabled(false);
         setFeatureDisabledMessage('');
@@ -335,7 +345,11 @@ export function useTrueNASSettingsPanelState({
     } catch (error) {
       if (!isCurrent()) return;
       if (withdrawOnDenial(error)) return;
-      setConnections([]);
+      batch(() => {
+        setConnections([]);
+        resetDialogState();
+        resetDeleteDialogState();
+      });
       if (apiErrorStatus(error) === 404) {
         setFeatureDisabled(true);
         setFeatureDisabledMessage(
