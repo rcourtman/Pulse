@@ -10,9 +10,11 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import proof_coverage
 from canonical_completion_guard import (
     REPO_ROOT,
     build_verification_requirements,
+    candidate_proof_files,
     infer_impacted_subsystems,
     is_ignored_runtime_file,
     is_test_or_fixture,
@@ -284,6 +286,7 @@ def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
     contract_updates = required_contract_updates(normalized, impacted, contract_index=contract_index)
     path_entries: list[dict[str, Any]] = []
     unowned: list[str] = []
+    read_working_tree = proof_coverage.working_tree_reader(REPO_ROOT)
 
     for path in normalized:
         classification = "runtime"
@@ -304,13 +307,25 @@ def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
                 if not subsystem_matches_path(rule, path):
                     continue
                 requirement = verification_requirement_for_path(rule, path)
+                # The guard accepts an existing proof that already exercises
+                # the file; report it so nobody edits a proof just to pass.
+                covering = (
+                    []
+                    if requirement.get("path_policy_gap")
+                    else proof_coverage.covering_proof_files(
+                        path,
+                        candidate_proof_files(requirement, revision=None),
+                        read_working_tree,
+                    )
+                )
                 matches.append(
                     {
                         "subsystem": rule["id"],
                         "contract": rule["contract"],
                         "lane_context": lane_context_for_rule(rule, status_report),
                         "contract_update_required": True,
-                        "proof_update_required": True,
+                        "proof_update_required": not covering,
+                        "covering_proof_files": covering,
                         "ownership_basis": ownership_basis_for_path(rule, path),
                         "matched_contract_references": reference_matches_by_subsystem.get(
                             str(rule["id"]),
@@ -349,7 +364,8 @@ def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
                     if path in contract["touched_runtime_files"]
                 ],
                 "contract_update_required": classification == "runtime" and bool(matches),
-                "proof_update_required": classification == "runtime" and bool(matches),
+                "proof_update_required": classification == "runtime"
+                and any(match["proof_update_required"] for match in matches),
             }
         )
 
@@ -437,6 +453,12 @@ def render_pretty(result: dict[str, Any]) -> str:
                 f"  - {match['subsystem']} -> {match['contract']} "
                 f"[{requirement['id']}: {requirement['label']}]"
             )
+            if match.get("covering_proof_files"):
+                covering = match["covering_proof_files"]
+                more = f" (+{len(covering) - 3} more)" if len(covering) > 3 else ""
+                lines.append("    already proved by: " + ", ".join(covering[:3]) + more)
+            elif match.get("proof_update_required"):
+                lines.append("    proof: no acceptable proof exercises this file yet; stage one")
             if lane_context and lane_context.get("lane"):
                 lane = lane_context["lane"]
                 gap = lane.get("gap")

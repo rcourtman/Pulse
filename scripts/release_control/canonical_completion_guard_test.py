@@ -3,6 +3,7 @@ import canonical_completion_guard
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr
@@ -31,6 +32,7 @@ from canonical_completion_guard import (
     stdin_files,
     subsystem_matches_path,
 )
+from proof_coverage import GitTextReader, proof_covers_runtime_file
 from repo_file_io import canonical_workspace_repos_root, strip_local_git_env
 
 WORKSPACE_REPOS_ROOT = canonical_workspace_repos_root(REPO_ROOT)
@@ -3136,9 +3138,28 @@ None yet.
                         patch("canonical_completion_guard.load_subsystem_rules", return_value=rules),
                         # Isolate verification routing from contract-edit checks.
                         patch("canonical_completion_guard.required_contract_updates", return_value={}),
+                        # Route by staged proofs alone: the real proofs already
+                        # import their runtime files, which would satisfy both
+                        # policies unchanged (see ExistingProofCoverageTest).
+                        patch("proof_coverage.covering_proof_files", return_value=[]),
                         redirect_stderr(io.StringIO()),
                     ):
                         self.assertEqual(check_staged_contracts(paths), expected)
+
+    def test_recovery_and_transfer_edits_pass_on_existing_covering_proofs(self):
+        rules = load_subsystem_rules()
+        paths = [
+            "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+            "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+            "frontend-modern/src/components/Settings/useBackupTransferFlow.ts",
+        ]
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}, clear=False),
+            patch("canonical_completion_guard.load_subsystem_rules", return_value=rules),
+            patch("canonical_completion_guard.required_contract_updates", return_value={}),
+            redirect_stderr(io.StringIO()) as stderr,
+        ):
+            self.assertEqual(check_staged_contracts(paths), 0, stderr.getvalue())
 
     def test_frontend_primitive_remaining_settings_shells_use_specific_guardrails(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
@@ -4573,6 +4594,379 @@ with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
                     f"\tsecond.txt\t--files-from-stdin --diff-base {second}^ --commit {second}",
                 ],
             )
+
+
+class ProofCoverageRelationTest(unittest.TestCase):
+    """A registered proof covers a runtime file when it exercises it, not when
+    it reads the file's source as text."""
+
+    @staticmethod
+    def covers(proof: str, proof_text: str, runtime: str, runtime_text: str = "x\n") -> bool:
+        files = {proof: proof_text, runtime: runtime_text}
+        return proof_covers_runtime_file(proof, runtime, files.get)
+
+    def test_go_proof_in_the_package_directory_covers(self) -> None:
+        self.assertTrue(self.covers("internal/a/b_test.go", "package a_test\n", "internal/a/c.go"))
+
+    def test_go_proof_importing_the_package_covers(self) -> None:
+        proof = 'package api\n\nimport (\n\t"github.com/rcourtman/pulse-go-rewrite/internal/a"\n)\n'
+        self.assertTrue(self.covers("internal/api/x_test.go", proof, "internal/a/c.go"))
+
+    def test_go_proof_elsewhere_without_the_import_does_not_cover(self) -> None:
+        proof = 'package api\n\nimport "github.com/rcourtman/pulse-go-rewrite/internal/ab"\n'
+        self.assertFalse(self.covers("internal/api/x_test.go", proof, "internal/a/c.go"))
+
+    def test_go_non_test_file_does_not_cover(self) -> None:
+        self.assertFalse(self.covers("internal/a/b.go", "package a\n", "internal/a/c.go"))
+
+    def test_ts_relative_and_alias_imports_cover(self) -> None:
+        runtime = "frontend-modern/src/components/Foo/Widget.tsx"
+        relative = "frontend-modern/src/components/Foo/__tests__/Widget.test.tsx"
+        self.assertTrue(self.covers(relative, "import { Widget } from '../Widget';\n", runtime))
+        alias = "frontend-modern/src/pages/__tests__/Page.test.tsx"
+        self.assertTrue(
+            self.covers(alias, "import {\n  Widget,\n  other,\n} from '@/components/Foo/Widget';\n", runtime)
+        )
+        self.assertTrue(
+            self.covers(alias, "const mod = await import('@/components/Foo/Widget');\n", runtime)
+        )
+
+    def test_ts_directory_import_resolves_to_index(self) -> None:
+        runtime = "frontend-modern/src/features/foo/index.ts"
+        proof = "frontend-modern/src/features/__tests__/foo.test.ts"
+        self.assertTrue(self.covers(proof, "import { foo } from '../foo';\n", runtime))
+
+    def test_ts_type_only_import_does_not_cover(self) -> None:
+        runtime = "frontend-modern/src/types/widget.ts"
+        proof = "frontend-modern/src/components/__tests__/Widget.test.tsx"
+        self.assertFalse(
+            self.covers(proof, "import type { Widget } from '@/types/widget';\n", runtime)
+        )
+
+    def test_ts_source_text_pin_does_not_cover(self) -> None:
+        runtime = "frontend-modern/src/components/Foo/Widget.tsx"
+        proof = "frontend-modern/src/components/Foo/__tests__/Widget.guardrails.test.ts"
+        pin = (
+            "import { readFileSync } from 'node:fs';\n"
+            "const source = readFileSync('src/components/Foo/Widget.tsx', 'utf8');\n"
+            "expect(source).toContain('Widget');\n"
+        )
+        self.assertFalse(self.covers(proof, pin, runtime))
+        raw = "import widgetSource from '@/components/Foo/Widget.tsx?raw';\n"
+        self.assertFalse(self.covers(proof, raw, runtime))
+
+    def test_ts_mocked_module_does_not_cover(self) -> None:
+        runtime = "frontend-modern/src/api/charts.ts"
+        proof = "frontend-modern/src/components/__tests__/Chart.test.tsx"
+        text = "vi.mock('@/api/charts', () => ({ ChartsAPI: {} }));\nimport { ChartsAPI } from '@/api/charts';\n"
+        self.assertFalse(self.covers(proof, text, runtime))
+
+    def test_ts_mock_with_import_argument_does_not_cover(self) -> None:
+        runtime = "frontend-modern/src/api/charts.ts"
+        proof = "frontend-modern/src/components/__tests__/Chart.test.tsx"
+        self.assertFalse(self.covers(proof, "vi.mock(import('@/api/charts'), () => ({}));\n", runtime))
+
+    def test_ts_comments_and_type_queries_do_not_cover(self) -> None:
+        runtime = "frontend-modern/src/components/Foo/Widget.tsx"
+        proof = "frontend-modern/src/components/Foo/__tests__/Widget.test.tsx"
+        for text in (
+            "// const mod = await import('../Widget');\n",
+            "/*\nimport { Widget } from '../Widget';\n*/\n",
+            "type WidgetModule = typeof import('../Widget');\n",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(self.covers(proof, text, runtime))
+
+    def test_ts_imports_in_trailing_comments_strings_or_member_calls_do_not_cover(self) -> None:
+        runtime = "frontend-modern/src/components/Foo/Widget.tsx"
+        proof = "frontend-modern/src/components/Foo/__tests__/Widget.test.tsx"
+        for text in (
+            "const n = 1; // await import('../Widget');\n",
+            "const s = \"import('../Widget')\";\n",
+            "loader.require('../Widget');\n",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(self.covers(proof, text, runtime))
+
+    def test_ts_specifier_resolves_to_one_file(self) -> None:
+        proof = "frontend-modern/src/features/__tests__/foo.test.ts"
+        files = {
+            proof: "import { foo } from '../foo';\n",
+            "frontend-modern/src/features/foo.ts": "x",
+            "frontend-modern/src/features/foo/index.ts": "x",
+        }
+        self.assertTrue(proof_covers_runtime_file(proof, "frontend-modern/src/features/foo.ts", files.get))
+        self.assertFalse(
+            proof_covers_runtime_file(proof, "frontend-modern/src/features/foo/index.ts", files.get)
+        )
+
+    def test_go_package_path_outside_import_declarations_does_not_cover(self) -> None:
+        proof = (
+            "package api\n\n// see github.com/rcourtman/pulse-go-rewrite/internal/a\n"
+            'const sample = "github.com/rcourtman/pulse-go-rewrite/internal/a"\n'
+        )
+        self.assertFalse(self.covers("internal/api/x_test.go", proof, "internal/a/c.go"))
+        aliased = 'package api\n\nimport alpha "github.com/rcourtman/pulse-go-rewrite/internal/a"\n'
+        self.assertTrue(self.covers("internal/api/x_test.go", aliased, "internal/a/c.go"))
+
+    def test_go_proof_behind_a_non_platform_build_tag_does_not_cover(self) -> None:
+        for constraint, expected in (
+            ("//go:build ignore", False),
+            ("//go:build integration", False),
+            ("//go:build linux && !arm64", True),
+            ("//go:build go1.21", True),
+        ):
+            with self.subTest(constraint=constraint):
+                proof = f"{constraint}\n\npackage a\n"
+                self.assertEqual(self.covers("internal/a/b_test.go", proof, "internal/a/c.go"), expected)
+
+    def test_python_docstring_and_type_checking_imports_do_not_cover(self) -> None:
+        runtime = "scripts/release_control/widget_policy.py"
+        proof = "scripts/release_control/widget_policy_test.py"
+        docstring = '"""Usage:\nimport widget_policy\n"""\n'
+        type_only = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import widget_policy\n"
+        self.assertFalse(self.covers(proof, docstring, runtime))
+        self.assertFalse(self.covers(proof, type_only, runtime))
+        dynamic = "import importlib\nmod = importlib.import_module('widget_policy')\n"
+        self.assertTrue(self.covers(proof, dynamic, runtime))
+
+    def test_python_stdlib_name_does_not_cover_a_same_named_file(self) -> None:
+        proof = "scripts/tests/test_tool.py"
+        if "json" in getattr(sys, "stdlib_module_names", ()):
+            self.assertFalse(self.covers(proof, "import json\n", "scripts/json.py"))
+        self.assertTrue(self.covers(proof, "import scripts.json\n", "scripts/json.py"))
+
+    def test_python_multiline_and_package_imports(self) -> None:
+        runtime = "scripts/release_control/widget_policy.py"
+        proof = "scripts/release_control/widget_policy_test.py"
+        self.assertTrue(self.covers(proof, "import os\nimport widget_policy\n\nclass T: pass\n", runtime))
+        self.assertTrue(self.covers(proof, "from release_control import (\n    other,\n    widget_policy,\n)\n", runtime))
+        self.assertFalse(self.covers(proof, "import os\n# import widget_policy\n", runtime))
+
+    def test_python_proof_importing_the_module_covers(self) -> None:
+        runtime = "scripts/release_control/widget_policy.py"
+        self.assertTrue(
+            self.covers("scripts/tests/test_widget.py", "from widget_policy import check\n", runtime)
+        )
+        self.assertTrue(
+            self.covers("scripts/tests/test_widget.py", "import os, widget_policy\n", runtime)
+        )
+        self.assertFalse(
+            self.covers("scripts/tests/test_widget.py", "import widget_policy_extra\n", runtime)
+        )
+
+    def test_non_code_file_is_covered_by_a_proof_that_names_its_path(self) -> None:
+        proof = "scripts/release_control/ai_docs_policy_test.py"
+        self.assertTrue(self.covers(proof, 'DOC = REPO / "docs/AI.md"\n', "docs/AI.md"))
+        self.assertFalse(self.covers(proof, 'DOC = REPO / "docs/API.md"\n', "docs/AI.md"))
+        mirror = 'DOC = REPO / "frontend-modern/public/docs/AI.md"\n'
+        self.assertFalse(self.covers(proof, mirror, "docs/AI.md"))
+        self.assertFalse(self.covers(proof, 'DOC = "docs/AI.md.bak"\n', "docs/AI.md"))
+
+    def test_missing_files_do_not_cover(self) -> None:
+        runtime = "frontend-modern/src/components/Foo/Widget.tsx"
+        proof = "frontend-modern/src/components/Foo/__tests__/Widget.test.tsx"
+        files = {proof: "import { Widget } from '../Widget';\n"}
+        self.assertFalse(proof_covers_runtime_file(proof, runtime, files.get))
+        self.assertFalse(proof_covers_runtime_file(proof, proof, {proof: "x"}.get))
+
+
+class ExistingProofCoverageTest(unittest.TestCase):
+    """A commit that changes an owned runtime file passes verification when a
+    registered proof already exercises that file, without editing the proof.
+    Requiring a staged proof diff is what filled proof files with source-text
+    pins. A change no registered proof exercises still needs a staged proof."""
+
+    SUBSYSTEMS = "docs/release-control/v6/internal/subsystems"
+    REGISTRY = f"{SUBSYSTEMS}/registry.json"
+    CONTRACT = f"{SUBSYSTEMS}/alpha.md"
+    GO_RUNTIME = "app/alpha/widget.go"
+    GO_PROOF = "app/alpha/widget_test.go"
+    GO_UNCOVERED = "app/alpha/sub/gadget.go"
+    TS_RUNTIME = "frontend-modern/src/alpha/widget.ts"
+    TS_PROOF = "frontend-modern/src/alpha/__tests__/widget.test.ts"
+    TS_PINNED = "frontend-modern/src/alpha/pinned.ts"
+    TS_PIN_PROOF = "frontend-modern/src/alpha/__tests__/alpha.guardrails.test.ts"
+
+    def setUp(self) -> None:
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.repo = Path(temp_dir.name)
+        for target in (
+            patch.dict(os.environ, strip_local_git_env(os.environ.copy()), clear=True),
+            patch("canonical_completion_guard.REPO_ROOT", self.repo),
+            patch("canonical_completion_guard.SUBSYSTEM_REGISTRY", self.repo / self.REGISTRY),
+            patch("repo_file_io.REPO_ROOT", self.repo),
+            patch("subsystem_contracts.REPO_ROOT", self.repo),
+            patch("subsystem_contracts.CONTRACTS_DIR", self.repo / self.SUBSYSTEMS),
+        ):
+            target.start()
+            self.addCleanup(target.stop)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Pulse Test")
+        self.git("config", "user.email", "pulse-test@example.invalid")
+        self.revision = 0
+        self.commit(
+            "base",
+            {
+                self.REGISTRY: self.registry(),
+                self.CONTRACT: self.contract(),
+                self.GO_RUNTIME: "package alpha\n",
+                self.GO_PROOF: "package alpha\n",
+                self.GO_UNCOVERED: "package sub\n",
+                self.TS_RUNTIME: "export const widget = 1;\n",
+                self.TS_PROOF: "import { widget } from '../widget';\n",
+                self.TS_PINNED: "export const pinned = 1;\n",
+                self.TS_PIN_PROOF: (
+                    "import { readFileSync } from 'node:fs';\n"
+                    "const source = readFileSync('src/alpha/pinned.ts', 'utf8');\n"
+                    "expect(source).toContain('pinned');\n"
+                ),
+            },
+        )
+
+    def registry(self) -> str:
+        rule = {
+            "id": "alpha",
+            "contract": self.CONTRACT,
+            "owned_prefixes": ["app/alpha/", "frontend-modern/src/alpha/"],
+            "owned_files": [],
+            "verification": {
+                "allow_same_subsystem_tests": False,
+                "test_prefixes": [],
+                "exact_files": [],
+                "require_explicit_path_policy_coverage": True,
+                "path_policies": [
+                    {
+                        "id": "alpha-runtime",
+                        "label": "alpha runtime proof",
+                        "match_prefixes": ["app/alpha/", "frontend-modern/src/alpha/"],
+                        "match_files": [],
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": [self.GO_PROOF, self.TS_PIN_PROOF, self.TS_PROOF],
+                    }
+                ],
+            },
+        }
+        return json.dumps({"subsystems": [rule]}, indent=2) + "\n"
+
+    def contract(self) -> str:
+        self.revision = getattr(self, "revision", 0) + 1
+        return (
+            "# alpha contract\n\n"
+            "## Contract Metadata\n\n"
+            "```json\n"
+            '{"subsystem_id": "alpha"}\n'
+            "```\n\n"
+            "## Current State\n\n"
+            f"Alpha owns the widget (revision {self.revision}).\n"
+        )
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def write(self, files: dict[str, str]) -> None:
+        for rel, text in files.items():
+            path = self.repo / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        self.git("add", *files)
+
+    def commit(self, message: str, files: dict[str, str]) -> str:
+        self.write(files)
+        self.git("commit", "-q", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def change(self, runtime: str, text: str) -> str:
+        return self.commit(f"change {runtime}", {runtime: text, self.CONTRACT: self.contract()})
+
+    def run_guard(self, commit: str) -> tuple[int, str]:
+        files = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}),
+            patch("sys.stdin", io.StringIO(files + "\n")),
+            redirect_stderr(stderr),
+        ):
+            status = main(["--files-from-stdin", "--diff-base", f"{commit}^", "--commit", commit])
+        return status, stderr.getvalue()
+
+    def test_untouched_covering_go_proof_satisfies_verification(self) -> None:
+        commit = self.change(self.GO_RUNTIME, "package alpha\n\nconst Size = 2\n")
+        status, stderr = self.run_guard(commit)
+        self.assertEqual(status, 0, stderr)
+
+    def test_untouched_covering_ts_proof_satisfies_verification(self) -> None:
+        commit = self.change(self.TS_RUNTIME, "export const widget = 2;\n")
+        status, stderr = self.run_guard(commit)
+        self.assertEqual(status, 0, stderr)
+
+    def test_runtime_file_no_proof_exercises_still_blocks(self) -> None:
+        commit = self.change(self.GO_UNCOVERED, "package sub\n\nconst Size = 2\n")
+        status, stderr = self.run_guard(commit)
+        self.assertEqual(status, 1)
+        self.assertIn("- subsystem alpha: missing verification artifact for alpha runtime proof", stderr)
+        self.assertIn(f"  no acceptable proof below already exercises:\n    {self.GO_UNCOVERED}", stderr)
+
+    def test_source_text_pin_is_not_coverage(self) -> None:
+        commit = self.change(self.TS_PINNED, "export const pinned = 2;\n")
+        status, stderr = self.run_guard(commit)
+        self.assertEqual(status, 1)
+        self.assertIn(f"    {self.TS_PINNED}", stderr)
+
+    def test_partially_covered_change_blocks_on_the_uncovered_file(self) -> None:
+        self.write({self.GO_UNCOVERED: "package sub\n\nconst Size = 3\n"})
+        commit = self.change(self.GO_RUNTIME, "package alpha\n\nconst Size = 3\n")
+        status, stderr = self.run_guard(commit)
+        self.assertEqual(status, 1)
+        uncovered = stderr.split("already exercises:\n", 1)[1].split("\n  make one", 1)[0]
+        self.assertEqual(uncovered, f"    {self.GO_UNCOVERED}")
+
+    def test_staged_proof_still_satisfies_an_uncovered_change(self) -> None:
+        self.write({self.GO_PROOF: "package alpha\n\nfunc TestSize() {}\n"})
+        commit = self.change(self.GO_UNCOVERED, "package sub\n\nconst Size = 4\n")
+        status, stderr = self.run_guard(commit)
+        self.assertEqual(status, 0, stderr)
+
+    def test_coverage_is_read_from_the_evaluated_commit(self) -> None:
+        covered = self.change(self.TS_RUNTIME, "export const widget = 5;\n")
+        self.commit("proof stops importing the widget", {self.TS_PROOF: "export {};\n"})
+        uncovered = self.change(self.TS_RUNTIME, "export const widget = 6;\n")
+
+        status, stderr = self.run_guard(covered)
+        self.assertEqual(status, 0, stderr)
+        status, stderr = self.run_guard(uncovered)
+        self.assertEqual(status, 1)
+        self.assertIn(f"    {self.TS_RUNTIME}", stderr)
+
+    def test_reader_skips_directories_without_losing_its_place(self) -> None:
+        commit = self.git("rev-parse", "HEAD")
+        with GitTextReader(commit, repo_root=self.repo) as read:
+            self.assertIsNone(read("frontend-modern/src/alpha"))
+            self.assertIsNone(read("frontend-modern/src/alpha/missing.ts"))
+            self.assertEqual(read(self.TS_RUNTIME), "export const widget = 1;\n")
+        with GitTextReader(None, repo_root=self.repo) as read:
+            self.assertIsNone(read("app/alpha"))
+            self.assertEqual(read(self.GO_PROOF), "package alpha\n")
+
+    def test_pre_commit_mode_reads_coverage_from_the_index(self) -> None:
+        self.write({self.GO_RUNTIME: "package alpha\n\nconst Size = 7\n", self.CONTRACT: self.contract()})
+        stderr = io.StringIO()
+        with patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}), redirect_stderr(stderr):
+            self.assertEqual(main([]), 0, stderr.getvalue())
+
+        self.write({self.GO_UNCOVERED: "package sub\n\nconst Size = 7\n"})
+        stderr = io.StringIO()
+        with patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}), redirect_stderr(stderr):
+            self.assertEqual(main([]), 1)
+        self.assertIn(f"    {self.GO_UNCOVERED}", stderr.getvalue())
 
 
 if __name__ == "__main__":
