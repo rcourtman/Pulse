@@ -394,7 +394,10 @@ jobs:
           path: ${{ runner.temp }}/frontend-embed.tar
           if-no-files-found: error
           retention-days: 1
-          compression-level: 0
+          # This tar holds text-heavy public assets, not precompressed release
+          # binaries. Deflate the transport envelope to reduce shared Actions
+          # storage without changing the hash-bound tar or consumer admission.
+          compression-level: 6
 
       # A failed audit must still permit unit proof, as in the serial job.
       # Only successful type/build/size/packet phases admit these jobs.
