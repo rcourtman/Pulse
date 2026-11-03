@@ -10,7 +10,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/crewjam/saml v0.5.1
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/go-jose/go-jose/v4 v4.1.6
+	github.com/go-jose/go-jose/v4 v4.1.7
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
@@ -23,10 +23,10 @@ require (
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
-	github.com/prometheus/common v0.72.1
+	github.com/prometheus/common v0.73.1
 	github.com/rs/dnscache v0.0.0-20230804202142-fc85eb664529
 	github.com/rs/zerolog v1.35.1
-	github.com/shirou/gopsutil/v4 v4.26.9
+	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	github.com/stripe/stripe-go/v82 v82.5.1
@@ -36,9 +36,9 @@ require (
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.37.1
-	k8s.io/apimachinery v0.37.1
-	k8s.io/client-go v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/client-go v0.37.2
 	modernc.org/sqlite v1.59.0
 )
 
@@ -53,7 +53,7 @@ require (
 	github.com/docker/go-connections v0.8.2 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/ebitengine/purego v0.11.1 // indirect
+	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
@@ -89,6 +89,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/pandatix/go-abnf v0.5.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect

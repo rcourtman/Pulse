@@ -16,6 +16,38 @@
 
 ## Purpose
 
+### Bounded public Go patch graph (3 November 2026)
+
+The managed public graph advances go-jose to 4.1.7, Prometheus common to
+0.73.1, gopsutil to 4.26.10 and the aligned Kubernetes API/apimachinery/client-go
+trio to 0.37.2. Its explicit transitive changes are purego 0.11.2 and the new
+Prometheus parser dependency go-abnf 0.5.3. Keep existing direct/indirect
+classifications, the Go 1.26.10 compiler, x/net 0.62.0, all other explicit pins
+and every modernc version unchanged. This is not the deferred storage-driver
+update. Retain the existing checksum records and add the sixteen exact module
+and go.mod records from the managed proposal; a tidy operation must not silently
+widen this bounded refresh or erase the previous verified checksum inventory.
+
+The managed graph controls in `scripts/tests/test-hot-dev-bg.sh` require all
+selected floors, paired checksums and aligned Kubernetes versions. The runtime
+security floor in `scripts/tests/test-hot-dev-runtime.sh` also requires JOSE
+4.1.7 or later. Pulse retains the upstream 4096-bit RSA bound and its normal
+OIDC discovery, remote-JWKS, algorithm and claim verification; no global library
+limit or verifier bypass is introduced. The existing real OIDC consumer tests
+must keep supported RSA, P256 and Ed25519 sign-ins working and reject invalid
+signatures, algorithms and claims.
+
+Structural controls and proposed checksums alone are not integrity or
+compatibility proof. Acceptance requires official exact-graph acquisition, a
+fresh matching worker, read-only module resolution and verification, actual
+metrics wire/decompression and Kubernetes-agent tests, host-agent and OIDC
+consumer tests, managed-runtime smokes, vet and real-embed server/agent builds.
+No rendered field, unit conversion or frontend state is intentionally changed;
+gopsutil's future Windows I/O-time opt-in is not enabled. No installed recovery,
+native-platform acceptance, release availability or advisory clearance is
+inferred from the graph edit or acquisition receipt.
+
+
 ### Compose preserves the image healthcheck verdict
 
 The bundled Compose configuration and first-install generator select the

@@ -358,7 +358,7 @@ test_go_module_security_dependency_floors() {
   assert_module_at_least "Go module floor excludes SSH connection deadlock advisories" "${output}" "golang.org/x/crypto" "v0.57.0"
   assert_module_at_least "Go module floor keeps x/term past the read-error handling release" "${output}" "golang.org/x/term" "v0.46.0"
   assert_module_at_least "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys" "v0.47.0"
-  assert_module_at_least "OIDC JOSE floor keeps bounded RSA JWK parsing and signature verification fixes" "${output}" "github.com/go-jose/go-jose/v4" "v4.1.6"
+  assert_module_at_least "OIDC JOSE floor retains JWK, header and bounded-signature security fixes" "${output}" "github.com/go-jose/go-jose/v4" "v4.1.7"
 }
 
 # The metrics and alerting stores run on the pure-Go SQLite driver, so a
