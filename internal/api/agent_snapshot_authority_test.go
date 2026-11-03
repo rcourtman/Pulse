@@ -49,6 +49,14 @@ func (p *snapshotAuthorityProvider) UnifiedResourceSnapshot() ([]unified.Resourc
 
 func (p *snapshotAuthorityProvider) unblock() { p.once.Do(func() { close(p.release) }) }
 
+type snapshotAuthorityApprovals struct{ staticApprovalsProvider }
+
+func (p snapshotAuthorityApprovals) PendingApprovalsForResource(resourceID, orgID string) []AgentResourceApprovalSummary {
+	// Match the production adapter's detached per-request projection. A read's
+	// redaction must not mutate the fixture evidence used by another reader.
+	return append([]AgentResourceApprovalSummary(nil), p.staticApprovalsProvider.PendingApprovalsForResource(resourceID, orgID)...)
+}
+
 type snapshotAuthorityFixture struct {
 	router   *Router
 	server   *httptest.Server
@@ -85,9 +93,9 @@ func newSnapshotAuthorityFixture(t *testing.T, path string, scopes []string) *sn
 	router.agentContextHandler.SetFindingsProvider(staticFindingsProvider{byResource: map[string][]AgentResourceFindingSnapshot{
 		"vm:101": {{ID: "synthetic-finding", Title: "Synthetic pressure", Severity: "warning"}},
 	}})
-	router.agentContextHandler.SetApprovalsProvider(staticApprovalsProvider{byResource: map[string][]AgentResourceApprovalSummary{
+	router.agentContextHandler.SetApprovalsProvider(snapshotAuthorityApprovals{staticApprovalsProvider{byResource: map[string][]AgentResourceApprovalSummary{
 		"vm:101": {{ID: "synthetic-approval", Command: snapshotAuthorityCommand, RequestedAt: now, ExpiresAt: now.Add(time.Hour)}},
-	}})
+	}}})
 	f := &snapshotAuthorityFixture{router: router, provider: p, path: path}
 	f.server = httptest.NewServer(router.Handler())
 	t.Cleanup(f.server.Close)
@@ -143,6 +151,11 @@ type snapshotAuthorityWire struct {
 
 func readSnapshotAuthorityResult(t *testing.T, result <-chan historyAuthorityResult, status int) snapshotAuthorityWire {
 	t.Helper()
+	return readSnapshotHTTPResult(t, result, status, true)
+}
+
+func readSnapshotHTTPResult(t *testing.T, result <-chan historyAuthorityResult, status int, withdrawn bool) snapshotAuthorityWire {
+	t.Helper()
 	select {
 	case got := <-result:
 		if got.err != nil {
@@ -156,7 +169,7 @@ func readSnapshotAuthorityResult(t *testing.T, result <-chan historyAuthorityRes
 		if got.response.StatusCode != status {
 			t.Errorf("snapshot status = %d, want %d: %s", got.response.StatusCode, status, body)
 		}
-		if status == http.StatusUnauthorized && (string(body) != "Authentication required\n" || strings.Contains(got.response.Header.Get("Content-Type"), "json")) {
+		if withdrawn && status == http.StatusUnauthorized && (string(body) != "Authentication required\n" || strings.Contains(got.response.Header.Get("Content-Type"), "json")) {
 			t.Error("withdrawn snapshot disclosed data or implied successful empty JSON")
 		}
 		if status == http.StatusOK && (!json.Valid(body) || got.response.Header.Get("Content-Type") != "application/json") {
@@ -174,7 +187,9 @@ func (f *snapshotAuthorityFixture) current(t *testing.T, raw, transport string, 
 	response, err := f.server.Client().Do(f.request(t, raw, transport))
 	result := make(chan historyAuthorityResult, 1)
 	result <- historyAuthorityResult{response, err}
-	return readSnapshotAuthorityResult(t, result, status)
+	// Initial authentication errors retain their existing transport; only a
+	// withdrawn admitted response is required to be the generic guard denial.
+	return readSnapshotHTTPResult(t, result, status, false)
 }
 
 func (f *snapshotAuthorityFixture) checkCurrent(t *testing.T, wire snapshotAuthorityWire, private bool) {
