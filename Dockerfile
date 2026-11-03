@@ -4,7 +4,7 @@ ARG APPRISE_VERSION=1.12.0
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS frontend-builder
+FROM --platform=linux/amd64 node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
@@ -26,7 +26,7 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
 # Build stage for Go backend
 # Force amd64 platform - Go cross-compiles for all targets anyway,
 # and this avoids slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS backend-builder
+FROM --platform=linux/amd64 golang:1.26.10-alpine@sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308 AS backend-builder
 
 ARG BUILD_AGENT
 ARG VERSION

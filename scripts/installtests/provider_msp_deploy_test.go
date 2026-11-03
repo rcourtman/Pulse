@@ -15,7 +15,7 @@ func TestProviderMSPGoBuilderMatchesIntegrationMock(t *testing.T) {
 	// These builders use the same Go patch level and immutable image. The
 	// mock's build must not exercise a different compiler from the hosted
 	// control plane merely because Dependabot advanced one Dockerfile.
-	const expected = "golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca"
+	const expected = "golang:1.26.10-alpine@sha256:" + go12610AlpineBuilderDigest
 	pattern := regexp.MustCompile(`(?m)^FROM (?:--platform=\$BUILDPLATFORM )?(golang:[^[:space:]]+) AS builder$`)
 	for _, path := range [][]string{
 		{"deploy", "provider-msp", "Dockerfile.control-plane"},
@@ -346,7 +346,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		"FROM --platform=linux/amd64 node:24-alpine@sha256:"+node24Amd64FrontendDigest+" AS frontend-builder",
 		"npm ci",
 		"npm run build",
-		"FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine@sha256:",
+		"FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine@sha256:"+go12610AlpineBuilderDigest+" AS builder",
 		"FROM alpine:3.24@sha256:",
 		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
 		"ARG TARGETOS",

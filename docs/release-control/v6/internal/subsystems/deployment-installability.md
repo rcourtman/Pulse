@@ -6182,7 +6182,7 @@ suppress the scanner or produce release artifacts with an older patched-over
 runtime.
 The hosted control-plane source builder and integration mock builder are both
 on the reviewed `golang:1.26.10-alpine` digest
-`sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca`.
+`sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308`.
 `TestProviderMSPGoBuilderMatchesIntegrationMock` pins their exact agreement;
 it does not pull the image, prove its registry contents, or qualify a deployed
 control plane. The release publisher's prebuilt control-plane target is a
@@ -6250,7 +6250,7 @@ of `1.26.9` remains the minimum for the 2026-10-08 `net/http`, `crypto/tls`,
 `golang.org/x/net` floor is `v0.60.0` for the same advisories. Source-built
 container stages pin the Docker Official Images manifest list for
 `golang:1.26.10-alpine`,
-`sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca`;
+`sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308`;
 the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
 cannot silently reintroduce the vulnerable runtime.
@@ -8685,7 +8685,7 @@ a valid pinned SSH signature and the extracted request expression with absent
 and synthetic email. It does not establish installed onboarding, server acceptance
 or legal identity. See the qualification evidence below.
 
-### Governed Node 24 and Alpine 3.24 digest parity
+### Governed Node 24, Go 1.26.10 and Alpine 3.24 digest parity
 
 The canonical Pulse release Dockerfile and provider-MSP control-plane Dockerfile
 pin the same immutable amd64 Node 24 Alpine frontend-builder image. The
@@ -8695,7 +8695,17 @@ metadata proof `TestDockerBuildUsesCanonicalReleaseLdflags` and hosted
 provider-MSP control proof `TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary`
 also require that exact digest while retaining their release metadata and
 license-build assertions. The selected Node 24 digest is
-`06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53`.
+`8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85`.
+The server, provider-MSP and integration mock Go builders share the
+Go 1.26.10 Alpine digest
+`a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308`.
+The development container retains the same compiler patch on its distinct
+Debian-based image, digest
+`670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c`.
+`TestGoContainerBuildersUseGovernedToolchain` binds all four full image
+references and the `go.mod` toolchain, rejecting a partial refresh, changed
+compiler patch or duplicate stage. The release metadata and hosted runtime
+proofs also bind the server and control-plane Go stages to that exact digest.
 All four Alpine source/prebuilt server, agent and Apprise foundation stages use
 `be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a`;
 the provider-MSP runtime and integration mock use that same Alpine 3.24 image.
