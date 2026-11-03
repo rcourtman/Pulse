@@ -125,7 +125,10 @@ class AdminDocsTest(unittest.TestCase):
         navigation = (frontend / "components/Settings/settingsNavCatalog.ts").read_text()
         for panel in ("roles", "users"):
             with self.subTest(panel=panel):
-                entry = navigation.split(f"id: 'security-{panel}'", 1)[1].split("},", 1)[0]
+                entry = re.search(
+                    rf"id: 'security-{panel}',(.*?)(?=\n\s+id:|\Z)",
+                    navigation, re.DOTALL,
+                ).group(1)
                 self.assertIn("features: ['rbac']", entry)
                 self.assertIn("hideWhenUnavailable: true", entry)
                 self.assertIn(f"requiredCapability: '{panel}'", entry)
