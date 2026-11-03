@@ -662,7 +662,7 @@ func (r *Router) setupRoutes() {
 		r.config.DataPath,
 	)
 	stripeWebhookHandlers := r.stripeWebhookHandlers
-	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor, r.defaultReadState())
+	infraUpdateHandlers := NewTenantUpdateDetectionHandlers(r.tenantMonitorAndReadState)
 	auditHandlers := NewAuditHandlers()
 	auditHandlers.SetResourceStoreProvider(r.resourceHandlers.getStore)
 
@@ -1699,6 +1699,20 @@ func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
 		m.SetDockerInventoryCollector(nil)
 		log.Info().Msg("[Router] Proxmox guest Docker detector configured for explicit LXC socket hinting")
 	}
+}
+
+// tenantMonitorAndReadState resolves the request organization's monitor and
+// read state. A non-default organization whose monitor cannot be resolved gets
+// neither, never the default organization's.
+func (r *Router) tenantMonitorAndReadState(ctx context.Context) (*monitoring.Monitor, unifiedresources.ReadState) {
+	if orgID := GetOrgID(ctx); orgID == "" || orgID == "default" {
+		return r.monitor, r.defaultReadState()
+	}
+	monitor := r.getTenantMonitor(ctx)
+	if monitor == nil {
+		return nil, nil
+	}
+	return monitor, monitor.GetUnifiedReadState()
 }
 
 func (r *Router) defaultReadState() unifiedresources.ReadState {
@@ -5084,12 +5098,13 @@ func (r *Router) handleSchedulerHealth(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	if r.monitor == nil {
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
 		http.Error(w, "Monitor not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	health := r.monitor.SchedulerHealth()
+	health := monitor.SchedulerHealth()
 	if err := utils.WriteJSONResponse(w, health); err != nil {
 		log.Error().Err(err).Msg("Failed to write scheduler health response")
 	}
