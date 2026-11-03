@@ -1939,7 +1939,27 @@ Looks up an agent by ID or hostname/display name. Requires `agent:report`.
 Agent self-unregister during uninstall: a token holding `agent:report` removes the agent that token owns. Without a token, only an admin session can remove an agent this way.
 
 `POST /api/agents/agent/unlink` (admin, `settings:write`)  
-Unlinks an agent from a node.
+Unlinks an agent from a Proxmox node without uninstalling the agent or removing
+the monitored node. Send the agent's exact canonical ID, not a display name,
+resource ID or node ID:
+
+```json
+{ "agentId": "canonical-agent-id" }
+```
+
+The agent keeps reporting. The explicit unlink is saved so automatic matching
+does not immediately reattach it, including after a server restart. This changes
+monitoring attribution; confirm that the agent and node really represent
+different machines before unlinking, and check their monitoring afterwards.
+Do not delete, reinstall or re-enrol an agent as a substitute.
+
+Older associations with unknown provenance are preserved rather than guessed to
+be automatic: an inference repair does not necessarily clear an existing link.
+See [a NAS shown as a Proxmox node](TROUBLESHOOTING.md#a-nas-is-shown-as-a-proxmox-node).
+This endpoint is distinct from `POST /api/resources/{id}/unlink`, whose
+`targetId` selects a resource pair, not an agent-to-node association. Keep the
+existing authentication and CSRF protections; never put credentials in a URL,
+command line or issue.
 
 `DELETE /api/agents/agent/{agent_id}` (admin, `settings:write`)  
 Removes an agent from state.
