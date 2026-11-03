@@ -36,6 +36,14 @@ unused `topByMemory` sort ranks no reading as 0. `resource.test.ts` and
 `ResourceDetailDrawer.history.test.tsx` cover measured zero, invalid pairs and
 percentage-only readings.
 
+### Phone Coverage names namesakes from every row (3 November 2026)
+
+The compact Coverage table now judges which workloads share a name across
+every Coverage row before search and filters (`identityRows`), using the same
+workload identity it already reads, and keeps the VM id and PVE connection
+beside the name only for those. Workload identity, connection data and the
+disclosure label are unchanged.
+
 ### Compact Proxmox node Disk cells show the fullest disk (2 November 2026)
 
 A compact Proxmox node row (phone width or compact metrics) has no room for

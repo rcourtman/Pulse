@@ -5091,6 +5091,17 @@ reserved: the inventory makes no all-time completeness claim. The empty
 Coverage table reads "Nothing to check yet". Which workloads each reason
 selects is unchanged.
 
+### Phone Coverage rows keep the workload name whole (3 November 2026)
+
+On a phone the Coverage name cell also carried the VM id and the PVE
+connection, which cut names to a few letters ("ch..."), so every
+"checkout-web-*" guest looked the same. In the compact layout a row now
+shows the name alone unless another Coverage row shares it, judged across
+every row before search and filters so a filter never changes how a row is
+named; namesakes keep the VM id and connection that tell them apart. The
+disclosure label and the row drawer always carry both. Wider layouts are
+unchanged.
+
 ### Backup health reason rows show they open Coverage (2 November 2026)
 
 Each Backup health reason row was already a button that filters Coverage to

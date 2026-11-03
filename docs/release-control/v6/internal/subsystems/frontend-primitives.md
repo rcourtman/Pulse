@@ -587,6 +587,17 @@ its presentation module are deleted. Backup jobs is the page's one daily bar
 chart, so two look-alike bar charts never stack on one page. Earlier notes here
 about the chart's tooltip portal and day-control focus are historical.
 
+### Compact Coverage columns give the name the slack (3 November 2026)
+
+`ProxmoxCoverageTable` takes `identityRows` (every row before filters) to find
+namesakes, and in the compact layout shows the VM id and connection beside the
+name only for them. In the compact layout, once the table knows its width,
+the cells beside the name take their measured needs at 320px (posture 80px
+for "Unknown" with its dot, age 52px for an "Unknown" age, job 34px for its
+header) as shares of that width, and the name takes the rest; without a width
+the shared 40% identity share still applies. At 360px and up a 16-character
+guest name fits whole. Rows stay 32px and single-line.
+
 ### Backup view tabs head the restore points, not the page (2 November 2026)
 
 On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,
