@@ -160,6 +160,10 @@ jobs:
         working-directory: tests/integration
         run: npm ci
 
+      - name: Validate flaky qualification with the pinned runner
+        working-directory: tests/integration
+        run: node --test scripts/flaky-qualification.test.mjs
+
       - name: Validate stable/probation project accounting
         working-directory: tests/integration
         run: npm run check:e2e-tiers
@@ -450,7 +454,8 @@ jobs:
       # Two-tier run (see PROBATION_SPECS in tests/integration/e2e-tiering.mjs
       # for the tier mechanism and the promotion/demotion rule). The stable tier
       # is always required. A PR changing probation coverage runs and enforces
-      # both tiers. Branch runs retain probation as observational evidence.
+      # both tiers without accepting a flaky retry. Branch runs retain probation
+      # as observational evidence. Retry counts and retained diagnostics are unchanged.
       - name: Run stable-tier E2E suite
         id: stable
         working-directory: tests/integration
@@ -462,7 +467,9 @@ jobs:
           PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"
           PULSE_E2E_TIER: "stable"
           PULSE_MULTI_TENANT_ENABLED: "true"
-        run: npm test -- --shard=${{ matrix.shard }}/8
+        run: >-
+          npm test -- --shard=${{ matrix.shard }}/8
+          ${{ github.event_name == 'pull_request' && needs.scope.outputs.run_probation == 'true' && '--fail-on-flaky-tests' || '' }}
 
       # Playwright's report artifacts preserve the full forensic record, but
       # artifact bodies and job logs require an authenticated GitHub session.
@@ -525,6 +532,7 @@ jobs:
         run: >-
           npm test -- --pass-with-no-tests
           --max-failures=5 --global-timeout=600000
+          ${{ github.event_name == 'pull_request' && '--fail-on-flaky-tests' || '' }}
 
       - name: Report probation-tier outcome
         if: ${{ !cancelled() && steps.probation.outcome != 'skipped' }}

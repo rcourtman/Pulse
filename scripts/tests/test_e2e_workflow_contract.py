@@ -30,6 +30,12 @@ class E2EWorkflowContractTest(unittest.TestCase):
         self.assertIn("timeout-minutes: 12", probation_step)
         self.assertIn("--max-failures=5", probation_step)
         self.assertIn("--global-timeout=600000", probation_step)
+        self.assertIn("github.event_name == 'pull_request' && '--fail-on-flaky-tests'", probation_step)
+
+        stable_start = workflow.index("- name: Run stable-tier E2E suite\n")
+        stable_step = workflow[stable_start:workflow.index("- name: Report stable-tier failures", stable_start)]
+        self.assertIn("--shard=${{ matrix.shard }}/8", stable_step)
+        self.assertIn("github.event_name == 'pull_request' && needs.scope.outputs.run_probation == 'true' && '--fail-on-flaky-tests'", stable_step)
 
         verdict_start = workflow.index("- name: Check E2E results")
         verdict = workflow[verdict_start:]

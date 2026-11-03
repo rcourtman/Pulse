@@ -1876,8 +1876,12 @@ of truth. The selector accepts NUL-delimited paths and literal spec paths under
 the manifest's recursive prefix. Unsupported patterns fail admission. An
 unknown scope cannot produce a passing E2E verdict.
 
-Selected PR probation failures fail their shard and the E2E verdict. Branch
-and manual runs keep probation observational. Promotion and demotion remain
+Selected PR probation failures fail their shard and the E2E verdict. Both
+tiers of full selected PR qualification use Playwright's
+`--fail-on-flaky-tests`: a failed attempt followed by a passing retry still
+fails qualification. Existing retry counts and retained diagnostics stay in
+place. Stable-only PR runs retain their existing policy. Branch and manual
+runs keep probation observational. Promotion and demotion remain
 governed by `tests/integration/e2e-tiering.mjs`, and only executed main runs
 count toward promotion. Restoring a resolved quarantine through probation
 does not claim stable qualification. Required source checks and release gates
@@ -1904,6 +1908,15 @@ placement, the long-file scheduling floor, new files/projects, invalid
 weights/coordinates, literal path escaping and empty-match containment.
 Passing selection proof does not replace a completed browser run with no
 unrun, interrupted, failed or flaky cases.
+
+`tests/integration/scripts/fixture-readiness.test.mjs` evaluates the actual
+workflow expressions for selected and stable-only PRs, branch and manual
+runs. `tests/integration/scripts/flaky-qualification.test.mjs` executes the
+installed pinned Playwright runner without a browser before image fan-out: a controlled failure followed by a passing retry succeeds under the
+ordinary policy, fails under full qualification, and a clean first attempt
+still succeeds. The image-distribution proof rejects missing or widened
+qualification flags while retaining producer and consumer admission. These
+controls prove exit and wiring semantics, not an application browser result.
 
 The image-distribution controls in `scripts/tests/test_e2e_test_images.py`
 require the actual partition check to block the producer and all consumers,
@@ -2695,6 +2708,7 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 14e. `.github/scripts/e2e-probation-seconds.json`
 14f. `tests/integration/playwright.config.ts`
 14g. `tests/integration/scripts/check-probation-shards.mjs`
+14h. `tests/integration/scripts/flaky-qualification.test.mjs`
 14a. `scripts/release_control/run_go_package_slice.py`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`

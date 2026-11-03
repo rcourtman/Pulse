@@ -2,10 +2,27 @@ import fs from 'node:fs';
 import { observeBootstrapTiming } from '../scripts/bootstrap-timing.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
 import { createAuthenticatedStorageState, isMultiTenantEnabled } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+async function recordBrowserReview(page: Page, testInfo: TestInfo, state: string) {
+  if (!process.env.CI || !['chromium', 'mobile-safari'].includes(testInfo.project.name)) return;
+  const frame = await page.screenshot({ type: 'jpeg', quality: 80, animations: 'disabled' });
+  await testInfo.attach('browser-review-' + state, { body: frame, contentType: 'image/jpeg' });
+  const encoded = frame.toString('base64');
+  const id = testInfo.project.name + ':' + state + ':' + testInfo.retry;
+  const chunks = Math.ceil(encoded.length / 6000);
+  console.log('PULSE_BROWSER_REVIEW ' + JSON.stringify({
+    id, state, url: page.url(), viewport: page.viewportSize(), revision: process.env.GITHUB_SHA,
+    bytes: frame.length, chunks,
+  }));
+  for (let index = 0; index < chunks; index++) {
+    console.log('PULSE_BROWSER_REVIEW_CHUNK ' + JSON.stringify({ id, index, data: encoded.slice(index * 6000, (index + 1) * 6000) }));
+  }
+}
+
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -104,7 +121,7 @@ test.describe('Settings shell consistency', () => {
   test.setTimeout(180_000);
 
   for (const panel of SETTINGS_SHELL_ROUTES) {
-    test(`uses the canonical shell on ${panel.route}`, async ({ page, isMobile }) => {
+    test(`uses the canonical shell on ${panel.route}`, async ({ page, isMobile }, testInfo) => {
       if ('requiresMultiTenant' in panel && panel.requiresMultiTenant) {
         // Organization panels only render when multi-tenant is enabled
         // (single-tenant installs hide the whole organization group).
@@ -129,6 +146,7 @@ test.describe('Settings shell consistency', () => {
 
       const searchInput = page.getByPlaceholder('Search settings...');
       await expect(searchInput, `${panel.route} should keep the shared settings search`).toBeVisible();
+      if (panel.route === '/settings/organization/billing') await recordBrowserReview(page, testInfo, 'settings-navigation-open');
 
       if (isMobile) {
         await expect(
@@ -173,6 +191,7 @@ test.describe('Settings shell consistency', () => {
         page.locator('main').locator('section, [data-slot="card"], .border-border').first(),
         `${panel.route} should render framed settings content inside the shared shell`,
       ).toBeVisible();
+      if (panel.route === '/settings/organization/billing') await recordBrowserReview(page, testInfo, 'settings-content');
     });
   }
 

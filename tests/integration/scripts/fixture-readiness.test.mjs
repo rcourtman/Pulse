@@ -244,3 +244,25 @@ test('selected probation coverage blocks PRs and remains observational on branch
       [runs, continues], `${event}, selected: ${selected}, stable: ${stable}, cancelled: ${cancelled}`);
   }
 });
+
+
+test('full PR qualification rejects flaky retries in both tiers without changing branch policy', () => {
+  const expressions = ['Run stable-tier E2E suite', 'Run probation-tier E2E suite'].map(name => {
+    const command = step(name)?.split(/\n        run: >-\n/)[1];
+    assert.ok(command, 'missing suite command: ' + name);
+    const expression = command.match(/\$\{\{ ([^\n]*--fail-on-flaky-tests[^\n]*) \}\}/)?.[1];
+    assert.ok(expression, 'missing flaky-result policy: ' + name);
+    assert.equal(command.match(/--fail-on-flaky-tests/g)?.length, 1, name);
+    return expression;
+  });
+  for (const [event, selected, expected] of [
+    ['pull_request', 'true', ['--fail-on-flaky-tests', '--fail-on-flaky-tests']],
+    ['pull_request', 'false', ['', '--fail-on-flaky-tests']],
+    ['push', 'true', ['', '']],
+    ['workflow_dispatch', 'true', ['', '']],
+  ]) {
+    const context = { github: { event_name: event }, needs: { scope: { outputs: { run_probation: selected } } } };
+    assert.deepEqual(expressions.map(expression => runInNewContext(expression, context)), expected,
+      event + ', selected: ' + selected);
+  }
+});
