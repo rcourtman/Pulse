@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "a315a4878070098435213143ea6587f15dbda12e",
+  "verified_at": "2026-11-03T09:58:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+    "frontend-modern/src/utils/securityAuthPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx": "f11687c6113d98868b2a51e9bdb76b227182a42f6e9aa3f0a4f9c05f2af891d7",
+    "frontend-modern/src/utils/securityAuthPresentation.ts": "41d839ffe1ac82e10b8f8e922ba44d7a389ceb24511c214d07d97ffc753e0ce1"
+  },
+  "routes": [
+    "/settings/security-auth"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree served by a mock-mode Pulse backend on pulse-dev (3 nodes), Chromium via the perf rig's browser package 1.62.1, logged in through /api/login.",
+    "Real /api/version and /api/security/status responses with only deploymentType and configuredButPendingRestart=true overridden, for deploymentType proxmoxve, systemd, docker, source and unset, at both viewports (10 cases).",
+    "Restart Required card renders one label plus an optional command for every type: proxmoxve 'Restart the service as root (older installs use pulse-backend): systemctl restart pulse'; systemd 'sudo systemctl restart pulse'; docker 'docker restart pulse'; source and unset show the generic 'Restart Pulse using your deployment method' with no command (previously source rendered an empty box).",
+    "No horizontal overflow in the instruction box in any case; desktop and 390px screenshots of the proxmoxve card inspected by eye."
+  ],
+  "interactions": [
+    "Navigated to /settings/security-auth per case, waited for the 'How to restart Pulse:' heading, read the instruction box text and its scroll width, scrolled the card into view and captured it."
+  ]
+}

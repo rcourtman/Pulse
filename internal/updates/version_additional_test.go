@@ -220,3 +220,46 @@ func TestGetDeploymentType_Manual(t *testing.T) {
 		t.Fatalf("GetDeploymentType = %q, want manual", got)
 	}
 }
+
+func TestIsProxmoxVEUpdateHelper(t *testing.T) {
+	// Current community-scripts bootstrap, as written by write_update_entrypoint
+	// in community-scripts/core. It names the app only through the export.
+	communityBootstrap := func(name string) string {
+		return `#!/usr/bin/env bash
+# Community-Scripts update entrypoint (generated - do not edit by hand).
+# Regenerated on install and on every successful update.
+export SCRIPT_SLUG="` + name + `"
+export UPDATE_SCRIPT_NAME="` + name + `"
+export COMMUNITY_SCRIPTS_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main"
+export COMMUNITY_SCRIPTS_CORE_URL="https://raw.githubusercontent.com/community-scripts/core/main"
+export COMMUNITY_SCRIPTS_WEBSITE_URL="https://community-scripts.org"
+_cs_helper="$(curl -fsSL --connect-timeout 10 "${COMMUNITY_SCRIPTS_CORE_URL}/misc/update.sh" 2>/dev/null)"
+if [[ -n "$_cs_helper" ]]; then
+  bash -c "$_cs_helper"
+else
+  echo "Update helper unavailable - falling back to direct update."
+  bash -c "$(curl -fsSL "${COMMUNITY_SCRIPTS_URL}/ct/${UPDATE_SCRIPT_NAME}.sh")"
+fi
+`
+	}
+
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"community-scripts bootstrap", communityBootstrap("pulse"), true},
+		{"legacy community-scripts direct pull", `bash -c "$(curl -fsSL https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"`, true},
+		{"pulse installer helper", "#!/usr/bin/env bash\n# Pulse update command\nINSTALLER_URL=\"https://github.com/rcourtman/Pulse/releases/latest/download/install.sh\"\n", true},
+		{"bootstrap for another app", communityBootstrap("plex"), false},
+		{"bootstrap for a pulse-prefixed app", communityBootstrap("pulsechain"), false},
+		{"unrelated script", "#!/bin/sh\napt update\n", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isProxmoxVEUpdateHelper(tc.content); got != tc.want {
+				t.Fatalf("isProxmoxVEUpdateHelper = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

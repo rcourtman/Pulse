@@ -36,8 +36,6 @@ describe('getSecurityAuthRestartInstruction — branch coverage (batch 0713)', (
         label: 'Restart the service:',
         command: 'sudo systemctl restart pulse',
       });
-      // The shared arm never exposes a secondaryLabel.
-      expect(manual.secondaryLabel).toBeUndefined();
     });
 
     it('routes systemd/manual to the sudo-prefixed command, not the dev command', () => {
@@ -57,7 +55,6 @@ describe('getSecurityAuthRestartInstruction — branch coverage (batch 0713)', (
         label: 'Restart Pulse using your deployment method',
       });
       expect(result.command).toBeUndefined();
-      expect(result.secondaryLabel).toBeUndefined();
     });
 
     it('returns the generic fallback for another unknown deployment type', () => {
@@ -94,7 +91,6 @@ describe('getSecurityAuthRestartInstruction — branch coverage (batch 0713)', (
         label: 'Restart Pulse using your deployment method',
       });
       expect(result.command).toBeUndefined();
-      expect(result.secondaryLabel).toBeUndefined();
     });
 
     it('falls through to default for a non-string runtime value (deliberately malformed)', () => {

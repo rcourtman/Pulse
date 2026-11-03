@@ -8717,6 +8717,9 @@ That same AI settings boundary now also owns
 empty, OAuth, action/error, shell-description, and workload-discovery copy
 for the settings shell stays on one governed helper instead of drifting back
 into section-local strings.
+`SecurityAuthPanel.tsx` follows the same rule for post-auth restart guidance: it
+renders the `getSecurityAuthRestartInstruction()` label and optional command
+once for every deployment type instead of hand-written per-type blocks.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx`,
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,

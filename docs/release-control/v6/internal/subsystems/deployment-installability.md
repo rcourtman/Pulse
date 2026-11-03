@@ -2515,6 +2515,11 @@ Generated install and rollback sections must each state this ownership boundary
 and link the signed server-installer flow from the candidate's versioned docs,
 with the exact installation or rollback target, for absent or unverified helpers.
 Operators verify the resulting version after restart.
+Runtime deployment detection in `internal/updates/version.go` classifies a
+community-scripts container as `proxmoxve` from either the legacy `ct/pulse.sh`
+text in `/bin/update` or the `export UPDATE_SCRIPT_NAME="pulse"` line of the
+community-scripts/core update bootstrap that replaced it; the Pulse installer's
+own helper also classifies native-installer hosts as `proxmoxve`.
 Signed installer recipes run in a fresh temporary directory and stop on any
 download or signature-verification failure before executing the installer.
 `scripts/tests/test_signed_installer_docs.py` executes both documented recipes

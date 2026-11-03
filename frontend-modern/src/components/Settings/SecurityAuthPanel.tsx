@@ -185,56 +185,16 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           <div class="rounded-md border border-amber-200 bg-surface p-3 dark:border-amber-700">
             <p class="text-xs font-semibold text-base-content mb-2">How to restart Pulse:</p>
 
-            <Show when={props.versionInfo()?.deploymentType === 'proxmoxve'}>
-              <div class="space-y-2">
-                <p class="text-xs text-base-content">
-                  Type <code class="px-1 py-0.5 bg-surface-hover rounded-sm">update</code> in your
-                  ProxmoxVE console
-                </p>
-                <p class="text-xs text-muted italic">
-                  {restartInstruction().secondaryLabel}{' '}
-                  <code class="text-xs">{restartInstruction().command}</code>
-                </p>
-              </div>
-            </Show>
-
-            <Show when={props.versionInfo()?.deploymentType === 'docker'}>
-              <div class="space-y-1">
-                <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
-                  {restartInstruction().command}
-                </code>
-              </div>
-            </Show>
-
-            <Show
-              when={
-                props.versionInfo()?.deploymentType === 'systemd' ||
-                props.versionInfo()?.deploymentType === 'manual'
-              }
-            >
-              <div class="space-y-1">
-                <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
-                  {restartInstruction().command}
-                </code>
-              </div>
-            </Show>
-
-            <Show when={props.versionInfo()?.deploymentType === 'development'}>
-              <div class="space-y-1">
-                <p class="text-xs text-base-content">{restartInstruction().label}</p>
-                <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
-                  {restartInstruction().command}
-                </code>
-              </div>
-            </Show>
-
-            <Show when={!props.versionInfo()?.deploymentType}>
-              <div class="space-y-1">
-                <p class="text-xs text-base-content">{restartInstruction().label}</p>
-              </div>
-            </Show>
+            <div class="space-y-1">
+              <p class="text-xs text-base-content">{restartInstruction().label}</p>
+              <Show when={restartInstruction().command}>
+                {(command) => (
+                  <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
+                    {command()}
+                  </code>
+                )}
+              </Show>
+            </div>
           </div>
 
           <div class="rounded-sm border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900/25">
