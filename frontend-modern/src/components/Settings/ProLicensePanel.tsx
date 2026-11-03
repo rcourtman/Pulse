@@ -4,9 +4,13 @@ import { CommercialBillingShell, CommercialSection } from './CommercialBillingSe
 import { ProLicensePlanSection } from './ProLicensePlanSection';
 import { SelfHostedCommercialRecoverySection } from './SelfHostedCommercialRecoverySection';
 import { useProLicensePanelState } from './useProLicensePanelState';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
-import { Button } from '@/components/shared/Button';
+import {
+  PULSE_MSP_REFERRAL_URL,
+  SELF_HOSTED_PRO_BILLING_PRESENTATION,
+} from './selfHostedBillingPresentation';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { Subtabs } from '@/components/shared/Subtabs';
+import { isHostedModeEnabled } from '@/stores/license';
 import {
   presentationPolicyHidesCommercialSurfaces,
   sessionPresentationPolicyResolved,
@@ -118,6 +122,31 @@ const ProLicensePanelContent: Component = () => {
                   onActivate={state.handleActivate}
                   onClear={state.handleClear}
                 />
+
+                {/* Opening Plans & Billing is the opt-in, so this follows the
+                    panel's commercial gate rather than the upgrade-prompt policy
+                    that keeps free installs free of nudges elsewhere. Hosted
+                    runtimes include MSP client workspaces, which already belong
+                    to a provider. */}
+                <Show when={!isHostedModeEnabled()}>
+                  <div
+                    class="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"
+                    data-testid="pulse-msp-referral"
+                  >
+                    <p class="text-sm text-muted">
+                      {SELF_HOSTED_PRO_BILLING_PRESENTATION.mspReferralBody}
+                    </p>
+                    <ButtonLink
+                      href={PULSE_MSP_REFERRAL_URL}
+                      target="_blank"
+                      variant="outline"
+                      size="settingsActionXs"
+                      class="w-fit shrink-0"
+                    >
+                      {SELF_HOSTED_PRO_BILLING_PRESENTATION.mspReferralActionLabel}
+                    </ButtonLink>
+                  </div>
+                </Show>
               </div>
             </CommercialSection>
           </Show>

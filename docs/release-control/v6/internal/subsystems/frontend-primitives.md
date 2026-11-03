@@ -11344,3 +11344,13 @@ literal date evidence and the browser-reproduced focus repair. The 15% threshold
 all other per-chunk baselines, total JS/CSS and preload/SRI checks stay unchanged.
 This is a narrowly declared intentional UI/accessibility cost, not suppression
 of the retained failed budget runs or permission to omit browser verification.
+
+### Plans & Billing MSP referral copy stays in the billing presentation owner
+
+The Pulse MSP line at the end of the Plans & Billing Plan tab takes its text
+and button label from `SELF_HOSTED_PRO_BILLING_PRESENTATION`
+(`mspReferralBody`, `mspReferralActionLabel`) and its tagged destination from
+`PULSE_MSP_REFERRAL_URL` in `selfHostedBillingPresentation.ts`, like the rest
+of the billing shell copy. `ProLicensePanel.tsx` renders it with the shared
+`ButtonLink` outline action, which supplies `noopener noreferrer` for the new
+tab; no local link styling or copy is drafted in the panel.

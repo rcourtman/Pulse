@@ -3991,3 +3991,20 @@ refused default selection by clearing it and retrying reads, and a user with no
 usable organization gets the invitation screen instead of a connection
 failure. Hosted tenant selection, subscription gating and paid capabilities
 are unchanged.
+
+### Plans & Billing names Pulse MSP for self-hosted installs
+
+`ProLicensePanel.tsx` ends the Plan tab with one line that points operators
+who manage infrastructure for clients at Pulse MSP, a separate self-hosted
+provider bundle sold from `pulserelay.pro/msp`. It changes no plan, licence,
+entitlement or checkout path in this install. The line follows the panel's
+commercial gate, so demo and white-label sessions never render it, and it is
+hidden whenever `isHostedModeEnabled()` is true, which covers Pulse-hosted
+workspaces and every provider MSP client runtime (`PULSE_HOSTED_MODE=true`
+from `internal/cloudcp/docker/manager.go`). It deliberately ignores
+`presentationPolicyHidesUpgradePrompts()`: the server sets that for every free
+install to keep nudges off other pages, while Plans & Billing already shows
+plans to free users who open it. The link carries
+`utm_source=pulse&utm_medium=app&utm_campaign=msp` so website visits that start
+here are counted apart. `ProLicensePanel.test.tsx` pins the free-install
+rendering, the hosted and commercial-hidden absence, and the link attributes.
