@@ -27,7 +27,10 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// the canonical agent lookup must be inside that lifetime too.
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
 		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.handleMetricsHistory))))
-	r.mux.HandleFunc("/api/availability-history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleAvailabilityHistory)))
+	// Batch history can also wait while reading its POST body. Revocation or
+	// logout during that wait must cover the result and any handler error.
+	r.mux.HandleFunc("/api/availability-history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead,
+		retainTokenResponseAuthority(r.config, config.ScopeMonitoringRead, false, r.handleAvailabilityHistory))))
 	r.mux.HandleFunc("/api/recovery/points", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.recoveryHandlers.HandleListPoints)))
 	r.mux.HandleFunc("/api/recovery/series", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.recoveryHandlers.HandleListSeries)))
 	r.mux.HandleFunc("/api/recovery/facets", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.recoveryHandlers.HandleListFacets)))
