@@ -4990,6 +4990,49 @@ stops before anything runs as root.
 macOS bash 3.2 and bash 5 against a scratch install directory; not yet run on a
 fresh Ubuntu host.
 
+
+### Provider MSP Traefik takes ACME settings from .env, and setup reports the certificate
+
+From the first provider bundle (2 June 2026) through v6.7.0,
+`deploy/provider-msp/docker-compose.yml` mounted `traefik.yml` as Traefik's
+static configuration and set `TRAEFIK_CERTIFICATESRESOLVERS_*` variables for
+the ACME email and DNS-01 provider. Traefik reads static configuration from
+exactly one source and the file wins, so those variables were ignored: every
+install registered with Let's Encrypt as `admin@example.com`, which Let's
+Encrypt refuses, no certificate was issued, and the portal and every client
+address refused TLS under `sniStrict`. `ACME_DNS_PROVIDER` was ignored the same
+way. Lab walkthroughs used a self-signed override and never saw it. Reproduced
+on a fresh Ubuntu 24.04 VM with a clean ACME store on 3 November 2026: the
+shipped files fail with `invalidContact` for `example.com`; copying
+`ACME_EMAIL` into the installed `traefik.yml` moves issuance on to the DNS
+challenge.
+
+The static configuration now lives in compose `command:` flags, which Compose
+fills from `.env` (`ACME_EMAIL`, `ACME_DNS_PROVIDER`,
+`PULSE_PROVIDER_MSP_DOCKER_NETWORK`); `traefik.yml` is gone from the bundle,
+from setup's and upgrade's install lists and from `scripts/validate-release.sh`,
+and setup and upgrade delete an installed copy. On the same VM the fixed files
+registered the real email and failed only at the placeholder Cloudflare token,
+and `ACME_DNS_PROVIDER=route53` reached Traefik's route53 provider.
+
+Setup no longer ends at "running" while the portal is unusable:
+`check_portal_readiness` waits up to `PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS`
+(180) for a certificate whose SANs include `*.DOMAIN`, probing
+`127.0.0.1:443` with `openssl s_client`. It stops early on Traefik's
+`Unable to obtain ACME certificate` log line and translates refused email,
+Cloudflare permission, DNS propagation and rate-limit failures. It checks that
+this host can resolve `DOMAIN` and a name under it, and prints the report
+before the optional install proof and again in the summary, with the `.env`
+edit and a `docker compose up -d --force-recreate traefik control-plane` retry
+(the control plane carries the `DOMAIN` routing labels). Verified on
+that VM for a refused email, a refused Cloudflare token, an unresolvable host
+name and, with a self-signed wildcard certificate and hosts entries, the ready
+report. A real Let's Encrypt issuance has not been run: the lab has no domain
+with an API token. `docs/MSP.md` carries the one-line v6.7.0 workaround while
+it pins that bundle. `TestProviderMSPTraefikStaticConfigComesFromComposeFlags`,
+`TestProviderMSPSetupReportsPortalReadiness` and
+`TestProviderMSPEvaluationDocsUsePublishedSignedBundle` pin the change.
+
 ### Provider MSP clients survive a support-container recreate
 
 Recreating the control plane or Traefik detaches it from each client's

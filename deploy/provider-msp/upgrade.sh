@@ -112,7 +112,7 @@ resolve_image_digest() {
 
 # The files setup.sh installs from a bundle. A bundle upgrade installs the same
 # set, so an upgraded install matches a fresh one.
-bundle_install_files=(docker-compose.yml traefik.yml traefik-dynamic.yml .env.example run-install-proof.sh upgrade.sh)
+bundle_install_files=(docker-compose.yml traefik-dynamic.yml .env.example run-install-proof.sh upgrade.sh)
 
 # A bundle upgrade brings an existing install up to the release bundle this
 # script was extracted with. Setup resolves the image pins in .env to digests
@@ -170,6 +170,10 @@ apply_bundle_upgrade() {
       *) install -m 0644 "${bundle_dir}/${file}" "${install_dir}/${file}" ;;
     esac
   done
+  # Bundles up to v6.7.0 mounted a traefik.yml whose example.com ACME email
+  # Let's Encrypt refuses. Its settings now live in docker-compose.yml, so the
+  # old file is removed rather than left looking editable.
+  rm -f "${install_dir}/traefik.yml"
   for ((i = 0; i < ${#bundle_pin_keys[@]}; i++)); do
     set_env_value "${bundle_pin_keys[$i]}" "${bundle_pin_values[$i]}" "${env_path}"
   done

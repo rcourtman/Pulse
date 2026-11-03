@@ -201,7 +201,6 @@ func TestProviderMSPSetupScriptMatchesProviderContract(t *testing.T) {
 		"PULSE_PROVIDER_MSP_BUNDLE_URL",
 		"docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
 		"docker-compose.yml",
-		"traefik.yml",
 		"traefik-dynamic.yml",
 		".env.example",
 		"run-install-proof.sh",
@@ -318,21 +317,55 @@ func TestProviderMSPInstallProofRunnerMatchesComposeContract(t *testing.T) {
 	)
 }
 
-func TestProviderMSPTraefikUsesProviderNetwork(t *testing.T) {
-	traefikBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "traefik.yml"))
+// Traefik reads its static configuration from exactly one source, and a
+// mounted traefik.yml beats flags and TRAEFIK_* variables. Through v6.7.0 the
+// bundle mounted one carrying admin@example.com, which Let's Encrypt refuses,
+// so no install obtained a certificate and ACME_EMAIL and ACME_DNS_PROVIDER
+// never reached Traefik. The static configuration now lives in compose flags.
+func TestProviderMSPTraefikStaticConfigComesFromComposeFlags(t *testing.T) {
+	if _, err := os.Stat(repoFile("deploy", "provider-msp", "traefik.yml")); !os.IsNotExist(err) {
+		t.Fatal("deploy/provider-msp/traefik.yml must not return: a mounted static file overrides every compose flag")
+	}
+	composeBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "docker-compose.yml"))
 	if err != nil {
-		t.Fatalf("read provider MSP Traefik config: %v", err)
+		t.Fatalf("read provider MSP compose: %v", err)
 	}
-	var cfg map[string]any
-	if err := yaml.Unmarshal(traefikBytes, &cfg); err != nil {
-		t.Fatalf("provider MSP Traefik config must be valid YAML: %v", err)
+	var compose struct {
+		Services map[string]struct {
+			Command     []string `yaml:"command"`
+			Volumes     []string `yaml:"volumes"`
+			Environment []string `yaml:"environment"`
+		} `yaml:"services"`
 	}
-	assertContainsAll(t, string(traefikBytes),
-		"network: pulse-provider-msp",
-		"certificatesResolvers:",
-		"letsencrypt:",
-		"le:",
+	if err := yaml.Unmarshal(composeBytes, &compose); err != nil {
+		t.Fatalf("provider MSP compose must be valid YAML: %v", err)
+	}
+	traefik := compose.Services["traefik"]
+	for _, volume := range traefik.Volumes {
+		if strings.Contains(volume, "traefik.yml") {
+			t.Fatalf("traefik must not mount a static config file: %s", volume)
+		}
+	}
+	for _, env := range traefik.Environment {
+		if strings.HasPrefix(env, "TRAEFIK_") {
+			t.Fatalf("TRAEFIK_* variables are ignored beside compose flags and must not suggest otherwise: %s", env)
+		}
+	}
+	assertContainsAll(t, strings.Join(traefik.Command, "\n"),
+		"--providers.docker.network=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}",
+		"--providers.file.filename=/etc/traefik/traefik-dynamic.yml",
+		"--entrypoints.websecure.http.middlewares=security-headers@file",
+		"--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}",
+		"--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
+		"--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json",
+		"--certificatesresolvers.le.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}",
+		"--certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
 	)
+	for _, flag := range traefik.Command {
+		if strings.Contains(flag, "acme.email=") && strings.Contains(flag, "example.com") {
+			t.Fatalf("the ACME contact must come from ACME_EMAIL, not an example.com address: %s", flag)
+		}
+	}
 }
 
 func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.T) {
@@ -554,6 +587,9 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		// The portal and client workspaces need both records, and the default
 		// DNS-01 token needs both permissions.
 		"`*.DOMAIN` (each client workspace",
+		// The pinned v6.7.0 bundle still mounts traefik.yml with an example.com
+		// ACME contact; drop this when the pin moves past it.
+		`e=$(sudo sed -n 's/^ACME_EMAIL=//p' .env | tail -n 1 | tr -d "\"'" | sed 's/[&/\]/\\&/g') && sudo sed -i "s/admin@example.com/$e/" traefik.yml && sudo docker compose restart traefik`,
 		"Zone / Zone / Read and Zone / DNS / Edit",
 		"The licence request omits an email address unless you export",
 		"`PULSE_PROVIDER_MSP_EVAL_EMAIL` before running `setup.sh`",
@@ -647,8 +683,8 @@ func TestProviderMSPTraefikEnvIsMinimalAndDNSProviderOverridable(t *testing.T) {
 
 	text := string(composeBytes)
 	assertContainsAll(t, text,
-		"TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}",
-		"TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}",
+		"--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
+		"--certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
 		"CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}",
 		"path: ./dns-credentials.env",
 		"required: false",
@@ -700,7 +736,7 @@ func TestProviderMSPSetupLeavesPlatformRunning(t *testing.T) {
 	assertContainsAll(t, summary, "Open Plan in the portal to see whether", "Keep within two clients until Plan confirms a", "Manage billing")
 	assertNotContainsAny(t, summary, "must bind this key", "derive_lease_signing_public_key", "checkout is by Stripe", "applies within\nseconds")
 
-	sequence := "  ensure_eval_license\n  validate_compose_config\n  start_provider_services\n  run_install_proof_if_requested\n  print_summary\n"
+	sequence := "  ensure_eval_license\n  validate_compose_config\n  start_provider_services\n  check_portal_readiness\n  run_install_proof_if_requested\n  print_summary\n"
 	if !strings.Contains(script, sequence) {
 		t.Fatal("setup must start provider services after the licensed compose validation and before the install proof and summary")
 	}
@@ -759,6 +795,46 @@ func TestProviderMSPSetupAsksForFirstRunValuesUpFront(t *testing.T) {
 	assertNotContainsAny(t, summary, "\n  docker compose run", "\n  ./run-install-proof.sh")
 }
 
+// On a fresh host setup printed "Pulse Provider MSP is running." while the
+// portal refused every TLS handshake: Let's Encrypt had rejected the ACME
+// email, Traefik had no certificate, and sniStrict left the browser with only
+// a handshake error. Setup now waits for the wildcard certificate, checks the
+// two DNS records, and names the fix in the provider's terms.
+func TestProviderMSPSetupReportsPortalReadiness(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	script := string(scriptBytes)
+
+	assertContainsAll(t, script,
+		`PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS="${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS:-180}"`,
+		`openssl s_client -connect 127.0.0.1:443 -servername "${domain}"`,
+		`grep -qF "DNS:*.${domain}"`,
+		`grep -F "Unable to obtain ACME certificate"`,
+		`for name in "${domain}" "pulse-dns-check.${domain}"; do`,
+		`timeout 10 getent ahostsv4 "${name}"`,
+		"sudo docker compose up -d --force-recreate traefik control-plane",
+	)
+	explain := script[strings.Index(script, "explain_acme_failure() {"):]
+	explain = explain[:strings.Index(explain, "\n}\n")]
+	assertContainsAll(t, explain,
+		"*invalidContact*", "Let's Encrypt refused ACME_EMAIL",
+		"*[Cc]loudflare*", "Zone / Zone / Read and Zone / DNS / Edit",
+		"*rateLimited*",
+	)
+	// The report is printed when it is made, so a failing install proof
+	// cannot hide it, and again in the closing summary.
+	check := script[strings.Index(script, "check_portal_readiness() {"):]
+	check = check[:strings.Index(check, "\n}\n")]
+	if !strings.Contains(check, `printf '\n%s\n\n' "${PORTAL_READINESS_REPORT}"`) {
+		t.Fatal("readiness report must be printed before the install proof runs")
+	}
+	summary := script[strings.Index(script, "Pulse Provider MSP is running."):]
+	summary = summary[:strings.Index(summary, "EOF")]
+	assertContainsAll(t, summary, "${PORTAL_READINESS_REPORT}")
+}
+
 // Setup pins the images in .env to digests once, so an upgrade used to re-pull
 // only the release a provider first installed. Run from a newly extracted
 // bundle, upgrade.sh must install that bundle into the existing install,
@@ -780,7 +856,7 @@ func TestProviderMSPUpgradeFromBundleRepinsToTheBundleRelease(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		for _, name := range []string{"docker-compose.yml", "traefik.yml", "traefik-dynamic.yml", ".env.example", "run-install-proof.sh", "upgrade.sh", "setup.sh"} {
+		for _, name := range []string{"docker-compose.yml", "traefik-dynamic.yml", ".env.example", "run-install-proof.sh", "upgrade.sh", "setup.sh"} {
 			content, err := os.ReadFile(repoFile("deploy", "provider-msp", name))
 			if err != nil {
 				t.Fatal(err)

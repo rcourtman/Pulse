@@ -639,7 +639,7 @@ provider_msp_root="pulse-provider-msp-v${PULSE_VERSION}"
 provider_msp_extract="${tmp_root}/provider-msp"
 mkdir -p "${provider_msp_extract}"
 tar -xzf "${provider_msp_bundle}" -C "${provider_msp_extract}"
-for required in setup.sh upgrade.sh run-install-proof.sh docker-compose.yml traefik.yml traefik-dynamic.yml .env.example VERSION; do
+for required in setup.sh upgrade.sh run-install-proof.sh docker-compose.yml traefik-dynamic.yml .env.example VERSION; do
     if [ ! -s "${provider_msp_extract}/${provider_msp_root}/${required}" ]; then
         error "Provider MSP bundle is missing ${required}"
         exit 1
