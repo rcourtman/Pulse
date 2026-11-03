@@ -231,8 +231,11 @@ recoverability, the native id is `pbs-datastore:<store>:job:<family>:<job id>`
 (PBS job ids are unique only within a family), and the
 summary names the job and a sync's remote without times, because incidents
 merge on their summary. The existing unified-incident pipeline raises a
-`backup-storage-incident` alert on the datastore and clears it when the job's
-newest run succeeds; the storage disable switch and per-resource overrides
+`backup-storage-incident` alert on the datastore and clears it after two
+polls that see the job's newest run succeed (`RecoveryConfirmationsRequired`
+2). A PBS outage drops the datastore from a poll, which with confirmed
+recovery reads as unknown, so the alert neither clears nor notifies again
+when PBS returns. The storage disable switch and per-resource overrides
 apply. Storeless task history, disabled jobs, backup-family jobs and warning,
 late or unknown runs raise nothing. So the alert neither flaps nor clears
 early, the PBS poller carries a job's last completed failure

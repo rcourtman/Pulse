@@ -152,7 +152,14 @@ drops the previous result while the next run is in progress, an overdue or
 unreadable job reports none, and a failed read lists no jobs. The carried
 failure clears on an observed success or warning, or when a complete read
 drops or disables the job. Jobs are keyed by family plus id, since PBS ids are
-unique only within a family. `pbsJobHealthPosture` now ranks a failed last
+unique only within a family. Only a failed job-list read (the `<family>:partial`
+entry) makes a family unreadable; task-history trouble does not keep a
+removed job's failure. Recovery is judged from the run's own status, so a
+successful run first seen after its next schedule passed still clears the
+carry. A poll that fails before reading jobs keeps the instance's last job
+results in state, so the carry survives a PBS outage. Carried failures live
+in memory: a Pulse restart forgets them until PBS reports the job again.
+`pbsJobHealthPosture` now ranks a failed last
 run above overdue, so a failed job that has also missed its next run reads
 failed, not late. `pbsTaskStatusOutcome` reads a PBS status the way
 Proxmox's own UI does (`parse_task_status`): exactly "OK" is success, a

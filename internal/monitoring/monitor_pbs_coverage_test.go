@@ -863,12 +863,13 @@ func TestPBSBudgetOwnerWithdrawsLatePublication(t *testing.T) {
 	exercisePBSBudgetOwnerWithdrawal(t)
 }
 
-func carriedJob(id, family, posture, reason string) models.PBSJobHealthEvidence {
+func carriedJob(id, family, state, posture, reason string) models.PBSJobHealthEvidence {
 	return models.PBSJobHealthEvidence{
 		ID:            id,
 		Family:        family,
 		Store:         "offsite",
 		Enabled:       true,
+		LastRunState:  state,
 		Posture:       posture,
 		PostureReason: reason,
 	}
@@ -886,7 +887,7 @@ func postureOf(evidence []models.PBSJobHealthEvidence, family, id string) string
 // A failed sync stays failed through the polls that cannot report a newer
 // outcome (#1815): otherwise its alert would clear and fire again each time.
 func TestCarryPBSJobFailuresHoldsAFailureUntilAnOutcomeIsObserved(t *testing.T) {
-	failed := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "critical", "last-run-failed")}
+	failed := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "connection error", "critical", "last-run-failed")}
 
 	cases := []struct {
 		name       string
@@ -894,14 +895,19 @@ func TestCarryPBSJobFailuresHoldsAFailureUntilAnOutcomeIsObserved(t *testing.T) 
 		readFailed bool
 		want       string
 	}{
-		{"next run in progress", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "healthy", "running")}, false, "critical/last-run-failed"},
-		{"overdue with no newer run", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "warning", "job-overdue")}, false, "critical/last-run-failed"},
-		{"state unreadable", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "unknown", "no-run-observed")}, false, "critical/last-run-failed"},
+		// PBS drops the previous result while the next run is in progress.
+		{"next run in progress", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "", "unknown", "no-run-observed")}, false, "critical/last-run-failed"},
+		{"state unknown", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "unknown", "unknown", "last-run-state-unknown")}, false, "critical/last-run-failed"},
 		{"whole read failed", nil, true, "critical/last-run-failed"},
-		{"family read failed", []models.PBSJobHealthEvidence{{ID: "sync:partial", Family: "sync", Error: "403"}}, false, "critical/last-run-failed"},
-		{"retry succeeded", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "healthy", "last-run-success")}, false, "healthy/last-run-success"},
-		{"retry warned", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "warning", "last-run-warning")}, false, "warning/last-run-warning"},
+		{"job list read failed", []models.PBSJobHealthEvidence{{ID: "sync:partial", Family: "sync", Error: "403", EvidenceSource: pbs.JobEvidenceSourcePBSPartialRead}}, false, "critical/last-run-failed"},
+		{"retry succeeded", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "OK", "healthy", "last-run-success")}, false, "healthy/last-run-success"},
+		{"retry warned", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "WARNINGS: 1", "warning", "last-run-warning")}, false, "warning/last-run-warning"},
+		// A successful run first seen after the next schedule passed is still
+		// a recovery, even though the posture reads late.
+		{"retry succeeded, now overdue", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "OK", "warning", "job-overdue")}, false, "warning/job-overdue"},
 		{"job removed", []models.PBSJobHealthEvidence{}, false, "absent"},
+		// Task history trouble says nothing about the configured job list.
+		{"job removed while task history failed", []models.PBSJobHealthEvidence{{ID: "sync:task-history-partial", Family: "sync", Error: "500", EvidenceSource: pbs.JobEvidenceSourcePBSPartialRead}}, false, "absent"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -912,7 +918,7 @@ func TestCarryPBSJobFailuresHoldsAFailureUntilAnOutcomeIsObserved(t *testing.T) 
 		})
 	}
 
-	disabled := carriedJob("s-1", "sync", "unknown", "no-run-observed")
+	disabled := carriedJob("s-1", "sync", "", "unknown", "no-run-observed")
 	disabled.Enabled = false
 	got := carryPBSJobFailures(failed, []models.PBSJobHealthEvidence{disabled}, false)
 	if len(got) != 1 || got[0].Enabled {
@@ -921,10 +927,10 @@ func TestCarryPBSJobFailuresHoldsAFailureUntilAnOutcomeIsObserved(t *testing.T) 
 }
 
 func TestCarryPBSJobFailuresKeysJobsByFamily(t *testing.T) {
-	previous := []models.PBSJobHealthEvidence{carriedJob("daily", "sync", "critical", "last-run-failed")}
+	previous := []models.PBSJobHealthEvidence{carriedJob("daily", "sync", "connection error", "critical", "last-run-failed")}
 	current := []models.PBSJobHealthEvidence{
-		carriedJob("daily", "verify", "healthy", "last-run-success"),
-		carriedJob("daily", "sync", "healthy", "running"),
+		carriedJob("daily", "verify", "OK", "healthy", "last-run-success"),
+		carriedJob("daily", "sync", "", "unknown", "no-run-observed"),
 	}
 	got := carryPBSJobFailures(previous, current, false)
 	if posture := postureOf(got, "sync", "daily"); posture != "critical/last-run-failed" {

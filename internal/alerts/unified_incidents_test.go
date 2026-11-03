@@ -1466,8 +1466,19 @@ func TestSyncUnifiedResourceIncidentsAlertsOnFailedPBSSyncJob(t *testing.T) {
 		t.Fatalf("resource name = %q, want the sync's store", alert.ResourceName)
 	}
 
+	// A PBS outage drops the datastore from the poll: unknown, not recovery.
+	m.SyncUnifiedResourceIncidents(nil)
+	if active := m.GetActiveAlerts(); len(active) != 1 {
+		t.Fatalf("an outage must keep the alert, got %+v", active)
+	}
+
+	// Recovery needs two polls that see the job succeed.
+	m.SyncUnifiedResourceIncidents(snapshot("healthy"))
+	if active := m.GetActiveAlerts(); len(active) != 1 {
+		t.Fatalf("one successful poll must not clear the alert yet, got %+v", active)
+	}
 	m.SyncUnifiedResourceIncidents(snapshot("healthy"))
 	if active := m.GetActiveAlerts(); len(active) != 0 {
-		t.Fatalf("a succeeded sync must clear the alert, got %+v", active)
+		t.Fatalf("a confirmed successful sync must clear the alert, got %+v", active)
 	}
 }

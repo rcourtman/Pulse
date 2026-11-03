@@ -89,6 +89,10 @@ func pbsDatastoreJobIncidents(instance models.PBSInstance, datastore string) []R
 			Source:    string(SourcePBS),
 			Summary:   pbsJobFailedSummary(entry, id, store),
 			StartedAt: startedAt,
+			// A PBS outage drops the datastore from a poll; with confirmed
+			// recovery that reads as unknown, so the alert neither clears nor
+			// notifies again when PBS returns.
+			RecoveryConfirmationsRequired: 2,
 		})
 	}
 	return incidents

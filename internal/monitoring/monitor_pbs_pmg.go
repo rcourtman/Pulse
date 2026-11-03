@@ -224,8 +224,10 @@ func carryPBSJobFailures(previous, current []models.PBSJobHealthEvidence, readFa
 
 	unreadFamilies := make(map[string]bool)
 	for _, entry := range current {
-		if strings.TrimSpace(entry.Error) != "" {
-			unreadFamilies[strings.ToLower(strings.TrimSpace(entry.Family))] = true
+		family := strings.ToLower(strings.TrimSpace(entry.Family))
+		if strings.TrimSpace(entry.Error) != "" && entry.ID == family+":partial" &&
+			entry.EvidenceSource == pbs.JobEvidenceSourcePBSPartialRead {
+			unreadFamilies[family] = true
 		}
 	}
 
@@ -252,11 +254,15 @@ func carryPBSJobFailures(previous, current []models.PBSJobHealthEvidence, readFa
 }
 
 // pbsJobReportsOutcome says whether this poll observed how the job's newest
-// run ended: success, warning or failure, rather than running, overdue or an
-// unreadable state.
+// run ended: success, warning or failure, rather than running or an
+// unreadable state. It reads the run's own status, not the posture, so a
+// successful run first seen after its next schedule passed still counts.
 func pbsJobReportsOutcome(entry models.PBSJobHealthEvidence) bool {
-	switch entry.PostureReason {
-	case "last-run-success", "last-run-warning", "last-run-failed":
+	if strings.TrimSpace(entry.Error) != "" {
+		return false
+	}
+	switch pbsTaskStatusOutcome(firstNonEmptyString(entry.TaskStatus, entry.LastRunState)) {
+	case "ok", "warning", "failed":
 		return true
 	default:
 		return false
@@ -743,6 +749,11 @@ func (m *Monitor) recordPBSNodeHistory(serviceID string, status *pbs.NodeStatus,
 // connection map, dashboard resource, and legacy alert evaluator must all use
 // the same poll error that is recorded in the scheduler ledger.
 func (m *Monitor) publishPBSConnectionOutcome(instance models.PBSInstance, pollErr error) {
+	// A poll that failed before reading jobs knows nothing new about them;
+	// keep the last results so a failed job is still carried when PBS returns.
+	if pollErr != nil && len(instance.JobHealthEvidence) == 0 {
+		instance.JobHealthEvidence = m.state.PBSJobHealthEvidence(instance.ID)
+	}
 	connected := pollErr == nil
 	if connected {
 		instance.Status = "online"

@@ -932,6 +932,11 @@ func TestPBSDatastoreJobIncidentsNameGarbageCollectionByStore(t *testing.T) {
 	if got[0].Summary != "Garbage collection failed on datastore main" || got[1].Summary != "Prune job p-1 failed on datastore main" {
 		t.Fatalf("summaries = %q, %q", got[0].Summary, got[1].Summary)
 	}
+	// A PBS outage drops the datastore from a poll; confirmed recovery keeps
+	// that from reading as the job recovering.
+	if got[0].RecoveryConfirmationsRequired != 2 {
+		t.Fatalf("recovery confirmations = %d, want 2", got[0].RecoveryConfirmationsRequired)
+	}
 }
 
 // PBS job ids are unique only within a family; a later successful verify job
