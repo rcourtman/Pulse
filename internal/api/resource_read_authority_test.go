@@ -57,8 +57,9 @@ func checkResourceReadAuthorityCurrent(t *testing.T, path string, wire snapshotA
 			t.Fatalf("statistics lost inventory: %s", wire.Body)
 		}
 	case strings.HasSuffix(path, "/storage-summary"):
-		if !strings.Contains(wire.Body, "synthetic-pool") {
-			t.Fatalf("summary lost storage: %s", wire.Body)
+		var total int
+		if json.Unmarshal(body["totalResources"], &total) != nil || total != 1 {
+			t.Fatalf("summary lost storage count: %s", wire.Body)
 		}
 	case strings.HasSuffix(path, "/storage-incidents"):
 		if len(body["sections"]) == 0 {
@@ -194,13 +195,29 @@ func TestResourceReadsStoreOnlyEntrancesKeepAdmission(t *testing.T) {
 	}
 }
 
+func TestResourceReadMissingVerificationKeepsAdmission(t *testing.T) {
+	f := newResourceReadAuthorityFixture(t, "/api/maintenance-verifications/missing", []string{config.ScopeSettingsRead})
+	f.provider.unblock()
+	f.current(t, "", "header", http.StatusUnauthorized)
+	f.current(t, snapshotAuthorityToken, "header", http.StatusForbidden)
+	f.current(t, snapshotAuthorityControl, "header", http.StatusNotFound)
+}
+
 func TestResourceReadScopeCannotMutate(t *testing.T) {
-	for _, path := range []string{"/api/resources/vm:101/link", "/api/resources/vm:101/unlink", "/api/resources/vm:101/report-merge", "/api/resources/vm:101/maintenance-verifications/rerun"} {
-		t.Run(path, func(t *testing.T) {
-			f := newResourceReadAuthorityFixture(t, path, []string{config.ScopeMonitoringRead})
+	for _, mutation := range []struct{ method, path string }{
+		{http.MethodPost, "/api/resources/vm:101/link"},
+		{http.MethodPost, "/api/resources/vm:101/unlink"},
+		{http.MethodPost, "/api/resources/vm:101/report-merge"},
+		{http.MethodPost, "/api/resources/vm:101/maintenance-verifications/rerun"},
+		{http.MethodPut, "/api/resources/vm:101/operator-state"},
+		{http.MethodDelete, "/api/resources/vm:101/operator-state"},
+		{http.MethodPost, "/api/maintenance-verifications/missing/review"},
+	} {
+		t.Run(mutation.method+mutation.path, func(t *testing.T) {
+			f := newResourceReadAuthorityFixture(t, mutation.path, []string{config.ScopeMonitoringRead})
 			f.provider.unblock()
 			req := f.request(t, snapshotAuthorityToken, "header")
-			req.Method = http.MethodPost
+			req.Method = mutation.method
 			response, err := f.server.Client().Do(req)
 			if err != nil {
 				t.Fatal(err)
