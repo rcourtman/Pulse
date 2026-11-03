@@ -15,9 +15,9 @@ from canonical_completion_guard import (
     git_staged_files as canonical_git_staged_files,
     infer_impacted_subsystems,
     load_subsystem_rules,
+    missing_verification_requirements,
     required_contract_updates,
     staged_contract_has_substantive_change,
-    staged_verification_files_for_requirement,
 )
 from repo_file_io import load_repo_json
 from release_promotion_policy_support import (
@@ -252,18 +252,7 @@ def canonical_commit_shape_errors(staged_files: Sequence[str]) -> list[str]:
         if contract_path in staged_set
         if not staged_contract_has_substantive_change(contract_path)
     }
-    missing_verification: dict[str, dict] = {}
-    for subsystem_id, data in impacted.items():
-        missing_requirements = [
-            requirement
-            for requirement in data.get("verification_requirements", [])
-            if not staged_verification_files_for_requirement(data, requirement, staged_files)
-        ]
-        if missing_requirements:
-            missing_verification[subsystem_id] = {
-                **data,
-                "missing_requirements": missing_requirements,
-            }
+    missing_verification = missing_verification_requirements(impacted, staged_files)
 
     if not missing_contracts and not insufficient_contract_updates and not missing_verification:
         return []
