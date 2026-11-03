@@ -1886,7 +1886,10 @@ retain their existing boundaries.
 `scripts/tests/test_e2e_probation_scope.mjs` exercises root and nested spec
 selection, stable and unrelated paths, execution configuration changes,
 unsupported patterns, and the CLI's NUL-delimited filename framing. The
-existing image admission proof still validates the same-run producer and
+executable verdict controls in `scripts/tests/test_ci_browser_proof_only.py`
+exercise known and unknown probation scope, required PR results and
+observational branch results while retaining every existing success boundary.
+The existing image admission proof still validates the same-run producer and
 consumer boundary. Actual execution of both browser tiers supplies the
 source-bound journey result.
 
