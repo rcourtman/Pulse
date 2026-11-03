@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse, type HistoryTimeRange } from '@/api/charts';
@@ -267,7 +268,12 @@ describe('GuestDrawerHistory stored-observation inspection', () => {
   it('offers no inspection or reads for an absent target or locked range', async () => {
     const fetch = vi.spyOn(ChartsAPI, 'getMetricsHistory');
     const [current, setTarget] = createSignal<GuestDrawerHistoryTarget | null>(null);
-    render(() => <GuestDrawerHistory target={current()} range="14d" />);
+    // The plan lock links to Plans & Billing, which needs a router.
+    render(() => (
+      <Router>
+        <Route path="/*" component={() => <GuestDrawerHistory target={current()} range="14d" />} />
+      </Router>
+    ));
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     setTarget(target);
     await screen.findByText(/14 days history requires/);
