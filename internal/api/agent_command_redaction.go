@@ -8,6 +8,24 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+// Context and history can wait for stores or providers after authentication.
+// Keep both the read authority and any command-disclosure authority used by
+// their projections until disclosure. Never refresh an old request into a
+// different reader or retry its lookup with wider/different authority.
+func retainAgentCommandResponseAuthority(cfg *config.Config, next http.HandlerFunc) http.HandlerFunc {
+	read := retainTokenResponseAuthority(cfg, config.ScopeMonitoringRead, false, next)
+	// These scopes are BOTH required for a command-bearing projection, not
+	// interchangeable alternatives. Monitoring-only reads keep redaction.
+	commandRead := retainTokenResponseAuthority(cfg, config.ScopeAIExecute, false, read)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if token := getAPITokenRecordFromRequest(r); token != nil && token.HasScope(config.ScopeAIExecute) {
+			commandRead(w, r)
+			return
+		}
+		read(w, r)
+	}
+}
+
 func requestCanReadAgentCommandPayloads(r *http.Request) bool {
 	token := getAPITokenRecordFromRequest(r)
 	if token == nil {
