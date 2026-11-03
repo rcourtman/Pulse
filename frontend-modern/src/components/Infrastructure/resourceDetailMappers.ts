@@ -385,6 +385,16 @@ const formatPowerWatts = (value: number) => {
   return `${value.toFixed(1)} W`;
 };
 
+export const buildPowerRows = (power?: HostSensorSummary['powerWatts']) =>
+  Object.entries(power ?? {})
+    .map(([name, value]) => [name, formatPowerWatts(value)] as const)
+    .filter(([, value]) => value)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => {
+      const label = formatPowerSensorLabel(name);
+      return { label, value, valueTitle: `${label} ${value}` };
+    });
+
 const formatFanRPM = (value: number) => {
   if (!Number.isFinite(value)) return '';
   return `${Math.round(Math.max(0, value)).toLocaleString()} RPM`;
@@ -502,21 +512,7 @@ export const buildTemperatureRows = (
       });
   }
 
-  const power = sensors?.powerWatts;
-  if (power) {
-    Object.entries(power)
-      .map(([name, value]) => [name, formatPowerWatts(value)] as const)
-      .filter(([, value]) => value)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([name, value]) => {
-        const label = formatPowerSensorLabel(name);
-        rows.push({
-          label,
-          value,
-          valueTitle: `${label} ${value}`,
-        });
-      });
-  }
+  rows.push(...buildPowerRows(sensors?.powerWatts));
 
   // This card has no other cue that a value is not current, so a retained
   // sensor reading says so in its value, as a retained disk reading does.

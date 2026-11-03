@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourceActionsAPI } from '@/api/resourceActions';
@@ -932,6 +933,65 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Healthy')).toHaveAttribute('data-docker-container-state', 'ok');
   });
 
+  it.each([320, WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH])(
+    'updates the same container row dot across health and lifecycle refreshes at %ipx',
+    (width) => {
+      setViewportWidth(width);
+      const [resources, setResources] = createStore<Resource[]>([
+        makeResource({
+          id: 'container-health',
+          type: 'app-container',
+          name: 'edge-api',
+          status: 'running',
+          docker: { hostname: 'edge-01', containerState: 'running', health: 'healthy' },
+        }),
+      ]);
+      const { container } = renderInRouter(() => (
+        <DockerContainersTable
+          resources={resources}
+          emptyIcon={<span />}
+          emptyTitle="No containers"
+          emptyDescription="No containers"
+          showToolbar={false}
+        />
+      ));
+      const row = container.querySelector('[data-docker-container-row="container-health"]')!;
+      const initialResource = resources[0];
+      expect(within(row as HTMLElement).getByTitle('Healthy')).toHaveClass('bg-emerald-500');
+
+      for (const [health, label, colour] of [
+        ['starting', 'Starting', 'bg-amber-500'],
+        ['unhealthy', 'Unhealthy', 'bg-red-500'],
+        ['healthy', 'Healthy', 'bg-emerald-500'],
+      ]) {
+        setResources(0, 'docker', 'health', health);
+        expect(resources[0]).toBe(initialResource);
+        expect(container.querySelector('[data-docker-container-row="container-health"]')).toBe(row);
+        expect(within(row as HTMLElement).getByTitle(label)).toHaveClass(colour);
+        if (health === 'healthy' && width === WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH) {
+          // Wide tables drop the State column when every row is healthy;
+          // the still-mounted dot, asserted above, carries that verdict.
+          expect(within(row as HTMLElement).queryByText('Healthy')).not.toBeInTheDocument();
+          expect(screen.queryByRole('columnheader', { name: /State/ })).not.toBeInTheDocument();
+        } else {
+          expect(within(row as HTMLElement).getByText(label)).toHaveAttribute(
+            'data-docker-container-state',
+            health === 'unhealthy' ? 'danger' : health === 'starting' ? 'warning' : 'ok',
+          );
+        }
+      }
+
+      setResources(0, 'docker', 'containerState', 'exited');
+      setResources(0, 'docker', 'exitCode', 137);
+      expect(within(row as HTMLElement).getByTitle('Exited (137)')).toHaveClass('bg-red-500');
+      setResources(0, 'docker', 'containerState', 'restarting');
+      expect(within(row as HTMLElement).getByTitle('Restarting')).toHaveClass('bg-amber-500');
+      setResources(0, 'docker', 'containerState', 'exited');
+      setResources(0, 'docker', 'exitCode', 0);
+      expect(within(row as HTMLElement).getByTitle('Exited')).toHaveClass('bg-slate-400');
+    },
+  );
+
   it('puts state words that need attention beside the name where a phone row has no State column', () => {
     // A narrow table cannot give "Unhealthy" its own column beside the 40%
     // name, both metric pills and the Update control without cutting it.
@@ -967,7 +1027,7 @@ describe('Docker native tables', () => {
     expect(unhealthy).toHaveAttribute('data-docker-container-state', 'danger');
     expect(unhealthy.closest('td')).toBe(screen.getByText('edge-api').closest('td'));
     // The words join the name on its line, so the row stays one line tall.
-    expect(unhealthy).toHaveClass('min-w-0', 'truncate');
+    expect(unhealthy).toHaveClass('min-w-0', 'truncate', 'shrink-0');
     expect(unhealthy.parentElement).toHaveClass('items-center');
     expect(unhealthy.parentElement).not.toHaveClass('flex-col');
     // A running container reads in its green dot; screen readers keep the words.

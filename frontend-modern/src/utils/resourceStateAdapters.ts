@@ -1467,6 +1467,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
       mhz: asString(cpuInfo?.mhz) || '0',
     },
     sensors: agentFacet?.sensors,
+    sensorsStale: agentFacet?.stale === true,
     temperature: buildTemperature(resource, proxmox),
     // The backend's primary CPU reading: the agent's when one is linked, the
     // same source the node's history line reads.

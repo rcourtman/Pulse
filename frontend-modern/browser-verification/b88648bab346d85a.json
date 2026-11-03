@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "base_sha": "42acb257c60403740c942853b4f827f226636106",
+  "verified_at": "2026-11-03T01:32:45.429Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "ab0fe265759103cd572b3102231a3f7ab9ea6faf2b0e672ea6c5677b58648740"
+  },
+  "routes": [
+    "/tmp/docker-health-proof/index.html"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Synthetic read-only /api/resources replies pass through production useUnifiedResources REST normalization/reconciliation, DockerContainersTable and inline drawer. Retained Delivery a6fb6e40 producer exits supply only health fixture data; no image probe, Docker engine, native installation, original incident or full App is replayed.",
+    "Healthy -> Unhealthy -> Healthy updates keep the same resource object and DOM row; row dot becomes red on failure and green on recovery, matching state words.",
+    "Unhealthy remains fully readable beside a deliberately long, truncated name at 390px WebKit/dark and 320px Chromium/light without overflow or added row height. The full name remains readable in the actual drawer.",
+    "51 browser assertions across Chromium 1440/320 and WebKit 390; nine retained failing/recovered captures opened with native view_image.",
+    "The first fixture attempt timed out at navigation networkidle before any assertions although the healthy table rendered. It is retained separately; final pass waits for DOM content and explicit loaded state, with production bytes unchanged."
+  ],
+  "interactions": [
+    "Manually refetched the same-ID canonical resource through the real REST reader, not by recreating a row or changing permissions.",
+    "Opened the actual inline drawer by desktop disclosure or phone tap; Failing is visible in Worth checking. After recovery, opened native Details to inspect Passing rather than incorrectly requiring closed content to be visible.",
+    "Measured failure-word scroll/client width, page width and unchanged single-line row height at every viewport; no page exceptions, console errors, off-origin requests or mutations occurred."
+  ],
+  "browser": {
+    "client": "Playwright 1.56.1",
+    "engines": [
+      {
+        "engine": "Chromium",
+        "version": "141.0.7390.37",
+        "width": 1440
+      },
+      {
+        "engine": "WebKit",
+        "version": "26.0",
+        "width": 390
+      },
+      {
+        "engine": "Chromium",
+        "version": "141.0.7390.37",
+        "width": 320
+      }
+    ]
+  }
+}
