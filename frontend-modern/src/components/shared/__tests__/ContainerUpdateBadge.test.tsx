@@ -245,11 +245,10 @@ describe('ContainerUpdateBadge', () => {
     ));
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    const status = screen.getByLabelText(/installed without command access/);
+    const status = screen.getByLabelText(/does not accept commands from Pulse/);
     expect(status.getAttribute('aria-label')).toContain('the Pulse agent on Tower');
-    expect(status.getAttribute('aria-label')).toContain('Settings → Infrastructure');
     expect(status.getAttribute('aria-label')).toContain(
-      '"Allow Pulse to run commands on this host" selected and run it on Tower',
+      'choose Manage on Tower, and follow Remote commands',
     );
   });
 

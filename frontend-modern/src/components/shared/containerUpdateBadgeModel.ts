@@ -1,6 +1,5 @@
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { ResourceActionReadiness } from '@/types/resource';
-import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
 
 export interface ContainerUpdateBadgeProps {
   updateStatus?: DockerContainerUpdateStatus;
@@ -126,8 +125,11 @@ export function getContainerUpdateCurrentTooltip(
 
 /**
  * What the locked "Update available" badge says when Pulse cannot apply the
- * update. An agent installed without command access is the common case and has
- * one fix, so it is named outright instead of the server's transport wording.
+ * update. An agent that does not accept commands is the common case and has
+ * one fix, so it is named outright instead of the server's transport wording,
+ * with the exact place that hands over the command. An absent commandsEnabled
+ * flag reads as false, so the copy says the agent does not accept commands
+ * rather than claiming how it was installed.
  */
 export function getUpdateUnavailableExplanation(input: {
   reason: string;
@@ -139,10 +141,9 @@ export function getUpdateUnavailableExplanation(input: {
   if (input.reasonCode === 'command_agent_disconnected') {
     if (input.hostCommandsEnabled === false) {
       return (
-        `Update available. Pulse cannot apply it because the Pulse agent on ${host} was installed without command access.\n` +
-        `To allow updates from Pulse, copy the install command from Settings → Infrastructure with ` +
-        `"${getUnifiedAgentCommandAccessOptionLabel()}" selected and run it on ${host}. ` +
-        'Otherwise, apply the update with your container manager.'
+        `Update available. Pulse cannot apply it because the Pulse agent on ${host} does not accept commands from Pulse.\n` +
+        `To allow it, open Settings → Infrastructure, choose Manage on ${host}, and follow Remote commands. ` +
+        'Or apply the update with your container manager.'
       );
     }
     if (input.hostCommandsEnabled === true) {
