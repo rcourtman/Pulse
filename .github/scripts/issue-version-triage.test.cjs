@@ -1163,6 +1163,10 @@ const formattedNoTopicResponses = [
   "`none known`",
   "**_No response_**",
   '[None](https://example.invalid/context "not another topic")',
+  "None that I know of.",
+  "**None** that I know of.",
+  "NONE THAT I KNOW OF!",
+  '[None that I know of.](https://example.invalid/context "another topic")',
 ];
 
 test("visible no-topic responses stay empty through ordinary inline formatting", () => {
@@ -1175,6 +1179,11 @@ test("visible no-topic responses stay empty through ordinary inline formatting",
 test("no-topic formatting cannot discard qualifiers, block evidence or images", () => {
   for (const value of [
     "**None**, except the saved target changes after switching organisation.",
+    "None that I know of, except another host also loses its disk history.",
+    "None that I know of. However, the saved target also changes.",
+    "None that I know of.\n\nThe second host also loses its Docker inventory.",
+    "None that I know of.\n\n```text\nAnother symptom is recorded here.\n```",
+    "![None that I know of.](https://example.invalid/evidence.png)",
     "None\n\n**The backup issue also affects another host.**",
     "None\n\n```text\n### Pulse version\n6.5.0\n```",
     "- **None**\n- The saved target also changes.",
