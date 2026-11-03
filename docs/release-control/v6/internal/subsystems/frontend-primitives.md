@@ -639,6 +639,13 @@ Backup health reasons "No backup history" and "Backup source reported a
 failure" become "Backup status unknown" and "Last backup failed"; each still
 shares one 32px row with its count and bar at phone width.
 
+### Backup jobs header names the pills' window at every width (3 November 2026)
+
+`ProxmoxBackupJobsCard` drops the "14 days" title suffix and always labels the
+header pills with their window: "Last 24h" from `sm` up, "24h" below, so a
+375px header stays one 21px line with three pills. The incomplete-window tag
+reads "incomplete data".
+
 ### Backup jobs card composes the overview primitives (2 November 2026)
 
 `ProxmoxBackupJobsCard` is a `TableCard` with a `TableCardHeader` strip, like

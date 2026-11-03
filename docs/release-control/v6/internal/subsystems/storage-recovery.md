@@ -5210,6 +5210,17 @@ and leaves the page where it is when the list already shows; clearing a filter
 never scrolls. `ProxmoxBackupsTable.test.tsx` pins the section order and both
 scroll cases.
 
+### Backup jobs names each time window where it is shown (3 November 2026)
+
+The card's title read "Backup jobs 14 days" while its outcome pills counted
+the last 24 hours, and the pills' "24h" prefix was hidden on phones, so the
+pills read as the chart's totals. The title is now "Backup jobs", the pills
+are prefixed "Last 24h" ("24h" on phones, keeping the header on one line),
+and the chart's own axis, first day to Today, gives its span. When Pulse did
+not see the whole last 24 hours the pills carry "incomplete data" (was
+"partial") with the hover "Pulse did not see the whole last 24 hours, so
+these counts may be low". Counts, windows and history states are unchanged.
+
 ### Backup jobs show 14 days of retained outcomes beside Backup health (2 November 2026)
 
 A Backup jobs card answers "did last night's backups run, and is that

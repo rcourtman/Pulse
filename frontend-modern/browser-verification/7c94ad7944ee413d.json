@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "8c248d45a0eca4037812c60cb9491125a0a846bd",
+  "verified_at": "2026-11-03T16:31:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "215c4f49cddafdf677ac89f96660e11f922bd85a0f1649103d79702d0bdf376d"
+  },
+  "routes": [
+    "/proxmox/backups",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 607
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode built from this change on pulse-dev: a complete last-24-hour window with ok, running and failed jobs and a 14-day chart",
+    "desktop and phone layouts, dark theme"
+  ],
+  "interactions": [
+    "at 1024px the card title reads BACKUP JOBS with no 14 days suffix; the header reads Last 24h 619 ok, 33 running, 35 failed on one 21px line; the chart axis reads Wed 21 Oct to Today",
+    "at 375x812 the header reads 24h 619 ok, 33 running, 35 failed on one 21px line with no horizontal overflow",
+    "the incomplete-window tag (incomplete data, with its hover) is not reachable in mock data; ProxmoxBackupJobsCard.test.tsx renders it from a partial last-24-hour payload"
+  ]
+}
