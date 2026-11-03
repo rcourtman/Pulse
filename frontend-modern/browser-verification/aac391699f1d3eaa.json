@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "019cd924ab8ac21d0f90e92d89292a45bbdeb8b1",
+  "verified_at": "2026-11-03T19:42:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "dffb9af8a5cf94ead553d0bc46cc0e20dc68e44c85eb49b4a493030ce6e24580",
+    "frontend-modern/src/utils/alerts.ts": "d0d7c726aafdab461b9a2ba0cd61a5a2b9b319d744b925bfc01ff31f9cfbb97c"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Light theme, fixed time and identical synthetic two-estate data before and after. Actual ProxmoxNodesTable and NodeDrawer under their data contexts in an evidence-only router frame, not a full authenticated App or installed estate.",
+    "Collapsed host table: both namesake pve1 nodes, different clusters/versions/CPU/RAM, own row accents and per-disk bars unchanged.",
+    "Each host drawer: baseline repeated seven-alert list; final North has its four local alerts and South its two local alerts. Their own chart thresholds remain separate from guest warnings.",
+    "North expanded alert list retains local guest, disk and storage warnings; unscoped child warnings are not attributed by name alone."
+  ],
+  "interactions": [
+    "Expand North, reveal its remaining alerts, switch to South and collapse; both desktop and narrow.",
+    "Replace the synthetic active-alert snapshot after South guest recovery: its attention count updates immediately without losing the remaining host alert.",
+    "Thirty before and 34 current browser checks pass; eight comparable capture pairs opened with the native image tool; no page errors or horizontal page overflow."
+  ]
+}

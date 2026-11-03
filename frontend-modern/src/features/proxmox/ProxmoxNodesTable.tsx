@@ -819,7 +819,18 @@ export const ProxmoxNodesTable: Component<{
                               alertResourceIds(),
                               activeAlerts,
                               alertsEnabled(),
-                              node.name,
+                              {
+                                // Display labels may differ from the provider
+                                // key, and names repeat across PVE connections.
+                                name:
+                                  asTrimmedString(node.proxmox?.nodeName) ||
+                                  asTrimmedString(node.proxmox?.node) ||
+                                  node.name,
+                                instance:
+                                  asTrimmedString(node.proxmox?.instance) ||
+                                  asTrimmedString(node.platformId) ||
+                                  '',
+                              },
                             )}
                             // Without the node-name match: the node's own alerts,
                             // not its guests', drive its trend cards.

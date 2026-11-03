@@ -584,6 +584,84 @@ describe('ProxmoxNodesTable', () => {
     );
   });
 
+  it('keeps namesake nodes in different instances apart without dropping their child warnings', async () => {
+    const nodes = ['north', 'south'].map((instance) =>
+      makeNodeResource({
+        id: `agent:${instance}-pve1`,
+        name: 'pve1',
+        platformId: instance,
+        proxmox: { sourceId: `${instance}-pve1`, instance, nodeName: 'pve1' },
+      }),
+    );
+    const alert = (id: string, resourceId: string, instance: string, node = 'pve1') => ({
+      id,
+      resourceId,
+      instance,
+      node,
+      type: 'memory',
+      level: 'warning',
+      acknowledged: false,
+    });
+    activeAlertsMock.value = {
+      own: alert('own', 'north-pve1', ''),
+      north: alert('north-guest', 'north-pve1-101', 'north'),
+      south: alert('south-guest', 'south-pve1-101', 'south'),
+      disk: alert('north-disk', 'north:pve1:disk:/dev/sda', 'north'),
+      storage: alert('north-storage', 'north-pve1-local', 'north'),
+      anotherNode: alert('another-node', 'north-pve10-101', 'north', 'pve10'),
+      unknown: alert('unscoped-guest', 'legacy-101', ''),
+    };
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={nodes}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const toggle = (id: string) =>
+      document.querySelector(`[data-proxmox-host-row="${id}"] [data-row-action="true"]`)!;
+    await fireEvent.click(toggle(nodes[0].id));
+    let drawer = nodeDrawerMock.mock.lastCall?.[0];
+    expect(drawer.alerts.map((entry: { id: string }) => entry.id)).toEqual([
+      'own',
+      'north-guest',
+      'north-disk',
+      'north-storage',
+    ]);
+    expect(drawer.ownAlerts.map((entry: { id: string }) => entry.id)).toEqual(['own']);
+
+    await fireEvent.click(toggle(nodes[1].id));
+    drawer = nodeDrawerMock.mock.lastCall?.[0];
+    expect(drawer.alerts.map((entry: { id: string }) => entry.id)).toEqual(['south-guest']);
+    expect(drawer.ownAlerts).toEqual([]);
+  });
+
+  it('matches the provider node name rather than an operator-facing resource label', async () => {
+    activeAlertsMock.value = {
+      guest: {
+        id: 'guest',
+        resourceId: 'homelab-pve-node-1-101',
+        node: 'pve-node-1',
+        instance: 'homelab',
+      },
+    };
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ name: 'Rack North' })]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for Rack North' }));
+    expect(nodeDrawerMock.mock.lastCall?.[0].alerts).toEqual([activeAlertsMock.value.guest]);
+  });
+
   it('does not present a retained stale update count as current in the node row', () => {
     render(() => (
       <ProxmoxNodesTable

@@ -18,15 +18,20 @@ const noAlertStyles = {
   hasAcknowledgedOnlyAlert: false,
 };
 
+interface NodeAlertScope {
+  name: string;
+  instance: string;
+}
+
 // Get alert highlighting styles based on active alerts for a resource.
-// When nodeMatch is provided, also includes alerts whose `node` field matches
-// (covers storage/topology/disk alerts that belong to a node but have a
-// different resourceId than the node itself).
+// nodeMatch includes child alerts with a different resourceId. Proxmox callers
+// supply both the provider node name and instance: a name alone is not unique
+// across estates. String matches retain the existing non-Proxmox contract.
 export const getAlertStyles = (
   resourceId: string | string[],
   activeAlerts: Record<string, Alert>,
   alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
-  nodeMatch?: string,
+  nodeMatch?: string | NodeAlertScope,
 ) => {
   if (!alertsEnabled) {
     return noAlertStyles;
@@ -163,12 +168,19 @@ export function getAlertsForResource(
   resourceIds: string[],
   activeAlerts: Record<string, Alert>,
   alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
-  nodeMatch?: string,
+  nodeMatch?: string | NodeAlertScope,
 ): Alert[] {
   if (!alertsEnabled) return [];
   const ids = new Set(resourceIds.filter(Boolean));
+  const nodeName = typeof nodeMatch === 'string' ? nodeMatch : nodeMatch?.name.trim();
+  const instance = typeof nodeMatch === 'object' ? nodeMatch.instance.trim() : undefined;
+  const hasNodeMatch = typeof nodeMatch === 'string' || Boolean(nodeName && instance);
   return Object.values(activeAlerts).filter(
-    (alert) => ids.has(alert.resourceId) || (nodeMatch !== undefined && alert.node === nodeMatch),
+    (alert) =>
+      ids.has(alert.resourceId) ||
+      (hasNodeMatch &&
+        alert.node === nodeName &&
+        (typeof nodeMatch === 'string' || alert.instance === instance)),
   );
 }
 
