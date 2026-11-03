@@ -771,8 +771,7 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
           const clusterId =
             cluster.kubernetes?.clusterId?.trim() || cluster.kubernetes?.clusterName?.trim() || '';
           setSearchParams({
-            [KUBERNETES_QUERY_PARAMS.cluster]:
-              selectedClusterId() === clusterId ? null : clusterId,
+            [KUBERNETES_QUERY_PARAMS.cluster]: selectedClusterId() === clusterId ? null : clusterId,
             [KUBERNETES_QUERY_PARAMS.namespace]: null,
           });
         }}
