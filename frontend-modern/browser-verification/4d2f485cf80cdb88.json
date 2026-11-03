@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "8c248d45a0eca4037812c60cb9491125a0a846bd",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "16be6e1603364bcfb43b56537b3a09211d293f92e9f6d63fc9d8689305c0cb53"
+  },
+  "routes": [
+    "/settings/security/roles"
+  ],
+  "states": [
+    "Built-in wildcard, read-only viewer, custom permissions and an empty role at desktop and narrow widths",
+    "390px light/dark and 320px light: full permission strings remain visible, without expansion or page horizontal overflow",
+    "Current-reader withdrawal removes the inventory and disables creation"
+  ],
+  "interactions": [
+    "Read synthetic roles through the production RBAC API client and role state, rendered inside the production Settings page shell",
+    "Open the existing custom-role editor with the keyboard, retain its saved non-shortcut resource, then cancel without a mutation",
+    "Withdraw the mounted reader capability and observe inventory removal; no role writes are sent"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-03T16:27:11Z",
+  "browser": "Chromium 141.0.7390.37; Playwright 1.56.1",
+  "notes": "Comparable before/after fixtures use the production RolesPanel, SettingsPageShell, API client, state, dialogs and CSS. This is a disclosed minimal page fixture, not the full authenticated App or native account recovery. All 16 captures were opened with the native image tool. Existing admission, entitlements and mutations are unchanged."
+}
