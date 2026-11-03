@@ -32,6 +32,14 @@ the `currentMetrics` and `deferredMetrics` the drawer already derives, issues
 no request, adds no poll or timer, and holds one item per configured series.
 The history query, its 30-second poll and its retry are unchanged.
 
+### Plan-locked history link adds no history work (3 November 2026)
+
+The plan-locked range in `GuestDrawerHistory` ends with a Plans & Billing link
+from `HistoryLockPlanLink`. It resolves a static in-product route, reads the
+session presentation policy the shell already holds, and issues no request:
+no commercial-posture fetch, poll or timer. A locked range still starts no
+history read.
+
 ### Missing backup completion remains a presentation-only uncertainty
 
 Workloads keeps its existing scalar and legacy absence classification, but

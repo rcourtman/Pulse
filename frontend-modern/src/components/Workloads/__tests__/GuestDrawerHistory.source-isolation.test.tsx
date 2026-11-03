@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type AllMetricsHistoryResponse, type HistoryTimeRange } from '@/api/charts';
@@ -220,10 +221,16 @@ describe('GuestDrawerHistory source isolation', () => {
       .mockImplementation(() => new Promise(() => {}));
     const [range, setRange] = createSignal<HistoryTimeRange>('24h');
     const target: GuestDrawerHistoryTarget = { resourceType: 'agent', resourceId: 'host-old' };
-    const view = render(() => <GuestDrawerHistory target={target} range={range()} />);
+    // The plan lock links to Plans & Billing, which needs a router.
+    const view = render(() => (
+      <Router>
+        <Route path="/*" component={() => <GuestDrawerHistory target={target} range={range()} />} />
+      </Router>
+    ));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     setRange('14d');
     await screen.findByText(/14 days history requires a higher license plan/);
+    expect(screen.getByRole('link', { name: 'Plans & Billing' })).toBeInTheDocument();
     expect(fetch.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
     expect(fetch.mock.calls[0][0].signal!.aborted).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(1);

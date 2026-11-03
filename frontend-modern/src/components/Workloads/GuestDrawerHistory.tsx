@@ -15,6 +15,7 @@ import { type AggregatedMetricPoint, type HistoryTimeRange } from '@/api/charts'
 import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { Button } from '@/components/shared/Button';
+import { HistoryLockPlanLink } from '@/components/shared/HistoryLockPlanLink';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
@@ -1219,7 +1220,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             <>
               <div class="rounded-xs border border-border bg-surface p-5 text-sm text-muted">
                 {formatHistoryRangeOptionLabel(props.range)} history requires a higher license plan.
-                This instance's plan retains {maxHistoryDays()} days.
+                This instance's plan retains {maxHistoryDays()} days. <HistoryLockPlanLink />
               </div>
               {liveReadings()}
             </>
