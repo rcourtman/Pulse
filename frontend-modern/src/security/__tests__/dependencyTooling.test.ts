@@ -34,6 +34,8 @@ describe('reviewed formatter behaviour', () => {
 
 describe('patched transitive dependency compatibility', () => {
   it.each([
+    '@solidjs/router',
+    'marked',
     'solid-js',
     'seroval',
     'seroval-plugins',

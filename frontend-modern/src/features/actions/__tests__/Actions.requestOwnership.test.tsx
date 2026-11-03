@@ -107,10 +107,14 @@ describe('Actions request ownership', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /Review Update on docker:container:edge-a/ }),
     );
+    // Consecutive synchronous navigations may coalesce. Issue the first read
+    // before selecting the next action, or there is no stale response to race.
+    await waitFor(() => expect(ResourceActionsAPI.getAction).toHaveBeenCalledWith('edge-a'));
     fireEvent.click(
       screen.getByRole('button', { name: /Review Update on docker:container:edge-b/ }),
     );
     expect(await screen.findByText('docker:container:edge-b')).toBeVisible();
+    expect(ResourceActionsAPI.getAction).toHaveBeenCalledWith('edge-b');
 
     first.resolve(detail('edge-a'));
     await waitFor(() => expect(ResourceActionsAPI.getAction).toHaveBeenCalledTimes(2));

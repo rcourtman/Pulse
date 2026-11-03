@@ -1410,3 +1410,21 @@ as verification progresses:
   source checks do not replace their terminal artifact or the subsequent signed
   installed transaction and public-browser evidence. No workflow retry, release
   decision or worker production authority is added.
+
+## Shared Markdown and router graph compatibility
+
+- Reconcile only the intended package records onto the current canonical lock;
+  retain the complete serializer, DOMPurify, glob and lint-tooling security
+  floors. `dependencySecurity.test.ts` and the actual Solid serialization
+  consumers still apply without new exceptions. Marked and Router installed
+  identities in `dependencyTooling.test.ts` must match that exact lock.
+- Run the existing Markdown/XSS, Docs and release-note consumers, and Kubernetes
+  URL-filter consumers. The latter restores the bookmarked selected row, clears
+  its namespace when deselecting/replacing the cluster, and preserves shared
+  search through the real router and tables. Full types must reject any possible
+  repeated-query array passed as a selected cluster string.
+- Clean exact-graph build, unchanged chunk budgets and entry/dynamic SRI/preload
+  checks, full lint and a complete dependency audit are separate from source
+  acquisition. Desktop/narrow consuming navigation and Markdown interactions
+  require actual inspected browser captures, not an acquisition receipt or
+  passing component tests. No installed recovery or publication is implied.
