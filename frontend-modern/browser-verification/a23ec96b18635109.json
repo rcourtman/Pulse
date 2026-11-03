@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "bb4228ad16408e3e2ac5f75b5af587cbfee4ab72",
+  "changed_paths": [
+    "frontend-modern/src/api/vmware.ts",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/vmware.ts": "b84b22f1f8de1548935ae307396f66e6aff938cbaa0cdc51b344c4d181a900a7",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "546d9fc87571e94ccc250d6ce3693bbeaef4941f6882990e9a136ac5fb8d15f2",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "e0986022081fcf11de2bb724341e702e1371b9958851df0f18a9ac86dad43d67",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "b297d4004c02aa5c44533e4f4c34eedca5cd3a21f70674d5510bca4815dcee80",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts": "55f4fd37de2823017eeac865ceec99b5cd0f55cfca40139d6ea6722acfd61725"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/security-auth"
+  ],
+  "states": [
+    "VMware/TrueNAS saved reads denied, unavailable, failed, empty, wrong-ID namesakes and fresh matching recovery",
+    "Saved password/API-key markers, mixed collection scope, TLS verification and TrueNAS HTTPS/certificate pin",
+    "Current VMware degraded and classified TLS feedback, denied Test withdrawal",
+    "Organisation A-B-A with an in-flight old Test; current-user replacement and capability withdrawal/restoration through Settings security refresh",
+    "Comparable before/after unavailable and saved editors including scrolled narrow lifecycle controls"
+  ],
+  "interactions": [
+    "Open real App Settings/Infrastructure Manage dialogs",
+    "Keyboard-activate bounded explicit read-only retries; require matching saved identity before editing",
+    "Test saved VMware connection through actual adapter/client without saving; reject stale outcomes after org replacement",
+    "Explicitly update one synthetic TrueNAS fixture per viewport with unchanged saved secret marker, scope and HTTPS pin; no other mutations",
+    "Use native org selection (forced change dispatch during modal focus ownership models external context replacement); no source hooks mocked",
+    "Cancel the real Change password dialog to refresh Settings security status without an authentication mutation; verify current-user and capability changes",
+    "Inspect all final production matrix and fresh-context comparison captures using native view_image"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-03T07:43:25Z",
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "checks_passed": 140,
+  "comparison_checks_passed": 67,
+  "captures_reviewed": 38,
+  "production_build_source": "bb4228ad16408e3e2ac5f75b5af587cbfee4ab72",
+  "source_receipt": "source-2kmr841h",
+  "notes": [
+    "Unmodified production App, Settings, hooks, adapters and API client with synthetic local HTTP/WebSocket fixtures only. No installed account, appliance, startup/removal, server authorisation or release acceptance is claimed.",
+    "Twenty comparison frames use fresh contexts and identical fixture data, fixed time, viewport, light theme, focus and scroll position. Earlier matrix captures retain accumulated synthetic notifications and are not the clean before/after comparison.",
+    "Original source-482jpz5v/stable-hook controls remain earned at their original source. A new current-graph source proof passes365 tests, full types/lint/embed/budgets.",
+    "Expected fixture error logs and one unattributed console404 remain in the evidence. No uncaught browser error or unexpected API route occurred."
+  ]
+}
