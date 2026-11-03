@@ -157,7 +157,7 @@ const COVERAGE_WEIGHTS: Record<
   ProxmoxBackupsTableLayoutMode,
   Partial<Record<CoverageColumnId, number>>
 > = {
-  // Posture keeps its whole compact word ("Unknown"), the age cell holds the
+  // Posture keeps its whole compact reason word, the age cell holds the
   // suffix-free compact age, and the job dot takes what a "Job" header needs.
   compact: { workload: 46, posture: 22, latest: 18, task: 14 },
   // Above the phone projection the identity columns (workload, node) take the
@@ -196,10 +196,11 @@ export const getCoverageColumns = (
 // Coverage's phone rows carry only the name in their identity cell, and guest
 // names often share a long prefix ("checkout-web-110"), so cutting their ends
 // hides what tells them apart. The cells beside it hold short, fixed content,
-// measured at 320px: "Unknown" with its dot, an "Unknown" age, the job dot
-// under "Job". When the table knows its width they take exactly that and the
-// name takes the rest, instead of a fixed share that wastes room at 360px and
-// up. A 302px table still leaves the other cells whole.
+// measured at 320px: a reason word with its dot ("No backup" is the longest),
+// an "Unknown" age, the job dot under "Job". When the table knows its width
+// they take exactly that and the name takes the rest, instead of a fixed share
+// that wastes room at 360px and up. A 302px table still leaves the other cells
+// whole.
 const COVERAGE_COMPACT_CELL_WIDTH_PX: Partial<Record<CoverageColumnId, number>> = {
   posture: 80,
   latest: 52,

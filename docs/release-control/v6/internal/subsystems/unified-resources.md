@@ -9584,6 +9584,13 @@ actual pixels. This corrects evidence scope, not original incident causality or
 native backup/guest recovery.
 
 
+### Phone Coverage rows name the reason, not just the state (3 November 2026)
+
+A compact Coverage row shows the canonical protection posture's reason in a
+word or two, with the state and explanation kept for assistive technology. Row
+identity, the posture itself and its sorting are unchanged, and a reason this
+build does not know falls back to the state word rather than a guess.
+
 ### Coverage distinguishes assessment clocks from visible restore evidence
 
 An expanded Proxmox Coverage record exposes the server assessment's `evaluatedAt`,

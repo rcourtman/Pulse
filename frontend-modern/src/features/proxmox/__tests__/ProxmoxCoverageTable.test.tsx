@@ -14,6 +14,7 @@ import {
 } from '../__fixtures__/backupIdentity';
 import type { WorkloadCoverageRow } from '../proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from '../proxmoxBackupsTableModel';
+import { protectionPosture } from '@/utils/__fixtures__/protectionPosture';
 
 // Record drawers link to the object they are about, which needs a router.
 const renderInRouter = (component: () => JSX.Element) =>
@@ -403,6 +404,45 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headerTexts()).toEqual(['Workload', 'Posture▲', 'Age', 'Job']);
     expect(document.body.textContent).toContain('Prot.');
     expect(document.body.textContent).not.toContain('VM 100 · pve1');
+  });
+
+  it('names the reason in a compact row, not just the state', () => {
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[
+          {
+            ...row,
+            posture: 'attention',
+            protectionPosture: {
+              ...protectionPosture('vm:100'),
+              state: 'attention',
+              reason: 'stale',
+            },
+          },
+        ]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={null}
+        onToggleExpand={() => {}}
+        showTaskColumn={true}
+        layoutWidth={() => 330}
+      />
+    ));
+
+    expect(document.body.textContent).toContain('Overdue');
+    expect(document.body.textContent).not.toContain('Attn.');
+    // The short word is for sighted phone users; assistive tech gets the full
+    // state and explanation in its place.
+    const word = screen.getByText('Overdue');
+    expect(word).toHaveAttribute('aria-hidden', 'true');
+    expect(word.parentElement?.querySelector('.sr-only')?.textContent).toMatch(
+      /^Needs attention: ./,
+    );
   });
 
   it.each([330, 600, 1200])(

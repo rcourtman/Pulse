@@ -76,6 +76,26 @@ export const backupExceptionGroupKey = (row: WorkloadCoverageRow): string | null
   return reason && reasonLabel(reason, null) ? reason : row.posture;
 };
 
+// A phone row has room for a word or two. The full reason stays in the row's
+// title and expansion, and Backup health names it in full.
+const COMPACT_REASON_LABEL: Record<string, string> = {
+  'source-failed': 'Failed',
+  'backup-future-dated': 'Bad date',
+  stale: 'Overdue',
+  'verification-future-dated': 'Bad date',
+  'verification-overdue': 'Verify late',
+  'history-partial': 'Partial',
+  'history-unreadable': "Can't read",
+  'no-history': 'Unknown',
+  'snapshots-only': 'Snapshots',
+  'no-backup': 'No backup',
+};
+
+export const compactBackupReasonLabel = (row: WorkloadCoverageRow): string | null => {
+  const key = backupExceptionGroupKey(row);
+  return key ? (COMPACT_REASON_LABEL[key] ?? null) : null;
+};
+
 const TONE_ORDER: Record<BackupExceptionTone, number> = {
   unprotected: 0,
   attention: 1,

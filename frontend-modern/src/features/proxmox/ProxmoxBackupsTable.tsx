@@ -41,7 +41,10 @@ import type {
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
+  isCompletedRecoveryArtifact,
   buildProxmoxBackupRecoveryModel,
+  describeIncompleteArtifacts,
+  restorePointCountNoun,
   coverageRowMatchesSearch,
   selectWorkloadRecoveryArtifacts,
   recoverableArtifactMatchesSearch,
@@ -647,8 +650,11 @@ export const ProxmoxBackupsTable: Component<{
     return max;
   });
 
-  const totalRecoverableCount = createMemo(() => recoveryModel().recoverableArtifacts.length);
-  const visibleRecoverableCount = createMemo(() => filteredRecoverableArtifacts().length);
+  // The list also holds running and failed entries, which are not restore
+  // points yet. Count them apart so the total matches Backup health.
+  const visibleCompletedCount = createMemo(
+    () => filteredRecoverableArtifacts().filter(isCompletedRecoveryArtifact).length,
+  );
 
   // Shared scope filters plus the per-view inline facet.
   const buildBackupsFilters = (): FilterDef[] => {
@@ -946,14 +952,24 @@ export const ProxmoxBackupsTable: Component<{
             onClearAll={resetBackupsFilters}
             trailingControls={
               <PlatformResourceCounter
-                visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
-                total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}
+                visible={view() === 'date' ? visibleCompletedCount() : visibleLiveCount()}
+                total={
+                  view() === 'date'
+                    ? recoveryModel().coverageSummary.recoverableArtifacts
+                    : liveTotalCount()
+                }
                 rowNoun={
                   view() === 'date'
-                    ? inventoryIncomplete()
-                      ? 'backup entries read'
-                      : 'backup entries'
+                    ? restorePointCountNoun(
+                        recoveryModel().coverageSummary.recoverableArtifacts,
+                        inventoryIncomplete(),
+                      )
                     : 'targets'
+                }
+                detail={
+                  view() === 'date'
+                    ? describeIncompleteArtifacts(filteredRecoverableArtifacts())
+                    : undefined
                 }
               />
             }

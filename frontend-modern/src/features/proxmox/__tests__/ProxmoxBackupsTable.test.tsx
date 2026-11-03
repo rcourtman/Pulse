@@ -3019,10 +3019,16 @@ describe('restore point list follows the consuming inventory scope', () => {
     'shows no restore points for empty or unresolved %s',
     async (query) => {
       mountScopedInventory(query);
-      await screen.findByText(/7 backup entries/);
+      await screen.findByText(/0 of 6 restore points/);
       expect(rows()).toHaveLength(0);
     },
   );
+
+  it('counts restore points and lists running entries apart', async () => {
+    mountScopedInventory('');
+    await waitFor(() => expect(rows()).toHaveLength(7));
+    expect(screen.getByText('6 restore points · 1 running')).toHaveAttribute('role', 'status');
+  });
 });
 
 describe('bare Backups entry opens Coverage', () => {

@@ -75,6 +75,7 @@ import {
   COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
+import { compactBackupReasonLabel } from './proxmoxBackupVerdict';
 import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 
 // Each evidence column is already named by its header, so an empty cell says
@@ -157,6 +158,7 @@ const statusDetailTone = (variant: StatusIndicatorVariant): DetailValueTone | un
   return undefined;
 };
 
+// The fallback for a row with no reason this build can name.
 const compactPostureLabel = (posture: WorkloadCoverageRow['posture']): string => {
   switch (posture) {
     case 'protected':
@@ -817,8 +819,16 @@ export function ProxmoxCoverageTable(props: {
                             </Show>
                           </TableCell>
                         </Show>
-                        <TableCell class={getPlatformTableCellClassForKind('text')}>
-                          <div class="flex items-center gap-2">
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} ${
+                            layoutMode() === 'compact' ? '!pl-1.5 !pr-0.5' : ''
+                          }`}
+                        >
+                          <div
+                            class={`flex items-center ${
+                              layoutMode() === 'compact' ? 'gap-1.5' : 'gap-2'
+                            }`}
+                          >
                             <StatusDot
                               size="sm"
                               variant={coveragePostureVariant(row.posture)}
@@ -835,7 +845,14 @@ export function ProxmoxCoverageTable(props: {
                                 when={layoutMode() === 'compact'}
                                 fallback={getWorkloadRecoveryPostureLabel(row.posture)}
                               >
-                                {compactPostureLabel(row.posture)}
+                                <span class="sr-only">
+                                  {getWorkloadRecoveryPostureLabel(row.posture)}:{' '}
+                                  {postureExplanation(row)}
+                                </span>
+                                <span aria-hidden="true">
+                                  {compactBackupReasonLabel(row) ??
+                                    compactPostureLabel(row.posture)}
+                                </span>
                               </Show>
                             </span>
                           </div>
