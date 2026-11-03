@@ -984,3 +984,57 @@ func TestPBSJobHealthPostureReadsStatusLikeProxmox(t *testing.T) {
 		}
 	}
 }
+
+// A Pulse restart empties state; the persisted record still carries the
+// failure, so the first poll that meets the job's next run in progress does
+// not read as recovery and clear the job's alert.
+func TestCarryPBSJobFailuresSurvivesARestart(t *testing.T) {
+	dir := t.TempDir()
+	before := &Monitor{state: models.NewState(), pbsJobFailureStore: config.NewPBSJobFailureStore(dir, nil)}
+	before.carryPBSJobFailuresForInstance("pbs-main", "https://pbs-a:8007", []models.PBSJobHealthEvidence{
+		carriedJob("s-1", "sync", "connection error", "critical", "last-run-failed"),
+	}, false)
+
+	after := &Monitor{state: models.NewState(), pbsJobFailureStore: config.NewPBSJobFailureStore(dir, nil)}
+	running := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "", "unknown", "no-run-observed")}
+	if posture := postureOf(after.carryPBSJobFailuresForInstance("pbs-main", "https://pbs-a:8007", running, false), "sync", "s-1"); posture != "critical/last-run-failed" {
+		t.Fatalf("after restart posture = %s, want the carried failure", posture)
+	}
+
+	// The next run succeeds: the failure clears and so does its record.
+	succeeded := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "OK", "healthy", "last-run-success")}
+	if posture := postureOf(after.carryPBSJobFailuresForInstance("pbs-main", "https://pbs-a:8007", succeeded, false), "sync", "s-1"); posture != "healthy/last-run-success" {
+		t.Fatalf("posture = %s, want the observed success", posture)
+	}
+	if left := config.NewPBSJobFailureStore(dir, nil).Get("pbs-main", "https://pbs-a:8007"); len(left) != 0 {
+		t.Fatalf("a recovered job stayed recorded: %+v", left)
+	}
+}
+
+// A record belongs to the server it was read from and to a configured
+// connection: a different server under a reused name, or a removed
+// connection, carries nothing.
+func TestCarryPBSJobFailuresIgnoresAnotherServerAndPrunesRemovedConnections(t *testing.T) {
+	dir := t.TempDir()
+	store := config.NewPBSJobFailureStore(dir, nil)
+	failed := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "connection error", "critical", "last-run-failed")}
+	if err := store.Set("pbs-main", "https://pbs-a:8007", failed); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := store.Set("pbs-old", "https://pbs-old:8007", failed); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	m := &Monitor{
+		state:              models.NewState(),
+		pbsJobFailureStore: config.NewPBSJobFailureStore(dir, nil),
+		config:             &config.Config{PBSInstances: []config.PBSInstance{{Name: "main"}}},
+	}
+	running := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "", "unknown", "no-run-observed")}
+	if posture := postureOf(m.carryPBSJobFailuresForInstance("pbs-main", "https://pbs-b:8007", running, false), "sync", "s-1"); posture != "unknown/no-run-observed" {
+		t.Fatalf("another server under the same name inherited %s", posture)
+	}
+	if left := config.NewPBSJobFailureStore(dir, nil).Get("pbs-old", "https://pbs-old:8007"); len(left) != 0 {
+		t.Fatalf("a removed connection kept its record: %+v", left)
+	}
+}
