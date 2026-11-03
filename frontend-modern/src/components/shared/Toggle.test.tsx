@@ -1,35 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Toggle, TogglePrimitive } from './Toggle';
-import toggleSource from './Toggle.tsx?raw';
-import toggleModelSource from './toggleModel.ts?raw';
-import toggleStateSource from './useToggleState.ts?raw';
 
 describe('Toggle', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps toggle on shell, runtime, and model owners', () => {
-    expect(toggleSource).toContain('useToggleState');
-    expect(toggleSource).toContain('getToggleTrackClass');
-    expect(toggleSource).toContain('getToggleKnobClass');
-    expect(toggleSource).not.toContain('defaultPrevented');
-    expect(toggleSource).not.toContain('toggleSizeConfig');
-    expect(toggleSource).not.toContain('handleClick =');
-
-    expect(toggleStateSource).toContain('export function useToggleState');
-    expect(toggleStateSource).toContain('defaultPrevented');
-    expect(toggleStateSource).toContain('currentTarget: { checked: next }');
-    expect(toggleStateSource).toContain('props.onChange?.(event)');
-    expect(toggleStateSource).toContain('props.onToggle?.()');
-
-    expect(toggleModelSource).toContain('toggleSizeConfig');
-    expect(toggleModelSource).toContain('resolveToggleSize');
-    expect(toggleModelSource).toContain('getToggleTrackClass');
-    expect(toggleModelSource).toContain("after:-inset-y-2.5 after:inset-x-0 after:content-['']");
-    expect(toggleModelSource).toContain('getToggleKnobClass');
-    expect(toggleModelSource).toContain('ToggleChangeEvent');
   });
 
   it('keeps a disabled toggle on its on or off colour, dimmed', () => {

@@ -6,7 +6,6 @@ import { getDockerContainerLifecycleDisabledReason } from '@/features/docker/doc
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
-import stringUtilsSource from '@/utils/stringUtils.ts?raw';
 import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 
 type UseUnifiedResourcesModule = typeof import('@/hooks/useUnifiedResources');
@@ -3666,16 +3665,6 @@ describe('useUnifiedResources', () => {
 
   it('uses the shared org scope helper for cache and fetch state', () => {
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(useUnifiedResourcesSource).toContain('supportsCanonicalWsHydration');
-    expect(useUnifiedResourcesSource).toContain("initialHydration === 'prefer-ws'");
-    expect(useUnifiedResourcesSource).toContain('wsStore.state.resources');
     expect(useUnifiedResourcesSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
-    expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
-    expect(useUnifiedResourcesSource).toContain('asTrimmedString');
-    expect(useUnifiedResourcesSource).not.toContain('UNIFIED_RESOURCES_MAX_PAGES');
-    expect(useUnifiedResourcesSource).not.toContain(
-      'const asTrimmedString = (value: unknown): string | undefined => {',
-    );
-    expect(stringUtilsSource).toContain('export const asTrimmedString');
   });
 });

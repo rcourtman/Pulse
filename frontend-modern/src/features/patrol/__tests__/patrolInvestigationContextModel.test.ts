@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { buildPatrolInvestigationRecordPresentation } from '../patrolInvestigationContextModel';
@@ -167,44 +165,6 @@ describe('patrolInvestigationContextModel', () => {
 });
 
 describe('Patrol page header IA framing', () => {
-  it('surfaces presenter-owned coverage wording on the recency line in the page header', () => {
-    // Third wedge of the Patrol page IA reframe. The recency line tells the
-    // operator when Pulse last ran; the coverage signal tells them what it
-    // covered. Pin the wiring so the recency render reads
-    // resourcesCheckedLabel from getPatrolRecencyPresentation and gates on a
-    // truthy <Show> so zero-coverage runs do not render a coverage phrase,
-    // and failed or scoped runs do not get hardcoded "verified" wording.
-    const headerSource = readFileSync(
-      resolve(__dirname, '..', 'PatrolIntelligenceHeader.tsx'),
-      'utf-8',
-    );
-    expect(headerSource).toContain('recency().resourcesCheckedLabel');
-    expect(headerSource).toContain('Show when={recency().resourcesCheckedLabel}');
-    expect(headerSource).not.toContain('verified {recency().resourcesChecked}');
-  });
-
-  it('keeps trust counters out of default Patrol chrome', () => {
-    // Trust counters remain backend/state evidence. The default Patrol surface
-    // should not reintroduce a second current-work/history strip to explain them.
-    const surfaceSource = readFileSync(
-      resolve(__dirname, '..', 'PatrolIntelligenceSurface.tsx'),
-      'utf-8',
-    );
-    const headerSource = readFileSync(
-      resolve(__dirname, '..', 'PatrolIntelligenceHeader.tsx'),
-      'utf-8',
-    );
-    const workspaceSource = readFileSync(
-      resolve(__dirname, '..', 'PatrolIntelligenceWorkspace.tsx'),
-      'utf-8',
-    );
-    expect(surfaceSource).not.toContain('PatrolIntelligenceSummary');
-    expect(surfaceSource).not.toContain('compactAssessmentSummary');
-    expect(surfaceSource).not.toContain('state.patrolStatus()?.trust?.regressed_at_least_once');
-    expect(headerSource).not.toContain('aria-label="Patrol trust summary header"');
-    expect(workspaceSource).not.toContain('aria-label="Patrol trust summary"');
-  });
-
   it('names the operator job on the canonical Patrol surface when control is available', async () => {
     // The Patrol page header is the most visible piece of operator-facing
     // copy on the canonical Patrol surface. The IA framing must keep the

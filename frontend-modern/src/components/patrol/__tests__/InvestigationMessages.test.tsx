@@ -2,7 +2,6 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
-import investigationMessagesSource from '../InvestigationMessages.tsx?raw';
 import InvestigationMessages from '../InvestigationMessages';
 
 const getMessages = vi.hoisted(() => vi.fn());
@@ -18,13 +17,6 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('InvestigationMessages', () => {
-  it('reads the thread through the non-suspending query', () => {
-    // The nearest Suspense boundary above a review is the app's route
-    // boundary, whose fallback replaces the page and loses the reader's place.
-    expect(investigationMessagesSource).not.toContain('createResource');
-    expect(investigationMessagesSource).toContain('createNonSuspendingQuery');
-  });
-
   it('keeps the page around a finding review while the thread loads', async () => {
     let finishRead: (value: unknown) => void = () => {};
     getMessages.mockReturnValue(

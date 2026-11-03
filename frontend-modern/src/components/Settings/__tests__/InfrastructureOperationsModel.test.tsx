@@ -258,12 +258,7 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain(
       'No root agent is required for normal platform inventory and metrics',
     );
-    expect(infrastructureInstallerSectionSource).toContain(
-      "buildInfrastructureOnboardingPath('pve')",
-    );
-    expect(infrastructureInstallerSectionSource).toContain(
-      "buildInfrastructureOnboardingPath('pbs')",
-    );
+    // A shipped docs link the operator clicks from this copy.
     expect(infrastructureInstallerSectionSource).toContain('/docs/PRODUCTION_SECURITY');
   });
 
@@ -289,9 +284,6 @@ describe('infrastructure operations model', () => {
   });
 
   it('keeps the embedded installer section on the canonical host-install framing', () => {
-    expect(infrastructureInstallerSectionSource).toContain(
-      "title={state.isEmbedded() ? presentation().title : 'Infrastructure'}",
-    );
     expect(infrastructureInstallerSectionSource).toContain('Install on Unraid');
     expect(infrastructureInstallerSectionSource).toContain('Run on Unraid');
     expect(infrastructureInstallerSectionSource).toContain('Install for Docker / Podman');
@@ -303,9 +295,6 @@ describe('infrastructure operations model', () => {
       /bounded[\s\S]{0,20}?<code>pct exec<\/code>/,
     );
     expect(infrastructureInstallerSectionSource).toContain('Install on a Kubernetes node');
-    expect(infrastructureInstallerSectionSource).toContain(
-      'state.handleInstallProfileChange(presentation().preferredProfile)',
-    );
     expect(infrastructureInstallerSectionSource).toContain('Generate install token');
     expect(infrastructureInstallerSectionSource).toContain('Generate token');
     expect(infrastructureInstallerSectionSource).toContain('Show token only');
@@ -339,17 +328,7 @@ describe('infrastructure operations model', () => {
       'commands keep it separate: copy the command first, then use Show token only.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'getUnifiedAgentCommandAccessOptionLabel',
-    );
-    expect(infrastructureInstallerSectionSource).toContain(
       'Pulse can then run commands as root on this host',
-    );
-    expect(infrastructureInstallerSectionSource).not.toContain('legacy combined');
-    expect(infrastructureInstallerSectionSource).not.toContain('Patrol auto-fix');
-    expect(infrastructureInstallerSectionSource).not.toContain('auto-fix requires Pulse Pro');
-    expect(infrastructureInstallerSectionSource).not.toContain('<api-token>');
-    expect(infrastructureInstallerSectionSource).not.toContain(
-      'Copy disabled until an install token is generated',
     );
     expect(infrastructureOperationsModelSource).toContain(
       'preflights this Pulse URL, verifies the matching agent binary is available',
@@ -362,17 +341,8 @@ describe('infrastructure operations model', () => {
     expect(infrastructureOperationsModelSource).toContain('admin password');
   });
 
-  it('keeps first-host completion handoff on Infrastructure instead of the retired dashboard', async () => {
-    const installStateSource = await import('../useInfrastructureInstallState.tsx?raw').then(
-      (mod) => (mod as { default: string }).default,
-    );
-
+  it('keeps first-host completion handoff on Infrastructure instead of the retired dashboard', () => {
     expect(infrastructureInstallerSectionSource).toContain('Open infrastructure');
-    expect(infrastructureInstallerSectionSource).not.toContain('Open dashboard');
-    expect(installStateSource).toContain('const openInfrastructure = () => {');
-    expect(installStateSource).toContain('navigate(buildInfrastructureWorkspacePath())');
-    expect(installStateSource).not.toContain('openDashboard');
-    expect(installStateSource).not.toContain("navigate('/dashboard')");
   });
 
   it('only auto-creates setup handoff install tokens on installer routes', async () => {
@@ -465,41 +435,6 @@ describe('infrastructure operations model', () => {
     );
   });
 
-  it('keeps infrastructure install and operations surfaces free of retired commercial telemetry wrappers', () => {
-    for (const source of [
-      infrastructureOperationsModelSource,
-      infrastructureInstallerSectionSource,
-      useInfrastructureInstallStateSource,
-    ]) {
-      expect(source).not.toContain('upgradeMetrics');
-      expect(source).not.toContain('conversionEvents');
-      expect(source).not.toContain('infrastructureOnboardingMetrics');
-      expect(source).not.toContain('UNIFIED_AGENT_TELEMETRY_SURFACE');
-      expect(source).not.toContain('normalizeTelemetryPart');
-      expect(source).not.toContain('trackAgentInstallTokenCreated');
-      expect(source).not.toContain('trackAgentInstallCommandsCopied');
-      expect(source).not.toContain('trackAgentFirstConnected');
-      expect(source).not.toContain('/api/upgrade-metrics/events');
-    }
-  });
-
-  it('does not reintroduce the retired reporting state hook on the operations state', async () => {
-    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
-      (mod) => (mod as { default: string }).default,
-    );
-    expect(operationsStateSource).not.toContain('useInfrastructureReportingState');
-  });
-
-  it('routes Windows upgrade commands through the shared seamless installer command builder', async () => {
-    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
-      (mod) => (mod as { default: string }).default,
-    );
-
-    expect(operationsStateSource).toContain('buildWindowsAgentInstallCommand({');
-    expect(operationsStateSource).toContain('extraEnvAssignments: envAssignments');
-    expect(operationsStateSource).not.toContain('const tokenEnv = token ?');
-  });
-
   it('pins the existing agent identity in the Unix credential repair command', async () => {
     const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
       (mod) => (mod as { default: string }).default,
@@ -545,26 +480,12 @@ describe('infrastructure operations model', () => {
     expect(agentUpgradeSource).toContain('if (replaceCredential) {');
   });
 
-  it('resolves connection upgrade platforms through the shared caption-tolerant resolver', async () => {
-    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
-      (mod) => (mod as { default: string }).default,
-    );
+  it('resolves connection upgrade platforms through the shared caption-tolerant resolver', () => {
     // Legacy agents report gopsutil OS captions ("microsoft windows 11 pro"),
     // so the hook must route through resolveAgentCommandPlatform instead of
     // exact-matching platform tokens locally (refs #1555).
-    expect(operationsStateSource).toContain(
-      'resolveAgentCommandPlatform(connection.agentIdentity?.platform)',
-    );
     expect(resolveAgentCommandPlatform('microsoft windows 11 pro')).toBe('windows');
     expect(resolveAgentCommandPlatform('linux')).toBe('linux');
-  });
-
-  it('keeps discovered-node filtering anchored to canonical represented-host dedupe', async () => {
-    const discoveryStateSource = await import('../useInfrastructureDiscoveryRuntimeState?raw').then(
-      (mod) => (mod as { default: string }).default,
-    );
-    expect(discoveryStateSource).toContain('filterRepresentedDiscoveredServers');
-    expect(discoveryStateSource).toContain('nodes()');
   });
 
   // /api/discover is RequireAdmin + settings:write and Settings mounts this

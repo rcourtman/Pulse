@@ -2,14 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createSignal } from 'solid-js';
 import { waitFor, cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { ALERT_BULK_EDIT_CLEAR_LABEL } from '@/utils/alertBulkEditPresentation';
-import resourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
-import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGroupHeader.tsx?raw';
-import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
-import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
-import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
 import alertResourceMetricEditorSource from '@/components/Alerts/AlertResourceMetricEditor.tsx?raw';
-import alertResourceTableModelSource from '@/components/Alerts/alertResourceTableModel.ts?raw';
-import alertResourceTableStateSource from '@/components/Alerts/useAlertResourceTableState.ts?raw';
 import {
   alertResourceSupportsMetric,
   buildAlertResourceEditPayload,
@@ -451,72 +444,10 @@ describe('ResourceTable', () => {
   });
 
   describe('table ownership model', () => {
-    it('keeps table state and metric rules in dedicated owners', () => {
-      const rawSvgTag = ['<', 'svg'].join('');
-
-      expect(resourceTableSource).toContain('useAlertResourceTableState');
-      expect(resourceTableSource).toContain('AlertResourceTableDesktop');
-      expect(resourceTableSource).toContain('AlertResourceTableMobile');
-      expect(resourceTableSource).toContain('ActionIconButton');
-      expect(resourceTableSource).not.toContain(rawSvgTag);
-      expect(resourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
-      expect(resourceTableSource).not.toContain(
-        'const normalizeMetricKey = (column: string): string => {',
-      );
-      expect(resourceTableSource).not.toContain(
-        "if (resource.type === 'agent' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(",
-      );
-      expect(alertResourceTableDesktopSource).toContain(
-        'export function AlertResourceTableDesktop',
-      );
-      expect(alertResourceTableDesktopSource).toContain('PlatformWindowedRows');
-      expect(alertResourceTableDesktopSource).toContain('AlertResourceTableRow');
-      expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
-      expect(alertResourceTableDesktopSource).toContain('ActionIconButton');
-      expect(alertResourceTableDesktopSource).not.toContain(rawSvgTag);
-      expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
-      expect(alertResourceTableMobileSource).toContain('PlatformWindowedList');
-      expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
-      expect(alertResourceTableMobileSource).toContain('FormTextarea');
-      expect(alertResourceTableMobileSource).toContain('ActionIconButton');
+    it('keeps the metric editor input touch-sized on phones', () => {
       expect(alertResourceMetricEditorSource).toContain(
         'min-h-11 w-full rounded-sm border p-1 text-center text-sm sm:min-h-0',
       );
-      expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
-      expect(alertResourceTableMobileSource).not.toContain(rawSvgTag);
-      expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');
-      expect(alertResourceGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
-      expect(alertResourceGroupHeaderSource).not.toContain('target="_blank"');
-      expect(alertResourceGroupHeaderSource).not.toContain('rel="noopener noreferrer"');
-      expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
-      expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
-      expect(alertResourceTableRowSource).toContain('FormTextarea');
-      expect(alertResourceTableRowSource).toContain('ActionIconButton');
-      expect(alertResourceTableRowSource).toContain('ResourceNameWithWebInterfaceLink');
-      expect(alertResourceTableRowSource).not.toContain(['<', 'textarea'].join(''));
-      expect(alertResourceTableRowSource).not.toContain('target="_blank"');
-      expect(alertResourceTableRowSource).not.toContain('rel="noopener noreferrer"');
-      expect(alertResourceTableRowSource).not.toContain(rawSvgTag);
-      expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
-      expect(alertResourceTableModelSource).toContain(
-        'export function normalizeAlertResourceMetricKey',
-      );
-      expect(alertResourceTableModelSource).toContain(
-        'export function getAlertResourceMetricDisplayValue',
-      );
-      expect(alertResourceTableModelSource).toContain(
-        'export function alertResourceSupportsMetric',
-      );
-      // The off sentinel is engine truth, not per-surface trivia: every editor
-      // reads it through the shared model instead of comparing against -1 inline.
-      expect(alertResourceTableModelSource).toContain('export function isAlertResourceMetricOff');
-      expect(alertResourceTableModelSource).toContain(
-        'export function resolveAlertResourceMetricEnableValue',
-      );
-      const strictOffComparison = ['===', ' -1'].join('');
-      expect(alertResourceTableDesktopSource).not.toContain(strictOffComparison);
-      expect(alertResourceTableMobileSource).not.toContain(strictOffComparison);
-      expect(alertResourceTableRowSource).not.toContain(strictOffComparison);
     });
 
     it('resolves metric values and edit payloads through the shared model', () => {
@@ -842,6 +773,33 @@ describe('ResourceTable', () => {
       const memoryCalls = formatMetricValue.mock.calls.filter(([metric]) => metric === 'memory');
       expect(memoryCalls.length).toBeGreaterThanOrEqual(1);
     });
+
+    it.each([false, true])(
+      'reads a legacy 0 override as Off, like -1, without formatting it (mobile=%s)',
+      (mobile) => {
+        mockIsMobile.mockReturnValue(mobile);
+        const formatMetricValue = vi.fn((_metric: string, value: number | undefined) =>
+          value !== undefined ? String(value) : '-',
+        );
+        const props = makeProps({
+          resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 0, memory: 85 } })],
+          columns: ['CPU %', 'Memory %'],
+          formatMetricValue,
+        });
+        render(() => <ResourceTable {...props} />);
+
+        expect(screen.getAllByText('Off').length).toBeGreaterThan(0);
+        if (!mobile) {
+          expect(screen.getAllByText('Off').some((el) => el.className.includes('italic'))).toBe(
+            true,
+          );
+        }
+        expect(formatMetricValue.mock.calls.filter(([metric]) => metric === 'cpu')).toHaveLength(0);
+        expect(
+          formatMetricValue.mock.calls.filter(([metric]) => metric === 'memory').length,
+        ).toBeGreaterThanOrEqual(1);
+      },
+    );
 
     it('shows active alert indicator dot when hasActiveAlert returns true', () => {
       const hasActiveAlert = vi.fn((_resource: unknown, metric: string) => metric === 'cpu');

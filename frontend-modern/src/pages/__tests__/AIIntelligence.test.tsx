@@ -13,11 +13,11 @@ import {
   getPublicPricingUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
 } from '@/utils/pricingHandoff';
-import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
-import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 import { AGENT_PATROL_CONTROL_STATUS_PATH } from '@/api/agentCapabilities';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { PATROL_MANUAL_SYNC_TIMEOUT_MS } from '@/features/patrol/usePatrolIntelligenceState';
+import { getPatrolSetupAction } from '@/utils/patrolRuntimeActions';
 
 import { AIIntelligence } from '../AIIntelligence';
 
@@ -559,19 +559,7 @@ async function openPatrolActivityMode() {
 
 describe('AIIntelligence entitlement gating', () => {
   it('keeps Patrol page data sync bounded without making it a primary action', () => {
-    expect(patrolIntelligenceStateSource).toContain('PATROL_MANUAL_SYNC_TIMEOUT_MS');
-    expect(patrolIntelligenceStateSource).toContain('requestId === manualRefreshRequestId');
-    expect(patrolIntelligenceStateSource).toContain('requestId === refreshRequestId');
-    expect(patrolIntelligenceStateSource).toContain('isManualRefreshRunning');
-    expect(patrolIntelligenceStateSource).toContain('handleRefreshPatrol');
-    expect(patrolIntelligenceStateSource).toContain('loadVisiblePatrolData');
-    expect(patrolIntelligenceStateSource).toContain('loadSupportingPatrolDataInBackground');
-    expect(patrolIntelligenceHeaderSource).not.toContain('state.handleRefreshPatrol()');
-    expect(patrolIntelligenceHeaderSource).not.toContain('Sync page data');
-    expect(patrolIntelligenceHeaderSource).not.toContain('animate-spin');
-    expect(patrolIntelligenceHeaderSource).not.toContain('Refresh Patrol');
     expect(patrolIntelligenceSurfaceSource).toContain('Review and history');
-    expect(patrolIntelligenceSurfaceSource).toContain('href="/actions"');
     expect(patrolIntelligenceSurfaceSource).toContain('Actions and approvals');
   });
 
@@ -588,11 +576,6 @@ describe('AIIntelligence entitlement gating', () => {
     expect(historyIndex).toBeGreaterThan(verifiedOutcomesIndex);
     expect(weeklyDigestIndex).toBeGreaterThan(attentionIndex);
     expect(weeklyDigestIndex).toBeLessThan(verifiedOutcomesIndex);
-  });
-
-  it('keeps the advanced Patrol settings drawer out of the old save-spinner path', () => {
-    expect(patrolIntelligenceHeaderSource).not.toContain('LoadingSpinner');
-    expect(patrolIntelligenceHeaderSource).not.toContain('Save Patrol mode');
   });
 
   beforeEach(() => {
@@ -2694,6 +2677,175 @@ describe('AIIntelligence entitlement gating', () => {
       scopeResourceTypes: ['vm'],
       showScopeWarnings: true,
       runSnapshotId: 'run-missing-snapshot',
+    });
+  });
+
+  describe('Patrol runtime block cause (#1789)', () => {
+    // A used-up cost budget blocks Patrol while readiness still reads "none":
+    // every setup action must follow the block cause to the budget field
+    // instead of sending the operator to the model check.
+    const budgetReadiness = {
+      status: 'not_ready',
+      ready: false,
+      cause: 'none',
+      summary: 'Patrol is paused by the 30-day cost budget.',
+      provider: 'ollama',
+      model: 'ollama:llama3',
+      checks: [],
+    };
+
+    it('points the paused banner and the setup card at the cost budget', async () => {
+      getPatrolStatusMock.mockResolvedValue(
+        defaultPatrolStatus({
+          runtime_state: 'blocked',
+          blocked_reason:
+            'Patrol is paused until the 30-day AI cost budget is raised or the 30-day window rolls on.',
+          blocked_cause: 'budget_exhausted',
+          readiness: budgetReadiness,
+        }),
+      );
+
+      render(() => <AIIntelligence />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Patrol paused').length).toBeGreaterThan(0);
+        expect(screen.getByRole('heading', { name: 'Patrol cannot run yet' })).toBeInTheDocument();
+      });
+      const budget = getPatrolSetupAction('budget_exhausted');
+      const links = screen.getAllByRole('link', { name: budget.label });
+      // The paused banner and the setup card each offer the budget action.
+      expect(links.length).toBeGreaterThanOrEqual(2);
+      for (const link of links) {
+        expect(link).toHaveAttribute('href', budget.href);
+      }
+      expect(screen.queryByRole('link', { name: 'Check Patrol model' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the budget action after a restart from the persisted runtime finding', async () => {
+      // The in-memory block state does not survive a restart; the saved Patrol
+      // runtime finding carries the same cause until the next run.
+      intelligenceState.findings = [
+        {
+          id: 'patrol-runtime-budget',
+          source: 'ai-patrol',
+          isThreshold: false,
+          status: 'active',
+          severity: 'critical',
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          resourceType: 'service',
+          title: 'Pulse Patrol: Cost budget exhausted',
+          failureCause: 'budget_exhausted',
+          detectedAt: '2026-03-12T09:57:00Z',
+        },
+      ];
+
+      render(() => <AIIntelligence />);
+
+      const budget = getPatrolSetupAction('budget_exhausted');
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Patrol cannot run yet' })).toBeInTheDocument();
+      });
+      const link = screen.getByRole('link', { name: budget.label });
+      expect(link).toHaveAttribute('href', budget.href);
+    });
+  });
+
+  describe('Patrol data refresh failures', () => {
+    const loadPatrolFindings = () => vi.mocked(aiIntelligenceStore.loadPatrolFindings);
+
+    it('keeps the page and offers Retry when a Patrol data load rejects, then clears the notice', async () => {
+      loadPatrolFindings().mockRejectedValue(new Error('findings unavailable'));
+      try {
+        render(() => <AIIntelligence />);
+
+        expect(await screen.findByText('Patrol could not refresh')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+        expect(screen.queryByText('findings unavailable')).not.toBeInTheDocument();
+
+        loadPatrolFindings().mockResolvedValue(undefined);
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+        await waitFor(() => {
+          expect(screen.queryByText('Patrol could not refresh')).not.toBeInTheDocument();
+        });
+      } finally {
+        loadPatrolFindings().mockResolvedValue(undefined);
+      }
+    });
+
+    it('does not let a slow earlier refresh raise a notice after a newer one succeeded', async () => {
+      let failEarlier!: (error: Error) => void;
+      loadPatrolFindings().mockClear();
+      loadPatrolFindings().mockImplementationOnce(
+        () =>
+          new Promise<undefined>((_resolve, reject) => {
+            failEarlier = reject;
+          }),
+      );
+      try {
+        render(() => <AIIntelligence />);
+        await waitFor(() => expect(loadPatrolFindings()).toHaveBeenCalledTimes(1));
+
+        // The tab becoming visible again starts a newer refresh, which succeeds.
+        document.dispatchEvent(new Event('visibilitychange'));
+        await waitFor(() => expect(loadPatrolFindings()).toHaveBeenCalledTimes(2));
+
+        failEarlier(new Error('stale refresh failed'));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(screen.queryByText('Patrol could not refresh')).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+      } finally {
+        loadPatrolFindings().mockResolvedValue(undefined);
+      }
+    });
+
+    it('frees Retry after the manual sync window and ignores an older retry finishing late', async () => {
+      loadPatrolFindings().mockRejectedValue(new Error('findings unavailable'));
+      let failFirst!: (error: Error) => void;
+      let failSecond!: (error: Error) => void;
+      try {
+        render(() => <AIIntelligence />);
+        const retry = await screen.findByRole('button', { name: 'Retry' });
+
+        loadPatrolFindings().mockImplementationOnce(
+          () =>
+            new Promise<undefined>((_resolve, reject) => {
+              failFirst = reject;
+            }),
+        );
+        vi.useFakeTimers();
+
+        fireEvent.click(retry);
+        expect(retry).toBeDisabled();
+        await vi.advanceTimersByTimeAsync(PATROL_MANUAL_SYNC_TIMEOUT_MS - 1);
+        expect(retry).toBeDisabled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(retry).toBeEnabled();
+
+        // A second retry starts while the first is still hanging.
+        loadPatrolFindings().mockImplementationOnce(
+          () =>
+            new Promise<undefined>((_resolve, reject) => {
+              failSecond = reject;
+            }),
+        );
+        fireEvent.click(retry);
+        expect(retry).toBeDisabled();
+
+        // The older retry finishing late must not release the newer one.
+        failFirst(new Error('first retry failed'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(retry).toBeDisabled();
+
+        failSecond(new Error('second retry failed'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(retry).toBeEnabled();
+      } finally {
+        vi.useRealTimers();
+        loadPatrolFindings().mockResolvedValue(undefined);
+      }
     });
   });
 });

@@ -1,9 +1,9 @@
-import { renderHook, waitFor } from '@solidjs/testing-library';
+import { render, renderHook, waitFor } from '@solidjs/testing-library';
+import { createComponent, createRenderEffect, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionsAPI, type Connection, type ConnectionSystem } from '@/api/connections';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { useConnectionsLedger } from '../useConnectionsLedger';
-import useConnectionsLedgerSource from '../useConnectionsLedger.ts?raw';
 
 describe('useConnectionsLedger', () => {
   beforeEach(() => {
@@ -15,10 +15,67 @@ describe('useConnectionsLedger', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps connection-ledger refreshes out of app-level Suspense', () => {
-    expect(useConnectionsLedgerSource).toContain('createNonSuspendingQuery');
-    expect(useConnectionsLedgerSource).toContain('pollMs: POLL_INTERVAL_MS');
-    expect(useConnectionsLedgerSource).not.toContain('createResource');
+  it('keeps loads and reloads out of the app-level Suspense fallback', async () => {
+    const agent = (id: string, name: string) =>
+      ({
+        id,
+        type: 'agent',
+        name,
+        source: 'agent',
+        address: name,
+        state: 'pending',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: null,
+        lastError: null,
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      }) as Connection;
+    type LedgerRead = Awaited<ReturnType<typeof ConnectionsAPI.list>>;
+    let finishFirst: (value: LedgerRead) => void = () => {};
+    let finishSecond: (value: LedgerRead) => void = () => {};
+    const list = vi
+      .spyOn(ConnectionsAPI, 'list')
+      .mockReturnValueOnce(new Promise<LedgerRead>((resolve) => (finishFirst = resolve)))
+      .mockReturnValueOnce(new Promise<LedgerRead>((resolve) => (finishSecond = resolve)));
+
+    let result!: ReturnType<typeof useConnectionsLedger>;
+    const { container, unmount } = render(() =>
+      createComponent(Suspense, {
+        fallback: 'Loading view...',
+        get children() {
+          return createComponent(() => {
+            result = useConnectionsLedger();
+            const node = document.createTextNode('');
+            createRenderEffect(() => {
+              node.data = `rows:${result.rows().length}`;
+            });
+            return node;
+          }, {});
+        },
+      }),
+    );
+    try {
+      await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+      expect(container.textContent).not.toContain('Loading view...');
+
+      finishFirst({ connections: [agent('agent:one', 'One')], systems: [] });
+      await waitFor(() => expect(container.textContent).toBe('rows:1'));
+
+      result.reload();
+      await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+      // The reload is in flight: the last ledger stays on screen.
+      expect(container.textContent).toBe('rows:1');
+
+      finishSecond({
+        connections: [agent('agent:one', 'One'), agent('agent:two', 'Two')],
+        systems: [],
+      });
+      await waitFor(() => expect(container.textContent).toBe('rows:2'));
+    } finally {
+      unmount();
+    }
   });
 
   it('names the first-report wait only for pending agents', async () => {

@@ -81,6 +81,7 @@ const renderLayout = (
     tone: 'healthy',
   }),
   loggingOut: Accessor<boolean> = () => false,
+  stateFrame?: Accessor<State>,
 ) => {
   window.history.replaceState({}, '', initialPath);
   const RouteStateProbe = () => {
@@ -111,11 +112,13 @@ const renderLayout = (
       proxyAuthInfo={() => null}
       handleLogout={() => {}}
       isLoggingOut={loggingOut}
-      state={() =>
-        ({
-          activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
-          resources,
-        }) as unknown as State
+      state={
+        stateFrame ??
+        (() =>
+          ({
+            activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
+            resources,
+          }) as unknown as State)
       }
       platformVisibility={platformVisibility ? () => platformVisibility : undefined}
       tokenScopes={() => tokenScopes}
@@ -136,6 +139,7 @@ const renderLayout = (
       <Route path="/docker/overview" component={LayoutRoute} />
       <Route path="/alerts" component={LayoutRoute} />
       <Route path="/actions" component={LayoutRoute} />
+      <Route path="/patrol" component={LayoutRoute} />
     </Router>
   ));
 };
@@ -267,6 +271,36 @@ describe('AppLayout navigation icons', () => {
       });
       expect(proxmox).toHaveFocus();
     }
+  });
+
+  it('keeps the same navigation links mounted when a state frame replaces the active alerts', () => {
+    // Active alerts are replaced wholesale by state frames, which rebuilds both
+    // tab arrays. Reference-keyed consumers would otherwise recreate every nav
+    // link and drop an in-flight tap.
+    const frame = () =>
+      ({
+        activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
+        resources: platformResources(),
+      }) as unknown as State;
+    const [stateFrame, setStateFrame] = createSignal(frame());
+    renderLayout(
+      [],
+      '/settings/infrastructure',
+      undefined,
+      ['settings:read'],
+      undefined,
+      undefined,
+      stateFrame,
+    );
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const links = within(desktopNav).getAllByRole('link');
+    expect(links.length).toBeGreaterThan(4);
+
+    setStateFrame(frame());
+
+    const after = within(desktopNav).getAllByRole('link');
+    expect(after).toHaveLength(links.length);
+    after.forEach((link, index) => expect(link).toBe(links[index]));
   });
 
   it('surfaces canonical Patrol attention as a count without renaming Patrol', () => {
@@ -642,6 +676,16 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
       .getByRole('navigation', { name: 'Primary navigation' })
       .querySelector('[aria-label="System"]');
     expect(within(systemGroup as HTMLElement).queryByRole('link', { name: 'Settings' })).toBeNull();
+  });
+
+  it('redirects a scope-limited session away from Patrol even when kiosk is off', async () => {
+    setKioskMode(false);
+    renderLayout([], '/patrol', DOCKER_ONLY_VISIBILITY, KIOSK_TOKEN_SCOPES);
+
+    expect(isKioskMode()).toBe(false);
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/docker/overview');
+    });
   });
 
   it('leaves settings reachable with kiosk off for a session that has settings access', async () => {

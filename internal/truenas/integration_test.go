@@ -219,10 +219,6 @@ func TestIntegrationHealthStateTransition(t *testing.T) {
 	}
 }
 
-func TestIntegrationStaleRecovery(t *testing.T) {
-	t.Skip("redundant with TestProviderRefreshPreservesLastSnapshotOnError in provider_test.go")
-}
-
 type dynamicResponses struct {
 	mu        sync.Mutex
 	responses map[string]apiResponse

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup, within } from '@solidjs/testing-library';
-import agentProfilesPanelStateSource from '../useAgentProfilesPanelState.ts?raw';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import { AgentProfilesPanel } from '../AgentProfilesPanel';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { notificationStore } from '@/stores/notifications';
 import type { ConnectedInfrastructureItem, State } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -302,17 +302,19 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     expect(assignProfileMock).not.toHaveBeenCalled();
   });
 
-  it('relies on shared commercial posture bootstrap instead of local posture loads', () => {
-    expect(agentProfilesPanelStateSource).not.toContain('loadCommercialPosture(');
-    expect(agentProfilesPanelStateSource).not.toContain('canOfferCommercialTrial');
-    expect(agentProfilesPanelSource).not.toContain('UPGRADE_TRIAL_LABEL');
-    expect(agentProfilesPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
+  it('names the Ideas button for what it does rather than as an AI feature', async () => {
+    const store = aiAvailabilityStore as unknown as { enabled: boolean };
+    store.enabled = true;
+    try {
+      render(() => <AgentProfilesPanel />);
+      const ideas = await screen.findByRole('button', { name: 'Ideas' });
+      expect(ideas).toHaveAttribute('title', 'Suggest profiles for your estate');
+    } finally {
+      store.enabled = false;
+    }
   });
 
-  it('keeps the Ideas button tooltip product-first instead of AI-branded', () => {
-    expect(agentProfilesPanelSource).toContain('title="Suggest profiles for your estate"');
-    expect(agentProfilesPanelSource).not.toContain('title="Get AI-powered profile suggestions"');
-    expect(agentProfilesPanelSource).toContain('hiddenOnMobile: true');
+  it('keeps profile row actions touch-sized on phones', () => {
     expect(agentProfilesPanelSource).toContain(
       'inline-flex min-h-11 min-w-11 items-center justify-center',
     );

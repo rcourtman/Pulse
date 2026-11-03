@@ -404,4 +404,32 @@ describe('durable maintenance verification evidence', () => {
       expect(mutations()).toHaveLength(1);
     },
   );
+
+  it('requests the resource reports by encoded id and lists every evidence count with the Patrol follow-up', async () => {
+    await mount([
+      report({
+        evidence: {
+          ...report().evidence,
+          activeCriticalAlerts: 4,
+          activeCriticalFindings: 5,
+          activeWarningFindings: 6,
+          failedActionsSinceWindowStart: 7,
+          patrolRunTodo: 'Run a scoped Patrol check for this resource',
+        },
+      }),
+    ]);
+    expect(api.apiFetchJSON.mock.calls[0][0]).toBe(
+      '/api/resources/cluster%3Apve-a%3A101/maintenance-verifications?limit=25',
+    );
+    for (const [label, count] of [
+      ['Critical alerts', '4'],
+      ['Warning alerts', '2'],
+      ['Critical findings', '5'],
+      ['Warning findings', '6'],
+      ['Failed actions', '7'],
+    ]) {
+      expect(screen.getByText(label).nextElementSibling).toHaveTextContent(count);
+    }
+    expect(screen.getByText('Run a scoped Patrol check for this resource')).toBeInTheDocument();
+  });
 });

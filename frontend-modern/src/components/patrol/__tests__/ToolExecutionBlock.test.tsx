@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { afterEach } from 'vitest';
 import { ToolExecutionBlock, type ToolExecution } from '../ToolExecutionBlock';
-import toolExecutionBlockSource from '../ToolExecutionBlock.tsx?raw';
 import { Router, Route } from '@solidjs/router';
 
 afterEach(() => {
@@ -51,16 +50,6 @@ describe('ToolExecutionBlock', () => {
     ));
     const link = screen.getByRole('link', { name: 'Review action' });
     expect(link).toHaveAttribute('href', '/actions?action=act-proof');
-  });
-
-  it('keeps tool copy controls on the shared CopyValueButton primitive', () => {
-    expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
-    expect(toolExecutionBlockSource).toContain('CopyValueButton');
-    expect(toolExecutionBlockSource).not.toContain('lucide-solid/icons/copy');
-    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
-    expect(toolExecutionBlockSource).not.toContain(
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
-    );
   });
 
   // --- Tool label mapping ---

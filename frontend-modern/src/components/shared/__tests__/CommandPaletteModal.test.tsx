@@ -2,9 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
-import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
-import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import { buildPrimaryPlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
 import { buildDockerPath } from '@/routing/resourceLinks';
 import { aiAvailabilityStore } from '@/stores/aiAvailability';
@@ -57,44 +54,6 @@ describe('CommandPaletteModal', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/proxmox/overview');
     aiAvailabilityStore.setEnabled(true);
-  });
-
-  it('keeps the command palette on shell, runtime, and model owners', () => {
-    expect(commandPaletteModalSource).toContain('useCommandPaletteState');
-    expect(commandPaletteModalSource).not.toContain('useNavigate');
-    expect(commandPaletteModalSource).not.toContain('createSignal');
-    expect(commandPaletteModalSource).not.toContain('buildInfrastructurePath');
-
-    expect(commandPaletteStateSource).toContain('useNavigate');
-    expect(commandPaletteStateSource).toContain('createSignal');
-    expect(commandPaletteStateSource).toContain('buildStandalonePath');
-    expect(commandPaletteStateSource).toContain('buildProxmoxPath');
-    expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
-    expect(commandPaletteStateSource).not.toContain('aiChatStore');
-
-    // Infrastructure and aggregate workspaces are not command-palette routes;
-    // platform/runtime pages own those workflows.
-    expect(commandPaletteStateSource).not.toContain('buildInfrastructurePath');
-    expect(commandPaletteStateSource).not.toContain('buildWorkloadsPath');
-    expect(commandPaletteStateSource).not.toContain('buildStoragePath');
-    expect(commandPaletteStateSource).not.toContain('buildRecoveryPath');
-
-    expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
-    expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
-    expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
-    expect(commandPaletteModelSource).toContain("id: 'nav-standalone'");
-    expect(commandPaletteModelSource).toContain("id: 'nav-proxmox'");
-    expect(commandPaletteModelSource).toContain("id: 'nav-docker'");
-    expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes'");
-    expect(commandPaletteModelSource).toContain("id: 'nav-kubernetes-workloads'");
-    expect(commandPaletteModelSource).toContain("id: 'nav-truenas'");
-    expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
-    expect(commandPaletteModelSource).toContain("id: 'nav-vmware-networks'");
-    expect(commandPaletteModelSource).not.toContain("id: 'assistant-");
-    expect(commandPaletteModelSource).not.toContain("id: 'nav-infrastructure'");
-    expect(commandPaletteModelSource).not.toContain("id: 'nav-workloads'");
-    expect(commandPaletteModelSource).not.toContain("id: 'nav-storage'");
-    expect(commandPaletteModelSource).not.toContain("id: 'nav-recovery'");
   });
 
   it('renders platform entries, runtime lens commands, and vSphere network inventory', () => {

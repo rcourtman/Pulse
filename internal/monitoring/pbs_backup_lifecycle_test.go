@@ -19,6 +19,13 @@ func waitPBSBudget(t *testing.T, ch <-chan struct{}, phase string) {
 	}
 }
 
+// PBS captures its runtime with the client and admission claim, rather than
+// reading it again after starting the goroutine, so the inherited context
+// itself is what must stay correct.
+func TestPBSBackupWorkersInheritRuntimeContext(t *testing.T) {
+	exercisePBSBackupRuntimeContext(t)
+}
+
 func exercisePBSBackupRuntimeContext(t *testing.T) {
 	t.Run("PBS inherits the canonical runtime", func(t *testing.T) {
 		type runtimeKey struct{}

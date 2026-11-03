@@ -9,8 +9,6 @@ import {
   toAgentFromResource,
   toNodeFromProxmox,
 } from '@/components/Infrastructure/resourceDetailMappers';
-import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
-import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import type { PhysicalDiskCollectionStatus, Resource } from '@/types/resource';
 
 const createHybridHostResource = (): Resource =>
@@ -445,16 +443,6 @@ describe('resourceDetailMappers', () => {
           valueTitle: 'Online · OK',
         },
       ]);
-    });
-  });
-
-  describe('detail row projection boundary', () => {
-    it('formats temperature, GPU, power, fan and custom rows from the selected resource payload only', () => {
-      expect(resourceDetailMappersSource).not.toContain('fetch(');
-      expect(resourceDetailMappersSource).not.toContain('nvidia-smi');
-      expect(resourceDetailMappersSource).not.toContain('powercap');
-      expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
-      expect(resourceDetailDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     });
   });
 

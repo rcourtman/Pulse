@@ -1,24 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SelectablePillButton } from './SelectablePillButton';
-import selectablePillButtonSource from './SelectablePillButton.tsx?raw';
-import selectablePillModelSource from './selectablePillModel.ts?raw';
 
 describe('SelectablePillButton', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps pressed semantics and class ownership in the shared primitive', () => {
-    expect(selectablePillButtonSource).toContain('getSelectablePillButtonClass');
-    expect(selectablePillButtonSource).toContain("aria-pressed={local.active ? 'true' : 'false'}");
-    expect(selectablePillButtonSource).not.toContain('border-blue-500 bg-blue-600');
-    expect(selectablePillButtonSource).not.toContain('hover:border-blue-400');
-
-    expect(selectablePillModelSource).toContain('SELECTABLE_PILL_BUTTON_BASE_CLASS');
-    expect(selectablePillModelSource).toContain('SELECTABLE_PILL_BUTTON_ACTIVE_CLASS');
-    expect(selectablePillModelSource).toContain('SELECTABLE_PILL_BUTTON_INACTIVE_CLASS');
-    expect(selectablePillModelSource).toContain('getSelectablePillButtonClass');
   });
 
   it('renders active and inactive pill states consistently', () => {

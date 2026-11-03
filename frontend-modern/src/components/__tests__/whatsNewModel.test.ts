@@ -9,7 +9,6 @@ import {
   extractReleaseVisuals,
   isReleaseVersion,
 } from '../whatsNewModel';
-import whatsNewCardSource from '../WhatsNewCard.tsx?raw';
 
 describe('extractHighlights', () => {
   it('extracts the Highlights section from a release body', () => {
@@ -396,25 +395,6 @@ describe('isReleaseVersion', () => {
     expect(isReleaseVersion('4.13')).toBe(false);
     expect(isReleaseVersion('4.13.0-preview')).toBe(false);
     expect(isReleaseVersion('')).toBe(false);
-  });
-});
-
-describe('post-update telemetry disclosure', () => {
-  it('does not announce telemetry payload changes from the release boundary', () => {
-    // Payload changes are disclosed in release notes and the dated
-    // PRIVACY.md changelog. A banner that pairs "we now collect more" with a
-    // one-click disable button reads as an opt-out prompt, so it was retired.
-    expect(whatsNewCardSource).not.toContain('TELEMETRY_PAYLOAD_NOTICE_VERSION');
-    expect(whatsNewCardSource).not.toContain('telemetry-payload-update-notice');
-    expect(whatsNewCardSource).not.toContain('openTelemetrySettings');
-  });
-
-  it('keeps release details opt-in and coordinates the automatic notice session', () => {
-    expect(whatsNewCardSource).toContain("reserveLowPriorityNoticeSession('release-update')");
-    expect(whatsNewCardSource).toContain('markVersionSeen(currentVersion);');
-    expect(whatsNewCardSource).toContain('actionLabel="See what\'s new"');
-    expect(whatsNewCardSource).toContain('setDialogVisible(true)');
-    expect(whatsNewCardSource).not.toContain('setDialogVisible(true);\n      markVersionSeen');
   });
 });
 

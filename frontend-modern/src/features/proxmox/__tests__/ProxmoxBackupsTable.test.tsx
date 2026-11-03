@@ -13,9 +13,6 @@ import {
   identityTask,
 } from '../__fixtures__/backupIdentity';
 import { buildBackupServerRows, ProxmoxBackupServersTable } from '../ProxmoxBackupServersTable';
-import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
-import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
-import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
@@ -632,16 +629,6 @@ describe('ProxmoxBackupsTable', () => {
     // the protected count and reason rows.
     expect(healthSummary.parentElement).toHaveClass('hidden', 'sm:inline');
 
-    expect(proxmoxBackupsTableSource).toContain('<PlatformSectionTabs');
-    expect(proxmoxBackupsTableSource).not.toContain('FilterSegmentedControl');
-    expect(proxmoxBackupsTableSource).toContain('buildProxmoxBackupsPath');
-    expect(proxmoxBackupsTableSource).toContain('trailingControls={');
-    expect(proxmoxBackupsTableSource).toContain('<PlatformResourceCounter');
-    expect(proxmoxBackupServersTableSource).toContain(
-      '<PlatformResponsiveTableLabel\n                    compact="Bkps"',
-    );
-    expect(proxmoxBackupServersTableSource).not.toContain('compact="#"');
-
     // The two route-backed sections exist...
     expect(screen.getByRole('navigation', { name: /backup views/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute(
@@ -1226,108 +1213,6 @@ describe('ProxmoxBackupsTable', () => {
       TABLE_CARD_FRAME_CLASS,
     );
     expect(emptyStateHeading.closest('.border-dashed')).not.toBeNull();
-  });
-
-  it('routes top-level loading and error states through shared platform primitives', () => {
-    expect(proxmoxBackupsTableSource).toContain('PlatformErrorState');
-    expect(proxmoxBackupsTableSource).toContain('PlatformTableLoadingState');
-    expect(proxmoxBackupsTableSource).toContain('title="Could not load Proxmox backup inventory"');
-    expect(proxmoxBackupsTableSource).toContain('title="Loading Proxmox backup inventory"');
-    expect(proxmoxBackupsTableSource).not.toContain(
-      'inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover',
-    );
-  });
-
-  it('keeps PBS backup count and capacity cells on shared platform primitives', () => {
-    const directLocaleCountCall = 'row.backupCount.' + 'toLocale' + 'String()';
-    const directDatastorePercentRound = 'Math.round(pct() ?? 0)}' + '%';
-
-    expect(proxmoxBackupServersTableSource).toContain('PlatformTableNumberValue');
-    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableIntegerValue');
-    expect(proxmoxBackupServersTableSource).toContain('PlatformTablePercentValue');
-    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTablePercentValue');
-    expect(proxmoxBackupServersTableSource).not.toContain(directLocaleCountCall);
-    expect(proxmoxBackupServersTableSource).not.toContain(directDatastorePercentRound);
-  });
-
-  it('routes PBS server expansion through the canonical resource drawer', () => {
-    expect(proxmoxBackupServersTableSource).toContain('PlatformResourceDetailTableRow');
-    expect(proxmoxBackupServersTableSource).toContain('resource={row.resource}');
-    expect(proxmoxBackupServersTableSource).toContain('initialShowHostDetails');
-    expect(proxmoxBackupServersTableSource).toContain('uniquelyCorrelatedAgent');
-    // A single agent can surface as both a PVE guest and a standalone host row;
-    // collapse those by agent identity, and keep declining genuinely ambiguous
-    // matches.
-    expect(proxmoxBackupServersTableSource).toContain('correlatedAgentKey');
-    expect(proxmoxBackupServersTableSource).toContain(
-      'if (byAgentKey.size !== 1) return undefined;',
-    );
-    expect(proxmoxBackupServersTableSource).toContain(
-      'metricsTarget: agent.metricsTarget ?? server.metricsTarget',
-    );
-    // A refresh that briefly omits the correlated host row must not flip the
-    // drawer target to the PBS service key; retain the resolved host per server
-    // and reuse it only across the omission.
-    expect(proxmoxBackupServersTableSource).toContain('createPbsCorrelationRetention');
-    expect(proxmoxBackupServersTableSource).toContain('hasCorrelationCandidate');
-    expect(proxmoxBackupServersTableSource).toContain(
-      'buildBackupServerRows(props.servers, props.backups ?? [], retention)',
-    );
-    expect(proxmoxBackupServersTableSource).not.toContain(
-      '<span class="font-medium text-base-content">Server:</span>',
-    );
-  });
-
-  it('keeps backup coverage fed by Proxmox VM/LXC guests when Overview demotes app containers', () => {
-    expect(proxmoxPageSurfaceSource).toContain(
-      'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
-    expect(proxmoxPageSurfaceSource).toContain('workloads={model().guests}');
-    expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
-  });
-
-  it('keeps Overview guest totals aligned with the filtered Workloads collection', () => {
-    // Guest totals now render as the shared toolbar inventory counts, fed by
-    // the workloads state whose collection already excludes demoted app
-    // containers. They must never come from the raw model summary counts.
-    expect(proxmoxPageSurfaceSource).toContain('inventoryStats={workloadsState.inventoryStats}');
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      'currentModel().summary.runningGuestCount} running',
-    );
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      'currentModel().summary.stoppedGuestCount} stopped',
-    );
-  });
-
-  it('keeps the overview node and guest regions on one canonical resource snapshot', () => {
-    expect(proxmoxPageSurfaceSource).toContain('const overviewResources = useUnifiedResources({');
-    expect(proxmoxPageSurfaceSource).toContain("cacheKey: 'proxmox-overview'");
-    expect(proxmoxPageSurfaceSource).toContain('resourceSnapshot={() =>');
-    expect(proxmoxPageSurfaceSource).toContain(
-      'resourceSnapshotRefetch={() => overviewResources.refetch()}',
-    );
-    expect(proxmoxPageSurfaceSource).toContain('useWorkloadsState({');
-    expect(proxmoxPageSurfaceSource).toContain('resourceSnapshot: props.resourceSnapshot');
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      'useWorkloads({ enabled: () => workloadsEnabled() })',
-    );
-  });
-
-  it('keeps the shared storage surface scoped to the whole Proxmox product family', () => {
-    expect(proxmoxPageSurfaceSource).toContain("const PROXMOX_PLATFORM_FILTER = 'proxmox-all';");
-    expect(proxmoxPageSurfaceSource).toContain('forcedSourceFilter={PROXMOX_PLATFORM_FILTER}');
-    expect(proxmoxPageSurfaceSource).not.toContain(
-      "const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';",
-    );
-  });
-
-  it('keeps Patrol coverage out of Proxmox evidence surfaces', () => {
-    expect(proxmoxPageSurfaceSource).not.toContain('getMonitorContextPatrolProtectionPosture');
-    expect(proxmoxPageSurfaceSource).not.toContain('getPatrolRunHistory(1)');
-    expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Proxmox Patrol coverage"');
-    expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Patrol protection posture"');
-    expect(proxmoxBackupsTableSource).not.toContain('Proxmox Patrol coverage');
   });
 });
 

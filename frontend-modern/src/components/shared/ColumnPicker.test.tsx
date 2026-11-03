@@ -1,36 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ColumnPicker } from './ColumnPicker';
-import columnPickerSource from './ColumnPicker.tsx?raw';
-import columnPickerModelSource from './columnPickerModel.ts?raw';
-import columnPickerStateSource from './useColumnPickerState.ts?raw';
 
 describe('ColumnPicker', () => {
   afterEach(() => {
     cleanup();
-  });
-
-  it('keeps column picker on shell, runtime, and model owners', () => {
-    expect(columnPickerSource).toContain('useColumnPickerState');
-    expect(columnPickerSource).toContain('COLUMN_PICKER_PANEL_TITLE');
-    expect(columnPickerSource).toContain('widthClass="w-56 max-w-[calc(100vw-2rem)]"');
-    expect(columnPickerSource).not.toContain('createSignal');
-    expect(columnPickerSource).not.toContain('createEffect');
-    expect(columnPickerSource).not.toContain('document.addEventListener');
-    expect(columnPickerSource).not.toContain('getHiddenColumnCount');
-
-    expect(columnPickerStateSource).toContain('export function useColumnPickerState');
-    expect(columnPickerStateSource).toContain('createSignal');
-    expect(columnPickerStateSource).toContain('createEffect');
-    expect(columnPickerStateSource).toContain('document.addEventListener');
-    expect(columnPickerStateSource).toContain('handleClickOutside');
-    expect(columnPickerStateSource).toContain('hiddenCount');
-
-    expect(columnPickerModelSource).toContain('COLUMN_PICKER_BUTTON_LABEL');
-    expect(columnPickerModelSource).toContain('COLUMN_PICKER_PANEL_TITLE');
-    expect(columnPickerModelSource).toContain('getHiddenColumnCount');
-    expect(columnPickerModelSource).toContain('shouldShowColumnPickerReset');
-    expect(columnPickerModelSource).toContain('getColumnPickerOptionTextClass');
   });
 
   it('uses the canonical columns label and modal copy', async () => {

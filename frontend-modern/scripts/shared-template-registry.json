@@ -203,20 +203,48 @@
         "export": "InlineDetailTableRow"
       },
       "requiredConsumers": [
-        { "path": "src/components/Workloads/WorkloadPanel.tsx" },
-        { "path": "src/features/docker/DockerAlertsTable.tsx" },
-        { "path": "src/features/docker/DockerHostsTable.tsx" },
-        { "path": "src/features/docker/DockerNetworksTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
-        { "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx" },
-        { "path": "src/features/proxmox/ProxmoxCephTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxCoverageTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
-        { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
-        { "path": "src/features/vmware/VsphereActivityTable.tsx" },
-        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+        {
+          "path": "src/components/Workloads/WorkloadPanel.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerNetworksTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCoverageTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASServicesTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereActivityTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -245,7 +273,11 @@
         "path": "src/components/Toast/Toast.tsx",
         "export": "Toast"
       },
-      "requiredConsumers": [{ "path": "src/components/Toast/Toast.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/Toast/Toast.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/components/Toast/Toast.tsx",
@@ -272,17 +304,39 @@
         "export": "DetailSection"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
-        { "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts" },
-        { "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts" },
-        { "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts" },
-        { "path": "src/features/docker/DockerAlertsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
-        { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
-        { "path": "src/features/vmware/VsphereActivityTable.tsx" },
-        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts"
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts"
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts"
+        },
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASServicesTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereActivityTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -334,12 +388,24 @@
         "export": "ObjectDrawerHeader"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
-        { "path": "src/components/Workloads/GuestDrawer.tsx" },
-        { "path": "src/components/Workloads/NodeDrawer.tsx" },
-        { "path": "src/components/shared/DetailSectionTable.tsx" },
-        { "path": "src/features/docker/DockerHostDrawer.tsx" },
-        { "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx" }
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx"
+        },
+        {
+          "path": "src/components/Workloads/GuestDrawer.tsx"
+        },
+        {
+          "path": "src/components/Workloads/NodeDrawer.tsx"
+        },
+        {
+          "path": "src/components/shared/DetailSectionTable.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerHostDrawer.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx"
+        }
       ],
       "forbiddenPatterns": [],
       "proof": [
@@ -357,9 +423,15 @@
         "export": "formatDetailBytesValue"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts" },
-        { "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts" },
-        { "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts" }
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts"
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts"
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -399,11 +471,21 @@
         "export": "TableCard"
       },
       "requiredConsumers": [
-        { "path": "src/components/Storage/StorageContentCard.tsx" },
-        { "path": "src/components/Workloads/WorkloadsSurface.tsx" },
-        { "path": "src/components/Workloads/WorkloadsTable.tsx" },
-        { "path": "src/features/alerts/AlertHistoryTableSection.tsx" },
-        { "path": "src/features/platformPage/sharedPlatformPage.tsx" }
+        {
+          "path": "src/components/Storage/StorageContentCard.tsx"
+        },
+        {
+          "path": "src/components/Workloads/WorkloadsSurface.tsx"
+        },
+        {
+          "path": "src/components/Workloads/WorkloadsTable.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertHistoryTableSection.tsx"
+        },
+        {
+          "path": "src/features/platformPage/sharedPlatformPage.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -419,8 +501,12 @@
         "export": "TableCardHeader"
       },
       "requiredConsumers": [
-        { "path": "src/components/Storage/StorageContentCard.tsx" },
-        { "path": "src/features/platformPage/sharedPlatformPage.tsx" }
+        {
+          "path": "src/components/Storage/StorageContentCard.tsx"
+        },
+        {
+          "path": "src/features/platformPage/sharedPlatformPage.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -436,19 +522,45 @@
         "export": "InfoCardFrame"
       },
       "requiredConsumers": [
-        { "path": "src/components/Infrastructure/AvailabilityProbeStatusCard.tsx" },
-        { "path": "src/components/Infrastructure/ResourceActionHistory.tsx" },
-        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
-        { "path": "src/components/shared/WebInterfaceUrlField.tsx" },
-        { "path": "src/components/shared/cards/DisksCard.tsx" },
-        { "path": "src/components/shared/cards/HardwareCard.tsx" },
-        { "path": "src/components/shared/cards/NetworkInterfacesCard.tsx" },
-        { "path": "src/components/shared/cards/RaidCard.tsx" },
-        { "path": "src/components/shared/cards/RootDiskCard.tsx" },
-        { "path": "src/components/shared/cards/SystemInfoCard.tsx" },
-        { "path": "src/components/shared/cards/TemperaturesCard.tsx" },
-        { "path": "src/components/Workloads/DrawerDiskListCard.tsx" },
-        { "path": "src/features/docker/DockerHostDrawerOverview.tsx" }
+        {
+          "path": "src/components/Infrastructure/AvailabilityProbeStatusCard.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/ResourceActionHistory.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx"
+        },
+        {
+          "path": "src/components/shared/WebInterfaceUrlField.tsx"
+        },
+        {
+          "path": "src/components/shared/cards/DisksCard.tsx"
+        },
+        {
+          "path": "src/components/shared/cards/HardwareCard.tsx"
+        },
+        {
+          "path": "src/components/shared/cards/NetworkInterfacesCard.tsx"
+        },
+        {
+          "path": "src/components/shared/cards/RaidCard.tsx"
+        },
+        {
+          "path": "src/components/shared/cards/RootDiskCard.tsx"
+        },
+        {
+          "path": "src/components/shared/cards/SystemInfoCard.tsx"
+        },
+        {
+          "path": "src/components/shared/cards/TemperaturesCard.tsx"
+        },
+        {
+          "path": "src/components/Workloads/DrawerDiskListCard.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerHostDrawerOverview.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -465,8 +577,12 @@
         "export": "CalloutCard"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
-        { "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx" },
+        {
+          "path": "src/components/Settings/AIProviderConfigurationSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx"
+        },
         {
           "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx"
         },
@@ -476,12 +592,24 @@
         {
           "path": "src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx"
         },
-        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
-        { "path": "src/components/Settings/DiscoverySettingsForm.tsx" },
-        { "path": "src/components/Settings/MonitoredSystemImpactPreview.tsx" },
-        { "path": "src/components/Settings/ReportingPanel.tsx" },
-        { "path": "src/components/Settings/SecurityAuthPanel.tsx" },
-        { "path": "src/components/Settings/SecurityOverviewPanel.tsx" }
+        {
+          "path": "src/components/Settings/DiagnosticsResultsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/DiscoverySettingsForm.tsx"
+        },
+        {
+          "path": "src/components/Settings/MonitoredSystemImpactPreview.tsx"
+        },
+        {
+          "path": "src/components/Settings/ReportingPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SecurityAuthPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SecurityOverviewPanel.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -549,7 +677,11 @@
         "path": "src/components/shared/CalloutCard.tsx",
         "export": "CalloutCard"
       },
-      "requiredConsumers": [{ "path": "src/components/ErrorBoundary.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/ErrorBoundary.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/components/ErrorBoundary.tsx",
@@ -576,8 +708,12 @@
         "export": "CalloutCard"
       },
       "requiredConsumers": [
-        { "path": "src/components/UpdateConfirmationModal.tsx" },
-        { "path": "src/components/UpdateProgressModal.tsx" }
+        {
+          "path": "src/components/UpdateConfirmationModal.tsx"
+        },
+        {
+          "path": "src/components/UpdateProgressModal.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -618,8 +754,12 @@
         "export": "InlineNotice"
       },
       "requiredConsumers": [
-        { "path": "src/features/platformPage/PlatformOutdatedAgentNotice.tsx" },
-        { "path": "src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx" }
+        {
+          "path": "src/features/platformPage/PlatformOutdatedAgentNotice.tsx"
+        },
+        {
+          "path": "src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -651,7 +791,11 @@
         "path": "src/components/shared/InlineNotice.tsx",
         "export": "InlineNotice"
       },
-      "requiredConsumers": [{ "path": "src/components/DemoBanner.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/DemoBanner.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/components/DemoBanner.tsx",
@@ -678,7 +822,11 @@
         "path": "src/components/shared/InlineNotice.tsx",
         "export": "InlineNotice"
       },
-      "requiredConsumers": [{ "path": "src/components/CommercialMigrationBanner.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/CommercialMigrationBanner.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/components/CommercialMigrationBanner.tsx",
@@ -708,7 +856,11 @@
         "path": "src/components/shared/Button.tsx",
         "export": "Button"
       },
-      "requiredConsumers": [{ "path": "src/components/GitHubStarBanner.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/GitHubStarBanner.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/components/GitHubStarBanner.tsx",
@@ -734,7 +886,11 @@
         "path": "src/components/shared/Button.tsx",
         "export": "Button"
       },
-      "requiredConsumers": [{ "path": "src/components/Settings/SSOProvidersPanel.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/components/Settings/SSOProvidersPanel.tsx",
@@ -763,15 +919,33 @@
         "export": "StatusDot"
       },
       "requiredConsumers": [
-        { "path": "src/components/shared/StatusIndicatorBadge.tsx" },
-        { "path": "src/components/Settings/ResourcePicker.tsx" },
-        { "path": "src/components/Storage/StoragePoolDetail.tsx" },
-        { "path": "src/components/shared/NodeGroupHeader.tsx" },
-        { "path": "src/features/alerts/AlertOverviewStatsCards.tsx" },
-        { "path": "src/features/docker/DockerHostsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
-        { "path": "src/features/vmware/VsphereHostsTable.tsx" }
+        {
+          "path": "src/components/shared/StatusIndicatorBadge.tsx"
+        },
+        {
+          "path": "src/components/Settings/ResourcePicker.tsx"
+        },
+        {
+          "path": "src/components/Storage/StoragePoolDetail.tsx"
+        },
+        {
+          "path": "src/components/shared/NodeGroupHeader.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertOverviewStatsCards.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereHostsTable.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -788,26 +962,66 @@
         "export": "LoadingSpinner"
       },
       "requiredConsumers": [
-        { "path": "src/components/AI/FindingsPanel.tsx" },
-        { "path": "src/components/Login.tsx" },
-        { "path": "src/components/Settings/AISettings.tsx" },
-        { "path": "src/components/Settings/AISettingsDialogs.tsx" },
-        { "path": "src/components/Settings/APITokenManager.tsx" },
-        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/RolesPanel.tsx" },
-        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
-        { "path": "src/components/Settings/UpdateInstallGuide.tsx" },
-        { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" },
-        { "path": "src/components/Settings/UserAssignmentsDialog.tsx" },
-        { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
-        { "path": "src/components/UpdateProgressModal.tsx" },
-        { "path": "src/components/shared/Button.tsx" },
-        { "path": "src/components/shared/HistoryChartOverlay.tsx" },
-        { "path": "src/components/shared/PulseDataGrid.tsx" },
-        { "path": "src/components/patrol/ApprovalSection.tsx" },
-        { "path": "src/components/patrol/InvestigationMessages.tsx" },
-        { "path": "src/components/patrol/InvestigationSection.tsx" },
-        { "path": "src/components/patrol/RunToolCallTrace.tsx" }
+        {
+          "path": "src/components/AI/FindingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Login.tsx"
+        },
+        {
+          "path": "src/components/Settings/AISettings.tsx"
+        },
+        {
+          "path": "src/components/Settings/AISettingsDialogs.tsx"
+        },
+        {
+          "path": "src/components/Settings/APITokenManager.tsx"
+        },
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/RolesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/UpdateInstallGuide.tsx"
+        },
+        {
+          "path": "src/components/Settings/UpdatesSettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/UserAssignmentsDialog.tsx"
+        },
+        {
+          "path": "src/components/Settings/UserAssignmentsPanel.tsx"
+        },
+        {
+          "path": "src/components/UpdateProgressModal.tsx"
+        },
+        {
+          "path": "src/components/shared/Button.tsx"
+        },
+        {
+          "path": "src/components/shared/HistoryChartOverlay.tsx"
+        },
+        {
+          "path": "src/components/shared/PulseDataGrid.tsx"
+        },
+        {
+          "path": "src/components/patrol/ApprovalSection.tsx"
+        },
+        {
+          "path": "src/components/patrol/InvestigationMessages.tsx"
+        },
+        {
+          "path": "src/components/patrol/InvestigationSection.tsx"
+        },
+        {
+          "path": "src/components/patrol/RunToolCallTrace.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -945,12 +1159,24 @@
         "export": "SettingsLoadingSkeleton"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/DataHandlingPanel.tsx" },
-        { "path": "src/components/Settings/OrganizationAccessLoadingState.tsx" },
-        { "path": "src/components/Settings/OrganizationBillingLoadingState.tsx" },
-        { "path": "src/components/Settings/OrganizationOverviewLoadingState.tsx" },
-        { "path": "src/components/Settings/OrganizationSharingLoadingState.tsx" },
-        { "path": "src/components/Settings/SecurityOverviewPanel.tsx" }
+        {
+          "path": "src/components/Settings/DataHandlingPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessLoadingState.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationBillingLoadingState.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationOverviewLoadingState.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationSharingLoadingState.tsx"
+        },
+        {
+          "path": "src/components/Settings/SecurityOverviewPanel.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1000,17 +1226,39 @@
         "export": "Button"
       },
       "requiredConsumers": [
-        { "path": "src/components/patrol/ApprovalBanner.tsx" },
-        { "path": "src/components/patrol/ApprovalSection.tsx" },
-        { "path": "src/components/ErrorBoundary.tsx" },
-        { "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx" },
-        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/APIAccessPanel.tsx" },
-        { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
-        { "path": "src/components/Settings/BillingAdminPanel.tsx" },
-        { "path": "src/components/Settings/BillingAdminOrganizationsTable.tsx" },
-        { "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx" },
-        { "path": "src/components/Settings/ConnectionEditor/ConnectionEditor.tsx" },
+        {
+          "path": "src/components/patrol/ApprovalBanner.tsx"
+        },
+        {
+          "path": "src/components/patrol/ApprovalSection.tsx"
+        },
+        {
+          "path": "src/components/ErrorBoundary.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx"
+        },
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/APIAccessPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/AvailabilitySettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/BillingAdminPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/BillingAdminOrganizationsTable.tsx"
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx"
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/ConnectionEditor.tsx"
+        },
         {
           "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx"
         },
@@ -1020,34 +1268,90 @@
         {
           "path": "src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx"
         },
-        { "path": "src/components/Settings/CopyCommandBlock.tsx" },
-        { "path": "src/components/Settings/DataHandlingPanel.tsx" },
-        { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
-        { "path": "src/components/Settings/InfrastructureAgentDoctorPage.tsx" },
-        { "path": "src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx" },
-        { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
-        { "path": "src/components/Settings/InfrastructureSourceManager.tsx" },
-        { "path": "src/components/Settings/InfrastructureWorkspace.tsx" },
-        { "path": "src/components/Settings/OrganizationAccessInvitationsSection.tsx" },
-        { "path": "src/components/Settings/OrganizationAccessManagementSection.tsx" },
-        { "path": "src/components/Settings/OrganizationAccessMembersSection.tsx" },
-        { "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx" },
-        { "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx" },
-        { "path": "src/components/Settings/OrganizationOverviewDetailsSection.tsx" },
-        { "path": "src/components/Settings/OrganizationSharingCreateSection.tsx" },
-        { "path": "src/components/Settings/ProLicensePanel.tsx" },
-        { "path": "src/components/Settings/ProLicensePlanSection.tsx" },
-        { "path": "src/components/Settings/ReportingPanel.tsx" },
-        { "path": "src/components/Settings/ResourcePicker.tsx" },
-        { "path": "src/components/Settings/RolesPanel.tsx" },
-        { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" },
-        { "path": "src/components/Settings/SecurityAuthPanel.tsx" },
-        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
-        { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
-        { "path": "src/components/UpdateConfirmationModal.tsx" },
-        { "path": "src/components/UpdateProgressModal.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
-        { "path": "src/features/standalone/StandalonePageSurface.tsx" }
+        {
+          "path": "src/components/Settings/CopyCommandBlock.tsx"
+        },
+        {
+          "path": "src/components/Settings/DataHandlingPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/GeneralSettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/InfrastructureAgentDoctorPage.tsx"
+        },
+        {
+          "path": "src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx"
+        },
+        {
+          "path": "src/components/Settings/InfrastructureInstallerSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/InfrastructureSourceManager.tsx"
+        },
+        {
+          "path": "src/components/Settings/InfrastructureWorkspace.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessInvitationsSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessManagementSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessMembersSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationOverviewDetailsSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationSharingCreateSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/ProLicensePanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/ProLicensePlanSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/ReportingPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/ResourcePicker.tsx"
+        },
+        {
+          "path": "src/components/Settings/RolesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx"
+        },
+        {
+          "path": "src/components/Settings/SecurityAuthPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/UserAssignmentsPanel.tsx"
+        },
+        {
+          "path": "src/components/UpdateConfirmationModal.tsx"
+        },
+        {
+          "path": "src/components/UpdateProgressModal.tsx"
+        },
+        {
+          "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx"
+        },
+        {
+          "path": "src/features/standalone/StandalonePageSurface.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1253,13 +1557,27 @@
         "export": "EmptyState"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/AuditWebhookPanel.tsx" },
-        { "path": "src/components/Settings/AuditLogPanel.tsx" },
-        { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
-        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
-        { "path": "src/components/patrol/RunHistoryPanel.tsx" },
-        { "path": "src/components/Settings/SSOProvidersPanel.tsx" }
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/AuditWebhookPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/AuditLogPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/AvailabilitySettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/DiagnosticsResultsPanel.tsx"
+        },
+        {
+          "path": "src/components/patrol/RunHistoryPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1313,13 +1631,27 @@
         "export": "ActionIconButton"
       },
       "requiredConsumers": [
-        { "path": "src/components/Alerts/AlertResourceTableDesktop.tsx" },
-        { "path": "src/components/Alerts/AlertResourceTableMobile.tsx" },
-        { "path": "src/components/Alerts/AlertResourceTableRow.tsx" },
-        { "path": "src/components/Alerts/ResourceTable.tsx" },
-        { "path": "src/components/Settings/RolesPanel.tsx" },
-        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
-        { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
+        {
+          "path": "src/components/Alerts/AlertResourceTableDesktop.tsx"
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableMobile.tsx"
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableRow.tsx"
+        },
+        {
+          "path": "src/components/Alerts/ResourceTable.tsx"
+        },
+        {
+          "path": "src/components/Settings/RolesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx"
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1389,9 +1721,15 @@
         "export": "CopyValueButton"
       },
       "requiredConsumers": [
-        { "path": "src/components/patrol/ToolExecutionBlock.tsx" },
-        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
-        { "path": "src/components/shared/WebInterfaceUrlField.tsx" }
+        {
+          "path": "src/components/patrol/ToolExecutionBlock.tsx"
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx"
+        },
+        {
+          "path": "src/components/shared/WebInterfaceUrlField.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1432,10 +1770,18 @@
         "export": "UpgradeButtonLink"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/AuditLogPanel.tsx" },
-        { "path": "src/components/Settings/ProLicensePlanSection.tsx" },
-        { "path": "src/components/shared/FeatureGateSection.tsx" }
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/AuditLogPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/ProLicensePlanSection.tsx"
+        },
+        {
+          "path": "src/components/shared/FeatureGateSection.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1477,14 +1823,30 @@
         "export": "ExternalTextLink"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
-        { "path": "src/components/Settings/AISettingsDialogs.tsx" },
-        { "path": "src/components/Settings/APITokenManager.tsx" },
-        { "path": "src/components/Settings/AgentIntegrationsPanel.tsx" },
-        { "path": "src/components/Settings/BackupTransferDialogs.tsx" },
-        { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
-        { "path": "src/components/Settings/SecurityOverviewPanel.tsx" },
-        { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" }
+        {
+          "path": "src/components/Settings/AIProviderConfigurationSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/AISettingsDialogs.tsx"
+        },
+        {
+          "path": "src/components/Settings/APITokenManager.tsx"
+        },
+        {
+          "path": "src/components/Settings/AgentIntegrationsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/BackupTransferDialogs.tsx"
+        },
+        {
+          "path": "src/components/Settings/GeneralSettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SecurityOverviewPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1535,36 +1897,84 @@
         "export": "FormSelect"
       },
       "requiredConsumers": [
-        { "path": "src/components/AI/FindingsPanel.tsx" },
-        { "path": "src/components/Alerts/EmailProviderSelect.tsx" },
-        { "path": "src/components/Alerts/WebhookConfigForm.tsx" },
-        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
-        { "path": "src/components/OrgSwitcher.tsx" },
-        { "path": "src/components/Settings/AIModelSelectionSection.tsx" },
-        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/AuditLogPanel.tsx" },
+        {
+          "path": "src/components/AI/FindingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Alerts/EmailProviderSelect.tsx"
+        },
+        {
+          "path": "src/components/Alerts/WebhookConfigForm.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx"
+        },
+        {
+          "path": "src/components/OrgSwitcher.tsx"
+        },
+        {
+          "path": "src/components/Settings/AIModelSelectionSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/AuditLogPanel.tsx"
+        },
         {
           "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx"
         },
         {
           "path": "src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx"
         },
-        { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
-        { "path": "src/components/Settings/NodeModalMonitoringSection.tsx" },
-        { "path": "src/components/Settings/OrganizationAccessManagementSection.tsx" },
-        { "path": "src/components/Settings/OrganizationAccessMembersSection.tsx" },
-        { "path": "src/components/Settings/OrganizationSharingCreateSection.tsx" },
-        { "path": "src/components/Settings/RecoverySettingsPanel.tsx" },
-        { "path": "src/components/Settings/RolesEditorDialog.tsx" },
-        { "path": "src/components/Settings/SystemLogsPanel.tsx" },
-        { "path": "src/components/Storage/StoragePageControls.tsx" },
-        { "path": "src/components/Workloads/GuestDrawerHistory.tsx" },
-        { "path": "src/components/shared/FilterBar/AddFilterMenu.tsx" },
-        { "path": "src/components/shared/FilterToolbar.tsx" },
-        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
-        { "path": "src/features/alerts/AlertDeliveryRoutingSection.tsx" },
-        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
-        { "path": "src/features/patrol/PatrolAttentionWorkbench.tsx" }
+        {
+          "path": "src/components/Settings/InfrastructureInstallerSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/NodeModalMonitoringSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessManagementSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessMembersSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationSharingCreateSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/RecoverySettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/RolesEditorDialog.tsx"
+        },
+        {
+          "path": "src/components/Settings/SystemLogsPanel.tsx"
+        },
+        {
+          "path": "src/components/Storage/StoragePageControls.tsx"
+        },
+        {
+          "path": "src/components/Workloads/GuestDrawerHistory.tsx"
+        },
+        {
+          "path": "src/components/shared/FilterBar/AddFilterMenu.tsx"
+        },
+        {
+          "path": "src/components/shared/FilterToolbar.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertDeliveryRoutingSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertQuietHoursSection.tsx"
+        },
+        {
+          "path": "src/features/patrol/PatrolAttentionWorkbench.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -1581,17 +1991,39 @@
         "export": "FormTextarea"
       },
       "requiredConsumers": [
-        { "path": "src/components/Alerts/EmailProviderSelect.tsx" },
-        { "path": "src/components/Alerts/IncidentTimelinePanel.tsx" },
-        { "path": "src/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx" },
-        { "path": "src/components/Alerts/WebhookConfigForm.tsx" },
-        { "path": "src/components/Infrastructure/ReportMergeModal.tsx" },
-        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" },
-        { "path": "src/components/Settings/SuggestProfileModal.tsx" },
-        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
-        { "path": "src/features/patrol/PatrolAttentionWorkbench.tsx" },
-        { "path": "src/features/patrol/PatrolObjectivesPanel.tsx" }
+        {
+          "path": "src/components/Alerts/EmailProviderSelect.tsx"
+        },
+        {
+          "path": "src/components/Alerts/IncidentTimelinePanel.tsx"
+        },
+        {
+          "path": "src/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx"
+        },
+        {
+          "path": "src/components/Alerts/WebhookConfigForm.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/ReportMergeModal.tsx"
+        },
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx"
+        },
+        {
+          "path": "src/components/Settings/SuggestProfileModal.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx"
+        },
+        {
+          "path": "src/features/patrol/PatrolAttentionWorkbench.tsx"
+        },
+        {
+          "path": "src/features/patrol/PatrolObjectivesPanel.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -1608,29 +2040,75 @@
         "export": "Toggle"
       },
       "requiredConsumers": [
-        { "path": "src/components/Alerts/AlertResourceTableDesktop.tsx" },
-        { "path": "src/components/Alerts/AlertResourceTableMobile.tsx" },
-        { "path": "src/components/Alerts/AlertResourceTableRow.tsx" },
-        { "path": "src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx" },
-        { "path": "src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx" },
-        { "path": "src/components/Infrastructure/ResourceOperatorStateSection.tsx" },
-        { "path": "src/components/Settings/AISettings.tsx" },
-        { "path": "src/components/Settings/AuditLogPanel.tsx" },
-        { "path": "src/components/Settings/DiscoverySettingsForm.tsx" },
-        { "path": "src/components/Settings/DockerRuntimeSettingsCard.tsx" },
-        { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
-        { "path": "src/components/Settings/NodeModalMonitoringSection.tsx" },
-        { "path": "src/components/Settings/RelaySettingsPanel.tsx" },
-        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
-        { "path": "src/components/Settings/SecurityAuthPanel.tsx" },
-        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
-        { "path": "src/features/alerts/AlertCooldownSection.tsx" },
-        { "path": "src/features/alerts/AlertEmailDestinationsSection.tsx" },
-        { "path": "src/features/alerts/AlertEscalationSection.tsx" },
-        { "path": "src/features/alerts/AlertGroupingSection.tsx" },
-        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
-        { "path": "src/features/alerts/AlertRecoverySection.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+        {
+          "path": "src/components/Alerts/AlertResourceTableDesktop.tsx"
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableMobile.tsx"
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableRow.tsx"
+        },
+        {
+          "path": "src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx"
+        },
+        {
+          "path": "src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/ResourceOperatorStateSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/AISettings.tsx"
+        },
+        {
+          "path": "src/components/Settings/AuditLogPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/DiscoverySettingsForm.tsx"
+        },
+        {
+          "path": "src/components/Settings/DockerRuntimeSettingsCard.tsx"
+        },
+        {
+          "path": "src/components/Settings/GeneralSettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/NodeModalMonitoringSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/RelaySettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/SecurityAuthPanel.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertCooldownSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertEmailDestinationsSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertEscalationSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertGroupingSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertQuietHoursSection.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertRecoverySection.tsx"
+        },
+        {
+          "path": "src/features/patrol/PatrolIntelligenceHeader.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -1647,9 +2125,15 @@
         "export": "StatusIndicatorBadge"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
-        { "path": "src/components/patrol/RunHistoryEntry.tsx" }
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/DiagnosticsResultsPanel.tsx"
+        },
+        {
+          "path": "src/components/patrol/RunHistoryEntry.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1672,10 +2156,18 @@
         "export": "AlertSeverityBadge"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerAlertsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
-        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1711,10 +2203,18 @@
         "export": "getPlatformAlertSeverityFilterOptions"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerAlertsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
-        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1764,10 +2264,18 @@
         "export": "getAlertSeverityDetailTone"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerAlertsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
-        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1802,10 +2310,18 @@
         "export": "formatPlatformAlertCode"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerAlertsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
-        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1861,15 +2377,33 @@
         "export": "MetadataBadge"
       },
       "requiredConsumers": [
-        { "path": "src/components/shared/OrganizationBadges.tsx" },
-        { "path": "src/components/AI/FindingsPanel.tsx" },
-        { "path": "src/components/patrol/ApprovalSection.tsx" },
-        { "path": "src/components/patrol/InvestigationSection.tsx" },
-        { "path": "src/components/patrol/RunHistoryEntry.tsx" },
-        { "path": "src/components/patrol/RunToolCallTrace.tsx" },
-        { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
-        { "path": "src/components/Infrastructure/ResourceDetailSummary.tsx" }
+        {
+          "path": "src/components/shared/OrganizationBadges.tsx"
+        },
+        {
+          "path": "src/components/AI/FindingsPanel.tsx"
+        },
+        {
+          "path": "src/components/patrol/ApprovalSection.tsx"
+        },
+        {
+          "path": "src/components/patrol/InvestigationSection.tsx"
+        },
+        {
+          "path": "src/components/patrol/RunHistoryEntry.tsx"
+        },
+        {
+          "path": "src/components/patrol/RunToolCallTrace.tsx"
+        },
+        {
+          "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx"
+        },
+        {
+          "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/ResourceDetailSummary.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -1965,11 +2499,21 @@
         "export": "OrganizationRoleBadge"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/OrganizationAccessInvitationsSection.tsx" },
-        { "path": "src/components/Settings/OrganizationAccessMembersSection.tsx" },
-        { "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx" },
-        { "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx" },
-        { "path": "src/components/Settings/OrganizationOverviewMembersSection.tsx" }
+        {
+          "path": "src/components/Settings/OrganizationAccessInvitationsSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessMembersSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationOverviewMembersSection.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2008,8 +2552,12 @@
         "export": "OrganizationShareStatusBadge"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx" },
-        { "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx" }
+        {
+          "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx"
+        },
+        {
+          "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2036,9 +2584,15 @@
         "export": "PlatformDetailTable"
       },
       "requiredConsumers": [
-        { "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx" },
-        { "path": "src/features/proxmox/ProxmoxCoverageTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" }
+        {
+          "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCoverageTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -2055,15 +2609,33 @@
         "export": "PlatformTableLoadingState"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerPageSurface.tsx" },
-        { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
-        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
-        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
-        { "path": "src/features/standalone/StandalonePageSurface.tsx" },
-        { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
-        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+        {
+          "path": "src/features/docker/DockerPageSurface.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPageSurface.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupsTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxPageSurface.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxReplicationTable.tsx"
+        },
+        {
+          "path": "src/features/standalone/StandalonePageSurface.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASPageSurface.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VmwarePageSurface.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -2080,18 +2652,42 @@
         "export": "formatPlatformTableTextValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesClustersTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesConfigTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesControllersTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesPodsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesPolicyTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesServicesTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesStorageTable.tsx" }
+        {
+          "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesClustersTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesConfigTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesControllersTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesEventsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPodsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPolicyTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesServicesTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesStorageTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2100,7 +2696,7 @@
         },
         {
           "path": "src/features/kubernetes/KubernetesClustersTable.tsx",
-          "patterns": ["asTrimmedString(cluster.kubernetes?.context) || '—'"]
+          "patterns": ["asTrimmedString(cluster.kubernetes?.context) || '\u2014'"]
         },
         {
           "path": "src/features/kubernetes/KubernetesConfigTable.tsx",
@@ -2112,7 +2708,7 @@
         },
         {
           "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx",
-          "patterns": ["asTrimmedString(deployment.kubernetes?.namespace) || '—'"]
+          "patterns": ["asTrimmedString(deployment.kubernetes?.namespace) || '\u2014'"]
         },
         {
           "path": "src/features/kubernetes/KubernetesEventsTable.tsx",
@@ -2124,7 +2720,7 @@
         },
         {
           "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
-          "patterns": ["asTrimmedString(meta()?.kubeletVersion) || '—'"]
+          "patterns": ["asTrimmedString(meta()?.kubeletVersion) || '\u2014'"]
         },
         {
           "path": "src/features/kubernetes/KubernetesPodsTable.tsx",
@@ -2158,10 +2754,18 @@
         "export": "formatPlatformTableTitleCaseValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx" }
+        {
+          "path": "src/features/truenas/TrueNASAppsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASServicesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2196,14 +2800,30 @@
         "export": "summarizePlatformTableValues"
       },
       "requiredConsumers": [
-        { "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesConfigTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesPolicyTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesServicesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx" },
-        { "path": "src/features/vmware/VsphereDatastoresTable.tsx" },
-        { "path": "src/features/vmware/VsphereNetworksTable.tsx" }
+        {
+          "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesConfigTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPolicyTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesServicesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereDatastoresTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereNetworksTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2254,14 +2874,30 @@
         "export": "formatPlatformTableUptimeValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerHostsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
-        { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
-        { "path": "src/features/vmware/VsphereHostsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx"
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereHostsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2316,18 +2952,42 @@
         "export": "formatPlatformTableBytesValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerNativeTableShared.tsx" },
-        { "path": "src/features/docker/DockerStorageUsageTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesStorageTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxCephTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxCoverageTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxRecoverableTable.tsx" },
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
-        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx" }
+        {
+          "path": "src/features/docker/DockerNativeTableShared.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerStorageUsageTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesStorageTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCoverageTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxRecoverableTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2397,7 +3057,11 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTableDateTimeValue"
       },
-      "requiredConsumers": [{ "path": "src/features/truenas/TrueNASProtectionTable.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/features/truenas/TrueNASProtectionTable.tsx",
@@ -2419,14 +3083,30 @@
         "export": "PlatformTableRelativeTimeValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerVolumesTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
-        { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
-        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
-        { "path": "src/features/standalone/AvailabilityChecksTable.tsx" },
-        { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
-        { "path": "src/features/vmware/VsphereActivityTable.tsx" }
+        {
+          "path": "src/features/docker/DockerVolumesTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesEventsTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxReplicationTable.tsx"
+        },
+        {
+          "path": "src/features/standalone/AvailabilityChecksTable.tsx"
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereActivityTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2435,12 +3115,12 @@
         },
         {
           "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx",
-          "patterns": ["formatRelativeTime(createdAt, { compact: true, emptyText: '—' })"]
+          "patterns": ["formatRelativeTime(createdAt, { compact: true, emptyText: '\u2014' })"]
         },
         {
           "path": "src/features/kubernetes/KubernetesEventsTable.tsx",
           "patterns": [
-            "formatRelativeTime(observedTimestamp(resource), { compact: true, emptyText: '—' })"
+            "formatRelativeTime(observedTimestamp(resource), { compact: true, emptyText: '\u2014' })"
           ]
         },
         {
@@ -2485,8 +3165,12 @@
         "export": "PlatformTableDurationValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
-        { "path": "src/features/standalone/AvailabilityChecksTable.tsx" }
+        {
+          "path": "src/features/proxmox/ProxmoxReplicationTable.tsx"
+        },
+        {
+          "path": "src/features/standalone/AvailabilityChecksTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2513,8 +3197,12 @@
         "export": "getPlatformTableWeightedColumnWidthStyle"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/dockerContainerTableModel.ts" },
-        { "path": "src/features/proxmox/proxmoxHostTableModel.ts" }
+        {
+          "path": "src/features/docker/dockerContainerTableModel.ts"
+        },
+        {
+          "path": "src/features/proxmox/proxmoxHostTableModel.ts"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2541,11 +3229,21 @@
         "export": "formatPlatformTableIntegerValue"
       },
       "requiredConsumers": [
-        { "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx" },
-        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
-        { "path": "src/features/proxmox/proxmoxCephClusterDrawerModel.ts" }
+        {
+          "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/proxmoxCephClusterDrawerModel.ts"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2584,22 +3282,42 @@
         "export": "PlatformTableNumberValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerNativeTableShared.tsx" },
-        { "path": "src/features/docker/DockerServicesTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesControllersTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesPodsTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
-        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerNativeTableShared.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerServicesTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesControllersTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesEventsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPodsTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
           "path": "src/features/docker/DockerNativeTableShared.tsx",
           "patterns": [
-            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>\u2014</span>"
           ]
         },
         {
@@ -2610,14 +3328,14 @@
           "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx",
           "patterns": [
             "const numberValue",
-            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>\u2014</span>"
           ]
         },
         {
           "path": "src/features/kubernetes/KubernetesControllersTable.tsx",
           "patterns": [
             "const numberValue",
-            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>\u2014</span>"
           ]
         },
         {
@@ -2628,19 +3346,19 @@
           "path": "src/features/kubernetes/KubernetesEventsTable.tsx",
           "patterns": [
             "const numberValue",
-            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>\u2014</span>"
           ]
         },
         {
           "path": "src/features/kubernetes/KubernetesPodsTable.tsx",
           "patterns": [
             "const numericValue",
-            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>\u2014</span>"
           ]
         },
         {
           "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
-          "patterns": ["const countCell", "value.toLocaleString() : '—'"]
+          "patterns": ["const countCell", "value.toLocaleString() : '\u2014'"]
         },
         {
           "path": "src/features/truenas/TrueNASSystemsTable.tsx",
@@ -2665,7 +3383,11 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTableCountRatioValue"
       },
-      "requiredConsumers": [{ "path": "src/features/kubernetes/KubernetesClustersTable.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/features/kubernetes/KubernetesClustersTable.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/features/kubernetes/KubernetesClustersTable.tsx",
@@ -2686,7 +3408,11 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "formatPlatformTableCountRatioValue"
       },
-      "requiredConsumers": [{ "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx",
@@ -2711,12 +3437,24 @@
         "export": "PlatformTablePercentValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxCephTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
-        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
-        { "path": "src/features/proxmox/proxmoxCephClusterDrawerModel.ts" }
+        {
+          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/proxmoxCephClusterDrawerModel.ts"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2766,16 +3504,22 @@
         "export": "PlatformTableTemperatureValue"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerHostsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
           "path": "src/features/docker/DockerHostsTable.tsx",
           "patterns": [
             "const formatTemperature",
-            "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
+            "<span class=\"tabular-nums\">{celsius.toFixed(1)}\u00b0C</span>"
           ]
         },
         {
@@ -2786,7 +3530,7 @@
           "path": "src/features/truenas/TrueNASSystemsTable.tsx",
           "patterns": [
             "const formatTemperature",
-            "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
+            "<span class=\"tabular-nums\">{celsius.toFixed(1)}\u00b0C</span>"
           ]
         }
       ],
@@ -2805,16 +3549,36 @@
         "export": "PlatformTableMetricFallback"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerContainersTable.tsx" },
-        { "path": "src/features/docker/DockerHostsTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesClustersTable.tsx" },
-        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
-        { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
-        { "path": "src/features/vmware/VsphereDatastoresTable.tsx" },
-        { "path": "src/features/vmware/VsphereHostsTable.tsx" }
+        {
+          "path": "src/features/docker/DockerContainersTable.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesClustersTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx"
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASAppsTable.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereDatastoresTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VsphereHostsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2872,7 +3636,11 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "getPlatformTableFiniteMetric"
       },
-      "requiredConsumers": [{ "path": "src/features/standalone/agentMachineTableModel.ts" }],
+      "requiredConsumers": [
+        {
+          "path": "src/features/standalone/agentMachineTableModel.ts"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/features/standalone/agentMachineTableModel.ts",
@@ -2893,15 +3661,33 @@
         "export": "PlatformErrorState"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerPageSurface.tsx" },
-        { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
-        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
-        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
-        { "path": "src/features/standalone/StandalonePageSurface.tsx" },
-        { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
-        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
-        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+        {
+          "path": "src/features/docker/DockerPageSurface.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPageSurface.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupsTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxPageSurface.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxReplicationTable.tsx"
+        },
+        {
+          "path": "src/features/standalone/StandalonePageSurface.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASPageSurface.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx"
+        },
+        {
+          "path": "src/features/vmware/VmwarePageSurface.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -2918,12 +3704,24 @@
         "export": "PlatformSectionTabs"
       },
       "requiredConsumers": [
-        { "path": "src/features/docker/DockerPageSurface.tsx" },
-        { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
-        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
-        { "path": "src/features/standalone/StandalonePageSurface.tsx" },
-        { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
-        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+        {
+          "path": "src/features/docker/DockerPageSurface.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPageSurface.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxPageSurface.tsx"
+        },
+        {
+          "path": "src/features/standalone/StandalonePageSurface.tsx"
+        },
+        {
+          "path": "src/features/truenas/TrueNASPageSurface.tsx"
+        },
+        {
+          "path": "src/features/vmware/VmwarePageSurface.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -2940,13 +3738,27 @@
         "export": "FilterBar"
       },
       "requiredConsumers": [
-        { "path": "src/components/Alerts/ThresholdsTable.tsx" },
-        { "path": "src/components/Settings/AuditLogPanel.tsx" },
-        { "path": "src/components/Storage/StoragePageControls.tsx" },
-        { "path": "src/components/Workloads/WorkloadsFilter.tsx" },
-        { "path": "src/features/alerts/AlertHistoryFiltersCard.tsx" },
-        { "path": "src/features/platformPage/sharedPlatformPage.tsx" },
-        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" }
+        {
+          "path": "src/components/Alerts/ThresholdsTable.tsx"
+        },
+        {
+          "path": "src/components/Settings/AuditLogPanel.tsx"
+        },
+        {
+          "path": "src/components/Storage/StoragePageControls.tsx"
+        },
+        {
+          "path": "src/components/Workloads/WorkloadsFilter.tsx"
+        },
+        {
+          "path": "src/features/alerts/AlertHistoryFiltersCard.tsx"
+        },
+        {
+          "path": "src/features/platformPage/sharedPlatformPage.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupsTable.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -2994,12 +3806,24 @@
         "export": "SearchField"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/InfrastructureSourcePicker.tsx" },
-        { "path": "src/components/Settings/ResourcePicker.tsx" },
-        { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
-        { "path": "src/components/shared/AIModelPicker.tsx" },
-        { "path": "src/components/shared/CommandPaletteModal.tsx" },
-        { "path": "src/components/shared/SearchInput.tsx" }
+        {
+          "path": "src/components/Settings/InfrastructureSourcePicker.tsx"
+        },
+        {
+          "path": "src/components/Settings/ResourcePicker.tsx"
+        },
+        {
+          "path": "src/components/Settings/UserAssignmentsPanel.tsx"
+        },
+        {
+          "path": "src/components/shared/AIModelPicker.tsx"
+        },
+        {
+          "path": "src/components/shared/CommandPaletteModal.tsx"
+        },
+        {
+          "path": "src/components/shared/SearchInput.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -3022,9 +3846,15 @@
         "export": "SearchInput"
       },
       "requiredConsumers": [
-        { "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx" },
-        { "path": "src/components/Settings/SettingsPageShell.tsx" },
-        { "path": "src/components/shared/FilterBar/FilterBar.tsx" }
+        {
+          "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx"
+        },
+        {
+          "path": "src/components/Settings/SettingsPageShell.tsx"
+        },
+        {
+          "path": "src/components/shared/FilterBar/FilterBar.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -3041,10 +3871,18 @@
         "export": "FilterButtonGroup"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
-        { "path": "src/components/Settings/ResourcePicker.tsx" },
-        { "path": "src/components/Settings/ReportingPanel.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+        {
+          "path": "src/components/Settings/GeneralSettingsPanel.tsx"
+        },
+        {
+          "path": "src/components/Settings/ResourcePicker.tsx"
+        },
+        {
+          "path": "src/components/Settings/ReportingPanel.tsx"
+        },
+        {
+          "path": "src/features/patrol/PatrolIntelligenceHeader.tsx"
+        }
       ],
       "forbiddenPatterns": [
         {
@@ -3077,7 +3915,11 @@
         "path": "src/components/shared/SelectablePillButton.tsx",
         "export": "SelectablePillButton"
       },
-      "requiredConsumers": [{ "path": "src/components/Settings/APITokenManager.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/Settings/APITokenManager.tsx"
+        }
+      ],
       "forbiddenPatterns": [
         {
           "path": "src/components/Settings/APITokenManager.tsx",
@@ -3104,8 +3946,12 @@
         "export": "ColumnPicker"
       },
       "requiredConsumers": [
-        { "path": "src/components/Workloads/WorkloadsFilter.tsx" },
-        { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
+        {
+          "path": "src/components/Workloads/WorkloadsFilter.tsx"
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -3122,8 +3968,12 @@
         "export": "SelectionCardGroup"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/AISettingsDialogs.tsx" },
-        { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" }
+        {
+          "path": "src/components/Settings/AISettingsDialogs.tsx"
+        },
+        {
+          "path": "src/components/Settings/UpdatesSettingsPanel.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -3139,7 +3989,11 @@
         "path": "src/components/shared/GroupedTableModeSegmentedControl.tsx",
         "export": "GroupedTableModeSegmentedControl"
       },
-      "requiredConsumers": [{ "path": "src/components/Workloads/WorkloadsFilter.tsx" }],
+      "requiredConsumers": [
+        {
+          "path": "src/components/Workloads/WorkloadsFilter.tsx"
+        }
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
@@ -3154,8 +4008,12 @@
         "export": "WorkloadsFilter"
       },
       "requiredConsumers": [
-        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
-        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+        {
+          "path": "src/features/proxmox/ProxmoxPageSurface.tsx"
+        },
+        {
+          "path": "src/features/vmware/VmwarePageSurface.tsx"
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -3711,7 +4569,7 @@
       },
       "scopes": ["src/features/kubernetes"],
       "extensions": [".tsx"],
-      "allPatterns": ["const textValue", "asTrimmedString(value) || '—'"],
+      "allPatterns": ["const textValue", "asTrimmedString(value) || '\u2014'"],
       "legacyReason": "Retired migration debt. Kubernetes platform table text cells must use formatPlatformTableTextValue for the shared trimmed-string empty-cell marker.",
       "allowedPaths": [],
       "ignoredPaths": [],
@@ -3932,7 +4790,7 @@
       },
       "scopes": ["src/features/docker", "src/features/kubernetes"],
       "extensions": [".tsx"],
-      "allPatterns": ["<span class=\"tabular-nums\">{value}</span>", "<span>—</span>"],
+      "allPatterns": ["<span class=\"tabular-nums\">{value}</span>", "<span>\u2014</span>"],
       "legacyReason": "Retired migration debt. Optional numeric platform table cells must use PlatformTableNumberValue for finite-number checks, tabular styling, and empty-cell markers.",
       "allowedPaths": [],
       "ignoredPaths": [],
@@ -3952,7 +4810,7 @@
       },
       "scopes": ["src/features/proxmox"],
       "extensions": [".tsx"],
-      "allPatterns": ["const countCell", "value.toLocaleString() : '—'"],
+      "allPatterns": ["const countCell", "value.toLocaleString() : '\u2014'"],
       "legacyReason": "Retired migration debt. Locale-formatted count cells must compose PlatformTableNumberValue with a caller-owned format function instead of owning fallback markup locally.",
       "allowedPaths": [],
       "ignoredPaths": [],
@@ -4315,7 +5173,7 @@
       "extensions": [".tsx"],
       "allPatterns": [
         "const formatTemperature",
-        "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
+        "<span class=\"tabular-nums\">{celsius.toFixed(1)}\u00b0C</span>"
       ],
       "legacyReason": "Retired migration debt. Positive Celsius table cells must compose PlatformTableTemperatureValue so validity, formatting, tabular styling, and empty markers stay shared.",
       "allowedPaths": [],
@@ -6060,6 +6918,246 @@
         "src/components/shared/Button.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
+    },
+    {
+      "id": "security-auth-panel-local-amber-action-shell",
+      "category": "action-button",
+      "summary": "SecurityAuthPanel must not copy the amber outline action shell; use Button.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/SecurityAuthPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300"
+      ],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "security-auth-panel-local-primary-action-shell",
+      "category": "action-button",
+      "summary": "SecurityAuthPanel must not copy the blue primary action shell; use Button with the primary variant.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/SecurityAuthPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600"
+      ],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "security-auth-panel-local-secondary-action-shell",
+      "category": "action-button",
+      "summary": "SecurityAuthPanel must not copy the bordered secondary action shell; use Button.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/SecurityAuthPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border"
+      ],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "roles-panel-local-primary-action-shell",
+      "category": "action-button",
+      "summary": "RolesPanel must not copy the blue primary action shell; use Button with the primary variant.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/RolesPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600"
+      ],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "roles-panel-local-icon-action-shell",
+      "category": "action-button",
+      "summary": "RolesPanel row icon actions must not recreate the slate icon-button shell; compose ActionIconButton.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "ActionIconButton"
+      },
+      "scopes": ["src/components/Settings/RolesPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["p-1.5 rounded-md text-slate-500 hover:text-"],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "user-assignments-panel-local-action-shell",
+      "category": "action-button",
+      "summary": "UserAssignmentsPanel must not copy the inline action shell; use Button.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/UserAssignmentsPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md"],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-primary-settings-inline-flex-local-shell",
+      "category": "action-button",
+      "summary": "Settings surfaces must not copy the inline-flex blue primary action shell; use Button with the primary variant.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "allPatterns": ["inline-flex items-center justify-center rounded-md bg-blue-600"],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "organization-sections-local-danger-ghost-row-action",
+      "category": "action-button",
+      "summary": "Organization access and sharing sections must not copy the red ghost row-action shell; use Button with the dangerGhost variant.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": [
+        "src/components/Settings/OrganizationAccessInvitationsSection.tsx",
+        "src/components/Settings/OrganizationAccessManagementSection.tsx",
+        "src/components/Settings/OrganizationAccessMembersSection.tsx",
+        "src/components/Settings/OrganizationIncomingSharesSection.tsx",
+        "src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+        "src/components/Settings/OrganizationOverviewDetailsSection.tsx",
+        "src/components/Settings/OrganizationSharingCreateSection.tsx"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["hover:bg-red-50 dark:text-red-300"],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "organization-sections-local-success-ghost-row-action",
+      "category": "action-button",
+      "summary": "Organization access and sharing sections must not copy the emerald ghost row-action shell; use Button with the successGhost variant.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": [
+        "src/components/Settings/OrganizationAccessInvitationsSection.tsx",
+        "src/components/Settings/OrganizationAccessManagementSection.tsx",
+        "src/components/Settings/OrganizationAccessMembersSection.tsx",
+        "src/components/Settings/OrganizationIncomingSharesSection.tsx",
+        "src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+        "src/components/Settings/OrganizationOverviewDetailsSection.tsx",
+        "src/components/Settings/OrganizationSharingCreateSection.tsx"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["hover:bg-emerald-50 dark:text-emerald-300"],
+      "legacyReason": "Retired migration debt. Settings actions compose the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-raw-noreferrer-link-attribute",
+      "category": "link",
+      "summary": "Settings surfaces must not hand-code rel=\"noreferrer\"; external links compose ExternalTextLink or ButtonLink, which own the rel value.",
+      "canonical": {
+        "path": "src/components/shared/ExternalTextLink.tsx",
+        "export": "ExternalTextLink"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "allPatterns": ["rel=\"noreferrer\""],
+      "legacyReason": "Retired migration debt. API access, API token and agent integration links compose the shared link primitives.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/ExternalTextLink.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "app-module-import-outside-entry",
+      "category": "runtime-context",
+      "summary": "Pages, components and features take app runtime state from @/contexts/appRuntime, not by importing the App module.",
+      "canonical": {
+        "path": "src/contexts/appRuntime.ts",
+        "export": "useWebSocket"
+      },
+      "scopes": ["src/components", "src/pages", "src/features"],
+      "extensions": [".ts", ".tsx"],
+      "allPatterns": ["from '@/App'"],
+      "legacyReason": "Retired migration debt. Websocket and runtime access moved to the shared app runtime context.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": ["scripts/shared-template-audit.mjs"]
     }
   ],
   "requiredPatternGuards": [

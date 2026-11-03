@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FindingsPanel } from '../FindingsPanel';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
+import { notificationStore } from '@/stores/notifications';
 
 const mockState = vi.hoisted(() => {
   const loadFindings = vi.fn();
@@ -85,8 +86,15 @@ const mockState = vi.hoisted(() => {
     getResource,
     loadFindings,
     loadPatrolFindings,
+    resolveFinding: vi.fn(async (_id: string) => true),
+    reopenFinding: vi.fn(async (_id: string) => true),
+    copyToClipboard: vi.fn(async (_text: string) => true),
   };
 });
+
+vi.mock('@/utils/clipboard', () => ({
+  copyToClipboard: (text: string) => mockState.copyToClipboard(text),
+}));
 
 vi.mock('@solidjs/router', () => ({
   A: (props: { href: string; children?: JSX.Element; [key: string]: unknown }) => (
@@ -174,6 +182,8 @@ vi.mock('@/stores/aiIntelligence', () => ({
     patrolFindingsSignal: () => mockState.patrolFindings,
     loadFindings: mockState.loadFindings,
     loadPatrolFindings: mockState.loadPatrolFindings,
+    resolveFinding: (id: string) => mockState.resolveFinding(id),
+    reopenFinding: (id: string) => mockState.reopenFinding(id),
   },
 }));
 
@@ -222,6 +232,11 @@ describe('FindingsPanel resource links', () => {
     mockState.loadFindings.mockClear();
     mockState.loadPatrolFindings.mockClear();
     mockState.getResource.mockClear();
+    mockState.resolveFinding.mockClear().mockResolvedValue(true);
+    mockState.reopenFinding.mockClear().mockResolvedValue(true);
+    mockState.copyToClipboard.mockClear().mockResolvedValue(true);
+    vi.mocked(notificationStore.success).mockClear();
+    vi.mocked(notificationStore.error).mockClear();
     mockState.findingsLoading = false;
     mockState.findingsError = null;
     mockState.patrolFindingsLoading = false;
@@ -301,6 +316,7 @@ describe('FindingsPanel resource links', () => {
     );
     expect(screen.queryByRole('button', { name: 'Open in Assistant' })).not.toBeInTheDocument();
     expect(screen.queryByText('Manage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resolve or dismiss')).not.toBeInTheDocument();
   });
 
   it('keeps finding disclosure separate from inline manual controls', async () => {
@@ -683,6 +699,337 @@ describe('FindingsPanel resource links', () => {
         'Checked 67 scoped resources. This run recorded no Patrol findings, but it ended with issues requiring review.',
       ),
     ).toBeInTheDocument();
+  });
+
+  describe('expanded finding detail and actions', () => {
+    const providerIssue = () => mockState.initialPatrolFindings[0];
+    const providerTitle = 'Provider connection issue';
+    const expandRow = () =>
+      fireEvent.click(screen.getByRole('button', { name: `Review issue for ${providerTitle}` }));
+
+    const renderPatrol = async (props: Record<string, unknown> = {}) => {
+      const view = render(() => <FindingsPanel findingsSource="patrol" {...props} />);
+      await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+      return view;
+    };
+    const openOptions = async (props: Record<string, unknown> = {}) => {
+      const view = await renderPatrol(props);
+      fireEvent.click(screen.getByRole('button', { name: `Finding options for ${providerTitle}` }));
+      return view;
+    };
+
+    it('shows the consequence, evidence, last fix and fill-up forecast in the expanded issue', async () => {
+      mockState.patrolFindings = [
+        {
+          ...providerIssue(),
+          key: 'apt-host-updates',
+          impact: 'Writes fail once the pool is full.',
+          evidence:
+            'pending_updates=3 inventory=abc123 checked_at=2026-04-01T10:00:00Z received_at=2026-04-01T10:01:00Z reboot_required=false',
+          previousResolvedFixSummary: 'Pruned old snapshots.',
+          capacityForecast: { current_pct: 86, daily_change: 1.2, days_to_full: 5 },
+        },
+      ];
+      await renderPatrol();
+      expandRow();
+
+      const panel = within(
+        await screen.findByRole('complementary', { name: `Review ${providerTitle}` }),
+      );
+      expect(panel.getByText('Impact:').parentElement).toHaveTextContent(
+        'Writes fail once the pool is full.',
+      );
+      const checked = panel.getByText('What Pulse checked:').parentElement;
+      expect(checked).toHaveTextContent('3 operating system updates were pending');
+      expect(checked).not.toHaveTextContent('inventory=');
+      expect(panel.getByText('Last time this resolved:').parentElement).toHaveTextContent(
+        'Pruned old snapshots.',
+      );
+      expect(panel.getByText('Filling up').parentElement).toHaveTextContent(
+        '5 days to full at +1.2%/day · 86% used',
+      );
+      expect(panel.queryByText('Recommendation:')).not.toBeInTheDocument();
+    });
+
+    it('offers the plan-locked Pro handoff in the expanded issue', async () => {
+      await renderPatrol({
+        patrolProHandoff: () => ({ detail: 'Investigating fixes needs Pulse Pro.' }),
+      });
+      expandRow();
+
+      expect(screen.getByText('Investigating fixes needs Pulse Pro.')).toBeInTheDocument();
+    });
+
+    it('puts confidence and regression count on a collapsed row only when they apply', async () => {
+      mockState.findings = [
+        {
+          ...mockState.initialFindings[0],
+          id: 'regressed',
+          title: 'Regressed finding',
+          investigationRecord: { confidence: 'high' },
+          regressionCount: 2,
+        },
+        {
+          ...mockState.initialFindings[0],
+          id: 'fresh',
+          title: 'Fresh finding',
+          regressionCount: 0,
+        },
+      ] as unknown as typeof mockState.findings;
+      render(() => <FindingsPanel />);
+      await waitFor(() => expect(mockState.loadFindings).toHaveBeenCalled());
+
+      expect(screen.getAllByText('high confidence')).toHaveLength(1);
+      expect(screen.getAllByText('regressed 2×')).toHaveLength(1);
+      expect(screen.queryByText(/regressed 0/)).not.toBeInTheDocument();
+    });
+
+    it('opens and closes a finding with Enter and Space', async () => {
+      render(() => <FindingsPanel />);
+      await waitFor(() => expect(mockState.loadFindings).toHaveBeenCalled());
+      const impact = 'Nextcloud is unreachable for users until readiness recovers.';
+
+      const title = 'Nextcloud failed readiness checks';
+      fireEvent.keyDown(screen.getByRole('button', { name: `Open issue details for ${title}` }), {
+        key: 'Enter',
+      });
+      expect(screen.getByText(impact)).toBeInTheDocument();
+
+      fireEvent.keyDown(screen.getByRole('button', { name: `Close issue details for ${title}` }), {
+        key: ' ',
+      });
+      expect(screen.queryByText(impact)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: `Open issue details for ${title}` }));
+      expect(screen.getByText(impact)).toBeInTheDocument();
+    });
+
+    it('marks an active finding resolved through the store and says so', async () => {
+      await openOptions();
+      expect(screen.queryByRole('button', { name: 'Reopen finding' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mark resolved' }));
+
+      await waitFor(() =>
+        expect(mockState.resolveFinding).toHaveBeenCalledWith('finding-provider-issue'),
+      );
+      await waitFor(() =>
+        expect(notificationStore.success).toHaveBeenCalledWith('Finding marked resolved'),
+      );
+    });
+
+    it('lets an operator reopen a dismissed finding', async () => {
+      mockState.patrolFindings = [
+        { ...providerIssue(), status: 'dismissed', dismissedReason: 'not_an_issue' },
+      ];
+      await renderPatrol({ filterOverride: 'all' });
+      expandRow();
+      expect(screen.queryByRole('button', { name: 'Mark resolved' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reopen finding' }));
+
+      await waitFor(() =>
+        expect(mockState.reopenFinding).toHaveBeenCalledWith('finding-provider-issue'),
+      );
+      await waitFor(() =>
+        expect(notificationStore.success).toHaveBeenCalledWith('Finding reopened'),
+      );
+    });
+
+    it('attributes a dismissal made by an operator-set state to its cause', async () => {
+      mockState.patrolFindings = [
+        {
+          ...providerIssue(),
+          status: 'dismissed',
+          dismissedReason: 'expected_behavior',
+          lifecycle: [
+            {
+              at: '2026-04-03T00:00:00Z',
+              type: 'dismissed',
+              metadata: { operator_state_cause: 'maintenance_window' },
+            },
+          ],
+        },
+        {
+          ...providerIssue(),
+          id: 'manual-dismissal',
+          title: 'Manually dismissed issue',
+          status: 'dismissed',
+          dismissedReason: 'expected_behavior',
+          lifecycle: [
+            { at: '2026-04-03T00:00:00Z', type: 'dismissed', metadata: { reason: 'expected' } },
+          ],
+        },
+      ];
+      await renderPatrol({ filterOverride: 'all' });
+
+      const badges = screen.getAllByTitle(
+        'Auto-suppressed by Pulse based on operator-set state for this resource.',
+      );
+      expect(badges).toHaveLength(1);
+      expect(badges[0]).toHaveTextContent('auto: maintenance');
+    });
+
+    it('copies a finding summary and says whether it worked', async () => {
+      await openOptions();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+      await waitFor(() => expect(mockState.copyToClipboard).toHaveBeenCalledTimes(1));
+      expect(mockState.copyToClipboard.mock.calls[0][0]).toContain(providerTitle);
+      await waitFor(() =>
+        expect(notificationStore.success).toHaveBeenCalledWith('Finding summary copied'),
+      );
+
+      mockState.copyToClipboard.mockResolvedValueOnce(false);
+      fireEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+      await waitFor(() =>
+        expect(notificationStore.error).toHaveBeenCalledWith('Could not copy finding summary'),
+      );
+    });
+
+    it('will not offer a suppression rule for a finding with no concrete category', async () => {
+      mockState.patrolFindings = [{ ...providerIssue(), category: '' }];
+      await openOptions();
+
+      const createRule = screen.getByRole('button', { name: 'Create rule from this' });
+      expect(createRule).toBeDisabled();
+      expect(createRule).toHaveAttribute(
+        'title',
+        'This finding is missing the resource or category needed for a scoped rule',
+      );
+    });
+
+    it('tells the operator what each dismissal will do before they confirm', async () => {
+      mockState.patrolFindings = [{ ...providerIssue(), regressionCount: 2 }];
+      await openOptions();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss: Later' }));
+      expect(screen.getByText(/Pulse will stay quiet on this for 7 days/)).toBeInTheDocument();
+      expect(screen.queryByText(/this finding has regressed/)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remember as expected' }));
+      expect(
+        screen.getByText(/Pulse will keep this finding visible as acknowledged/),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/this finding has regressed 2 times before/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss: Not an issue' }));
+      expect(screen.getByText(/Pulse will permanently suppress/)).toBeInTheDocument();
+      expect(screen.getByText(/this finding has regressed 2 times before/)).toBeInTheDocument();
+    });
+
+    // Pulse mirrors the backend's seven-day default, so the confirmation names the
+    // date the finding comes back before the operator commits to it.
+    it('names the date a will-fix-later dismissal comes back, seven days out', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-04-01T12:00:00Z'));
+      try {
+        await openOptions();
+        fireEvent.click(screen.getByRole('button', { name: 'Dismiss: Later' }));
+
+        const comesBack = new Date('2026-04-08T12:00:00Z').toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        });
+        const notice = screen.getByText(/Pulse will stay quiet on this for 7 days/);
+        expect(notice).toHaveTextContent(
+          `surface it again on ${comesBack} if it is still happening`,
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not warn about recurrence for a finding that has regressed only once', async () => {
+      mockState.patrolFindings = [{ ...providerIssue(), regressionCount: 1 }];
+      await openOptions();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss: Not an issue' }));
+
+      expect(screen.getByText(/Pulse will permanently suppress/)).toBeInTheDocument();
+      expect(screen.queryByText(/this finding has regressed/)).not.toBeInTheDocument();
+    });
+
+    it('keeps raw lifecycle history out of an active issue until history is asked for', async () => {
+      mockState.patrolFindings = [
+        {
+          ...providerIssue(),
+          lifecycle: [{ at: '2026-03-30T11:00:00Z', type: 'detected', message: 'Detected' }],
+        },
+      ];
+      const first = await renderPatrol();
+      expandRow();
+      await screen.findByRole('complementary', { name: `Review ${providerTitle}` });
+      expect(screen.queryByText('Lifecycle')).not.toBeInTheDocument();
+      first.unmount();
+
+      await renderPatrol({ filterOverride: 'all' });
+      expandRow();
+      expect(await screen.findByText('Lifecycle')).toBeInTheDocument();
+    });
+
+    // Every other way into an issue keeps its history: a finding from the
+    // general findings source, one that is no longer active, a Patrol run record,
+    // and the resolved list.
+    describe('lifecycle history stays visible where it is the point', () => {
+      const lifecycle = [{ at: '2026-03-30T11:00:00Z', type: 'detected', message: 'Detected' }];
+
+      it('shows it on a finding from the general findings source', async () => {
+        mockState.findings = [
+          { ...mockState.initialFindings[0], lifecycle },
+        ] as unknown as typeof mockState.findings;
+        render(() => <FindingsPanel />);
+        await waitFor(() => expect(mockState.loadFindings).toHaveBeenCalled());
+
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: 'View details for Nextcloud failed readiness checks',
+          }),
+        );
+
+        expect(await screen.findByText('Lifecycle')).toBeInTheDocument();
+      });
+
+      it('shows it on a Patrol finding that is no longer active', async () => {
+        mockState.patrolFindings = [{ ...providerIssue(), status: 'dismissed', lifecycle }];
+        mockState.attentionFindingIds = ['finding-provider-issue'];
+        try {
+          await renderPatrol({ filterOverride: 'attention' });
+          expandRow();
+
+          expect(await screen.findByText('Lifecycle')).toBeInTheDocument();
+        } finally {
+          mockState.attentionFindingIds = [];
+        }
+      });
+
+      it('shows it on an active finding opened from a Patrol run record', async () => {
+        mockState.patrolFindings = [{ ...providerIssue(), lifecycle }];
+        await renderPatrol({
+          filterFindingIds: ['finding-provider-issue'],
+          runSnapshot: {
+            resources_checked: 3,
+            scope_resource_ids: [],
+            effective_scope_resource_ids: [],
+            finding_ids: ['finding-provider-issue'],
+            status: 'critical',
+            error_count: 0,
+          },
+        });
+        expandRow();
+
+        expect(await screen.findByText('Lifecycle')).toBeInTheDocument();
+      });
+
+      it('shows it in the resolved list', async () => {
+        mockState.patrolFindings = [{ ...providerIssue(), status: 'resolved', lifecycle }];
+        await renderPatrol({ filterOverride: 'resolved' });
+        expandRow();
+
+        expect(await screen.findByText('Lifecycle')).toBeInTheDocument();
+      });
+    });
   });
 });
 

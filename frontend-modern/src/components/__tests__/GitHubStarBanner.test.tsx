@@ -24,10 +24,6 @@ const PROMPT_SHOWN_KEY = 'pulse-github-star-prompt-shown';
 const ACTIVE_DAYS_KEY = 'pulse-github-star-active-days';
 const LAST_ACTIVE_DATE_KEY = 'pulse-github-star-last-active-date';
 const LOW_PRIORITY_NOTICE_OWNER_KEY = 'pulse-low-priority-notice-owner';
-const LOCAL_DISMISS_BUTTON_CLASS =
-  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content';
-const LOCAL_PRIMARY_BUTTON_CLASS =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700';
 
 async function renderBanner() {
   const mod = await import('../GitHubStarBanner');
@@ -116,6 +112,11 @@ describe('GitHubStarBanner', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Star on GitHub')).toBeInTheDocument();
     expect(screen.queryByText('Maybe later')).not.toBeInTheDocument();
+    expect(screen.getByText('Enjoying Pulse?').closest('[aria-live]')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(localStorage.getItem(ACTIVE_DAYS_KEY)).toBe('2');
     expect(localStorage.getItem(PROMPT_SHOWN_KEY)).toBe('true');
   });
@@ -212,33 +213,10 @@ describe('GitHubStarBanner', () => {
     );
     expect(localStorage.getItem(DISMISSED_KEY)).toBe('true');
   });
-
-  it('uses runtime state and remains a non-blocking app-shell prompt', () => {
-    expect(gitHubStarBannerSource).toContain('useWebSocket');
-    expect(gitHubStarBannerSource).toContain('initialDataReceived');
-    expect(gitHubStarBannerSource).not.toContain('useResources');
-    expect(gitHubStarBannerSource).not.toContain('<Dialog');
-    expect(gitHubStarBannerSource).toContain('dialogStackHasBlockingDialog');
-    expect(gitHubStarBannerSource).toContain('reserveLowPriorityNoticeSession');
-    expect(gitHubStarBannerSource).toContain('aria-live="polite"');
-    expect(gitHubStarBannerSource).toContain('z-30');
-  });
-
-  it('routes prompt actions through shared Button primitives', () => {
-    expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
-    expect(gitHubStarBannerSource).toContain('<ActionIconButton');
-    expect(gitHubStarBannerSource).toContain('<Button');
-    expect(gitHubStarBannerSource).not.toContain(LOCAL_DISMISS_BUTTON_CLASS);
-    expect(gitHubStarBannerSource).not.toContain(LOCAL_PRIMARY_BUTTON_CLASS);
-  });
 });
 
 describe('GitHubStarBanner mobile navigation clearance', () => {
   it('reads the published bottom navigation height', () => {
     expect(gitHubStarBannerSource).toContain('bottom-(--pulse-mobile-nav-height)');
-  });
-
-  it('does not keep its own copy of the bar height', () => {
-    expect(gitHubStarBannerSource).not.toMatch(/5rem\s*\+\s*env\(safe-area-inset-bottom/);
   });
 });

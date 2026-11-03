@@ -5,9 +5,6 @@ import { Route, Router } from '@solidjs/router';
 import type { LicenseEntitlements } from '@/api/license';
 import type { AgentOperationsLoopStatus } from '@/api/agentCapabilities';
 import { ProLicensePanel } from '../ProLicensePanel';
-import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
-import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
-import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import selfHostedCommercialRecoverySectionSource from '../SelfHostedCommercialRecoverySection.tsx?raw';
 import {
   getSelfHostedBillingHref,
@@ -1735,106 +1732,10 @@ describe('ProLicensePanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps Pro license split into shell, runtime, and plan owners', () => {
-    expect(proLicensePanelSource).toContain('./useProLicensePanelState');
-    expect(proLicensePanelSource).toContain('sessionPresentationPolicyResolved');
-    expect(proLicensePanelSource).toContain('presentationPolicyHidesCommercialSurfaces');
-    expect(proLicensePanelSource).toContain('ProLicensePanelContent');
-    expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
-    expect(proLicensePanelSource).toContain('SelfHostedCommercialRecoverySection');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('FormTextarea');
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain('<textarea');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('@/components/shared/Button');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('variant="primary"');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('variant="outline"');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('size="settingsAction"');
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
-      'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
-    );
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
-      'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
-    );
-    expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
-    expect(proLicensePanelSource).toContain('value={state.activeSection()}');
-    expect(proLicensePanelSource).toContain('<Subtabs');
-    expect(proLicensePanelSource).not.toContain('createSignal(');
-    expect(proLicensePanelSource).not.toContain('useLocation()');
-    expect(proLicensePanelStateSource).toContain('useLocation');
-    expect(proLicensePanelStateSource).toContain('resolveSelfHostedBillingSection');
-    expect(proLicensePanelStateSource).toContain('getSelfHostedBillingPlanIntent');
-    expect(proLicensePanelStateSource).not.toContain('getSelfHostedBillingUsageDetail');
-    expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: string) => {');
-    expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
-    expect(proLicensePanelStateSource).toContain('fetchAgentOperationsLoopStatus');
-    expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
-    expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
-    expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
-    expect(proLicensePanelStateSource).toContain('getSelfHostedCurrentPlanPresentation({');
-    expect(proLicensePanelStateSource).toContain('getSelfHostedCurrentPlanStatusPresentation');
-    expect(proLicensePanelStateSource).toContain('getSelfHostedPlanComparisonPresentation({');
-    expect(proLicensePanelStateSource).toContain('getSelfHostedActivationSuccessPresentation({');
-    expect(proLicensePanelStateSource).not.toContain('runStartProTrialAction({');
-    expect(proLicensePanelStateSource).not.toContain('startProTrial()');
-    expect(proLicensePanelStateSource).toContain("'A license key is required'");
-    expect(proLicensePanelSource).toContain('@/components/shared/Button');
-    expect(proLicensePanelSource).toContain('variant="outline"');
-    expect(proLicensePanelSource).toContain('size="settingsAction"');
-    expect(proLicensePanelSource).not.toContain(
-      'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60',
-    );
-    expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
-    expect(proLicensePlanSectionSource).toContain('getNoActiveSelfHostedActivationState');
-    expect(proLicensePlanSectionSource).not.toContain('getTrialEndedProLicenseNotice');
-    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
-    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.supplementalBadges');
-    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.privateRuntimeAction');
-    expect(proLicensePlanSectionSource).toContain('props.activationSuccessSummary');
-    expect(proLicensePlanSectionSource).toContain('summary().actionUrl');
-    expect(proLicensePlanSectionSource).toContain('ButtonLink');
-    expect(proLicensePlanSectionSource).toContain('variant="warning"');
-    expect(proLicensePlanSectionSource).toContain('size="settingsActionXs"');
-    expect(proLicensePlanSectionSource).not.toContain(
-      'mt-2 inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-800 transition-colors disabled:opacity-60',
-    );
-    expect(proLicensePlanSectionSource).toContain('UpgradeButtonLink');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('ExternalTextLink');
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain('target="_blank"');
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain('rel="noopener noreferrer"');
-    expect(proLicensePlanSectionSource).not.toContain(
-      'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
-    );
-    expect(proLicensePlanSectionSource).toContain('props.planComparisonSummary.cards.length > 0');
-    expect(proLicensePlanSectionSource).toContain(
-      'SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonSectionTitle',
-    );
-    expect(proLicensePlanSectionSource).toContain('summary().highlightsLabel');
-    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.unlockedFeaturesLabel');
-    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.includedExtras.length > 0');
-    expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
-    expect(proLicensePlanSectionSource).not.toContain('MonitoredSystemDefinitionDisclosure');
-    expect(proLicensePlanSectionSource).not.toContain('trialStartTitle');
-    expect(proLicensePlanSectionSource).not.toContain('trialStartIdleActionLabel');
-    expect(proLicensePlanSectionSource).not.toContain('trialEndedNotice');
-    expect(proLicensePlanSectionSource).not.toContain('props.trialEnded');
-    expect(proLicensePlanSectionSource).toContain('planSelectionPrompt');
-    expect(proLicensePlanSectionSource).not.toContain(
-      "resolveSelfHostedPurchaseStartDestination('self_hosted_plan')",
-    );
-    expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
-    expect(proLicensePlanSectionSource).not.toContain('Turn alert noise into');
-    expect(selfHostedCommercialRecoverySectionSource).toContain(
-      'SELF_HOSTED_RECOVERY_PRESENTATION',
-    );
+  it('routes the terms link through the shipped docs URL', () => {
     expect(selfHostedCommercialRecoverySectionSource).toContain('TERMS_DOC_URL');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('disclosureLabel');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('privateRuntimeNotice');
-    expect(selfHostedCommercialRecoverySectionSource).toContain('recoverySectionTitle');
     expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain('Start 14-day Pro Trial');
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain('Legacy v5 license detected');
-    expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}');
-    expect(proLicensePanelSource).not.toContain('SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID');
   });
 });

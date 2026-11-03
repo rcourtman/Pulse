@@ -1,7 +1,6 @@
 import { createRoot } from 'solid-js';
 import { waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import useAppRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
@@ -1542,13 +1541,6 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
-  it('keeps retired chart cache prewarm out of the authenticated app shell', () => {
-    expect(useAppRuntimeStateSource).not.toContain('getInfrastructureSummaryCharts');
-    expect(useAppRuntimeStateSource).not.toContain('getWorkloadCharts');
-    expect(useAppRuntimeStateSource).not.toContain('requestIdleCallback');
-    expect(useAppRuntimeStateSource).not.toContain('App prewarm');
-  });
-
   it('skips the protected state bootstrap probe on the login route until a local auth hint exists', async () => {
     window.history.replaceState({}, '', '/login');
     hasStoredAuthSessionMock.mockReturnValue(false);
@@ -1592,5 +1584,26 @@ describe('useAppRuntimeState', () => {
     expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state/summary')).toBe(true);
 
     dispose();
+  });
+
+  it('keeps the protected state bootstrap probe on the login route for a remembered login after the tab closed', async () => {
+    // Remember-me sessions ride an HttpOnly cookie with no per-tab artifacts, so
+    // the remembered username is the only hint left (issue #1531).
+    window.history.replaceState({}, '', '/login');
+    hasStoredAuthSessionMock.mockReturnValue(false);
+    window.localStorage.setItem('pulse_remembered_login_username', 'demo');
+
+    try {
+      const { dispose } = mountHook();
+
+      await flushAsync();
+      await flushAsync();
+
+      expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state/summary')).toBe(true);
+
+      dispose();
+    } finally {
+      window.localStorage.removeItem('pulse_remembered_login_username');
+    }
   });
 });
