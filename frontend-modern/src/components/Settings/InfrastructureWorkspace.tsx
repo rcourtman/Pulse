@@ -14,6 +14,7 @@ import X from 'lucide-solid/icons/x';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
+import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
 import { notificationStore } from '@/stores/notifications';
 import { updateStore } from '@/stores/updates';
 import { eventBus } from '@/stores/events';
@@ -488,6 +489,48 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     </div>
   );
 
+  // A monitoring-only agent sets its command ceiling locally at install time,
+  // so Pulse cannot raise it from here; that is what keeps such a host safe
+  // from a compromised Pulse. The locked Docker update pill sends users to
+  // this dialog, so it names the one host-side step and opens the installer
+  // with that option already ticked.
+  const openCommandAccessInstaller = () => {
+    closeEditFlow();
+    void operations.setEnableCommands(true);
+    openAddFlow('agent');
+  };
+
+  const renderRemoteCommandsSetup = (connection: Connection) => (
+    <Show when={connection.agentIdentity && !connection.agentIdentity.commandsEnabled}>
+      <section class="rounded-xl border border-border bg-surface p-4" aria-label="Remote commands">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="space-y-1">
+            <div class="text-sm font-semibold text-base-content">Remote commands are off</div>
+            <p class="text-xs text-muted">
+              Pulse can't apply container updates or other actions on {connection.name}. Command
+              access is granted on the host, not from Pulse: run the install command on{' '}
+              {connection.name} with{' '}
+              <span class="font-medium">{getUnifiedAgentCommandAccessOptionLabel()}</span> ticked.
+            </p>
+          </div>
+          <Show when={!readOnly()}>
+            <Button
+              variant="outline"
+              size="settingsAction"
+              class="shrink-0"
+              // The install state ignores a command-access change while a token
+              // is minting, so the installer would open without the option.
+              disabled={operations.isGeneratingToken()}
+              onClick={openCommandAccessInstaller}
+            >
+              Get install command
+            </Button>
+          </Show>
+        </div>
+      </section>
+    </Show>
+  );
+
   const renderAgentConnectionDetails = (connection: Connection) => {
     const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
     const removeConfirming = () => rowActions.confirmingRemove(connection.id);
@@ -537,11 +580,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             <Show when={connection.agentIdentity?.architecture?.trim()}>
               {(architecture) => infoCard('Architecture', architecture())}
             </Show>
-            <Show when={connection.agentIdentity}>
-              {infoCard(
-                'Remote commands',
-                connection.agentIdentity?.commandsEnabled ? 'Enabled' : 'Not enabled',
-              )}
+            <Show when={connection.agentIdentity?.commandsEnabled}>
+              {infoCard('Remote commands', 'Enabled')}
             </Show>
           </div>
 
@@ -551,6 +591,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             </div>
           </Show>
         </section>
+
+        {renderRemoteCommandsSetup(connection)}
 
         <section class="rounded-xl border border-border bg-surface p-4">
           <div class="space-y-3">
@@ -685,6 +727,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     <span class="text-xs text-muted">{connectionLastActivityText(connection)}</span>
                   </div>
                 </div>
+
+                <div class="mt-3 empty:hidden">{renderRemoteCommandsSetup(connection)}</div>
 
                 <Show when={error()}>
                   {(message) => (

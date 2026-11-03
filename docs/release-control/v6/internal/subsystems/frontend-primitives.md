@@ -864,6 +864,14 @@ names the installer option through `getUnifiedAgentCommandAccessOptionLabel`
 install command on, instead of the retired "legacy combined command profile"
 wording and its advanced-options path.
 
+Superseded 3 November 2026: the pill now says the host's agent "does not
+accept commands from Pulse" (an absent `commandsEnabled` reads as false, so it
+no longer claims how the agent was installed) and sends users to Settings →
+Infrastructure → Manage on that host → Remote commands, which names the option
+and opens the installer with it ticked. The pill no longer reads the shared
+label itself. `containerUpdateBadgeModel.unavailable.test.ts` and
+`ContainerUpdateBadge.test.tsx` pin the wording.
+
 ### Container update control offers only what the server advertises (21 October 2026)
 
 `UpdateButton` is live only when the server advertises the `update` capability
