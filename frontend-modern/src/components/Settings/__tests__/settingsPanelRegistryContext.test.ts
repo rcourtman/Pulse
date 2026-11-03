@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSignal, type Setter } from 'solid-js';
 import type { SecurityStatus } from '@/types/config';
+import { createSettingsPanelRegistry } from '../settingsPanelRegistry';
 import type { SettingsSystemPanels } from '../useSettingsSystemPanels';
 import {
   buildSettingsPanelRegistryContext,
@@ -373,8 +374,50 @@ describe('buildSettingsPanelRegistryContext', () => {
     setStatus({ ...status(), tokenScopes: ['settings:write', 'settings:read'] } as SecurityStatus);
     expect(context.getSystemLogsPanelProps()).toEqual(accepted);
     setStatus({ ...status(), apiTokenHint: 'hint-b' } as SecurityStatus);
-    expect(context.getSystemLogsPanelProps().accessKey).not.toBe(accepted.accessKey);
+    expect(context.getSystemLogsPanelProps().accessKey).not.toBe(
+      (accepted as { accessKey: string }).accessKey,
+    );
     setStatus({ ...status(), settingsCapabilities: { systemLogsRead: false } } as SecurityStatus);
     expect(context.getSystemLogsPanelProps().canRead).toBe(false);
   });
+});
+
+it('dispatches Availability with the live principal, explicit read capability and stable scope identity', () => {
+  const [status, setStatus] = createSignal<SecurityStatus | null>(null);
+  const context = buildSettingsPanelRegistryContext({
+    ...buildParams(null),
+    securityStatus: status,
+  });
+  expect(context.getAvailabilityPanelProps()).toEqual({
+    currentUser: undefined,
+    accessKey: '[null,null]',
+    canRead: false,
+  });
+  setStatus({
+    currentUsername: 'reader-a',
+    authUsername: 'configured-admin',
+    apiTokenHint: 'hint-a',
+    tokenScopes: ['settings:write', 'settings:read'],
+    settingsCapabilities: { availabilityRead: true },
+  } as SecurityStatus);
+  const registry = createSettingsPanelRegistry(context);
+  const accepted = registry['monitoring-availability'].getProps?.();
+  expect(accepted).toEqual(context.getAvailabilityPanelProps());
+  expect(accepted).toEqual({
+    currentUser: 'reader-a',
+    accessKey: '["hint-a",["settings:read","settings:write"]]',
+    canRead: true,
+  });
+  setStatus({ ...status()!, tokenScopes: ['settings:read', 'settings:write'] });
+  expect(context.getAvailabilityPanelProps()).toEqual(accepted);
+  setStatus({ ...status()!, apiTokenHint: 'hint-b' });
+  expect(context.getAvailabilityPanelProps().accessKey).not.toEqual(
+    (accepted as { accessKey: string }).accessKey,
+  );
+  setStatus({
+    ...status()!,
+    currentUsername: '',
+    settingsCapabilities: { availabilityRead: false },
+  } as SecurityStatus);
+  expect(context.getAvailabilityPanelProps()).toMatchObject({ currentUser: '', canRead: false });
 });

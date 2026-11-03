@@ -1,4 +1,4 @@
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, type APIContextOptions } from '@/utils/apiClient';
 import type { ResourceCertificateObservation } from '@/types/resource';
 
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
@@ -143,12 +143,38 @@ export interface AvailabilityTestResponse {
 }
 
 export class AvailabilityTargetsAPI {
-  static async list(): Promise<AvailabilityTarget[]> {
-    return apiFetchJSON(AVAILABILITY_TARGETS_PATH);
+  static async list(options?: APIContextOptions): Promise<AvailabilityTarget[]> {
+    const targets = await apiFetchJSON<unknown>(AVAILABILITY_TARGETS_PATH, options);
+    const ids = new Set<string>();
+    if (
+      !Array.isArray(targets) ||
+      targets.some((target) => {
+        if (
+          !target ||
+          typeof target !== 'object' ||
+          typeof target.id !== 'string' ||
+          !target.id.trim() ||
+          ids.has(target.id) ||
+          typeof target.name !== 'string' ||
+          typeof target.address !== 'string' ||
+          !['icmp', 'tcp', 'udp', 'http', 'https'].includes(target.protocol) ||
+          typeof target.enabled !== 'boolean'
+        )
+          return true;
+        ids.add(target.id);
+        return false;
+      })
+    )
+      throw new Error('Invalid saved availability checks response from Pulse.');
+    return targets;
   }
 
-  static async create(target: AvailabilityTarget): Promise<AvailabilityTarget> {
+  static async create(
+    target: AvailabilityTarget,
+    options?: APIContextOptions,
+  ): Promise<AvailabilityTarget> {
     return apiFetchJSON(AVAILABILITY_TARGETS_PATH, {
+      ...options,
       method: 'POST',
       body: JSON.stringify(target),
     });
@@ -162,28 +188,39 @@ export class AvailabilityTargetsAPI {
   static async update(
     id: string,
     target: Partial<AvailabilityTarget>,
+    options?: APIContextOptions,
   ): Promise<AvailabilityTarget> {
     return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/${encodeURIComponent(id)}`, {
+      ...options,
       method: 'PUT',
       body: JSON.stringify(target),
     });
   }
 
-  static async remove(id: string): Promise<void> {
+  static async remove(id: string, options?: APIContextOptions): Promise<void> {
     await apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/${encodeURIComponent(id)}`, {
+      ...options,
       method: 'DELETE',
     });
   }
 
-  static async test(target: AvailabilityTarget): Promise<AvailabilityTestResponse> {
+  static async test(
+    target: AvailabilityTarget,
+    options?: APIContextOptions,
+  ): Promise<AvailabilityTestResponse> {
     return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/test`, {
+      ...options,
       method: 'POST',
       body: JSON.stringify(target),
     });
   }
 
-  static async testSaved(id: string): Promise<AvailabilityTestResponse> {
+  static async testSaved(
+    id: string,
+    options?: APIContextOptions,
+  ): Promise<AvailabilityTestResponse> {
     return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/${encodeURIComponent(id)}/test`, {
+      ...options,
       method: 'POST',
     });
   }

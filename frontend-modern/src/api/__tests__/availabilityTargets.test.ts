@@ -25,7 +25,7 @@ describe('AvailabilityTargetsAPI', () => {
 
     mockedApiFetchJSON.mockResolvedValueOnce([target]);
     await expect(AvailabilityTargetsAPI.list()).resolves.toEqual([target]);
-    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith('/api/availability-targets');
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith('/api/availability-targets', undefined);
 
     mockedApiFetchJSON.mockResolvedValueOnce(target);
     await AvailabilityTargetsAPI.create(target);
@@ -125,4 +125,24 @@ describe('AvailabilityTargetsAPI', () => {
       body: JSON.stringify(target),
     });
   });
+});
+
+it('forwards one admitted organisation, cancellation and no-retry policy to every route', async () => {
+  const options = { expectedOrgID: 'north', retry: false, signal: new AbortController().signal };
+  const target: AvailabilityTarget = {
+    id: 'same',
+    name: 'Check',
+    address: 'example.invalid',
+    protocol: 'https',
+    enabled: true,
+  };
+  mockedApiFetchJSON.mockResolvedValue([target]);
+  await AvailabilityTargetsAPI.list(options);
+  await AvailabilityTargetsAPI.create(target, options);
+  await AvailabilityTargetsAPI.update('same', { enabled: false }, options);
+  await AvailabilityTargetsAPI.remove('same', options);
+  await AvailabilityTargetsAPI.test(target, options);
+  await AvailabilityTargetsAPI.testSaved('same', options);
+  for (const [, init] of mockedApiFetchJSON.mock.calls.slice(-6))
+    expect(init).toEqual(expect.objectContaining(options));
 });

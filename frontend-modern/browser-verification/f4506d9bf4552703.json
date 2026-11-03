@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "e9e03120ed9013568957c00434260d20db411096",
+  "verified_at": "2026-11-03T19:17:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useAvailabilitySettingsState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityTargets.ts": "e63dc0bf439de71c0815edebc021368e6280fc2df3c87a4027a59030975914a1",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "b9cec385f23a0b2a82cc1dbb6095216d93e9835066518952243238584c233a83",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "c984d694a19627da350237bfa5b19e727a0b5fdd8fedd6f3fa6fd257bf66f04e",
+    "frontend-modern/src/components/Settings/settingsPanelRegistry.ts": "3c06164bcf813f413c9bc002c253b43bdf95f09cc28244d690f7358d830f321d",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "a3928ade88c135cc3e06be574d40adf417a05e6dd1a37aad320a0bb42356f42a",
+    "frontend-modern/src/components/Settings/useAvailabilitySettingsState.ts": "f6831349a33fc6017904c473bee4c9a3fcae4025fdafc0e8dab9cfa96c4104dc"
+  },
+  "routes": [
+    "/settings/monitoring/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Successful saved inventory with unchanged per-check status, address and controls",
+    "Unknown/503 initial inventory is unavailable, not empty onboarding",
+    "Same-reader refresh failure retains labelled last-loaded configuration with actions disabled",
+    "Failed or missing saved editor read exposes read-only retry, not blank defaults",
+    "HTTP 403 withdraws saved inventory and the editor",
+    "Read-capability withdrawal removes a populated private draft",
+    "Replacement organisation rejects an obsolete delayed reply",
+    "Loaded HTTPS editor retains fields, TLS controls and write-only saved secrets"
+  ],
+  "interactions": [
+    "Keyboard Retry reads configuration without writes",
+    "Retry saved check restores the confirmed saved form",
+    "Test saved target and draft probe through the real API client",
+    "Pause/resume round-trip through canonical refetch",
+    "Save HTTPS configuration without replacing its stored secret",
+    "Create a check beside the existing check",
+    "Two-step removal sends one DELETE and does not retry a 403",
+    "Inspect actual comparable desktop/phone pixels with the native image tool"
+  ],
+  "notes": "Production panel/editor/API and live settings registry context in an evidence-only Router frame with synthetic local HTTP and WebSocket transports. All 32 comparable captures were opened natively. This is not an authenticated App, installed-account recovery or full App build. Browser: Playwright 1.56.1/Chromium; the integration lock matches. Full source VM snapshot is separately unavailable."
+}

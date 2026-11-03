@@ -1,5 +1,8 @@
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import { Show, createEffect, createMemo, createSignal, onMount, type Component } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onCleanup, type Component } from 'solid-js';
+import { eventBus } from '@/stores/events';
+import { getOrgID } from '@/utils/apiClient';
+import { useAvailabilitySettingsState } from './useAvailabilitySettingsState';
 import type { Resource } from '@/types/resource';
 import { isAgentlessAvailabilityResource } from '@/features/standalone/standalonePageModel';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -15,11 +18,7 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import { useResources } from '@/hooks/useResources';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
-import {
-  AvailabilityTargetsAPI,
-  type AvailabilityTarget,
-  type AvailabilityTargetKind,
-} from '@/api/availabilityTargets';
+import { type AvailabilityTarget, type AvailabilityTargetKind } from '@/api/availabilityTargets';
 import { AvailabilityTargetSlot } from './ConnectionEditor/CredentialSlots/AvailabilityTargetSlot';
 import {
   buildAvailabilitySettingsPath,
@@ -36,15 +35,77 @@ import {
   shouldOpenAvailabilityTargetAddDialog,
 } from './availabilitySettingsModel';
 
-type AvailabilityDialogState =
-  | { mode: 'add'; initialTargetKind?: AvailabilityTargetKind }
-  | { mode: 'edit'; target: AvailabilityTarget }
-  | null;
+export interface AvailabilitySettingsPanelProps {
+  currentUser?: string;
+  accessKey?: string;
+  canRead?: boolean;
+}
 
-const sortTargets = (targets: readonly AvailabilityTarget[]): AvailabilityTarget[] =>
-  [...targets].sort((left, right) => left.name.localeCompare(right.name));
+export const AvailabilitySettingsPanel: Component<AvailabilitySettingsPanelProps> = (props) => {
+  const [orgRevision, setOrgRevision] = createSignal(0);
+  const [withdrawnReader, setWithdrawnReader] = createSignal<object | null>(null);
+  onCleanup(eventBus.on('org_switched', () => setOrgRevision((value) => value + 1)));
+  const reader = createMemo(
+    (previous?: {
+      org: string;
+      revision: number;
+      user?: string;
+      access?: string;
+      read: boolean;
+    }) => {
+      const next = {
+        org: getOrgID() || 'default',
+        revision: orgRevision(),
+        user: props.currentUser,
+        access: props.accessKey,
+        read: props.canRead !== false,
+      };
+      return previous &&
+        Object.keys(next).every(
+          (key) => next[key as keyof typeof next] === previous[key as keyof typeof next],
+        )
+        ? previous
+        : next;
+    },
+  );
+  return (
+    <Show
+      when={reader().read && withdrawnReader() !== reader()}
+      fallback={
+        <SettingsPanel title="Availability checks">
+          <p class="p-4 text-sm text-muted">
+            {reader().read
+              ? 'The session or organisation changed. Reload this page before using availability checks.'
+              : 'Availability checks are not available to this session.'}
+          </p>
+        </SettingsPanel>
+      }
+    >
+      <Show when={reader()} keyed>
+        {(accepted) => (
+          <AvailabilityWorkspace
+            org={accepted.org}
+            isCurrentReader={() => {
+              if (reader() !== accepted) return false;
+              if ((getOrgID() || 'default') !== accepted.org) {
+                // Storage drift (including a 401 clearing auth) is not an
+                // authenticated organisation switch. Withdraw, never fall back
+                // to another organisation using this reader's capability.
+                setWithdrawnReader(accepted);
+                return false;
+              }
+              return true;
+            }}
+          />
+        )}
+      </Show>
+    </Show>
+  );
+};
 
-export const AvailabilitySettingsPanel: Component = () => {
+const AvailabilityWorkspace: Component<{ org: string; isCurrentReader: () => boolean }> = (
+  props,
+) => {
   const now = useRelativeTimeNow();
   const location = useLocation();
   const navigate = useNavigate();
@@ -63,96 +124,50 @@ export const AvailabilitySettingsPanel: Component = () => {
   });
   const resourceForTarget = (target: AvailabilityTarget) =>
     availabilityResourceByTargetId().get(target.id);
-  const [targets, setTargets] = createSignal<AvailabilityTarget[]>([]);
-  const [loading, setLoading] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
-  const [dialog, setDialog] = createSignal<AvailabilityDialogState>(null);
-  const [pendingActionId, setPendingActionId] = createSignal<string | null>(null);
-  const [deleteConfirmingId, setDeleteConfirmingId] = createSignal<string | null>(null);
-  const sortedTargets = createMemo(() => sortTargets(targets()));
-
-  const loadTargets = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setTargets(await AvailabilityTargetsAPI.list());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load availability checks.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const {
+    targets,
+    loading,
+    loaded,
+    loadError,
+    error,
+    dialog,
+    setDialog,
+    pendingActionId,
+    deleteConfirmingId,
+    setDeleteConfirmingId,
+    canAct,
+    isCurrent,
+    rejectAccess,
+    loadTargets,
+    toggleTarget,
+    testTarget,
+    requestRemoveTarget,
+    openEditDialog,
+  } = useAvailabilitySettingsState(props);
+  const sortedTargets = createMemo(() =>
+    [...targets()].sort((a, b) => a.name.localeCompare(b.name)),
+  );
   const openAddDialog = (targetKind: AvailabilityTargetKind = 'service') => {
+    if (!canAct()) return;
     setDeleteConfirmingId(null);
     navigate(buildAvailabilityTargetAddPath(targetKind), { scroll: false });
   };
-
   const closeDialog = (replace = false) => {
+    if (!isCurrent()) return;
     setDialog(null);
     setDeleteConfirmingId(null);
     if (location.pathname === buildAvailabilitySettingsPath() && location.search) {
       navigate(buildAvailabilitySettingsPath(), { replace, scroll: false });
     }
   };
-
   const handleSaved = () => {
+    if (!isCurrent()) return;
     void loadTargets();
     closeDialog(true);
   };
 
-  const toggleTarget = async (target: AvailabilityTarget) => {
-    setPendingActionId(target.id);
-    setError(null);
-    try {
-      await AvailabilityTargetsAPI.update(target.id, { enabled: !target.enabled });
-      await loadTargets();
-      const currentDialog = dialog();
-      if (currentDialog?.mode === 'edit' && currentDialog.target.id === target.id) {
-        const updated = targets().find((item) => item.id === target.id);
-        if (updated) setDialog({ mode: 'edit', target: updated });
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update availability check.');
-    } finally {
-      setPendingActionId(null);
-    }
-  };
-
-  const testTarget = async (target: AvailabilityTarget) => {
-    setPendingActionId(target.id);
-    setError(null);
-    try {
-      await AvailabilityTargetsAPI.testSaved(target.id);
-      await loadTargets();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Availability test failed.');
-    } finally {
-      setPendingActionId(null);
-    }
-  };
-
-  const requestRemoveTarget = async (target: AvailabilityTarget) => {
-    if (deleteConfirmingId() !== target.id) {
-      setDeleteConfirmingId(target.id);
-      return;
-    }
-
-    setPendingActionId(target.id);
-    setError(null);
-    try {
-      await AvailabilityTargetsAPI.remove(target.id);
-      await loadTargets();
-      closeDialog(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove availability check.');
-    } finally {
-      setPendingActionId(null);
-    }
-  };
-
   createEffect(() => {
-    if (shouldOpenAvailabilityTargetAddDialog(location.pathname, location.search)) {
+    if (canAct() && shouldOpenAvailabilityTargetAddDialog(location.pathname, location.search)) {
       setDialog({
         mode: 'add',
         initialTargetKind: getAvailabilityTargetAddKind(location.pathname, location.search),
@@ -164,10 +179,6 @@ export const AvailabilitySettingsPanel: Component = () => {
     if (current?.mode === 'add') {
       setDialog(null);
     }
-  });
-
-  onMount(() => {
-    void loadTargets();
   });
 
   const dialogTitle = createMemo(() => {
@@ -203,7 +214,11 @@ export const AvailabilitySettingsPanel: Component = () => {
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
               <div class="text-sm font-semibold text-base-content">
-                {getAvailabilityTargetsSummary(targets(), resourceForTarget, now())}
+                {loaded()
+                  ? getAvailabilityTargetsSummary(targets(), resourceForTarget, now())
+                  : loading()
+                    ? 'Loading availability checks…'
+                    : 'Availability checks unavailable'}
               </div>
               <p class="mt-1 text-xs leading-5 text-muted">
                 Monitor endpoint-only devices and services with ICMP, TCP, and HTTP probes.
@@ -216,10 +231,10 @@ export const AvailabilitySettingsPanel: Component = () => {
                 size="mdCompact"
                 class="min-h-11 gap-2 sm:min-h-9"
                 onClick={() => void loadTargets()}
-                disabled={loading()}
+                disabled={loading() || Boolean(pendingActionId())}
               >
                 <RotateCw class={`h-4 w-4 ${loading() ? 'animate-spin' : ''}`} />
-                Refresh
+                {loadError() ? 'Retry' : 'Refresh'}
               </Button>
               <Button
                 type="button"
@@ -227,6 +242,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                 size="mdCompact"
                 class="min-h-11 gap-2 sm:min-h-9"
                 onClick={() => openAddDialog('service')}
+                disabled={!canAct()}
               >
                 <Plus class="h-4 w-4" />
                 Add service/device check
@@ -254,24 +270,27 @@ export const AvailabilitySettingsPanel: Component = () => {
           <Show
             when={sortedTargets().length > 0}
             fallback={
-              <EmptyState
-                variant="panel"
-                icon={<Activity class="h-5 w-5" />}
-                title="No availability checks yet"
-                description="Add a ping, TCP port, MQTT broker, ESPHome device, HTTP health check, or another endpoint that only needs reachability monitoring."
-                actions={
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="mdCompact"
-                    class="min-h-9! gap-2"
-                    onClick={() => openAddDialog('service')}
-                  >
-                    <Plus class="h-4 w-4" />
-                    Add service/device check
-                  </Button>
-                }
-              />
+              <Show when={loaded() && !loading() && !loadError()}>
+                <EmptyState
+                  variant="panel"
+                  icon={<Activity class="h-5 w-5" />}
+                  title="No availability checks yet"
+                  description="Add a ping, TCP port, MQTT broker, ESPHome device, HTTP health check, or another endpoint that only needs reachability monitoring."
+                  actions={
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="mdCompact"
+                      class="min-h-9! gap-2"
+                      onClick={() => openAddDialog('service')}
+                      disabled={!canAct()}
+                    >
+                      <Plus class="h-4 w-4" />
+                      Add service/device check
+                    </Button>
+                  }
+                />
+              </Show>
             }
           >
             <PlatformWindowedList
@@ -333,7 +352,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                         size="xs"
                         class="min-h-11 sm:min-h-8"
                         onClick={() => void testTarget(target)}
-                        disabled={pending()}
+                        disabled={!canAct()}
                       >
                         {pending() ? 'Testing...' : 'Test'}
                       </Button>
@@ -343,7 +362,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                         size="xs"
                         class="min-h-11 sm:min-h-8"
                         onClick={() => void toggleTarget(target)}
-                        disabled={pending()}
+                        disabled={!canAct()}
                       >
                         {target.enabled ? 'Pause' : 'Resume'}
                       </Button>
@@ -352,10 +371,8 @@ export const AvailabilitySettingsPanel: Component = () => {
                         variant="outline"
                         size="xs"
                         class="min-h-11 sm:min-h-8"
-                        onClick={() => {
-                          setDeleteConfirmingId(null);
-                          setDialog({ mode: 'edit', target });
-                        }}
+                        onClick={() => openEditDialog(target)}
+                        disabled={!canAct()}
                       >
                         Manage
                       </Button>
@@ -372,6 +389,8 @@ export const AvailabilitySettingsPanel: Component = () => {
         {(dialogAccessor) => {
           const current = dialogAccessor();
           const editingTarget = current.mode === 'edit' ? current.target : null;
+          const currentTarget = () =>
+            editingTarget ? targets().find((target) => target.id === editingTarget.id) : undefined;
           return (
             <Dialog
               isOpen={true}
@@ -379,8 +398,8 @@ export const AvailabilitySettingsPanel: Component = () => {
               ariaLabel={dialogTitle()}
               panelClass="max-w-4xl"
             >
-              <div class="flex h-full min-h-0 flex-col">
-                <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+              <div class="flex min-h-0 flex-col">
+                <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
                   <div class="space-y-1">
                     <h2 class="text-base font-semibold text-base-content">{dialogTitle()}</h2>
                     <p class="text-sm text-muted">{dialogDescription()}</p>
@@ -397,6 +416,9 @@ export const AvailabilitySettingsPanel: Component = () => {
                 </div>
                 <div class="min-h-0 flex-1 overflow-y-auto p-4">
                   <AvailabilityTargetSlot
+                    reader={{ org: props.org, isCurrent }}
+                    blocked={!canAct()}
+                    onAccessRejected={rejectAccess}
                     editingTargetId={editingTarget?.id}
                     initialTargetKind={
                       current.mode === 'add' ? current.initialTargetKind : undefined
@@ -404,12 +426,22 @@ export const AvailabilitySettingsPanel: Component = () => {
                     onCancel={() => closeDialog(true)}
                     onSaved={handleSaved}
                     onToggleEnabled={
-                      editingTarget ? () => void toggleTarget(editingTarget) : undefined
+                      editingTarget
+                        ? () => {
+                            const target = currentTarget();
+                            if (target) void toggleTarget(target);
+                          }
+                        : undefined
                     }
                     togglePending={editingTarget ? pendingActionId() === editingTarget.id : false}
-                    connectionEnabled={editingTarget?.enabled}
+                    connectionEnabled={currentTarget()?.enabled}
                     onDelete={
-                      editingTarget ? () => void requestRemoveTarget(editingTarget) : undefined
+                      editingTarget
+                        ? () => {
+                            const target = currentTarget();
+                            if (target) void requestRemoveTarget(target);
+                          }
+                        : undefined
                     }
                     deletePending={editingTarget ? pendingActionId() === editingTarget.id : false}
                     deleteConfirming={
