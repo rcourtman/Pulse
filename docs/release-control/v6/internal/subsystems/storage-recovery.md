@@ -9352,6 +9352,15 @@ actual pixels. This corrects evidence scope, not original incident causality or
 native backup/guest recovery.
 
 
+### Coverage says Protection, not Posture (3 November 2026)
+
+The Coverage column header read "Posture", a word the Backups redesign lists as
+one users do not know. It now reads "Protection", or "Status" on a phone where
+"Protection" does not fit. The filter group says "Protection", and the
+unavailable notice and the expanded row say "protection status".
+Phone rows spell out "Protected" instead of "Prot.". The API, sort key and
+assessment keep the posture name, so only the words on the page changed.
+
 ### Backup activity preserves calendar-day interaction identity
 
 `BackupActivityChart` retains each day control by its local calendar key across

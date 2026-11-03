@@ -1071,7 +1071,7 @@ describe('ProxmoxBackupsTable', () => {
 
     // Coverage is the posture view; the server-owned workload posture reads
     // "Protected".
-    expect(screen.getByRole('columnheader', { name: /posture/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^(protection|status)/i })).toBeInTheDocument();
     expect(screen.getAllByText('Protected').length).toBeGreaterThan(0);
 
     // Per-source detail is one click down inside the workload's row.
@@ -1141,7 +1141,7 @@ describe('ProxmoxBackupsTable', () => {
     await within(detail).findByText(explanation);
     expect(within(detail).getByText('History Complete')).toBeInTheDocument();
     expect(within(detail).getByRole('status')).toHaveTextContent(
-      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+      'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
     );
     expect(within(detail).queryByText('Restore evidence')).not.toBeInTheDocument();
     expect(within(detail).queryByText('pre-upgrade')).not.toBeInTheDocument();
@@ -1180,7 +1180,9 @@ describe('ProxmoxBackupsTable', () => {
       await screen.findAllByText(name);
       expect(screen.getByRole('button', { name: /collapse details for pbs-docker/i })).toBe(toggle);
       expect(toggle).toHaveFocus();
-      expect(screen.getByRole('columnheader', { name: /posture/i })).toBeInTheDocument();
+      expect(
+        screen.getAllByRole('columnheader', { name: /^(protection|status)/i })[0],
+      ).toBeInTheDocument();
       expect(screen.getByText('Restore evidence')).toBeInTheDocument();
       expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
@@ -1280,7 +1282,7 @@ describe('backup read recovery keeps keyboard position', () => {
       },
       label:
         source === 'posture'
-          ? 'Retry protection posture'
+          ? 'Retry protection status'
           : `Retry ${source.toUpperCase()} inventory`,
     };
   };
@@ -2226,7 +2228,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
     fireEvent.click(retry);
     await waitFor(() =>
       expect(detail).toHaveTextContent(
-        'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+        'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
       ),
     );
     expect(within(rowElement()).getByTitle('No PBS backup or PVE backup file')).toHaveTextContent(
@@ -2240,7 +2242,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
     apiFetchJSONMock.mockRejectedValue(new Error('synthetic posture read failed'));
     mount();
     const detail = await open();
-    await screen.findByText(/Protection posture is unavailable/);
+    await screen.findByText(/Protection status is unavailable/);
     expect(detail).toHaveTextContent('not confirmed complete');
     expect(rowElement()).not.toHaveTextContent('None');
   });
@@ -2322,7 +2324,7 @@ describe('Coverage withdraws failed protection assessments', () => {
               : { ...accepted, policy: { ...accepted.policy, requireVerification: privateValue } };
         apiFetchJSONMock.mockResolvedValue(malformed);
         await vi.advanceTimersByTimeAsync(30_000);
-        await screen.findByText(/Protection posture is unavailable/);
+        await screen.findByText(/Protection status is unavailable/);
         expect(row()).toHaveTextContent('Unknown');
         expect(row()).not.toHaveTextContent('Protected');
         expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
@@ -2335,9 +2337,9 @@ describe('Coverage withdraws failed protection assessments', () => {
         const beforePVE = sourceCalls('pve').length;
         const beforePBS = sourceCalls('pbs').length;
         apiFetchJSONMock.mockResolvedValue(accepted);
-        fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Retry protection status' }));
         await waitFor(() => expect(row()).toHaveTextContent('Protected'));
-        expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Protection status is unavailable/)).not.toBeInTheDocument();
         expect(sourceCalls('pve')).toHaveLength(beforePVE);
         expect(sourceCalls('pbs')).toHaveLength(beforePBS);
       } finally {
@@ -2365,7 +2367,7 @@ describe('Coverage withdraws failed protection assessments', () => {
 
       apiFetchJSONMock.mockRejectedValue(new Error('Synthetic posture refresh failed'));
       await vi.advanceTimersByTimeAsync(30_000);
-      await screen.findByText(/Protection posture is unavailable/);
+      await screen.findByText(/Protection status is unavailable/);
       expect(row()).toHaveTextContent('Unknown');
       expect(row()).not.toHaveTextContent('Protected');
       expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent('0 of 1 protected');
@@ -2378,7 +2380,7 @@ describe('Coverage withdraws failed protection assessments', () => {
 
       const pending = deferred<typeof accepted>();
       apiFetchJSONMock.mockReturnValue(pending.promise);
-      const retry = screen.getByRole('button', { name: 'Retry protection posture' });
+      const retry = screen.getByRole('button', { name: 'Retry protection status' });
       fireEvent.click(retry);
       expect(retry).toHaveAttribute('aria-disabled', 'true');
       expect(retry).toHaveTextContent('Retrying');
@@ -2395,7 +2397,7 @@ describe('Coverage withdraws failed protection assessments', () => {
       });
       await waitFor(() => expect(row()).toHaveTextContent(/attention/i));
       expect(detail).toHaveTextContent('The current backup verification needs attention.');
-      expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Protection status is unavailable/)).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: '1 needs attention' })).toBeInTheDocument();
       expect(document.querySelector('[data-coverage-posture-rule]')).not.toBeNull();
       expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(2);
@@ -3127,8 +3129,8 @@ describe('bare Backups entry opens Coverage', () => {
     mountBackupReadState();
     await settleNavigation();
     await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
-    await screen.findByText(/Protection posture is unavailable/);
-    await fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
+    await screen.findByText(/Protection status is unavailable/);
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry protection status' }));
     await waitFor(() => verdictShows('protected'));
     expect(window.location.pathname).toBe('/proxmox/backups/coverage');
     await fireEvent.click(screen.getByRole('link', { name: /by date/i }));

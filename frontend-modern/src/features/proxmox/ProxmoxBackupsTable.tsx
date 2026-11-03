@@ -703,7 +703,7 @@ export const ProxmoxBackupsTable: Component<{
     } else {
       filters.push({
         id: 'posture',
-        label: 'Posture',
+        label: 'Protection',
         group: 'status',
         inline: true,
         options: () => COVERAGE_FILTERS,
@@ -812,19 +812,19 @@ export const ProxmoxBackupsTable: Component<{
                 class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center justify-between gap-2`}
               >
                 <span>
-                  Protection posture is unavailable. Pulse is showing restore evidence without
+                  Protection status is unavailable. Pulse is showing restore evidence without
                   guessing whether workloads are protected.
                 </span>
                 <button
                   type="button"
                   class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50"
-                  aria-label="Retry protection posture"
+                  aria-label="Retry protection status"
                   aria-disabled={protectionPostures.response.loading}
                   onClick={() => {
                     if (!protectionPostures.response.loading) void protectionPostures.refetch();
                   }}
                 >
-                  {protectionPostures.response.loading ? 'Retrying…' : 'Retry protection posture'}
+                  {protectionPostures.response.loading ? 'Retrying…' : 'Retry protection status'}
                 </button>
               </div>
             </Show>

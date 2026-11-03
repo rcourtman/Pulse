@@ -162,7 +162,7 @@ const statusDetailTone = (variant: StatusIndicatorVariant): DetailValueTone | un
 const compactPostureLabel = (posture: WorkloadCoverageRow['posture']): string => {
   switch (posture) {
     case 'protected':
-      return 'Prot.';
+      return 'Protected';
     case 'attention':
       return 'Attn.';
     case 'unprotected':
@@ -669,7 +669,7 @@ export function ProxmoxCoverageTable(props: {
                 <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
               </Show>
               <SortableHead
-                label="Posture"
+                label={layoutMode() === 'compact' ? 'Status' : 'Protection'}
                 sortKey="posture"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
@@ -1011,7 +1011,7 @@ export function ProxmoxCoverageTable(props: {
                                   >
                                     {!backupHistoryComplete()
                                       ? 'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.'
-                                      : 'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.'}
+                                      : 'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.'}
                                   </InlineNotice>
                                 }
                               >

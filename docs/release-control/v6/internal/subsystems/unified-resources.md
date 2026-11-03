@@ -9481,6 +9481,15 @@ not a DOM height sampled while a window retires. Offscreen detail measurements
 remain in that map until the owning item is remeasured or removed, so a transient
 DOM extent cannot lower the reserve before its compensating spacer settles.
 
+### Coverage says Protection, not Posture (3 November 2026)
+
+The Coverage column header read "Posture", a word the Backups redesign lists as
+one users do not know. It now reads "Protection", or "Status" on a phone where
+"Protection" does not fit. The filter group says "Protection", and the
+unavailable notice and the expanded row say "protection status".
+Phone rows spell out "Protected" instead of "Prot.". The API, sort key and
+assessment keep the posture name, so only the words on the page changed.
+
 ### Coverage task order is evidence, not an input-order tie-break
 
 The Coverage task summary names a latest task only when the observed start times

@@ -367,7 +367,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).toContain('Type');
     expect(headers).toContain('Target ID');
     expect(headers).toContain('Node');
-    expect(headers).toContain('Posture▲');
+    expect(headers).toContain('Protection▲');
     expect(headers).toContain('Last backup');
     // Per-source ages are expansion detail at every width.
     expect(headers).not.toContain('PBS backup');
@@ -401,8 +401,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
-    expect(headerTexts()).toEqual(['Workload', 'Posture▲', 'Age', 'Job']);
-    expect(document.body.textContent).toContain('Prot.');
+    expect(headerTexts()).toEqual(['Workload', 'Status▲', 'Age', 'Job']);
+    expect(document.body.textContent).toContain('Protected');
     expect(document.body.textContent).not.toContain('VM 100 · pve1');
   });
 
@@ -771,7 +771,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     const notice = screen.getByRole('status');
     expect(notice).toHaveTextContent(
-      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+      'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
     );
     expect(notice.className).toContain('border-amber-300');
     // No registry match, so nothing to link to.
@@ -1067,7 +1067,7 @@ describe('Coverage absence requires readable, complete history', () => {
     });
     expect(screen.getByTitle(unknownTitle)).toHaveTextContent(/^Unknown$/);
     expect(screen.getByRole('status')).toHaveTextContent(
-      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+      'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
     );
     expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
   });
@@ -1080,7 +1080,7 @@ describe('Coverage absence requires readable, complete history', () => {
     });
     expect(screen.getByTitle('No PBS backup or PVE backup file')).toHaveTextContent(/^None$/);
     expect(screen.getByRole('status')).toHaveTextContent(
-      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+      'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
     );
     expect(screen.queryByTitle(unknownTitle)).not.toBeInTheDocument();
   });
@@ -1105,7 +1105,7 @@ describe('Coverage absence requires readable, complete history', () => {
       expect(screen.getByText(explanation)).toBeInTheDocument();
       expect(screen.getByText('History Complete')).toBeInTheDocument();
       expect(screen.getByRole('status')).toHaveTextContent(
-        'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+        'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
       );
       expect(screen.getByTitle('No PBS backup or PVE backup file')).toHaveTextContent('None');
       // No lastSuccessfulPointAt is expected for a guest snapshot. Nor may the

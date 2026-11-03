@@ -11202,6 +11202,12 @@ actual pixels. This corrects evidence scope, not original incident causality or
 native backup/guest recovery.
 
 
+### Coverage header follows the Job and Task precedent (3 November 2026)
+
+The Coverage table's protection column names itself by layout, as its Job and
+Task column already does: "Protection" where it fits and "Status" in the compact
+phone layout. The canonical sortable header and column kinds are unchanged.
+
 ### Backup activity preserves calendar-day interaction identity
 
 `BackupActivityChart` retains each day control by its local calendar key across
