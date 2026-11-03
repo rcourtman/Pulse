@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "523b0fc974b07e7ad543f535f03b4a258e83275d",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "b7a8cdad6b766e011290fb968774cb9d2f2528ecfa3a8413da015ca0c5a62ffc"
+  },
+  "routes": [
+    "/kubernetes/overview?cluster=cluster-west&namespace=prod&q=-cache",
+    "/kubernetes/workloads",
+    "/docs/COMPAT#query-persistence",
+    "/docs/NEXT#next-step",
+    "/docs/API#resource-maintenance-and-operator-state"
+  ],
+  "states": [
+    "Bookmarked cluster scope, shared negative search and namespace",
+    "Deselected and replaced cluster, filtered deployments",
+    "Back/Forward, section navigation and reload",
+    "Actual App post-update release-note dialog: formatted content, safe link and hostile content sanitisation",
+    "Real Docs viewer: async/direct/reload/cross-document fragment focus, table/code formatting, safe links and sanitisation; harmless images remain allowed"
+  ],
+  "interactions": [
+    "Click selected cluster to clear cluster and namespace while retaining q",
+    "Keyboard-select replacement cluster, then Back/Forward and reload",
+    "Navigate real App Workloads tab and return to Overview",
+    "Open and dismiss actual App changelog, preserving safe Markdown and stripping executable markup/unsafe hrefs",
+    "Keyboard-follow relative guide link, then Back and reload, checking focused fragment",
+    "Open the actual shipped API guide at its fragment",
+    "Native pixel review of every final desktop/narrow capture"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-03T05:48:19Z",
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "checks_passed": 54,
+  "captures_reviewed": 8,
+  "producer_manifests": {
+    "package.json": "e61fffb1ae7d2e5dd56d97a4efd8aaa34caec5f5c2f8e1660821d2c7ff819e4b",
+    "package-lock.json": "ef79cbea89de85d48b0fb4584cac079fca50331684998f91b9b5fd92721bf87b"
+  },
+  "producer_versions": {
+    "marked": "18.1.1",
+    "@solidjs/router": "1.0.0"
+  },
+  "production_build_source": "439e244a608340c24c0d1a80c5207304d07280eb",
+  "notes": [
+    "The verified production assets and this containing source differ only in a registered Actions request-order test. Runtime source and dependency manifests are identical.",
+    "Synthetic read-only HTTP/WebSocket fixtures drive unchanged App/pages/stores. No installed-host, reporter recovery or release acceptance is claimed.",
+    "No uncaught browser error or unexpected API route; one console HTTP 404 is retained in the detailed evidence."
+  ]
+}
