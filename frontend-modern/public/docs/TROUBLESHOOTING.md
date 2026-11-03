@@ -21,6 +21,10 @@ establish safe recovery.
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
   or repeat first-time setup.
+- **Signed in, but saved infrastructure settings are unavailable:** use
+  [saved-settings access recovery](#signed-in-but-saved-infrastructure-settings-are-unavailable).
+  An unreadable connection is not evidence that it was removed; keep its saved
+  credentials, TLS trust and collection scope.
 - **Server installation finished but Pulse is unavailable:** distinguish
   [container state, Pulse service state and web access](INSTALL.md#installation-did-not-reach-a-usable-server).
   Preserve the existing installation; a success banner is not readiness.
@@ -517,6 +521,48 @@ request path (without query strings). Keep passwords, hashes, cookies, tokens,
 full headers, **Copy as cURL** commands and network exports private. A 401 alone
 does not justify deleting configuration, recreating the data volume or
 re-enrolling agents.
+
+#### Signed in, but saved infrastructure settings are unavailable
+
+In **Settings → Infrastructure → Manage**, an unavailable saved configuration
+means Pulse could not read the matching connection for the current account and
+organisation. It does **not** establish that the connection was removed, that
+its saved password is lost, or that the monitored server rejected it. Monitoring
+access and permission to manage saved connections are different.
+
+1. Check that you are using the intended Pulse URL, account and organisation.
+   Preserve any working administrator session. After an account, organisation
+   or access change, Pulse withdraws stale fields and test results rather than
+   reuse another reader's settings. Do not copy values back from an old tab.
+2. Use **Retry saved configuration**, when shown, to read the saved settings
+   again before editing. This is a read, not a save, connection test or removal.
+   If the page says **Reload before making changes**, restore the intended
+   access first, then reload that page; do not repeat a refused Test or Save.
+3. If access is still refused, ask the Pulse administrator to check the
+   account's intended role, organisation and connection access. A successful
+   sign-in or visible dashboard does not grant settings access. Keep existing
+   restrictions: do not widen token scopes, grant another department's nodes,
+   disable authentication or bypass CSRF checks just to make the error go away.
+
+An HTTP **401** concerns the Pulse session or token; follow the
+[login guidance](#cannot-login--401-unauthorized). An HTTP **403** can be an
+access refusal or a rejected browser write's CSRF check; identify the request
+and whether it was a read or a write, not just the status. A failed read does
+not prove an empty inventory. A timeout or lost Save response can occur after
+a change was applied: check the existing state before any further write.
+
+Do not remove and recreate the connection, reinstall an agent or enter
+replacement secrets to recover an unread form. Preserve saved passwords/API
+keys, certificate verification, fingerprints and collection scope. A successful
+read restores the editor, not proof of polling or recovery of missing readings;
+check those separately using the [affected workflow](#choose-the-affected-workflow).
+
+For a report, keep the time, Pulse version, platform, action, redacted error and
+request path without query strings, plus whether the failure followed an
+account or organisation change. Use observations already available; do not
+run Diagnostics or replay a mutation just to collect them. Keep tokens,
+cookies, passwords, full configuration, **Copy as cURL** and network exports
+private; a cropped error must not expose saved credentials or private hosts.
 
 #### Audit Log verification shows unsigned events
 
