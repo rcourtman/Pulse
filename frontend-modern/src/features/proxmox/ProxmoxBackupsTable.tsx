@@ -782,7 +782,7 @@ export const ProxmoxBackupsTable: Component<{
           fallback={
             <PlatformTableLoadingState
               title="Loading Proxmox backup inventory"
-              description="Reading PBS snapshots, PVE backup files, guest snapshots, and recent backup tasks."
+              description="Reading PBS backups, PVE backup files, guest snapshots, and recent backup tasks."
             />
           }
         >
@@ -950,7 +950,7 @@ export const ProxmoxBackupsTable: Component<{
               emptyDescription={
                 inventoryIncomplete()
                   ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                  : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
+                  : 'PBS backups, PVE backup files, and guest snapshots will appear here when available.'
               }
               sortKey={recoverableSortKey}
               sortDirection={recoverableSortDirection}

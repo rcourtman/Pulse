@@ -81,10 +81,10 @@ import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRo
 // "None" instead of restating the source ("No PVE backup file"). The long form
 // truncated at most widths and stays available as the hover title.
 const COVERAGE_EMPTY_LABEL = 'None';
-const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
+const COVERAGE_NO_BACKUP_TITLE = 'No PBS backup or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
-  'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.';
+  'No PBS backup or PVE backup file. A guest snapshot is not a separate backup, so it does not count.';
 const COVERAGE_HISTORY_UNKNOWN_TITLE =
   'No completed backup is visible in the current list. Missing entries do not mean no backups exist. Expand this row to inspect the evidence.';
 

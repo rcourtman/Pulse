@@ -587,6 +587,13 @@ its presentation module are deleted. Backup jobs is the page's one daily bar
 chart, so two look-alike bar charts never stack on one page. Earlier notes here
 about the chart's tooltip portal and day-control focus are historical.
 
+### Backups source labels keep "snapshot" for guest snapshots (3 November 2026)
+
+`proxmoxBackupSourcePresentation` names PBS items "PBS backup(s)" in every
+label (filter, detail, fallback, timeline) and gives a PBS item with no
+verification result the state "Backup"; the guest snapshot source keeps
+"Snapshot". One word, one meaning on the page.
+
 ### Backup view tabs head the restore points, not the page (2 November 2026)
 
 On the Backups page the shared `PlatformSectionTabs` ("Backup views": By date,

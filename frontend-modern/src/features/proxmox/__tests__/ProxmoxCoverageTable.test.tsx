@@ -298,7 +298,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).toContain('Posture▲');
     expect(headers).toContain('Last backup');
     // Per-source ages are expansion detail at every width.
-    expect(headers).not.toContain('PBS snapshot');
+    expect(headers).not.toContain('PBS backup');
     expect(headers).not.toContain('Guest snapshot');
     expect(headers).not.toContain('PVE file');
     expect(headers).not.toContain('Task');
@@ -726,9 +726,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     ));
 
     // The cell says None and the full reason sits on hover, so it cannot
-    // truncate to "No PBS snapshot or PVE b…".
+    // truncate to "No PBS backup or PVE b…".
     const empty = (title: string) => document.querySelector(`td span[title="${title}"]`);
-    for (const title of ['No PBS snapshot or PVE backup file', 'No recent task']) {
+    for (const title of ['No PBS backup or PVE backup file', 'No recent task']) {
       expect(empty(title)).toHaveTextContent(/^None$/);
     }
   });
@@ -758,7 +758,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       span.getAttribute('title'),
     );
     expect(titles).toContain(
-      'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.',
+      'No PBS backup or PVE backup file. A guest snapshot is not a separate backup, so it does not count.',
     );
     expect(titles).toContain(
       'This backup does not match a guest Pulse currently monitors, so it is not rated.',
@@ -967,7 +967,7 @@ describe('Coverage absence requires readable, complete history', () => {
       posture: 'unprotected',
       protectionPosture: { ...completePosture, state: 'unprotected', coverage: 'none' },
     });
-    expect(screen.getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(/^None$/);
+    expect(screen.getByTitle('No PBS backup or PVE backup file')).toHaveTextContent(/^None$/);
     expect(screen.getByRole('status')).toHaveTextContent(
       'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
     );
@@ -996,7 +996,7 @@ describe('Coverage absence requires readable, complete history', () => {
       expect(screen.getByRole('status')).toHaveTextContent(
         'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
       );
-      expect(screen.getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent('None');
+      expect(screen.getByTitle('No PBS backup or PVE backup file')).toHaveTextContent('None');
       // No lastSuccessfulPointAt is expected for a guest snapshot. Nor may the
       // notice synthesize a raw snapshot, date or completed backup from prose.
       expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();

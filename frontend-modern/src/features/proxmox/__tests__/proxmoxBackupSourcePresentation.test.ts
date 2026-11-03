@@ -14,8 +14,8 @@ describe('proxmoxBackupSourcePresentation', () => {
       badgeTone: 'sky',
       badgeLabel: 'PBS',
       coverageColumnLabel: 'Latest PBS',
-      filterLabel: 'PBS snapshots',
-      timelineLabel: 'PBS snapshots',
+      filterLabel: 'PBS backups',
+      timelineLabel: 'PBS backups',
     });
     expect(getProxmoxBackupSourcePresentation('archive')).toMatchObject({
       badgeTone: 'info',

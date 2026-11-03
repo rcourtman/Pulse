@@ -90,14 +90,14 @@ describe('ProxmoxRecoverableTable record drawer', () => {
     ));
 
     const toggle = screen.getByRole('button', {
-      name: /^Expand details for web \(VM 100\) · PVE connection: Not reported · PBS snapshot/,
+      name: /^Expand details for web \(VM 100\) · PVE connection: Not reported · PBS backup/,
     });
     expect(toggle).toHaveAttribute('aria-controls', 'proxmox-recoverable-detail-pbs:web:100');
     await fireEvent.click(toggle);
 
     const panel = screen.getByTestId('proxmox-recoverable-detail');
     expect(within(panel).getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
-    expect(within(panel).getByText('PBS snapshot in main / pve1')).toBeInTheDocument();
+    expect(within(panel).getByText('PBS backup in main / pve1')).toBeInTheDocument();
     expect(within(panel).getByText('main / pve1', { selector: 'span' })).toBeInTheDocument();
     expect(within(panel).getAllByText('Verified')).toHaveLength(2);
     expect(within(panel).getByText('Prune protection')).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('ProxmoxRecoverableTable record drawer', () => {
     // Opening another restore point closes the first.
     await fireEvent.click(
       screen.getByRole('button', {
-        name: /^Expand details for db \(VM 101\) · PVE connection: Not reported · PBS snapshot/,
+        name: /^Expand details for db \(VM 101\) · PVE connection: Not reported · PBS backup/,
       }),
     );
     expect(screen.getAllByTestId('proxmox-recoverable-detail')).toHaveLength(1);

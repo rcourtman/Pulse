@@ -558,7 +558,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('LXC').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PBS').length).toBeGreaterThan(0);
     expect(screen.getByText('2 PBS files')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /pbs snapshots/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pbs backups/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /pve backup files/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /guest snapshots/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Archives' })).not.toBeInTheDocument();
@@ -673,7 +673,7 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findAllByText('pbs-docker');
     expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByPlaceholderText(/search backups by workload/i)).toHaveValue('pbs-docker');
-    expect(screen.getByRole('button', { name: /pbs snapshots/i })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /pbs backups/i })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -1960,7 +1960,7 @@ describe('backup-date-evidence connected inventory', () => {
     window.history.replaceState({}, '', '/?view=date');
     supply('2026-10-04T11:59:00Z', true);
     mount();
-    const toggle = await screen.findByRole('button', { name: /Expand details.*PBS snapshot/ });
+    const toggle = await screen.findByRole('button', { name: /Expand details.*PBS backup/ });
     await fireEvent.click(toggle);
     toggle.focus();
     const panel = screen.getByTestId('proxmox-recoverable-detail');
@@ -2286,7 +2286,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
         'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
       ),
     );
-    expect(within(rowElement()).getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(
+    expect(within(rowElement()).getByTitle('No PBS backup or PVE backup file')).toHaveTextContent(
       'None',
     );
     expect(sourceCalls('pve')).toHaveLength(1);
@@ -2514,7 +2514,7 @@ describe('completed restore-point summary', () => {
   it('does not claim PBS restore coverage for an incomplete-only inventory', async () => {
     const { container } = mountInventory(true);
     const summary = await screen.findByText(/0 completed restore points · 1 running · 1 failed/);
-    expect(summary).not.toHaveTextContent('with PBS snapshots');
+    expect(summary).not.toHaveTextContent('with PBS backups');
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
     expect(
       screen.getByRole('cell', { name: `${getRecoveryFullDateLabel('2026-10-04')} 2 entries` }),
@@ -3264,7 +3264,7 @@ describe('By-date restore-point scope', () => {
       />
     ));
     const toggle = await screen.findByRole('button', {
-      name: /^Expand details for east-100 \(VM 100\) · PVE connection: east · PBS snapshot/,
+      name: /^Expand details for east-100 \(VM 100\) · PVE connection: east · PBS backup/,
     });
     // With one PVE connection and one reader the row stays a single line;
     // the disclosure still names both scopes before it is opened.
@@ -3294,13 +3294,13 @@ describe('By date recovery evidence limits', () => {
       explanation: /shares the guest's storage.*not a separate backup/,
     },
     {
-      name: 'verified PBS snapshot',
+      name: 'verified PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ protected: true })],
       explanation: /Verified is the provider's reported backup check, not a tested restore/,
     },
     {
-      name: 'unverified PBS snapshot',
+      name: 'unverified PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ verified: false })],
       explanation: /not reported as verified.*does not establish a successful restore/,
@@ -3321,19 +3321,19 @@ describe('By date recovery evidence limits', () => {
       explanation: /Verified is the provider's reported backup check, not a tested restore/,
     },
     {
-      name: 'running PBS snapshot',
+      name: 'running PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: true })],
       explanation: /incomplete and may still be in progress.*not a completed restore point/,
     },
     {
-      name: 'incomplete PBS snapshot with unread write activity',
+      name: 'incomplete PBS backup with unread write activity',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true })],
       explanation: /incomplete and may still be in progress.*not a completed restore point/,
     },
     {
-      name: 'failed PBS snapshot',
+      name: 'failed PBS backup',
       pve: emptyPVE.data,
       pbs: [identityPBS({ inProgress: true, writeActivityObserved: true, writeActive: false })],
       explanation: /No current writer is reported.*not a completed restore point/,
