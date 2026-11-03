@@ -10,19 +10,23 @@ WORKFLOW = ROOT / ".github" / "workflows" / "test-e2e.yml"
 
 
 class E2EWorkflowContractTest(unittest.TestCase):
-    def test_probation_failures_are_bounded_and_non_gating(self) -> None:
+    def test_selected_probation_is_required_on_prs_and_bounded(self) -> None:
         workflow = WORKFLOW.read_text()
         probation_start = workflow.index(
-            "- name: Run probation-tier E2E suite (non-gating)"
+            "- name: Run probation-tier E2E suite\n"
         )
         report_start = workflow.index(
             "- name: Report probation-tier outcome", probation_start
         )
         probation_step = workflow[probation_start:report_start]
 
-        self.assertIn("continue-on-error: true", probation_step)
-        # Non-gating and promotion counts only main runs, so PRs skip it.
-        self.assertIn("github.event_name != 'pull_request'", probation_step)
+        self.assertIn(
+            "continue-on-error: ${{ github.event_name != 'pull_request' }}",
+            probation_step,
+        )
+        self.assertIn("needs.scope.outputs.run_probation == 'true'", probation_step)
+        self.assertIn("steps.stable.conclusion != 'skipped'", probation_step)
+        self.assertIn("!cancelled()", probation_step)
         self.assertIn("timeout-minutes: 12", probation_step)
         self.assertIn("--max-failures=5", probation_step)
         self.assertIn("--global-timeout=600000", probation_step)

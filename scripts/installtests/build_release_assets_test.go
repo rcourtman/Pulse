@@ -3942,11 +3942,42 @@ func TestCIDocsMirrorPreflight(t *testing.T) {
 		Uses            string `yaml:"uses"`
 		Run             string `yaml:"run"`
 		If              string `yaml:"if"`
-		ContinueOnError bool   `yaml:"continue-on-error"`
+		ContinueOnError any    `yaml:"continue-on-error"`
 		Directory       string `yaml:"working-directory"`
 	}
 	type job struct {
 		Steps []step `yaml:"steps"`
+	}
+	blocksOnFailure := func(value any) bool {
+		if value == nil {
+			return true
+		}
+		continued, literalBoolean := value.(bool)
+		return literalBoolean && !continued
+	}
+	// Other workflow steps may use Actions expressions. The docs preflight
+	// itself must block unconditionally, with no expression to evaluate.
+	for _, fixture := range []struct {
+		name, source string
+		blocking     bool
+	}{
+		{"omitted", "name: preflight", true},
+		{"literal-false", "continue-on-error: false", true},
+		{"literal-true", "continue-on-error: true", false},
+		{"conditional-expression", "continue-on-error: ${{ github.event_name != 'pull_request' }}", false},
+		{"false-expression", "continue-on-error: ${{ false }}", false},
+		{"quoted-false", "continue-on-error: 'false'", false},
+		{"number", "continue-on-error: 0", false},
+	} {
+		t.Run("blocking-setting/"+fixture.name, func(t *testing.T) {
+			var parsed step
+			if err := yaml.Unmarshal([]byte(fixture.source), &parsed); err != nil {
+				t.Fatal(err)
+			}
+			if got := blocksOnFailure(parsed.ContinueOnError); got != fixture.blocking {
+				t.Fatalf("blocking = %v, want %v", got, fixture.blocking)
+			}
+		})
 	}
 	for _, site := range []struct{ workflow, job string }{
 		{"build-and-test.yml", "changes"},
@@ -3971,7 +4002,7 @@ func TestCIDocsMirrorPreflight(t *testing.T) {
 			}
 			guard := steps[1]
 			if guard.Run != "python3 scripts/check_docs_mirror.py" || guard.If != "" ||
-				guard.ContinueOnError || guard.Directory != "" || guard.Uses != "" {
+				!blocksOnFailure(guard.ContinueOnError) || guard.Directory != "" || guard.Uses != "" {
 				t.Fatal("whole-tree mirror check must be an unconditional blocking step immediately after checkout")
 			}
 			checker, err := os.ReadFile(repoFile("scripts", "check_docs_mirror.py"))
