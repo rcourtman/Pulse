@@ -216,7 +216,14 @@ func TestAvailabilityHistoryWithdrawnTokenCannotDisclose(t *testing.T) {
 				}
 				fresh := httptest.NewRecorder()
 				f.router.Handler().ServeHTTP(fresh, f.request(t, availabilityAuthorityToken, transport, availabilityAuthorityBody))
-				if fresh.Code == http.StatusOK {
+				if change == "credential" || change == "principal" {
+					// The raw key still has monitoring-read authority, now under
+					// its replacement identity. Only the old admission is invalid;
+					// a new request must use the current identity normally.
+					result := make(chan *httptest.ResponseRecorder, 1)
+					result <- fresh
+					readAvailabilityAuthorityResult(t, result, http.StatusOK)
+				} else if fresh.Code == http.StatusOK {
 					t.Error("fresh read reused withdrawn authority")
 				}
 			})
