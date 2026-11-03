@@ -607,6 +607,16 @@ the widest datastore share. The table therefore no longer consumes
 from that rule's required consumers. The memory cell's multi-line "Last known"
 qualifier went with it, so every row is now single-line by construction.
 
+### Backup health lists datastore job failures in their own rows (3 November 2026)
+
+`ProxmoxBackupsCoverageStrip` takes `datastoreProblems` and renders them as a
+separate "Datastores with failed jobs" list under the guest rows, on the same
+row grid: amber dot, "Sync failed", a datastore-count pill, and the datastore
+names where a reason row's share bar sits, since a datastore is not a share of
+rated guests. Rows stay 32px and single-line; names truncate on phones and the
+accessible name and title carry them in full. The list renders even when no
+guests are rated.
+
 ### Datastore fill forecast stays on one row line (2 November 2026)
 
 `ProxmoxBackupServersTable` shows a PBS datastore's fill forecast as the
@@ -863,6 +873,14 @@ names the installer option through `getUnifiedAgentCommandAccessOptionLabel`
 ("Allow Pulse to run commands on this host") and the host to run the new
 install command on, instead of the retired "legacy combined command profile"
 wording and its advanced-options path.
+
+Superseded 3 November 2026: the pill now says the host's agent "does not
+accept commands from Pulse" (an absent `commandsEnabled` reads as false, so it
+no longer claims how the agent was installed) and sends users to Settings →
+Infrastructure → Manage on that host → Remote commands, which names the option
+and opens the installer with it ticked. The pill no longer reads the shared
+label itself. `containerUpdateBadgeModel.unavailable.test.ts` and
+`ContainerUpdateBadge.test.tsx` pin the wording.
 
 ### Container update control offers only what the server advertises (21 October 2026)
 

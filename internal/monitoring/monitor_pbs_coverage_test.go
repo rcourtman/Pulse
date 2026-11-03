@@ -862,3 +862,125 @@ func TestPBSNamespaceDiscoveryLegacyRootOnlyRemainsComplete(t *testing.T) {
 func TestPBSBudgetOwnerWithdrawsLatePublication(t *testing.T) {
 	exercisePBSBudgetOwnerWithdrawal(t)
 }
+
+func carriedJob(id, family, state, posture, reason string) models.PBSJobHealthEvidence {
+	return models.PBSJobHealthEvidence{
+		ID:            id,
+		Family:        family,
+		Store:         "offsite",
+		Enabled:       true,
+		LastRunState:  state,
+		Posture:       posture,
+		PostureReason: reason,
+	}
+}
+
+func postureOf(evidence []models.PBSJobHealthEvidence, family, id string) string {
+	for _, entry := range evidence {
+		if entry.Family == family && entry.ID == id {
+			return entry.Posture + "/" + entry.PostureReason
+		}
+	}
+	return "absent"
+}
+
+// A failed sync stays failed through the polls that cannot report a newer
+// outcome (#1815): otherwise its alert would clear and fire again each time.
+func TestCarryPBSJobFailuresHoldsAFailureUntilAnOutcomeIsObserved(t *testing.T) {
+	failed := []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "connection error", "critical", "last-run-failed")}
+
+	cases := []struct {
+		name       string
+		current    []models.PBSJobHealthEvidence
+		readFailed bool
+		want       string
+	}{
+		// PBS drops the previous result while the next run is in progress.
+		{"next run in progress", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "", "unknown", "no-run-observed")}, false, "critical/last-run-failed"},
+		{"state unknown", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "unknown", "unknown", "last-run-state-unknown")}, false, "critical/last-run-failed"},
+		{"whole read failed", nil, true, "critical/last-run-failed"},
+		{"job list read failed", []models.PBSJobHealthEvidence{{ID: "sync:partial", Family: "sync", Error: "403", EvidenceSource: pbs.JobEvidenceSourcePBSPartialRead}}, false, "critical/last-run-failed"},
+		{"retry succeeded", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "OK", "healthy", "last-run-success")}, false, "healthy/last-run-success"},
+		{"retry warned", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "WARNINGS: 1", "warning", "last-run-warning")}, false, "warning/last-run-warning"},
+		// A successful run first seen after the next schedule passed is still
+		// a recovery, even though the posture reads late.
+		{"retry succeeded, now overdue", []models.PBSJobHealthEvidence{carriedJob("s-1", "sync", "OK", "warning", "job-overdue")}, false, "warning/job-overdue"},
+		{"job removed", []models.PBSJobHealthEvidence{}, false, "absent"},
+		// Task history trouble says nothing about the configured job list.
+		{"job removed while task history failed", []models.PBSJobHealthEvidence{{ID: "sync:task-history-partial", Family: "sync", Error: "500", EvidenceSource: pbs.JobEvidenceSourcePBSPartialRead}}, false, "absent"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := carryPBSJobFailures(failed, tc.current, tc.readFailed)
+			if posture := postureOf(got, "sync", "s-1"); posture != tc.want {
+				t.Fatalf("posture = %s, want %s", posture, tc.want)
+			}
+		})
+	}
+
+	disabled := carriedJob("s-1", "sync", "", "unknown", "no-run-observed")
+	disabled.Enabled = false
+	got := carryPBSJobFailures(failed, []models.PBSJobHealthEvidence{disabled}, false)
+	if len(got) != 1 || got[0].Enabled {
+		t.Fatalf("a disabled job must replace its carried failure, got %+v", got)
+	}
+}
+
+func TestCarryPBSJobFailuresKeysJobsByFamily(t *testing.T) {
+	previous := []models.PBSJobHealthEvidence{carriedJob("daily", "sync", "connection error", "critical", "last-run-failed")}
+	current := []models.PBSJobHealthEvidence{
+		carriedJob("daily", "verify", "OK", "healthy", "last-run-success"),
+		carriedJob("daily", "sync", "", "unknown", "no-run-observed"),
+	}
+	got := carryPBSJobFailures(previous, current, false)
+	if posture := postureOf(got, "sync", "daily"); posture != "critical/last-run-failed" {
+		t.Fatalf("sync daily = %s, want the carried failure", posture)
+	}
+	if posture := postureOf(got, "verify", "daily"); posture != "healthy/last-run-success" {
+		t.Fatalf("verify daily = %s, want its own success", posture)
+	}
+}
+
+func TestPBSJobHealthPostureRanksAFailedRunAboveOverdue(t *testing.T) {
+	observedAt := time.Unix(1700010000, 0)
+	evidence := pbsJobHealthEvidenceFromFacts([]pbs.JobHealthEvidence{{
+		ID:             "s-1",
+		Family:         "sync",
+		Store:          "offsite",
+		Enabled:        true,
+		LastRunState:   "connection error",
+		LastRunEndtime: 1700000000,
+		NextRun:        1700003600,
+	}}, observedAt)
+	if got := evidence[0]; got.Freshness.State != "overdue" || got.Posture != "critical" || got.PostureReason != "last-run-failed" {
+		t.Fatalf("freshness/posture = %s %s/%s, want overdue critical/last-run-failed", got.Freshness.State, got.Posture, got.PostureReason)
+	}
+}
+
+// PBS reports a failed run as the bare error message. Every message that is
+// not OK, a WARNINGS count or unknown is a failure, whatever words it holds.
+func TestPBSJobHealthPostureReadsStatusLikeProxmox(t *testing.T) {
+	observedAt := time.Unix(1700010000, 0)
+	cases := []struct {
+		status, posture, reason string
+	}{
+		{"OK", "healthy", "last-run-success"},
+		{"ok", "healthy", "last-run-success"},
+		{"WARNINGS: 2", "warning", "last-run-warning"},
+		{"unknown", "unknown", "last-run-state-unknown"},
+		{"", "unknown", "no-run-observed"},
+		{"remote 'offsite' does not exist", "critical", "last-run-failed"},
+		{"broken pipe", "critical", "last-run-failed"},
+		{"token lookup timed out", "critical", "last-run-failed"},
+		{"connection error", "critical", "last-run-failed"},
+	}
+	for _, tc := range cases {
+		evidence := pbsJobHealthEvidenceFromFacts([]pbs.JobHealthEvidence{{
+			ID: "s-1", Family: "sync", Store: "offsite", Enabled: true,
+			LastRunState: tc.status, LastRunEndtime: 1700009000,
+		}}, observedAt)
+		if got := evidence[0]; got.Posture != tc.posture || got.PostureReason != tc.reason {
+			t.Fatalf("status %q: posture = %s/%s, want %s/%s", tc.status, got.Posture, got.PostureReason, tc.posture, tc.reason)
+		}
+	}
+}

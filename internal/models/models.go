@@ -6229,6 +6229,19 @@ func (s *State) UpdatePBSInstance(instance PBSInstance) {
 	s.LastUpdate = time.Now()
 }
 
+// PBSJobHealthEvidence returns the job results last stored for one PBS
+// instance, so the next poll can tell a job's recovery from a missing read.
+func (s *State) PBSJobHealthEvidence(instanceID string) []PBSJobHealthEvidence {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, instance := range s.PBSInstances {
+		if instance.ID == instanceID {
+			return append([]PBSJobHealthEvidence(nil), instance.JobHealthEvidence...)
+		}
+	}
+	return nil
+}
+
 // UpdatePMGInstances replaces the entire PMG instance list
 func (s *State) UpdatePMGInstances(instances []PMGInstance) {
 	s.mu.Lock()

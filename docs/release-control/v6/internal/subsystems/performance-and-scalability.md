@@ -15,6 +15,15 @@
 
 ## Purpose
 
+### PBS job failure carry is bounded per instance (3 November 2026)
+
+Each PBS poll copies only that instance's stored job results
+(`State.PBSJobHealthEvidence`) rather than a full state snapshot, and
+`carryPBSJobFailures` is linear in that instance's jobs. Datastore job
+incidents add at most one incident per failed job to the datastore resource.
+The mock fixture adds seven PBS job results across two instances, so large
+mock estates gain no per-guest work.
+
 ### Drawer live-readings strip adds no history work (2 November 2026)
 
 `GuestDrawerHistory` renders its "Latest readings" strip only in place of

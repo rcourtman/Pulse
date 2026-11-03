@@ -1183,11 +1183,24 @@ func applyDemoStorageScenario(state *models.StateSnapshot, now time.Time) {
 		state.PBSInstances[i].LastSeen = demoRecentSeenAt(now, "pbs", state.PBSInstances[i].ID, state.PBSInstances[i].Name)
 		if len(state.PBSInstances[i].Datastores) > 0 {
 			datastoreNames := []string{"primary-vault", "offsite-vault", "replica-vault"}
+			renamed := make(map[string]string, len(state.PBSInstances[i].Datastores))
 			for j := range state.PBSInstances[i].Datastores {
 				if j < len(datastoreNames) {
+					renamed[state.PBSInstances[i].Datastores[j].Name] = datastoreNames[j]
 					state.PBSInstances[i].Datastores[j].Name = datastoreNames[j]
 				}
 				state.PBSInstances[i].Datastores[j].Status = "online"
+			}
+			// Job results name their datastore; keep them on the renamed store.
+			for j := range state.PBSInstances[i].JobHealthEvidence {
+				job := &state.PBSInstances[i].JobHealthEvidence[j]
+				if name, ok := renamed[job.Store]; ok {
+					job.ID = strings.ReplaceAll(job.ID, job.Store, name)
+					job.Store = name
+				}
+				if job.Family == "sync" {
+					job.Remote = "backup-vault"
+				}
 			}
 		}
 	}

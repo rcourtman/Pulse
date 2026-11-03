@@ -1654,6 +1654,7 @@ func resourceFromPBSDatastore(instance models.PBSInstance, datastore models.PBSD
 	datastoreStatus, _ := statusFromStorageState(datastore.Status)
 	status := storageStatus(datastoreStatus, risk)
 	incidents := incidentsFromAssessment("pulse", string(SourcePBS), "pbs-datastore:"+name, assessment, instance.LastSeen)
+	incidents = append(incidents, pbsDatastoreJobIncidents(instance, name)...)
 	status = incidentsStatus(status, incidents)
 
 	resource := Resource{

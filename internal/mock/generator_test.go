@@ -1784,3 +1784,33 @@ func TestUpdateHostsRefreshesNativeSensorInventory(t *testing.T) {
 		t.Fatalf("host without an inventory gained one: %+v", data.Hosts[1].Sensors.Native)
 	}
 }
+
+// Mock PBS servers report job results so the Jobs column and datastore job
+// alerts have data: every job succeeded except the secondary's sync (#1815).
+func TestGeneratePBSInstancesReportsJobResultsWithOneFailedSync(t *testing.T) {
+	instances := generatePBSInstances()
+	failed := 0
+	for _, instance := range instances {
+		stores := make(map[string]bool, len(instance.Datastores))
+		for _, datastore := range instance.Datastores {
+			stores[datastore.Name] = true
+		}
+		if len(instance.JobHealthEvidence) == 0 {
+			t.Fatalf("%s reports no job results", instance.Name)
+		}
+		for _, job := range instance.JobHealthEvidence {
+			if !stores[job.Store] {
+				t.Fatalf("%s job %s names unknown datastore %q", instance.Name, job.ID, job.Store)
+			}
+			if job.Posture == "critical" {
+				failed++
+				if job.Family != "sync" || job.PostureReason != "last-run-failed" || job.Remote == "" {
+					t.Fatalf("unexpected failed job %+v", job)
+				}
+			}
+		}
+	}
+	if failed != 1 {
+		t.Fatalf("failed jobs = %d, want exactly one", failed)
+	}
+}
