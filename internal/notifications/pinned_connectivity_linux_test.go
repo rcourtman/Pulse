@@ -4,6 +4,7 @@ package notifications
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -24,17 +25,7 @@ import (
 // privileged network configuration, or a replacement production dial function.
 func notificationStalledAddress(t *testing.T) (string, *atomic.Int32) {
 	t.Helper()
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = syscall.Close(fd) })
-	require.NoError(t, syscall.Bind(fd, &syscall.SockaddrInet4{Addr: [4]byte{127, 0, 0, 2}}))
-	require.NoError(t, syscall.Listen(fd, 1))
-	address, err := syscall.Getsockname(fd)
-	require.NoError(t, err)
-	port := strconv.Itoa(address.(*syscall.SockaddrInet4).Port)
-
-	healthy, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", port))
-	require.NoError(t, err)
+	port, healthy := notificationLoopbackListenerPair(t)
 	var accepted atomic.Int32
 	server := &httptest.Server{Listener: healthy, Config: &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		accepted.Add(1)
@@ -74,6 +65,45 @@ func notificationStalledAddress(t *testing.T) (string, *atomic.Int32) {
 	require.True(t, stalled, "failed to fill the owned listener's accept queue")
 	require.NotEmpty(t, fillers, "the listener must first accept real TCP connections")
 	return port, &accepted
+}
+
+func notificationLoopbackListenerPair(t *testing.T) (string, net.Listener) {
+	t.Helper()
+	var bindErr error
+	for attempt := 0; attempt < 10; attempt++ {
+		// Allocate on the busy loopback address first. A port allocated on
+		// 127.0.0.2 alone may already be occupied on 127.0.0.1.
+		healthy, err := net.Listen("tcp4", "127.0.0.1:0")
+		require.NoError(t, err)
+		port := healthy.Addr().(*net.TCPAddr).Port
+		fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC, 0)
+		if err != nil {
+			_ = healthy.Close()
+			require.NoError(t, err)
+		}
+		closePair := func() {
+			_ = syscall.Close(fd)
+			_ = healthy.Close()
+		}
+		bindErr = syscall.Bind(fd, &syscall.SockaddrInet4{Addr: [4]byte{127, 0, 0, 2}, Port: port})
+		if bindErr != nil {
+			closePair()
+			// Only retry reservation conflicts. Both sockets stay owned once
+			// the pair is reserved, so there is no close-and-rebind window.
+			if errors.Is(bindErr, syscall.EADDRINUSE) {
+				continue
+			}
+			require.NoError(t, bindErr)
+		}
+		if err := syscall.Listen(fd, 1); err != nil {
+			closePair()
+			require.NoError(t, err)
+		}
+		t.Cleanup(closePair)
+		return strconv.Itoa(port), healthy
+	}
+	t.Fatalf("could not reserve a loopback listener pair after 10 attempts: %v", bindErr)
+	return "", nil
 }
 
 func TestQueuedWebhookFallbackVerdictSurvivesRestart(t *testing.T) {
