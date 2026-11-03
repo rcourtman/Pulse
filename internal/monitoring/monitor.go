@@ -2487,6 +2487,12 @@ func (m *Monitor) startModeRuntime(ctx context.Context, wsHub *websocket.Hub, mo
 		m.startMockMetricsSampler(ctx)
 	}
 
+	// Start runs on its own goroutine while request handlers already read the
+	// service through GetDiscoveryService, so it is published under m.mu, as
+	// StartDiscoveryService and StopDiscoveryService do.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	// Initialize and start discovery service if enabled
 	if mockEnabled {
 		log.Info().Msg("mock mode enabled - skipping discovery service")
@@ -2499,7 +2505,7 @@ func (m *Monitor) startModeRuntime(ctx context.Context, wsHub *websocket.Hub, mo
 		cfgProvider := func() config.DiscoveryConfig {
 			return m.discoveryConfigSnapshot()
 		}
-		m.discoveryService = discovery.NewService(wsHub, m.GetOrgID(), 5*time.Minute, discoverySubnet, cfgProvider)
+		m.discoveryService = discovery.NewService(wsHub, m.orgID, 5*time.Minute, discoverySubnet, cfgProvider)
 		if m.discoveryService != nil {
 			m.discoveryService.Start(ctx)
 			log.Info().Msg("discovery service initialized and started")
@@ -5093,6 +5099,8 @@ func (m *Monitor) GetStartTime() time.Time {
 
 // GetDiscoveryService returns the discovery service
 func (m *Monitor) GetDiscoveryService() *discovery.Service {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.discoveryService
 }
 

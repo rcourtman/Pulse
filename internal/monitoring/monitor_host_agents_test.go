@@ -8829,6 +8829,32 @@ func TestRetiredQGAMemoryCannotAlterIndependentAgentEvidence(t *testing.T) {
 	}
 }
 
+// A tenant monitor's Start runs on its own goroutine while request handlers,
+// such as auto-register, already read the discovery service. Under -race an
+// unlocked publish fails this test whether or not the two calls overlap.
+func TestMonitorStartupDiscoveryPublishIsSafeForConcurrentReaders(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("discoveryEnabled=%v", enabled), func(t *testing.T) {
+			monitor := &Monitor{config: &config.Config{DiscoveryEnabled: enabled, DiscoverySubnet: "127.0.0.1/32"}}
+			t.Cleanup(monitor.StopDiscoveryService)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			started := make(chan struct{})
+			go func() {
+				defer close(started)
+				monitor.startModeRuntime(ctx, nil, false)
+			}()
+			monitor.GetDiscoveryService()
+			<-started
+
+			if got := monitor.GetDiscoveryService() != nil; got != enabled {
+				t.Fatalf("discovery service published = %v, want %v", got, enabled)
+			}
+		})
+	}
+}
+
 func TestMonitorDiscoveryEventsStayWithOwningOrganization(t *testing.T) {
 	for _, start := range []string{"startup", "explicit"} {
 		for _, orgID := range []string{"org-a", "default", ""} {
