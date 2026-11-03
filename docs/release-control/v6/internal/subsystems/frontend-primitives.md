@@ -554,6 +554,23 @@ route, navigation, access or backup operation changes.
 and phone, so a filtering row looks clickable without adding height. Rows that
 open nothing leave the track empty, so every row's columns still line up.
 
+### Backup servers rows group under a header per server (2 November 2026)
+
+`ProxmoxBackupServersTable` renders one `getGroupedTableRowClass` header row
+per PBS resource, spanning every column, before that resource's datastore
+rows: a connection `StatusDot`, `ResourceNameWithWebInterfaceLink` for the
+server, and a datastore count in `GROUPED_TABLE_ROW_META_CLASS`, omitted when
+the server has no datastore rows. Datastore rows show only the datastore name;
+the muted server name and per-row web link are gone. `groupBackupServerRows`
+builds the items, keyed `server:` and `datastore:` so an item never changes
+kind, and the header carries plain values only so its windowed store never
+aliases a datastore row's resource snapshot. Rows stay single-line.
+The table's `PlatformTableShell` title reads "Backup servers" with the server
+count, like the Overview "Nodes" strip. Connection health renders only on the
+server header (red label when the server is not reachable); `status` is a
+compact-layout column ("State") that answers for the datastore with a fill
+forecast, a job problem, its job result, or "Unreachable".
+
 ### Backup servers rows lead with the datastore (2 November 2026)
 
 `getBackupServerColumns` drops the `server` and separate `datastore` columns for

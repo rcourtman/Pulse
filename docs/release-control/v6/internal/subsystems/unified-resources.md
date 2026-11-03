@@ -230,6 +230,16 @@ of a PBS resource only when it is a failed read (`partial-read` or carrying an
 `error`) or a failed or warned run. A storeless `observed-task` run whose
 status is merely unclear no longer does.
 
+### Backup servers group datastore rows by PBS resource (2 November 2026)
+
+`ProxmoxBackupServersTable` still renders one row per datastore of a `pbs`
+resource, keyed by resource and datastore, with unchanged drawers. A header row
+per resource now carries the resource's name, web-interface link, connection
+status and datastore count, so datastore rows no longer repeat the resource
+name or link. Connection status renders only on the header; datastore rows
+carry no connection cell, and the compact State cell reads the datastore's job
+summary or fill forecast, or "Unreachable" when the resource is not reachable.
+
 ### Backup servers rows name the datastore, then its PBS resource (2 November 2026)
 
 `ProxmoxBackupServersTable` still renders one row per datastore of a `pbs`

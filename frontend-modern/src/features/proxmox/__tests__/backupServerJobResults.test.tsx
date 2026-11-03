@@ -82,7 +82,8 @@ describe('Backup server job results', () => {
     const rows = [...container.querySelectorAll('tbody tr')].filter(
       (row) => row.querySelectorAll('td').length > 1,
     );
-    expect(rows[0].querySelectorAll('td')[1]).toHaveTextContent('Healthy');
+    // State answers for the datastore; connection health is on the header.
+    expect(rows[0].querySelectorAll('td')[1]).toHaveTextContent(/^OK$/);
     expect(rows[1].querySelectorAll('td')[1]).toHaveTextContent(/^Sync failed$/);
   });
 

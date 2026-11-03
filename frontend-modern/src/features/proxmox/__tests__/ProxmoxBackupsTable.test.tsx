@@ -265,7 +265,10 @@ describe('ProxmoxBackupsTable', () => {
       const usedColumn = Array.from(table.querySelectorAll('th')).findIndex(
         (head) => head.textContent?.trim() === 'Used',
       );
-      const usedCell = () => table.querySelector('tbody tr')!.querySelectorAll('td')[usedColumn];
+      const usedCell = () =>
+        table.querySelector('tbody tr:not([data-backup-server-group])')!.querySelectorAll('td')[
+          usedColumn
+        ];
       expect(within(usedCell()).getByText(expected).parentElement).toHaveClass(tone);
 
       // Reconciled polling updates must recompute the same row, not retain the
@@ -341,7 +344,9 @@ describe('ProxmoxBackupsTable', () => {
       const index = Array.from(table.querySelectorAll('th')).findIndex(
         (head) => head.getAttribute('aria-label') === 'Backups',
       );
-      return table.querySelector('tbody tr')!.querySelectorAll('td')[index].textContent;
+      return table
+        .querySelector('tbody tr:not([data-backup-server-group])')!
+        .querySelectorAll('td')[index].textContent;
     };
     await within(table).findByText('Unavailable');
     await waitFor(() => expect(backupCount()).toBe('1'));
@@ -355,7 +360,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 
-  it('names each row by its datastore, with its server beside it', async () => {
+  it('groups datastore rows under one header row per server', async () => {
     mockBackupAPIs();
     const twoStores = {
       ...pbsServerResource,
@@ -393,9 +398,13 @@ describe('ProxmoxBackupsTable', () => {
     };
 
     // Two datastores of one server read as two datastores, not two servers:
-    // each row leads with its datastore name and carries its server and status,
-    // so every row reads on its own. There is no separate server column. Host
-    // CPU, memory, uptime and version are in the server's drawer, not the row.
+    // one header row names the server and counts its datastores, and each row
+    // under it leads with its datastore name. There is no separate server
+    // column. Host CPU, memory, uptime and version are in the server's drawer.
+    const groups = Array.from(table.querySelectorAll('[data-backup-server-group]'));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toHaveTextContent('pbs-main');
+    expect(groups[0]).toHaveTextContent('2 datastores');
     expect(dataRows()).toHaveLength(2);
     expect(columns[0]).toBe('datastore');
     expect(columns).not.toContain('server');
@@ -403,14 +412,18 @@ describe('ProxmoxBackupsTable', () => {
       (name) => name.textContent,
     );
     expect(datastoreNames).toEqual(['main', 'offsite']);
-    expect(within(table).getAllByText('pbs-main')).toHaveLength(2);
-    expect(cellText(0, 'status')).not.toBe('');
-    expect(cellText(1, 'status')).toBe(cellText(0, 'status'));
+    expect(within(table).getAllByText('pbs-main')).toHaveLength(1);
+    // Connection health is the server's: its header shows it, its rows do not.
+    expect(columns).not.toContain('status');
+    expect(
+      within(groups[0] as HTMLElement).getByRole('img', { name: 'Healthy' }),
+    ).toBeInTheDocument();
+    expect(table.querySelector('[data-backup-servers-title]')).toHaveTextContent('Backup servers1');
     expect(
       columns.filter((column) => ['version', 'cpu', 'memory', 'uptime'].includes(column ?? '')),
     ).toEqual([]);
-    expect(cellText(0, 'datastore')).toBe('mainpbs-main');
-    expect(cellText(1, 'datastore')).toBe('offsitepbs-main');
+    expect(cellText(0, 'datastore')).toBe('main');
+    expect(cellText(1, 'datastore')).toBe('offsite');
     expect(cellText(1, 'used')).toContain('25');
     const offsite = within(table).getByRole('button', {
       name: 'Expand details for pbs-main · datastore offsite',
@@ -1800,10 +1813,12 @@ describe('independent Proxmox backup inventory reads', () => {
       );
       expect(serverTable()).toBe(originalServerTable);
       expect(serverTable()).not.toHaveTextContent('Unavailable');
+      // Read the count from the body: the title strip counts servers too.
       expect(
-        within(serverTable() as HTMLElement).getByText(failed === 'pve' ? '0' : '1', {
-          exact: true,
-        }),
+        within(serverTable().querySelector('tbody') as HTMLElement).getByText(
+          failed === 'pve' ? '0' : '1',
+          { exact: true },
+        ),
       ).toBeInTheDocument();
     },
   );
@@ -3449,18 +3464,19 @@ describe('PBS inventory state column', () => {
     const countColumn = table.querySelector<HTMLElement>(
       'col[data-proxmox-backups-column="backups"]',
     )!;
-    // Datastore (with its server), status, used, jobs, then the count.
-    const cells = table.querySelector('tbody tr')!.querySelectorAll('td');
-    expect(countColumn.style.width).toBe('11%');
-    expect(cells[4]).toHaveTextContent(/^Loading$/);
+    // Datastore, used, jobs, then the count; the server header holds status.
+    const cells = table
+      .querySelector('tbody tr:not([data-backup-server-group])')!
+      .querySelectorAll('td');
+    expect(countColumn.style.width).toBe('13%');
+    expect(cells[3]).toHaveTextContent(/^Loading$/);
     setState('unavailable');
-    expect(cells[4]).toHaveTextContent(/^Unavailable$/);
-    expect(cells[1]).toHaveTextContent('Healthy');
-    expect(cells[2]).toHaveTextContent('40.0%');
-    expect(cells[2]).toHaveTextContent('400 B / 1000 B');
+    expect(cells[3]).toHaveTextContent(/^Unavailable$/);
+    expect(cells[1]).toHaveTextContent('40.0%');
+    expect(cells[1]).toHaveTextContent('400 B / 1000 B');
     setState('available');
-    expect(cells[4]).toHaveTextContent(/^0$/);
-    expect(countColumn.style.width).toBe('11%');
+    expect(cells[3]).toHaveTextContent(/^0$/);
+    expect(countColumn.style.width).toBe('13%');
   });
 });
 

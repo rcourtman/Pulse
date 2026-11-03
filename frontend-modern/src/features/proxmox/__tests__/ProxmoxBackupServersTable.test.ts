@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
-import { buildBackupServerRows, createPbsCorrelationRetention } from '../ProxmoxBackupServersTable';
+import {
+  buildBackupServerRows,
+  createPbsCorrelationRetention,
+  groupBackupServerRows,
+} from '../ProxmoxBackupServersTable';
 
 const makePbsResource = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -82,6 +86,36 @@ describe('buildBackupServerRows', () => {
       ['pbs-second', 'offsite'],
       ['pbs-second', 'tank'],
       ['pbs-third', null],
+    ]);
+  });
+
+  it('puts one header before the datastores of each server and counts them', () => {
+    const first = makePbsResource();
+    const second = makePbsResource({ id: 'pbs-2', name: 'pbs-second', status: 'offline' });
+    const empty = makePbsResource({
+      id: 'pbs-3',
+      name: 'pbs-third',
+      pbs: { instanceId: 'pbs-third', connectionHealth: 'healthy', datastores: [] },
+    });
+    second.pbs = { ...second.pbs!, connectionHealth: 'error' };
+
+    const items = groupBackupServerRows(buildBackupServerRows([empty, second, first]));
+
+    expect(
+      items.map((item) =>
+        item.kind === 'server'
+          ? ['server', item.group.serverName, item.group.datastoreCount, item.group.online]
+          : ['datastore', item.row.datastore?.name ?? null],
+      ),
+    ).toEqual([
+      ['server', 'pbs-main', 2, true],
+      ['datastore', 'offsite'],
+      ['datastore', 'tank'],
+      ['server', 'pbs-second', 2, false],
+      ['datastore', 'offsite'],
+      ['datastore', 'tank'],
+      ['server', 'pbs-third', 0, true],
+      ['datastore', null],
     ]);
   });
 

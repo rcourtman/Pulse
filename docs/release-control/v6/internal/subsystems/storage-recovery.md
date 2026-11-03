@@ -5124,6 +5124,23 @@ amber and red as the Overview CPU, memory and disk bars. They had their own
 shades, so the Backups page looked inconsistent beside every other page. What
 each bar counts is unchanged.
 
+### Backup servers rows sit under one header per server (2 November 2026)
+
+The Backup servers table now puts a header row above each PBS server's
+datastores: its connection dot, its name with the web-interface link, and how
+many datastores it reports. On a real install with one server and two
+datastores, a muted server name on each row still left the maintainer asking
+whether they ran one PBS or two; the header answers that at a glance, the way
+guest tables group by node. Datastore rows are named by the datastore alone. A
+server with no datastore data keeps its reachability row, and its header
+claims no count, because an empty read is not proof of no datastores. The
+earlier note that each row carries its server's name and web link is
+historical. The table is titled "Backup servers" with the number of servers.
+Datastore rows no longer show "Healthy": that was the server's connection, and
+it read as the datastore and its backups being fine. Connection health is on
+the server header; phones keep a State column for the datastore's job result,
+a job problem or a fill forecast.
+
 ### Backup servers rows are named by their datastore (2 November 2026)
 
 The Backup servers table keeps one row per datastore, but each row is now

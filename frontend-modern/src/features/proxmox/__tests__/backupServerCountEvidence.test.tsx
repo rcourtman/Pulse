@@ -177,7 +177,11 @@ describe('PBS server count identity', () => {
     await screen.findByRole('button', { name: 'Retry PBS inventory' });
     await waitFor(() => expect(displayedCounts(table)).toEqual(['Unavailable', 'Unavailable']));
     expect(within(table).getAllByText('40.0%')).toHaveLength(2);
-    expect(within(table).getAllByText('Healthy')).toHaveLength(2);
+    expect(
+      within(table.querySelector('[data-backup-server-group]') as HTMLElement).getByRole('img', {
+        name: 'Healthy',
+      }),
+    ).toBeInTheDocument();
     failed = false;
     payload = inventory();
     await fireEvent.click(screen.getByRole('button', { name: 'Retry PBS inventory' }));
