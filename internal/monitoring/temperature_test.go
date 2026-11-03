@@ -225,14 +225,6 @@ func TestTemperatureCollector_ParseSensorsJSON_FlagsLegacyFormat(t *testing.T) {
 	assert.False(t, temp.HasSMART)
 }
 
-func TestTemperatureCollector_HelperMethods(t *testing.T) {
-	// extractCoreNumber
-	// Private methods are hard to test directly from separate package if using _test,
-	// but since we are in `monitoring`, we can access if same package.
-	// But usually tests are `monitoring_test` package.
-	// I will assume same package for now based on file declaration.
-}
-
 func TestDefaultCommandRunner_RejectsOversizedStdout(t *testing.T) {
 	runner := &defaultCommandRunner{}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
