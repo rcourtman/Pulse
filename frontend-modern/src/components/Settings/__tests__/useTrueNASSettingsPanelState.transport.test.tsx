@@ -64,7 +64,7 @@ const ready = async (state: ReturnType<typeof useTrueNASSettingsPanelState>) => 
 describe('TrueNAS settings through the real API transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    fetchMock.mockReset().mockResolvedValue(json([connection('Replacement source')]));
+    fetchMock.mockReset().mockImplementation(async () => json([connection('Replacement source')]));
     fetchMock.mockResolvedValueOnce(json([connection()]));
     vi.stubGlobal('fetch', fetchMock);
     sessionStorage.clear();
