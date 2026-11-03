@@ -147,26 +147,125 @@ func pbsJobHealthFreshness(fact pbs.JobHealthEvidence, observedAt time.Time) mod
 }
 
 func pbsJobHealthPosture(fact pbs.JobHealthEvidence, freshness models.PBSJobHealthFreshness) (string, string) {
-	status := strings.ToLower(strings.TrimSpace(firstNonEmptyString(fact.TaskStatus, fact.LastRunState)))
 	if fact.Error != "" {
 		return "unknown", strings.TrimSpace(fact.Confidence)
+	}
+	outcome := pbsTaskStatusOutcome(firstNonEmptyString(fact.TaskStatus, fact.LastRunState))
+	// A failed last run outranks a missed next one: an overdue job whose last
+	// run failed is still failed, not merely late.
+	if outcome == "failed" {
+		return "critical", "last-run-failed"
 	}
 	if freshness.State == "overdue" {
 		return "warning", "job-overdue"
 	}
-	switch {
-	case status == "":
+	switch outcome {
+	case "":
 		return "unknown", "no-run-observed"
-	case strings.Contains(status, "ok") || strings.Contains(status, "success"):
+	case "ok":
 		return "healthy", "last-run-success"
-	case strings.Contains(status, "running"):
+	case "running":
 		return "healthy", "running"
-	case strings.Contains(status, "warn"):
+	case "warning":
 		return "warning", "last-run-warning"
-	case strings.Contains(status, "fail") || strings.Contains(status, "error"):
-		return "critical", "last-run-failed"
 	default:
-		return "unknown", "last-run-state-" + strings.ReplaceAll(status, " ", "-")
+		return "unknown", "last-run-state-unknown"
+	}
+}
+
+// pbsTaskStatusOutcome reads a PBS task or job status the way Proxmox's own UI
+// does (proxmox-widget-toolkit parse_task_status). PBS writes "OK",
+// "WARNINGS: <n>", "unknown", or, for a failure, the error message itself with
+// no prefix, such as "remote 'offsite' does not exist" or "broken pipe".
+// Matching words like "error" missed failures that lack them, and matching
+// "ok" called "broken pipe" a success.
+func pbsTaskStatusOutcome(status string) string {
+	lower := strings.ToLower(strings.TrimSpace(status))
+	switch {
+	case lower == "":
+		return ""
+	case lower == "ok":
+		return "ok"
+	case strings.HasPrefix(lower, "warnings:"):
+		return "warning"
+	case lower == "unknown":
+		return "unknown"
+	case lower == "running":
+		return "running"
+	default:
+		return "failed"
+	}
+}
+
+// pbsJobKey identifies one job across polls. PBS job ids are only unique
+// within a family, so a sync and a verify job may share one.
+func pbsJobKey(entry models.PBSJobHealthEvidence) string {
+	return strings.ToLower(strings.TrimSpace(entry.Family)) + "\x00" + strings.TrimSpace(entry.ID)
+}
+
+// carryPBSJobFailures keeps a job's last completed failure known while PBS
+// cannot report a newer outcome. PBS's /admin job status drops the previous
+// result while the next run is in progress, an overdue or unreadable job
+// reports none, and a failed read lists no jobs at all; treating any of those
+// as recovery would clear a failed-job alert and raise it again on the next
+// poll. A carried failure clears only when the job's newest run is observed to
+// succeed or warn, or when a complete read no longer lists the job (removed),
+// or lists it disabled.
+func carryPBSJobFailures(previous, current []models.PBSJobHealthEvidence, readFailed bool) []models.PBSJobHealthEvidence {
+	failed := make(map[string]models.PBSJobHealthEvidence)
+	for _, entry := range previous {
+		if entry.Posture == "critical" && entry.PostureReason == "last-run-failed" && strings.TrimSpace(entry.ID) != "" {
+			failed[pbsJobKey(entry)] = entry
+		}
+	}
+	if len(failed) == 0 {
+		return current
+	}
+
+	unreadFamilies := make(map[string]bool)
+	for _, entry := range current {
+		family := strings.ToLower(strings.TrimSpace(entry.Family))
+		if strings.TrimSpace(entry.Error) != "" && entry.ID == family+":partial" &&
+			entry.EvidenceSource == pbs.JobEvidenceSourcePBSPartialRead {
+			unreadFamilies[family] = true
+		}
+	}
+
+	out := make([]models.PBSJobHealthEvidence, 0, len(current)+len(failed))
+	seen := make(map[string]bool, len(current))
+	for _, entry := range current {
+		key := pbsJobKey(entry)
+		seen[key] = true
+		if prior, ok := failed[key]; ok && entry.Enabled && !pbsJobReportsOutcome(entry) {
+			out = append(out, prior)
+			continue
+		}
+		out = append(out, entry)
+	}
+	for key, prior := range failed {
+		if seen[key] {
+			continue
+		}
+		if readFailed || unreadFamilies[strings.ToLower(strings.TrimSpace(prior.Family))] {
+			out = append(out, prior)
+		}
+	}
+	return out
+}
+
+// pbsJobReportsOutcome says whether this poll observed how the job's newest
+// run ended: success, warning or failure, rather than running or an
+// unreadable state. It reads the run's own status, not the posture, so a
+// successful run first seen after its next schedule passed still counts.
+func pbsJobReportsOutcome(entry models.PBSJobHealthEvidence) bool {
+	if strings.TrimSpace(entry.Error) != "" {
+		return false
+	}
+	switch pbsTaskStatusOutcome(firstNonEmptyString(entry.TaskStatus, entry.LastRunState)) {
+	case "ok", "warning", "failed":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -485,7 +584,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Str("instance", instanceName).
 				Msg("Failed to collect PBS job health evidence")
 		}
-		pbsInst.JobHealthEvidence = pbsJobHealthEvidenceFromFacts(jobFacts, time.Now())
+		pbsInst.JobHealthEvidence = carryPBSJobFailures(
+			m.state.PBSJobHealthEvidence(pbsInst.ID),
+			pbsJobHealthEvidenceFromFacts(jobFacts, time.Now()),
+			err != nil,
+		)
 	}
 
 	// Convert PBS datastores to Storage entries for unified storage view
@@ -646,6 +749,11 @@ func (m *Monitor) recordPBSNodeHistory(serviceID string, status *pbs.NodeStatus,
 // connection map, dashboard resource, and legacy alert evaluator must all use
 // the same poll error that is recorded in the scheduler ledger.
 func (m *Monitor) publishPBSConnectionOutcome(instance models.PBSInstance, pollErr error) {
+	// A poll that failed before reading jobs knows nothing new about them;
+	// keep the last results so a failed job is still carried when PBS returns.
+	if pollErr != nil && len(instance.JobHealthEvidence) == 0 {
+		instance.JobHealthEvidence = m.state.PBSJobHealthEvidence(instance.ID)
+	}
 	connected := pollErr == nil
 	if connected {
 		instance.Status = "online"

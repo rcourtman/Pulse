@@ -783,6 +783,64 @@ describe('ProxmoxBackupsTable', () => {
     });
   });
 
+  it('lists a failed PBS sync as a datastore problem while the guest stays protected (#1815)', async () => {
+    mockBackupAPIs();
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    const scrollIntoView = vi.fn();
+    const prototype = HTMLElement.prototype as { scrollIntoView?: (arg?: unknown) => void };
+    const original = prototype.scrollIntoView;
+    prototype.scrollIntoView = scrollIntoView;
+    try {
+      const server = {
+        ...pbsServerResource,
+        pbs: {
+          ...pbsServerResource.pbs!,
+          jobHealthEvidence: [
+            {
+              id: 's-main',
+              family: 'sync',
+              store: 'main',
+              remote: 'pbs-offsite',
+              enabled: true,
+              confidence: 'config-last-run',
+              posture: 'critical',
+              postureReason: 'last-run-failed',
+            },
+          ],
+        },
+      } as Resource;
+      renderInRouter(() => (
+        <ProxmoxBackupsTable
+          emptyIcon={<span />}
+          workloads={[workloadResource]}
+          servers={[server]}
+        />
+      ));
+
+      await waitFor(() =>
+        expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent(
+          '1 of 1 protected',
+        ),
+      );
+      const problems = within(screen.getByRole('list', { name: 'Datastores with failed jobs' }));
+      const row = problems.getByRole('button', { name: 'Sync failed on 1 datastore: main' });
+      expect(row).toHaveTextContent('Sync failed');
+      expect(row).toHaveAttribute('title', 'Show in Backup servers: main');
+      // The datastore problem is not a guest: no guest exception appears.
+      expect(
+        screen.queryByRole('list', { name: 'Backups that are not protected' }),
+      ).toBeEmptyDOMElement();
+
+      fireEvent.click(row);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView.mock.contexts[0]).toBe(
+        document.querySelector('[data-backup-servers-section]'),
+      );
+    } finally {
+      prototype.scrollIntoView = original;
+    }
+  });
+
   it('states the verdict and names each exception group by its reason', async () => {
     mockBackupAPIs('attention');
     window.history.replaceState({}, '', '/proxmox/backups/date');

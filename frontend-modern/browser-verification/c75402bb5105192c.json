@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "a315a4878070098435213143ea6587f15dbda12e",
+  "verified_at": "2026-11-03T10:23:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "2feadfd18f169131ba4a3aeff3e69d83010d7fc5c5ebe659d82f0534bf3fea41",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "af734a64cec4347f31f947b16c0bb670f0074dd92423266c4d21e16bfc31a2e9",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts": "e37dcdca685e690eeae8750140adbe02120e5b37b2384ea0c89f4ec9a216655e"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/api/alerts/active"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 607
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode built from this change on pulse-dev: dr-vault reports a failed sync job into its primary-vault datastore (copying from backup-vault) while every backup succeeded; all other PBS jobs report OK",
+    "desktop and phone layouts, dark theme"
+  ],
+  "interactions": [
+    "Backup health keeps the guest verdict (457 / 929 protected) and adds a DATASTORE JOBS heading with one 32px row: amber dot, Sync failed, count 1, primary-vault (dr-vault); its accessible name is Sync failed on 1 datastore: primary-vault (dr-vault)",
+    "the Backup servers Jobs column shows OK, OK and Sync failed on the same datastore",
+    "/api/alerts/active carries one warning backup-storage-incident: Sync job s-primary-vault failed on datastore primary-vault (copying from backup-vault)",
+    "at 1024px clicking the row scrolls the Backup servers table to the top of the view; at 375x812 the row stays single-line with the name truncated and no horizontal overflow, the State column reads Sync failed; smooth scroll did not run in this pane emulation for this row or the existing exception rows, while a direct scrollIntoView did"
+  ]
+}

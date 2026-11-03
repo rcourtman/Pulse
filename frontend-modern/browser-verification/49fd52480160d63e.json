@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "24c9bfb8f1f13e30d0d420ba839859d44a3233c6",
+  "verified_at": "2026-11-03T10:39:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "2feadfd18f169131ba4a3aeff3e69d83010d7fc5c5ebe659d82f0534bf3fea41",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "4da46b297204c2e3cf74fc4b3da4e920cbd09903d71847da4961c51d60d33cd5",
+    "frontend-modern/src/features/proxmox/proxmoxBackupServerJobs.ts": "e37dcdca685e690eeae8750140adbe02120e5b37b2384ea0c89f4ec9a216655e"
+  },
+  "routes": [
+    "/proxmox/backups",
+    "/proxmox/backups/coverage",
+    "/api/alerts/active"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 607
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "mock mode rebuilt from this branch after its rebase onto main with the Coverage-first default: dr-vault reports a failed sync into primary-vault (copying from backup-vault) while every backup succeeded",
+    "desktop and phone layouts, dark theme"
+  ],
+  "interactions": [
+    "the bare /proxmox/backups route opens Coverage; Backup health keeps the guest reasons (No successful backup, Snapshots only, no backup, No backup in 7 days, Last backup failed, Backup status unknown) and the 457 / 929 verdict, then a DATASTORE JOBS heading with one 32px row named Sync failed on 1 datastore: primary-vault (dr-vault)",
+    "the Backup servers Jobs column reads OK, OK and Sync failed; /api/alerts/active carries one warning: Sync job s-primary-vault failed on datastore primary-vault (copying from backup-vault)",
+    "clicking the row brings the Backup servers table to the top of the view (verified with reduced motion, since the hidden pane pauses smooth scrolling)",
+    "at 375x812 all health rows are 32-33px and single-line, the State column reads Sync failed, and the page has no horizontal overflow"
+  ]
+}

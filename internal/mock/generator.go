@@ -6010,7 +6010,52 @@ func generatePBSInstances() []models.PBSInstance {
 		})
 	}
 
+	// Job results as the PBS poller reports them, so the Jobs column and
+	// datastore job alerts have something to show. The secondary's sync from
+	// the primary failed while every backup succeeded: the #1815 case.
+	now := time.Now()
+	pbsInstances[0].JobHealthEvidence = []models.PBSJobHealthEvidence{
+		mockPBSJobEvidence("garbage:backup-store", "garbage", "backup-store", "", "OK", now.Add(-5*time.Hour)),
+		mockPBSJobEvidence("v-backup-store", "verify", "backup-store", "", "OK", now.Add(-3*time.Hour)),
+		mockPBSJobEvidence("p-backup-store", "prune", "backup-store", "", "OK", now.Add(-4*time.Hour)),
+		mockPBSJobEvidence("garbage:offsite-backup", "garbage", "offsite-backup", "", "OK", now.Add(-6*time.Hour)),
+		mockPBSJobEvidence("v-offsite-backup", "verify", "offsite-backup", "", "OK", now.Add(-2*time.Hour)),
+	}
+	pbsInstances[1].JobHealthEvidence = []models.PBSJobHealthEvidence{
+		mockPBSJobEvidence("garbage:replica-store", "garbage", "replica-store", "", "OK", now.Add(-7*time.Hour)),
+		mockPBSJobEvidence("s-replica-store", "sync", "replica-store", "pbs-main", "connection error", now.Add(-90*time.Minute)),
+	}
+
 	return pbsInstances
+}
+
+func mockPBSJobEvidence(id, family, store, remote, state string, endedAt time.Time) models.PBSJobHealthEvidence {
+	posture, reason := "healthy", "last-run-success"
+	if state != "OK" {
+		posture, reason = "critical", "last-run-failed"
+	}
+	endedAt = endedAt.UTC().Truncate(time.Second)
+	return models.PBSJobHealthEvidence{
+		ID:             id,
+		Family:         family,
+		Store:          store,
+		Remote:         remote,
+		Schedule:       "daily",
+		Enabled:        true,
+		LastRunState:   state,
+		LastRunEndtime: endedAt.Unix(),
+		Confidence:     "config-last-run",
+		EvidenceSource: "pbs-job-config",
+		EvidenceScope:  "configured-job",
+		Freshness: models.PBSJobHealthFreshness{
+			ObservedAt:     time.Now().UTC(),
+			LastRunEndTime: endedAt,
+			AgeSeconds:     int64(time.Since(endedAt).Seconds()),
+			State:          "observed",
+		},
+		Posture:       posture,
+		PostureReason: reason,
+	}
 }
 
 // generatePBSBackups generates mock PBS backup data

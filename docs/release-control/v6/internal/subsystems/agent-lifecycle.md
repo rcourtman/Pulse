@@ -10745,6 +10745,14 @@ through both monitor initialization paths, including explicit and legacy
 default organizations. These notifications refresh inventory presentation;
 they do not grant enrollment, removal, re-enrollment or command authority.
 
+### PBS job failure carry preserves lifecycle authority (3 November 2026)
+
+`State.PBSJobHealthEvidence` is a read-only copy of the job results already
+stored for one PBS instance, read by the PBS poller to carry a failed job
+across polls. It adds no agent enrollment, credential, command, collection or
+remediation authority, never triggers a poll or a job, and leaves agent
+records untouched.
+
 ### Backup jobs history preserves lifecycle authority (2 November 2026)
 
 `GET /api/backups/jobs` reads current tenant inventory and retained `pve-task:`

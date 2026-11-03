@@ -1,4 +1,5 @@
 import type { PBSJobHealthEvidence } from '@/types/api';
+import type { Resource } from '@/types/resource';
 
 // "Is my PBS OK?" needs the datastore's housekeeping, not just its fill: a
 // failed sync means the offsite copy is stale, a failed verify means restores
@@ -106,13 +107,14 @@ export function summarizeDatastoreJobs(
       .filter(isDatastoreFamily),
   );
 
-  // Task history can repeat a job; the newest run of each job id speaks for it.
+  // Task history can repeat a job; the newest run of each job speaks for it.
+  // Job ids are unique only within a family, so the family is part of the key.
   const newestById = new Map<string, PBSJobHealthEvidence>();
   for (const entry of evidence) {
     const family = normalize(entry.family);
     if (!isDatastoreFamily(family) || entry.enabled === false) continue;
     if (entry.store?.trim() !== store) continue;
-    const id = entry.id?.trim() || `${family}:${store}`;
+    const id = `${family}:${entry.id?.trim() || store}`;
     const previous = newestById.get(id);
     if (!previous || runTime(entry) >= runTime(previous)) newestById.set(id, entry);
   }
@@ -157,3 +159,40 @@ export const describeDatastoreJobs = (summary: DatastoreJobSummary): string =>
   summary.entries.length === 0
     ? 'No PBS jobs reported for this datastore'
     : summary.entries.map((entry) => `${entry.familyLabel} ${entry.outcomeLabel}`).join(' · ');
+
+// Backup health lists guests, but a failed sync, verify, prune or GC run is a
+// datastore problem: the guests' own backups can be fine while the offsite
+// copy is stale (#1815). Each failed family becomes one row naming the
+// datastores it hit, from the same judgment the Jobs column shows. Only a
+// failure pinned to a datastore counts; storeless history stays "unknown" in
+// that column and never reaches this list, matching the backend alert.
+export interface DatastoreJobFailureGroup {
+  family: string;
+  label: string;
+  datastores: string[];
+}
+
+const FAILURE_ROW_ORDER = ['sync', 'verify', 'prune', 'garbage'] as const;
+
+export function collectDatastoreJobFailures(
+  servers: readonly Resource[],
+): DatastoreJobFailureGroup[] {
+  const pbsServers = servers.filter((server) => server.type === 'pbs');
+  const nameServer = pbsServers.length > 1;
+  const byFamily = new Map<string, string[]>();
+  for (const server of pbsServers) {
+    for (const datastore of server.pbs?.datastores ?? []) {
+      const summary = summarizeDatastoreJobs(server.pbs?.jobHealthEvidence, datastore.name);
+      const failed = new Set(
+        summary.entries.filter((entry) => entry.state === 'critical').map((entry) => entry.family),
+      );
+      const name = nameServer ? `${datastore.name} (${server.name})` : datastore.name;
+      for (const family of failed) byFamily.set(family, [...(byFamily.get(family) ?? []), name]);
+    }
+  }
+  return FAILURE_ROW_ORDER.filter((family) => byFamily.has(family)).map((family) => ({
+    family,
+    label: `${FAMILY_LABEL[family]} failed`,
+    datastores: [...byFamily.get(family)!].sort((left, right) => left.localeCompare(right)),
+  }));
+}
