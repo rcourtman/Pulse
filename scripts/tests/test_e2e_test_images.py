@@ -312,8 +312,7 @@ class E2EImageWorkflowTest(unittest.TestCase):
                     self.assert_partition_admission(source.replace(command, replacement))
 
     def assert_retry_qualification(self, workflow):
-        # Qualification consumes the admitted images in both tiers. A retry
-        # cannot turn a failed browser attempt into a successful PR verdict.
+        # Qualification consumes admitted images and cannot soften a flaky PR.
         self.assert_workflow(workflow)
         selection = job_block(workflow, "tier-selection")
         command = "run: node --test scripts/flaky-qualification.test.mjs"
@@ -333,21 +332,25 @@ class E2EImageWorkflowTest(unittest.TestCase):
             start = consumer.index(f"- name: Run {name}-tier E2E suite\n")
             end = consumer.index("\n      - name:", start)
             suite = consumer[start:end]
-            expression = "${{ " + selector + " && '--fail-on-flaky-tests' || '' }}"
-            self.assertEqual(suite.count("--fail-on-flaky-tests"), 1)
-            self.assertIn(expression, suite)
-            self.assertNotIn("|| true", suite)
+            self.assertIn("PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ " + selector + " }}", suite)
+            shell = suite.split("        run: |\n", 1)[1]
+            self.assertNotIn("${{", shell)
+            self.assertEqual(shell.count("--fail-on-flaky-tests"), 1)
+            self.assertIn('if [ "$PULSE_E2E_FAIL_ON_FLAKY_TESTS" = "true" ]; then', shell)
+            self.assertNotIn("|| true", shell)
         self.assertIn("continue-on-error: ${{ github.event_name != 'pull_request' }}", consumer)
 
     def test_source_bound_qualification_rejects_flaky_retries(self):
         source = WORKFLOW.read_text()
         self.assert_retry_qualification(source)
+        stable_policy = "PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ github.event_name == 'pull_request' && needs.scope.outputs.run_probation == 'true' }}"
+        probation_policy = "PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ github.event_name == 'pull_request' }}"
         mutations = {
             "missing runner proof": source.replace("run: node --test scripts/flaky-qualification.test.mjs", "run: echo omitted"),
             "ignored runner proof": source.replace("run: node --test scripts/flaky-qualification.test.mjs", "run: node --test scripts/flaky-qualification.test.mjs || true"),
             "missing stable flag": source.replace("--fail-on-flaky-tests", "--pass-with-no-tests", 1),
-            "widened stable policy": source.replace(" && needs.scope.outputs.run_probation == 'true' && '--fail-on-flaky-tests'", " && '--fail-on-flaky-tests'", 1),
-            "inverted probation policy": source.replace("github.event_name == 'pull_request' && '--fail-on-flaky-tests'", "github.event_name != 'pull_request' && '--fail-on-flaky-tests'", 1),
+            "widened stable policy": source.replace(stable_policy, probation_policy, 1),
+            "inverted probation policy": source.replace(probation_policy, probation_policy.replace(" == ", " != "), 1),
         }
         for name, mutation in mutations.items():
             with self.subTest(mutation=name):

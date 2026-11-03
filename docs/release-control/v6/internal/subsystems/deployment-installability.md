@@ -1866,6 +1866,30 @@ read frontend sources (the `internal/api` contract tests, the
 `internal/unifiedresources` code standards walk of `frontend-modern/src`, and
 the `internal/telemetry` repository-wide wording scan).
 
+### PR governance uses the target snapshot actually tested
+
+Canonical Governance audits a pull request against the first parent of the
+provider merge checked out for that run. The event's recorded base can be
+older than this target snapshot after another PR lands. Auditing from that
+older event base would revalidate already-landed target commits and receipts
+as though they belonged to the current PR.
+
+`scripts/release_control/pr_validation_base.py` requires the exact checkout
+commit, a two-parent merge whose second parent is the expected PR source
+head, and an event base that is an ancestor of the tested target parent.
+Missing objects, a different checkout or source, an unrelated base and an
+unexpected merge shape stop validation without a fallback range. Only then
+can both canonical history and browser verification consume the resolved
+range. Push and manual range selection retain their existing behavior.
+
+`scripts/tests/test_pr_validation_base.py` uses real Git histories to prove
+that a stale event base excludes an already-landed target change while
+retaining the PR source change. It executes the actual workflow shell,
+checks its context bindings and refusal before output, and covers unchanged
+push/manual ranges. The helper and workflow have an exact L1 proof policy.
+These controls establish audit scope, not a passed contract, browser journey
+or release gate.
+
 ### Core E2E validates changed probation coverage before landing
 
 Core E2E runs both tiers for pull requests that change a probation spec, the
@@ -1879,8 +1903,11 @@ unknown scope cannot produce a passing E2E verdict.
 Selected PR probation failures fail their shard and the E2E verdict. Both
 tiers of full selected PR qualification use Playwright's
 `--fail-on-flaky-tests`: a failed attempt followed by a passing retry still
-fails qualification. Existing retry counts and retained diagnostics stay in
-place. Stable-only PR runs retain their existing policy. Branch and manual
+fails qualification. Event and scope decisions enter each shell through the
+step environment; the shell adds one literal flag to its argument array only
+when required. Matrix shard coordinates also enter through the environment.
+Existing retry counts and retained diagnostics stay in place. Stable-only PR
+runs retain their existing policy. Branch and manual
 runs keep probation observational. Promotion and demotion remain
 governed by `tests/integration/e2e-tiering.mjs`, and only executed main runs
 count toward promotion. Restoring a resolved quarantine through probation
@@ -1911,7 +1938,10 @@ unrun, interrupted, failed or flaky cases.
 
 `tests/integration/scripts/fixture-readiness.test.mjs` evaluates the actual
 workflow expressions for selected and stable-only PRs, branch and manual
-runs. `tests/integration/scripts/flaky-qualification.test.mjs` executes the
+runs. It executes the actual tier shells with a confined npm double and checks
+every argument, including empty-flag behavior. Workflow trust remains enforced
+by `scripts/tests/test_workflow_trust.py`.
+`tests/integration/scripts/flaky-qualification.test.mjs` executes the
 installed pinned Playwright runner without a browser before image fan-out: a controlled failure followed by a passing retry succeeds under the
 ordinary policy, fails under full qualification, and a clean first attempt
 still succeeds. The image-distribution proof rejects missing or widened
@@ -2709,6 +2739,8 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 14f. `tests/integration/playwright.config.ts`
 14g. `tests/integration/scripts/check-probation-shards.mjs`
 14h. `tests/integration/scripts/flaky-qualification.test.mjs`
+14i. `.github/workflows/canonical-governance.yml`
+14j. `scripts/release_control/pr_validation_base.py`
 14a. `scripts/release_control/run_go_package_slice.py`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`

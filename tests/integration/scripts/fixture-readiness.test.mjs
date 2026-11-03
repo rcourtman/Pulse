@@ -246,23 +246,44 @@ test('selected probation coverage blocks PRs and remains observational on branch
 });
 
 
-test('full PR qualification rejects flaky retries in both tiers without changing branch policy', () => {
-  const expressions = ['Run stable-tier E2E suite', 'Run probation-tier E2E suite'].map(name => {
-    const command = step(name)?.split(/\n        run: >-\n/)[1];
-    assert.ok(command, 'missing suite command: ' + name);
-    const expression = command.match(/\$\{\{ ([^\n]*--fail-on-flaky-tests[^\n]*) \}\}/)?.[1];
-    assert.ok(expression, 'missing flaky-result policy: ' + name);
-    assert.equal(command.match(/--fail-on-flaky-tests/g)?.length, 1, name);
-    return expression;
+test('full PR qualification rejects flaky retries through env and actual shell arguments', () => {
+  const names = ['Run stable-tier E2E suite', 'Run probation-tier E2E suite'];
+  const suites = names.map(name => {
+    const body = step(name);
+    const expression = body?.match(/PULSE_E2E_FAIL_ON_FLAKY_TESTS: \$\{\{ (.+) \}\}/)?.[1];
+    const command = body?.split(/\n        run: \|\n/)[1];
+    assert.ok(expression, 'missing flaky-result env policy: ' + name);
+    assert.ok(command, 'missing suite shell: ' + name);
+    assert.doesNotMatch(command, /\$\{\{/);
+    return { expression, command };
   });
-  for (const [event, selected, expected] of [
-    ['pull_request', 'true', ['--fail-on-flaky-tests', '--fail-on-flaky-tests']],
-    ['pull_request', 'false', ['', '--fail-on-flaky-tests']],
-    ['push', 'true', ['', '']],
-    ['workflow_dispatch', 'true', ['', '']],
-  ]) {
-    const context = { github: { event_name: event }, needs: { scope: { outputs: { run_probation: selected } } } };
-    assert.deepEqual(expressions.map(expression => runInNewContext(expression, context)), expected,
-      event + ', selected: ' + selected);
-  }
+  assert.match(step(names[0]), /PULSE_E2E_SHARD: \$\{\{ matrix\.shard \}\}\/8/);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-qualification-command-'));
+  try {
+    fs.writeFileSync(path.join(directory, 'npm'), "#!/bin/sh\nprintf '%s\\n' \"$@\"\n", { mode: 0o700 });
+    for (const [event, selected, expected] of [
+      ['pull_request', 'true', [true, true]],
+      ['pull_request', 'false', [false, true]],
+      ['push', 'true', [false, false]],
+      ['workflow_dispatch', 'true', [false, false]],
+    ]) {
+      const context = { github: { event_name: event }, needs: { scope: { outputs: { run_probation: selected } } } };
+      const policies = suites.map(({ expression }) => runInNewContext(expression, context));
+      assert.deepEqual(policies, expected, event + ', selected: ' + selected);
+      for (const [index, { command }] of suites.entries()) {
+        const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', command], {
+          cwd: integrationRoot, encoding: 'utf8', timeout: 5000,
+          env: { ...process.env, PATH: directory + ':' + process.env.PATH,
+            PULSE_E2E_SHARD: '3/8', PULSE_E2E_FAIL_ON_FLAKY_TESTS: String(policies[index]) },
+        });
+        assert.ifError(result.error);
+        assert.equal(result.status, 0, result.stdout + result.stderr);
+        const argumentsForTier = index === 0 ? ['--shard=3/8'] :
+          ['--pass-with-no-tests', '--max-failures=5', '--global-timeout=600000'];
+        assert.deepEqual(result.stdout.split('\n').slice(0, -1),
+          ['test', '--', ...argumentsForTier, ...(expected[index] ? ['--fail-on-flaky-tests'] : [])],
+          names[index] + ', ' + event + ', selected: ' + selected);
+      }
+    }
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

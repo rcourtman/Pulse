@@ -146,7 +146,11 @@ test.describe('Settings shell consistency', () => {
 
       const searchInput = page.getByPlaceholder('Search settings...');
       await expect(searchInput, `${panel.route} should keep the shared settings search`).toBeVisible();
-      if (panel.route === '/settings/organization/billing') await recordBrowserReview(page, testInfo, 'settings-navigation-open');
+      if (panel.route === '/settings/organization/billing') {
+        const selectedSection = navigation.locator('button[aria-current="page"]');
+        if ((await selectedSection.count()) === 1) await selectedSection.scrollIntoViewIfNeeded();
+        await recordBrowserReview(page, testInfo, 'settings-navigation-open');
+      }
 
       if (isMobile) {
         await expect(

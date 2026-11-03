@@ -58,12 +58,22 @@ jobs:
       - name: Determine governance diff range
         id: diff
         shell: bash
+        env:
+          PULSE_GOVERNANCE_EVENT: ${{ github.event_name }}
+          PULSE_GOVERNANCE_CHECKOUT: ${{ github.sha }}
+          PULSE_GOVERNANCE_PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PULSE_GOVERNANCE_PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PULSE_GOVERNANCE_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            range="${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            range="${{ github.event.before }}...${{ github.sha }}"
+          if [ "$PULSE_GOVERNANCE_EVENT" = "pull_request" ]; then
+            base="$(python3 scripts/release_control/pr_validation_base.py \
+              --commit "$PULSE_GOVERNANCE_CHECKOUT" \
+              --source-head "$PULSE_GOVERNANCE_PR_HEAD" \
+              --event-base "$PULSE_GOVERNANCE_PR_BASE")"
+            range="$base...$PULSE_GOVERNANCE_CHECKOUT"
+          elif [ "$PULSE_GOVERNANCE_EVENT" = "push" ]; then
+            range="$PULSE_GOVERNANCE_BEFORE...$PULSE_GOVERNANCE_CHECKOUT"
           elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
             range="HEAD^...HEAD"
           else

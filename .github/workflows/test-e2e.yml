@@ -467,9 +467,14 @@ jobs:
           PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"
           PULSE_E2E_TIER: "stable"
           PULSE_MULTI_TENANT_ENABLED: "true"
-        run: >-
-          npm test -- --shard=${{ matrix.shard }}/8
-          ${{ github.event_name == 'pull_request' && needs.scope.outputs.run_probation == 'true' && '--fail-on-flaky-tests' || '' }}
+          PULSE_E2E_SHARD: ${{ matrix.shard }}/8
+          PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ github.event_name == 'pull_request' && needs.scope.outputs.run_probation == 'true' }}
+        run: |
+          qualification_flags=()
+          if [ "$PULSE_E2E_FAIL_ON_FLAKY_TESTS" = "true" ]; then
+            qualification_flags+=(--fail-on-flaky-tests)
+          fi
+          npm test -- --shard="$PULSE_E2E_SHARD" "${qualification_flags[@]}"
 
       # Playwright's report artifacts preserve the full forensic record, but
       # artifact bodies and job logs require an authenticated GitHub session.
@@ -529,10 +534,13 @@ jobs:
           PULSE_E2E_REPORT_DIR: playwright-report-probation
           PULSE_E2E_RESULTS_DIR: test-results-probation
           PULSE_MULTI_TENANT_ENABLED: "true"
-        run: >-
-          npm test -- --pass-with-no-tests
-          --max-failures=5 --global-timeout=600000
-          ${{ github.event_name == 'pull_request' && '--fail-on-flaky-tests' || '' }}
+          PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ github.event_name == 'pull_request' }}
+        run: |
+          qualification_flags=()
+          if [ "$PULSE_E2E_FAIL_ON_FLAKY_TESTS" = "true" ]; then
+            qualification_flags+=(--fail-on-flaky-tests)
+          fi
+          npm test -- --pass-with-no-tests --max-failures=5 --global-timeout=600000 "${qualification_flags[@]}"
 
       - name: Report probation-tier outcome
         if: ${{ !cancelled() && steps.probation.outcome != 'skipped' }}

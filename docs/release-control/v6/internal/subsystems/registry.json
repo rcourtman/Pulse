@@ -4738,6 +4738,7 @@
         ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/build-and-test.yml",
         ".github/workflows/build-release-candidate.yml",
+        ".github/workflows/canonical-governance.yml",
         ".github/workflows/compile-release-payload.yml",
         ".github/workflows/create-release.yml",
         ".github/workflows/demo-runtime-native.yml",
@@ -4846,6 +4847,7 @@
         "scripts/release_control/control_plane.py",
         "scripts/release_control/customer_promotion_lease.sh",
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
+        "scripts/release_control/pr_validation_base.py",
         "scripts/release_control/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/release_promotion_policy_support.py",
         "scripts/release_control/release_snapshot.py",
@@ -5606,6 +5608,20 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/tests/test_e2e_probation_shards.mjs"
+            ]
+          },
+          {
+            "id": "ci-pr-merge-base",
+            "label": "exact checked-out PR merge target and source identity proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/canonical-governance.yml",
+              "scripts/release_control/pr_validation_base.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_pr_validation_base.py"
             ]
           }
         ],
