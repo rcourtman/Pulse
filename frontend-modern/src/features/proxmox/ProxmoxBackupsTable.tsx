@@ -89,9 +89,10 @@ import {
 
 type BackupView = ProxmoxBackupsView;
 
+// Coverage leads: "are my guests backed up?" is the question most visits ask.
 const BACKUP_VIEW_TABS: readonly { id: BackupView; label: string }[] = [
-  { id: 'date', label: 'By date' },
   { id: 'coverage', label: 'Coverage' },
+  { id: 'date', label: 'By date' },
 ];
 
 const BACKUP_INVENTORY_POLL_MS = 30_000;
@@ -515,13 +516,7 @@ export const ProxmoxBackupsTable: Component<{
   const backupVerdict = createMemo(() =>
     buildBackupVerdict(recoveryModel().coverageRows, protectionPostures.policy()),
   );
-  const view = (): BackupView =>
-    routeView() ??
-    legacyQueryView() ??
-    // A saved exception filter keeps Coverage even once that group is empty.
-    (exceptionFilter() !== null || backupVerdict().exceptions.length > 0
-      ? 'coverage'
-      : PROXMOX_BACKUPS_DEFAULT_VIEW);
+  const view = (): BackupView => routeView() ?? legacyQueryView() ?? PROXMOX_BACKUPS_DEFAULT_VIEW;
 
   const backupViewPath = (next: BackupView): string => {
     const params = new URLSearchParams(location.search);
@@ -539,16 +534,10 @@ export const ProxmoxBackupsTable: Component<{
   // Each exception group in the health strip toggles a Coverage filter to its
   // workloads. From the date view a group opens Coverage already filtered.
   const navigate = useNavigate();
-  // Old bookmarks can enter without a view segment. Pick their useful default
-  // only after the first assessment settles, then let the existing URL own it.
-  // A later poll must update health, not replace the workspace under inspection.
+  // Old bookmarks can enter without a view segment; give them the default
+  // view's route so the URL names what the page shows.
   createEffect(() => {
-    if (
-      location.pathname.replace(/\/+$/, '') !== PROXMOX_BACKUPS_PATH ||
-      legacyQueryView() ||
-      !hasReadableInventory() ||
-      ((props.workloads?.length ?? 0) > 0 && !protectionPostures.resolvedOnce())
-    ) {
+    if (location.pathname.replace(/\/+$/, '') !== PROXMOX_BACKUPS_PATH || legacyQueryView()) {
       return;
     }
     navigate(`${backupViewPath(view())}${location.hash}`, { replace: true, scroll: false });
@@ -582,8 +571,8 @@ export const ProxmoxBackupsTable: Component<{
       );
       return;
     }
-    // By date, or Coverage chosen only by the health fallback: land on the
-    // Coverage route so the view cannot flip back when the exceptions clear.
+    // By date, or the bare path before its redirect: land on the Coverage
+    // route with the group applied.
     const target = new URL(backupViewPath('coverage'), 'https://pulse.invalid');
     target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
     if (next) target.searchParams.set(PROXMOX_BACKUPS_QUERY_PARAMS.reason, next);
@@ -992,8 +981,8 @@ export const ProxmoxBackupsTable: Component<{
               rows={liveCoverageRows()}
               hasAnyRows={liveTotalCount() > 0}
               emptyIcon={props.emptyIcon}
-              emptyTitle="No backup target coverage"
-              emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
+              emptyTitle="Nothing to check yet"
+              emptyDescription="Each VM, container, and host appears here with its backup status."
               sortKey={coverageSortKey}
               sortDirection={coverageSortDirection}
               onSort={handleCoverageSort}

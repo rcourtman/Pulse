@@ -5071,6 +5071,26 @@ observed daily growth. The page owns the live alert store and passes a lookup
 through `ProxmoxBackupsTable`'s `datastoreAlerts`, so the table renders without
 an alerts provider and shows no forecast when none is given.
 
+### Backups opens on Coverage, with plainer health reasons (3 November 2026)
+
+The Backups tab now opens Coverage, which answers whether each guest is backed
+up; By date stays one click away for finding a particular restore point, and
+Coverage leads the view tabs. `PROXMOX_BACKUPS_DEFAULT_VIEW` is `coverage`, so
+the section link and a bare `/proxmox/backups` bookmark both land there at
+once, without waiting for the first assessment. Explicit `date` routes and
+legacy `?view=` links are unchanged.
+
+Two Backup health reasons read plainer. "No backup history" (`no-history`)
+sounded like "No successful backup" (`no-backup`) while meaning the opposite:
+Pulse cannot read any history for that guest, so it cannot say either way. It
+now reads "Backup status unknown". "Backup source reported a failure"
+(`source-failed`) is now "Last backup failed": the newest attempt failed after
+the last success, so an older backup still exists, which is why it sits under
+Needs attention. "No successful backup" stays, because "No backup found" is
+reserved: the inventory makes no all-time completeness claim. The empty
+Coverage table reads "Nothing to check yet". Which workloads each reason
+selects is unchanged.
+
 ### Backup health reason rows show they open Coverage (2 November 2026)
 
 Each Backup health reason row was already a button that filters Coverage to
@@ -9269,6 +9289,10 @@ filter, preserving bounded reads. Backup/posture policy, source association,
 read cadence and guest operations are unchanged; this is not native recovery.
 
 ### Bare Backups entry chooses a view once, not on each health poll
+
+Historical since 3 November 2026: a bare entry now opens Coverage at once (see
+"Backups opens on Coverage, with plainer health reasons"). The rules below on
+keeping the workspace through later polls still apply.
 
 An existing `/proxmox/backups` bookmark without a named or legacy-query view
 chooses its health-based default after readable inventory and the first

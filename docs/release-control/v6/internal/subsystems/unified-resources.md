@@ -256,6 +256,14 @@ from the uniquely correlated host agent when one exists). Correlation,
 retention and History targets are unchanged. `ProxmoxBackupServersTable.test.ts`
 pins that the row resource still carries the host readings.
 
+### Backups default route is Coverage (3 November 2026)
+
+`PROXMOX_BACKUPS_DEFAULT_VIEW` in `routing/resourceLinks.ts` is now
+`coverage`, so `buildProxmoxBackupsPath()` and the Proxmox section link point
+at `/proxmox/backups/coverage`. A bare `/proxmox/backups` redirects there at
+once instead of waiting for the first protection assessment to choose a view.
+Explicit `date` paths and legacy `?view=` links are unchanged.
+
 ### PBS datastore alerts join by instance id, not display name (2 November 2026)
 
 The Backup servers table finds a datastore's capacity alert from the unified

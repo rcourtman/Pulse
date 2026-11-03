@@ -307,6 +307,7 @@ describe('ProxmoxBackupsTable', () => {
 
   it('keeps successful backup inventory independent of unavailable datastore capacity', async () => {
     mockBackupAPIs();
+    window.history.replaceState({}, '', '/proxmox/backups/date');
     const failed = {
       ...pbsServerResource,
       pbs: {
@@ -685,6 +686,7 @@ describe('ProxmoxBackupsTable', () => {
   });
 
   it('filters restore points and coverage by PBS server and datastore', async () => {
+    window.history.replaceState({}, '', '/proxmox/backups/date');
     const offsitePayload = {
       ...pbsPayload,
       data: {
@@ -783,8 +785,8 @@ describe('ProxmoxBackupsTable', () => {
     });
     expect(verdict).toHaveAttribute('data-backup-verdict', 'attention');
     const exceptions = within(screen.getByRole('list', { name: 'Backups that are not protected' }));
-    const group = exceptions.getByRole('button', { name: '1 backup source reported a failure' });
-    expect(group).toHaveTextContent('Backup source reported a failure');
+    const group = exceptions.getByRole('button', { name: '1 last backup failed' });
+    expect(group).toHaveTextContent('Last backup failed');
     // The hover title says where a click goes and previews the names; the
     // filtered Coverage table lists them all.
     expect(group).toHaveAttribute('title', 'Show in Coverage: pbs-docker (LXC 112)');
@@ -870,7 +872,7 @@ describe('ProxmoxBackupsTable', () => {
       const group = () =>
         within(screen.getByRole('list', { name: 'Backups that are not protected' })).getByRole(
           'button',
-          { name: '1 backup source reported a failure' },
+          { name: '1 last backup failed' },
         );
       const reason = () => new URLSearchParams(window.location.search).get('reason');
       const settle = async () => {
@@ -932,7 +934,7 @@ describe('ProxmoxBackupsTable', () => {
       await screen.findByRole('list', { name: 'Backups that are not protected' }),
     );
     const group = await exceptions.findByRole('button', {
-      name: '1 backup source reported a failure',
+      name: '1 last backup failed',
     });
     expect(group).toHaveAttribute('aria-pressed', 'false');
     // Health bars fill with the metric bar colours every other Pulse bar uses.
@@ -944,14 +946,15 @@ describe('ProxmoxBackupsTable', () => {
       expect(new URLSearchParams(window.location.search).get('reason')).toBe('source-failed');
     });
     expect(new URLSearchParams(window.location.search).get('posture')).toBeNull();
-    expect(
-      exceptions.getByRole('button', { name: '1 backup source reported a failure' }),
-    ).toHaveAttribute('aria-pressed', 'true');
+    expect(exceptions.getByRole('button', { name: '1 last backup failed' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(group).toHaveAttribute('title', 'Clear this filter in Coverage');
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
 
     // Toggling off keeps the same focused control rather than rebuilding it.
-    const pressed = exceptions.getByRole('button', { name: '1 backup source reported a failure' });
+    const pressed = exceptions.getByRole('button', { name: '1 last backup failed' });
     expect(pressed).toBe(group);
     pressed.focus();
     await fireEvent.click(pressed);
@@ -972,7 +975,7 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findByRole('button', {
-      name: '1 backup source reported a failure',
+      name: '1 last backup failed',
       pressed: true,
     });
     await fireEvent.click(screen.getByRole('button', { name: /^protected$/i }));
@@ -983,9 +986,7 @@ describe('ProxmoxBackupsTable', () => {
     });
   });
 
-  it('pins Coverage when an exception group is used on the bare Backups route', async () => {
-    // Coverage was chosen only because something needs attention; without the
-    // route segment the view would flip to By date once the exceptions cleared.
+  it('applies an exception group from the bare Backups route on the Coverage route', async () => {
     mockBackupAPIs('attention');
     window.history.replaceState({}, '', '/proxmox/backups');
 
@@ -993,9 +994,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    await fireEvent.click(
-      await screen.findByRole('button', { name: '1 backup source reported a failure' }),
-    );
+    await fireEvent.click(await screen.findByRole('button', { name: '1 last backup failed' }));
     await waitFor(() => {
       expect(window.location.pathname).toBe('/proxmox/backups/coverage');
       expect(new URLSearchParams(window.location.search).get('reason')).toBe('source-failed');
@@ -3068,7 +3067,7 @@ describe('restore point list follows the consuming inventory scope', () => {
   );
 });
 
-describe('bare Backups entry retains its assessed workspace', () => {
+describe('bare Backups entry opens Coverage', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     window.history.replaceState({}, '', '/proxmox/backups');
@@ -3097,13 +3096,16 @@ describe('bare Backups entry retains its assessed workspace', () => {
 
   it.each([
     { initial: 'attention', next: 'protected', view: 'coverage', table: 'coverage' },
-    { initial: 'protected', next: 'attention', view: 'date', table: 'recoverable' },
+    { initial: 'protected', next: 'attention', view: 'coverage', table: 'coverage' },
     { initial: 'unknown', next: 'protected', view: 'coverage', table: 'coverage' },
+    // An explicit By date route holds its workspace through the same polls.
+    { initial: 'protected', next: 'attention', view: 'date', table: 'recoverable' },
   ] as const)(
     'keeps $view, its open evidence and focus when $initial becomes $next',
     async ({ initial, next, view, table }) => {
       let state: 'protected' | 'attention' | 'unknown' = initial;
       apiFetchJSONMock.mockImplementation(() => Promise.resolve(responseFor(state)));
+      if (view === 'date') window.history.replaceState({}, '', '/proxmox/backups/date');
       const historyLength = window.history.length;
       mountBackupReadState();
       await settleNavigation();
@@ -3134,7 +3136,7 @@ describe('bare Backups entry retains its assessed workspace', () => {
     },
   );
 
-  it('waits for the initial assessment, preserves common filters/hash and replaces rather than pushes', async () => {
+  it('does not wait for the assessment, preserves common filters/hash and replaces rather than pushes', async () => {
     const pending = deferred<ProtectionPosturesResponse>();
     apiFetchJSONMock.mockReturnValue(pending.promise);
     window.history.replaceState(
@@ -3145,11 +3147,9 @@ describe('bare Backups entry retains its assessed workspace', () => {
     const historyLength = window.history.length;
     mountBackupReadState();
     await settleNavigation();
-    await screen.findByRole('link', { name: /by date/i });
-    expect(window.location.pathname).toBe('/proxmox/backups/');
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
     pending.resolve(responseFor('attention'));
     await settleNavigation();
-    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
     expect(window.location.search).toBe('?q=pbs&node=pve-a&type=ct&operator=saved');
     expect(window.location.hash).toBe('#evidence');
     expect(window.history.length).toBe(historyLength);
@@ -3214,27 +3214,15 @@ describe('bare Backups entry retains its assessed workspace', () => {
     expect(new URLSearchParams(window.location.search).get('reason')).toBe('stale');
   });
 
-  it('does not navigate after the pending entry is unmounted', async () => {
-    const pending = deferred<ProtectionPosturesResponse>();
-    apiFetchJSONMock.mockReturnValue(pending.promise);
-    const { unmount } = mountBackupReadState();
-    await screen.findByRole('link', { name: /by date/i });
-    unmount();
-    pending.resolve(responseFor('attention'));
-    await settleNavigation();
-    await Promise.resolve();
-    expect(window.location.pathname).toBe('/proxmox/backups');
-  });
-
-  it('chooses By date after a readable empty inventory without requesting an unscoped assessment', async () => {
+  it('opens Coverage for a readable empty inventory without requesting an unscoped assessment', async () => {
     apiFetchMock.mockImplementation((url: string) =>
       Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
     );
     renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} workloads={[]} />);
     await settleNavigation();
-    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/date'));
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
-    await screen.findByText('No backups yet');
+    await screen.findByText('Nothing to check yet');
   });
 });
 

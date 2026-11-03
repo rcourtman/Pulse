@@ -604,6 +604,14 @@ the slot the compact layout already gives a job problem. Its label comes from
 alert changes, the unreadable store, the cross-connection id collision and the
 job-problem precedence.
 
+### Backups view tabs lead with Coverage (3 November 2026)
+
+The Backups view tabs now list Coverage before By date, because Coverage is the
+default view. They keep the same route-backed links and `aria-current`. The
+Backup health reasons "No backup history" and "Backup source reported a
+failure" become "Backup status unknown" and "Last backup failed"; each still
+shares one 32px row with its count and bar at phone width.
+
 ### Backup jobs card composes the overview primitives (2 November 2026)
 
 `ProxmoxBackupJobsCard` is a `TableCard` with a `TableCardHeader` strip, like

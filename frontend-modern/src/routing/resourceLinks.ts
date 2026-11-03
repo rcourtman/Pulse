@@ -24,7 +24,7 @@ export const STANDALONE_QUERY_PARAMS = {
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';
 export const PROXMOX_BACKUPS_PATH = `${PROXMOX_PATH}/backups`;
-export const PROXMOX_BACKUPS_DEFAULT_VIEW = 'date';
+export const PROXMOX_BACKUPS_DEFAULT_VIEW = 'coverage';
 export type ProxmoxBackupsView = 'date' | 'coverage';
 export const PROXMOX_BACKUPS_QUERY_PARAMS = {
   query: 'q',

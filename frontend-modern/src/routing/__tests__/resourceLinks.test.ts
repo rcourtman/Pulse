@@ -166,7 +166,7 @@ describe('resource link routing contract', () => {
     expect(PROXMOX_PATH).toBe('/proxmox');
     expect(PROXMOX_DEFAULT_TAB).toBe('overview');
     expect(PROXMOX_BACKUPS_PATH).toBe('/proxmox/backups');
-    expect(PROXMOX_BACKUPS_DEFAULT_VIEW).toBe('date');
+    expect(PROXMOX_BACKUPS_DEFAULT_VIEW).toBe('coverage');
     expect(PROXMOX_BACKUPS_QUERY_PARAMS).toEqual({
       query: 'q',
       view: 'view',
@@ -181,7 +181,8 @@ describe('resource link routing contract', () => {
     expect(buildProxmoxPath()).toBe('/proxmox/overview');
     expect(buildProxmoxPath('/storage/')).toBe('/proxmox/storage');
     expect(buildProxmoxPath('')).toBe('/proxmox');
-    expect(buildProxmoxBackupsPath()).toBe('/proxmox/backups/date');
+    expect(buildProxmoxBackupsPath()).toBe('/proxmox/backups/coverage');
+    expect(buildProxmoxBackupsPath('date')).toBe('/proxmox/backups/date');
     expect(buildProxmoxBackupsPath('coverage')).toBe('/proxmox/backups/coverage');
   });
 
