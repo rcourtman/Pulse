@@ -726,6 +726,42 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     );
   };
 
+  const renderUnavailableSavedConfiguration = (
+    connection: Connection,
+    platform: 'TrueNAS' | 'VMware',
+    state:
+      | InfrastructureWorkspaceProps['trueNASSettings']
+      | InfrastructureWorkspaceProps['vmwareSettings'],
+  ) => (
+    <div class="space-y-3">
+      <div
+        role={state.loading() ? 'status' : 'alert'}
+        class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/25 dark:bg-amber-950/25 dark:text-amber-200"
+      >
+        <Show
+          when={state.loading()}
+          fallback={
+            <>
+              Saved {platform} configuration for {connection.name} is unavailable. Retry to verify
+              access and read it again before editing. This does not confirm removal.
+            </>
+          }
+        >
+          Reading saved {platform} configuration for {connection.name}…
+        </Show>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="mdCompact"
+        disabled={state.loading()}
+        onClick={() => void state.loadConnections()}
+      >
+        Retry saved configuration
+      </Button>
+    </div>
+  );
+
   const renderConnectionSlot = (context: {
     mode: 'add' | 'edit';
     type: ConnectionType;
@@ -791,61 +827,59 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           );
         }
         case 'vmware': {
-          const vmware = findEditableVMware(connection);
-          if (!vmware) {
-            return (
-              <div
-                role="alert"
-                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
-              >
-                Couldn't find the saved VMware configuration for {connection.name}. It may have
-                already been removed.
-              </div>
-            );
-          }
           return (
-            <VMwareCredentialSlot
-              state={props.vmwareSettings}
-              editingConnection={vmware}
-              onCancel={context.onCancel}
-              onSaved={context.onSaved}
-              onToggleEnabled={() => void rowActions.togglePause(connection)}
-              togglePending={rowActions.pendingAction(connection.id) === 'pause'}
-              connectionEnabled={connection.enabled}
-              onDelete={() => void rowActions.requestRemove(connection)}
-              deletePending={rowActions.pendingAction(connection.id) === 'remove'}
-              deleteConfirming={rowActions.confirmingRemove(connection.id)}
-              deleteError={rowActions.actionError(connection.id)}
-            />
+            <Show
+              when={findEditableVMware(connection)}
+              fallback={renderUnavailableSavedConfiguration(
+                connection,
+                'VMware',
+                props.vmwareSettings,
+              )}
+            >
+              {(editableConnection) => (
+                <VMwareCredentialSlot
+                  state={props.vmwareSettings}
+                  editingConnection={editableConnection()}
+                  onCancel={context.onCancel}
+                  onSaved={context.onSaved}
+                  onToggleEnabled={() => void rowActions.togglePause(connection)}
+                  togglePending={rowActions.pendingAction(connection.id) === 'pause'}
+                  connectionEnabled={connection.enabled}
+                  onDelete={() => void rowActions.requestRemove(connection)}
+                  deletePending={rowActions.pendingAction(connection.id) === 'remove'}
+                  deleteConfirming={rowActions.confirmingRemove(connection.id)}
+                  deleteError={rowActions.actionError(connection.id)}
+                />
+              )}
+            </Show>
           );
         }
         case 'truenas': {
-          const truenas = findEditableTrueNAS(connection);
-          if (!truenas) {
-            return (
-              <div
-                role="alert"
-                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
-              >
-                Couldn't find the saved TrueNAS configuration for {connection.name}. It may have
-                already been removed.
-              </div>
-            );
-          }
           return (
-            <TrueNASCredentialSlot
-              state={props.trueNASSettings}
-              editingConnection={truenas}
-              onCancel={context.onCancel}
-              onSaved={context.onSaved}
-              onToggleEnabled={() => void rowActions.togglePause(connection)}
-              togglePending={rowActions.pendingAction(connection.id) === 'pause'}
-              connectionEnabled={connection.enabled}
-              onDelete={() => void rowActions.requestRemove(connection)}
-              deletePending={rowActions.pendingAction(connection.id) === 'remove'}
-              deleteConfirming={rowActions.confirmingRemove(connection.id)}
-              deleteError={rowActions.actionError(connection.id)}
-            />
+            <Show
+              when={findEditableTrueNAS(connection)}
+              fallback={renderUnavailableSavedConfiguration(
+                connection,
+                'TrueNAS',
+                props.trueNASSettings,
+              )}
+            >
+              {(editableConnection) => (
+                <TrueNASCredentialSlot
+                  state={props.trueNASSettings}
+                  editingConnection={editableConnection()}
+                  onCancel={context.onCancel}
+                  onSaved={context.onSaved}
+                  onToggleEnabled={() => void rowActions.togglePause(connection)}
+                  togglePending={rowActions.pendingAction(connection.id) === 'pause'}
+                  connectionEnabled={connection.enabled}
+                  onDelete={() => void rowActions.requestRemove(connection)}
+                  deletePending={rowActions.pendingAction(connection.id) === 'remove'}
+                  deleteConfirming={rowActions.confirmingRemove(connection.id)}
+                  deleteError={rowActions.actionError(connection.id)}
+                />
+              )}
+            </Show>
           );
         }
         default:

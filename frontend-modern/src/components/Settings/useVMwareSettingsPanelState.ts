@@ -1,4 +1,7 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { batch, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
+import { unwrap } from 'solid-js/store';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
 import {
   VMwareAPI,
@@ -146,10 +149,15 @@ const buildConnectionInput = (form: VMwareConnectionFormState): VMwareConnection
   };
 };
 
-// See useTrueNASSettingsPanelState: /api/vmware/connections is RequireAdmin and
-// this hook is constructed for every settings tab, so the mount fetch has to be
-// gated on the session's infrastructure capability.
-export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boolean } = {}) {
+// Settings constructs this hook for every tab. Keep both inventory and actions
+// with the org/user/capability reader that admitted them, not just its first load.
+export function useVMwareSettingsPanelState({
+  canLoad,
+  currentUser,
+}: {
+  canLoad?: () => boolean;
+  currentUser?: () => string | undefined;
+} = {}) {
   const [connections, setConnections] = createSignal<VMwareConnection[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [loadingError, setLoadingError] = createSignal<string | null>(null);
@@ -186,124 +194,238 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
     () => connections().find((connection) => connection.id === editingConnectionId()) ?? null,
   );
 
-  const loadConnections = async () => {
-    setLoading(true);
-    setLoadingError(null);
-    try {
-      const nextConnections = await VMwareAPI.listConnections();
-      setConnections(nextConnections);
-      setFeatureDisabled(false);
-      setFeatureDisabledMessage('');
-    } catch (error) {
-      if (apiErrorStatus(error) === 404) {
-        setFeatureDisabled(true);
-        setFeatureDisabledMessage(
-          getErrorMessage(error, 'VMware integration has been explicitly disabled'),
-        );
-        setConnections([]);
-        return;
-      }
-      const message = getErrorMessage(error, 'Failed to load VMware connections');
-      setLoadingError(message);
-      logger.error('[VMware Settings] Failed to load connections', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // See useTrueNASSettingsPanelState: wait for the capability to resolve rather
-  // than sampling it once at mount.
-  let connectionsRequested = false;
-  createEffect(() => {
-    if (connectionsRequested) return;
-    if (canLoad && !canLoad()) {
-      setLoading(false);
-      return;
-    }
-    connectionsRequested = true;
-    void loadConnections();
+  const accessAllowed = () => canLoad?.() ?? true;
+  const currentOrg = () => getOrgID() || 'default';
+  const snapshot = () => ({
+    org: currentOrg(),
+    user: currentUser?.(),
+    allowed: accessAllowed(),
+    controller: new AbortController(),
   });
-
-  const openCreateDialog = () => {
-    setEditingConnectionId(null);
-    setForm(createEmptyFormState());
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
+  const [reader, setReader] = createSignal(snapshot());
+  const [accessRejected, setAccessRejected] = createSignal(false);
+  let disposed = false;
+  let readController: AbortController | undefined;
+  let dialogVersion = 0;
+  const isCurrentReader = (accepted = reader()) =>
+    !disposed &&
+    accepted === reader() &&
+    !accepted.controller.signal.aborted &&
+    accepted.org === currentOrg() &&
+    accepted.user === currentUser?.() &&
+    accepted.allowed === accessAllowed();
+  const requestOptions = (accepted = reader(), signal = accepted.controller.signal) => ({
+    expectedOrgID: accepted.org,
+    signal,
+    retry: false,
+  });
+  const busy = () => saving() || testing() || deleting() || previewing();
+  const isCurrentConnection = (connection: VMwareConnection) =>
+    connections().some((current) => unwrap(current) === unwrap(connection));
+  const clearPreview = () => {
     setMonitoredSystemPreview(null);
     setMonitoredSystemPreviewUnavailableState(null);
     setMonitoredSystemPreviewGenericError(null);
-    setDialogOpen(true);
   };
-
-  const openEditDialog = (connection: VMwareConnection) => {
-    setEditingConnectionId(connection.id);
-    setForm(buildFormStateFromConnection(connection));
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
-    setDialogOpen(true);
-  };
-
   const resetDialogState = () => {
+    dialogVersion += 1;
     setDialogOpen(false);
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
     setConnectionFailure(null);
     setConnectionTestWarning(null);
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
+    clearPreview();
   };
-
-  const closeDialog = () => {
-    if (saving() || testing()) return;
-    resetDialogState();
-  };
-
-  const openDeleteDialog = (connection: VMwareConnection) => {
-    setPendingDeleteConnection(connection);
-    setDeleteDialogOpen(true);
-  };
-
   const resetDeleteDialogState = () => {
     setDeleteDialogOpen(false);
     setPendingDeleteConnection(null);
   };
-
-  const closeDeleteDialog = () => {
-    if (deleting()) return;
-    resetDeleteDialogState();
+  const resetReader = (reload = true) => {
+    reader().controller.abort();
+    readController?.abort();
+    readController = undefined;
+    batch(() => {
+      // A returned user/org name does not revive an earlier reader's promises.
+      setReader(snapshot());
+      resetDialogState();
+      resetDeleteDialogState();
+      setConnections([]);
+      setLoadingError(null);
+      setFeatureDisabled(false);
+      setFeatureDisabledMessage('');
+      setAccessRejected(false);
+      setSaving(false);
+      setTesting(false);
+      setDeleting(false);
+      setPreviewing(false);
+      setLoading(false);
+    });
+    if (!disposed && reload) void loadConnections();
+  };
+  const ensureReader = () => {
+    if (isCurrentReader()) return true;
+    if (!disposed) resetReader();
+    return false;
+  };
+  const canAct = () =>
+    ensureReader() && accessAllowed() && !accessRejected() && !featureDisabled() && !busy();
+  const withdrawOnDenial = (error: unknown) => {
+    if (![401, 403].includes(apiErrorStatus(error) ?? 0)) return false;
+    resetReader(false);
+    setAccessRejected(true);
+    setLoadingError('VMware settings access could not be verified. Reload before making changes.');
+    return true;
   };
 
+  const loadConnections = async () => {
+    if (!ensureReader() || !accessAllowed() || readController || busy()) return;
+    const accepted = reader();
+    const controller = new AbortController();
+    readController = controller;
+    const isCurrent = () => isCurrentReader(accepted) && readController === controller;
+    batch(() => {
+      setLoading(true);
+      setLoadingError(null);
+    });
+    try {
+      const nextConnections = await VMwareAPI.listConnections(
+        requestOptions(accepted, controller.signal),
+      );
+      if (!isCurrent()) return;
+      batch(() => {
+        setConnections(nextConnections);
+        if (
+          editingConnectionId() &&
+          !nextConnections.some((connection) => connection.id === editingConnectionId())
+        )
+          resetDialogState();
+        if (
+          pendingDeleteConnection() &&
+          !nextConnections.some((connection) => connection.id === pendingDeleteConnection()?.id)
+        )
+          resetDeleteDialogState();
+        setAccessRejected(false);
+        setFeatureDisabled(false);
+        setFeatureDisabledMessage('');
+      });
+    } catch (error) {
+      if (!isCurrent()) return;
+      if (withdrawOnDenial(error)) return;
+      batch(() => {
+        setConnections([]);
+        resetDialogState();
+        resetDeleteDialogState();
+      });
+      if (apiErrorStatus(error) === 404) {
+        setFeatureDisabled(true);
+        setFeatureDisabledMessage(
+          getErrorMessage(error, 'VMware integration has been explicitly disabled'),
+        );
+        return;
+      }
+      setLoadingError(getErrorMessage(error, 'Failed to load VMware connections'));
+      logger.error('[VMware Settings] Failed to load connections', error);
+    } finally {
+      if (isCurrent()) {
+        readController = undefined;
+        setLoading(false);
+      }
+    }
+  };
+
+  createEffect(
+    on([accessAllowed, () => currentUser?.()], (current, previous) => {
+      if (!previous || current.some((value, index) => value !== previous[index])) resetReader();
+    }),
+  );
+  const unsubscribeOrg = eventBus.on('org_switched', () => {
+    if (!isCurrentReader()) resetReader();
+  });
+  onCleanup(() => {
+    disposed = true;
+    unsubscribeOrg();
+    resetReader(false);
+  });
+
+  const openCreateDialog = () => {
+    if (!canAct()) return;
+    batch(() => {
+      resetDialogState();
+      resetDeleteDialogState();
+      setDialogOpen(true);
+    });
+  };
+  const openEditDialog = (connection: VMwareConnection) => {
+    if (!canAct() || !isCurrentConnection(connection)) return;
+    batch(() => {
+      resetDialogState();
+      resetDeleteDialogState();
+      setEditingConnectionId(connection.id);
+      setForm(buildFormStateFromConnection(connection));
+      setDialogOpen(true);
+    });
+  };
+  const closeDialog = () => {
+    if (saving() || testing()) return;
+    batch(resetDialogState);
+  };
+  const openDeleteDialog = (connection: VMwareConnection) => {
+    if (!canAct() || !isCurrentConnection(connection)) return;
+    batch(() => {
+      resetDialogState();
+      setPendingDeleteConnection(connection);
+      setDeleteDialogOpen(true);
+    });
+  };
+  const closeDeleteDialog = () => {
+    if (!deleting()) resetDeleteDialogState();
+  };
   const updateForm = (patch: Partial<VMwareConnectionFormState>) => {
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
-    setForm((current) => ({ ...current, ...patch }));
+    if (!ensureReader() || !accessAllowed() || accessRejected() || !dialogOpen() || saving())
+      return;
+    dialogVersion += 1;
+    batch(() => {
+      setConnectionFailure(null);
+      setConnectionTestWarning(null);
+      clearPreview();
+      setForm((current) => ({ ...current, ...patch }));
+    });
+  };
+  const notifyDenial = (error: unknown) => {
+    if (!withdrawOnDenial(error)) return false;
+    notificationStore.error(loadingError()!);
+    return true;
   };
 
   const testCurrentForm = async () => {
-    setTesting(true);
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
+    if (!canAct() || !dialogOpen()) return false;
+    const accepted = reader();
+    const version = dialogVersion;
+    const isCurrent = () => isCurrentReader(accepted) && version === dialogVersion;
+    batch(() => {
+      setTesting(true);
+      setConnectionFailure(null);
+      setConnectionTestWarning(null);
+    });
     try {
       const payload = buildConnectionInput(form());
       const result = editingConnectionId()
-        ? await VMwareAPI.testSavedConnection(editingConnectionId()!, payload)
-        : await VMwareAPI.testConnection(payload);
+        ? await VMwareAPI.testSavedConnection(
+            editingConnectionId()!,
+            payload,
+            requestOptions(accepted),
+          )
+        : await VMwareAPI.testConnection(payload, requestOptions(accepted));
+      if (!isCurrent()) return false;
       const warning = buildConnectionTestWarning(result);
       setConnectionTestWarning(warning);
-      if (warning) {
-        notificationStore.warning(warning.message);
-      } else {
-        notificationStore.success('VMware connection successful');
-      }
+      if (warning) notificationStore.warning(warning.message);
+      else notificationStore.success('VMware connection successful');
       return true;
     } catch (error) {
+      if (!isCurrentReader(accepted)) return false;
+      // A changed draft obsoletes its test result, but not this reader's denial.
+      if (notifyDenial(error) || !isCurrent()) return false;
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
         category: apiErrorDetailField(error, 'category'),
@@ -315,14 +437,21 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
       logger.error('[VMware Settings] Connection test failed', error);
       return false;
     } finally {
-      setTesting(false);
+      if (isCurrentReader(accepted)) setTesting(false);
     }
   };
 
   const testSavedConnection = async (connection: VMwareConnection) => {
+    if (!canAct() || !isCurrentConnection(connection)) return;
+    const accepted = reader();
     setTesting(true);
     try {
-      const result = await VMwareAPI.testSavedConnection(connection.id);
+      const result = await VMwareAPI.testSavedConnection(
+        connection.id,
+        undefined,
+        requestOptions(accepted),
+      );
+      if (!isCurrentReader(accepted)) return;
       const warning = buildConnectionTestWarning(result);
       if (warning) {
         notificationStore.warning(
@@ -334,6 +463,7 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
         );
       }
     } catch (error) {
+      if (!isCurrentReader(accepted) || notifyDenial(error)) return;
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
         category: apiErrorDetailField(error, 'category'),
@@ -346,31 +476,41 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
       notificationStore.error(failure.message);
       logger.error('[VMware Settings] Saved connection test failed', error);
     } finally {
-      setTesting(false);
-      await loadConnections();
+      if (isCurrentReader(accepted)) {
+        setTesting(false);
+        await loadConnections();
+      }
     }
   };
 
   const previewCurrentForm = async () => {
-    setPreviewing(true);
-    setConnectionFailure(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
+    if (!canAct() || !dialogOpen()) return null;
+    const accepted = reader();
+    const version = dialogVersion;
+    const isCurrent = () => isCurrentReader(accepted) && version === dialogVersion;
+    batch(() => {
+      setPreviewing(true);
+      setConnectionFailure(null);
+      clearPreview();
+    });
     try {
       const payload = buildConnectionInput(form());
       const preview = editingConnectionId()
-        ? await VMwareAPI.previewSavedConnection(editingConnectionId()!, payload)
-        : await VMwareAPI.previewConnection(payload);
+        ? await VMwareAPI.previewSavedConnection(
+            editingConnectionId()!,
+            payload,
+            requestOptions(accepted),
+          )
+        : await VMwareAPI.previewConnection(payload, requestOptions(accepted));
+      if (!isCurrent()) return null;
       setMonitoredSystemPreview(preview);
-      setMonitoredSystemPreviewUnavailableState(null);
-      setMonitoredSystemPreviewGenericError(null);
       return preview;
     } catch (error) {
+      if (!isCurrentReader(accepted)) return null;
+      if (notifyDenial(error) || !isCurrent()) return null;
       const unavailableState = monitoredSystemImpactPreviewUnavailableStateFromError(error);
       if (unavailableState) {
-        setMonitoredSystemPreview(null);
         setMonitoredSystemPreviewUnavailableState(unavailableState);
-        setMonitoredSystemPreviewGenericError(null);
         logger.error('[VMware Settings] Preview failed', error);
         return null;
       }
@@ -380,60 +520,64 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
         message: getVMwareErrorMessage(error, 'Could not preview monitored-system impact'),
         fallback: 'Could not preview monitored-system impact',
       });
-      setMonitoredSystemPreview(null);
-      setMonitoredSystemPreviewUnavailableState(null);
       setMonitoredSystemPreviewGenericError(failure.message);
       if (
         apiErrorCode(error) === 'vmware_connection_failed' ||
         apiErrorCode(error) === 'vmware_invalid_config'
-      ) {
+      )
         setConnectionFailure(failure);
-      }
       logger.error('[VMware Settings] Preview failed', error);
       return null;
     } finally {
-      setPreviewing(false);
+      if (isCurrentReader(accepted)) setPreviewing(false);
     }
   };
 
   const saveCurrentForm = async () => {
+    if (!canAct() || !dialogOpen()) return;
+    const accepted = reader();
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
-      if (editingConnectionId()) {
-        await VMwareAPI.updateConnection(editingConnectionId()!, payload);
-        notificationStore.success('VMware connection updated');
-      } else {
-        await VMwareAPI.createConnection(payload);
-        notificationStore.success('VMware connection added');
-      }
-      resetDialogState();
+      const editingID = editingConnectionId();
+      if (editingID) await VMwareAPI.updateConnection(editingID, payload, requestOptions(accepted));
+      else await VMwareAPI.createConnection(payload, requestOptions(accepted));
+      if (!isCurrentReader(accepted)) return;
+      notificationStore.success(
+        editingID ? 'VMware connection updated' : 'VMware connection added',
+      );
+      batch(resetDialogState);
+      setSaving(false);
       await loadConnections();
     } catch (error) {
+      if (!isCurrentReader(accepted) || notifyDenial(error)) return;
       setMonitoredSystemPreviewUnavailableState(null);
-      const message = getErrorMessage(error, 'Failed to save VMware connection');
-      notificationStore.error(message);
+      notificationStore.error(getErrorMessage(error, 'Failed to save VMware connection'));
       logger.error('[VMware Settings] Save failed', error);
     } finally {
-      setSaving(false);
+      if (isCurrentReader(accepted)) setSaving(false);
     }
   };
 
   const deletePendingConnection = async () => {
+    if (!canAct()) return;
     const connection = pendingDeleteConnection();
-    if (!connection) return;
+    if (!connection || !isCurrentConnection(connection)) return;
+    const accepted = reader();
     setDeleting(true);
     try {
-      await VMwareAPI.deleteConnection(connection.id);
+      await VMwareAPI.deleteConnection(connection.id, requestOptions(accepted));
+      if (!isCurrentReader(accepted)) return;
       notificationStore.success(`Removed ${connection.name || connection.host}`);
       resetDeleteDialogState();
+      setDeleting(false);
       await loadConnections();
     } catch (error) {
-      const message = getErrorMessage(error, 'Failed to remove VMware connection');
-      notificationStore.error(message);
+      if (!isCurrentReader(accepted) || notifyDenial(error)) return;
+      notificationStore.error(getErrorMessage(error, 'Failed to remove VMware connection'));
       logger.error('[VMware Settings] Delete failed', error);
     } finally {
-      setDeleting(false);
+      if (isCurrentReader(accepted)) setDeleting(false);
     }
   };
 
