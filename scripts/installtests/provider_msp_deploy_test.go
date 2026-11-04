@@ -471,7 +471,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"/v1/provider-msp/eval-license",
 		"PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE",
 		"reusing existing evaluation license",
-		"could not reach the license server",
+		"license server rejected the evaluation request (HTTP ${http_status})",
 		"PULSE_PROVIDER_MSP_EVAL_EMAIL",
 		"PULSE_PROVIDER_MSP_SIGNUP_SOURCE",
 		`setup_stage: "images_ready"`,
@@ -1041,7 +1041,7 @@ validate_compose_config
 			if strings.Count(string(output), "same-compose-config\n") != 2 {
 				t.Fatalf("pre/final validation did not both use the same config: %s", output)
 			}
-			if skip == "0" && !strings.Contains(string(output), "could not reach the license server") {
+			if skip == "0" && !strings.Contains(string(output), "evaluation license request failed (curl exit 7)") {
 				t.Fatal("fixture did not exercise unavailable licence issuance")
 			}
 			after, err := os.ReadFile(filepath.Join(dir, ".env"))

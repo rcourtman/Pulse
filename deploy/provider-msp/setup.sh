@@ -366,9 +366,9 @@ Set ${key} in ${env_path} by hand, or check this host can reach the registry."
 # by email put a human round-trip in front of the first screen; this asks the
 # license server directly with the public half of the key generated above.
 #
-# The private key never leaves this host. Failure is a warning, not a stop: the
-# portal, provisioning and client isolation all work regardless, and an
-# air-gapped operator can skip it outright.
+# The private key never leaves this host. Failure is a warning, not a stop:
+# the portal can start unlicensed, but a running portal is not proof that client
+# runtimes have MSP capabilities. An air-gapped operator can skip the request.
 ensure_eval_license() {
   local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
   [[ -f "${env_path}" ]] || die "missing ${env_path}"
@@ -386,8 +386,7 @@ ensure_eval_license() {
 
   if truthy "${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE}"; then
     log "PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE set: staying unlicensed"
-    log "  the portal and client isolation work, but client workspaces will not"
-    log "  carry MSP capabilities until a license is installed"
+    log "  client MSP capabilities are not active until a license is installed"
     return 0
   fi
 
@@ -409,8 +408,8 @@ ensure_eval_license() {
     return 0
   fi
 
-  log "requesting a 2-client evaluation license from ${PULSE_PROVIDER_MSP_LICENSE_URL}"
-  local body response token
+  log "requesting a 2-client evaluation license"
+  local body response http_status curl_exit token=""
   body="$(jq -cn \
     --arg public_key "${public_key}" \
     --arg email "${PULSE_PROVIDER_MSP_EVAL_EMAIL}" \
@@ -418,22 +417,59 @@ ensure_eval_license() {
     '{entitlement_signing_public_key: $public_key, setup_stage: "images_ready"}
       + (if $email == "" then {} else {email: $email} end)
       + (if $signup_source == "" then {} else {signup_source: $signup_source} end)')"
-  response="$(curl -fsS --max-time 20 \
-    -H 'Content-Type: application/json' \
-    -d "${body}" \
-    "${PULSE_PROVIDER_MSP_LICENSE_URL%/}/v1/provider-msp/eval-license" 2>/dev/null || true)"
-
-  if [[ -z "${response}" ]]; then
-    log "warning: could not reach the license server"
-    log "  continuing unlicensed. The portal and client isolation work, but client"
-    log "  workspaces will not carry MSP capabilities. Re-run setup.sh to retry,"
-    log "  or set CP_PROVIDER_MSP_LICENSE_FILE if you already hold a license."
-    return 0
+  # Keep transport exit, HTTP status and body separate. --fail discards the
+  # distinction between a request rejection and a connection failure. The
+  # final curl-owned line is metadata, even when the JSON body has newlines.
+  # Neither arbitrary response/error text nor the configured URL is logged.
+  if response="$(curl -sS --max-time 20 --write-out $'\n%{http_code}' \
+      -H 'Content-Type: application/json' \
+      -d "${body}" \
+      "${PULSE_PROVIDER_MSP_LICENSE_URL%/}/v1/provider-msp/eval-license" 2>/dev/null)"; then
+    curl_exit=0
+  else
+    curl_exit=$?
   fi
+  http_status="${response##*$'\n'}"
+  response="${response%$'\n'*}"
 
-  token="$(printf '%s' "${response}" | jq -r '.license // empty' 2>/dev/null || true)"
+  if [[ "${curl_exit}" != 0 ]]; then
+    log "warning: evaluation license request failed (curl exit ${curl_exit})"
+    case "${curl_exit}" in
+      6) log "  check this host's DNS resolution before retrying" ;;
+      7|28) log "  check this host's connection to the license server before retrying" ;;
+      35|51|60) log "  check the license endpoint and certificate trust before retrying; keep TLS verification enabled" ;;
+      *) log "  check the configured license endpoint and host connectivity before retrying" ;;
+    esac
+  elif [[ ! "${http_status}" =~ ^[1-5][0-9]{2}$ ]]; then
+    log "warning: license server returned an unexpected HTTP status"
+  elif [[ "${http_status}" == 429 ]]; then
+    log "warning: evaluation license request was rate limited (HTTP 429)"
+    log "  wait before a deliberate retry"
+  elif [[ "${http_status}" == 4* ]]; then
+    log "warning: license server rejected the evaluation request (HTTP ${http_status})"
+    log "  Check the request details before retrying, including the configured endpoint and public signing key."
+  elif [[ "${http_status}" == 5* ]]; then
+    log "warning: evaluation license service is temporarily unavailable (HTTP ${http_status})"
+    log "  try again later; no automatic retry was attempted"
+  elif [[ "${http_status}" != 2* ]]; then
+    log "warning: license server returned an unexpected HTTP status (HTTP ${http_status})"
+    log "  check the configured license endpoint before retrying"
+  else
+    # A successful HTTP exchange is not an issued licence. Admit exactly one
+    # JSON object and a nonempty string, never a number/object or extra document.
+    token="$(printf '%s' "${response}" | jq -ers '
+      if length == 1 and (.[0] | type == "object") then
+        .[0].license | select(type == "string" and length > 0 and (test("[[:space:][:cntrl:]]") | not))
+      else empty end' 2>/dev/null || true)"
+    if [[ -z "${token}" ]]; then
+      log "warning: license server response contained no valid license"
+    fi
+  fi
   if [[ -z "${token}" ]]; then
-    log "warning: license server response contained no license; continuing unlicensed"
+    log "  continuing unlicensed; client MSP capabilities are not active"
+    log "  resolve the failure before deliberately re-running setup.sh, or set"
+    log "  CP_PROVIDER_MSP_LICENSE_FILE to an existing license bound to this host's signing key."
+    log "  Keep saved clients and signing keys; do not recreate them to retry issuance."
     return 0
   fi
 
@@ -442,7 +478,11 @@ ensure_eval_license() {
   set_env_value CP_PROVIDER_MSP_LICENSE_FILE "./provider-msp-eval-license.jwt" "${env_path}"
 
   local expires
-  expires="$(printf '%s' "${response}" | jq -r '.expires_at // empty' 2>/dev/null || true)"
+  expires="$(printf '%s' "${response}" | jq -r '.expires_at | select(type == "string")' 2>/dev/null || true)"
+  # Preserve useful expiry information without echoing arbitrary server data.
+  if [[ ! "${expires}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$ ]]; then
+    expires=""
+  fi
   log "evaluation license installed: 2 client workspaces${expires:+, expires ${expires}}"
   log "  Plan in your provider portal shows whether a paid upgrade is available"
   log "  keep within two clients until Plan confirms a higher active limit"
@@ -955,10 +995,11 @@ Prove the platform before the first real client:
 Portal (after bootstrap):
   https://${domain}/portal
 
-Plan: the evaluation covers two clients. Open Plan in the portal to see whether
-a paid upgrade is available. Keep within two clients until Plan confirms a
-higher active limit. A paid plan exposes Manage billing for changes or
-cancellation.
+Plan: check Plan in the portal for this deployment's licence status and whether
+a paid upgrade is available. A successfully issued evaluation covers two clients;
+a running portal alone does not confirm active client MSP capabilities. Keep
+within two clients until Plan confirms a higher active limit. A paid plan exposes
+Manage billing for changes or cancellation.
 
 Day 2: portal sessions last 7 days. Re-run the bootstrap command above any
 time to print a fresh owner sign-in link, or use
