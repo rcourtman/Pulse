@@ -1607,8 +1607,9 @@ export function renderHeaderHTML(context: ShellViewContext): string {
     return (
       '<div class="header-account-chip">' +
         '<span class="header-account-email">' + escapeHTML(context.bootstrap.email || '') + '</span>' +
-        '<button class="logout-btn" id="logout-btn" type="button">Sign out</button>' +
-      '</div>'
+        '<button class="logout-btn" id="logout-btn" type="button" aria-describedby="portal-logout-error">Sign out</button>' +
+      '</div>' +
+      '<div class="header-logout-error" id="portal-logout-error" role="alert" aria-atomic="true" hidden></div>'
     );
   }
   if (!hasSignupPath(context.signupPath)) {

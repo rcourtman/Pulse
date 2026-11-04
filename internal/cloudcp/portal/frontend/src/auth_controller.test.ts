@@ -139,6 +139,76 @@ describe('auth controller', function() {
     return { ok: status >= 200 && status < 300, status, headers: new Headers({ 'content-type': 'application/json' }), json: async function() { return payload; } };
   }
 
+  it.each([0, 401, 403, 503])('keeps a failed sign-out %i visible without losing the task or automatically retrying', async function(status) {
+    var settle!: (value: ReturnType<typeof jsonResponse>) => void;
+    var reject!: (error: Error) => void;
+    var fetchMock = vi.fn().mockImplementation(function() {
+      return new Promise(function(resolve, fail) { settle = resolve; reject = fail; });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    mountSignIn({ authenticated: true, email: 'owner@example.com', bootstrap_path: '' });
+    var root = document.getElementById('portal-app-root')!;
+    var task = document.createElement('input');
+    task.value = 'Work in progress';
+    root.appendChild(task);
+    var button = document.getElementById('logout-btn') as HTMLButtonElement;
+    button.click();
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('Signing out…');
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    // An event from stale, enabled markup cannot submit a duplicate request.
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    if (status) settle(jsonResponse(status, { message: 'Private server detail must not appear' }));
+    else reject(new Error('Connection lost'));
+    await flushAsync();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/logout', { method: 'POST' });
+    var error = document.getElementById('portal-logout-error') as HTMLElement;
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toBe('Sign out could not be confirmed. You may still be signed in. Try Sign out again.');
+    expect(error.getAttribute('role')).toBe('alert');
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toBe('Sign out');
+    expect(button.getAttribute('aria-busy')).toBe('false');
+    expect(document.activeElement).toBe(button);
+    expect(root.contains(task)).toBe(true);
+    expect(task.value).toBe('Work in progress');
+    expect(document.body.textContent).not.toContain('Private server detail');
+    button.click();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(error.hidden).toBe(true);
+    reject(new Error('Explicit retry failed'));
+    await flushAsync();
+    expect(error.hidden).toBe(false);
+  });
+
+  it('retains pending and failed sign-out state when bootstrap replaces the header', async function() {
+    var reject!: (error: Error) => void;
+    var fetchMock = vi.fn().mockImplementation(function() { return new Promise(function(_resolve, fail) { reject = fail; }); });
+    vi.stubGlobal('fetch', fetchMock);
+    var bootstrap = { authenticated: true, email: 'owner@example.com', bootstrap_path: '' };
+    var store = mountSignIn(bootstrap);
+    (document.getElementById('logout-btn') as HTMLButtonElement).click();
+    store.setBootstrap(bootstrap);
+    var replacement = document.getElementById('logout-btn') as HTMLButtonElement;
+    expect(replacement.disabled).toBe(true);
+    expect(replacement.textContent).toBe('Signing out…');
+    replacement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    reject(new Error('Connection lost'));
+    await flushAsync();
+    store.setBootstrap(bootstrap);
+    var error = document.getElementById('portal-logout-error') as HTMLElement;
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toContain('may still be signed in');
+    expect((document.getElementById('logout-btn') as HTMLButtonElement).disabled).toBe(false);
+    store.setBootstrap({ authenticated: false });
+    expect(document.getElementById('portal-logout-error')).toBeNull();
+    store.setBootstrap(bootstrap);
+    expect((document.getElementById('portal-logout-error') as HTMLElement).hidden).toBe(true);
+  });
+
   it('submits the real signed-out form once while pending, then permits deliberate resend', async function() {
     var settle!: (value: ReturnType<typeof jsonResponse>) => void;
     var fetchMock = vi.fn().mockImplementation(function() { return new Promise(function(resolve) { settle = resolve; }); });

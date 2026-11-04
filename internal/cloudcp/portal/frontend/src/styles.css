@@ -190,6 +190,14 @@ header .theme-toggle:hover {
 
 header .logout-btn { flex-shrink: 0; white-space: nowrap; }
 
+.header-logout-error {
+  max-width: 34rem;
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 /* ── Buttons ──────────────────────────────────────────────────── */
 header .logout-btn,
 .link-button,

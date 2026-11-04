@@ -1,7 +1,7 @@
-import { beginMutationState, failMutationState, succeedMutationState } from './async_state';
+import { beginMutationState, failMutationState, resetMutationState, succeedMutationState } from './async_state';
 import { PortalAPIError } from './api';
 import type { PortalAPI } from './api';
-import { createPortalLoginState, syncLoginStateBootstrapEmail } from './state';
+import { createMutationState, syncLoginStateBootstrapEmail } from './state';
 import type { PortalLoginState } from './types';
 import type { PortalStore } from './store';
 
@@ -25,10 +25,50 @@ function getElement<T extends HTMLElement = HTMLElement>(id: string): T | null {
 }
 
 export function installAuthController(deps: AuthControllerDeps): AuthController {
+  // Keep request state outside the button: a bootstrap refresh can replace
+  // the header while the sign-out request is still in flight.
+  var logoutRequest = createMutationState();
+
+  function renderLogoutState(): void {
+    if (!deps.store.getBootstrap().authenticated) resetMutationState(logoutRequest);
+    var button = getElement<HTMLButtonElement>('logout-btn');
+    if (button) {
+      button.disabled = logoutRequest.pending;
+      button.textContent = logoutRequest.pending ? 'Signing out…' : 'Sign out';
+      button.setAttribute('aria-busy', String(logoutRequest.pending));
+    }
+    var error = getElement<HTMLElement>('portal-logout-error');
+    if (error) {
+      error.textContent = logoutRequest.error;
+      error.hidden = !logoutRequest.error;
+    }
+  }
+
+  async function signOut(): Promise<void> {
+    if (logoutRequest.pending || !deps.store.getBootstrap().authenticated) return;
+    beginMutationState(logoutRequest);
+    renderLogoutState();
+    try {
+      await deps.api.logout();
+    } catch (_) {
+      // A failed response cannot tell us whether the server revoked the
+      // session. Do not imply success, discard the current task or retry it.
+      failMutationState(logoutRequest, 'Sign out could not be confirmed. You may still be signed in. Try Sign out again.');
+      renderLogoutState();
+      getElement<HTMLButtonElement>('logout-btn')?.focus();
+      return;
+    }
+    window.location.href = deps.store.getBootstrap().portal_path;
+  }
+
   deps.store.updateLoginState(function(loginState) {
     var bootstrap = deps.store.getBootstrap();
     syncLoginStateBootstrapEmail(loginState, bootstrap.email || '');
   }, { notify: false });
+
+  deps.store.subscribeBootstrap(renderLogoutState);
+  deps.store.subscribeLogin(renderLogoutState);
+  renderLogoutState();
 
   async function sendMagicLink() {
     if (deps.store.getBootstrap().email_sign_in_available === false) {
@@ -105,14 +145,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
       return;
     }
     event.preventDefault();
-    logoutBtn.disabled = true;
-    logoutBtn.textContent = 'Signing out…';
-    (async function() {
-      try {
-        await deps.api.logout();
-      } catch (_) {}
-      window.location.href = deps.store.getBootstrap().portal_path;
-    })();
+    void signOut();
   });
 
   document.addEventListener('input', function(event) {
