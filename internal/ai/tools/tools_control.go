@@ -220,6 +220,23 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 		agent, _ := connectedAgentForNodeReference(rs, reference, agents)
 		return agent.AgentID
 	}
+	// throughGuest sends a command inside a guest through its node's agent. With no
+	// node agent connected, an agent known by identity to run in that guest can take
+	// it directly. It runs in the same place, and no name can select that agent.
+	throughGuest := func(targetType, transport string, vmid int) CommandRoutingResult {
+		nodeAgentID := nodeAgent()
+		if nodeAgentID == "" {
+			if agent, ok := connectedAgentByID(agents, loc.GuestAgentID); ok {
+				result.AgentID, result.AgentHostname = agent.AgentID, agent.Hostname
+				return result
+			}
+		}
+		result.TargetType, result.TargetID, result.Transport = targetType, fmt.Sprintf("%d", vmid), transport
+		if agent, ok := connectedAgentByID(agents, nodeAgentID); ok {
+			result.AgentID, result.AgentHostname = agent.AgentID, agent.Hostname
+		}
+		return result
+	}
 	if loc.Found {
 		result.ResolvedKind = loc.ResourceType
 		// Route based on resource type
@@ -260,41 +277,13 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 
 		case "system-container":
 			// System container - route through node agent via pct exec
-			nodeAgentID := nodeAgent()
-			result.ResolvedKind = "system-container"
 			result.ResolvedNode = loc.Node
-			result.TargetType = "container"
-			result.TargetID = fmt.Sprintf("%d", loc.VMID)
-			result.Transport = "pct_exec"
-			if nodeAgentID != "" {
-				result.AgentID = nodeAgentID
-				for _, agent := range agents {
-					if agent.AgentID == nodeAgentID {
-						result.AgentHostname = agent.Hostname
-						break
-					}
-				}
-			}
-			return result
+			return throughGuest("container", "pct_exec", loc.VMID)
 
 		case "vm":
 			// VM - route through node agent via qm guest exec
-			nodeAgentID := nodeAgent()
-			result.ResolvedKind = "vm"
 			result.ResolvedNode = loc.Node
-			result.TargetType = "vm"
-			result.TargetID = fmt.Sprintf("%d", loc.VMID)
-			result.Transport = "qm_guest_exec"
-			if nodeAgentID != "" {
-				result.AgentID = nodeAgentID
-				for _, agent := range agents {
-					if agent.AgentID == nodeAgentID {
-						result.AgentHostname = agent.Hostname
-						break
-					}
-				}
-			}
-			return result
+			return throughGuest("vm", "qm_guest_exec", loc.VMID)
 
 		case "app-container", "docker-host":
 			// Docker container or Docker host
@@ -302,36 +291,10 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 			result.ResolvedNode = loc.Node
 
 			if loc.DockerHostType == "system-container" {
-				nodeAgentID := nodeAgent()
-				result.TargetType = "container"
-				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
-				result.Transport = "pct_exec"
-				if nodeAgentID != "" {
-					result.AgentID = nodeAgentID
-					for _, agent := range agents {
-						if agent.AgentID == nodeAgentID {
-							result.AgentHostname = agent.Hostname
-							break
-						}
-					}
-				}
-				return result
+				return throughGuest("container", "pct_exec", loc.DockerHostVMID)
 			}
 			if loc.DockerHostType == "vm" {
-				nodeAgentID := nodeAgent()
-				result.TargetType = "vm"
-				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
-				result.Transport = "qm_guest_exec"
-				if nodeAgentID != "" {
-					result.AgentID = nodeAgentID
-					for _, agent := range agents {
-						if agent.AgentID == nodeAgentID {
-							result.AgentHostname = agent.Hostname
-							break
-						}
-					}
-				}
-				return result
+				return throughGuest("vm", "qm_guest_exec", loc.DockerHostVMID)
 			}
 			// Standalone parents keep an explicit agent identity when available.
 			reference := loc.AgentID

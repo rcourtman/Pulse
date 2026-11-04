@@ -613,16 +613,22 @@ search answer a node's flag, and a guest's `node_command_agent_connected`, throu
 that lookup, and add `id` and `instance` only to node rows whose shown name repeats.
 A system or Docker host row's flag, and the topology Docker host flag and count,
 ask `routeCommandTarget` about the row's ID, so they report where a command would
-go: a Docker host in a guest answers for the guest's node. A topology Docker host
-row carries `id` only when another Docker host has its hostname. Routing never sends
-a command for a guest row to an agent inside that guest, so a guest's own
-`command_agent_connected` instead reports an agent linked to or folded into the
-guest, or, while no agent is linked to it, an unlinked agent with its name when no
-node and no other guest has that name.
+go: a Docker host in a guest goes through the guest's node, or to its own agent
+while the node has no connected agent. That direct route needs identity: a
+connected agent with a matching name cannot take it. A topology Docker host row
+carries `id` only when another Docker host, a guest or a node has its hostname, so
+every row shows a reference that reaches what its flag reports. A command for a guest
+row goes through its node. It reaches an agent inside the guest only when that agent
+is folded into the guest and the node has no connected agent. An automatic link can
+come from a hostname, so it never takes a guest row's command, and that agent is
+reached through its own row. A guest's own `command_agent_connected` reports an agent
+linked to or folded into the guest, or, while no agent is linked to it, an unlinked
+agent with its name when no node and no other guest has that name.
 `TestCommandConnectivityDoesNotReplaceMonitoringEvidence`,
 `TestTopologyOmitsUnobservedCommandConnections`,
 `TestQueryCommandFlagsFollowTheNodeNotItsName`,
 `TestQueryHostFlagsFollowCommandRouting`,
+`TestCommandsReachAnAgentInsideAGuestOnlyByIdentity`,
 `TestQueryGuestOwnFlagFollowsItsAgentNotItsName` and
 `TestAssistantInventoryDoesNotInventCommandConnectionObservations` cover these
 projection and continuity boundaries. Existing persisted tool records are not

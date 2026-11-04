@@ -2411,11 +2411,12 @@ func (c *queryCommandConnections) target(id string) *bool {
 	return commandConnectionObservation(c.agents, commandRouteReaches(c.rs, c.agents, id))
 }
 
-// guest answers whether a connected agent runs inside this guest. Routing never
-// sends a command for a guest row to such an agent: it goes through the parent,
-// which node_command_agent_connected reports, and the agent is reached through its
-// own row. A parent's agent is never the guest's connection, so this reads the
-// guest's name and not its identity hostnames, which can include its host's.
+// guest answers whether a connected agent runs inside this guest. A command for a
+// guest row goes through the parent, which node_command_agent_connected reports. A
+// linked agent is reached through its own row, since a link can come from a name.
+// Only an agent folded into the guest takes the row's command, while no parent
+// agent is connected. A parent's agent is never the guest's connection, so this
+// reads the guest's name and not its identity hostnames, which can include its host's.
 func (c *queryCommandConnections) guest(guestID, name string) *bool {
 	return commandConnectionObservation(c.agents, c.guestHasOwnAgent(guestID, name))
 }
@@ -2426,9 +2427,11 @@ func (c *queryCommandConnections) guestHasOwnAgent(guestID, name string) bool {
 	}
 	// A manual link folds the agent's record into the guest.
 	if resolver, ok := c.rs.(unifiedresources.ReferenceReadState); ok {
-		if guest, _, found := resolver.GetByReference(guestID); found && guest != nil && guest.Agent != nil && guest.Agent.AgentID != "" {
-			_, connected := connectedAgentByID(c.agents, guest.Agent.AgentID)
-			return connected
+		if guest, _, found := resolver.GetByReference(guestID); found {
+			if agentID := unifiedresources.ResourceOwnAgentID(guest); agentID != "" {
+				_, connected := connectedAgentByID(c.agents, agentID)
+				return connected
+			}
 		}
 	}
 	known := c.readGuestAgents()
@@ -4334,10 +4337,39 @@ func proxmoxTopologyNodeKeyOf(node *unifiedresources.NodeView) proxmoxTopologyNo
 	return proxmoxTopologyNodeKey{instance: node.Instance(), name: firstNonEmptyString(node.NodeName(), node.Name())}
 }
 
-// dockerHostsSharingAHostname finds rows a hostname cannot select, so they carry
-// an ID. Hostnames can differ only by a domain, so these are not exact matches.
-func dockerHostsSharingAHostname(hosts []*unifiedresources.DockerHostView) map[string]bool {
+// dockerHostsAHostnameCannotSelect finds rows a hostname cannot select, so they
+// carry an ID. A Docker host's hostname can differ from another's only by a domain,
+// so those are not exact matches. A guest or node has to match exactly, as it does
+// when a command names it.
+func dockerHostsAHostnameCannotSelect(rs unifiedresources.ReadState) map[string]bool {
+	hosts := rs.DockerHosts()
 	repeats := make(map[string]bool)
+	others := make(map[string][]string)
+	for _, node := range rs.Nodes() {
+		if node != nil {
+			others[node.NodeName()] = append(others[node.NodeName()], node.ID())
+		}
+	}
+	for _, vm := range rs.VMs() {
+		if vm != nil {
+			others[vm.Name()] = append(others[vm.Name()], vm.ID())
+		}
+	}
+	for _, container := range rs.Containers() {
+		if container != nil {
+			others[container.Name()] = append(others[container.Name()], container.ID())
+		}
+	}
+	for _, host := range hosts {
+		if host == nil {
+			continue
+		}
+		for _, id := range others[host.Hostname()] {
+			if id != host.ID() {
+				repeats[host.ID()] = true
+			}
+		}
+	}
 	for i, left := range hosts {
 		if left == nil {
 			continue
@@ -4601,7 +4633,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 	dockerHosts := []DockerHostTopology{}
 	dockerHostnameRepeats := make(map[string]bool)
 	if includeDocker && !options.SummaryOnly {
-		dockerHostnameRepeats = dockerHostsSharingAHostname(rs.DockerHosts())
+		dockerHostnameRepeats = dockerHostsAHostnameCannotSelect(rs)
 	}
 	for _, host := range rs.DockerHosts() {
 		if host == nil {

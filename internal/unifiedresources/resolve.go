@@ -32,8 +32,10 @@ func clusterSourceOrDisplayName(c *K8sClusterView) string {
 //
 // loc.AgentID arrives holding the agent that reports this Docker resource, since
 // a hostname cannot say which machine it means. An agent record found on the way
-// up replaces it, and a backing guest replaces it with the agent on its node.
+// up replaces it. A backing guest replaces it with the agent on its node and
+// keeps it as GuestAgentID.
 func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTarget bool, loc *models.ResourceLocation) {
+	reportedAgentID := loc.AgentID
 	var guest *Resource
 	if resolver, ok := rs.(ReferenceReadState); ok && sourceID != "" {
 		resource, _, found := resolver.GetByReference(sourceID)
@@ -57,6 +59,7 @@ func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTar
 			}
 		}
 	}
+	guestByName := guest == nil
 	if guest == nil {
 		add := func(resource *Resource) bool {
 			if resource == nil || (resource.Name != hostname && resource.Name != sourceID) {
@@ -93,6 +96,16 @@ func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTar
 		return
 	}
 	owned := resourceContext(rs, guest).Location
+	// A name can place this Docker host in a guest, but cannot make an agent in
+	// that guest its own. A reference that is only its hostname adds nothing to the
+	// agent its report names.
+	loc.GuestAgentID = reportedAgentID
+	if sourceID != hostname {
+		loc.GuestAgentID = loc.AgentID
+		if !guestByName && owned.GuestAgentID != "" {
+			loc.GuestAgentID = owned.GuestAgentID
+		}
+	}
 	loc.DockerHostType, loc.DockerHostVMID, loc.Node = owned.ResourceType, owned.VMID, owned.Node
 	loc.NodeResourceID, loc.AgentID = owned.NodeResourceID, owned.AgentID
 	if rewriteTarget {

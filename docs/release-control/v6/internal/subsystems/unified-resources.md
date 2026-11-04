@@ -7199,6 +7199,15 @@ routing. `internal/unifiedresources/resolve.go`,
 containers while preserving adapter-specific routing. Reusing shared
 `DockerData` for workload metadata must not misclassify a TrueNAS app as a
 Docker-routed control target.
+A location in a guest also carries `GuestAgentID`, an agent known by identity to
+run there: a Docker host's own agent, or an agent folded into the guest by machine
+identity or a manual link. Routing uses it only while the guest's node has no
+connected agent. A name that places a Docker host in a guest cannot make an agent
+folded into that guest its own, a reference that is only a hostname does not set
+it, and neither does an automatic guest link, because that link can come from a
+hostname. Clones sharing a machine ID merge into one resource before this runs, so
+it cannot tell them apart, as no direct route can.
+`TestCommandsReachAnAgentInsideAGuestOnlyByIdentity` pins this.
 That same contract applies to the frontend workload state boundary:
 `frontend-modern/src/hooks/useWorkloads.ts`,
 `frontend-modern/src/utils/workloads.ts`,

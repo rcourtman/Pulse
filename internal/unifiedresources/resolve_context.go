@@ -59,10 +59,12 @@ func resourceContext(rs ReadState, resource *Resource) ResolvedResourceContext {
 		view := NewVMView(resource)
 		loc.VMID, loc.Node, loc.TargetHost = view.VMID(), view.Node(), view.Name()
 		setParentNodeLocation(rs, resource, &loc)
+		loc.GuestAgentID = ResourceOwnAgentID(resource)
 	case ResourceTypeSystemContainer:
 		view := NewContainerView(resource)
 		loc.VMID, loc.Node, loc.TargetHost = view.VMID(), view.Node(), view.Name()
 		setParentNodeLocation(rs, resource, &loc)
+		loc.GuestAgentID = ResourceOwnAgentID(resource)
 	case ResourceTypeAppContainer:
 		populateAppContainerLocation(rs, *resource, &loc)
 	case ResourceTypeStorage:
@@ -115,6 +117,23 @@ func resourceContext(rs ReadState, resource *Resource) ResolvedResourceContext {
 		}
 	}
 	return ResolvedResourceContext{Location: loc, Resource: resource}
+}
+
+// ResourceOwnAgentID names the agent that reports this resource. It runs on the
+// machine the resource describes, which a matching hostname cannot establish.
+func ResourceOwnAgentID(resource *Resource) string {
+	if resource == nil {
+		return ""
+	}
+	if resource.Agent != nil {
+		if id := strings.TrimSpace(resource.Agent.AgentID); id != "" {
+			return id
+		}
+	}
+	if resource.Docker != nil {
+		return strings.TrimSpace(resource.Docker.AgentID)
+	}
+	return ""
 }
 
 func resourceByName(rs ReadState, name string) (*Resource, bool) {
