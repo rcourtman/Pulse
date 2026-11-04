@@ -4,6 +4,13 @@
 frontend-modern/browser-verification.json:generic-api-key:11
 frontend-modern/browser-verification.json:generic-api-key:12
 
+# This portal browser receipt records public Git blob IDs, not credentials,
+# beside auth-controller source paths. Keep the exception to this exact receipt,
+# rule and the two hash lines, including their first-parent merge appearances.
+# test_gitleaks_ignore.py verifies the values against the recorded source blobs.
+internal/cloudcp/portal/browser-verification/faa976065fe7bd60.json:generic-api-key:9
+internal/cloudcp/portal/browser-verification/faa976065fe7bd60.json:generic-api-key:10
+
 # Schema-v4 secure-runtime evidence stores SHA-256 source digests beside source
 # paths whose names contain auth/token terminology. Suppress only those exact
 # generated path/rule/line fingerprints; the transcript remains fully scanned.
