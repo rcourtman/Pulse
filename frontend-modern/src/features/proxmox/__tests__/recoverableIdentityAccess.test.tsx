@@ -82,7 +82,7 @@ afterEach(() => {
 
 describe('restore-point identity without hover', () => {
   it.each([320, 720, 1200])(
-    'keeps each source’s exact reported date and uncertainty inspectable at %ipx',
+    'reads usable dates as times and keeps unusable ones literal for each source at %ipx',
     async (width) => {
       api.width = width;
       const exact = '2026-10-04T12:15:34.123456789+02:00';
@@ -111,14 +111,17 @@ describe('restore-point identity without hover', () => {
           });
           await fireEvent.click(button);
           const panel = screen.getByTestId('proxmox-recoverable-detail');
-          const reported = within(panel).getByText('Reported date').closest('tr')!;
-          expect(reported).toHaveTextContent(date || 'Not reported');
-          expect(reported.querySelector('td:last-child span')).not.toHaveClass('truncate');
           const created = within(panel).getByText('Created').closest('tr')!;
           if (index === 0) {
             expect(created).toHaveTextContent('2026');
+            expect(created.querySelector(`[title="${exact}"]`)).not.toBeNull();
+            expect(within(panel).queryByText('Reported date')).toBeNull();
+            expect(panel).not.toHaveTextContent('.123456789');
           } else {
             expect(created).toHaveTextContent('Unknown');
+            const reported = within(panel).getByText('Reported date').closest('tr')!;
+            expect(reported).toHaveTextContent(date || 'Not reported');
+            expect(reported.querySelector('td:last-child span')).not.toHaveClass('truncate');
           }
           expect(panel.querySelector('img')).toBeNull();
         }
@@ -153,11 +156,18 @@ describe('restore-point identity without hover', () => {
       for (const next of ['2026-10-04T12:15:34.123456789+02:00', '']) {
         date = next;
         await vi.advanceTimersByTimeAsync(30_000);
-        await waitFor(() =>
-          expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(
-            next || 'Not reported',
-          ),
-        );
+        await waitFor(() => {
+          if (next) {
+            expect(within(panel).queryByText('Reported date')).toBeNull();
+            expect(
+              within(panel).getByText('Created').closest('tr')!.querySelector(`[title="${next}"]`),
+            ).not.toBeNull();
+          } else {
+            expect(within(panel).getByText('Reported date').closest('tr')).toHaveTextContent(
+              'Not reported',
+            );
+          }
+        });
         expect(screen.getByTestId('proxmox-recoverable-detail')).toBe(panel);
         expect(toggle).toHaveFocus();
         const notice = screen.queryByText(

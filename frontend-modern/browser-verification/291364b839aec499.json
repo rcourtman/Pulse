@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "26b81dcbb4122df99619b219020d0ef6c8c3bdfc",
+  "verified_at": "2026-11-04T10:15:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "188ec8355c3ba57c2605d1a829a33dfe4efc80cd69b6a16072d96d1d761decb6",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "2dbaa8e3e0681892d690b011664ad7bf21d5d0820d1d39bbd772d9682c2218f0",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "d3f831f920bba1da43192e5b0abcf14caa544c99f948cbd8c72067a8f73d3b49"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Mock stack built from this change",
+    "Coverage evidence at 1280, 390 and 320 reads \"Created: 2 Nov 2026, 21:55:06 GMT+0\" with the exact value in its title",
+    "By date record at 1280 and 390 has one Created row with the exact value in its title, and no Reported date row",
+    "Responses patched in the browser to malformed and future dates: Coverage at 390 shows \"Reported date: 2099-10-04T10:00:00.5Z\"",
+    "By date at 390 with the same patch shows \"Created Unknown\" and \"Reported date not-a-date\", with the unavailable-date notice",
+    "No horizontal overflow at any tested width"
+  ],
+  "interactions": [
+    "Expanded a Coverage row at 1280, 390 and 320 and read each restore point",
+    "Expanded a By date record at 1280 and 390",
+    "Searched \"pbs\" at 390 and switched between Coverage and By date with patched dates",
+    "Waited for an ordinary inventory poll to bring the patched dates into the open page"
+  ]
+}
