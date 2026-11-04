@@ -184,6 +184,22 @@ exec %s "$@"
 	}
 }
 
+// Give each command its own budget. In particular, the complete Python
+// transfer suite must not consume the later shell probes' time on a slower
+// native runner. A deadline is a fixture failure, never the expected exit 23.
+func runNativeInstallerFixtureCommand(t *testing.T, limit time.Duration, env []string, program string, args ...string) ([]byte, error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, program, args...)
+	cmd.Env = env
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("%s fixture command exceeded its %s budget: %v\n%s", program, limit, ctx.Err(), output)
+	}
+	return output, err
+}
+
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
 	for _, scenario := range []string{"real tools", "symlinked fixture root", "streamed version output", "failed version producer", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing cp", "non-GNU cp", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing sha256sum", "non-GNU sha256sum", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
@@ -273,14 +289,7 @@ esac
 			}
 			env := append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "TOOLS_PREFIX="+prefix,
 				"TAR_PREFIX="+tarPrefix, "BREW_CALLS="+calls, "BREW_EXIT="+installExit, "RUNNER_TEMP="+runnerTemp, "GITHUB_ENV="+envFile)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			cmd := exec.CommandContext(ctx, "bash", "-c", supply.Run)
-			cmd.Env = env
-			output, runErr := cmd.CombinedOutput()
-			if ctx.Err() != nil {
-				t.Fatalf("fixture prerequisite deadline: %v", ctx.Err())
-			}
+			output, runErr := runNativeInstallerFixtureCommand(t, 10*time.Second, env, "bash", "-c", supply.Run)
 			if scenario != "real tools" && scenario != "symlinked fixture root" && scenario != "streamed version output" {
 				want := 1
 				if scenario == "install failure" || scenario == "failed version producer" {
@@ -321,9 +330,9 @@ esac
 			if scenario == "real tools" {
 				// Execute the consuming Linux CI shells, not just --version.
 				// The unusable native sha256sum remains behind the staged tools.
-				cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendEmbedTransfer", "-v")
-				cmd.Env = append(env, "PATH="+fixtureBin+":"+bin+":"+os.Getenv("PATH"))
-				output, err := cmd.CombinedOutput()
+				output, err := runNativeInstallerFixtureCommand(t, time.Minute,
+					append(env, "PATH="+fixtureBin+":"+bin+":"+os.Getenv("PATH")),
+					"python3", repoFile("scripts", "tests", "test_frontend_real_embed.py"), "FrontendEmbedTransfer", "-v")
 				if err != nil {
 					t.Fatalf("staged GNU tools did not execute frontend transfer controls: %v\n%s", err, output)
 				}
@@ -410,9 +419,9 @@ exit "${SUITE_EXIT:-0}"
 			}
 			for phase, step := range map[string]nativeGuidanceStep{"preflight": preflight, "remaining": installer} {
 				for _, code := range []string{"0", "23"} {
-					cmd := exec.CommandContext(ctx, "bash", "-c", step.Run)
-					cmd.Env = append(env, "PULSE_INSTALLER_FIXTURE_BIN="+fixtureBin, "PROBE_ROOT="+root, "SUITE_EXIT="+code, "EXPECTED_PHASE="+phase)
-					output, err := cmd.CombinedOutput()
+					output, err := runNativeInstallerFixtureCommand(t, 10*time.Second,
+						append(env, "PULSE_INSTALLER_FIXTURE_BIN="+fixtureBin, "PROBE_ROOT="+root, "SUITE_EXIT="+code, "EXPECTED_PHASE="+phase),
+						"bash", "-c", step.Run)
 					if code == "0" && err != nil {
 						t.Fatalf("fixture-local path did not reach the suite: %v: %s", err, output)
 					} else if code == "23" {

@@ -1,0 +1,63 @@
+name: Account portal frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'internal/cloudcp/portal/**'
+      - 'scripts/exclusive-lock.mjs'
+      - 'scripts/installtests/account_portal_workflow_test.go'
+      - '.github/workflows/account-portal.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'internal/cloudcp/portal/**'
+      - 'scripts/exclusive-lock.mjs'
+      - 'scripts/installtests/account_portal_workflow_test.go'
+      - '.github/workflows/account-portal.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-portal-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  portal-frontend:
+    name: Account portal typecheck, tests and embed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify source identity
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: internal/cloudcp/portal/frontend/package-lock.json
+
+      # This is a separate npm module from frontend-modern. Its Go tests and
+      # the main UI's CI do not execute this module's TypeScript or unit suite.
+      # Rebuild all three served files without silently repairing stale embeds.
+      - name: Validate complete portal module and committed embed
+        working-directory: internal/cloudcp/portal/frontend
+        run: |
+          set -euo pipefail
+          sha256sum ../dist/portal_app.js ../dist/portal_app.css ../dist/build_manifest.json > "$RUNNER_TEMP/account-portal-assets.sha256"
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run typecheck
+          npm test -- --maxWorkers=2
+          npm run build
+          sha256sum --check "$RUNNER_TEMP/account-portal-assets.sha256"
+          git diff --exit-code -- ../dist
