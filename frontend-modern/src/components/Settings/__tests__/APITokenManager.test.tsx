@@ -615,6 +615,7 @@ describe('APITokenManager', () => {
     await waitFor(() => expect(listTokensMock).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'Full access' }));
+    fireEvent.click(screen.getByText('Custom scopes'));
     fireEvent.click(screen.getByRole('button', { name: 'Monitoring & alerts (read)' }));
 
     expect(screen.getByRole('button', { name: 'Full access' })).toHaveAttribute(
@@ -654,6 +655,7 @@ describe('APITokenManager', () => {
     await waitFor(() => expect(listTokensMock).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('button', { name: 'Full access' }));
+    fireEvent.click(screen.getByText('Custom scopes'));
     fireEvent.click(screen.getByRole('button', { name: 'Monitoring & alerts (read)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Audit logs (read)' }));
     expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
