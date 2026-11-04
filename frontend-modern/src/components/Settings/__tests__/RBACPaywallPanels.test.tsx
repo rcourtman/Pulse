@@ -179,6 +179,54 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
   });
 
+  it('keeps complete saved grants in each role-list projection, including read-only roles', async () => {
+    const permissions = [
+      { action: '*', resource: '*' },
+      { action: 'read', resource: 'nodes' },
+      { action: 'read', resource: 'resource_beyond_the_editor_shortcuts' },
+    ];
+    getRolesMock.mockResolvedValueOnce([
+      {
+        id: 'auditor',
+        name: 'Saved auditor',
+        description: 'Review only',
+        permissions,
+        isBuiltIn: true,
+      },
+      {
+        id: 'draft',
+        name: 'Draft role',
+        description: 'Not configured',
+        permissions: [],
+        isBuiltIn: false,
+      },
+    ]);
+
+    render(() => <RolesPanel />);
+
+    const auditorName = await screen.findByText('Saved auditor');
+    const auditor = within(auditorName.closest('tr')!);
+    // CSS chooses the phone identity cell or desktop column; every projection
+    // must retain every grant rather than a count or an editable-only summary.
+    const lists = auditor.getAllByRole('list', { name: 'Permissions for Saved auditor' });
+    for (const list of lists) {
+      expect(within(list).getAllByRole('listitem')).toHaveLength(permissions.length);
+      for (const permission of permissions) {
+        expect(
+          within(list).getByText(`${permission.action}:${permission.resource}`),
+        ).toBeInTheDocument();
+      }
+    }
+    expect(auditor.getByText('Read-only')).toBeInTheDocument();
+    expect(auditor.queryByRole('button')).not.toBeInTheDocument();
+    const draft = within(screen.getByText('Draft role').closest('tr')!);
+    expect(draft.getAllByText('No permissions').length).toBeGreaterThan(0);
+    expect(draft.queryByRole('list')).not.toBeInTheDocument();
+    expect(draft.getByRole('button', { name: 'Edit role' })).toBeEnabled();
+    expect(draft.getByRole('button', { name: 'Delete role' })).toBeEnabled();
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps editable role actions touch-sized on mobile', async () => {
     getRolesMock.mockResolvedValueOnce([
       {
@@ -616,6 +664,52 @@ describe('RBAC paywall settings panels', () => {
     expect(notificationSuccessMock).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
   });
+
+  it.each(['save', 'delete'])(
+    'reconciles an unconfirmed user %s with reads, never a repeated mutation',
+    async (kind) => {
+      const mutation = kind === 'save' ? updateUserRolesMock : deleteUserMock;
+      mutation.mockRejectedValueOnce(new Error('private response must not be rendered'));
+      render(() => <UserAssignmentsPanel />);
+      await screen.findByRole('button', { name: 'Manage access for alice' });
+      if (kind === 'save') {
+        fireEvent.click(screen.getByRole('button', { name: 'Manage access for alice' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Save Changes' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Remove alice' }));
+        fireEvent.click(
+          within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove User Access' }),
+        );
+      }
+      const check = await screen.findByRole('button', { name: 'Check saved access' });
+      const warning = screen.getByRole('alert');
+      expect(warning).toHaveTextContent('may already have been applied');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Manage access for alice' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('No users yet')).not.toBeInTheDocument();
+      expect(screen.queryByText('private response must not be rendered')).not.toBeInTheDocument();
+      await waitFor(() => expect(warning).toHaveFocus());
+      expect(getUsersMock).toHaveBeenCalledTimes(1);
+      getUsersMock.mockRejectedValueOnce(new Error('private read failure'));
+      fireEvent.click(check);
+      await screen.findByText('Failed to load user assignments');
+      expect(screen.getByRole('button', { name: 'Check saved access' })).toBeInTheDocument();
+      expect(screen.queryByText('No users yet')).not.toBeInTheDocument();
+      getUsersMock.mockResolvedValueOnce([]);
+      fireEvent.click(screen.getByRole('button', { name: 'Check saved access' }));
+      await screen.findByText('No users yet');
+      expect(screen.queryByText(/may already have been applied/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Check saved access' })).not.toBeInTheDocument();
+      expect(getUsersMock).toHaveBeenCalledTimes(3);
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect(updateUserRolesMock.mock.calls.length + deleteUserMock.mock.calls.length).toBe(1);
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+      expect(loggerErrorMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps trial start out of RBAC feature gates', async () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');

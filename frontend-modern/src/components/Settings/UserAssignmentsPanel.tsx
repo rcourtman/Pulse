@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createEffect, on, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
@@ -25,6 +25,19 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
   const state = useUserAssignmentsPanelState(props);
   const emptyStateCopy = () => getUserAssignmentsEmptyStateCopy();
   let searchInputRef: HTMLInputElement | undefined;
+  let inventoryNotice: HTMLDivElement | undefined;
+  let focusTimer: number | undefined;
+  createEffect(
+    on(state.unconfirmedChange, (change) => {
+      window.clearTimeout(focusTimer);
+      if (!change) return;
+      // The editor/confirmation has withdrawn; keep keyboard recovery local.
+      focusTimer = window.setTimeout(() => {
+        if (state.unconfirmedChange() === change) inventoryNotice?.focus();
+      }, 0);
+    }),
+  );
+  onCleanup(() => window.clearTimeout(focusTimer));
 
   return (
     <div class="space-y-6">
@@ -38,7 +51,9 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             placeholder="Search users..."
             value={state.searchQuery()}
             onChange={state.setSearchQuery}
-            disabled={!state.accessAllowed() || Boolean(state.loadError())}
+            disabled={
+              !state.accessAllowed() || Boolean(state.loadError() || state.unconfirmedChange())
+            }
             class="min-w-60"
             inputClass="min-h-10 sm:min-h-9 py-2.5"
           />
@@ -62,6 +77,25 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
           />
         </Show>
 
+        <Show when={state.accessAllowed() && state.unconfirmedChange()}>
+          {(message) => (
+            <InlineNotice
+              ref={inventoryNotice}
+              tabindex={-1}
+              tone="warning"
+              layout="banner"
+              role="alert"
+              aria-live="polite"
+              class="break-words"
+              icon={<TriangleAlert />}
+              actionLabel={state.loading() ? undefined : 'Check saved access'}
+              actionOnClick={() => void state.loadData()}
+            >
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+
         <Show when={state.loading()}>
           <div class="flex items-center justify-center py-8">
             <LoadingSpinner size="xl" tone="info" label="Loading user access" />
@@ -82,7 +116,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
               tone="danger"
               layout="banner"
               icon={<TriangleAlert />}
-              actionLabel="Retry"
+              actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
               actionOnClick={() => void state.loadData()}
             >
               {message()}
@@ -95,6 +129,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             !state.loading() &&
             state.accessAllowed() &&
             !state.loadError() &&
+            !state.unconfirmedChange() &&
             state.filteredAssignments().length === 0
           }
         >
@@ -118,6 +153,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             !state.loading() &&
             state.accessAllowed() &&
             !state.loadError() &&
+            !state.unconfirmedChange() &&
             state.filteredAssignments().length > 0
           }
         >

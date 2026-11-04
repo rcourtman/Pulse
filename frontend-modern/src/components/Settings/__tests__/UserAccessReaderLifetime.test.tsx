@@ -266,7 +266,9 @@ describe('User Access reader lifetime', () => {
   });
 
   it('preserves the current draft on a refused save without logging the private response', async () => {
-    mocks.updateUserRoles.mockRejectedValueOnce(new Error('private response canary'));
+    mocks.updateUserRoles.mockRejectedValueOnce(
+      Object.assign(new Error('private response canary'), { status: 403 }),
+    );
     const { state } = mount();
     await loaded(state);
     await state.openManageAccess(alice);
@@ -452,7 +454,9 @@ describe('User Access reader lifetime', () => {
   });
 
   it('withdraws failed-action feedback before another confirmation and when authority changes', async () => {
-    mocks.deleteUser.mockRejectedValueOnce(new Error('private deletion details'));
+    mocks.deleteUser.mockRejectedValueOnce(
+      Object.assign(new Error('private deletion details'), { status: 403 }),
+    );
     const { state, setAllowed } = mount();
     await loaded(state);
     state.openDeleteUser(alice);
@@ -468,4 +472,166 @@ describe('User Access reader lifetime', () => {
     expect(state.successNotice()).toBeNull();
     expect(state.actionError()).toBeNull();
   });
+
+  it.each([
+    ['save', undefined],
+    ['save', 502],
+    ['save', 200],
+    ['delete', undefined],
+    ['delete', 502],
+    ['delete', 200],
+  ] as const)(
+    'withdraws an unconfirmed %s (status %s) until a read-only check succeeds',
+    async (kind, status) => {
+      const mutate = kind === 'save' ? mocks.updateUserRoles : mocks.deleteUser;
+      // The server commits the change, but its response is lost, fails, or cannot be read.
+      mutate.mockImplementationOnce(async () => {
+        mocks.getUsers.mockResolvedValue(kind === 'save' ? [{ ...alice, roleIds: [] }] : []);
+        throw Object.assign(new Error('private unconfirmed response'), { status });
+      });
+      const { state } = mount();
+      await loaded(state);
+      const staleRow = state.filteredAssignments()[0];
+      if (kind === 'save') {
+        await state.openManageAccess(staleRow);
+        state.toggleRole('reader');
+        await state.handleSaveAssignments();
+      } else {
+        state.openDeleteUser(staleRow);
+        await state.handleDeleteUser();
+      }
+      expect(state.filteredAssignments()).toEqual([]);
+      expect(state.canEdit()).toBe(false);
+      expect(state.unconfirmedChange()).toContain('may already have been applied');
+      expect(state.roles()).toEqual([]);
+      expect(state.formRoleIds()).toEqual([]);
+      expect(state.userPermissions()).toBeNull();
+      expect(state.editingUser()).toBeNull();
+      expect(state.userPendingDeletion()).toBeNull();
+      expect(state.showModal()).toBe(false);
+      expect(state.actionError()).toBeNull();
+      expect(state.successNotice()).toBeNull();
+      expect(mocks.getUsers).toHaveBeenCalledTimes(1);
+      // Neither retained callbacks nor a saved-permissions retry can replay the write.
+      await state.openManageAccess(staleRow);
+      state.openDeleteUser(staleRow);
+      state.toggleRole('reader');
+      await state.handleSaveAssignments();
+      await state.handleDeleteUser();
+      await state.loadUserPermissions();
+      expect(mutate).toHaveBeenCalledTimes(1);
+      expect(mocks.updateUserRoles.mock.calls.length + mocks.deleteUser.mock.calls.length).toBe(1);
+      await state.loadData();
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.canEdit()).toBe(true);
+      expect(state.filteredAssignments()).toEqual(
+        kind === 'save' ? [{ ...alice, roleIds: [] }] : [],
+      );
+      await state.openManageAccess(staleRow);
+      state.openDeleteUser(staleRow);
+      expect(state.showModal()).toBe(false);
+      expect(state.userPendingDeletion()).toBeNull();
+      expect(mocks.updateUserRoles.mock.calls.length + mocks.deleteUser.mock.calls.length).toBe(1);
+      expect(mocks.error).not.toHaveBeenCalled();
+      expect(mocks.success).not.toHaveBeenCalled();
+      expect(mocks.log).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['failed users', 'malformed users', 'failed roles', 'malformed roles'])(
+    'keeps the uncertainty after a %s recovery check and serialises checks',
+    async (failure) => {
+      mocks.updateUserRoles.mockRejectedValueOnce(new Error('lost reply'));
+      const { state } = mount();
+      await loaded(state);
+      await state.openManageAccess(alice);
+      await state.handleSaveAssignments();
+      const warning = state.unconfirmedChange();
+      const checking = deferred<UserRoleAssignment[]>();
+      mocks.getUsers.mockReturnValueOnce(checking.promise);
+      if (failure === 'failed roles') mocks.getRoles.mockRejectedValueOnce(new Error('lost read'));
+      if (failure === 'malformed roles') mocks.getRoles.mockResolvedValueOnce({});
+      const read = state.loadData();
+      await state.loadData();
+      expect(mocks.getUsers).toHaveBeenCalledTimes(2);
+      expect(state.unconfirmedChange()).toBe(warning);
+      expect(state.canEdit()).toBe(false);
+      if (failure === 'failed users') checking.reject(new Error('lost read'));
+      else checking.resolve(failure === 'malformed users' ? ({} as UserRoleAssignment[]) : [alice]);
+      await read;
+      expect(state.loadError()).not.toBeNull();
+      expect(state.unconfirmedChange()).toBe(warning);
+      expect(state.filteredAssignments()).toEqual([]);
+      expect(state.roles()).toEqual([]);
+      expect(state.canEdit()).toBe(false);
+      await state.loadData();
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.loadError()).toBeNull();
+      expect(state.canEdit()).toBe(true);
+      expect(mocks.updateUserRoles).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('aborts and ignores delayed saved permissions after an unconfirmed save', async () => {
+    const permissions = deferred<Permission[]>();
+    mocks.getUserPermissions.mockReturnValueOnce(permissions.promise);
+    mocks.updateUserRoles.mockRejectedValueOnce(new Error('lost reply'));
+    const { state } = mount();
+    await loaded(state);
+    const reading = state.openManageAccess(alice);
+    const signal = mocks.getUserPermissions.mock.calls.at(-1)![1].signal;
+    await state.handleSaveAssignments();
+    expect(signal.aborted).toBe(true);
+    permissions.resolve([{ action: '*', resource: 'obsolete saved permissions' }]);
+    await reading;
+    expect(state.unconfirmedChange()).not.toBeNull();
+    expect(state.userPermissions()).toBeNull();
+    expect(state.showModal()).toBe(false);
+  });
+
+  it('withdraws uncertainty and ignores its delayed recovery read on reader replacement', async () => {
+    mocks.deleteUser.mockRejectedValueOnce(new Error('lost reply'));
+    const { state } = mount();
+    await loaded(state);
+    state.openDeleteUser(alice);
+    await state.handleDeleteUser();
+    expect(state.unconfirmedChange()).not.toBeNull();
+    const old = deferred<UserRoleAssignment[]>();
+    mocks.getUsers.mockReturnValueOnce(old.promise);
+    const checking = state.loadData();
+    const oldSignal = mocks.getUsers.mock.calls.at(-1)![0].signal;
+    mocks.getUsers.mockResolvedValueOnce([bob]);
+    switchOrg();
+    await loaded(state);
+    expect(oldSignal.aborted).toBe(true);
+    expect(state.unconfirmedChange()).toBeNull();
+    expect(state.filteredAssignments()).toEqual([bob]);
+    old.resolve([alice]);
+    await checking;
+    expect(state.filteredAssignments()).toEqual([bob]);
+    expect(state.loadError()).toBeNull();
+    expect(state.unconfirmedChange()).toBeNull();
+  });
+
+  it.each([400, 401, 403, 404, 409, 422, 429])(
+    'retains a definitely rejected removal (%s) for correction without an uncertainty claim',
+    async (status) => {
+      mocks.deleteUser.mockRejectedValueOnce(
+        Object.assign(new Error('private rejection'), { status, code: 'self_deprovision_denied' }),
+      );
+      const { state } = mount();
+      await loaded(state);
+      state.openDeleteUser(alice);
+      await state.handleDeleteUser();
+      expect(state.userPendingDeletion()).toBe(alice);
+      expect(state.filteredAssignments()).toEqual([alice]);
+      expect(state.canEdit()).toBe(true);
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.actionError()).toBe(
+        status === 403 ? 'You cannot remove your own user access.' : 'Failed to remove user access',
+      );
+      expect(mocks.getUsers).toHaveBeenCalledTimes(1);
+      expect(mocks.deleteUser).toHaveBeenCalledTimes(1);
+    },
+  );
 });
