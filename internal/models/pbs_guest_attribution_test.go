@@ -305,3 +305,75 @@ func TestAttributedPBSBackupSerializesGuestBesideTheSnapshot(t *testing.T) {
 		t.Errorf("encoded = %s, an unattributed snapshot omits guestInstance", encoded)
 	}
 }
+
+// Registry rollups and Patrol read from snapshots, so a snapshot has to see the
+// PVE storage evidence State does, and keep what it captured.
+func TestStateSnapshotAttributesLikeState(t *testing.T) {
+	state := NewState()
+	state.UpdateVMsForInstance("home", []VM{{ID: "home:pmx1:100", VMID: 100, Name: "docker1", Node: "pmx1", Instance: "home"}})
+	state.UpdateVMsForInstance("hetzner", []VM{{ID: "hetzner:pmx1:100", VMID: 100, Name: "docker1", Node: "pmx1", Instance: "hetzner"}})
+	backup := pbsAttributionBackup("colliding", "100", PBSBackup{Datastore: "shared"})
+	state.UpdatePBSBackups("pbs-main", []PBSBackup{backup})
+	if got := state.GetSnapshot().PBSBackupGuestInstances()["colliding"]; got != "" {
+		t.Fatalf("no evidence yet, but the snapshot names %q", got)
+	}
+
+	state.UpdatePBSGuestConfirmationsForInstance("hetzner", []PBSGuestConfirmation{{Storage: "pbs-h", BackupType: "vm", VMID: 100, Time: backup.BackupTime.Unix()}})
+	captured := state.GetSnapshot()
+	if got, want := captured.PBSBackupGuestInstances()["colliding"], state.PBSBackupGuestInstances()["colliding"]; got != want || got != "hetzner" {
+		t.Fatalf("snapshot names %q, state names %q; want hetzner", got, want)
+	}
+	if got := captured.Clone().AttributedPBSBackups()[0].GuestInstance; got != "hetzner" {
+		t.Fatalf("a clone names %q, want hetzner", got)
+	}
+	if got := state.GetAgentLookupSnapshot().PBSBackupGuestInstances()["colliding"]; got != "hetzner" {
+		t.Fatalf("the agent lookup snapshot names %q, want hetzner", got)
+	}
+
+	state.UpdatePBSGuestConfirmationsForInstance("hetzner", nil)
+	if got := captured.PBSBackupGuestInstances()["colliding"]; got != "hetzner" {
+		t.Fatalf("later evidence changed a captured snapshot's answer to %q", got)
+	}
+	if got := state.GetSnapshot().PBSBackupGuestInstances()["colliding"]; got != "" {
+		t.Fatalf("a new snapshot kept withdrawn evidence and names %q", got)
+	}
+}
+
+func TestAttributedPBSBackupGuest(t *testing.T) {
+	settled := AttributedPBSBackup{GuestInstance: " home ", PBSBackup: PBSBackup{BackupType: "CT", VMID: " 100 "}}
+	if got, ok := settled.Guest(); !ok || got != (PBSGuestRef{Instance: "home", BackupType: "ct", VMID: 100}) {
+		t.Fatalf("Guest() = %+v, %v", got, ok)
+	}
+	for name, backup := range map[string]AttributedPBSBackup{
+		"unsettled":   {PBSBackup: PBSBackup{BackupType: "vm", VMID: "100"}},
+		"host backup": {GuestInstance: "home", PBSBackup: PBSBackup{BackupType: "host", VMID: "100"}},
+		"non-numeric": {GuestInstance: "home", PBSBackup: PBSBackup{BackupType: "vm", VMID: "web"}},
+		"zero vmid":   {GuestInstance: "home", PBSBackup: PBSBackup{BackupType: "vm", VMID: "0"}},
+	} {
+		if got, ok := backup.Guest(); ok {
+			t.Errorf("%s: Guest() = %+v, want none", name, got)
+		}
+	}
+}
+
+func TestStateSnapshotPBSBackupGuestsLineUpWithItsRows(t *testing.T) {
+	snapshot := StateSnapshot{
+		VMs: []VM{{VMID: 200, Instance: "home", Node: "pmx2", Name: "web"}},
+		PBSBackups: []PBSBackup{
+			pbsAttributionBackup("nobody", "999", PBSBackup{}),
+			pbsAttributionBackup("web", "200", PBSBackup{}),
+		},
+	}
+	guests := snapshot.PBSBackupGuests()
+	if len(guests) != 2 || guests[0] != (PBSGuestRef{}) || guests[1] != (PBSGuestRef{Instance: "home", BackupType: "vm", VMID: 200}) {
+		t.Fatalf("guests = %+v", guests)
+	}
+}
+
+func TestStorageBackupGuestKind(t *testing.T) {
+	for kind, want := range map[string]string{"qemu": "vm", "VM": "vm", " lxc ": "ct", "ct": "ct", "": "", "iso": "unknown"} {
+		if got := (StorageBackup{Type: kind}).GuestKind(); got != want {
+			t.Errorf("GuestKind(%q) = %q, want %q", kind, got, want)
+		}
+	}
+}

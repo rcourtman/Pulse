@@ -22,11 +22,13 @@ func (rr *ResourceRegistry) refreshPBSRollupsLocked() {
 		resource.PBS.AffectedDatastoreCount = 0
 		resource.PBS.AffectedDatastores = nil
 		resource.PBS.AffectedDatastoreSummary = ""
-		resource.PBS.ProtectedWorkloadCount = 0
-		resource.PBS.ProtectedWorkloadTypes = nil
-		resource.PBS.ProtectedWorkloadNames = nil
-		resource.PBS.ProtectedWorkloadSummary = ""
 		resource.PBS.PostureSummary = ""
+		if rr.pbsBackupsRead {
+			resource.PBS.ProtectedWorkloadCount = 0
+			resource.PBS.ProtectedWorkloadTypes = nil
+			resource.PBS.ProtectedWorkloadNames = nil
+			resource.PBS.ProtectedWorkloadSummary = ""
+		}
 	}
 
 	affectedDatastores := make(map[string][]string)
@@ -50,15 +52,11 @@ func (rr *ResourceRegistry) refreshPBSRollupsLocked() {
 		instanceIndex := buildPBSInstanceIndex(rr.resources)
 		workloadIndex := buildPBSBackupWorkloadIndex(rr.resources)
 		for _, backup := range rr.pbsBackups {
-			pbsResource := selectPBSInstanceResource(instanceIndex, backup.Instance)
+			pbsResource := selectPBSInstanceResource(instanceIndex, backup.instance)
 			if pbsResource == nil || pbsResource.PBS == nil {
 				continue
 			}
-			vmid, err := strconv.Atoi(strings.TrimSpace(backup.VMID))
-			if err != nil || vmid <= 0 {
-				continue
-			}
-			workload := resolvePBSBackupWorkload(workloadIndex, backup, vmid)
+			workload := rr.resolvePBSBackupWorkloadLocked(workloadIndex, backup.guest)
 			if workload == nil {
 				continue
 			}

@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -211,6 +212,111 @@ func TestSeedPrecomputeIntelligence_PopulatesSignals(t *testing.T) {
 	}
 }
 
+// Two connections reuse VMIDs and a name. Patrol reads what the guest backup
+// badge reads: a guest with an old backup stays stale however fresh its VMID's
+// twin is, and a snapshot the evidence does not settle covers nobody.
+func TestSeedBackupAnalysis_CreditsTheGuestTheRuleNames(t *testing.T) {
+	now := time.Now()
+	ps := NewPatrolService(nil, nil)
+	fresh := now.Add(-2 * time.Hour)
+	stale := now.Add(-240 * time.Hour)
+
+	state := models.NewState()
+	guest := func(instance string, vmid int, name string) models.VM {
+		return models.VM{ID: instance + ":pve:" + strconv.Itoa(vmid), VMID: vmid, Name: name, Node: "pve", Instance: instance, Type: "qemu", Status: "running", LastSeen: now}
+	}
+	state.UpdateVMsForInstance("alpha", []models.VM{guest("alpha", 100, "web"), guest("alpha", 110, "quiet-a"), guest("alpha", 120, "app"), guest("alpha", 130, "busy")})
+	state.UpdateVMsForInstance("bravo", []models.VM{guest("bravo", 100, "db"), guest("bravo", 110, "quiet-b"), guest("bravo", 121, "app")})
+	snapshotOf := func(id, vmid, comment string, when time.Time, inProgress bool) models.PBSBackup {
+		return models.PBSBackup{ID: id, Instance: "pbs", Datastore: "tank", BackupType: "vm", VMID: vmid, Comment: comment, BackupTime: when, InProgress: inProgress}
+	}
+	state.UpdatePBSBackups("pbs", []models.PBSBackup{
+		snapshotOf("web-fresh", "100", "web", fresh, false),
+		snapshotOf("db-old", "100", "db", stale, false),
+		snapshotOf("unsettled", "110", "", fresh, false),
+		snapshotOf("app-fresh", "120", "", fresh, false),
+		snapshotOf("app-old", "121", "", stale, false),
+		snapshotOf("busy-old", "130", "", stale, false),
+		snapshotOf("busy-running", "130", "", fresh, true),
+	})
+	state.SyncGuestBackupTimes()
+
+	snapshot := state.GetSnapshot()
+	adapter := ur.NewMonitorAdapter(ur.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(snapshot)
+	runtime := newPatrolRuntimeStateWithProviders(snapshot, adapter, nil)
+
+	output := ps.seedBackupAnalysisState(runtime, nil, now)
+	for _, want := range []string{
+		// The source proves the PBS row reached this guest, not only its badge.
+		"db (last: 10d ago via PBS pbs/tank",
+		"app on bravo (last: 10d ago via PBS pbs/tank",
+		"quiet-a (never",
+		"quiet-b (never",
+		"busy (last: 10d ago",
+		"Guests with recent backups: 2/7",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("expected %q in:\n%s", want, output)
+		}
+	}
+	for _, unwanted := range []string{"web (", "app on alpha"} {
+		if strings.Contains(output, unwanted) {
+			t.Errorf("did not expect %q in:\n%s", unwanted, output)
+		}
+	}
+
+	// A run scoped to db sees db's own age, not its VMID twin's.
+	scoped := filterPatrolStateByScopeState(runtime, PatrolScope{ResourceIDs: []string{"bravo:pve:100"}})
+	var scopedGuestID string
+	for _, vm := range scoped.readState.VMs() {
+		scopedGuestID = vm.ID()
+	}
+	output = ps.seedBackupAnalysisState(scoped, map[string]bool{scopedGuestID: true}, now)
+	if !strings.Contains(output, "db (last: 10d ago via PBS pbs/tank") || !strings.Contains(output, "Guests with recent backups: 0/1") {
+		t.Fatalf("scoped run credited db with its twin's backup:\n%s", output)
+	}
+}
+
+// PVE rows name their connection, and a retained archive its guest kind, so
+// neither credits another connection's guest or the kind that reused the VMID.
+func TestSeedBackupAnalysis_PVERowsStayWithTheirGuest(t *testing.T) {
+	now := time.Now()
+	ps := NewPatrolService(nil, nil)
+	fresh := now.Add(-2 * time.Hour)
+	snapshot := models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "alpha:pve:100", VMID: 100, Name: "web", Node: "pve", Instance: "alpha", Status: "running"},
+			{ID: "bravo:pve:100", VMID: 100, Name: "db", Node: "pve", Instance: "bravo", Status: "running"},
+		},
+		Containers: []models.Container{
+			{ID: "alpha:pve:200", VMID: 200, Name: "reused", Node: "pve", Instance: "alpha", Status: "running"},
+			{ID: "bravo:pve:300", VMID: 300, Name: "partial", Node: "pve", Instance: "bravo", Status: "running"},
+			{ID: "bravo:pve:400", VMID: 400, Name: "tasked", Node: "pve", Instance: "bravo", Status: "running"},
+			{ID: "bravo:pve:500", VMID: 500, Name: "archived", Node: "pve", Instance: "bravo", Status: "running"},
+			{ID: "bravo:pve:600", VMID: 600, Name: "untyped", Node: "pve", Instance: "bravo", Status: "running"},
+		},
+		PVEBackups: models.PVEBackups{
+			BackupTasks: []models.BackupTask{
+				{Instance: "alpha", VMID: 100, Status: "OK", EndTime: fresh},
+				{Instance: "bravo", VMID: 400, Status: "OK", EndTime: fresh},
+			},
+			StorageBackups: []models.StorageBackup{
+				{Instance: "alpha", VMID: 200, Type: "qemu", Time: fresh},
+				{Instance: "bravo", VMID: 300, Type: "lxc", Time: fresh, InProgress: true},
+				{Instance: "bravo", VMID: 500, Type: "lxc", Time: fresh},
+				{Instance: "bravo", VMID: 600, Time: fresh},
+			},
+		},
+	}
+	output := ps.seedBackupAnalysisState(newPatrolRuntimeState(snapshot), nil, now)
+	for _, want := range []string{"db (never", "reused (never", "partial (never", "Guests with recent backups: 4/7"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("expected %q in:\n%s", want, output)
+		}
+	}
+}
+
 func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 	now := time.Now()
 	ps := NewPatrolService(nil, nil)
@@ -220,7 +326,7 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 	// Set LastBackup on vm-1's underlying resource via view construction.
 	vm1Res := &ur.Resource{
 		ID: "vm-1", Name: "vm-1", Type: ur.ResourceTypeVM, Status: ur.StatusOnline,
-		Proxmox: &ur.ProxmoxData{VMID: 101, LastBackup: now.Add(-24 * time.Hour)},
+		Proxmox: &ur.ProxmoxData{VMID: 101, Instance: "homelab", LastBackup: now.Add(-24 * time.Hour)},
 	}
 	vm1v := ur.NewVMView(vm1Res)
 	vm1 = &vm1v
@@ -228,20 +334,22 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 	ps.SetReadState(&mockReadState{
 		vms: []*ur.VMView{
 			vm1,
-			newTestVMView("qemu/102", "vm-2", 102, "pve1", "", ur.StatusOnline, false, nil),
+			newTestVMView("qemu/102", "vm-2", 102, "pve1", "homelab", ur.StatusOnline, false, nil),
 		},
 		containers: []*ur.ContainerView{
-			newTestContainerView("lxc/201", "ct-1", 201, "pve1", "", ur.StatusOnline, false, nil),
+			newTestContainerView("lxc/201", "ct-1", 201, "pve1", "homelab", ur.StatusOnline, false, nil),
 		},
 	})
 
 	state := models.StateSnapshot{
+		VMs: []models.VM{{ID: "qemu/102", VMID: 102, Name: "vm-2", Node: "pve1", Instance: "homelab"}},
 		PVEBackups: models.PVEBackups{
-			BackupTasks:    []models.BackupTask{{VMID: 102, Status: "OK", EndTime: now.Add(-72 * time.Hour)}},
-			StorageBackups: []models.StorageBackup{{VMID: 101, Time: now.Add(-36 * time.Hour)}},
+			BackupTasks:    []models.BackupTask{{Instance: "homelab", VMID: 102, Status: "OK", EndTime: now.Add(-72 * time.Hour)}},
+			StorageBackups: []models.StorageBackup{{Instance: "homelab", VMID: 101, Time: now.Add(-36 * time.Hour)}},
 		},
 		PBSBackups: []models.PBSBackup{{
 			VMID:       "102",
+			BackupType: "vm",
 			Instance:   "pbs-main",
 			Datastore:  "backup-vault",
 			Namespace:  "tenant-a",

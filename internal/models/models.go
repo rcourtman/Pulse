@@ -4673,6 +4673,13 @@ func localBackupGuestType(kind string) string {
 	}
 }
 
+// GuestKind returns "vm" or "ct" for a retained archive, "" when the record has
+// no type and "unknown" for any other. A VMID can be reused by the other guest
+// kind, and the archive still belongs to the guest that wrote it.
+func (b StorageBackup) GuestKind() string {
+	return localBackupGuestType(b.Type)
+}
+
 // UpdatePBSGuestConfirmationsForInstance replaces the PVE-side PBS snapshot
 // evidence for one connection. Pass an empty slice when the connection's
 // storage poll saw no pbs-type storage content so stale evidence cannot
@@ -4754,7 +4761,7 @@ type PBSSnapshotRef struct {
 func (s *State) PBSExclusiveConfirmers() map[PBSSnapshotRef]string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.pbsExclusiveConfirmersLocked()
+	return pbsExclusiveConfirmers(s.pbsGuestConfirmations)
 }
 
 // PVE-side confirmations say a connection's own pbs-type storage listed a
@@ -4764,13 +4771,13 @@ func (s *State) PBSExclusiveConfirmers() map[PBSSnapshotRef]string {
 // other connection also lists can be treated as authorship evidence; an
 // overlapping view has demonstrated it sees other clusters' snapshots, so
 // nothing it lists attributes anything (#1639).
-func (s *State) pbsExclusiveConfirmersLocked() map[PBSSnapshotRef]string {
+func pbsExclusiveConfirmers(confirmationsByInstance map[string]map[PBSGuestConfirmation]struct{}) map[PBSSnapshotRef]string {
 	type pbsStorageView struct {
 		instance string
 		storage  string
 	}
 	viewsBySnapshot := make(map[PBSSnapshotRef][]pbsStorageView)
-	for instanceName, confirmations := range s.pbsGuestConfirmations {
+	for instanceName, confirmations := range confirmationsByInstance {
 		for confirmation := range confirmations {
 			key := PBSSnapshotRef{BackupType: confirmation.BackupType, VMID: confirmation.VMID, Time: confirmation.Time}
 			viewsBySnapshot[key] = append(viewsBySnapshot[key], pbsStorageView{instance: instanceName, storage: confirmation.Storage})

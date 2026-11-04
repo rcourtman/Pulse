@@ -3,7 +3,6 @@ package unifiedresources
 import (
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -39,13 +38,29 @@ type pbsDatastoreIndexKey struct {
 	name     string
 }
 
-type pbsBackupWorkloadIndex struct {
-	byVMID        map[int][]*Resource
-	vmidAmbiguous map[int]bool
+type pbsBackupWorkloadIndex map[models.PBSGuestRef][]*Resource
+
+// pbsGuestBackup is what the rollups need from a settled PBS snapshot. Keeping only
+// this spares each registry a copy of every snapshot's file list.
+type pbsGuestBackup struct {
+	instance  string
+	datastore string
+	guest     models.PBSGuestRef
+}
+
+func pbsGuestBackupsOf(snapshot models.StateSnapshot) []pbsGuestBackup {
+	guests := snapshot.PBSBackupGuests()
+	backups := make([]pbsGuestBackup, 0, len(guests))
+	for i, guest := range guests {
+		if guest != (models.PBSGuestRef{}) {
+			backups = append(backups, pbsGuestBackup{instance: snapshot.PBSBackups[i].Instance, datastore: snapshot.PBSBackups[i].Datastore, guest: guest})
+		}
+	}
+	return backups
 }
 
 func (rr *ResourceRegistry) refreshStorageConsumersLocked() {
-	sourceOwned := preserveSourceOwnedStorageConsumers(rr.resources)
+	sourceOwned := preserveSourceOwnedStorageConsumers(rr.resources, rr.pbsBackupsRead)
 	for _, resource := range rr.resources {
 		if resource.Storage == nil {
 			continue
@@ -62,15 +77,20 @@ func (rr *ResourceRegistry) refreshStorageConsumersLocked() {
 		addProxmoxStorageConsumers(consumersByStorage, rr.resources, proxmoxIndex)
 	}
 
-	addPBSStorageConsumers(consumersByStorage, rr.resources, rr.pbsBackups)
+	rr.addPBSStorageConsumersLocked(consumersByStorage)
 	applyStorageConsumers(rr.resources, consumersByStorage)
 	applySourceOwnedStorageConsumers(rr.resources, sourceOwned)
 }
 
-func preserveSourceOwnedStorageConsumers(resources map[string]*Resource) map[string]sourceOwnedStorageConsumers {
+func preserveSourceOwnedStorageConsumers(resources map[string]*Resource, pbsBackupsRead bool) map[string]sourceOwnedStorageConsumers {
 	preserved := make(map[string]sourceOwnedStorageConsumers)
 	for id, resource := range resources {
-		if resource == nil || resource.Storage == nil || !hasDataSource(resource.Sources, SourceVMware) {
+		if resource == nil || resource.Storage == nil {
+			continue
+		}
+		// A PBS datastore's consumers come from backups, which a registry seeded
+		// from resources never read, so its seed holds the only answer.
+		if !hasDataSource(resource.Sources, SourceVMware) && (pbsBackupsRead || !isPBSDatastoreResource(resource)) {
 			continue
 		}
 		if resource.Storage.ConsumerCount <= 0 && len(resource.Storage.ConsumerTypes) == 0 && len(resource.Storage.TopConsumers) == 0 {
@@ -112,27 +132,23 @@ func addProxmoxStorageConsumers(consumersByStorage map[string]map[string]*storag
 	}
 }
 
-func addPBSStorageConsumers(consumersByStorage map[string]map[string]*storageConsumerSummary, resources map[string]*Resource, backups []models.PBSBackup) {
-	if len(backups) == 0 {
+func (rr *ResourceRegistry) addPBSStorageConsumersLocked(consumersByStorage map[string]map[string]*storageConsumerSummary) {
+	if len(rr.pbsBackups) == 0 {
 		return
 	}
 
-	datastoreIndex := buildPBSDatastoreIndex(resources)
-	workloadIndex := buildPBSBackupWorkloadIndex(resources)
-	if len(datastoreIndex) == 0 || len(workloadIndex.byVMID) == 0 {
+	datastoreIndex := buildPBSDatastoreIndex(rr.resources)
+	workloadIndex := buildPBSBackupWorkloadIndex(rr.resources)
+	if len(datastoreIndex) == 0 || len(workloadIndex) == 0 {
 		return
 	}
 
-	for _, backup := range backups {
-		vmid, err := strconv.Atoi(strings.TrimSpace(backup.VMID))
-		if err != nil || vmid <= 0 {
-			continue
-		}
-		datastore := selectPBSDatastoreResource(datastoreIndex, backup)
+	for _, backup := range rr.pbsBackups {
+		datastore := selectPBSDatastoreResource(datastoreIndex, backup.instance, backup.datastore)
 		if datastore == nil {
 			continue
 		}
-		workload := resolvePBSBackupWorkload(workloadIndex, backup, vmid)
+		workload := rr.resolvePBSBackupWorkloadLocked(workloadIndex, backup.guest)
 		if workload == nil {
 			continue
 		}
@@ -269,36 +285,26 @@ func buildPBSDatastoreIndex(resources map[string]*Resource) map[pbsDatastoreInde
 }
 
 func buildPBSBackupWorkloadIndex(resources map[string]*Resource) pbsBackupWorkloadIndex {
-	index := pbsBackupWorkloadIndex{
-		byVMID:        make(map[int][]*Resource),
-		vmidAmbiguous: make(map[int]bool),
-	}
-	vmidInstances := make(map[int]map[string]struct{})
+	index := make(pbsBackupWorkloadIndex)
 	for _, resource := range resources {
-		if resource == nil || resource.Proxmox == nil {
+		if resource == nil || resource.Proxmox == nil || resource.Proxmox.VMID <= 0 {
 			continue
 		}
+		backupType := ""
 		switch resource.Type {
-		case ResourceTypeVM, ResourceTypeSystemContainer:
+		case ResourceTypeVM:
+			backupType = "vm"
+		case ResourceTypeSystemContainer:
+			backupType = "ct"
 		default:
 			continue
 		}
-		vmid := resource.Proxmox.VMID
-		if vmid <= 0 {
-			continue
+		guest := models.PBSGuestRef{
+			Instance:   strings.TrimSpace(resource.Proxmox.Instance),
+			BackupType: backupType,
+			VMID:       resource.Proxmox.VMID,
 		}
-		index.byVMID[vmid] = append(index.byVMID[vmid], resource)
-		instances := vmidInstances[vmid]
-		if instances == nil {
-			instances = make(map[string]struct{})
-			vmidInstances[vmid] = instances
-		}
-		instances[strings.TrimSpace(resource.Proxmox.Instance)] = struct{}{}
-	}
-	for vmid, instances := range vmidInstances {
-		if len(instances) > 1 {
-			index.vmidAmbiguous[vmid] = true
-		}
+		index[guest] = append(index[guest], resource)
 	}
 	return index
 }
@@ -371,10 +377,10 @@ func pbsDatastoreInstanceAliases(resource *Resource, resources map[string]*Resou
 	return uniqueStrings(aliases)
 }
 
-func selectPBSDatastoreResource(index map[pbsDatastoreIndexKey][]*Resource, backup models.PBSBackup) *Resource {
+func selectPBSDatastoreResource(index map[pbsDatastoreIndexKey][]*Resource, instance, datastore string) *Resource {
 	key := pbsDatastoreIndexKey{
-		instance: normalizePBSLookupName(backup.Instance),
-		name:     normalizePBSLookupName(backup.Datastore),
+		instance: normalizePBSLookupName(instance),
+		name:     normalizePBSLookupName(datastore),
 	}
 	if key.instance == "" || key.name == "" {
 		return nil
@@ -386,86 +392,31 @@ func selectPBSDatastoreResource(index map[pbsDatastoreIndexKey][]*Resource, back
 	return candidates[0]
 }
 
-func resolvePBSBackupWorkload(index pbsBackupWorkloadIndex, backup models.PBSBackup, vmid int) *Resource {
-	candidates := index.byVMID[vmid]
-	if len(candidates) == 0 {
-		return nil
-	}
-	candidates = filterPBSBackupCandidatesByType(candidates, backup.BackupType)
-	if len(candidates) == 0 {
-		return nil
-	}
-	if matched := filterPBSBackupCandidatesByNamespace(candidates, backup.Namespace); len(matched) == 1 {
-		return matched[0]
-	} else if len(matched) > 1 {
-		return nil
-	}
-	if index.vmidAmbiguous[vmid] {
-		return nil
-	}
-	if len(candidates) == 1 {
+// resolvePBSBackupWorkloadLocked finds the resource for the guest the attribution
+// rule named. It decides nothing itself.
+func (rr *ResourceRegistry) resolvePBSBackupWorkloadLocked(index pbsBackupWorkloadIndex, guest models.PBSGuestRef) *Resource {
+	switch candidates := index[guest]; len(candidates) {
+	case 0:
+	case 1:
 		return candidates[0]
+	default:
+		return nil
+	}
+	// An operator link can fold this guest into another guest's row, which keeps
+	// only its own Proxmox facet. The link fold still names the folded guest.
+	resourceType := ResourceTypeVM
+	if guest.BackupType == "ct" {
+		resourceType = ResourceTypeSystemContainer
+	}
+	holderID, _ := rr.linkFoldHolderLocked(ProxmoxGuestCanonicalID(resourceType, guest.Instance, guest.VMID))
+	if holder := rr.resources[holderID]; isStorageConsumerResource(holder) {
+		return holder
 	}
 	return nil
 }
 
-func filterPBSBackupCandidatesByType(candidates []*Resource, backupType string) []*Resource {
-	backupType = strings.ToLower(strings.TrimSpace(backupType))
-	if backupType == "" {
-		return candidates
-	}
-	filtered := make([]*Resource, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate == nil {
-			continue
-		}
-		switch backupType {
-		case "vm":
-			if candidate.Type == ResourceTypeVM {
-				filtered = append(filtered, candidate)
-			}
-		case "ct", "container":
-			if candidate.Type == ResourceTypeSystemContainer {
-				filtered = append(filtered, candidate)
-			}
-		default:
-			filtered = append(filtered, candidate)
-		}
-	}
-	return filtered
-}
-
-func filterPBSBackupCandidatesByNamespace(candidates []*Resource, namespace string) []*Resource {
-	namespace = strings.TrimSpace(namespace)
-	if namespace == "" {
-		return nil
-	}
-	filtered := make([]*Resource, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate == nil || candidate.Proxmox == nil {
-			continue
-		}
-		if pbsNamespaceMatchesInstance(namespace, candidate.Proxmox.Instance) {
-			filtered = append(filtered, candidate)
-		}
-	}
-	return filtered
-}
-
 func normalizePBSLookupName(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
-}
-
-func pbsNamespaceMatchesInstance(namespace, instance string) bool {
-	namespace = normalizeStorageLookupName(namespace)
-	instance = normalizeStorageLookupName(instance)
-	if namespace == "" || instance == "" {
-		return false
-	}
-	if namespace == instance {
-		return true
-	}
-	return strings.HasSuffix(instance, namespace) || strings.HasSuffix(namespace, instance)
 }
 
 func selectStorageConsumerCandidate(candidates []*Resource, guestNode string) *Resource {

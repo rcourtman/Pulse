@@ -98,7 +98,13 @@ type ResourceRegistry struct {
 	linksByID    map[string][]ResourceLink
 	splitAgents  map[string]nodeAgentLinkSide // node source ID -> the linked agent the operator split it from
 	identityPins *identityPinIndex
-	pbsBackups   []models.PBSBackup
+	// pbsBackups holds the snapshots the attribution rule settled over the whole
+	// state, with the guest it named.
+	pbsBackups []pbsGuestBackup
+	// pbsBackupsRead says this registry read PBS backups from a state snapshot.
+	// A registry seeded from resources never saw them, so the rollups its seed
+	// carries are the only answer it has.
+	pbsBackupsRead bool
 	// overridesUnreadable records that the store could not be read for the
 	// operator's links or exclusions when this registry loaded them, so
 	// links, linksByID and exclusions lack the decisions that read held
@@ -712,8 +718,10 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 		}
 	}
 
+	pbsBackups := pbsGuestBackupsOf(snapshot)
 	rr.mu.Lock()
-	rr.pbsBackups = clonePBSBackups(snapshot.PBSBackups)
+	rr.pbsBackups = pbsBackups
+	rr.pbsBackupsRead = true
 	if !rr.deferManualLinks {
 		rr.applyManualLinks(thresholds)
 	}
@@ -6403,15 +6411,6 @@ func pmgInstanceSourceID(instance models.PMGInstance) string {
 		return v
 	}
 	return extractHostname(instance.Host)
-}
-
-func clonePBSBackups(in []models.PBSBackup) []models.PBSBackup {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]models.PBSBackup, len(in))
-	copy(out, in)
-	return out
 }
 
 func dockerSwarmClusterKey(host models.DockerHost) string {

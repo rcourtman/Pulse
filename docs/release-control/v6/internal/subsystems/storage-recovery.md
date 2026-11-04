@@ -36,8 +36,9 @@ a snapshot links to. It opens no new storage or recovery path.
 ### PBS restore points use the same attribution as guest badges (4 November 2026)
 
 `models.AttributePBSBackups` is the one rule for which guest owns a PBS snapshot.
-Guest backup badges, recovery points and the Backups table all read its answer, so
-one snapshot cannot read as different guests. The guest the labels fit best takes
+Guest backup badges, recovery points, the Backups table, PBS protected-workload
+counts, datastore consumers and Patrol all read its answer, so one snapshot cannot
+read as different guests. The guest the labels fit best takes
 the snapshot. A tie goes to the connection whose exclusive storage view listed it,
 and that evidence also teaches the source learner. If that connection has no such
 guest, the learner disagrees or nothing settles it, the snapshot stays unattributed

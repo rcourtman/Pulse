@@ -631,7 +631,7 @@ func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 			{ID: "node-1", Name: "node-1"},
 		},
 		VMs: []models.VM{
-			{ID: "vm-101", VMID: 101, Name: "vm-101"},
+			{ID: "vm-101", VMID: 101, Name: "vm-101", Instance: "pve-a"},
 		},
 		LastUpdate: now,
 		ConnectionHealth: map[string]bool{
@@ -661,8 +661,8 @@ func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 			},
 		},
 		PBSBackups: []models.PBSBackup{
-			{ID: "pb-101", VMID: "101"},
-			{ID: "pb-202", VMID: "202"},
+			{ID: "pb-101", VMID: "101", BackupType: "vm"},
+			{ID: "pb-202", VMID: "202", BackupType: "vm"},
 		},
 	}
 	scope := PatrolScope{ResourceTypes: []string{"node", "vm"}}
@@ -692,6 +692,35 @@ func TestFilterStateByScope_PreservesScopedMetadataOnly(t *testing.T) {
 	}
 	if len(filtered.PBSBackups) != 1 || filtered.PBSBackups[0].VMID != "101" {
 		t.Fatalf("expected only scoped PBS backups, got %+v", filtered.PBSBackups)
+	}
+}
+
+// A scope narrows the guests, so it must not get to narrow the candidates: the
+// snapshot of one connection's VM 100 stays out of a run scoped to the other
+// connection's VM 100, and a snapshot the evidence leaves unsettled is nobody's.
+func TestFilterStateByScope_KeepsSnapshotsOfTheScopedGuestOnly(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	now := time.Now()
+	state := models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "alpha:pve:100", VMID: 100, Name: "web", Node: "pve", Instance: "alpha"},
+			{ID: "bravo:pve:100", VMID: 100, Name: "db", Node: "pve", Instance: "bravo"},
+		},
+		PBSBackups: []models.PBSBackup{
+			{ID: "of-web", Instance: "pbs", BackupType: "vm", VMID: "100", Comment: "web", BackupTime: now},
+			{ID: "of-db", Instance: "pbs", BackupType: "vm", VMID: "100", Comment: "db", BackupTime: now},
+			{ID: "unsettled", Instance: "pbs", BackupType: "vm", VMID: "100", BackupTime: now},
+			{ID: "ct-reuse", Instance: "pbs", BackupType: "ct", VMID: "100", BackupTime: now},
+		},
+	}
+
+	filtered := ps.filterStateByScopeState(ps.patrolRuntimeStateForSnapshot(state), PatrolScope{ResourceIDs: []string{"bravo:pve:100"}})
+
+	if len(filtered.VMs) != 1 || filtered.VMs[0].Instance != "bravo" {
+		t.Fatalf("expected only bravo's guest in scope, got %+v", filtered.VMs)
+	}
+	if len(filtered.PBSBackups) != 1 || filtered.PBSBackups[0].ID != "of-db" {
+		t.Fatalf("expected only db's snapshot, got %+v", filtered.PBSBackups)
 	}
 }
 
@@ -996,7 +1025,7 @@ func TestPatrolRuntimeState_WithDerivedProviders_UsesResourceInventoryOnly(t *te
 		PVEBackups: models.PVEBackups{
 			BackupTasks: []models.BackupTask{{ID: "bt-1", VMID: 101}},
 		},
-		PBSBackups: []models.PBSBackup{{ID: "pb-1", VMID: "101"}},
+		PBSBackups: []models.AttributedPBSBackup{{PBSBackup: models.PBSBackup{ID: "pb-1", VMID: "101"}}},
 	}
 
 	derived := state.withDerivedProviders()
