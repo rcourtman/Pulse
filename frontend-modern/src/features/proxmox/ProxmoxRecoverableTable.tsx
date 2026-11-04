@@ -41,6 +41,7 @@ import {
   SortableHead,
   retainBackupTableFocus,
   artifactCreatedLabel,
+  artifactDateRows,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
   getBackupWorkloadNodeLabel,
@@ -157,18 +158,7 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         }),
         makeDetailRow('Connection', artifact.locationConnection || 'Not reported', { wrap: true }),
         makeDetailRow('Location', artifact.location, { wrap: true }),
-        makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.created, artifactCreatedLabel(artifact), {
-          tone: artifact.createdMs === undefined ? 'warning' : undefined,
-          ...(artifact.createdMs !== undefined && artifact.createdAt
-            ? { title: artifact.createdAt }
-            : {}),
-        }),
-        // A usable date reads as Created, with the provider's exact value on
-        // hover. Unknown would hide what the source sent, so only an unusable or
-        // missing date needs its literal text.
-        artifact.createdMs === undefined
-          ? makeDetailRow('Reported date', artifact.createdAt || 'Not reported', { wrap: true })
-          : null,
+        ...artifactDateRows(artifact),
         makeDetailRow(
           'Size',
           hasSize ? formatPlatformTableBytesValue(artifact.size) : 'Unknown size',

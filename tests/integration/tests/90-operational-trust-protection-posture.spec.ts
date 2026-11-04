@@ -140,7 +140,7 @@ test.describe("Operational trust protection posture", () => {
     expect(posture?.explanation.trim()).toBeTruthy();
     await expect(detailRow).toContainText(posture!.explanation);
     await expect(detailRow).toContainText(
-      /Restore evidence|Restore-point history is not confirmed complete\. Missing entries do not mean no backups exist\.|No restore points are visible in the current list\. Missing entries do not mean no backups exist\.|No restore points reported for this workload in the readable history\./,
+      /Restore points|Restore-point history is not confirmed complete\. Missing entries do not mean no backups exist\.|No restore points are visible in the current list\. Missing entries do not mean no backups exist\.|No restore points reported for this workload in the readable history\./,
     );
   });
 

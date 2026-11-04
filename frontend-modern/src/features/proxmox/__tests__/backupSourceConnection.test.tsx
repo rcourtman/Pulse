@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -99,7 +100,9 @@ describe('restore-point source connections in real inventory consumers', () => {
     await fireEvent.click(
       within(coverage).getByRole('button', { name: /expand details for same-name/i }),
     );
-    expect(await screen.findByTestId('proxmox-coverage-detail')).toHaveTextContent('pbs-west');
+    expect(
+      revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail')),
+    ).toHaveTextContent('pbs-west');
     expect(new URLSearchParams(window.location.search).get('q')).toBe('PBS-WEST');
     expect(new URLSearchParams(window.location.search).has('location')).toBe(false);
     await fireEvent.input(screen.getByPlaceholderText(/Search backups by workload/), {
@@ -162,17 +165,12 @@ describe('restore-point source connections in real inventory consumers', () => {
     mount(() => points());
     const toggle = await screen.findByRole('button', { name: /expand details for same-name/i });
     fireEvent.click(toggle);
-    const detail = screen.getByTestId('proxmox-coverage-detail');
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const origins = Array.from(detail.querySelectorAll('[data-backup-source-connection]'));
-    expect(origins.map((item) => item.textContent)).toEqual([
-      'Connection: pbs-east',
-      'Connection: pbs-west',
-    ]);
+    expect(origins.map((item) => item.textContent)).toEqual(['pbs-east', 'pbs-west']);
     expect(origins.every((item) => item.classList.contains('wrap-anywhere'))).toBe(true);
     for (const origin of origins) {
-      const evidence = origin.closest('tr')!;
-      expect(evidence).toHaveTextContent('main / pve-1');
-      expect(evidence).toHaveTextContent('Verified');
+      expect(origin.closest('tbody')!).toHaveTextContent('main / pve-1');
     }
     expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);

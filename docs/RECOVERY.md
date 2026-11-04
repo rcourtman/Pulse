@@ -301,7 +301,7 @@ A recent backup and a failed task can both be genuine. In **Proxmox → Backups
 | **Task** | A collected task result for this workload, where the evidence establishes which task started last. It does not verify an artifact or replace its timestamp. |
 | **Protection** (**Status** on a phone) | Pulse's assessment of subject-linked protection evidence, not a synonym for either task success or backup age. A location filter does not recalculate this assessment. |
 
-Expand the workload, including on a phone, to inspect **Latest task**: **Status**,
+Expand the workload, including on a phone, and open **More details** to inspect **Latest task**: **Status**,
 **Started**, **Duration**, **Error** and **Task ID**, where reported. Keep the
 workload's type, ID, node and **PVE connection** separate from the provider
 reader's **Scope**. Match the existing native task and backup record to that
@@ -371,7 +371,7 @@ protected. Compare one existing archive with the same workload in Pulse:
    Keep the native task's completion result separate from the archive's
    creation time. The PVE source names the inventory reader, not necessarily
    local storage: a PBS-backed storage target can also appear as a PVE file.
-3. Open **Coverage**, clear its Protection filter and expand that same workload.
+3. Open **Coverage**, clear its Protection filter, expand that same workload and open **More details**.
    Read the protection explanation and **Provider evidence**: provider,
    **Scope**, **Source**, **Reported outcome**, **History** and **Access**.
    A successful inventory read is not a backup-job completion result; keep task
@@ -383,7 +383,7 @@ protected. Compare one existing archive with the same workload in Pulse:
    [Protection assessment times](#protection-assessment-times) separately from
    the archive and task clocks; a recent evaluation is not a fresh collection.
 4. Compare **Last backup** (**Backup** or **Age** at narrower widths) with the
-   archive's timestamp. **Restore evidence** can show only a selection of the
+   archive's timestamp. **Restore points** can show only a selection of the
    workload's points; use **By date** to locate an omitted archive. **Unknown**
    is not **None**: unavailable or future dates, or incomplete readable
    history, can prevent a reliable latest age. Do not substitute an older

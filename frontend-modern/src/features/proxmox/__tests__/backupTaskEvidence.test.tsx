@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -57,7 +58,7 @@ async function open(scope = 'east') {
     name: `Expand details for same-name (VM 100) · PVE connection: ${scope}`,
   });
   fireEvent.click(toggle);
-  return screen.findByTestId('proxmox-coverage-detail');
+  return revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
 }
 const taskSection = (panel: HTMLElement) =>
   within(panel).getByText('Latest task', { exact: true, selector: 'th' }).closest('tbody')!;
@@ -103,7 +104,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
     expect(
       within(section).getByText('Task status does not verify a restore or guest responsiveness.'),
     ).toHaveClass('whitespace-normal');
-    expect(panel).toHaveTextContent('Restore evidence');
+    expect(panel).toHaveTextContent('Restore points');
     expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);
 
@@ -174,13 +175,13 @@ describe('latest backup task evidence through the inventory consumer', () => {
     await waitFor(() => expect(value(taskSection(panel), 'Duration')).toHaveTextContent('Unknown'));
     expect(value(taskSection(panel), 'Status')).toHaveTextContent('OK');
     expect(document.activeElement).toBe(toggle);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     tasks = [identityTask({ endTime: '2026-10-04T11:01:05Z' })];
     await vi.advanceTimersByTimeAsync(30_000);
     await waitFor(() => expect(value(taskSection(panel), 'Duration')).toHaveTextContent('1m 5s'));
     expect(taskSection(panel)).not.toHaveTextContent('do not establish a completed duration');
     expect(document.activeElement).toBe(toggle);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(6);
   });
@@ -211,7 +212,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
       within(taskSection(panel)).queryByText('Error', { exact: true, selector: 'td' }),
     ).toBeNull();
     expect(panel.textContent).not.toContain(failure);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(toggle.closest('tr')).toBe(summary);
     expect(document.activeElement).toBe(toggle);
     expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
@@ -224,8 +225,8 @@ describe('latest backup task evidence through the inventory consumer', () => {
     );
     expect(panel).not.toHaveTextContent('task-recovered');
     expect(panel.textContent).not.toContain(failure);
-    expect(panel).toHaveTextContent('Restore evidence');
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(panel).toHaveTextContent('Restore points');
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(document.activeElement).toBe(toggle);
     expect(api.fetch).toHaveBeenCalledTimes(6);
   });
@@ -279,7 +280,7 @@ describe('uncertain task chronology through the inventory consumer', () => {
       expect(summary).toHaveTextContent('Latest task: Unknown');
       expect(summary).not.toHaveTextContent('OK');
       expect(panel).toHaveTextContent('dated-ok');
-      expect(panel).toHaveTextContent('Restore evidence');
+      expect(panel).toHaveTextContent('Restore points');
       expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
       expect(api.fetch).toHaveBeenCalledTimes(2);
 
@@ -340,8 +341,8 @@ describe('uncertain task chronology through the inventory consumer', () => {
     await waitFor(() => expect(panel).not.toHaveTextContent('Task order'));
     expect(panel).not.toHaveTextContent('Possible latest task');
     expect(panel.textContent).not.toContain(failure);
-    expect(panel).toHaveTextContent('Restore evidence');
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(panel).toHaveTextContent('Restore points');
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(toggle.closest('tr')).toBe(summary);
     expect(document.activeElement).toBe(toggle);
     expect(api.fetch).toHaveBeenCalledTimes(8);
@@ -361,7 +362,9 @@ describe('uncertain task chronology through the inventory consumer', () => {
       expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1),
     );
     await waitFor(() => expect(window.location.search).toContain('q=uncertain-failure'));
-    expect(screen.getByTestId('proxmox-coverage-detail').textContent).toContain(failure);
+    expect(
+      revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail')).textContent,
+    ).toContain(failure);
     fireEvent.input(input, { target: { value: 'backup target unavailable' } });
     await waitFor(() => expect(window.location.search).toContain('backup+target+unavailable'));
     expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
@@ -470,7 +473,7 @@ describe('bounded uncertain-task inspection', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     await waitFor(() => expect(panel).not.toHaveTextContent('now-ordered'));
     expect(document.activeElement).toBe(more);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(api.fetch).toHaveBeenCalledTimes(10);
   });
 

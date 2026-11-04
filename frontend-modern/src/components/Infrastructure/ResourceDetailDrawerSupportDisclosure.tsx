@@ -13,6 +13,9 @@ interface ResourceDetailDrawerSupportDisclosureProps {
   buttonClass?: string;
   contentClass?: string;
   dataTestId?: string;
+  // Names the button when Show or Hide alone would not say what it reveals.
+  accessibleSubject?: string;
+  contentId?: string;
   // Rendered in the header row next to the toggle button, visible whether or
   // not the section is expanded — for actions that must not require a click
   // on the disclosure first (e.g. an open-web-interface link).
@@ -46,6 +49,13 @@ export const ResourceDetailDrawerSupportDisclosure: Component<
           <button
             type="button"
             onClick={props.onToggle}
+            aria-expanded={props.expanded}
+            aria-controls={props.expanded ? props.contentId : undefined}
+            aria-label={
+              props.accessibleSubject
+                ? `${props.expanded ? props.hideLabel : props.showLabel} ${props.accessibleSubject}`
+                : undefined
+            }
             class={
               props.buttonClass ??
               'inline-flex min-h-11 shrink-0 items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-surface-hover sm:min-h-0'
@@ -57,7 +67,9 @@ export const ResourceDetailDrawerSupportDisclosure: Component<
       </div>
 
       <Show when={props.expanded}>
-        <div class={props.contentClass ?? 'mt-3'}>{props.children}</div>
+        <div id={props.contentId} class={props.contentClass ?? 'mt-3'}>
+          {props.children}
+        </div>
       </Show>
     </div>
   );

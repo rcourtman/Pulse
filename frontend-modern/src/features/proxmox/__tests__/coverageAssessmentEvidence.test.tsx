@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,7 +64,7 @@ function mount(data = [assessment()]) {
 }
 async function open() {
   fireEvent.click(await screen.findByRole('button', { name: /Expand details for east-100/ }));
-  const panel = await screen.findByTestId('proxmox-coverage-detail');
+  const panel = revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
   await within(panel).findByText('Protection assessment', { exact: true });
   return panel;
 }
@@ -138,7 +139,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
     fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), {
       target: { value: option.value },
     });
-    await screen.findByRole('note', { name: 'Restore evidence scope' });
+    await screen.findByRole('note', { name: 'Restore point scope' });
     expect(valueRow(panel, 'Latest successful point').querySelector('time')).toHaveAttribute(
       'datetime',
       pointAt,
@@ -146,13 +147,13 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
     expect(panel).toHaveTextContent('independent of the current list and its filters');
     fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
     await waitFor(() =>
-      expect(screen.queryByRole('note', { name: 'Restore evidence scope' })).toBeNull(),
+      expect(screen.queryByRole('note', { name: 'Restore point scope' })).toBeNull(),
     );
     expect(valueRow(panel, 'Latest successful point').querySelector('time')).toHaveAttribute(
       'datetime',
       pointAt,
     );
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(api.fetch).toHaveBeenCalledTimes(2);
     expect(api.json).toHaveBeenCalledTimes(1);
   });
@@ -172,7 +173,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
       'datetime',
       pointAt,
     );
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(collapse).toHaveFocus();
 
     api.json.mockRejectedValue(new Error('synthetic unavailable assessment'));
@@ -200,7 +201,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
       mount([assessment({ evaluatedAt: invalid })]);
       await screen.findByText(/Protection status is unavailable/);
       fireEvent.click(await screen.findByRole('button', { name: /Expand details for east-100/ }));
-      const panel = await screen.findByTestId('proxmox-coverage-detail');
+      const panel = revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
       expect(within(panel).queryByText('Protection assessment', { exact: true })).toBeNull();
       expect(panel.querySelector('time')).toBeNull();
       expect(panel.querySelector('img')).toBeNull();

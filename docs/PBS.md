@@ -413,9 +413,9 @@ Check one affected guest without changing its setup:
 2. Compare the listed backup with the existing record in PBS: server,
    datastore, namespace (including root), guest type/ID and backup time.
    Independent PVE installations can reuse an ID; confirm the owning
-   installation too. Under **Restore evidence**, choose the newest point whose
-   **Source** is **PBS**, and read its **Created** time and **State**. Hover the
-   Created age for its absolute timestamp; if unavailable, keep the time
+   installation too. Under **Restore points**, choose the newest point whose
+   **Source** is **PBS**, and read its **Created** time and **State**. Tap the
+   point for its absolute **Created** time; if unavailable, keep the time
    unknown. A relative age or Pulse's refresh time is not a matching backup
    timestamp. A **guest snapshot** is not a PBS backup. Check the existing
    backup task and verification result for that same point in PBS.

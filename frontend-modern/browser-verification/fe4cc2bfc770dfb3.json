@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "d2b83dda34831d40e2d4e75da393f391fdb9c759",
+  "verified_at": "2026-11-04T11:20:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx": "3a50a48c24a1de657538bc0571526d6b7f026b9a983f2868a23dfeda6fdae37a",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "809132434c3bad2aee2b2d2b52d226bc041322b7722ac54f9d87a207231dab23",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "0573839932b65c3ceb3defa345646b16fc0d7d0c1f9d4a1279417edf37e0f371",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "ae7a65e84fff818dfcf5b871b04c9e294b435c0ae1e7721863b49a89559d29ac",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "748ebf2d2bdb3d24525d8090eada51892f441a6b58f1941e023f10b73729da3f"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 700,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Mock stack built from this change, at 1280 on the final build; 390, 320 and 700 on the build before three non-layout review fixes",
+    "Open row at 390: reason, failed-job notice, Newest backup line, five restore points at 32px, one More details control, 439px tall",
+    "Open row at 1280: Source, Location, Created, Size and State per point, 33px rows, no Details column",
+    "Tapped point at 320 and 1280 shows Connection, Location, Created, Size, Identifier and Metadata",
+    "More details shows Workload, Protection assessment, Latest task and Provider evidence",
+    "More details button at 1280 is named Show more details or Hide more details, with aria-expanded and aria-controls while open",
+    "No horizontal overflow or clipped point cell at any tested width"
+  ],
+  "interactions": [
+    "Expanded a Coverage row at 1280, 390 and 320",
+    "Tapped a restore point open at 390, 320 and 1280",
+    "Opened and closed More details at 390 and 1280",
+    "Waited through a 30 second inventory poll at 390: tapped point and More details stayed open",
+    "Changed width from 390 to 700 and 320 with both open: both stayed open"
+  ]
+}

@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -72,12 +73,12 @@ const value = (parent: HTMLElement, label: string) =>
   within(parent).getByText(label, { exact: true, selector: 'td' }).closest('tr')!.lastElementChild!;
 const evidenceTable = (panel: HTMLElement) =>
   within(
-    within(panel).getByText('Restore evidence', { exact: true }).closest('div')!.parentElement!,
-  ).getByRole('table');
+    within(panel).getByText('Restore points', { exact: true }).closest('div')!.parentElement!,
+  ).getAllByRole('table')[0];
 async function open() {
   const toggle = await screen.findByRole('button', { name: /Expand details for east-100/ });
   fireEvent.click(toggle);
-  return screen.findByTestId('proxmox-coverage-detail');
+  return revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
 }
 beforeEach(() => {
   vi.resetAllMocks();
@@ -111,7 +112,7 @@ describe('malformed timestamp evidence through the parsed HTTP consumer', () => 
     );
     expect(value(section(panel, 'Possible latest task 2'), 'Status')).toHaveTextContent('OK');
     const evidence = evidenceTable(panel);
-    expect(within(evidence).getAllByText('Unknown', { exact: true })).toHaveLength(3);
+    expect(within(evidence).getAllByText('Unknown', { exact: true })).toHaveLength(6);
     expect(document.body).toHaveTextContent('3 completed restore points');
     expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);
@@ -157,7 +158,7 @@ describe('malformed timestamp evidence through the parsed HTTP consumer', () => 
     expect(panel).not.toHaveTextContent('Retained failure');
     const evidence = evidenceTable(panel);
     expect(within(evidence).queryByText('Unknown', { exact: true })).toBeNull();
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(document.activeElement).toBe(toggle);
     expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(4);

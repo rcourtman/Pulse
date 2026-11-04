@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -174,9 +175,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toBeInTheDocument();
 
     toggle.focus();
-    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     setRows([{ ...row, pbsCount: 2 }]);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(toggle).toHaveFocus();
     fireEvent.keyDown(toggle, { key: ' ' });
     expect(expanded()).toBeNull();
@@ -227,17 +228,18 @@ describe('ProxmoxCoverageTable column visibility', () => {
         showTaskColumn
       />
     ));
+    revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     fireEvent.click(screen.getByRole('button', { name: 'Show 8 more possible latest tasks' }));
-    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toHaveTextContent(
       'Showing 16 of 24 possible latest tasks.',
     );
     setExpanded(second.key);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toHaveTextContent(
       'Showing 8 of 24 possible latest tasks.',
     );
     setExpanded(null);
     setExpanded(first.key);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toHaveTextContent(
       'Showing 8 of 24 possible latest tasks.',
     );
   }, 15_000);
@@ -268,7 +270,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         showTaskColumn={false}
       />
     ));
-    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     for (const label of ['Evaluated', 'Latest successful point']) {
       expect(within(panel).getByText(label, { exact: true })).toHaveClass('whitespace-normal');
       const value = within(panel).getByText(label, { exact: true }).closest('tr')!;
@@ -314,33 +316,35 @@ describe('ProxmoxCoverageTable column visibility', () => {
         layoutWidth={() => 390}
       />
     ));
-    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const evidence = () =>
-      within(within(panel).getByText('Restore evidence').closest('div')!.parentElement!).getByRole(
+      within(within(panel).getByText('Restore points').closest('div')!.parentElement!).getAllByRole(
         'table',
-      );
-    expect(evidence().querySelectorAll('tbody > tr')).toHaveLength(8);
+      )[0];
+    expect(evidence().querySelectorAll('[data-coverage-evidence-point]')).toHaveLength(8);
     expect(evidence()).toHaveTextContent('undated-disk');
     expect(panel).toHaveTextContent('1 entry has an unavailable or future date');
     expect(current.workload.resourceId).toBe('east-100');
     expect(current.posture).toBe('unknown');
-    fireEvent.click(within(panel).getByRole('button', { name: 'Show 5 more evidence entries' }));
-    expect(evidence().querySelectorAll('tbody > tr')).toHaveLength(13);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 5 more restore points' }));
+    expect(evidence().querySelectorAll('[data-coverage-evidence-point]')).toHaveLength(13);
     expect(
-      within(panel).getByRole('button', { name: 'All 13 evidence entries shown' }),
+      within(panel).getByRole('button', { name: 'All 13 restore points shown' }),
     ).toHaveAttribute('aria-disabled', 'true');
     expect(model.coverageRows[0]).toBe(current);
-    const more = within(panel).getByRole('button', { name: 'All 13 evidence entries shown' });
+    const more = within(panel).getByRole('button', { name: 'All 13 restore points shown' });
     more.focus();
     setRows([{ ...current, artifacts: [current.artifacts[0]] }]);
-    await waitFor(() => expect(more).toHaveTextContent('All 1 evidence entry shown'));
+    await waitFor(() => expect(more).toHaveTextContent('All 1 restore point shown'));
     expect(document.activeElement).toBe(more);
     setRows([{ ...current, artifacts: [] }]);
-    await waitFor(() => expect(more).toHaveTextContent('All 0 evidence entries shown'));
-    expect(panel).not.toHaveTextContent('Restore evidence');
+    await waitFor(() => expect(more).toHaveTextContent('All 0 restore points shown'));
+    expect(panel).not.toHaveTextContent('Restore points');
     expect(document.activeElement).toBe(more);
     setRows(restoredRows);
-    await waitFor(() => expect(evidence().querySelectorAll('tbody > tr')).toHaveLength(13));
+    await waitFor(() =>
+      expect(evidence().querySelectorAll('[data-coverage-evidence-point]')).toHaveLength(13),
+    );
     expect(document.activeElement).toBe(more);
   });
 
@@ -479,16 +483,23 @@ describe('ProxmoxCoverageTable column visibility', () => {
           layoutWidth={() => width}
         />
       ));
-      const detail = screen.getByTestId('proxmox-coverage-detail');
-      const location = detail.querySelector('[data-coverage-evidence-location]')!;
-      expect(location).toHaveTextContent('long-repository-'.repeat(8));
-      expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
-      if (width < 480)
-        expect(location.textContent).toBe(`Location: ${current.artifacts[0].location}`);
+      const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
+      const location = detail.querySelector('[data-coverage-evidence-location]');
+      if (width < 480) {
+        expect(location).toBeNull();
+      } else {
+        expect(location).toHaveClass('truncate');
+        expect(location).toHaveAttribute('title', current.artifacts[0].location);
+      }
+      expect(
+        within(detail).getByText('Location', { exact: true, selector: 'td' }).closest('tr'),
+      ).toHaveTextContent(current.artifacts[0].location);
       expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
         'Not reported',
       );
-      expect(detail.querySelectorAll('[data-coverage-evidence-location]')).toHaveLength(1);
+      expect(detail.querySelectorAll('[data-coverage-evidence-location]')).toHaveLength(
+        width < 480 ? 0 : 1,
+      );
     },
   );
 
@@ -545,6 +556,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
+    revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(document.body.textContent).toContain('Provider evidence');
     expect(document.body.textContent).toContain('Proxmox Backup Server');
     expect(document.body.textContent).toContain('History Complete');
@@ -597,6 +609,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
+    revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const readable = screen.getByText('Scope pbs-main').closest('tr')!;
     const denied = screen.getByText('Scope pbs-other-estate').closest('tr')!;
     expect(readable).not.toBe(denied);
@@ -633,6 +646,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         />
       ));
 
+      revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       const provider = screen.getByText('Scope Unknown').closest('tr')!;
       expect(within(provider).getByText('Access Sufficient')).toBeVisible();
       expect(provider).not.toHaveTextContent('pve1');
@@ -665,6 +679,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
+    revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const label = screen.getByText(`Scope ${scope}`);
     expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
     expect(label.querySelector('img, a')).toBeNull();
@@ -708,7 +723,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
-    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(within(panel).getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
     expect(
       within(panel).getByText(
@@ -719,33 +734,21 @@ describe('ProxmoxCoverageTable column visibility', () => {
       'href',
       '/proxmox/overview?resource=vm-100-resource',
     );
-    // Restore evidence leads; provider quality is a section, not a grid.
-    expect(within(panel).getByText('Restore evidence')).toBeInTheDocument();
-    // `.table-fixed td` forces nowrap on cells, so the wrap lives on the span.
-    const location = panel.querySelector('[data-coverage-evidence-location]');
-    expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
-    expect(location).not.toHaveClass('truncate');
-    expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveClass(
-      'whitespace-pre-line',
-      'wrap-anywhere',
-    );
+    // Restore points leads; provider quality is a section, not a grid.
+    expect(within(panel).getByText('Restore points')).toBeInTheDocument();
     // An age/source pair is not the point's identity. The open evidence keeps
     // the full identifier and metadata readable rather than only on hover.
     expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
-      'Identifier: pbs-1',
+      'Identifierpbs-1',
     );
     expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
-      /Created: .*2026/,
+      /Created.*2026/,
     );
     expect(panel.querySelector('[data-coverage-evidence-detail]')).not.toHaveTextContent(
       'Reported date',
     );
     expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
-      'Metadata: vm/100/2026-07-18T23:00:00Z',
-    );
-    // The source label wraps in the drawer too; a long snapshot name is not cut.
-    expect(within(panel).getByText('PBS', { selector: 'td span' })).toHaveClass(
-      'whitespace-normal',
+      'Metadatavm/100/2026-07-18T23:00:00Z',
     );
     expect(panel.querySelector('.grid')).toBeNull();
     expect(within(panel).getByText('Provider evidence', { selector: 'th' })).toBeInTheDocument();
@@ -945,7 +948,7 @@ describe('Coverage provider-outcome-meaning', () => {
     ['   ', 'Unknown'],
   ])('identifies %j without guessing a backup job result', (source, label) => {
     mount(` ${source} `);
-    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(within(panel).getByText(`Source ${label}`)).toHaveClass(
       'whitespace-normal',
       'wrap-anywhere',
@@ -965,7 +968,7 @@ describe('Coverage provider-outcome-meaning', () => {
     'retains the reported %s without changing protection, history or access',
     (outcome) => {
       mount('pbs-backup-enumeration', outcome, 1200);
-      const panel = screen.getByTestId('proxmox-coverage-detail');
+      const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       expect(panel).toHaveTextContent(
         `Reported outcome ${outcome.charAt(0).toUpperCase() + outcome.slice(1)}`,
       );
@@ -978,7 +981,7 @@ describe('Coverage provider-outcome-meaning', () => {
   it.each([320, 1200])('keeps an unknown source literal and wrapping at %ipx', (width) => {
     const source = '<img src=x onerror=alert(1)>' + 'source-'.repeat(30);
     mount(source, 'unknown', width);
-    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const label = within(panel).getByText(`Source ${source}`);
     expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
     expect(label).not.toHaveClass('truncate');
@@ -1033,7 +1036,7 @@ describe('Coverage absence requires readable, complete history', () => {
     expect(document.body.textContent).not.toContain('No restore points found');
     expect(document.body.textContent).not.toContain('No restore points reported');
     // This copy qualifies the list; it does not synthesise a hidden archive.
-    expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
+    expect(screen.queryByText('Restore points')).not.toBeInTheDocument();
   });
 
   it.each([
@@ -1072,7 +1075,7 @@ describe('Coverage absence requires readable, complete history', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
     );
-    expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
+    expect(screen.queryByText('Restore points')).not.toBeInTheDocument();
   });
 
   it('preserves accepted-empty history as a scoped empty observation', () => {
@@ -1106,6 +1109,7 @@ describe('Coverage absence requires readable, complete history', () => {
       });
 
       expect(screen.getByText(explanation)).toBeInTheDocument();
+      revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       expect(screen.getByText('History Complete')).toBeInTheDocument();
       expect(screen.getByRole('status')).toHaveTextContent(
         'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
@@ -1113,7 +1117,7 @@ describe('Coverage absence requires readable, complete history', () => {
       expect(screen.getByTitle('No PBS backup or PVE backup file')).toHaveTextContent('None');
       // No lastSuccessfulPointAt is expected for a guest snapshot. Nor may the
       // notice synthesize a raw snapshot, date or completed backup from prose.
-      expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
+      expect(screen.queryByText('Restore points')).not.toBeInTheDocument();
       expect(document.body.textContent).not.toContain('No restore points reported');
     },
   );
@@ -1319,7 +1323,7 @@ describe('indeterminate task order in the canonical Coverage consumer', () => {
       const summary = document.querySelector('[data-proxmox-backup-row="coverage"]')!;
       expect(summary).toHaveTextContent('Latest task: Unknown');
       expect(summary).not.toHaveTextContent('OK');
-      const panel = screen.getByTestId('proxmox-coverage-detail');
+      const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       expect(within(panel).queryByText('Latest task', { selector: 'th', exact: true })).toBeNull();
       expect(
         within(panel).getByText('Task order', { selector: 'th', exact: true }),
@@ -1369,6 +1373,7 @@ describe('unknown duration in possible-latest task details', () => {
         showTaskColumn
       />
     ));
+    revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const taskCard = (id: string) => screen.getByText(id, { exact: true }).closest('tbody')!;
     const duration = (card: HTMLElement) =>
       within(card).getByText('Duration', { exact: true, selector: 'td' }).closest('tr')!;
@@ -1380,7 +1385,9 @@ describe('unknown duration in possible-latest task details', () => {
     expect(duration(taskCard('reported-failure'))).toHaveTextContent('5m 0s');
     expect(taskCard('reported-failure')).toHaveTextContent('Failed');
     expect(taskCard('reported-failure')).toHaveTextContent('Retain this error');
-    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent('Task order');
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toHaveTextContent(
+      'Task order',
+    );
     expect(model.coverageRows[0].posture).toBe('unknown');
   });
 });
@@ -1441,7 +1448,7 @@ describe('Coverage owned focus during live reordering', () => {
     async (width, type) => {
       const { container, reorder } = mountReordering(width, type);
       const disclosure = screen.getByRole('button', { name: /Collapse details for alpha/ });
-      const panel = screen.getByTestId('proxmox-coverage-detail');
+      const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       const focus = vi.spyOn(disclosure, 'focus');
       disclosure.focus();
       focus.mockClear();
@@ -1457,7 +1464,7 @@ describe('Coverage owned focus during live reordering', () => {
         expect.stringContaining('alpha'),
       ]);
       expect(screen.getByRole('button', { name: /Collapse details for alpha/ })).toBe(disclosure);
-      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
       expect(disclosure).toHaveFocus();
       expect(focus).toHaveBeenCalledWith({ preventScroll: true });
       fireEvent.keyDown(disclosure, { key: 'Enter' });
@@ -1468,13 +1475,13 @@ describe('Coverage owned focus during live reordering', () => {
 
   it('keeps a connected detail link focused rather than falling back to its disclosure', async () => {
     const { reorder } = mountReordering();
-    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const link = within(panel).getAllByRole('link')[0]!;
     link.focus();
     reorder();
     await Promise.resolve();
     expect(link).toHaveFocus();
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
   });
 
   it.each([false, true])(

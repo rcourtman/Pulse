@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal, type JSX } from 'solid-js';
@@ -720,7 +721,7 @@ describe('ProxmoxBackupsTable', () => {
         '["pbs","pbs-offsite","offsite"]',
       ),
     );
-    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
+    expect(screen.getAllByText('offsite / minipc')[0]).toBeInTheDocument();
     expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Backup location: PBS · pbs-offsite / offsite' }),
@@ -733,7 +734,7 @@ describe('ProxmoxBackupsTable', () => {
     );
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
-    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
+    expect(screen.getAllByText('offsite / minipc')[0]).toBeInTheDocument();
     expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
   });
 
@@ -1077,7 +1078,7 @@ describe('ProxmoxBackupsTable', () => {
     // Per-source detail is one click down inside the workload's row.
     const disclosure = screen.getByRole('button', { name: /expand details for pbs-docker/i });
     await fireEvent.click(disclosure);
-    expect(screen.getByText('Restore evidence')).toBeInTheDocument();
+    expect(screen.getByText('Restore points')).toBeInTheDocument();
     expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
     // The drawer keeps the shared detail shell, whose phone width is capped
@@ -1137,21 +1138,21 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findAllByText('pbs-docker');
     await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
     await fireEvent.click(screen.getByRole('button', { name: /expand details for database-a/i }));
-    const detail = screen.getByTestId('proxmox-coverage-detail');
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     await within(detail).findByText(explanation);
     expect(within(detail).getByText('History Complete')).toBeInTheDocument();
     expect(within(detail).getByRole('status')).toHaveTextContent(
       'No restore-point details are visible in the current list. The protection status above may use previously recorded evidence.',
     );
-    expect(within(detail).queryByText('Restore evidence')).not.toBeInTheDocument();
+    expect(within(detail).queryByText('Restore points')).not.toBeInTheDocument();
     expect(within(detail).queryByText('pre-upgrade')).not.toBeInTheDocument();
     expect(detail).not.toHaveTextContent('No restore points reported');
 
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
-    const peer = screen.getByTestId('proxmox-coverage-detail');
-    expect(within(peer).getByText('Restore evidence')).toBeInTheDocument();
+    const peer = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
+    expect(within(peer).getByText('Restore points')).toBeInTheDocument();
     expect(peer.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
-      'Metadata: pre-upgrade',
+      'Metadatapre-upgrade',
     );
     expect(within(peer).queryByRole('status')).not.toBeInTheDocument();
     expect(
@@ -1183,7 +1184,7 @@ describe('ProxmoxBackupsTable', () => {
       expect(
         screen.getAllByRole('columnheader', { name: /^(protection|status)/i })[0],
       ).toBeInTheDocument();
-      expect(screen.getByText('Restore evidence')).toBeInTheDocument();
+      expect(screen.getByText('Restore points')).toBeInTheDocument();
       expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
     }
@@ -2065,7 +2066,7 @@ describe('backup-identity: connected Coverage and By date', () => {
     fireEvent.click(
       within(rows()[0] as HTMLElement).getByRole('button', { name: /expand details/i }),
     );
-    const coverage = await screen.findByTestId('proxmox-coverage-detail');
+    const coverage = revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
     expect(coverage).toHaveTextContent('PBS');
     expect(coverage).toHaveTextContent('PVE file');
     expect(coverage).toHaveTextContent('Snapshot');
@@ -2177,7 +2178,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
   const open = async () => {
     await waitFor(() => expect(rowElement()).not.toBeNull());
     fireEvent.click(within(rowElement()).getByRole('button', { name: /expand details/i }));
-    return screen.findByTestId('proxmox-coverage-detail');
+    return revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
   };
 
   beforeEach(() => {
@@ -2206,7 +2207,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
       await waitFor(() => expect(detail).toHaveTextContent('not confirmed complete'));
       expect(rowElement()).not.toHaveTextContent('None');
       expect(detail).not.toHaveTextContent('No restore points reported');
-      expect(detail).not.toHaveTextContent('Restore evidence');
+      expect(detail).not.toHaveTextContent('Restore points');
     },
   );
 
@@ -2271,7 +2272,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
     });
     mount();
     const detail = await open();
-    await waitFor(() => expect(detail).toHaveTextContent('Restore evidence'));
+    await waitFor(() => expect(detail).toHaveTextContent('Restore points'));
     expect(rowElement()).not.toHaveTextContent('None');
     expect(within(rowElement()).queryByLabelText(/Unknown age/)).not.toBeInTheDocument();
     expect(detail).toHaveTextContent('History Partial');
@@ -2295,7 +2296,7 @@ describe('Coverage withdraws failed protection assessments', () => {
           document.querySelector('[data-proxmox-backup-row="coverage"]') as HTMLElement;
         await waitFor(() => expect(row()).toHaveTextContent('Protected'));
         fireEvent.click(within(row()).getByRole('button', { name: /expand details/i }));
-        const detail = await screen.findByTestId('proxmox-coverage-detail');
+        const detail = revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
         const accepted = (await apiFetchJSONMock.mock.results[0]
           .value) as ProtectionPosturesResponse;
         const privateValue = { private: 'SYNTHETIC_PRIVATE_VALUE' };
@@ -2329,7 +2330,7 @@ describe('Coverage withdraws failed protection assessments', () => {
         expect(row()).not.toHaveTextContent('Protected');
         expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
         expect(detail).not.toHaveTextContent('A current verified backup is available.');
-        expect(detail).toHaveTextContent('Restore evidence');
+        expect(detail).toHaveTextContent('Restore points');
         expect(within(detail).getByText('PVE file', { exact: true })).toBeInTheDocument();
         expect(document.querySelector('[data-coverage-posture-rule]')).toBeNull();
         expect(document.body).not.toHaveTextContent('SYNTHETIC_PRIVATE_VALUE');
@@ -2362,7 +2363,7 @@ describe('Coverage withdraws failed protection assessments', () => {
       const accepted = (await apiFetchJSONMock.mock.results[0].value) as ProtectionPosturesResponse;
       expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent('1 of 1 protected');
       fireEvent.click(within(row()).getByRole('button', { name: /expand details/i }));
-      const detail = await screen.findByTestId('proxmox-coverage-detail');
+      const detail = revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
       expect(detail).toHaveTextContent('A current verified backup is available.');
 
       apiFetchJSONMock.mockRejectedValue(new Error('Synthetic posture refresh failed'));
@@ -2374,7 +2375,7 @@ describe('Coverage withdraws failed protection assessments', () => {
       expect(screen.getByRole('button', { name: '1 status unknown' })).toBeInTheDocument();
       expect(detail).not.toHaveTextContent('A current verified backup is available.');
       expect(detail).not.toHaveTextContent('History Complete');
-      expect(detail).toHaveTextContent('Restore evidence');
+      expect(detail).toHaveTextContent('Restore points');
       expect(within(detail).getByText('PVE file', { exact: true })).toBeInTheDocument();
       expect(document.querySelector('[data-coverage-posture-rule]')).toBeNull();
 
@@ -2557,7 +2558,7 @@ describe('mounted Proxmox backup inventory refresh', () => {
     const disclosure = within(row()).getByRole('button', { name: /expand details/i });
     fireEvent.click(disclosure);
     disclosure.focus();
-    const detail = await screen.findByTestId('proxmox-coverage-detail');
+    const detail = revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
     const badge = within(detail).getByText('Verified', { exact: true });
     expect(badge).toHaveClass('bg-emerald-100');
 
@@ -2569,7 +2570,7 @@ describe('mounted Proxmox backup inventory refresh', () => {
     await waitFor(() => expect(within(detail).getByText('Unverified')).toBe(badge));
     expect(badge).toHaveClass('bg-amber-100');
     expect(detail).toHaveTextContent('PVE file');
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(detail);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(detail);
     expect(document.activeElement).toBe(disclosure);
     expect(document.body).toHaveTextContent('2 completed restore points');
     expect(sourceCalls('pbs')).toHaveLength(2);
@@ -2688,12 +2689,10 @@ describe('backup location identity in the consuming views', () => {
     await fireEvent.click(
       await screen.findByRole('button', { name: /expand details for pbs-docker/i }),
     );
-    const detail = screen.getByTestId('proxmox-coverage-detail');
-    expect(within(detail).getByText('Main / minipc')).toBeInTheDocument();
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
+    expect(within(detail).getAllByText('Main / minipc')[0]).toBeInTheDocument();
     expect(within(detail).queryByText('main / minipc')).not.toBeInTheDocument();
-    expect(detail.querySelector('[data-backup-source-connection]')).toHaveTextContent(
-      'Connection: pbs-main',
-    );
+    expect(detail.querySelector('[data-backup-source-connection]')).toHaveTextContent('pbs-main');
     expect(new URLSearchParams(window.location.search).get('location')).toBe(key);
     expect(apiFetchMock).toHaveBeenCalledTimes(calls);
     mounted.unmount();
@@ -2704,7 +2703,9 @@ describe('backup location identity in the consuming views', () => {
       await screen.findByRole('button', { name: 'Backup location: PBS · pbs-main / Main' }),
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
-    expect(screen.getByTestId('proxmox-coverage-detail')).not.toHaveTextContent('main / minipc');
+    expect(
+      revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail')),
+    ).not.toHaveTextContent('main / minipc');
   });
 
   it('does not interpret an ambiguous old saved location as both repositories, and lets the operator choose again', async () => {
@@ -2808,8 +2809,8 @@ describe('location-scoped evidence keeps workload-wide protection explicit', () 
   const scopeNote = () => screen.queryByRole('note', { name: 'Backup location scope' });
   const pointTable = (panel: HTMLElement) =>
     within(
-      within(panel).getByText('Restore evidence', { exact: true }).closest('div')!.parentElement!,
-    ).getByRole('table');
+      within(panel).getByText('Restore points', { exact: true }).closest('div')!.parentElement!,
+    ).getAllByRole('table')[0];
   const setup = (kind: 'stale' | 'running' | 'snapshot') => {
     const guest = identityGuest('east-100', 'east', 'pve-1');
     const pve = {
@@ -2890,26 +2891,26 @@ describe('location-scoped evidence keeps workload-wide protection explicit', () 
       else expect(row).toHaveTextContent('Unknown');
       const toggle = within(row).getByRole('button', { name: /Expand details/ });
       fireEvent.click(toggle);
-      const panel = screen.getByTestId('proxmox-coverage-detail');
-      expect(within(panel).getByRole('note', { name: 'Restore evidence scope' })).toHaveTextContent(
+      const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
+      expect(within(panel).getByRole('note', { name: 'Restore point scope' })).toHaveTextContent(
         label,
       );
       expect(panel).toHaveTextContent('cover the whole workload, not just this location.');
       expect(panel).toHaveTextContent('A current verified backup is available.');
       expect(panel).toHaveTextContent('whole-workload-task');
       expect(pointTable(panel)).not.toHaveTextContent('current-local');
-      expect(pointTable(panel).querySelectorAll('tbody > tr')).toHaveLength(1);
+      expect(pointTable(panel).querySelectorAll('[data-coverage-evidence-point]')).toHaveLength(1);
       expect(apiFetchMock).toHaveBeenCalledTimes(2);
       expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
 
       fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
       await waitFor(() => expect(scopeNote()).not.toBeInTheDocument());
-      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
       expect(
-        within(panel).queryByRole('note', { name: 'Restore evidence scope' }),
+        within(panel).queryByRole('note', { name: 'Restore point scope' }),
       ).not.toBeInTheDocument();
       expect(pointTable(panel)).toHaveTextContent('current-local');
-      expect(pointTable(panel).querySelectorAll('tbody > tr')).toHaveLength(2);
+      expect(pointTable(panel).querySelectorAll('[data-coverage-evidence-point]')).toHaveLength(2);
       expect(document.querySelector('[data-backup-verdict]')).toHaveTextContent('1 of 2 protected');
       expect(apiFetchMock).toHaveBeenCalledTimes(2);
       expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
@@ -3483,7 +3484,7 @@ describe('Coverage provider-outcome-meaning through parsed API reads', () => {
         renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} workloads={[guest]} />);
         const toggle = await screen.findByRole('button', { name: /Expand details for east-100/ });
         fireEvent.click(toggle);
-        const panel = await screen.findByTestId('proxmox-coverage-detail');
+        const panel = revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
         await waitFor(() => expect(panel).toHaveTextContent(`Source ${label}`));
         const task = within(panel).getByText('Latest task', { selector: 'th' }).closest('tbody')!;
         expect(within(task).getByText('OK', { exact: true })).toBeVisible();
@@ -3510,7 +3511,7 @@ describe('Coverage provider-outcome-meaning through parsed API reads', () => {
           ).getByText('OK', { exact: true }),
         ).toBeVisible();
         expect(within(panel).getByText('Running', { exact: true })).toBeVisible();
-        expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+        expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
         expect(toggle).toHaveFocus();
         // No new read, test-job or mutation is needed to explain the evidence.
         expect(apiFetchMock).toHaveBeenCalledTimes(4);

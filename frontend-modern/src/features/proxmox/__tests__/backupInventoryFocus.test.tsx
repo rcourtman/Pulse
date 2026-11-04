@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -148,7 +149,7 @@ describe('retiring backup evidence retains a usable keyboard position', () => {
     mount();
     const disclosure = await screen.findByRole('button', { name: /Expand details for east-100/ });
     fireEvent.click(disclosure);
-    const detail = screen.getByTestId('proxmox-coverage-detail');
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     within(detail)
       .getByRole('button', { name: /Collapse .* details/ })
       .focus();

@@ -181,7 +181,7 @@ try {
   });
   await expanded.focus();
   await expect(
-    page.getByText("Restore evidence", { exact: true }),
+    page.getByText("Restore points", { exact: true }),
   ).toBeVisible();
   // Finish layout/scroll synchronisation before measuring refresh effects.
   await page.waitForTimeout(500);
@@ -205,7 +205,7 @@ try {
         .first(),
     ).toBeVisible();
     await expect(
-      page.getByText("Restore evidence", { exact: true }),
+      page.getByText("Restore points", { exact: true }),
     ).toBeVisible();
     const sample = await page.evaluate(() => ({
       y: document.querySelector(".app-scroll-shell").scrollTop,
