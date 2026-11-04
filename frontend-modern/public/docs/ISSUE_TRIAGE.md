@@ -201,6 +201,33 @@ distinction matters, use an existing, locally reviewed error code or redacted
 explanation, never a raw response, Debug capture or replay. Historical errors
 and other exports are not retroactively scrubbed; the full entry remains private.
 
+## Reports on older releases
+
+Before asking for more information from someone still running an older release,
+compare it with the latest published stable. Start with the `affects-` label,
+then read the whole thread for a later running version. An old version mentioned
+earlier in the thread is not necessarily what they use now.
+
+Read the release notes since that version and the commits touching the reported
+symptom. Check the actual released source before claiming a change is included.
+If a change could help, link its release, explain what changed for the user and
+suggest an update and a result from ordinary use. Say when it has not been
+confirmed to fix their case. If nothing looks relevant, still name the latest
+stable once and explain that no change aimed at this problem was found. Do not
+send a bare "try the latest" or make updating a condition of investigating.
+
+Before recommending an update, check that release's known issues, open
+`stable-regression` and `release-blocker` reports, and recent upgrade reports.
+Mention any that affect this installation. Tell the user to back up their Pulse
+data first, give the exact versioned image tag for Docker, and say whether a
+separately installed agent needs updating too. Preserve existing safety stops
+and recovery evidence rather than asking them to repeat a failed upgrade.
+
+Keep investigating after the suggestion. It is not a verified fix or the start
+of a retest timeout. Read earlier replies before posting, so the same release
+advice is not repeated and an already-answered question is not asked again.
+This is whole-thread maintainer judgment, not an automatic version-only reply.
+
 ## Required disposition
 
 Before removing `needs-decomposition` or declaring a mixed report triaged:
