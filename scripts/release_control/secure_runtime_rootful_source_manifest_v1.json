@@ -68,6 +68,7 @@
     "scripts/installtests/root_auto_update_repo_test.go",
     "scripts/installtests/root_install_sh_test.go",
     "scripts/installtests/safe_profile_migration_test.go",
+    "scripts/installtests/safe_profile_rollback_quiescence_test.go",
     "scripts/installtests/secure_runtime_platform_matrix_test.go",
     "scripts/installtests/secure_runtime_rootful_qualification_test.go",
     "scripts/installtests/secure_runtime_rootless_qualification_test.go",

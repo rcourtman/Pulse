@@ -2991,9 +2991,15 @@ safe_profile_restore_transaction() {
     [[ -n "$snapshot_state_dir" && "$snapshot_state_dir" == /* && "$snapshot_state_dir" != "/" ]] || return 1
     prior_profile=$(safe_profile_manifest_value "$manifest_file" PRIOR_PROFILE)
 
-    systemctl stop "${AGENT_NAME}.service" 2>/dev/null || true
-    systemctl stop "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null || true
-    systemctl stop "${PRIVILEGED_HELPER_NAME}.service" 2>/dev/null || true
+    # Restoration replaces executables, credentials and saved identity. A
+    # successful (or refused) stop command alone cannot establish that no old
+    # process or socket can still use them. Reuse removal's bounded complete
+    # state reads and final batch check, without touching the action runner.
+    if ! quiesce_agent_units_for_removal "${AGENT_NAME}.service" \
+        "${PRIVILEGED_HELPER_NAME}.socket" "${PRIVILEGED_HELPER_NAME}.service"; then
+        log_error "Safe-profile rollback could not confirm stopped, disabled collector/helper units; installed files and the rollback snapshot were retained. Some units may now be stopped or disabled; reconcile service state before retrying."
+        return 1
+    fi
     safe_profile_restore_entry "$transaction_dir" collector-binary "${INSTALL_DIR}/${BINARY_NAME}" COLLECTOR_BINARY
     safe_profile_restore_entry "$transaction_dir" collector-unit "$SAFE_PROFILE_COLLECTOR_UNIT" COLLECTOR_UNIT
     # The server-side execution-scope reduction deliberately survives both
