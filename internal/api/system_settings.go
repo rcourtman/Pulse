@@ -1116,8 +1116,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		if settings.BackupPollingEnabled != nil {
 			h.config.EnableBackupPolling = *settings.BackupPollingEnabled
 		}
+		// The background updater and full reload share config.Mu for channel
+		// selection; the ordinary settings writer must publish on it too.
+		config.Mu.Lock()
 		h.config.UpdateChannel = settings.UpdateChannel
 		h.config.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
+		config.Mu.Unlock()
 		h.config.DiscoveryEnabled = settings.DiscoveryEnabled
 		if settings.DiscoverySubnet != "" {
 			h.config.DiscoverySubnet = settings.DiscoverySubnet
