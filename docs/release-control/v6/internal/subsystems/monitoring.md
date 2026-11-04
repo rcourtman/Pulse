@@ -2439,8 +2439,7 @@ unseen until the next complete inventory, including before the first one after a
 restart. Inventories only add guests, because each is filtered by its token's
 `VM.Audit`. Clones and disk imports from a running VM also freeze it
 with no config `lock` and stay undetected. `guest_agent_replication_test.go` is
-a synthetic source control, read against PVE 9.2's `Replication.pm`; no native
-replication has exercised it.
+a synthetic source control, read against PVE 9.2's `Replication.pm`.
 
 These reproduce missing Pulse safety controls, **not** the reported native
 PVE/QGA command-ID collision or successful backup thaw. HTTP lock checks cannot
@@ -2450,6 +2449,20 @@ lock clears, or coordinate separate Pulse processes. Native freeze/thaw acceptan
 on a containing build remains required. Until then, stopping Pulse before a
 freeze-enabled backup and restarting only after verified thaw remains the safe
 workaround, with monitoring and alerts unavailable during that window.
+
+A native run on 4 November 2026 used a disposable two-node PVE 9.2.25 cluster
+(qemu-server 9.2.14) and a Debian 13 guest whose freeze hook held the agent for
+30 seconds, with an independent guest writer. Counts are runs where the thaw
+failed with `got wrong command id`. Backups: no Pulse 0 of 1, 6.4.5 2 of 3, 6.7.0
+1 of 1 valid run, from a `file-read` admitted just before the lock, and the #3892
+build 0 of 4. Replication: 6.7.0 1 of 2, with guest commands timing out during
+the freeze in both, and the #3892 build 0 of 3, with none sent during the freeze
+and `prev-replication-active` reported during the job. This reproduces the
+reported error natively. PVE's per-command `guest-ping` timing out was seen
+leaving the stale reply. The thaw is written with its sync, and every guest
+thawed with new writes resuming, so why the reported guest stayed frozen is not
+established. These are small counts with a held freeze, not HAOS or a rate. The
+pre-lock race remains on the #3892 build, so the workaround above stays.
 
 The [bounded backup observation tools](../../../../../tests/qualification/guest-agent-backup/README.md)
 provide an independent guest filesystem writer (file/directory fsync and

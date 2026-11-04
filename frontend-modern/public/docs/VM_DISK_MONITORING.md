@@ -13,13 +13,17 @@ For a quiet VM **Disk I/O** chart alongside busy linked-agent disks, see
 guest-agent request is an active command on the same channel used by
 freeze-enabled backups, even when it only reads disk or memory information.
 There is a [report of a VM remaining frozen despite an OK backup task](https://github.com/rcourtman/Pulse/issues/2439).
-The reported command-ID collision is not established as a reproduced cause.
+On a test Proxmox we reproduced its error: guest-agent polling during a slow
+freeze made the thaw fail with `got wrong command id`, and the task still
+reported OK. The guest thawed in every test run, so what left the reported VM
+frozen is not established.
 
 Pulse pauses its own guest-agent reads while Proxmox reports a VM lock, such as
 a backup, and for up to the first hour of a replication job on the VM, because
 replication freezes the guest without setting a VM lock. Cloning a running VM or
 importing disks from one can also freeze it without a lock, and Pulse can't
-detect those.
+detect those. A read already running when a freeze starts can still cause the
+error above.
 
 If your installation is affected, stop the Pulse service before the backup
 and keep it stopped until the backup has ended and independent checks confirm
