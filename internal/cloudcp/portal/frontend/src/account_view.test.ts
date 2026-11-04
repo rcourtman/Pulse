@@ -234,6 +234,66 @@ describe('account view', function() {
     expect(document.getElementById('access-task-title-acct_1')?.textContent).toContain('Remove access');
   });
 
+  it('names each access control for its member without changing its request identity', function() {
+    document.body.innerHTML =
+      '<div id="access-section-acct_1" data-actor-role="owner" data-can-manage="true">' +
+      '<div id="access-list-acct_1"></div></div>';
+    var members = [
+      { email: 'owner@example.com', role: 'owner', subject_id: 'subject-owner', user_id: 'legacy-owner' },
+      { email: 'tech@example.com', role: 'tech', user_id: 'legacy-tech' },
+      { email: 'pending@example.com', role: 'read_only', subject_id: 'subject-pending', state: 'pending' as const },
+      { email: '\"<review>&@example.com', role: 'admin', subject_id: 'subject-literal' },
+    ];
+    var entry = createEntry({
+      accessVisible: true,
+      activeAccessJob: 'change_role',
+      accessQuery: { status: 'ready', error: '', data: members },
+    });
+
+    renderAccessSection('acct_1', entry);
+    var selects = document.querySelectorAll<HTMLSelectElement>('[data-action="change-role"]');
+    expect(selects).toHaveLength(members.length);
+    for (var i = 0; i < members.length; i += 1) {
+      expect(selects[i].getAttribute('aria-label')).toBe('Role for ' + members[i].email);
+      expect(selects[i].getAttribute('data-account-id')).toBe('acct_1');
+      expect(selects[i].getAttribute('data-user-id')).toBe(members[i].subject_id || members[i].user_id);
+      expect(selects[i].value).toBe(members[i].role);
+      expect(Array.from(selects[i].options).map(function(option) { return option.value; }))
+        .toEqual(['owner', 'admin', 'tech', 'read_only']);
+    }
+
+    entry.activeAccessJob = 'remove';
+    renderAccessSection('acct_1', entry);
+    var buttons = document.querySelectorAll<HTMLButtonElement>('[data-action="remove-member"]');
+    expect(buttons).toHaveLength(members.length);
+    for (var j = 0; j < members.length; j += 1) {
+      expect(buttons[j].getAttribute('aria-label')).toBe('Remove access for ' + members[j].email);
+      expect(buttons[j].textContent).toBe('Remove access');
+      expect(buttons[j].getAttribute('data-account-id')).toBe('acct_1');
+      expect(buttons[j].getAttribute('data-user-id')).toBe(members[j].subject_id || members[j].user_id);
+      expect(buttons[j].getAttribute('data-member-email')).toBe(members[j].email);
+    }
+    expect(document.querySelector('#access-list-acct_1 review')).toBeNull();
+
+    var section = document.getElementById('access-section-acct_1')!;
+    section.setAttribute('data-actor-role', 'admin');
+    renderAccessSection('acct_1', entry);
+    expect(document.querySelectorAll('[data-action="remove-member"]')).toHaveLength(members.length - 1);
+    expect(document.querySelector('[data-user-id="subject-owner"]')).toBeNull();
+    entry.activeAccessJob = 'change_role';
+    renderAccessSection('acct_1', entry);
+    expect(document.querySelector('[data-user-id="subject-owner"]')).toBeNull();
+    expect(Array.from(document.querySelector('select')!.options).map(function(option) { return option.value; }))
+      .toEqual(['admin', 'tech', 'read_only']);
+
+    section.setAttribute('data-can-manage', 'false');
+    renderAccessSection('acct_1', entry);
+    expect(document.querySelector('[data-action="change-role"]')).toBeNull();
+    entry.activeAccessJob = 'remove';
+    renderAccessSection('acct_1', entry);
+    expect(document.querySelector('[data-action="remove-member"]')).toBeNull();
+  });
+
   it('normalizes legacy member roles into the current read-only operator model', function() {
     document.body.innerHTML =
       '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +

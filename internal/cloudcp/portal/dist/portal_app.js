@@ -627,6 +627,7 @@
     }
     var sel = document.createElement("select");
     sel.className = "access-role-select";
+    sel.setAttribute("aria-label", "Role for " + member.email);
     var roles = isOwner ? ["owner", "admin", "tech", "read_only"] : ["admin", "tech", "read_only"];
     for (var j = 0; j < roles.length; j += 1) {
       var opt = document.createElement("option");
@@ -658,6 +659,7 @@
     btn.type = "button";
     btn.className = "btn-remove";
     btn.textContent = "Remove access";
+    btn.setAttribute("aria-label", "Remove access for " + member.email);
     btn.setAttribute("data-action", "remove-member");
     btn.setAttribute("data-account-id", accountID);
     btn.setAttribute("data-user-id", subjectID);

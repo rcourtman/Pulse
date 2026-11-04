@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "parent": "303d6c467a1396b026f50d1749ae6438f2f9e4cf",
+  "content_fingerprint": "ffe2803ab645b543",
+  "verified_blobs": {
+    "internal/cloudcp/portal/frontend/src/account_view.ts": "0057931f80b086660231bc64f1d4bf1790525cef",
+    "internal/cloudcp/portal/frontend/src/account_view.test.ts": "c27e2c13e8b84cfde3a5128bd0889e4c00cb733c",
+    "internal/cloudcp/portal/dist/portal_app.js": "8376914b1737158785ba0c8905d6afa068f32c19",
+    "internal/cloudcp/portal/dist/build_manifest.json": "7b8491b8e78d8370d8efd9e89505c13d248c6b74"
+  },
+  "verified_at": "2026-11-04T11:45:18.185494+00:00",
+  "surface": "Native embedded Pulse Account Access roster, Change roles and Remove access",
+  "command": "pulse-worker-browser tmp/portal-access-evidence/verify.cjs",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 780,
+      "theme": "dark"
+    }
+  ],
+  "checks": 328,
+  "result": "passed",
+  "fixture": "Unchanged native portal.html and real committed/generated JS/CSS; synthetic account bootstrap, GET roster, role PATCH and member DELETE with last-owner 409. Reserved example.com identities only; no production or live account writes.",
+  "comparisons": "Three role controls go from unnamed to Role for <email>; identical removal labels become Remove access for <email>. Named keyboard focus/removal, exact stable subject targets, cancelled removal, last owner refusal, admin restrictions and read-only presentation pass in both engines at all three widths. Visible text and widths match base.",
+  "captures": {
+    "count": 24,
+    "pairs": 12,
+    "location": "Current Web output captures/; indexed and linked in CAPTURES.md and CAPTURE-PAIRS.json. All final original images opened with native view_image.",
+    "correction": "WebKit desktop images recaptured with pointer parked to remove hover-state drift (28 capture/read-only assertions; no mutation suite replay). All final 12 PNG pairs are byte-identical."
+  },
+  "limits": "Accessibility labels only. No role/API/grant changes, live mail, account recovery, saved-client/native/installed acceptance or release. The existing 320px header overflow (339px) remains unchanged. Portal source is outside the main-frontend guard classifier; its skip is not browser proof."
+}
