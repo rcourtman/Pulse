@@ -781,7 +781,10 @@ export const useAppRuntimeState = () => {
         return;
       }
 
+      // The status response names a user only for a signed-in session. A portal
+      // handoff sets nothing but HttpOnly cookies, so no local hint can exist for it.
       if (
+        !securityData.currentUsername &&
         isPreAuthLoginBootstrapPath(window.location.pathname) &&
         !hasLocalAuthBootstrapHint() &&
         !hasSSOCallbackSuccessHint()
