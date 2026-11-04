@@ -20,6 +20,15 @@
 
 ## Purpose
 
+### Needs attention fills its drawer (4 November 2026)
+
+`DrawerAttentionSection` was capped at 768px, which left an empty region beside it
+on a wide screen, above the drawer's range selector. The card now fills the drawer,
+and its alerts flow into as many columns of at least 20rem as the drawer's width
+allows, with the last row stretching to the edge. The width comes from the drawer
+rather than the viewport, so narrow drawers and phones stay at one column. Content,
+severity, overflow and acknowledgement behaviour are unchanged.
+
 ### Backups bars use the metric bar colours (2 November 2026)
 
 The Backup health rows (`ProxmoxBackupsCoverageStrip`) and the Backup jobs
