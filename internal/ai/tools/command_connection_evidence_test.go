@@ -111,7 +111,7 @@ func TestTopologyOmitsUnobservedCommandConnections(t *testing.T) {
 	for _, observed := range []bool{false, true} {
 		options := TopologyBuildOptions{Include: "all", ControlEnabled: true}
 		if observed {
-			options.ConnectedAgentHostnames = map[string]bool{}
+			options.ConnectedAgents = []agentexec.ConnectedAgent{}
 		}
 		result := commandEvidenceJSON(t, BuildTopologyResponseFromReadState(registry, options))
 		caseName := "unobserved_topology"

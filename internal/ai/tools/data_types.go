@@ -455,7 +455,8 @@ func (t ProxmoxTopology) NormalizeCollections() ProxmoxTopology {
 type ProxmoxNodeTopology struct {
 	GovernedResourceMetadata
 	Name                  string              `json:"name"`
-	ID                    string              `json:"id,omitempty"`
+	Instance              string              `json:"instance,omitempty"` // Connection that reports this node; set only when another node shows the same name
+	ID                    string              `json:"id,omitempty"`       // Canonical resource ID; set only when another node shows the same name, since the name cannot select this one
 	Status                string              `json:"status"`
 	CommandAgentConnected *bool               `json:"command_agent_connected,omitempty"`
 	CanExecute            *bool               `json:"can_execute,omitempty"` // True if commands can be executed on this node

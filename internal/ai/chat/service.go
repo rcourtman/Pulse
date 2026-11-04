@@ -1291,8 +1291,9 @@ func marshalAssistantInventoryTopologyContext(topology tools.TopologyResponse) (
 	}
 	for _, node := range topology.Proxmox.Nodes {
 		nodeContext := assistantInventoryProxmoxNode{
-			AnswerLabel:           assistantInventoryNodeAnswerLabel(node.Name),
+			AnswerLabel:           assistantInventoryNodeAnswerLabel(node.Name, node.Instance),
 			Name:                  node.Name,
+			Instance:              node.Instance,
 			Status:                node.Status,
 			CommandAgentConnected: node.CommandAgentConnected,
 			CanExecute:            node.CanExecute,
@@ -1424,6 +1425,7 @@ type assistantInventoryKubernetesTopology struct {
 type assistantInventoryProxmoxNode struct {
 	AnswerLabel           string                       `json:"answer_label"`
 	Name                  string                       `json:"name"`
+	Instance              string                       `json:"instance,omitempty"`
 	Status                string                       `json:"status"`
 	CommandAgentConnected *bool                        `json:"command_agent_connected,omitempty"`
 	CanExecute            *bool                        `json:"can_execute,omitempty"`
@@ -1504,10 +1506,13 @@ type assistantInventoryKubernetesPod struct {
 	OwnerName   string `json:"owner_name,omitempty"`
 }
 
-func assistantInventoryNodeAnswerLabel(name string) string {
+func assistantInventoryNodeAnswerLabel(name, instance string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "Node unknown"
+	}
+	if instance = strings.TrimSpace(instance); instance != "" {
+		return "Node " + name + " (" + instance + ")"
 	}
 	return "Node " + name
 }

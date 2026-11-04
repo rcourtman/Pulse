@@ -442,76 +442,93 @@ func (e *PulseToolExecutor) findAgentForNode(reference string) string {
 		}
 		return ""
 	}
-	var nodeID, hostname string
 	for _, node := range rs.Nodes() {
 		if node != nil && node.ID() == reference {
-			nodeID, hostname = node.ID(), node.NodeName()
-			break
-		}
-	}
-	if nodeID == "" {
-		for _, node := range rs.Nodes() {
-			if node == nil || !unifiedresources.HostnamesEquivalent(node.NodeName(), reference) {
-				continue
-			}
-			if nodeID != "" && nodeID != node.ID() {
-				return ""
-			}
-			nodeID, hostname = node.ID(), node.NodeName()
-		}
-	}
-	if nodeID == "" {
-		if agent, found := uniqueConnectedAgent(agents, reference); found {
+			agent, _ := connectedAgentForNode(rs, node, agents)
 			return agent.AgentID
 		}
+	}
+	if !bareNodeNameCanRoute(rs, reference) {
 		return ""
 	}
+	agent, _ := uniqueConnectedAgent(agents, reference)
+	return agent.AgentID
+}
+
+// connectedAgentForNode names the connected agent that runs commands on a known
+// node. Topology reports the same answer, so its hint matches where a command goes.
+func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources.NodeView, agents []agentexec.ConnectedAgent) (agentexec.ConnectedAgent, bool) {
+	if node == nil || len(agents) == 0 {
+		return agentexec.ConnectedAgent{}, false
+	}
+	nodeID := node.ID()
 	owned := unifiedresources.ResolveResourceContext(rs, nodeID)
 	if owned.Resource != nil && owned.Resource.Agent != nil && owned.Resource.Agent.AgentID != "" {
-		for _, agent := range agents {
-			if agent.AgentID == owned.Resource.Agent.AgentID {
-				return agent.AgentID
-			}
-		}
-		return ""
+		return connectedAgentByID(agents, owned.Resource.Agent.AgentID)
 	}
-	candidate := ""
+	var candidate agentexec.ConnectedAgent
+	linked, found := false, false
 	for _, host := range rs.Hosts() {
 		if host == nil || host.LinkedNodeID() == "" {
 			continue
 		}
 		linkedID := host.LinkedNodeID()
 		if resolver, ok := rs.(unifiedresources.ReferenceReadState); ok {
-			_, id, found := resolver.GetByReference(linkedID)
-			if found {
+			_, id, resolved := resolver.GetByReference(linkedID)
+			if resolved {
 				linkedID = id
 			}
 		}
 		if linkedID != nodeID {
 			continue
 		}
-		agent, found := connectedAgentByID(agents, host.AgentID())
-		if !found {
+		linked = true
+		agent, connected := connectedAgentByID(agents, host.AgentID())
+		if !connected {
 			continue
 		}
-		if candidate != "" && candidate != agent.AgentID {
-			return ""
+		if found && candidate.AgentID != agent.AgentID {
+			return agentexec.ConnectedAgent{}, false
 		}
-		candidate = agent.AgentID
+		candidate, found = agent, true
 	}
-	if candidate != "" {
-		return candidate
+	// A linked node belongs to its agent. While that agent is offline, another
+	// machine with the same hostname cannot stand in for it.
+	if found || linked {
+		return candidate, found
 	}
 	// A hostname can route an old unlinked node only when both sides are unique.
-	for _, node := range rs.Nodes() {
-		if node != nil && node.ID() != nodeID && unifiedresources.HostnamesEquivalent(node.NodeName(), hostname) {
-			return ""
+	hostname := firstNonEmptyString(node.NodeName(), node.Name())
+	for _, other := range rs.Nodes() {
+		if other != nil && other.ID() != nodeID && unifiedresources.HostnamesEquivalent(other.NodeName(), hostname) {
+			return agentexec.ConnectedAgent{}, false
 		}
 	}
-	if agent, found := uniqueConnectedAgent(agents, hostname); found {
-		return agent.AgentID
+	return uniqueConnectedAgent(agents, hostname)
+}
+
+// bareNodeNameCanRoute reports whether a node name with no node record behind it
+// still stands for one machine. Placement already tried to find the guest's
+// node, so a node with this name is some other machine, and guests naming it
+// from two connections mean two machines.
+func bareNodeNameCanRoute(rs unifiedresources.ReadState, name string) bool {
+	for _, node := range rs.Nodes() {
+		if node != nil && unifiedresources.HostnamesEquivalent(node.NodeName(), name) {
+			return false
+		}
 	}
-	return ""
+	connections := make(map[string]struct{})
+	for _, vm := range rs.VMs() {
+		if vm != nil && unifiedresources.HostnamesEquivalent(vm.Node(), name) {
+			connections[vm.Instance()] = struct{}{}
+		}
+	}
+	for _, ct := range rs.Containers() {
+		if ct != nil && unifiedresources.HostnamesEquivalent(ct.Node(), name) {
+			connections[ct.Instance()] = struct{}{}
+		}
+	}
+	return len(connections) <= 1
 }
 
 // Formatting helpers for control tools
