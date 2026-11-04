@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "505375c77c8939dd760b1cafcc8134f2d94187b0",
+  "verified_at": "2026-11-04T10:59:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/useAppRuntimeState.ts": "d8099e91143e3b08c5d7c033c8525d6246f48a643e5ab232537009bf6de29537"
+  },
+  "routes": [
+    "/",
+    "/login"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "client runtime built from these source bytes with the release tag, running behind a provider control plane on a lab VM, reached through the real portal handoff",
+    "signed in through the portal handoff with only HttpOnly session cookies and no local hint: / and /login both enter the app at 1440 and 375, scrollWidth 375 of 375 on the phone",
+    "explicit sign-out intent with a live session at /: the sign-in form shows",
+    "no session at / and /login at 1440, and / at 375: the sign-in form shows, and /api/security/status is the only API request, so the quiet pre-auth start is preserved"
+  ],
+  "interactions": [
+    "clicked Open client in the provider portal and followed the handoff into the client workspace",
+    "reloaded / and /login at phone width after the handoff",
+    "opened / and /login in a fresh browser context with no cookies"
+  ]
+}

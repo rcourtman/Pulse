@@ -469,6 +469,32 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
+  it('starts the signed-in runtime at the root for a session with no local hint', async () => {
+    const fallbackFetch = apiFetchMock.getMockImplementation()!;
+    const statusFor = (body: string) =>
+      apiFetchMock.mockImplementation(async (url: string) =>
+        url === '/api/security/status' ? new Response(body, { status: 200 }) : fallbackFetch(url),
+      );
+    window.history.pushState({}, '', '/');
+    hasStoredAuthSessionMock.mockReturnValue(false);
+    window.sessionStorage.clear();
+    try {
+      statusFor('{"hasAuthentication":true}');
+      const signedOut = mountHook();
+      await waitFor(() => expect(signedOut.hookState.isLoading()).toBe(false));
+      expect(signedOut.hookState.needsAuth()).toBe(true);
+      signedOut.dispose();
+
+      statusFor('{"hasAuthentication":true,"currentUsername":"portal-user"}');
+      const signedIn = mountHook();
+      await waitFor(() => expect(signedIn.hookState.isLoading()).toBe(false));
+      expect(signedIn.hookState.needsAuth()).toBe(false);
+      signedIn.dispose();
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
   it('retains explicit logout intent until discovery succeeds', async () => {
     window.localStorage.setItem('just_logged_out', 'true');
     apiFetchMock.mockResolvedValue(new Response('Unavailable', { status: 503 }));
