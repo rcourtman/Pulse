@@ -40,7 +40,7 @@ export const DrawerAttentionSection: Component<DrawerAttentionSectionProps> = (p
       <section
         data-testid="drawer-attention-section"
         aria-labelledby={headingId}
-        class="w-full overflow-hidden rounded-md border border-border bg-surface lg:max-w-3xl"
+        class="w-full overflow-hidden rounded-md border border-border bg-surface"
       >
         <header class="flex items-center justify-between gap-3 border-b border-border bg-surface-alt px-3 py-2">
           <h3
@@ -54,10 +54,10 @@ export const DrawerAttentionSection: Component<DrawerAttentionSectionProps> = (p
           </span>
         </header>
 
-        <ul class="divide-y divide-border" aria-label="Active alerts">
+        <ul class="flex flex-wrap" aria-label="Active alerts">
           <For each={visibleItems()}>
             {(item) => (
-              <li class="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-3 py-2.5">
+              <li class="-ml-px -mt-px grid min-w-0 flex-[1_1_min(100%,20rem)] grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 border-l border-t border-border px-3 py-2.5">
                 <div class="min-w-0">
                   <Show when={item.subject || item.metric}>
                     <p class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-xs">

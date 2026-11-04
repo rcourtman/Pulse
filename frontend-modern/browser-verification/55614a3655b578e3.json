@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "5eec3e4eb53f0a85ef94a11759371eb77cff4edb",
+  "verified_at": "2026-11-04T14:11:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx": "430ad610151b3cc23f9da0e2defc55accbcdca2dfc1021802c8e8c552da97698"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 1100
+    },
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1100,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Node drawer with 3 alerts: the card fills the drawer in 3 columns at 1100px and wider, 2 at 768px, 1 on a phone",
+    "Node drawer expanded to 10 alerts: 5 columns at 1920px, 4 at 1440px, 3 at 1100px, 2 at 768px, 1 on a phone, with the last row stretching to the edge",
+    "Guest drawer with 1 alert: one full-width row with its severity badge at the right",
+    "Measured at every width: the card matches its container's width, with no horizontal overflow in the card or the page"
+  ],
+  "interactions": [
+    "Expand a node row and read its Needs attention card",
+    "Show more alerts, then collapse the drawer and expand another node",
+    "Expand a guest row and read its card",
+    "Look at full-size screenshots at desktop and phone widths"
+  ]
+}
