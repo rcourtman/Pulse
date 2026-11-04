@@ -358,6 +358,31 @@ function agreedDeclaredVersion(versions) {
     version.toLowerCase() === first.toLowerCase()) ? first : null;
 }
 
+function legacyVersionDeclarations(lines, report) {
+  const declarations = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!lines[i].declaration) continue;
+    const line = (lines[i].heading ?? lines[i].metadata).replace(/\*\*|__/g, "")
+      .replace(/^[ \t]*[-*][ \t]+/, "").trim();
+    const field = line.match(
+      /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
+    );
+    if (!field) continue;
+
+    const visibleLine = (lines[i].heading ?? lines[i].fieldText).replace(/\*\*|__/g, "")
+      .replace(/^[ \t]*[-*][ \t]+/, "").trim();
+    const visibleField = visibleLine.match(
+      /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
+    );
+    const inlineValue = visibleField ? visibleField[1].trim() : "";
+    // Keep the original Markdown scope and shared reference definitions.
+    // A literal value can be fenced; a copied declaration cannot supply one.
+    declarations.push({ index: i, version: normalizeLegacyVersionValue(inlineValue ||
+      firstFieldValue(lines, i + 1), report) });
+  }
+  return declarations;
+}
+
 function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
   if (body) {
     const lines = report.lines;
@@ -368,34 +393,24 @@ function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      return agreedDeclaredVersion(versionHeadings.map(index =>
-        normalizeLegacyVersionValue(firstFieldValue(lines, index + 1), report)));
+      return agreedDeclaredVersion(versionHeadings.flatMap(index => {
+        let end = index + 1;
+        while (end < lines.length && lines[end].heading === null) end += 1;
+        const contents = lines.slice(index + 1, end);
+        const declarations = legacyVersionDeclarations(contents, report);
+        const versions = declarations.map(declaration => declaration.version);
+        const first = contents.findIndex(line => !line.delimiter && line.text.trim());
+        // An explicit correction in this very field has the same authority
+        // as its first value. Do not silently prefer the form layout over a
+        // later legacy label, or mine legacy prose in unrelated form fields.
+        if (!declarations.some(declaration => declaration.index === first)) {
+          versions.unshift(normalizeLegacyVersionValue(firstFieldValue(contents), report));
+        }
+        return versions;
+      }));
     }
-    const legacyVersions = [];
-    for (let i = 0; i < lines.length; i += 1) {
-      if (!lines[i].declaration) continue;
-      const line = (lines[i].heading ?? lines[i].metadata).replace(/\*\*|__/g, "")
-        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
-      const field = line.match(
-        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
-      );
-      if (!field) continue;
-
-      // Legacy inline/standalone fields have the same authority as the form.
-      // Unknown or incomplete must not borrow an agent/platform version or
-      // an upgrade's starting version from the title.
-      const visibleLine = (lines[i].heading ?? lines[i].fieldText).replace(/\*\*|__/g, "")
-        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
-      const visibleField = visibleLine.match(
-        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
-      );
-      const inlineValue = visibleField ? visibleField[1].trim() : "";
-      // A declared value may itself be fenced; that does not turn headings
-      // elsewhere in a fenced log into declarations. Reconcile every real
-      // legacy declaration, just as with repeated form headings above.
-      legacyVersions.push(normalizeLegacyVersionValue(inlineValue ||
-        firstFieldValue(lines, i + 1), report));
-    }
+    const legacyVersions = legacyVersionDeclarations(lines, report)
+      .map(declaration => declaration.version);
     if (legacyVersions.length) return agreedDeclaredVersion(legacyVersions);
   }
 
