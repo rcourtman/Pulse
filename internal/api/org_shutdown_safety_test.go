@@ -66,8 +66,8 @@ func TestOrgDeleteRetainsDataWhenGuestMetadataPersistenceFails(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(orgPath, "org.json")); err != nil {
 		t.Fatalf("organisation data removed: %v", err)
 	}
-	if got, ok := mtm.PeekMonitor("retained"); !ok || got != monitor {
-		t.Fatal("failed writer owner lost")
+	if got, ok := mtm.PeekMonitor("retained"); ok || got != nil {
+		t.Fatal("failed writer exposed as a live authentication source")
 	}
 	if _, err := mtm.GetMonitor("retained"); err == nil {
 		t.Fatal("new monitor can write into retained shutdown path")
@@ -78,5 +78,31 @@ func TestOrgDeleteRetainsDataWhenGuestMetadataPersistenceFails(t *testing.T) {
 	}
 	if _, err := persistence.GetPersistence("other"); err != nil {
 		t.Fatal(err)
+	}
+	// A second real deletion must reach the SAME failed writer. A lost owner
+	// would incorrectly admit deletion here despite the unresolved disk error.
+	rec = httptest.NewRecorder()
+	h.HandleDeleteOrg(rec, req)
+	if rec.Code != http.StatusServiceUnavailable || called {
+		t.Fatalf("retry lost failed writer ownership: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(orgPath, "org.json")); err != nil {
+		t.Fatalf("retry removed retained organization: %v", err)
+	}
+	// Remove only the deliberately empty refusal fixture, then prove ordinary
+	// deletion drains that retained writer before removing the organization.
+	if err := os.Remove(filepath.Join(orgPath, "guest_metadata.json")); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	h.HandleDeleteOrg(rec, req)
+	if rec.Code != http.StatusNoContent || !called {
+		t.Fatalf("recovered deletion: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(orgPath); !os.IsNotExist(err) {
+		t.Fatalf("completed deletion retained organization: %v", err)
+	}
+	if err := monitor.GuestMetadataStore().RememberIdentity("late", "late", "qemu"); err == nil {
+		t.Fatal("original retained writer was not closed by recovered deletion")
 	}
 }

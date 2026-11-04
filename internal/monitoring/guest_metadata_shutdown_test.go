@@ -26,6 +26,26 @@ func (f *blockedGuestMetadataFS) WriteFile(p string, b []byte, m os.FileMode) er
 }
 func (f *blockedGuestMetadataFS) Rename(a, b string) error { return os.Rename(a, b) }
 
+// Cleanup ownership is deliberately not a live authentication/read source.
+// Inspect the retained owner under its mutex, and separately require both
+// public lookup paths to keep the partially stopped runtime unavailable.
+func assertTenantCleanupOwner(t *testing.T, manager *MultiTenantMonitor, orgID string, want *Monitor) {
+	t.Helper()
+	manager.mu.RLock()
+	retained, owned := manager.monitors[orgID]
+	_, guarded := manager.tenantDeleting[orgID]
+	manager.mu.RUnlock()
+	if !owned || retained != want || !guarded {
+		t.Fatal("incomplete shutdown lost its cleanup owner or admission fence")
+	}
+	if got, ok := manager.PeekMonitor(orgID); ok || got != nil {
+		t.Fatal("incomplete shutdown exposed a cleanup owner as a live runtime")
+	}
+	if got, err := manager.GetMonitor(orgID); err == nil || got != nil {
+		t.Fatal("incomplete shutdown reopened tenant admission")
+	}
+}
+
 func TestTenantDeletionRetainsBlockedGuestWriterOwnership(t *testing.T) {
 	path := t.TempDir()
 	fs := &blockedGuestMetadataFS{entered: make(chan struct{}), release: make(chan struct{})}
@@ -51,9 +71,7 @@ func TestTenantDeletionRetainsBlockedGuestWriterOwnership(t *testing.T) {
 	if err := mtm.BeginTenantDeletion("blocked"); err == nil {
 		t.Fatal("deletion accepted incomplete drain")
 	}
-	if retained, ok := mtm.PeekMonitor("blocked"); !ok || retained != monitor {
-		t.Fatal("in-flight writer owner was discarded")
-	}
+	assertTenantCleanupOwner(t, mtm, "blocked", monitor)
 	mtm.FinishTenantDeletion("blocked")
 	if _, err := mtm.GetMonitor("blocked"); err == nil {
 		t.Fatal("deferred cleanup released unsafe lifecycle guard")
@@ -98,9 +116,7 @@ func TestTenantDeletionRetainsUnfinishedMonitorLoop(t *testing.T) {
 	if err := mtm.BeginTenantDeletion("loop"); err == nil {
 		t.Fatal("unfinished monitoring loop admitted directory deletion")
 	}
-	if retained, ok := mtm.PeekMonitor("loop"); !ok || retained != monitor {
-		t.Fatal("unfinished monitoring loop lost owner")
-	}
+	assertTenantCleanupOwner(t, mtm, "loop", monitor)
 	if _, err := mtm.GetMonitor("loop"); err == nil {
 		t.Fatal("unfinished monitor replaced")
 	}

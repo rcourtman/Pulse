@@ -305,9 +305,7 @@ func TestTenantDeletionRetainsBlockedAlertProjectionThenRemovesCompletedRuntime(
 	// The existing deletion budget must refuse a live replay writer without
 	// closing its stores, dropping its owner or permitting lazy recreation.
 	require.Error(t, manager.BeginTenantDeletion("history-owner"))
-	retained, ok := manager.PeekMonitor("history-owner")
-	require.True(t, ok)
-	require.Same(t, monitor, retained)
+	assertTenantCleanupOwner(t, manager, "history-owner", monitor)
 	manager.FinishTenantDeletion("history-owner")
 	_, err = manager.GetMonitor("history-owner")
 	require.Error(t, err)
@@ -319,7 +317,7 @@ func TestTenantDeletionRetainsBlockedAlertProjectionThenRemovesCompletedRuntime(
 	require.NoError(t, manager.BeginTenantDeletion("history-owner"))
 	require.NoError(t, persistence.DeleteOrganization("history-owner"))
 	manager.FinishTenantDeletion("history-owner")
-	_, ok = manager.PeekMonitor("history-owner")
+	_, ok := manager.PeekMonitor("history-owner")
 	require.False(t, ok)
 	_, err = manager.GetMonitor("history-owner")
 	require.Error(t, err)

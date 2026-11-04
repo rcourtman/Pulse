@@ -563,7 +563,9 @@ func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
 	}
 	tenantSource := string(data)
 	loadIdx := strings.Index(tenantSource, "if orgID != \"default\" {\n\t\ttenantConfig, err = loadTenantRuntimeConfig(mtm.baseConfig, tenantPersistence)")
-	newIdx := strings.Index(tenantSource, "monitor, err = New(tenantConfig)")
+	// A helper extraction may change := to = (or back) without changing the
+	// boundary. Check the loader/constructor calls, not the assignment spelling.
+	newIdx := strings.Index(tenantSource, "New(tenantConfig)")
 	if loadIdx < 0 || newIdx < 0 || loadIdx >= newIdx {
 		t.Fatal("multi_tenant_monitor.go must load non-default tenant configuration before New")
 	}

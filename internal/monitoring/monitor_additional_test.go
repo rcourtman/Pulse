@@ -1180,9 +1180,7 @@ func TestTenantDeletionWaitsForSlowMonitoringLoop(t *testing.T) {
 	// RemoveTenant keeps the plain budget, gives up and retains the owner.
 	retained := slowLoop(mtm, "removal")
 	mtm.RemoveTenant("removal")
-	if got, ok := mtm.PeekMonitor("removal"); !ok || got != retained {
-		t.Fatal("plain removal discarded a monitor whose loop had not stopped")
-	}
+	assertTenantCleanupOwner(t, mtm, "removal", retained)
 
 	slowLoop(mtm, "deletion")
 	if err := mtm.BeginTenantDeletion("deletion"); err != nil {
