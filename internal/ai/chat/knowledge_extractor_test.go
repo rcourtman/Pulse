@@ -484,6 +484,26 @@ func TestExtractFacts_QueryTopology_UsesGovernedSummary(t *testing.T) {
 	assert.NotContains(t, facts[0].Value, "finance-node.internal")
 }
 
+func TestExtractFacts_QueryTopology_NamesConnectionOfRepeatedNode(t *testing.T) {
+	input := map[string]interface{}{"action": "topology"}
+	result := `{"summary":{"total_nodes":2},"proxmox":{"nodes":[{"name":"pmx1","instance":"site-a","status":"online"},{"name":"pmx1","instance":"site-b","status":"offline"}]}}`
+
+	facts := ExtractFacts("pulse_query", input, result)
+	require.Len(t, facts, 1)
+	assert.Contains(t, facts[0].Value, "pmx1 (site-a)=online")
+	assert.Contains(t, facts[0].Value, "pmx1 (site-b)=offline")
+}
+
+func TestExtractFacts_QueryTopology_GovernedNodeKeepsConnectionOut(t *testing.T) {
+	input := map[string]interface{}{"action": "topology"}
+	result := `{"summary":{"total_nodes":1},"proxmox":{"nodes":[{"name":"finance-node","instance":"finance-site","status":"online","policy":{"sensitivity":"sensitive","routing":{"scope":"local-first","redact":["hostname","platform-id","alias"]}},"ai_safe_summary":"agent resource; status online; redacted for cloud summary"}]}}`
+
+	facts := ExtractFacts("pulse_query", input, result)
+	require.Len(t, facts, 1)
+	assert.NotContains(t, facts[0].Value, "finance-site")
+	assert.NotContains(t, facts[0].Value, "finance-node")
+}
+
 // --- Health ---
 
 func TestExtractFacts_QueryHealth(t *testing.T) {

@@ -592,6 +592,13 @@ The parent node's connection cannot become a direct guest connection merely
 because provider placement names that node. Existing command routing, control,
 approval and invocation enforcement remain authoritative. A `can_execute` hint
 reflects connected transport with control enabled, not approval for an operation.
+A Proxmox node name is unique only within its connection. Topology keys a node by
+connection and node name, places a guest by its canonical parent before its name,
+and adds `instance` and the canonical `id` only to rows whose shown name repeats.
+Its command flags come from `connectedAgentForNode`, the same answer command
+routing uses. A name with no node record behind it routes by hostname only while
+no node has that name and no more than one connection's guests use it, and an
+offline linked agent is never replaced by a hostname match.
 `TestCommandConnectivityDoesNotReplaceMonitoringEvidence`,
 `TestTopologyOmitsUnobservedCommandConnections` and
 `TestAssistantInventoryDoesNotInventCommandConnectionObservations` cover these

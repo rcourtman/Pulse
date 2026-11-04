@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rs/zerolog/log"
@@ -4174,8 +4175,16 @@ type TopologyBuildOptions struct {
 	MaxK8sNodesPerCluster       int
 	MaxK8sDeploymentsPerCluster int
 	MaxK8sPodsPerCluster        int
-	ConnectedAgentHostnames     map[string]bool // nil means command connections were not observed
+	ConnectedAgents             []agentexec.ConnectedAgent // nil means command connections were not observed
 	ControlEnabled              bool
+}
+
+// proxmoxTopologyNodeKey identifies a node in the topology. Proxmox only makes a
+// node name unique within its connection, so the name alone cannot key a node.
+type proxmoxTopologyNodeKey struct{ instance, name string }
+
+func proxmoxTopologyNodeKeyOf(node *unifiedresources.NodeView) proxmoxTopologyNodeKey {
+	return proxmoxTopologyNodeKey{instance: node.Instance(), name: firstNonEmptyString(node.NodeName(), node.Name())}
 }
 
 func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options TopologyBuildOptions) TopologyResponse {
@@ -4191,7 +4200,14 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 	includeProxmox := include == "all" || include == "proxmox"
 	includeDocker := include == "all" || include == "app-containers"
 	includeKubernetes := include == "all" || include == "kubernetes"
-	connectedAgentHostnames := options.ConnectedAgentHostnames
+	connectedAgents := options.ConnectedAgents
+	var connectedAgentHostnames map[string]bool
+	if connectedAgents != nil {
+		connectedAgentHostnames = make(map[string]bool, len(connectedAgents))
+		for _, agent := range connectedAgents {
+			connectedAgentHostnames[agent.Hostname] = true
+		}
+	}
 	governance := newGovernedQueryMetadataResolver(rs)
 
 	summary := TopologySummary{
@@ -4211,11 +4227,13 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		summary.DockerHostsWithCommandAgents = new(int)
 	}
 
+	nodesWithAgents := make(map[string]bool)
 	for _, node := range rs.Nodes() {
 		if node == nil {
 			continue
 		}
-		if connectedAgentHostnames[node.Name()] {
+		if _, connected := connectedAgentForNode(rs, node, connectedAgents); connected {
+			nodesWithAgents[node.ID()] = true
 			(*summary.NodesWithCommandAgents)++
 		}
 	}
@@ -4238,7 +4256,20 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		}
 	}
 
-	nodeMap := make(map[string]*ProxmoxNodeTopology)
+	// These cover every node in the read state, so a max_proxmox_nodes cap cannot
+	// change which node holds a guest.
+	nodeKeyByID := make(map[string]proxmoxTopologyNodeKey)
+	inventoryNodeNames := make(map[string]bool)
+	for _, node := range rs.Nodes() {
+		if node != nil {
+			key := proxmoxTopologyNodeKeyOf(node)
+			nodeKeyByID[node.ID()] = key
+			inventoryNodeNames[key.name] = true
+		}
+	}
+
+	nodeMap := make(map[proxmoxTopologyNodeKey]*ProxmoxNodeTopology)
+	nodeIDs := make(map[proxmoxTopologyNodeKey]string)
 	if includeProxmox && !options.SummaryOnly {
 		for _, node := range rs.Nodes() {
 			if node == nil {
@@ -4247,41 +4278,47 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 			if options.MaxProxmoxNodes > 0 && len(nodeMap) >= options.MaxProxmoxNodes {
 				break
 			}
-			name := node.Name()
-			hasAgent := connectedAgentHostnames[name]
-			nodeMap[name] = &ProxmoxNodeTopology{
+			key := proxmoxTopologyNodeKeyOf(node)
+			nodeIDs[key] = node.ID()
+			nodeMap[key] = &ProxmoxNodeTopology{
 				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
-				Name:                     name,
+				Name:                     node.Name(),
 				Status:                   string(node.Status()),
-				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
-				CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
 				VMs:                      []TopologyVM{},
 				Containers:               []TopologyContainer{},
 			}
 		}
 	}
 
-	ensureNode := func(name, status string) *ProxmoxNodeTopology {
+	// guestNode follows the guest's canonical parent, then its connection and node
+	// name, and adds a row when that node is not in the read state.
+	guestNode := func(parentID, instance, name string) *ProxmoxNodeTopology {
 		if !includeProxmox || options.SummaryOnly {
 			return nil
 		}
-		if node, exists := nodeMap[name]; exists {
+		key, owned := nodeKeyByID[strings.TrimSpace(parentID)]
+		if !owned {
+			key = proxmoxTopologyNodeKey{instance: instance, name: name}
+		}
+		if node, exists := nodeMap[key]; exists {
 			return node
 		}
 		if options.MaxProxmoxNodes > 0 && len(nodeMap) >= options.MaxProxmoxNodes {
 			return nil
 		}
-		hasAgent := connectedAgentHostnames[name]
-		nodeMap[name] = &ProxmoxNodeTopology{
-			GovernedResourceMetadata: governance.Resolve(name),
-			Name:                     name,
-			Status:                   status,
-			CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
-			CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
+		// Metadata resolved by a namesake's name would describe another machine.
+		var metadata GovernedResourceMetadata
+		if !inventoryNodeNames[key.name] {
+			metadata = governance.Resolve(key.name)
+		}
+		nodeMap[key] = &ProxmoxNodeTopology{
+			GovernedResourceMetadata: metadata,
+			Name:                     key.name,
+			Status:                   "unknown",
 			VMs:                      []TopologyVM{},
 			Containers:               []TopologyContainer{},
 		}
-		return nodeMap[name]
+		return nodeMap[key]
 	}
 
 	for _, vm := range rs.VMs() {
@@ -4292,7 +4329,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		if status == "running" || status == string(unifiedresources.StatusOnline) {
 			summary.RunningVMs++
 		}
-		nodeTopology := ensureNode(vm.Node(), "unknown")
+		nodeTopology := guestNode(vm.ParentID(), vm.Instance(), vm.Node())
 		if nodeTopology == nil {
 			continue
 		}
@@ -4320,7 +4357,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		if status == "running" || status == string(unifiedresources.StatusOnline) {
 			summary.RunningContainers++
 		}
-		nodeTopology := ensureNode(ct.Node(), "unknown")
+		nodeTopology := guestNode(ct.ParentID(), ct.Instance(), ct.Node())
 		if nodeTopology == nil {
 			continue
 		}
@@ -4342,11 +4379,42 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 
 	proxmoxNodes := []ProxmoxNodeTopology{}
 	if includeProxmox && !options.SummaryOnly {
-		for _, node := range nodeMap {
+		// Count names across every node, so a capped row still says its name repeats.
+		keysByShownName := make(map[string]map[proxmoxTopologyNodeKey]bool)
+		noteShownName := func(name string, key proxmoxTopologyNodeKey) {
+			name = strings.ToLower(name)
+			if keysByShownName[name] == nil {
+				keysByShownName[name] = make(map[proxmoxTopologyNodeKey]bool)
+			}
+			keysByShownName[name][key] = true
+		}
+		for _, node := range rs.Nodes() {
+			if node != nil {
+				noteShownName(node.Name(), proxmoxTopologyNodeKeyOf(node))
+			}
+		}
+		for key, node := range nodeMap {
+			noteShownName(node.Name, key)
+		}
+		for key, node := range nodeMap {
+			nodeID, known := nodeIDs[key]
+			hasAgent := nodesWithAgents[nodeID]
+			if !known && bareNodeNameCanRoute(rs, key.name) {
+				_, hasAgent = uniqueConnectedAgent(connectedAgents, key.name)
+			}
+			node.CommandAgentConnected = commandConnectionObservation(connectedAgentHostnames, hasAgent)
+			node.CanExecute = commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled)
+			if len(keysByShownName[strings.ToLower(node.Name)]) > 1 {
+				node.Instance, node.ID = key.instance, nodeID
+			}
 			proxmoxNodes = append(proxmoxNodes, *node)
 		}
 		sort.Slice(proxmoxNodes, func(i, j int) bool {
-			return strings.ToLower(proxmoxNodes[i].Name) < strings.ToLower(proxmoxNodes[j].Name)
+			left, right := strings.ToLower(proxmoxNodes[i].Name), strings.ToLower(proxmoxNodes[j].Name)
+			if left != right {
+				return left < right
+			}
+			return strings.ToLower(proxmoxNodes[i].Instance) < strings.ToLower(proxmoxNodes[j].Instance)
 		})
 		for i := range proxmoxNodes {
 			sort.Slice(proxmoxNodes[i].VMs, func(a, b int) bool {
@@ -4701,12 +4769,10 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		return NewErrorResult(err), nil
 	}
 
-	// Build a set of connected agent hostnames for quick lookup
-	connectedAgentHostnames := make(map[string]bool)
+	// A non-nil list records that connections were observed, even when none are up.
+	connectedAgents := []agentexec.ConnectedAgent{}
 	if e.agentServer != nil {
-		for _, agent := range e.agentServer.GetConnectedAgents() {
-			connectedAgentHostnames[agent.Hostname] = true
-		}
+		connectedAgents = append(connectedAgents, e.agentServer.GetConnectedAgents()...)
 	}
 
 	// Check if control is enabled
@@ -4724,7 +4790,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		MaxK8sNodesPerCluster:       maxK8sNodesPerCluster,
 		MaxK8sDeploymentsPerCluster: maxK8sDeploymentsPerCluster,
 		MaxK8sPodsPerCluster:        maxK8sPodsPerCluster,
-		ConnectedAgentHostnames:     connectedAgentHostnames,
+		ConnectedAgents:             connectedAgents,
 		ControlEnabled:              controlEnabled,
 	})
 
