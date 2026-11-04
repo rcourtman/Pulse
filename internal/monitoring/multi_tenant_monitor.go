@@ -19,7 +19,11 @@ import (
 type MultiTenantMonitor struct {
 	// Serialize constructors and dependency wiring without holding mu across
 	// persistence or callbacks. Live tenant reads only need mu, not initMu.
-	initMu       sync.Mutex
+	initMu sync.Mutex
+	// Share the actual settings writer's boundary with template reads and
+	// snapshot capture. Live lookups/visitors never acquire this lock, and
+	// dependency callbacks run only after it is released.
+	configMu     sync.Mutex
 	mu           sync.RWMutex
 	monitors     map[string]*Monitor
 	tenantCancel map[string]context.CancelFunc
@@ -40,9 +44,8 @@ type MultiTenantMonitor struct {
 	stopped               bool // Terminal admission fence, protected by mu.
 }
 
-// Copy instance settings at the propagation boundary, after the settings
-// handler updates the canonical config. Constructors must not read that mutable
-// config later or retain callbacks that close over request-local state.
+// Immutable values captured with the actual config mutation, not by unrelated
+// visitors. Constructors never retain request-local propagation callbacks.
 type tenantInstanceSettings struct {
 	publicURL      string
 	backupEnabled  bool
@@ -51,20 +54,51 @@ type tenantInstanceSettings struct {
 	pmgInterval    time.Duration
 }
 
+func captureTenantInstanceSettings(cfg *config.Config) tenantInstanceSettings {
+	if cfg == nil {
+		return tenantInstanceSettings{}
+	}
+	return tenantInstanceSettings{
+		publicURL: cfg.PublicURL, backupEnabled: cfg.EnableBackupPolling,
+		backupInterval: cfg.BackupPollingInterval,
+		pbsInterval:    cfg.PBSPollingInterval, pmgInterval: cfg.PMGPollingInterval,
+	}
+}
+
+// UpdateInstanceSettings applies the settings handler's config mutation and
+// captures the resulting runtime settings as one publication. The callback is
+// synchronous and must only mutate config: no persistence, monitor lookup or
+// side effect that can wait for initialization. In particular it never runs
+// under initMu or the live-reader mutex, and is never retained for later use.
+func (mtm *MultiTenantMonitor) UpdateInstanceSettings(update func()) {
+	if mtm == nil || update == nil {
+		return
+	}
+	mtm.configMu.Lock()
+	defer mtm.configMu.Unlock()
+	update()
+	runtime := captureTenantInstanceSettings(mtm.baseConfig)
+	mtm.mu.Lock()
+	mtm.instanceSettings = runtime
+	mtm.propagationGeneration++
+	mtm.mu.Unlock()
+}
+
 // NewMultiTenantMonitor creates a new multi-tenant monitor manager.
 func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTenantPersistence, wsHub *websocket.Hub) *MultiTenantMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MultiTenantMonitor{
-		monitors:       make(map[string]*Monitor),
-		tenantCancel:   make(map[string]context.CancelFunc),
-		tenantDone:     make(map[string]chan struct{}),
-		tenantDeleting: make(map[string]struct{}),
-		tenantStopping: make(map[string]struct{}),
-		persistence:    persistence,
-		baseConfig:     baseCfg, // Used as a template or for global settings
-		wsHub:          wsHub,
-		globalCtx:      ctx,
-		globalCancel:   cancel,
+		monitors:         make(map[string]*Monitor),
+		tenantCancel:     make(map[string]context.CancelFunc),
+		tenantDone:       make(map[string]chan struct{}),
+		tenantDeleting:   make(map[string]struct{}),
+		tenantStopping:   make(map[string]struct{}),
+		persistence:      persistence,
+		baseConfig:       baseCfg, // Used as a template or for global settings
+		instanceSettings: captureTenantInstanceSettings(baseCfg),
+		wsHub:            wsHub,
+		globalCtx:        ctx,
+		globalCancel:     cancel,
 	}
 }
 
@@ -126,9 +160,10 @@ func (mtm *MultiTenantMonitor) SetMonitorInitializer(initializer func(*Monitor))
 }
 
 // ForEachMonitor runs fn synchronously against every live tenant monitor.
-// Instance-setting saves and reloads also invalidate an admitted constructor's
-// settings snapshot, which it reconciles before publication. Do not wait for
-// construction here: callers can hold router settings locks needed by live
+// Policy reloads also invalidate an admitted constructor's settings snapshot,
+// which it reconciles before publication. Runtime values are captured by the
+// settings writer, never read from mutable config by this generic iterator.
+// Do not wait for construction here: callers can hold router settings locks needed by live
 // requests. Do not retain fn: callers can close over request-local mutable state.
 func (mtm *MultiTenantMonitor) ForEachMonitor(fn func(*Monitor)) {
 	if mtm == nil || fn == nil {
@@ -136,13 +171,6 @@ func (mtm *MultiTenantMonitor) ForEachMonitor(fn func(*Monitor)) {
 	}
 	mtm.mu.Lock()
 	mtm.propagationGeneration++
-	if cfg := mtm.baseConfig; cfg != nil {
-		mtm.instanceSettings = tenantInstanceSettings{
-			publicURL: cfg.PublicURL, backupEnabled: cfg.EnableBackupPolling,
-			backupInterval: cfg.BackupPollingInterval,
-			pbsInterval:    cfg.PBSPollingInterval, pmgInterval: cfg.PMGPollingInterval,
-		}
-	}
 	monitors := make([]*Monitor, 0, len(mtm.monitors))
 	for _, monitor := range mtm.monitors {
 		if monitor != nil {
@@ -345,50 +373,21 @@ func (mtm *MultiTenantMonitor) initializeTenantMonitor(orgID string) (*Monitor, 
 	// Initialize new monitor for this tenant
 	log.Info().Str("org_id", orgID).Msg("initializing tenant monitor")
 
-	// 1. Load Tenant Config
-	// The default org is the primary runtime and must retain the canonical
-	// configuration pointer owned by the server. Runtime auth mutations such as
-	// freshly minted agent tokens need to become visible to monitoring-backed
-	// diagnostics immediately. Non-default tenants remain isolated deep copies
-	// so their mutable state and credentials cannot alias the primary runtime.
-	tenantConfig := mtm.baseConfig
-
-	// Resolve scoped persistence before loading any resource or credential.
+	// Resolve persistence independently of the base-config lock.
 	tenantPersistence, err := mtm.persistence.GetPersistence(orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get persistence for org %s: %w", orgID, err)
 	}
 	var instancePersistence *config.ConfigPersistence
 	if orgID != "default" {
-		tenantConfig, err = loadTenantRuntimeConfig(mtm.baseConfig, tenantPersistence)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load configuration for org %s: %w", orgID, err)
-		}
-		// The org's own config copy holds none of the instance tokens bound
-		// to it, which is where its agent install tokens live.
 		instancePersistence, err = mtm.persistence.GetPersistence("default")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get instance persistence for org %s: %w", orgID, err)
 		}
-	} else {
-		tenantConfig.PVEInstances = nil
-		tenantConfig.PBSInstances = nil
-		tenantConfig.PMGInstances = nil
-		tenantConfig.DataPath = tenantPersistence.GetConfigDir()
-		if nodes, loadErr := tenantPersistence.LoadNodesConfig(); loadErr != nil {
-			log.Warn().Err(loadErr).Str("org_id", orgID).Msg("failed to load tenant nodes config, starting with empty config")
-		} else if nodes != nil {
-			tenantConfig.PVEInstances = nodes.PVEInstances
-			tenantConfig.PBSInstances = nodes.PBSInstances
-			tenantConfig.PMGInstances = nodes.PMGInstances
-		}
 	}
-
-	// 2. Create Monitor
-	// Usage of internal New constructor
-	monitor, err := New(tenantConfig)
+	monitor, err := mtm.newTenantMonitor(orgID, tenantPersistence)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create monitor for org %s: %w", orgID, err)
+		return nil, err
 	}
 	tenantPersistence.SetMetadataStores(
 		monitor.GuestMetadataStore(),
@@ -424,6 +423,47 @@ func (mtm *MultiTenantMonitor) initializeTenantMonitor(orgID string) (*Monitor, 
 		mtm.initializer(monitor)
 	}
 
+	return monitor, nil
+}
+
+// newTenantMonitor protects the template copy (and default's canonical config)
+// against actual settings writes. It releases configMu before any initializer
+// or publication, so a held dependency callback cannot block a settings save.
+func (mtm *MultiTenantMonitor) newTenantMonitor(orgID string, tenantPersistence *config.ConfigPersistence) (*Monitor, error) {
+	mtm.configMu.Lock()
+	defer mtm.configMu.Unlock()
+	// 1. Load Tenant Config
+	// The default org is the primary runtime and must retain the canonical
+	// configuration pointer owned by the server. Runtime auth mutations such as
+	// freshly minted agent tokens need to become visible to monitoring-backed
+	// diagnostics immediately. Non-default tenants remain isolated deep copies
+	// so their mutable state and credentials cannot alias the primary runtime.
+	tenantConfig := mtm.baseConfig
+
+	var err error
+	if orgID != "default" {
+		tenantConfig, err = loadTenantRuntimeConfig(mtm.baseConfig, tenantPersistence)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load configuration for org %s: %w", orgID, err)
+		}
+	} else {
+		tenantConfig.PVEInstances = nil
+		tenantConfig.PBSInstances = nil
+		tenantConfig.PMGInstances = nil
+		tenantConfig.DataPath = tenantPersistence.GetConfigDir()
+		if nodes, loadErr := tenantPersistence.LoadNodesConfig(); loadErr != nil {
+			log.Warn().Err(loadErr).Str("org_id", orgID).Msg("failed to load tenant nodes config, starting with empty config")
+		} else if nodes != nil {
+			tenantConfig.PVEInstances = nodes.PVEInstances
+			tenantConfig.PBSInstances = nodes.PBSInstances
+			tenantConfig.PMGInstances = nodes.PMGInstances
+		}
+	}
+
+	monitor, err := New(tenantConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create monitor for org %s: %w", orgID, err)
+	}
 	return monitor, nil
 }
 

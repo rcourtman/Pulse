@@ -101,3 +101,54 @@ func TestTenantInitializationRejectsUnreadableChangedPolicy(t *testing.T) {
 		})
 	}
 }
+
+// Pausing a real config mutation mid-way must neither expose a mixed snapshot
+// nor make an unrelated synchronous visitor wait for the writer/constructor.
+func TestInstanceSettingsPublicationKeepsUnrelatedVisitorIndependent(t *testing.T) {
+	cfg := &config.Config{PublicURL: "https://old.pulse.invalid", PBSPollingInterval: time.Minute,
+		PMGPollingInterval: time.Minute, BackupPollingInterval: time.Minute}
+	manager := NewMultiTenantMonitor(cfg, nil, nil)
+	defer manager.globalCancel()
+	old := manager.instanceSettings
+	entered, release, updated := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	go func() {
+		manager.UpdateInstanceSettings(func() {
+			cfg.PublicURL = "https://new.pulse.invalid"
+			close(entered)
+			<-release
+			cfg.PBSPollingInterval = 5 * time.Minute
+			cfg.PMGPollingInterval = 7 * time.Minute
+			cfg.BackupPollingInterval = 11 * time.Minute
+			cfg.EnableBackupPolling = true
+		})
+		close(updated)
+	}()
+	t.Cleanup(func() { once.Do(func() { close(release) }); <-updated })
+	<-entered
+	visited := make(chan struct{})
+	go func() { manager.ForEachMonitor(func(*Monitor) {}); close(visited) }()
+	select {
+	case <-visited:
+	case <-time.After(2 * time.Second):
+		once.Do(func() { close(release) })
+		<-visited
+		t.Fatal("unrelated visitor waited for a config mutation")
+	}
+	manager.mu.RLock()
+	during := manager.instanceSettings
+	manager.mu.RUnlock()
+	if during != old {
+		t.Errorf("unrelated visit published a partial config: %+v", during)
+	}
+	once.Do(func() { close(release) })
+	<-updated
+	manager.mu.RLock()
+	final := manager.instanceSettings
+	manager.mu.RUnlock()
+	want := tenantInstanceSettings{publicURL: "https://new.pulse.invalid", backupEnabled: true,
+		pbsInterval: 5 * time.Minute, pmgInterval: 7 * time.Minute, backupInterval: 11 * time.Minute}
+	if final != want {
+		t.Errorf("completed write did not publish a coherent snapshot: got %+v, want %+v", final, want)
+	}
+}
