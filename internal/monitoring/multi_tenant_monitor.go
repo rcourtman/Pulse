@@ -71,7 +71,14 @@ func captureTenantInstanceSettings(cfg *config.Config) tenantInstanceSettings {
 // side effect that can wait for initialization. In particular it never runs
 // under initMu or the live-reader mutex, and is never retained for later use.
 func (mtm *MultiTenantMonitor) UpdateInstanceSettings(update func()) {
-	if mtm == nil || update == nil {
+	if update == nil {
+		return
+	}
+	// The settings handler's optional interface can contain a typed nil
+	// manager on single-runtime installs. The config write still belongs to
+	// the handler even when there is no tenant snapshot to publish.
+	if mtm == nil {
+		update()
 		return
 	}
 	mtm.configMu.Lock()

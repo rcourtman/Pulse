@@ -152,3 +152,13 @@ func TestInstanceSettingsPublicationKeepsUnrelatedVisitorIndependent(t *testing.
 		t.Errorf("completed write did not publish a coherent snapshot: got %+v, want %+v", final, want)
 	}
 }
+
+func TestInstanceSettingsPublicationWithoutManagerAppliesSynchronously(t *testing.T) {
+	var manager *MultiTenantMonitor
+	applied := false
+	manager.UpdateInstanceSettings(func() { applied = true })
+	if !applied {
+		t.Fatal("optional nil tenant manager swallowed the real config mutation")
+	}
+	manager.UpdateInstanceSettings(nil)
+}
