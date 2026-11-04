@@ -28,17 +28,24 @@ func clusterSourceOrDisplayName(c *K8sClusterView) string {
 // container, a VM, or is standalone, and fills the corresponding fields in loc.
 // When rewriteTarget is true (docker container lookups), TargetHost is rewritten
 // to the backing guest name. When false (docker host lookups), TargetHost stays
-// as the docker hostname — matching StateSnapshot.ResolveResource parity.
+// as the docker hostname.
 //
 // loc.AgentID arrives holding the agent that reports this Docker resource, since
 // a hostname cannot say which machine it means. An agent record found on the way
 // up replaces it. A backing guest replaces it with the agent on its node and
 // keeps it as GuestAgentID.
+//
+// A guest backs this host only when something beyond a matching name says so: an
+// operator's link folded them together, Pulse found the host by probing that
+// guest, or the two share an address with no link saying otherwise. Anything else
+// can be another machine with the same name, so the host stays standalone.
 func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTarget bool, loc *models.ResourceLocation) {
-	reportedAgentID := loc.AgentID
-	var guest *Resource
+	var guest, reporter *Resource
 	if resolver, ok := rs.(ReferenceReadState); ok && sourceID != "" {
 		resource, _, found := resolver.GetByReference(sourceID)
+		if found && resource != nil && resource.Docker != nil && resource.Type == ResourceTypeAgent {
+			reporter = resource
+		}
 		visited := map[string]bool{}
 		for found && resource != nil && !visited[resource.ID] {
 			visited[resource.ID] = true
@@ -59,8 +66,13 @@ func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTar
 			}
 		}
 	}
-	guestByName := guest == nil
-	if guest == nil {
+	probedGuest, probed := guestProbedForDockerHost(rs, reporter)
+	if probed {
+		guest = probedGuest
+	}
+	// A reference that is only its hostname can find a guest by name too.
+	inferred := guest == nil || sourceID == hostname
+	if guest == nil && !probed {
 		add := func(resource *Resource) bool {
 			if resource == nil || (resource.Name != hostname && resource.Name != sourceID) {
 				return true
@@ -95,22 +107,114 @@ func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTar
 		loc.DockerHostType = "standalone"
 		return
 	}
+	if inferred && (!dockerHostSharesGuestAddress(reporter, guest) || agentLinkedElsewhere(rs, reporter, guest)) {
+		loc.DockerHostType = "standalone"
+		return
+	}
 	owned := resourceContext(rs, guest).Location
 	// A name can place this Docker host in a guest, but cannot make an agent in
-	// that guest its own. A reference that is only its hostname adds nothing to the
-	// agent its report names.
-	loc.GuestAgentID = reportedAgentID
-	if sourceID != hostname {
-		loc.GuestAgentID = loc.AgentID
-		if !guestByName && owned.GuestAgentID != "" {
-			loc.GuestAgentID = owned.GuestAgentID
-		}
+	// that guest its own.
+	loc.GuestAgentID, loc.DockerHostInferred = loc.AgentID, inferred
+	if !inferred && owned.GuestAgentID != "" {
+		loc.GuestAgentID = owned.GuestAgentID
 	}
 	loc.DockerHostType, loc.DockerHostVMID, loc.Node = owned.ResourceType, owned.VMID, owned.Node
 	loc.NodeResourceID, loc.AgentID = owned.NodeResourceID, owned.AgentID
 	if rewriteTarget {
 		loc.TargetHost = owned.TargetHost
 	}
+}
+
+// guestProbedForDockerHost finds the guest Pulse probed through its node to discover
+// a Docker host, so no name is consulted. The agent ID names that guest. It comes
+// from the same report as the host's inventory, while the host's own ID can name
+// another guest: a probe report matches an existing row by hostname. The second
+// result says the ID is one of these, including when its guest has gone.
+func guestProbedForDockerHost(rs ReadState, host *Resource) (*Resource, bool) {
+	if host == nil || host.Docker == nil {
+		return nil, false
+	}
+	guestSourceID, probed := strings.CutPrefix(strings.TrimSpace(host.Docker.AgentID), proxmoxLXCDockerHostSourcePrefix)
+	if !probed {
+		return nil, false
+	}
+	// References follow a guest across a migration and through a merge of two
+	// connections. Its VMID can pass to a VM once it has gone.
+	if resolver, ok := rs.(ReferenceReadState); ok {
+		if guest, _, found := resolver.GetByReference(guestSourceID); found && guest != nil && guest.Type == ResourceTypeSystemContainer {
+			return guest, true
+		}
+	}
+	return nil, true
+}
+
+// dockerHostSharesGuestAddress reports whether a Docker host's machine lists an
+// address its same-named guest also has. Sites can reuse a private range, so this
+// corroborates the name and does not stand alone, and addresses every machine has
+// to itself do not count. A guest's known addresses can be stale, so a miss only
+// means nothing shows they are the same machine.
+func dockerHostSharesGuestAddress(host, guest *Resource) bool {
+	if host == nil || guest == nil {
+		return false
+	}
+	// A guest's flat address list has no interface names to filter, so it counts only
+	// when the guest has no interface list.
+	guestNetwork := []NetworkInterface{{Addresses: guest.Identity.IPAddresses}}
+	if guest.Proxmox != nil && len(guest.Proxmox.NetworkInterfaces) > 0 {
+		guestNetwork = guest.Proxmox.NetworkInterfaces
+	}
+	addresses := networkLinkAddresses(guestNetwork)
+	sharesAny := func(network []NetworkInterface) bool {
+		for address := range networkLinkAddresses(network) {
+			if _, shared := addresses[address]; shared {
+				return true
+			}
+		}
+		return false
+	}
+	if host.Docker != nil && sharesAny(host.Docker.NetworkInterfaces) {
+		return true
+	}
+	return host.Agent != nil && sharesAny(host.Agent.NetworkInterfaces)
+}
+
+// agentLinkedElsewhere reports whether a Docker host's agent record is linked to a
+// node or to another guest. A link to this guest adds nothing, since it can come from
+// the name, but one elsewhere contradicts placing the host here.
+func agentLinkedElsewhere(rs ReadState, host, guest *Resource) bool {
+	resolver, ok := rs.(ReferenceReadState)
+	if !ok || host == nil || host.Agent == nil {
+		return false
+	}
+	if strings.TrimSpace(host.Agent.LinkedNodeID) != "" {
+		return true
+	}
+	for _, linked := range []string{host.Agent.LinkedVMID, host.Agent.LinkedContainerID} {
+		if linked = strings.TrimSpace(linked); linked == "" {
+			continue
+		}
+		// References follow a guest across a migration and through a merge of two
+		// connections, and an unreadable link cannot show it means this guest.
+		if resolved, _, found := resolver.GetByReference(linked); !found || resolved == nil || resolved.ID != guest.ID {
+			return true
+		}
+	}
+	return false
+}
+
+func networkLinkAddresses(network []NetworkInterface) map[string]struct{} {
+	addresses := make(map[string]struct{})
+	for _, nic := range network {
+		if models.IsHostLocalLinkInterface(nic.Name) {
+			continue
+		}
+		for _, address := range nic.Addresses {
+			if normalized := models.NodeLinkAddress(address); normalized != "" {
+				addresses[normalized] = struct{}{}
+			}
+		}
+	}
+	return addresses
 }
 
 type appContainerResourceGetter interface {

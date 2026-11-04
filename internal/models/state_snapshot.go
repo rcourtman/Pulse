@@ -398,6 +398,10 @@ type ResourceLocation struct {
 	DockerHostName string // Name of the Docker host (system-container/VM/standalone)
 	DockerHostType string // "system-container", "vm", or "standalone"
 	DockerHostVMID int    // Guest ID (VMID) if Docker host is a system container or VM
+	// DockerHostInferred says a matching name and a shared address put this Docker
+	// host in its guest, not an identity. Another site can reuse both, so the
+	// host's own agent, in GuestAgentID, goes before the guest's node.
+	DockerHostInferred bool
 
 	// For Kubernetes resources
 	K8sClusterName string // Kubernetes cluster name

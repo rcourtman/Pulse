@@ -222,10 +222,12 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 	}
 	// throughGuest sends a command inside a guest through its node's agent. With no
 	// node agent connected, an agent known by identity to run in that guest can take
-	// it directly. It runs in the same place, and no name can select that agent.
+	// it directly. It runs in the same place, and no name can select that agent. A
+	// Docker host's own agent also goes first when only a name and an address put the
+	// host in the guest, since that agent is on the host's machine either way.
 	throughGuest := func(targetType, transport string, vmid int) CommandRoutingResult {
 		nodeAgentID := nodeAgent()
-		if nodeAgentID == "" {
+		if nodeAgentID == "" || loc.DockerHostInferred {
 			if agent, ok := connectedAgentByID(agents, loc.GuestAgentID); ok {
 				result.AgentID, result.AgentHostname = agent.AgentID, agent.Hostname
 				return result
