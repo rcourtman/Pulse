@@ -411,6 +411,9 @@ type ResourceLocation struct {
 	// The key output: where to route commands
 	TargetHost string // The target_host to use for pulse_control/pulse_file_edit
 	AgentID    string // Direct agent ID if known (for K8s, standalone hosts)
+	// GuestAgentID is an agent known by identity to run in the guest this resource
+	// is in. AgentID stays that guest's node agent, so commands prefer the node.
+	GuestAgentID string
 }
 
 // ResolveResource looks up a resource by name and returns its location in the hierarchy.
