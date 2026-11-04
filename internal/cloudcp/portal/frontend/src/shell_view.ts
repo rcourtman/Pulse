@@ -1776,11 +1776,11 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
   var providerMode = context.bootstrap.provider_hosted_mode === true;
   var statusHTML = '';
   if (context.loginState.request.error) {
-    statusHTML = '<div class="billing-status visible error">' + escapeHTML(context.loginState.request.error) + '</div>';
+    statusHTML = '<div class="billing-status visible error" role="alert">' + escapeHTML(context.loginState.request.error) + '</div>';
   } else if (context.loginState.success) {
     var successMessage = context.loginState.successMessage || 'If that email is registered, a sign-in link is on the way.';
     statusHTML =
-      '<div class="billing-status visible success">' +
+      '<div class="billing-status visible success" role="status">' +
       escapeHTML(successMessage) +
       '<br><br><strong>Need another link?</strong> <a href="#" data-portal-action="resend-magic-link">Send it again</a>.' +
       '</div>';
@@ -1822,17 +1822,20 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
     cardHTML =
       '<h2 id="portal-auth-title">Email sign-in link</h2>' +
       '<p>' + escapeHTML(emailIntro) + '</p>' +
+      '<form id="portal-login-form" data-portal-form="sign-in" aria-labelledby="portal-auth-title" aria-busy="' +
+      String(context.loginState.request.pending) + '">' +
       '<div class="form-group portal-auth-form-group">' +
         '<label for="portal-login-email">' + escapeHTML(emailLabel) + '</label>' +
         '<input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' +
         escapeAttr(context.loginState.emailValue || '') +
-        '" data-portal-input="login-email">' +
+        '" data-portal-input="login-email" required' + (context.loginState.request.pending ? ' disabled' : '') + '>' +
       '</div>' +
       '<div class="form-actions portal-auth-actions">' +
-        '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
+        '<button class="btn-primary" id="portal-login-send" type="submit"' + (context.loginState.request.pending ? ' disabled' : '') + '>' +
         (context.loginState.request.pending ? 'Sending…' : 'Send sign-in link') +
         '</button>' +
       '</div>' +
+      '</form>' +
       signupHTML +
       statusHTML;
   }

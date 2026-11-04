@@ -1,4 +1,4 @@
-import { beginMutationState, failMutationState, resetMutationState, succeedMutationState } from './async_state';
+import { beginMutationState, failMutationState, succeedMutationState } from './async_state';
 import { PortalAPIError } from './api';
 import type { PortalAPI } from './api';
 import { createPortalLoginState, syncLoginStateBootstrapEmail } from './state';
@@ -37,6 +37,7 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
       return;
     }
     var loginState = deps.store.getLoginState();
+    if (loginState.request.pending) return;
     var email = String(loginState.emailValue || '').trim();
     if (!email) {
       var input = getElement<FormValueElement>('portal-login-email');
@@ -73,25 +74,25 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
             : 'Network error. Please check your connection and try again.'
         );
       });
+      getElement<HTMLInputElement>('portal-login-email')?.focus();
     }
   }
+
+  document.addEventListener('submit', function(event) {
+    var form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.getAttribute('data-portal-form') !== 'sign-in') return;
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    void sendMagicLink();
+  });
 
   document.addEventListener('click', function(event) {
     var portalActionEl = asHTMLElement(event.target)?.closest('[data-portal-action]');
     if (portalActionEl) {
       var portalAction = portalActionEl.getAttribute('data-portal-action') || '';
       switch (portalAction) {
-        case 'send-magic-link':
-          event.preventDefault();
-          void sendMagicLink();
-          return;
         case 'resend-magic-link':
           event.preventDefault();
-          deps.store.updateLoginState(function(nextState) {
-            nextState.success = false;
-            nextState.successMessage = '';
-            resetMutationState(nextState.request);
-          });
           void sendMagicLink();
           return;
         default:

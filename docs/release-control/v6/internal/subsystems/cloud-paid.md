@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Email sign-in supports native keyboard submission
+
+The existing Pulse Account email sign-in form accepts Enter and pointer
+activation through one marked form-submit handler. Required email validation
+keeps empty or malformed input local; unrelated handoff forms are not
+intercepted. While a request is pending, the form reports busy and disables
+its input and send button. The mounted controller admits one pending request,
+including a stale resend action, not a cross-tab or server idempotency promise.
+
+An error keeps the entered address, restores the controls and input focus,
+and announces the existing error. Only deliberate retry or resend starts
+another request. Generic unknown-account success, the request payload and
+authentication/session rules are unchanged. A control plane without email
+still shows its operator instructions rather than a sending form; stale
+markup cannot bypass that declared capability. Registered auth-controller,
+app and shell tests cover these boundaries. Comparable desktop/phone captures
+exercise the native embedded portal with synthetic responses, not live mail
+delivery, sign-in-token redemption or installed account recovery.
+
 ### Client creation uses one native form submission
 
 The existing MSP Add client form submits through its account-scoped submit
