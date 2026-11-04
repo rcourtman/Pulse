@@ -606,6 +606,93 @@ describe('APITokenManager', () => {
     );
   });
 
+  it('replaces Full access with an explicit custom scope before creating a token', async () => {
+    createTokenMock.mockResolvedValue({
+      token: 'fixture-only',
+      record: makeToken({ scopes: [MONITORING_READ_SCOPE] }),
+    });
+    render(() => <APITokenManager canManage />);
+    await waitFor(() => expect(listTokensMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Full access', exact: true }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
+    );
+
+    expect(screen.getByRole('button', { name: 'Full access', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Generate', exact: true }));
+    await waitFor(() =>
+      expect(createTokenMock).toHaveBeenCalledWith(
+        undefined,
+        [MONITORING_READ_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      ),
+    );
+
+    // Removing the last explicit capability must not fall back to a broad token.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
+    );
+    expect(screen.getByRole('button', { name: 'Generate', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Full access', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(createTokenMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps custom scopes additive but makes broad access a separate deliberate choice', async () => {
+    createTokenMock.mockResolvedValue({ token: 'fixture-only', record: makeToken() });
+    render(() => <APITokenManager canManage />);
+    await waitFor(() => expect(listTokensMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Full access', exact: true }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Audit logs (read)', exact: true }));
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Generate', exact: true }));
+    await waitFor(() =>
+      expect(createTokenMock).toHaveBeenLastCalledWith(
+        undefined,
+        [AUDIT_READ_SCOPE, MONITORING_READ_SCOPE],
+        expect.any(Object),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Full access', exact: true }));
+    expect(
+      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Audit logs (read)', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Generate', exact: true }));
+    await waitFor(() =>
+      expect(createTokenMock).toHaveBeenLastCalledWith(undefined, ['*'], expect.any(Object)),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection', exact: true }));
+    expect(screen.getByRole('button', { name: 'Generate', exact: true })).toBeDisabled();
+    expect(createTokenMock).toHaveBeenCalledTimes(2);
+  });
+
   it('creates Patrol external agent tokens from the live manifest scopes', async () => {
     createTokenMock.mockResolvedValueOnce({
       token: 'pulse_agent_secret',
