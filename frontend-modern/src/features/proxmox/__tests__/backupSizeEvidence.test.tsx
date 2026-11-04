@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -171,13 +172,11 @@ describe('restore-point size evidence through parsed inventory', () => {
         name: /Expand details for backup-size-guest/,
       });
       fireEvent.click(toggle);
-      const panel = screen.getByTestId('proxmox-coverage-detail');
+      const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       expect(panel).toHaveTextContent(
-        'Some restore-point sizes are unknown. Unknown does not mean those points are empty.',
+        'No usable size was reported. Unknown does not mean this restore point is empty.',
       );
-      expect(
-        within(panel).getAllByText(width === 1200 ? 'Unknown size' : 'Size: Unknown size'),
-      ).toHaveLength(3);
+      expect(within(panel).getAllByText('Unknown size')).toHaveLength(width === 1200 ? 6 : 3);
       expect(panel).not.toHaveTextContent('0 B');
       expect(api.fetch).toHaveBeenCalledTimes(2);
     },

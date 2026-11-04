@@ -128,14 +128,28 @@ source-bound collector frames, its separate task/evidence meanings and readable
 source/outcome/qualifier. This is safer inspection, not backup-job execution,
 original guest recovery, a tested restore or published availability.
 
+### Coverage rows open to one line per restore point
+
+An open Coverage row answers "can I restore this?" first: its reason, a failed
+last job's error, the newest completed backup and one single-line row per
+restore point. Tapping a point shows its connection, location, Created time,
+size, identifier and metadata in the same shape as its By date record. Workload,
+Protection assessment, task and provider sections sit behind one More details
+control. All of it stays readable without hover. The newest backup is the
+workload's canonical latest backup, so guest snapshots and incomplete points never
+count and an undated completed point leaves it unnamed. Tapped points and More details survive
+polling and width changes and close when another workload opens.
+
+Normal-suite `coverageRestorePointIdentity.test.tsx` covers the default state and
+both taps at phone and desktop widths.
+
 ### Coverage dates read as times and unusable dates stay literal
 
 Open Coverage evidence shows a usable date as a formatted Created time beside
 the point’s identifier and metadata, with the provider’s exact value on hover.
 Missing dates say “Not reported”. Invalid and future raw dates stay as wrapping
 literal text, inspectable without hover and never valid ages or ordered evidence. The
-existing Unknown age and uncertainty notices still apply. This works in both
-the Details column and its folded phone projection; it adds no read or recovery
+existing Unknown age and uncertainty notices still apply. This works at every width; it adds no read or recovery
 operation and does not change completion, posture, chronology or preview rules.
 
 Normal-suite `coverageRestorePointIdentity.test.tsx` exercises parsed PVE/PBS

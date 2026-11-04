@@ -255,7 +255,5 @@ describe('Proxmox backups responsive table presentation', () => {
     expect(isCoverageEvidenceColumnVisible('basic', 'location')).toBe(true);
     expect(isCoverageEvidenceColumnVisible('basic', 'size')).toBe(false);
     expect(isCoverageEvidenceColumnVisible('operational', 'size')).toBe(true);
-    expect(isCoverageEvidenceColumnVisible('operational', 'details')).toBe(false);
-    expect(isCoverageEvidenceColumnVisible('expanded', 'details')).toBe(true);
   });
 });

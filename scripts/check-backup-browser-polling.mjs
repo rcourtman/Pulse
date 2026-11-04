@@ -99,7 +99,7 @@ try {
   });
   await expanded.focus();
   await expect(
-    page.getByText("Restore evidence", { exact: true }),
+    page.getByText("Restore points", { exact: true }),
   ).toBeVisible();
   const baseline = await page.evaluate(() => ({
     y: document.querySelector("main").scrollTop,
@@ -114,7 +114,7 @@ try {
         .first(),
     ).toBeVisible();
     await expect(
-      page.getByText("Restore evidence", { exact: true }),
+      page.getByText("Restore points", { exact: true }),
     ).toBeVisible();
     const sample = await page.evaluate(() => ({
       y: document.querySelector("main").scrollTop,

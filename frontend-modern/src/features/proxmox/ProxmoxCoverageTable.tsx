@@ -18,6 +18,7 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
+import { ResourceDetailDrawerSupportDisclosure } from '@/components/Infrastructure/ResourceDetailDrawerSupportDisclosure';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -58,7 +59,7 @@ import {
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
   retainBackupTableFocus,
-  artifactCreatedLabel,
+  artifactDateRows,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
   hasMultipleConnections,
@@ -494,20 +495,42 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
     },
   ]);
 
-// Several points can share a reader, location and rounded age. Preserve the
-// point's identifier, date and metadata in the open evidence at every width. A
-// usable date reads as a time, with the exact value on hover. A date that cannot
-// establish an age stays as literal text, since Unknown would hide what was sent.
+// Several points can share a reader, location and rounded age. Tapping a point
+// shows what tells it apart, in the same shape as its By date record.
 function coverageRestorePointDetails(artifact: RecoverableArtifact) {
+  const hasSize = () => Boolean(artifact.size && artifact.size > 0);
   return (
-    <div class="whitespace-pre-line wrap-anywhere" data-coverage-evidence-detail>
-      {`Identifier: ${artifact.nativeId}\n`}
-      {artifact.createdMs === undefined ? (
-        `Reported date: ${artifact.createdAt || 'Not reported'}`
-      ) : (
-        <span title={artifact.createdAt}>{`Created: ${artifactCreatedLabel(artifact)}`}</span>
-      )}
-      {`\nMetadata: ${artifact.detailTitle || artifact.detail}`}
+    <div class="min-w-0 whitespace-normal" data-coverage-evidence-detail>
+      <DetailSectionTable
+        wrapValues
+        sections={[
+          {
+            label: 'Restore point',
+            rows: compactDetailRows([
+              makeDetailRow('Connection', artifact.locationConnection || 'Not reported', {
+                wrap: true,
+                valueContent: (
+                  <span class="wrap-anywhere" data-backup-source-connection>
+                    {artifact.locationConnection || 'Not reported'}
+                  </span>
+                ),
+              }),
+              makeDetailRow('Location', artifact.location, { wrap: true }),
+              ...artifactDateRows(artifact),
+              makeDetailRow('Size', formatPlatformTableBytesValue(artifact.size, 'Unknown size'), {
+                tone: hasSize() ? undefined : 'muted',
+              }),
+              makeDetailRow('Identifier', artifact.nativeId, { wrap: true }),
+              makeDetailRow('Metadata', artifact.detailTitle || artifact.detail, { wrap: true }),
+            ]),
+            footerContent: hasSize() ? undefined : (
+              <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+                No usable size was reported. Unknown does not mean this restore point is empty.
+              </p>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -551,10 +574,22 @@ export function ProxmoxCoverageTable(props: {
   const [evidenceLimit, setEvidenceLimit] = createSignal(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE);
   // There is one open workload. Keep its deliberate preview expansion across
   // polling, but start bounded again when a different row is opened or closed.
+  const [openPoints, setOpenPoints] = createSignal<ReadonlySet<string>>(new Set());
+  const [moreDetails, setMoreDetails] = createSignal(false);
+  const togglePoint = (id: string) =>
+    setOpenPoints((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   createEffect(
     on(
       () => props.expandedKey,
-      () => setEvidenceLimit(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE),
+      () => {
+        setEvidenceLimit(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE);
+        setOpenPoints(new Set<string>());
+        setMoreDetails(false);
+      },
     ),
   );
   let coverageElement: HTMLDivElement | undefined;
@@ -732,6 +767,10 @@ export function ProxmoxCoverageTable(props: {
                   const backupHistoryComplete = () =>
                     !props.historyReadIncomplete && hasCompleteBackupHistory(row);
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
+                  const evidenceColumnCount = () =>
+                    3 +
+                    (isCoverageEvidenceColumnVisible(layoutMode(), 'location') ? 1 : 0) +
+                    (isCoverageEvidenceColumnVisible(layoutMode(), 'size') ? 1 : 0);
                   return (
                     <>
                       <TableRow
@@ -988,19 +1027,44 @@ export function ProxmoxCoverageTable(props: {
                                 subject={proxmoxBackupWorkloadSubject(row.workload)}
                               />
                             }
-                            sections={buildCoverageDetailSections(row)}
+                            sections={[]}
                             onClose={() => props.onToggleExpand(row.key)}
                           >
+                            <Show when={row.latestTask?.label === 'Failed'}>
+                              <InlineNotice
+                                tone="warning"
+                                role="status"
+                                class="text-xs whitespace-normal wrap-anywhere"
+                                data-coverage-failed-task
+                              >
+                                Last backup job failed:{' '}
+                                {row.latestTask?.error?.trim() || 'no error reported'}
+                              </InlineNotice>
+                            </Show>
+                            <Show when={row.latestBackup}>
+                              {(backup) => (
+                                <p
+                                  class="flex min-w-0 items-baseline gap-1.5 text-xs text-muted"
+                                  data-coverage-newest-backup
+                                >
+                                  <span class="shrink-0">Newest backup</span>
+                                  <ProxmoxBackupAgeText artifact={backup()} />
+                                  <span class="min-w-0 truncate text-base-content">
+                                    {backup().location}
+                                  </span>
+                                </p>
+                              )}
+                            </Show>
                             <Show when={props.evidenceLocationLabel}>
                               {(label) => (
                                 <InlineNotice
                                   tone="info"
                                   role="note"
-                                  aria-label="Restore evidence scope"
+                                  aria-label="Restore point scope"
                                   class="text-xs whitespace-normal wrap-anywhere"
                                 >
-                                  Restore evidence: {label()}. Protection assessments and task
-                                  history cover the whole workload, not just this location.
+                                  Restore points: {label()}. Protection assessments and task history
+                                  cover the whole workload, not just this location.
                                 </InlineNotice>
                               )}
                             </Show>
@@ -1024,7 +1088,7 @@ export function ProxmoxCoverageTable(props: {
                                 }
                               >
                                 <div class="flex items-center justify-between gap-2 bg-surface-alt px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                                  <span>Restore evidence</span>
+                                  <span>Restore points</span>
                                   <Show when={row.artifacts.length > evidence().length}>
                                     <span class="normal-case tracking-normal">
                                       Showing {evidence().length} of {row.artifacts.length}
@@ -1042,16 +1106,6 @@ export function ProxmoxCoverageTable(props: {
                                       The preview includes a sample from each affected source and
                                       state.
                                     </Show>
-                                  </p>
-                                </Show>
-                                <Show
-                                  when={evidence().some(
-                                    (artifact) => !(artifact.size && artifact.size > 0),
-                                  )}
-                                >
-                                  <p class="px-2 py-2 text-[11px] leading-snug text-muted whitespace-normal wrap-anywhere">
-                                    Some restore-point sizes are unknown. Unknown does not mean
-                                    those points are empty.
                                   </p>
                                 </Show>
                                 <PlatformDetailTable class="table-fixed text-[11px]">
@@ -1086,131 +1140,95 @@ export function ProxmoxCoverageTable(props: {
                                     <TableHead class={getPlatformTableHeadClassForKind('badge')}>
                                       State
                                     </TableHead>
-                                    <Show
-                                      when={isCoverageEvidenceColumnVisible(
-                                        layoutMode(),
-                                        'details',
-                                      )}
-                                    >
-                                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                                        {PROXMOX_BACKUP_COLUMN_LABELS.details}
-                                      </TableHead>
-                                    </Show>
                                   </PlatformDetailTableHeader>
                                   <PlatformDetailTableBody class="divide-border-subtle">
                                     <For each={evidence()}>
-                                      {(artifact) => (
-                                        <TableRow>
-                                          <TableCell
-                                            class={getPlatformTableCellClassForKind('name')}
-                                          >
-                                            <ArtifactSourceIdentity artifact={artifact} wrap />
-                                            <Show
-                                              when={
-                                                !isCoverageEvidenceColumnVisible(
+                                      {(artifact) => {
+                                        const open = () => openPoints().has(artifact.id);
+                                        return (
+                                          <>
+                                            <TableRow
+                                              {...getPlatformResourceDetailRowInteractionProps({
+                                                expanded: open(),
+                                                onToggle: () => togglePoint(artifact.id),
+                                              })}
+                                              data-coverage-evidence-point={artifact.id}
+                                            >
+                                              <TableCell
+                                                class={getPlatformTableCellClassForKind('name')}
+                                              >
+                                                <div class="flex min-w-0 items-center gap-1.5">
+                                                  <PlatformResourceDetailToggleButton
+                                                    expanded={open()}
+                                                    resourceLabel={`${artifact.sourceLabel} ${artifact.nativeId}`}
+                                                    hideWhenRowTappableOnMobile={false}
+                                                    onToggle={() => togglePoint(artifact.id)}
+                                                  />
+                                                  <div class="shrink-0">
+                                                    <ArtifactSourceIdentity artifact={artifact} />
+                                                  </div>
+                                                </div>
+                                              </TableCell>
+                                              <Show
+                                                when={isCoverageEvidenceColumnVisible(
                                                   layoutMode(),
                                                   'location',
-                                                )
-                                              }
-                                            >
-                                              <span
-                                                class="mt-1 block whitespace-normal text-muted leading-snug wrap-anywhere"
-                                                data-coverage-evidence-location
+                                                )}
                                               >
-                                                Location: {artifact.location}
-                                              </span>
-                                            </Show>
-                                            <Show
-                                              when={
-                                                !isCoverageEvidenceColumnVisible(
+                                                <TableCell
+                                                  class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                                >
+                                                  <span
+                                                    class="block truncate"
+                                                    title={artifact.location}
+                                                    data-coverage-evidence-location
+                                                  >
+                                                    {artifact.location}
+                                                  </span>
+                                                </TableCell>
+                                              </Show>
+                                              <TableCell
+                                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                                              >
+                                                <ProxmoxBackupAgeText artifact={artifact} />
+                                              </TableCell>
+                                              <Show
+                                                when={isCoverageEvidenceColumnVisible(
                                                   layoutMode(),
                                                   'size',
-                                                )
-                                              }
-                                            >
-                                              <span
-                                                class="mt-1 block whitespace-normal text-muted leading-snug wrap-anywhere"
-                                                data-coverage-evidence-size
-                                              >
-                                                Size:{' '}
-                                                {formatPlatformTableBytesValue(
-                                                  artifact.size,
-                                                  'Unknown size',
                                                 )}
-                                              </span>
-                                            </Show>
-                                            <Show
-                                              when={
-                                                !isCoverageEvidenceColumnVisible(
-                                                  layoutMode(),
-                                                  'details',
-                                                )
-                                              }
-                                            >
-                                              {coverageRestorePointDetails(artifact)}
-                                            </Show>
-                                          </TableCell>
-                                          <Show
-                                            when={isCoverageEvidenceColumnVisible(
-                                              layoutMode(),
-                                              'location',
-                                            )}
-                                          >
-                                            {/* Wrapping is set on the span: `.table-fixed td`
-                                                forces nowrap on the cell and outranks a class there. */}
-                                            <TableCell
-                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                                            >
-                                              <span
-                                                class="block whitespace-normal wrap-anywhere"
-                                                data-coverage-evidence-location
                                               >
-                                                {artifact.location}
-                                              </span>
-                                            </TableCell>
-                                          </Show>
-                                          <TableCell
-                                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                                          >
-                                            <ProxmoxBackupAgeText artifact={artifact} />
-                                          </TableCell>
-                                          <Show
-                                            when={isCoverageEvidenceColumnVisible(
-                                              layoutMode(),
-                                              'size',
-                                            )}
-                                          >
-                                            <TableCell
-                                              class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
-                                            >
-                                              {formatPlatformTableBytesValue(
-                                                artifact.size,
-                                                'Unknown size',
-                                              )}
-                                            </TableCell>
-                                          </Show>
-                                          <TableCell
-                                            class={getPlatformTableCellClassForKind('badge')}
-                                          >
-                                            <ArtifactStateBadge
-                                              artifact={artifact}
-                                              label={artifactStateLabel(artifact)}
-                                            />
-                                          </TableCell>
-                                          <Show
-                                            when={isCoverageEvidenceColumnVisible(
-                                              layoutMode(),
-                                              'details',
-                                            )}
-                                          >
-                                            <TableCell
-                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                                            >
-                                              {coverageRestorePointDetails(artifact)}
-                                            </TableCell>
-                                          </Show>
-                                        </TableRow>
-                                      )}
+                                                <TableCell
+                                                  class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
+                                                >
+                                                  {formatPlatformTableBytesValue(
+                                                    artifact.size,
+                                                    'Unknown size',
+                                                  )}
+                                                </TableCell>
+                                              </Show>
+                                              <TableCell
+                                                class={getPlatformTableCellClassForKind('badge')}
+                                              >
+                                                <ArtifactStateBadge
+                                                  artifact={artifact}
+                                                  label={artifactStateLabel(artifact)}
+                                                />
+                                              </TableCell>
+                                            </TableRow>
+                                            <Show when={open()}>
+                                              <TableRow>
+                                                <TableCell
+                                                  class="whitespace-normal"
+                                                  colspan={evidenceColumnCount()}
+                                                >
+                                                  {coverageRestorePointDetails(artifact)}
+                                                </TableCell>
+                                              </TableRow>
+                                            </Show>
+                                          </>
+                                        );
+                                      }}
                                     </For>
                                   </PlatformDetailTableBody>
                                 </PlatformDetailTable>
@@ -1237,8 +1255,8 @@ export function ProxmoxCoverageTable(props: {
                                       when={evidence().length < row.artifacts.length}
                                       fallback={
                                         <>
-                                          All {evidence().length} evidence{' '}
-                                          {evidence().length === 1 ? 'entry' : 'entries'} shown
+                                          All {evidence().length} restore{' '}
+                                          {evidence().length === 1 ? 'point' : 'points'} shown
                                         </>
                                       }
                                     >
@@ -1247,13 +1265,29 @@ export function ProxmoxCoverageTable(props: {
                                         COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
                                         row.artifacts.length - evidence().length,
                                       )}{' '}
-                                      more evidence entries
+                                      more restore points
                                     </Show>
                                   </button>
                                 </div>
                               </Show>
                             </div>
-                            <CoverageTaskCandidates tasks={row.taskCandidates ?? []} />
+                            <ResourceDetailDrawerSupportDisclosure
+                              title="More details"
+                              expanded={moreDetails()}
+                              onToggle={() => setMoreDetails((value) => !value)}
+                              showLabel="Show"
+                              hideLabel="Hide"
+                              contentClass="mt-2 space-y-3"
+                              dataTestId="coverage-more-details"
+                              accessibleSubject="more details"
+                              contentId={`${detailRowId()}-more`}
+                            >
+                              <DetailSectionTable
+                                sections={buildCoverageDetailSections(row)}
+                                wrapValues
+                              />
+                              <CoverageTaskCandidates tasks={row.taskCandidates ?? []} />
+                            </ResourceDetailDrawerSupportDisclosure>
                           </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>

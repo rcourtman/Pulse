@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal } from 'solid-js';
@@ -91,7 +92,7 @@ describe('backup workload identity in real inventory consumers', () => {
           name: `Expand details for same-name (VM 100) · PVE connection: ${scope}`,
         });
         fireEvent.click(toggle);
-        const detail = screen.getByTestId('proxmox-coverage-detail');
+        const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
         expect(connectionRow(detail)).toHaveTextContent(scope);
         expect(within(detail).getByRole('link', { name: 'Open same-name' })).toHaveAttribute(
           'href',
@@ -99,7 +100,7 @@ describe('backup workload identity in real inventory consumers', () => {
         );
         const sources = detail.querySelectorAll('[data-backup-source-connection]');
         expect(sources).toHaveLength(1);
-        expect(sources[0]).toHaveTextContent(`Connection: ${scope}`);
+        expect(sources[0]).toHaveTextContent(scope);
         expect(detail).toHaveTextContent('Backup file');
         expect(detail).not.toHaveTextContent('Unverified');
         fireEvent.click(toggle);
@@ -150,7 +151,7 @@ describe('backup workload identity in real inventory consumers', () => {
         if (width < 1120) expect(row).toHaveTextContent('VM 100');
         const toggle = within(row).getByRole('button', { name: /Expand details/ });
         fireEvent.click(toggle);
-        const panel = screen.getByTestId('proxmox-coverage-detail');
+        const panel = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
         expect(connectionRow(panel)).toHaveTextContent(scope);
         expect(panel).toHaveTextContent(`store-${index}`);
         expect(panel).not.toHaveTextContent(`store-${1 - index}`);
@@ -175,12 +176,10 @@ describe('backup workload identity in real inventory consumers', () => {
     // One PVE connection tells no rows apart, so only the drawer names it.
     expect(connectionOf(row)).toBeUndefined();
     fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
-    let detail = screen.getByTestId('proxmox-coverage-detail');
+    let detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(connectionRow(detail)).toHaveTextContent('east');
     expect(connectionRow(detail)).not.toHaveTextContent('pbs-reader');
-    expect(detail.querySelector('[data-backup-source-connection]')).toHaveTextContent(
-      'Connection: pbs-reader',
-    );
+    expect(detail.querySelector('[data-backup-source-connection]')).toHaveTextContent('pbs-reader');
     await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
     const point = await screen.findByRole('button', {
       name: /^Expand details for same-name \(VM 100\) · PVE connection: east · PBS backup/,
@@ -214,7 +213,7 @@ describe('backup workload identity in real inventory consumers', () => {
     });
     expect(vm.closest('tr')!.textContent?.match(/VM 100/g)).toHaveLength(1);
     fireEvent.click(vm);
-    let detail = screen.getByTestId('proxmox-coverage-detail');
+    let detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(connectionRow(detail)).toHaveTextContent('Not reported');
     expect(connectionRow(detail)).not.toHaveTextContent('east');
     expect(detail.querySelector('[data-backup-source-connection]')).toHaveTextContent('pbs-reader');
@@ -222,7 +221,7 @@ describe('backup workload identity in real inventory consumers', () => {
     const host = screen.getByRole('button', { name: /expand details for Host nas-box/i });
     expect(host).not.toHaveAccessibleName(/PVE connection/i);
     fireEvent.click(host);
-    detail = screen.getByTestId('proxmox-coverage-detail');
+    detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(within(detail).queryByText('PVE connection')).not.toBeInTheDocument();
     expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
     await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
@@ -256,7 +255,7 @@ describe('backup workload identity in real inventory consumers', () => {
     expect(vm.closest('tr')).toHaveTextContent('VM 100');
     expect(ct.closest('tr')).toHaveTextContent('LXC 100');
     fireEvent.click(ct);
-    const detail = screen.getByTestId('proxmox-coverage-detail');
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(connectionRow(detail)).toHaveTextContent('east');
     expect(detail.querySelectorAll('[data-backup-source-connection]')).toHaveLength(1);
     expect(within(detail).getByRole('link')).toHaveAttribute(
@@ -274,9 +273,9 @@ describe('backup workload identity in real inventory consumers', () => {
     const [row] = await coverageRows();
     expect(connectionOf(row)).toBeUndefined();
     fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
-    expect(connectionRow(screen.getByTestId('proxmox-coverage-detail'))).toHaveTextContent(
-      'Not reported',
-    );
+    expect(
+      connectionRow(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))),
+    ).toHaveTextContent('Not reported');
   });
 
   it('uses literal connection text and keeps same-key live updates in the open panel without losing disclosure focus', async () => {
@@ -286,11 +285,11 @@ describe('backup workload identity in real inventory consumers', () => {
     const toggle = within(row).getByRole('button', { name: /expand details/i });
     fireEvent.click(toggle);
     toggle.focus();
-    const detail = screen.getByTestId('proxmox-coverage-detail');
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     const literal = '<img data-workload-injected src=x>';
     setWorkloads([{ ...guest, proxmox: { ...guest.proxmox!, instance: literal } }]);
     await waitFor(() => expect(connectionRow(detail)).toHaveTextContent(literal));
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(detail);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(detail);
     expect(connectionRow(detail)).toHaveTextContent(literal);
     expect(document.querySelector('[data-workload-injected]')).toBeNull();
     expect(toggle).toHaveAccessibleName(
@@ -335,12 +334,12 @@ describe('backup workload identity in real inventory consumers', () => {
       });
       fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
       fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
-      let detail = screen.getByTestId('proxmox-coverage-detail');
+      let detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
         'Not reported',
       );
       expect(detail).toHaveTextContent('datastore-only / namespace-only');
-      expect(detail).toHaveTextContent('Connection: pbs-reader');
+      expect(detail).toHaveTextContent('Connectionpbs-reader');
       expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
       expect(
         screen.queryByRole('option', { name: 'Node: namespace-only' }),
@@ -375,7 +374,7 @@ describe('backup workload identity in real inventory consumers', () => {
       });
       fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
       fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
-      let detail = screen.getByTestId('proxmox-coverage-detail');
+      let detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
       expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
         'Not reported',
       );
@@ -402,7 +401,7 @@ describe('backup workload identity in real inventory consumers', () => {
     mount({ workloads: [], pve: { ...emptyPVE, storageBackups: [identityArchive()] } });
     fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
     fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
-    const detail = screen.getByTestId('proxmox-coverage-detail');
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
       'pve-1',
     );
@@ -426,14 +425,14 @@ describe('backup workload identity in real inventory consumers', () => {
     fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
     fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
     expect(
-      within(screen.getByTestId('proxmox-coverage-detail'))
+      within(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail')))
         .getByText('Node', { exact: true })
         .closest('tr'),
     ).toHaveTextContent('Not reported');
     setWorkloads([identityGuest('guest-east', 'east', 'native-node')]);
     const matched = await screen.findByRole('button', { name: /expand details for guest-east/i });
     fireEvent.click(matched);
-    let detail = screen.getByTestId('proxmox-coverage-detail');
+    let detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
       'native-node',
     );
@@ -444,7 +443,7 @@ describe('backup workload identity in real inventory consumers', () => {
     expect(detail).toHaveTextContent('main / namespace-only');
     setWorkloads([]);
     fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
-    detail = screen.getByTestId('proxmox-coverage-detail');
+    detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
     expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
       'Not reported',
     );

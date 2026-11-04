@@ -1,4 +1,5 @@
 import { Show, type Accessor } from 'solid-js';
+import { makeDetailRow, type DetailRow } from '@/components/shared/DetailSectionTable';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
@@ -312,6 +313,21 @@ export const artifactCreatedLabel = (artifact: Pick<RecoverableArtifact, 'create
     : formatPlatformTableDateTimeValue(artifact.createdMs, {
         dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
       });
+
+// A usable date reads as Created, with the provider's exact value on hover.
+// Unknown would hide what the source sent, so only an unusable or missing date
+// needs its literal text.
+export const artifactDateRows = (artifact: RecoverableArtifact): Array<DetailRow | null> => [
+  makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.created, artifactCreatedLabel(artifact), {
+    tone: artifact.createdMs === undefined ? 'warning' : undefined,
+    ...(artifact.createdMs !== undefined && artifact.createdAt
+      ? { title: artifact.createdAt }
+      : {}),
+  }),
+  artifact.createdMs === undefined
+    ? makeDetailRow('Reported date', artifact.createdAt || 'Not reported', { wrap: true })
+    : null,
+];
 
 // Short state label for a recoverable artifact, paired with ArtifactStateBadge
 // for colour. Prune retention is not verification or workload protection.

@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -97,14 +98,19 @@ function mount() {
 }
 const evidenceTable = (panel: HTMLElement) =>
   within(
-    within(panel).getByText('Restore evidence', { exact: true }).closest('div')!.parentElement!,
-  ).getByRole('table');
-const entries = (panel: HTMLElement) => evidenceTable(panel).querySelectorAll('tbody > tr');
+    within(panel).getByText('Restore points', { exact: true }).closest('div')!.parentElement!,
+  ).getAllByRole('table')[0];
+const entries = (panel: HTMLElement) =>
+  evidenceTable(panel).querySelectorAll<HTMLElement>('[data-coverage-evidence-point]');
+const unknownAges = (panel: HTMLElement) =>
+  Array.from(entries(panel)).flatMap((row) =>
+    within(row).queryAllByText('Unknown', { exact: true }),
+  );
 async function open(name = 'east-100') {
   fireEvent.click(
     await screen.findByRole('button', { name: new RegExp(`Expand details for ${name}`) }),
   );
-  return screen.findByTestId('proxmox-coverage-detail');
+  return revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
 }
 beforeEach(() => {
   vi.resetAllMocks();
@@ -131,41 +137,44 @@ describe('Coverage uncertain evidence inspection through parsed inventory', () =
       expect(panel).toHaveTextContent('sample from each affected source and state');
       expect(entries(panel)).toHaveLength(8);
       const evidence = evidenceTable(panel);
-      expect(within(evidence).getAllByText('Unknown', { exact: true })).toHaveLength(5);
+      expect(unknownAges(panel)).toHaveLength(5);
       expect(evidence).toHaveTextContent('Running');
       expect(evidence).toHaveTextContent('Failed');
       expect(evidence).toHaveTextContent(literal);
       expect(evidence.querySelector('img')).toBeNull();
       expect(evidence).toHaveTextContent('archive-undated-0');
       expect(evidence).not.toHaveTextContent('undated-b');
-      const more = within(panel).getByRole('button', { name: 'Show 8 more evidence entries' });
+      const more = within(panel).getByRole('button', { name: 'Show 8 more restore points' });
       more.focus();
       for (const count of [16, 24, 32, 40, 44]) {
         fireEvent.click(more);
         expect(entries(panel)).toHaveLength(count);
         expect(document.activeElement).toBe(more);
       }
-      expect(more).toHaveTextContent('All 44 evidence entries shown');
+      expect(more).toHaveTextContent('All 44 restore points shown');
       expect(more).toHaveAttribute('aria-disabled', 'true');
       expect(panel).not.toHaveTextContent('sample from each affected source and state');
+      revealCoverageDetail(panel);
       expect(evidenceTable(panel)).toHaveTextContent('undated-b');
-      expect(within(evidenceTable(panel)).getAllByText('Unknown', { exact: true })).toHaveLength(8);
+      expect(unknownAges(panel)).toHaveLength(8);
       fireEvent.click(more);
       expect(entries(panel)).toHaveLength(44);
       expect(api.fetch).toHaveBeenCalledTimes(2);
       fireEvent.click(screen.getByRole('button', { name: /Collapse details for east-100/ }));
       const peer = await open('west-100');
-      expect(peer).not.toHaveTextContent('Restore evidence');
+      expect(peer).not.toHaveTextContent('Restore points');
       expect(peer).not.toHaveTextContent(literal);
       fireEvent.click(screen.getByRole('button', { name: /Expand details for east-100/ }));
-      expect(entries(await screen.findByTestId('proxmox-coverage-detail'))).toHaveLength(8);
+      expect(
+        entries(revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'))),
+      ).toHaveLength(8);
     },
   );
 
   it('preserves expanded evidence and focus while polling removes and restores uncertainty', async () => {
     mount();
     const panel = await open();
-    const more = within(panel).getByRole('button', { name: 'Show 8 more evidence entries' });
+    const more = within(panel).getByRole('button', { name: 'Show 8 more restore points' });
     more.focus();
     fireEvent.click(more);
     expect(entries(panel)).toHaveLength(16);
@@ -175,7 +184,7 @@ describe('Coverage uncertain evidence inspection through parsed inventory', () =
     expect(entries(panel)).toHaveLength(16);
     expect(within(evidenceTable(panel)).queryByText('Unknown', { exact: true })).toBeNull();
     expect(document.activeElement).toBe(more);
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     repaired = false;
     await vi.advanceTimersByTimeAsync(30_000);
     await waitFor(() =>

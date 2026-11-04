@@ -331,12 +331,10 @@ export const isCompactBackupIdentityLayout = (layout: ProxmoxBackupsTableLayoutM
 
 export const isCoverageEvidenceColumnVisible = (
   layout: ProxmoxBackupsTableLayoutMode,
-  column: 'location' | 'size' | 'details',
+  column: 'location' | 'size',
 ): boolean => {
   if (column === 'location') return layout !== 'compact';
-  if (column === 'size')
-    return layout === 'operational' || layout === 'expanded' || layout === 'full';
-  return layout === 'expanded' || layout === 'full';
+  return layout === 'operational' || layout === 'expanded' || layout === 'full';
 };
 
 // What the backup health counts mean, stated from the server's own posture

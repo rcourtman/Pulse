@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,7 +44,7 @@ async function open(scope = 'east') {
       name: `Expand details for same-name (VM 100) · PVE connection: ${scope}`,
     }),
   );
-  return screen.findByTestId('proxmox-coverage-detail');
+  return revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
 }
 const section = (panel: HTMLElement, label = 'Latest task') =>
   within(panel).getByText(label, { exact: true, selector: 'th' }).closest('tbody')!;
@@ -189,7 +190,7 @@ describe('task-reported origin through the inventory consumer', () => {
     );
     expect(value(section(panel), 'Task connection')).toHaveTextContent('Not reported');
     expect(value(section(panel, 'Workload'), 'Node')).toHaveTextContent('current-node');
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(document.activeElement).toBe(toggle);
     expect(api.fetch).toHaveBeenCalledTimes(6);
   });

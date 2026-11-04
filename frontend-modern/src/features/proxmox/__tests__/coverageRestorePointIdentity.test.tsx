@@ -1,3 +1,4 @@
+import { revealCoverageDetail } from '../__fixtures__/coverageDetail';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -92,12 +93,10 @@ function mount() {
 async function open() {
   const toggle = await screen.findByRole('button', { name: /Expand details for east-100/ });
   await fireEvent.click(toggle);
-  return screen.findByTestId('proxmox-coverage-detail');
+  return revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
 }
 function evidenceRows(panel: HTMLElement) {
-  return Array.from(panel.querySelectorAll<HTMLElement>('[data-coverage-evidence-detail]')).map(
-    (details) => details.closest('tr')!,
-  );
+  return Array.from(panel.querySelectorAll<HTMLElement>('[data-coverage-evidence-detail]'));
 }
 
 beforeEach(() => {
@@ -116,6 +115,45 @@ afterEach(() => {
 });
 
 describe('Coverage restore-point identity through parsed inventory', () => {
+  it.each([320, 480, 1200])('opens to one line per point at %ipx', async (width) => {
+    api.width = width;
+    mount();
+    await fireEvent.click(
+      await screen.findByRole('button', { name: /Expand details for east-100/ }),
+    );
+    const panel = await screen.findByTestId('proxmox-coverage-detail');
+    const points = panel.querySelectorAll<HTMLElement>('[data-coverage-evidence-point]');
+    expect(points).toHaveLength(6);
+    expect(panel.querySelector('[data-coverage-evidence-detail]')).toBeNull();
+    expect(panel.querySelector('[data-coverage-newest-backup]')).not.toBeNull();
+    expect(panel).not.toHaveTextContent('Identifier');
+    expect(panel).not.toHaveTextContent('PVE connection');
+    expect(panel).not.toHaveTextContent('Protection assessment');
+
+    await fireEvent.click(within(points[0]).getByRole('button', { name: /^Expand details/ }));
+    expect(panel.querySelectorAll('[data-coverage-evidence-detail]')).toHaveLength(1);
+    expect(panel).toHaveTextContent('Identifier');
+    await fireEvent.click(within(points[0]).getByRole('button', { name: /^Collapse details/ }));
+    expect(panel.querySelector('[data-coverage-evidence-detail]')).toBeNull();
+
+    await fireEvent.click(within(panel).getByRole('button', { name: 'Show more details' }));
+    expect(panel).toHaveTextContent('PVE connection');
+    await fireEvent.click(within(panel).getByRole('button', { name: 'Hide more details' }));
+    expect(panel).not.toHaveTextContent('PVE connection');
+  });
+
+  it('closes tapped points and more details when another workload opens', async () => {
+    mount();
+    await fireEvent.click(
+      await screen.findByRole('button', { name: /Expand details for east-100/ }),
+    );
+    revealCoverageDetail(await screen.findByTestId('proxmox-coverage-detail'));
+    await fireEvent.click(screen.getByRole('button', { name: /Expand details for west-100/ }));
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    expect(panel.querySelector('[data-coverage-evidence-detail]')).toBeNull();
+    expect(panel).not.toHaveTextContent('PVE connection');
+  });
+
   it.each([320, 480, 720, 1200])(
     'reads usable dates as times and keeps unusable ones literal at %ipx',
     async (width) => {
@@ -134,16 +172,15 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       for (const [id, date] of expected) {
         const details = Array.from(
           panel.querySelectorAll<HTMLElement>('[data-coverage-evidence-detail]'),
-        ).find((element) => element.textContent?.startsWith(`Identifier: ${id}\n`))!;
+        ).find((element) => element.textContent?.includes(`Identifier${id}Metadata`))!;
         if (id === 'same-time-pbs-a' || id === 'same-time-archive-a') {
-          expect(details).toHaveTextContent(/Created: .*2026/);
+          expect(details).toHaveTextContent(/Created.*2026/);
           expect(details).not.toHaveTextContent('Reported date');
           expect(details.querySelector(`[title="${date}"]`)).not.toBeNull();
         } else {
-          expect(details).toHaveTextContent(`Reported date: ${date}`);
+          expect(details).toHaveTextContent(`Reported date${date}`);
         }
         expect(details).not.toHaveAttribute('title');
-        expect(details).toHaveClass('whitespace-pre-line', 'wrap-anywhere');
         if (id !== 'same-time-pbs-a' && id !== 'same-time-archive-a') {
           expect(
             within(details.closest('tr')!).getByText('Unknown', { exact: true }),
@@ -152,6 +189,8 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       }
       expect(panel.querySelector('img')).toBeNull();
       expect(panel).toHaveTextContent('entries cannot be placed in time');
+      // A completed point has no usable date, so nothing can be called newest.
+      expect(panel.querySelector('[data-coverage-newest-backup]')).toBeNull();
       expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
       const before = evidenceRows(panel);
       const toggle = screen.getByRole('button', { name: /Collapse details for east-100/ });
@@ -159,17 +198,17 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       updated = true;
       await vi.advanceTimersByTimeAsync(30_000);
       await waitFor(() =>
-        expect(
-          panel.querySelector('[title="2026-10-04T10:15:34.123456789+02:00"]'),
-        ).toHaveTextContent(/^Created: /),
+        expect(panel.querySelector('[title="2026-10-04T10:15:34.123456789+02:00"]')).not.toBeNull(),
       );
       expect(panel).not.toHaveTextContent('.123456789');
-      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
       for (const row of before) expect(evidenceRows(panel)).toContain(row);
       expect(toggle).toHaveFocus();
       expect(api.fetch).toHaveBeenCalledTimes(4);
       await fireEvent.click(screen.getByRole('button', { name: /Expand details for west-100/ }));
-      expect(screen.getByTestId('proxmox-coverage-detail')).not.toHaveTextContent('Reported date:');
+      expect(
+        revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail')),
+      ).not.toHaveTextContent('Reported date');
     },
   );
 
@@ -190,21 +229,10 @@ describe('Coverage restore-point identity through parsed inventory', () => {
         ['same-time-snapshot-b', 'second snapshot'],
       ];
       for (const [id, metadata] of expected) {
-        const row = rows.find((candidate) =>
-          candidate.querySelector('[data-coverage-evidence-detail]')?.textContent?.includes(id),
-        )!;
-        expect(row).toBeDefined();
-        expect(row.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
-          `Identifier: ${id}`,
-        );
-        expect(row.querySelector('[data-coverage-evidence-detail]')).toHaveTextContent(
-          `Metadata: ${metadata}`,
-        );
-        expect(row.querySelector('[data-coverage-evidence-detail]')).toHaveClass(
-          'whitespace-pre-line',
-          'wrap-anywhere',
-        );
-        expect(row.querySelector('[data-coverage-evidence-detail]')).not.toHaveClass('truncate');
+        const details = rows.find((candidate) => candidate.textContent?.includes(id))!;
+        expect(details).toBeDefined();
+        expect(details).toHaveTextContent(`Identifier${id}`);
+        expect(details).toHaveTextContent(`Metadata${metadata}`);
       }
       expect(panel.querySelector('img')).toBeNull();
       expect(within(panel).getByText('Failed', { exact: true })).toBeInTheDocument();
@@ -212,10 +240,12 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       expect(screen.getByText(/5 completed restore points/)).toBeInTheDocument();
       expect(api.fetch).toHaveBeenCalledTimes(2);
       await fireEvent.click(screen.getByRole('button', { name: /Expand details for west-100/ }));
-      expect(screen.getByTestId('proxmox-coverage-detail')).not.toHaveTextContent(volume);
-      expect(screen.getByTestId('proxmox-coverage-detail')).not.toHaveTextContent(
-        'same-time-pbs-a',
-      );
+      expect(
+        revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail')),
+      ).not.toHaveTextContent(volume);
+      expect(
+        revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail')),
+      ).not.toHaveTextContent('same-time-pbs-a');
     },
   );
 
@@ -230,15 +260,21 @@ describe('Coverage restore-point identity through parsed inventory', () => {
     updated = true;
     await vi.advanceTimersByTimeAsync(30_000);
     await waitFor(() => expect(panel).toHaveTextContent(`${volume}-updated`));
+    // No taps since the poll: what was open is still open.
+    expect(within(panel).getByRole('button', { name: 'Hide more details' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(panel.querySelectorAll('[data-coverage-evidence-detail]')).toHaveLength(6);
     expect(panel).not.toHaveTextContent('second snapshot');
     expect(panel).toHaveTextContent(`updated ${literal}`);
     expect(panel).toHaveTextContent('2 PBS files');
     const pbsRow = evidenceRows(panel).find((row) =>
-      row.textContent?.includes('Identifier: same-time-pbs-a'),
+      row.textContent?.includes('Identifiersame-time-pbs-a'),
     )!;
     expect(pbsRow).toHaveTextContent('Unknown size');
     expect(panel.querySelector('img')).toBeNull();
-    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'))).toBe(panel);
     expect(evidenceRows(panel)).toEqual(before);
     expect(document.activeElement).toBe(toggle);
     expect(api.fetch).toHaveBeenCalledTimes(4);
