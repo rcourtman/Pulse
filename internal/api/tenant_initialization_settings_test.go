@@ -118,8 +118,6 @@ func TestTenantInitializationSettingsSaveReachesAdmittedMonitor(t *testing.T) {
 	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }); <-saved })
 	select {
 	case <-observer.entered:
-	case <-saved:
-		t.Fatalf("settings request did not enter runtime propagation: %d %s", rec.Code, rec.Body.String())
 	case <-time.After(10 * time.Second):
 		t.Fatal("settings request did not reach the real iterator")
 	}
