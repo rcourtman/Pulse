@@ -695,7 +695,7 @@ class VMDiskHelpTest(unittest.TestCase):
             source = (ROOT / f"docs/{name}.md").read_bytes()
             self.assertEqual(source, (ROOT / f"frontend-modern/public/docs/{name}.md").read_bytes())
         guide = DOC.read_text()
-        for phrase in ("monitoring and alerts", "not established as a reproduced cause",
+        for phrase in ("monitoring and alerts", "frozen is not established",
                        "does not prove thaw", "a backup can", "older copies", "non-zero exit",
                        "host-root diagnostic does not test", "not a claim", "bounded timeouts"):
             self.assertIn(phrase, guide)
