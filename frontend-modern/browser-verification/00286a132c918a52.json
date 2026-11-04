@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "90d1b0b059328fdbdd3af0a15457a78dfb52f70d",
+  "verified_at": "2026-11-04T02:28:35.733119Z",
+  "result": "passed",
+  "changed_paths": [
+    "internal/cloudcp/portal/dist/build_manifest.json",
+    "internal/cloudcp/portal/dist/portal_app.js",
+    "internal/cloudcp/portal/frontend/src/account_controller.ts",
+    "internal/cloudcp/portal/frontend/src/account_runtime.ts",
+    "internal/cloudcp/portal/frontend/src/account_view.ts",
+    "internal/cloudcp/portal/frontend/src/shell_view.ts"
+  ],
+  "content_sha256": {
+    "internal/cloudcp/portal/frontend/src/account_controller.ts": "df24a72c8597254c648727a7638fce0384619c0c9e4d52a7a3173d61e8c97518",
+    "internal/cloudcp/portal/frontend/src/account_runtime.ts": "4c1842a3d5b6adaaadf84f8c3f4521a2af526baa33eb104f0ebfc0e1ac2d7a4b",
+    "internal/cloudcp/portal/frontend/src/account_view.ts": "078f0c755458ae1ca217df3d2d553b740e79b060b507b570bf1785594fe45863",
+    "internal/cloudcp/portal/frontend/src/shell_view.ts": "e294badf253f548c7bd7bf064899d91d6b3d9efb22c12469c99126c919036f04",
+    "internal/cloudcp/portal/dist/portal_app.js": "9938de1205e37e4277497ce47c42856d16c71345fb77788edc9d49fc3c858714",
+    "internal/cloudcp/portal/dist/build_manifest.json": "3880cef49389eafdd65c92583888c30d696f290514aab8c90c667e0b28c6ba68"
+  },
+  "routes": [
+    "/portal (native embedded template, bundle and CSS; synthetic provider bootstrap and account APIs)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Comparable light-theme before/after native portal: filled name, after Enter, pending, failed request, created-client onboarding. All twenty retained captures were opened with the native image tool.",
+    "The unchanged parent sends no request on Enter; the final bundle sends one. Form controls are disabled and aria-busy is true while pending; an additional submit event starts no duplicate request. Failure clears the spinner and busy state, retains the name and restores explicit retry.",
+    "No status, per-client distinction or existing control is removed, aggregated or moved behind disclosure. Created-client identity, counts, setup instructions and selected row remain visible.",
+    "Playwright 1.56.1 matches tests/integration lock; Chromium 141.0.7390.37. Before 19 checks, final 31 checks. Real frontend request/response flow with safe fixtures; not an installed control-plane, TLS, licence or original client recovery claim."
+  ],
+  "interactions": [
+    "Enter in the existing Client name field, pointer submit, controlled HTTP 503, deliberate Enter retry and successful bootstrap refresh/select of the created client.",
+    "Duplicate submit while the first create is pending; pointer still creates once; Cancel makes no additional request; read-only account has no create control.",
+    "No horizontal overflow at desktop or 390px; no page exception. Same fixture, en-GB locale, UTC, viewport and light theme for comparable captures. Filled and Enter pairs use identical keyboard interaction; pending/failure/created parent controls use pointer because parent Enter does nothing."
+  ],
+  "evidence": [
+    "BROWSER-BEFORE.json",
+    "BROWSER-AFTER.json",
+    "CAPTURES.md",
+    "RECEIPTS.md"
+  ]
+}

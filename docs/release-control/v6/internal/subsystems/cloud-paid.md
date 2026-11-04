@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Client creation uses one native form submission
+
+The existing MSP Add client form submits through its account-scoped submit
+handler, so Enter in the name field and activating Add client use the same
+request. Empty input uses native required-field validation; whitespace-only
+names still return focus without a write. Cancel remains a non-submit button,
+and unrelated workspace handoff forms retain their ordinary submission.
+
+Each account admits one pending create request. Its name and action controls
+are disabled and the form reports busy until the request settles. A failed
+request preserves the name, clears busy state and restores explicit retry;
+there is no automatic create retry. Existing account permissions, API payload,
+workspace identity, licence checks and the created-client onboarding view are
+unchanged. Normal portal controller, runtime, view and shell tests cover these
+boundaries. Comparable desktop/phone captures and native-bundle browser checks
+cover Enter, pointer activation, pending duplicates, failure and deliberate retry;
+they do not establish live licensing, TLS or installed client recovery.
+
 ### Control-plane account responses are not HTTP-cacheable by default
 
 `CPSecurityHeaders`, which wraps the registered control-plane routes in the

@@ -35,7 +35,7 @@ describe('account controller', function() {
       '<button id="job" data-action="set-access-job" data-account-id="acct_1" data-access-job="invite">Invite job</button>' +
       '<button id="job-close" data-action="clear-access-job" data-account-id="acct_1">Close access job</button>' +
       '<button id="invite" data-action="invite-member" data-account-id="acct_1">Invite</button>' +
-      '<button id="create" data-action="create-workspace" data-account-id="acct_1">Create</button>' +
+      '<form id="create-form" data-account-form="create-workspace" data-account-id="acct_1"><button type="submit" id="create">Create</button></form>' +
       '<button id="select" data-action="select-workspace" data-account-id="acct_1" data-workspace-id="ws_1">Manage</button>' +
       '<button id="close" data-action="clear-workspace-selection" data-account-id="acct_1">Done</button>' +
       '<button id="manage" data-action="workspace-action" data-account-id="acct_1" data-workspace-id="ws_1" data-workspace-action="suspend" data-workspace-name="Alpha">Suspend</button>' +
@@ -62,8 +62,28 @@ describe('account controller', function() {
     document.getElementById('invite')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(runtime.inviteMember).toHaveBeenCalledWith('acct_1');
 
-    document.getElementById('create')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    (document.getElementById('create') as HTMLButtonElement).click();
     expect(runtime.createWorkspace).toHaveBeenCalledWith('acct_1');
+    expect(runtime.createWorkspace).toHaveBeenCalledTimes(1);
+
+    // The submit event, not a key handler or button-only click, owns creation.
+    var submit = new Event('submit', { bubbles: true, cancelable: true });
+    document.getElementById('create-form')?.dispatchEvent(submit);
+    expect(submit.defaultPrevented).toBe(true);
+    expect(runtime.createWorkspace).toHaveBeenCalledTimes(2);
+
+    var handoff = document.createElement('form');
+    document.body.appendChild(handoff);
+    var handoffSubmit = new Event('submit', { bubbles: true, cancelable: true });
+    handoff.dispatchEvent(handoffSubmit);
+    expect(handoffSubmit.defaultPrevented).toBe(false);
+    expect(runtime.createWorkspace).toHaveBeenCalledTimes(2);
+
+    document.getElementById('create-form')?.setAttribute('data-account-id', '');
+    var missingAccount = new Event('submit', { bubbles: true, cancelable: true });
+    document.getElementById('create-form')?.dispatchEvent(missingAccount);
+    expect(missingAccount.defaultPrevented).toBe(true);
+    expect(runtime.createWorkspace).toHaveBeenCalledTimes(2);
 
     document.getElementById('select')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(runtime.selectWorkspace).toHaveBeenCalledWith('acct_1', 'ws_1');

@@ -193,6 +193,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
   }
 
   var createWorkspace = async function(accountID: string): Promise<void> {
+    if (deps.store.getAccountState().byAccountID[accountID]?.createWorkspace.pending) return;
     var nameEl = getElement<HTMLInputElement>('ws-name-' + accountID);
     if (!nameEl) return;
     var name = nameEl.value.trim();
@@ -210,7 +211,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           resetMutationState(entry.createWorkspace);
-        }, { notify: false });
+        });
         return;
       }
       var createdWorkspaceID = created && typeof created.id === 'string' ? created.id : '';
@@ -237,7 +238,7 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         failMutationState(entry.createWorkspace, message);
-      }, { notify: false });
+      });
       deps.showToast(message, true);
     }
   };

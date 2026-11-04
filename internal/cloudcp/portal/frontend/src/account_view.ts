@@ -465,6 +465,10 @@ export function renderAddWorkspaceSection(accountID: string, entry: PortalAccoun
   var spinner = getElement<HTMLElement>('ws-spinner-' + accountID);
   if (!form) return;
   form.classList.toggle('visible', entry.addWorkspaceOpen);
+  form.setAttribute('aria-busy', String(entry.createWorkspace.pending));
+  form.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(function(control) {
+    control.disabled = entry.createWorkspace.pending;
+  });
   if (spinner) {
     spinner.hidden = !entry.createWorkspace.pending;
   }

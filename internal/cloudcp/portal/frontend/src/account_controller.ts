@@ -7,6 +7,16 @@ export interface AccountControllerDeps {
 }
 
 export function installAccountController(deps: AccountControllerDeps): void {
+  document.addEventListener('submit', function(event) {
+    var form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.getAttribute('data-account-form') !== 'create-workspace') return;
+    event.preventDefault();
+    var accountID = form.getAttribute('data-account-id') || '';
+    if (!accountID) return;
+    deps.setShellSection('workspaces');
+    void deps.runtime.createWorkspace(accountID);
+  });
+
   document.addEventListener('click', function(event) {
     var target = asHTMLElement(event.target);
     if (!target) return;
@@ -43,11 +53,6 @@ export function installAccountController(deps: AccountControllerDeps): void {
       case 'invite-member':
         event.preventDefault();
         void deps.runtime.inviteMember(accountID);
-        return;
-      case 'create-workspace':
-        event.preventDefault();
-        deps.setShellSection('workspaces');
-        void deps.runtime.createWorkspace(accountID);
         return;
       case 'select-workspace':
         event.preventDefault();

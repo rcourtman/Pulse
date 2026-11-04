@@ -64,6 +64,27 @@ function createContext(overrides: Partial<ShellViewContext> = {}): ShellViewCont
 }
 
 describe('shell view', function() {
+  it('renders native client creation forms without intercepting workspace handoffs', function() {
+    var account = {
+      id: 'acct_1', name: 'Example MSP', kind: 'msp', kind_label: 'MSP',
+      role: 'owner', can_manage: true, has_billing: false, members: [], workspaces: [],
+    };
+    var root = document.createElement('div');
+    root.innerHTML = renderAuthenticatedPortalHTML(createContext({ bootstrap: createBootstrap({ accounts: [account] }) }));
+    var form = root.querySelector('#add-ws-form-acct_1') as HTMLFormElement;
+    expect(form).toBeInstanceOf(HTMLFormElement);
+    expect(form.getAttribute('data-account-form')).toBe('create-workspace');
+    expect(form.getAttribute('data-account-id')).toBe('acct_1');
+    expect(form.querySelector('input')?.required).toBe(true);
+    expect(form.querySelector('button.btn-primary')?.getAttribute('type')).toBe('submit');
+    expect(form.querySelector('button.btn-secondary')?.getAttribute('type')).toBe('button');
+    expect(form.querySelector('[data-action="create-workspace"]')).toBeNull();
+    expect(form.querySelector('form')).toBeNull();
+
+    root.innerHTML = renderAuthenticatedPortalHTML(createContext({ bootstrap: createBootstrap({ accounts: [{ ...account, role: 'read_only', can_manage: false }] }) }));
+    expect(root.querySelector('[data-account-form="create-workspace"]')).toBeNull();
+  });
+
   it('renders authenticated header with account email and sign-out button', function() {
     var html = renderHeaderHTML(createContext());
 

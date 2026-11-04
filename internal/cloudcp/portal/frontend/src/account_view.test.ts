@@ -103,8 +103,8 @@ describe('account view', function() {
 
   it('renders add-workspace visibility from account UI state', function() {
     document.body.innerHTML =
-      '<div id="add-ws-form-acct_1" class="add-workspace-form"></div>' +
-      '<div id="ws-spinner-acct_1" hidden></div>';
+      '<form id="add-ws-form-acct_1" class="add-workspace-form"><input value="Acme Clinic"><button type="submit">Add client</button><button type="button">Cancel</button>' +
+      '<div id="ws-spinner-acct_1" hidden></div></form>';
 
     renderAddWorkspaceSection('acct_1', createEntry({ addWorkspaceOpen: true }));
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(true);
@@ -115,6 +115,15 @@ describe('account view', function() {
       createWorkspace: { pending: true, error: '' },
     }));
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(false);
+    expect(document.querySelector('#add-ws-form-acct_1')?.getAttribute('aria-busy')).toBe('true');
+    expect((document.querySelector('#add-ws-form-acct_1 input') as HTMLInputElement).disabled).toBe(true);
+    expect(Array.from(document.querySelectorAll<HTMLButtonElement>('#add-ws-form-acct_1 button')).every(function(button) { return button.disabled; })).toBe(true);
+
+    renderAddWorkspaceSection('acct_1', createEntry({ addWorkspaceOpen: true, createWorkspace: { pending: false, error: 'Try again' } }));
+    expect((document.querySelector('#add-ws-form-acct_1 input') as HTMLInputElement).disabled).toBe(false);
+    expect((document.querySelector('#add-ws-form-acct_1 input') as HTMLInputElement).value).toBe('Acme Clinic');
+    expect(Array.from(document.querySelectorAll<HTMLButtonElement>('#add-ws-form-acct_1 button')).every(function(button) { return !button.disabled; })).toBe(true);
+    expect(document.querySelector('#add-ws-form-acct_1')?.getAttribute('aria-busy')).toBe('false');
 
     renderAddWorkspaceSection('acct_1', createEntry({ addWorkspaceOpen: false }));
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(false);
