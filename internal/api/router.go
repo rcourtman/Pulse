@@ -1968,7 +1968,10 @@ func (r *Router) SetConfig(cfg *config.Config) {
 
 	if r.config == nil {
 		r.config = cfg
-	} else {
+	} else if r.config != cfg {
+		// Reload already refreshed the canonical object before starting its
+		// replacement monitor. Copying that object onto itself here is still
+		// a write, racing the new loop's ordinary config reads.
 		*r.config = *cfg
 	}
 

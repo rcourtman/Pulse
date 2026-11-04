@@ -1112,10 +1112,17 @@ func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) str
 	if canonical, ok := config.CanonicalUpdateChannel(requested); ok {
 		return canonical
 	}
+	// Reload refreshes the shared config under config.Mu, independently of
+	// update checks. Snapshot only the channel under that same boundary;
+	// never hold it during provider I/O or while choosing a version fallback.
+	channel := ""
+	config.Mu.RLock()
 	if m.config != nil {
-		if canonical, ok := config.CanonicalUpdateChannel(m.config.UpdateChannel); ok {
-			return canonical
-		}
+		channel = m.config.UpdateChannel
+	}
+	config.Mu.RUnlock()
+	if canonical, ok := config.CanonicalUpdateChannel(channel); ok {
+		return canonical
 	}
 	if currentInfo != nil {
 		if canonical, ok := config.CanonicalUpdateChannel(currentInfo.Channel); ok {
