@@ -117,7 +117,7 @@ afterEach(() => {
 
 describe('Coverage restore-point identity through parsed inventory', () => {
   it.each([320, 480, 720, 1200])(
-    'keeps exact reported dates inspectable without hover at %ipx',
+    'reads usable dates as times and keeps unusable ones literal at %ipx',
     async (width) => {
       api.width = width;
       dateEvidence = true;
@@ -135,7 +135,13 @@ describe('Coverage restore-point identity through parsed inventory', () => {
         const details = Array.from(
           panel.querySelectorAll<HTMLElement>('[data-coverage-evidence-detail]'),
         ).find((element) => element.textContent?.startsWith(`Identifier: ${id}\n`))!;
-        expect(details).toHaveTextContent(`Reported date: ${date}`);
+        if (id === 'same-time-pbs-a' || id === 'same-time-archive-a') {
+          expect(details).toHaveTextContent(/Created: .*2026/);
+          expect(details).not.toHaveTextContent('Reported date');
+          expect(details.querySelector(`[title="${date}"]`)).not.toBeNull();
+        } else {
+          expect(details).toHaveTextContent(`Reported date: ${date}`);
+        }
         expect(details).not.toHaveAttribute('title');
         expect(details).toHaveClass('whitespace-pre-line', 'wrap-anywhere');
         if (id !== 'same-time-pbs-a' && id !== 'same-time-archive-a') {
@@ -153,9 +159,11 @@ describe('Coverage restore-point identity through parsed inventory', () => {
       updated = true;
       await vi.advanceTimersByTimeAsync(30_000);
       await waitFor(() =>
-        expect(panel).toHaveTextContent('Reported date: 2026-10-04T10:15:34.123456789+02:00'),
+        expect(
+          panel.querySelector('[title="2026-10-04T10:15:34.123456789+02:00"]'),
+        ).toHaveTextContent(/^Created: /),
       );
-      expect(panel).not.toHaveTextContent('2026-10-04T10:00:00.123456789Z');
+      expect(panel).not.toHaveTextContent('.123456789');
       expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
       for (const row of before) expect(evidenceRows(panel)).toContain(row);
       expect(toggle).toHaveFocus();

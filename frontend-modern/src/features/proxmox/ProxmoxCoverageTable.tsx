@@ -58,6 +58,7 @@ import {
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
   retainBackupTableFocus,
+  artifactCreatedLabel,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
   hasMultipleConnections,
@@ -494,12 +495,19 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
   ]);
 
 // Several points can share a reader, location and rounded age. Preserve the
-// point's identifier, reported date and metadata in the open evidence at every
-// width. Raw dates remain inspectable even when they cannot establish an age.
+// point's identifier, date and metadata in the open evidence at every width. A
+// usable date reads as a time, with the exact value on hover. A date that cannot
+// establish an age stays as literal text, since Unknown would hide what was sent.
 function coverageRestorePointDetails(artifact: RecoverableArtifact) {
   return (
     <div class="whitespace-pre-line wrap-anywhere" data-coverage-evidence-detail>
-      {`Identifier: ${artifact.nativeId}\nReported date: ${artifact.createdAt || 'Not reported'}\nMetadata: ${artifact.detailTitle || artifact.detail}`}
+      {`Identifier: ${artifact.nativeId}\n`}
+      {artifact.createdMs === undefined ? (
+        `Reported date: ${artifact.createdAt || 'Not reported'}`
+      ) : (
+        <span title={artifact.createdAt}>{`Created: ${artifactCreatedLabel(artifact)}`}</span>
+      )}
+      {`\nMetadata: ${artifact.detailTitle || artifact.detail}`}
     </div>
   );
 }

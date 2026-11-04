@@ -16,7 +16,6 @@ import {
 } from '@/utils/recoveryDatePresentation';
 import {
   formatPlatformTableBytesValue,
-  formatPlatformTableDateTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableEmptyState,
@@ -41,6 +40,7 @@ import {
   RowMetricBar,
   SortableHead,
   retainBackupTableFocus,
+  artifactCreatedLabel,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
   getBackupWorkloadNodeLabel,
@@ -109,13 +109,6 @@ const artifactVerificationText = (artifact: RecoverableArtifact): string => {
   return artifact.sourceKind === 'snapshot' ? '' : 'Not reported';
 };
 
-const artifactCreatedLabel = (artifact: RecoverableArtifact): string =>
-  artifact.createdMs === undefined
-    ? 'Unknown'
-    : formatPlatformTableDateTimeValue(artifact.createdMs, {
-        dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
-      });
-
 // A dated feed can contain many points for the same workload. Name the point,
 // not just its owner: source, repository scope and native ID also distinguish
 // tied/unknown dates without inventing an order or using an unstable row index.
@@ -166,10 +159,16 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         makeDetailRow('Location', artifact.location, { wrap: true }),
         makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.created, artifactCreatedLabel(artifact), {
           tone: artifact.createdMs === undefined ? 'warning' : undefined,
+          ...(artifact.createdMs !== undefined && artifact.createdAt
+            ? { title: artifact.createdAt }
+            : {}),
         }),
-        // Keep the provider's exact value beside its interpretation. Formatting
-        // loses subsecond precision/offsets; Unknown otherwise hides bad dates.
-        makeDetailRow('Reported date', artifact.createdAt || 'Not reported', { wrap: true }),
+        // A usable date reads as Created, with the provider's exact value on
+        // hover. Unknown would hide what the source sent, so only an unusable or
+        // missing date needs its literal text.
+        artifact.createdMs === undefined
+          ? makeDetailRow('Reported date', artifact.createdAt || 'Not reported', { wrap: true })
+          : null,
         makeDetailRow(
           'Size',
           hasSize ? formatPlatformTableBytesValue(artifact.size) : 'Unknown size',

@@ -8,6 +8,7 @@ import { getTableSortIndicator } from '@/components/shared/tableSortPresentation
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import {
   PlatformTableRelativeTimeValue,
+  formatPlatformTableDateTimeValue,
   formatPlatformTableRelativeTimeValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
@@ -302,6 +303,15 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; com
     </span>
   );
 }
+
+// A restore point's date as a person reads it. Coverage and By date share this
+// so one point never reads two ways.
+export const artifactCreatedLabel = (artifact: Pick<RecoverableArtifact, 'createdMs'>): string =>
+  artifact.createdMs === undefined
+    ? 'Unknown'
+    : formatPlatformTableDateTimeValue(artifact.createdMs, {
+        dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
+      });
 
 // Short state label for a recoverable artifact, paired with ArtifactStateBadge
 // for colour. Prune retention is not verification or workload protection.

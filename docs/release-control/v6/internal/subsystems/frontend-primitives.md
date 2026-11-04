@@ -147,12 +147,12 @@ primitives. `ProxmoxCoverageTable.test.tsx` and `ProxmoxBackupsTable.test.tsx`
 cover source meaning, unknown/literal values, independent states, polling and
 focus. Actual desktop/narrow Backups pixels must confirm readable wrapping.
 
-### Coverage dates are inspectable without hover
+### Coverage dates read as times and unusable dates stay literal
 
-Open Coverage evidence retains each point’s exact reported date as wrapping
-literal text beside its identifier and metadata, including seconds, fractions
-and timezone offsets. Missing dates say “Not reported”. Invalid and future raw
-dates remain inspectable without becoming valid ages or ordered evidence. The
+Open Coverage evidence shows a usable date as a formatted Created time beside
+the point’s identifier and metadata, with the provider’s exact value on hover.
+Missing dates say “Not reported”. Invalid and future raw dates stay as wrapping
+literal text, inspectable without hover and never valid ages or ordered evidence. The
 existing Unknown age and uncertainty notices still apply. This works in both
 the Details column and its folded phone projection; it adds no read or recovery
 operation and does not change completion, posture, chronology or preview rules.
@@ -11362,11 +11362,11 @@ phone columns and disclosure interactions retain their existing owners.
 
 ### By date retains literal restore-point date evidence
 
-The existing Proxmox By date record exposes the provider's exact reported date
-beside its formatted Created interpretation. Offsets and subsecond precision
-remain literal wrapping text for PBS snapshots, PVE backup files and guest
-snapshots, including malformed and future values; missing values say Not
-reported. Unknown Created values remain unknown. The existing By date notice
+The existing Proxmox By date record shows a usable date as its formatted Created
+interpretation, with the provider's exact value, including offsets and subsecond
+precision, on hover. Malformed and future values stay as a Reported date row of
+literal wrapping text for PBS snapshots, PVE backup files and guest snapshots;
+missing values say Not reported. Unknown Created values remain unknown. The existing By date notice
 continues to explain unavailable/future dates and their exclusion from activity
 and day filters; no duplicate per-point warning is added. Raw dates are not an
 inferred completion time, freshness, protection or restore assertion.
