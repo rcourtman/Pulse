@@ -37,6 +37,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     null,
   );
   const [inventoryLoaded, setInventoryLoaded] = createSignal(false);
+  const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',
@@ -62,6 +63,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     inventoryLoaded() &&
     !loading() &&
     !loadError() &&
+    !unconfirmedChange() &&
     !saving() &&
     !deletingUser();
   const isCurrentUser = (user: UserRoleAssignment) =>
@@ -149,6 +151,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
         setAssignments(usersData);
         setRoles(rolesData);
         setInventoryLoaded(true);
+        setUnconfirmedChange(null);
       });
     } catch {
       if (!isCurrentRead()) return;
@@ -174,6 +177,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
       setInventoryLoaded(false);
       setSearchQuery('');
       setSuccessNotice(null);
+      setUnconfirmedChange(null);
       setLoadError(null);
       setUserPendingDeletion(null);
       setSaving(false);
@@ -287,11 +291,27 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
       saved = true;
     } catch (err) {
       if (!isCurrentMutation()) return;
-      setActionError(
-        kind === 'save'
-          ? getUserAssignmentsUpdateErrorMessage()
-          : getUserAssignmentsDeleteErrorMessage(err),
-      );
+      const status = (err as { status?: number } | null)?.status;
+      // A definite rejection leaves a correctable draft. A lost response,
+      // server error or unreadable success does not establish rollback.
+      if (status && [400, 401, 403, 404, 409, 422, 429].includes(status)) {
+        setActionError(
+          kind === 'save'
+            ? getUserAssignmentsUpdateErrorMessage()
+            : getUserAssignmentsDeleteErrorMessage(err),
+        );
+      } else {
+        batch(() => {
+          clearEditor();
+          setUserPendingDeletion(null);
+          setAssignments([]);
+          setRoles([]);
+          setInventoryLoaded(false);
+          setUnconfirmedChange(
+            `The ${kind === 'save' ? 'role update' : 'access removal'} for ${getUserIdentityDisplayName(user)} could not be confirmed. It may already have been applied. Check saved access and review the user's roles before making another change.`,
+          );
+        });
+      }
     } finally {
       if (isCurrentMutation()) {
         mutationController = undefined;
@@ -361,5 +381,6 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     toggleRole,
     userPendingDeletion,
     userPermissions,
+    unconfirmedChange,
   };
 }

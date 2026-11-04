@@ -665,6 +665,52 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
   });
 
+  it.each(['save', 'delete'])(
+    'reconciles an unconfirmed user %s with reads, never a repeated mutation',
+    async (kind) => {
+      const mutation = kind === 'save' ? updateUserRolesMock : deleteUserMock;
+      mutation.mockRejectedValueOnce(new Error('private response must not be rendered'));
+      render(() => <UserAssignmentsPanel />);
+      await screen.findByRole('button', { name: 'Manage access for alice' });
+      if (kind === 'save') {
+        fireEvent.click(screen.getByRole('button', { name: 'Manage access for alice' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Save Changes' }));
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Remove alice' }));
+        fireEvent.click(
+          within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove User Access' }),
+        );
+      }
+      const check = await screen.findByRole('button', { name: 'Check saved access' });
+      const warning = screen.getByRole('alert');
+      expect(warning).toHaveTextContent('may already have been applied');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Manage access for alice' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('No users yet')).not.toBeInTheDocument();
+      expect(screen.queryByText('private response must not be rendered')).not.toBeInTheDocument();
+      await waitFor(() => expect(warning).toHaveFocus());
+      expect(getUsersMock).toHaveBeenCalledTimes(1);
+      getUsersMock.mockRejectedValueOnce(new Error('private read failure'));
+      fireEvent.click(check);
+      await screen.findByText('Failed to load user assignments');
+      expect(screen.getByRole('button', { name: 'Check saved access' })).toBeInTheDocument();
+      expect(screen.queryByText('No users yet')).not.toBeInTheDocument();
+      getUsersMock.mockResolvedValueOnce([]);
+      fireEvent.click(screen.getByRole('button', { name: 'Check saved access' }));
+      await screen.findByText('No users yet');
+      expect(screen.queryByText(/may already have been applied/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Check saved access' })).not.toBeInTheDocument();
+      expect(getUsersMock).toHaveBeenCalledTimes(3);
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect(updateUserRolesMock.mock.calls.length + deleteUserMock.mock.calls.length).toBe(1);
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+      expect(loggerErrorMock).not.toHaveBeenCalled();
+    },
+  );
+
   it('keeps trial start out of RBAC feature gates', async () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');
     commercialPostureMock.mockReturnValue({ trial_eligible: true });

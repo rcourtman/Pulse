@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "36e177b580fc530f05637c0a52c024e0e03a8b06",
+  "verified_at": "2026-11-04T22:52:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "18765df3998eecd269c0645661847d84ac9ad3ea5423e0a0ecf5e09202e58762",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "9feebb54103e55374b6fe6d3f61f996271c0198b4d308b4057c8fe9f5f63ed0d"
+  },
+  "routes": [
+    "/settings/users (real UserAssignmentsPanel, reader state, RBACAPI, API client, grid, dialogs and shipped CSS with safe HTTP fixtures)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Eight cases per phase: Chromium desktop/light and phone/light/dark; WebKit phone/light. Playwright 1.56.1 matches all three integration lock packages; Chromium 141.0.7390.37, WebKit 26.0. Same fixtures, viewports, class themes and submitted actions in every before/final pair. All 26 final retained captures opened natively.",
+    "Fixture server applies a role reduction before dropping PUT response, or applies user removal before returning DELETE 502. Parent keeps the stale directory, role draft/saved permissions or removal confirmation and enabled repeat write. Final withdraws stale state, explicitly says change may already have applied and offers Check saved access. No premature No users state.",
+    "A failed saved-access read keeps the uncertainty, does not restore stale actions or show a false empty directory. An accepted user+role read shows the saved Reader role, or the accepted empty directory after removal. No horizontal overflow or unexpected browser errors."
+  ],
+  "interactions": [
+    "Real client transmits existing expected-organisation header, exact selected role payload and one PUT/DELETE only per case. No automatic mutation retry or automatic post-failure read. Reconciliation uses GET only.",
+    "Keyboard Enter opens Manage Access. On unconfirmed completion the warning receives focus; Tab then Enter activates the saved-access check. Failed check keeps the warning and explicit retry. Successful check restores current data; reopened editor has exactly the saved role selection and Cancel dispatches no write.",
+    "Proof uses actual consuming modules with synthetic HTTP, not the complete App shell, a production-bundle render, backend authorization, IdP, original account, installed upgrade or release acceptance."
+  ],
+  "evidence": {
+    "before": "before-results.json",
+    "after": "after-results.json",
+    "captures": "CAPTURES.md",
+    "identities": "CAPTURE-IDENTITIES.json",
+    "fixture": "BROWSER-EVIDENCE.tar.xz"
+  }
+}
