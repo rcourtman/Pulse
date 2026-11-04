@@ -29,12 +29,6 @@ an upgrade title's **from** version is not a fallback for the failing version.
 These labels support intake only: they do not establish a cause, resolution or
 reason to contact the reporter. Existing reports need no refile.
 
-Explicit version declarations within the same **Pulse version** field must
-agree, including an inline or list correction below the first value. Conflicting,
-unknown or malformed declarations remain ambiguous rather than silently keeping
-the first version. Copied logs and prose in other form fields cannot override
-that field; existing affected-version labels still belong to whole-thread review.
-
 The bug and pre-release forms ask for the version on the failing running
 instance, not merely the version before an upgrade. If installation failed
 before Pulse started, the attempted version or release asset is the relevant
