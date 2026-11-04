@@ -80,6 +80,9 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [tokensLoaded, setTokensLoaded] = createSignal(false);
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [unconfirmedChange, setUnconfirmedChange] = createSignal<
+    'create' | 'scope' | 'rename' | 'revoke' | null
+  >(null);
   const [isGenerating, setIsGenerating] = createSignal(false);
   const [updatingTokenId, setUpdatingTokenId] = createSignal<string | null>(null);
   const [isRenaming, setIsRenaming] = createSignal(false);
@@ -139,7 +142,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   };
 
   const beginMutation = () => {
-    if (!canManage() || mutationController) return;
+    if (!canManage() || mutationController || unconfirmedChange()) return;
     const controller = new AbortController();
     const version = contextVersion();
     const org = selectedOrg();
@@ -164,7 +167,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
           setUpdatingTokenId(null);
           setIsRenaming(false);
         });
-        if (resumeRead && contextIsCurrent()) void loadTokens();
+        if (resumeRead && contextIsCurrent() && !unconfirmedChange()) void loadTokens();
       },
     };
   };
@@ -183,7 +186,28 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   );
   const hasScopeSelection = () => selectedScopes().length > 0;
   const isFullAccessSelected = () => selectedScopes().includes(API_TOKEN_WILDCARD_SCOPE);
-  const canGenerateToken = () => canManage() && hasScopeSelection() && !isMutating();
+  const canGenerateToken = () =>
+    canManage() && hasScopeSelection() && !isMutating() && !unconfirmedChange();
+
+  const requireInventoryCheck = (
+    error: unknown,
+    operation: NonNullable<ReturnType<typeof unconfirmedChange>>,
+    tokenId?: string,
+  ) => {
+    // These responses explicitly refuse the request. A missing response, timeout,
+    // server error or malformed success does not establish server-side rollback.
+    const status = (error as { status?: number } | null)?.status;
+    if (status && [400, 401, 403, 404, 409, 422, 429].includes(status)) return;
+    inventoryVersion += 1;
+    batch(() => {
+      setUnconfirmedChange(operation);
+      setTokensLoaded(false);
+      setTokens([]);
+      setLoading(false);
+      setLoadError('The token change could not be confirmed.');
+      if (tokenId && newTokenRecord()?.id === tokenId) clearTokenValue();
+    });
+  };
 
   let createSectionRef: HTMLDivElement | undefined;
   const [createHighlight, setCreateHighlight] = createSignal(false);
@@ -266,8 +290,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       // identity, while excluding every object from an earlier inventory read.
       inventoryVersion += 1;
       list.forEach(rememberToken);
-      setTokens(list);
-      setTokensLoaded(true);
+      batch(() => {
+        setTokens(list);
+        setTokensLoaded(true);
+        setUnconfirmedChange(null);
+      });
     } catch (err) {
       if (!isCurrent()) return;
       setLoadError(getAPITokensLoadErrorMessage());
@@ -293,6 +320,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       setTokensLoaded(false);
       setLoadError(null);
       if (selectionChanged) {
+        setUnconfirmedChange(null);
         setNameInput('');
         setSelectedScopes([]);
       }
@@ -476,6 +504,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       if (!mutation.isCurrent()) return;
       logger.error('Failed to generate API token', err);
       notificationStore.error(getAPITokenGenerateErrorMessage(err));
+      requireInventoryCheck(err, 'create');
     } finally {
       mutation.finish();
     }
@@ -544,6 +573,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       if (!mutation.isCurrent()) return;
       logger.error('Failed to revoke API token', err);
       notificationStore.error(getAPITokenRevokeErrorMessage());
+      requireInventoryCheck(err, 'revoke', record.id);
     } finally {
       mutation.finish();
     }
@@ -574,6 +604,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       if (!mutation.isCurrent()) return false;
       logger.error('Failed to update API token scopes', err);
       notificationStore.error(getAPITokenUpdateErrorMessage(err));
+      requireInventoryCheck(err, 'scope', record.id);
       return false;
     } finally {
       mutation.finish();
@@ -604,6 +635,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
       if (!mutation.isCurrent()) return false;
       logger.error('Failed to rename API token', err);
       notificationStore.error('Unable to rename the API token.');
+      requireInventoryCheck(err, 'rename', record.id);
       return false;
     } finally {
       mutation.finish();
@@ -684,6 +716,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     loadError,
     loadTokens,
     tokensLoaded,
+    unconfirmedChange,
     nameInput,
     newMonitoringKioskLink,
     newTokenRecord,

@@ -40,6 +40,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [tokenToRename, setTokenToRename] = createSignal<APITokenRecord | null>(null);
   const [renameInput, setRenameInput] = createSignal('');
   let dialogTrigger: HTMLButtonElement | undefined;
+  let inventoryNotice: HTMLDivElement | undefined;
   let focusTimer: number | undefined;
   const {
     API_SCOPE_LABELS,
@@ -72,6 +73,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     loadError,
     loadTokens,
     tokensLoaded,
+    unconfirmedChange,
     nameInput,
     newMonitoringKioskLink,
     newTokenRecord,
@@ -102,6 +104,17 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     setRenameInput('');
   };
   createEffect(on(contextVersion, clearDialogs, { defer: true }));
+  createEffect(
+    on(unconfirmedChange, (change) => {
+      if (!change) return;
+      // An old confirmation must not remain an invitation to repeat a write.
+      clearDialogs();
+      const version = contextVersion();
+      focusTimer = window.setTimeout(() => {
+        if (version === contextVersion() && unconfirmedChange()) inventoryNotice?.focus();
+      }, 0);
+    }),
+  );
   onCleanup(() => window.clearTimeout(focusTimer));
 
   const effectiveScopes = (token: APITokenRecord) =>
@@ -462,13 +475,31 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       <Show when={!loading() && loadError()}>
         {(message) => (
           <InlineNotice
+            ref={inventoryNotice}
+            tabIndex={-1}
             role="alert"
             tone="danger"
-            actionLabel="Retry token inventory"
+            actionLabel={unconfirmedChange() ? 'Check token inventory' : 'Retry token inventory'}
             actionOnClick={() => void loadTokens()}
           >
             <p>{message()}</p>
-            <p>Existing credentials have not been changed. Retry to check their scopes.</p>
+            <Show
+              when={unconfirmedChange()}
+              fallback={
+                <p>This read does not change credentials. Retry to check their current scopes.</p>
+              }
+            >
+              <p>
+                The change may already have been saved. Check the current inventory before making
+                another change. Pulse will not repeat the request.
+              </p>
+              <Show when={unconfirmedChange() === 'create'}>
+                <p>
+                  If a new token appears but you did not receive its value, revoke it before
+                  creating a replacement.
+                </p>
+              </Show>
+            </Show>
           </InlineNotice>
         )}
       </Show>
@@ -718,9 +749,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               onClick={handleGenerate}
               disabled={!canGenerateToken()}
               title={
-                hasScopeSelection()
-                  ? undefined
-                  : 'Choose a scope preset or custom scope before generating a token.'
+                unconfirmedChange()
+                  ? 'Check token inventory before making another change.'
+                  : hasScopeSelection()
+                    ? undefined
+                    : 'Choose a scope preset or custom scope before generating a token.'
               }
               class="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:w-auto dark:bg-blue-500 dark:hover:bg-blue-400"
             >

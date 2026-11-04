@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "581c325da9e0de70c8ed6e2989a93775b67a46e3",
+  "verified_at": "2026-11-04T18:35:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "9102f7c764572ed56c904306cf84dcc77aaf3edd84490a1e124e92cff73fa55f",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "28468c2a231292a34ee9b3dcd68b37045ee73041311e2fff3c328f18a3404d2a"
+  },
+  "routes": [
+    "/settings/api-access (real APIAccessPanel consumer in an isolated HTTP fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1, Chromium 141.0.7390.37 and WebKit 26.0; desktop light and narrow dark. Comparable parent/final captures use the same synthetic token, operation, viewport, theme and draft. Scope states: initial, failed response, underlying inventory and final recovered inventory.",
+    "PATCH applies monitoring:read but returns 502. Parent retains Full access inventory and Save scopes; final closes the stale dialog, focuses an explicit uncertainty notice, shows Unknown rather than zero/unchanged, and blocks further writes until an accepted read.",
+    "Chromium additionally exercises applied create, rename and revoke with lost responses at both viewports. Parent bytes for those comparisons are loaded from exact git-show snapshots of these two files at base_sha, with unchanged current consumers; scope baseline used the original assigned source before editing.",
+    "Safe API HTTP stubs plus inert resource/WebSocket inputs, real APIAccessPanel/state/dialogs/SecurityAPI/API client/CSS/toasts. This is not installed account, production-bundle or reporter recovery proof."
+  ],
+  "interactions": [
+    "All four scope cases send exactly one PATCH with monitoring:read and preserve the existing organization and CSRF headers. No automatic mutation or read replay. The read-only Check token inventory action survives a failed GET; double activation coalesces and the write gate persists through a delayed GET. Accepted inventory shows the applied scope with draft name/preset intact.",
+    "Additional create/rename/revoke cases each send exactly one write, then only one deliberate GET. Keyboard Enter activates recovery. Lost create values are never revealed; the notice tells users to revoke an issued token whose value was not received. Successful read restores truthful names/absence and enables deliberate actions.",
+    "No page errors or horizontal overflow in completed cases. All retained capture files are inspected natively; browser checks and initial fixture/selector failures are retained separately."
+  ],
+  "evidence": {
+    "before": "before-results.json",
+    "after": "after-results.json",
+    "other_before": "before-more-results.json",
+    "other_after": "after-more-results.json",
+    "pairs": "CAPTURES.md",
+    "fixture_and_adverse": "BROWSER-EVIDENCE.tar.xz"
+  }
+}

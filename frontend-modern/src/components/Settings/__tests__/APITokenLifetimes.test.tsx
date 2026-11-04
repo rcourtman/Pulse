@@ -111,6 +111,148 @@ afterEach(() => {
 });
 
 describe('API token request lifetimes', () => {
+  it.each(['create', 'scope', 'rename', 'revoke'] as const)(
+    'requires current inventory after an unconfirmed %s without replaying any write',
+    async (operation) => {
+      await ready();
+      const original = state.sortedTokens()[0];
+      state.setNameInput('Unsent draft');
+      const failure = new Error('synthetic response lost');
+      vi.mocked(SecurityAPI.createToken).mockRejectedValueOnce(failure);
+      vi.mocked(SecurityAPI.updateTokenScopes).mockRejectedValueOnce(failure);
+      vi.mocked(SecurityAPI.renameToken).mockRejectedValueOnce(failure);
+      vi.mocked(SecurityAPI.deleteToken).mockRejectedValueOnce(failure);
+      if (operation === 'create') await state.handleGenerate();
+      if (operation === 'scope') await state.handleUpdateScopes(original, ['settings:read']);
+      if (operation === 'rename') await state.handleRename(original, 'Renamed');
+      if (operation === 'revoke') await state.handleDelete(original);
+
+      expect(state.unconfirmedChange()).toBe(operation);
+      expect(state.tokensLoaded()).toBe(false);
+      expect(state.sortedTokens()).toEqual([]);
+      expect(state.canManage()).toBe(true);
+      expect(state.canGenerateToken()).toBe(false);
+      expect(changed).not.toHaveBeenCalled();
+      expect(notificationStore.success).not.toHaveBeenCalled();
+      expect(SecurityAPI.listTokens).toHaveBeenCalledTimes(1);
+      const writeCounts = () => [
+        vi.mocked(SecurityAPI.createToken).mock.calls.length,
+        vi.mocked(SecurityAPI.updateTokenScopes).mock.calls.length,
+        vi.mocked(SecurityAPI.renameToken).mock.calls.length,
+        vi.mocked(SecurityAPI.deleteToken).mock.calls.length,
+      ];
+      const firstCounts = writeCounts();
+      const attemptWrites = async () => {
+        await state.handleGenerate();
+        await state.handleUpdateScopes(original, ['*']);
+        await state.handleRename(original, 'Wrong');
+        await state.handleDelete(original);
+        expect(writeCounts()).toEqual(firstCounts);
+      };
+      await attemptWrites();
+
+      const read = deferred<APITokenRecord[]>();
+      vi.mocked(SecurityAPI.listTokens).mockReturnValueOnce(read.promise);
+      const recovering = state.loadTokens();
+      await state.loadTokens();
+      expect(SecurityAPI.listTokens).toHaveBeenCalledTimes(2);
+      await attemptWrites();
+      read.reject(new Error('still unavailable'));
+      await recovering;
+      expect(state.unconfirmedChange()).toBe(operation);
+      expect(state.canGenerateToken()).toBe(false);
+      await attemptWrites();
+
+      // A read can confirm either outcome. It never assumes the rejected
+      // response rolled back the request, nor repeats it to find out.
+      const current = { ...record, scopes: ['settings:read'], name: 'Current token' };
+      vi.mocked(SecurityAPI.listTokens).mockResolvedValueOnce([current]);
+      await state.loadTokens();
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.tokensLoaded()).toBe(true);
+      expect(state.sortedTokens()).toEqual([current]);
+      expect(state.canGenerateToken()).toBe(true);
+      expect(state.nameInput()).toBe('Unsent draft');
+      expect(state.selectedScopes()).toEqual(['monitoring:read']);
+      expect(writeCounts()).toEqual(firstCounts);
+      // The accepted read must not re-admit the pre-failure row object.
+      await state.handleRename(original, 'Wrong');
+      await state.handleUpdateScopes(original, ['*']);
+      await state.handleDelete(original);
+      expect(writeCounts()).toEqual(firstCounts);
+      expect(SecurityAPI.listTokens).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it.each([400, 401, 403, 404, 409, 422, 429])(
+    'retains an explicitly rejected scope draft without inventing uncertainty (%s)',
+    async (status) => {
+      await ready();
+      vi.mocked(SecurityAPI.updateTokenScopes).mockRejectedValueOnce(
+        Object.assign(new Error('synthetic rejection'), { status }),
+      );
+      expect(await state.handleUpdateScopes(record, ['settings:read'])).toBe(false);
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.tokensLoaded()).toBe(true);
+      expect(state.sortedTokens()).toEqual([record]);
+      expect(state.canGenerateToken()).toBe(true);
+      expect(SecurityAPI.listTokens).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([408, 500, 502, 504])(
+    'does not treat HTTP %s as a confirmed rejection',
+    async (status) => {
+      await ready();
+      vi.mocked(SecurityAPI.updateTokenScopes).mockRejectedValueOnce(
+        Object.assign(new Error('private proxy error'), { status }),
+      );
+      await state.handleUpdateScopes(record, ['settings:read']);
+      expect(state.unconfirmedChange()).toBe('scope');
+      expect(state.tokensLoaded()).toBe(false);
+      expect(state.canGenerateToken()).toBe(false);
+    },
+  );
+
+  it('does not automatically resume an interrupted initial read after an unconfirmed create', async () => {
+    const oldRead = deferred<APITokenRecord[]>();
+    vi.mocked(SecurityAPI.listTokens).mockReturnValueOnce(oldRead.promise);
+    render(() => <Harness />);
+    state.applyScopePreset(['monitoring:read']);
+    vi.mocked(SecurityAPI.createToken).mockRejectedValueOnce(new Error('response lost'));
+    await state.handleGenerate();
+    expect(state.loading()).toBe(false);
+    expect(state.unconfirmedChange()).toBe('create');
+    expect(SecurityAPI.listTokens).toHaveBeenCalledTimes(1);
+    oldRead.resolve([]);
+    await oldRead.promise;
+    await Promise.resolve();
+    expect(state.tokensLoaded()).toBe(false);
+    expect(state.canGenerateToken()).toBe(false);
+  });
+
+  it('clears only the affected retained credential after an unconfirmed scope edit', async () => {
+    await ready();
+    await state.handleGenerate();
+    showTokenReveal({ token: 'other-synthetic-secret', source: 'agent-setup' });
+    const other = reveal();
+    vi.mocked(SecurityAPI.updateTokenScopes).mockRejectedValueOnce(new Error('response lost'));
+    await state.handleUpdateScopes(created.record, ['*']);
+    expect(state.newTokenValue()).toBeNull();
+    expect(state.newMonitoringKioskLink()).toBeNull();
+    expect(reveal()).toBe(other);
+  });
+
+  it('keeps an unrelated confirmed credential after an unconfirmed token change', async () => {
+    await ready();
+    await state.handleGenerate();
+    const acceptedReveal = reveal();
+    vi.mocked(SecurityAPI.deleteToken).mockRejectedValueOnce(new Error('response lost'));
+    await state.handleDelete(record);
+    expect(state.newTokenValue()).toBe(created.token);
+    expect(reveal()).toBe(acceptedReveal);
+  });
+
   it.each(['success', 'failure'])(
     'ignores a late create %s after unmount instead of revealing its credential globally',
     async (result) => {
