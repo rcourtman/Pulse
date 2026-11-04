@@ -129,6 +129,10 @@ func AttributePBSBackups(backups []PBSBackup, guests []PBSGuestCandidate, exclus
 }
 
 func attributePBSBackup(backup PBSBackup, guests []PBSGuestCandidate, confirmer string, learner *proxmoxidentity.PBSSourceLearner) string {
+	// Most snapshots have one possible guest, so skip scoring their labels.
+	if len(guests) == 1 {
+		return guests[0].Instance
+	}
 	connections := make(map[string]int, len(guests))
 	for _, guest := range guests {
 		score := proxmoxidentity.BackupGuestMatchScore(backup.Namespace, backup.Comment, backup.VMID, guest.Name, guest.Instance, guest.Node)
