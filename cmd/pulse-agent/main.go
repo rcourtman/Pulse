@@ -304,13 +304,16 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		return fmt.Errorf("failed to load unified agent configuration: %w", err)
 	}
 
-	// The installer runs this on the verified staged executable before changing
-	// a service or its saved credentials. Use the modules' primary-destination
-	// policy, without logging, enrollment, identity persistence or listeners.
-	if cfg.ValidateURLOnly {
+	// Refuse an invalid primary destination before logging it, fetching remote
+	// configuration, enrolling or changing saved state. Self-test is deliberately
+	// only a local executable/logger probe: the updater invokes it without the
+	// service's runtime transport flags. --validate-url checks the actual policy.
+	if !cfg.SelfTest || cfg.ValidateURLOnly {
 		if _, err := agenttarget.NormalizePulseURL(cfg.PulseURL, true, cfg.AllowPlaintextHTTP); err != nil {
 			return fmt.Errorf("invalid pulse URL: %w", err)
 		}
+	}
+	if cfg.ValidateURLOnly {
 		fmt.Println("Pulse URL validation passed")
 		return nil
 	}

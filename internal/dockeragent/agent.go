@@ -557,7 +557,7 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			return nil, errors.New("pulse target URL is required")
 		}
 		if token == "" {
-			return nil, fmt.Errorf("pulse target %s is missing API token", targetURL)
+			return nil, fmt.Errorf("pulse target %d is missing API token", index+1)
 		}
 
 		if len(normalized) == 0 && !target.Authoritative {
@@ -569,7 +569,7 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			target.AllowPlaintextHTTP,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("invalid pulse target URL %q: %w", targetURL, err)
+			return nil, fmt.Errorf("invalid pulse target %d URL: %w", index+1, err)
 		}
 
 		caCertPath := strings.TrimSpace(target.CACertPath)
