@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,6 +35,8 @@ func safeProfileTransactionFunctions(t *testing.T) string {
 		extractInstallShellFunction(t, "safe_profile_manifest_value") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_snapshot_state_metadata") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_restore_state_metadata") + "\n" +
+		extractInstallShellFunction(t, "read_agent_removal_unit_state") + "\n" +
+		extractInstallShellFunction(t, "safe_profile_read_recovery_flags") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_begin_transaction") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_restore_entry") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_remove_collector_command_authority") + "\n" +
@@ -199,6 +202,167 @@ grep -q '^gpasswd -a pulse-agent docker$' "$CALL_LOG"
 			t.Fatalf("failure rollback rehearsal: %v\n%s", err, out)
 		}
 	})
+}
+
+func safeProfileFixtureSnapshot(t *testing.T, root string) map[string]struct {
+	mode os.FileMode
+	body string
+} {
+	t.Helper()
+	result := make(map[string]struct {
+		mode os.FileMode
+		body string
+	})
+	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == filepath.Join(root, "calls.log") {
+			return nil
+		}
+		var body []byte
+		if info.Mode().IsRegular() {
+			body, err = os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+		}
+		result[path] = struct {
+			mode os.FileMode
+			body string
+		}{info.Mode(), string(body)}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func TestSafeProfileRefusesUnconfirmedRecoveryStateBeforeSnapshot(t *testing.T) {
+	for _, unit := range []string{"pulse-agent.service", "pulse-agent-helper.socket"} {
+		for _, fault := range []struct {
+			name, output, diagnostic string
+			exit                     int
+		}{
+			{name: "refused", diagnostic: "private manager detail\n", exit: 1},
+			{name: "timeout", exit: 124},
+			{name: "empty"},
+			{name: "missing property", output: "LoadState=loaded\nActiveState=active\n"},
+			{name: "duplicate property", output: "LoadState=loaded\nActiveState=active\nActiveState=inactive\nUnitFileState=enabled\n"},
+			{name: "diagnostic with success", output: "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n", diagnostic: "private manager detail\n"},
+			{name: "trailing blank diagnostic", output: "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n", diagnostic: "\n"},
+			{name: "activating", output: "LoadState=loaded\nActiveState=activating\nUnitFileState=enabled\n"},
+			{name: "deactivating", output: "LoadState=loaded\nActiveState=deactivating\nUnitFileState=enabled\n"},
+			{name: "reloading", output: "LoadState=loaded\nActiveState=reloading\nUnitFileState=enabled\n"},
+			{name: "load error", output: "LoadState=error\nActiveState=inactive\nUnitFileState=disabled\n"},
+			{name: "unknown enablement", output: "LoadState=loaded\nActiveState=active\nUnitFileState=unknown\n"},
+			{name: "runtime enablement", output: "LoadState=loaded\nActiveState=active\nUnitFileState=enabled-runtime\n"},
+			{name: "runtime link", output: "LoadState=loaded\nActiveState=active\nUnitFileState=linked-runtime\n"},
+			{name: "mask", output: "LoadState=masked\nActiveState=inactive\nUnitFileState=masked\n"},
+			{name: "static", output: "LoadState=loaded\nActiveState=inactive\nUnitFileState=static\n"},
+		} {
+			t.Run(unit+"/"+fault.name, func(t *testing.T) {
+				root := t.TempDir()
+				harness := safeProfileHarness(t, root, true)
+				before := safeProfileFixtureSnapshot(t, root)
+				// Only systemctl is doubled. The production state parser,
+				// snapshot admission and all fixture filesystem work are real.
+				harness += `
+safe_profile_begin_transaction
+grep -E '^(COLLECTOR|HELPER)_(ACTIVE|ENABLED)=' "$SAFE_PROFILE_TRANSACTION_DIR/manifest.env"
+`
+				cmd := exec.Command("bash", "-c", harness)
+				cmd.Env = append(os.Environ(), "STATE_FAULT_UNIT="+unit, "STATE_FAULT_OUTPUT="+fault.output,
+					"STATE_FAULT_DIAGNOSTIC="+fault.diagnostic, "STATE_FAULT_EXIT="+strconv.Itoa(fault.exit))
+				out, err := cmd.CombinedOutput()
+				if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 ||
+					!strings.Contains(string(out), "recovery state could not be confirmed") {
+					t.Fatalf("unconfirmed recovery state admitted: err=%v\n%s", err, out)
+				}
+				if strings.Contains(string(out), "private manager detail") {
+					t.Fatalf("manager diagnostic leaked: %s", out)
+				}
+				if !reflect.DeepEqual(before, safeProfileFixtureSnapshot(t, root)) {
+					t.Fatal("refusal changed fixture files/modes or created a migration snapshot")
+				}
+				calls, readErr := os.ReadFile(filepath.Join(root, "calls.log"))
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				for _, line := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+					if !strings.HasPrefix(line, "systemctl show ") {
+						t.Fatalf("refusal mutated service state: %s", calls)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestSafeProfileCapturesConfirmedRecoveryFlagsAndRestoresIntent(t *testing.T) {
+	for _, state := range []struct {
+		name, active, enabled, wantActive, wantEnabled string
+	}{
+		{"running enabled", "active", "enabled", "true", "true"},
+		{"running disabled", "active", "disabled", "true", "false"},
+		{"stopped enabled", "inactive", "enabled", "false", "true"},
+		{"stopped disabled", "inactive", "disabled", "false", "false"},
+		{"failed enabled", "failed", "enabled", "false", "true"},
+	} {
+		for _, missingHelper := range []bool{false, true} {
+			t.Run(state.name+"/helperAbsent="+strconv.FormatBool(missingHelper), func(t *testing.T) {
+				root := t.TempDir()
+				harness := safeProfileHarness(t, root, false) + `
+STATE_ACTIVE=` + state.active + `
+STATE_ENABLED=` + state.enabled + `
+STATE_HELPER_ABSENT=` + strconv.FormatBool(missingHelper) + `
+safe_profile_begin_transaction
+grep -qx 'COLLECTOR_ACTIVE=` + state.wantActive + `' "$SAFE_PROFILE_TRANSACTION_DIR/manifest.env"
+grep -qx 'COLLECTOR_ENABLED=` + state.wantEnabled + `' "$SAFE_PROFILE_TRANSACTION_DIR/manifest.env"
+`
+				helperActive, helperEnabled := state.wantActive, state.wantEnabled
+				if missingHelper {
+					helperActive, helperEnabled = "false", "false"
+				}
+				harness += `
+grep -qx 'HELPER_ACTIVE=` + helperActive + `' "$SAFE_PROFILE_TRANSACTION_DIR/manifest.env"
+grep -qx 'HELPER_ENABLED=` + helperEnabled + `' "$SAFE_PROFILE_TRANSACTION_DIR/manifest.env"
+safe_profile_restore_transaction "$SAFE_PROFILE_TRANSACTION_DIR" recovery-control
+`
+				if out, err := exec.Command("bash", "-c", harness).CombinedOutput(); err != nil {
+					t.Fatalf("confirmed recovery state: %v\n%s", err, out)
+				}
+				calls, err := os.ReadFile(filepath.Join(root, "calls.log"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, want := range []struct{ unit, active, enabled string }{
+					{"pulse-agent.service", state.wantActive, state.wantEnabled},
+					{"pulse-agent-helper.socket", helperActive, helperEnabled},
+				} {
+					for verb, expected := range map[string]bool{"start": want.active == "true", "enable": want.enabled == "true", "disable": want.enabled == "false"} {
+						got := strings.Contains(string(calls), "systemctl "+verb+" "+want.unit+"\n")
+						if got != expected {
+							t.Fatalf("recovery %s %s=%t, want %t:\n%s", verb, want.unit, got, expected, calls)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestSafeProfileRefusesMissingInstalledCollector(t *testing.T) {
+	root := t.TempDir()
+	harness := safeProfileHarness(t, root, false) + `
+STATE_FAULT_UNIT=pulse-agent.service
+STATE_FAULT_OUTPUT=$'LoadState=not-found\nActiveState=inactive\nUnitFileState=\n'
+safe_profile_begin_transaction
+`
+	out, err := exec.Command("bash", "-c", harness).CombinedOutput()
+	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 || !strings.Contains(string(out), "recovery state could not be confirmed") {
+		t.Fatalf("missing installed collector admitted: %v\n%s", err, out)
+	}
 }
 
 func TestSafeProfileMigrationIsExplicitAndRunnerIndependent(t *testing.T) {
@@ -813,15 +977,37 @@ EXIT_MISSING_ARGS=2
 log_info() { :; }
 log_error() { printf 'ERROR:%s\n' "$*" >&2; }
 fail() { printf 'FAIL:%s\n' "$1" >&2; return "${2:-1}"; }
+timeout() {
+  [[ "$1 $2 $3 $4" == '-k 1 5 systemctl' ]] || return 95
+  shift 4
+  systemctl "$@"
+}
 systemctl() {
+  printf 'systemctl %s\n' "$*" >> "$CALL_LOG"
   case "${1:-}" in
     show)
+      if [[ "${3:-}" == --property=LoadState,ActiveState,UnitFileState ]]; then
+        [[ $# == 3 ]] || return 96
+        if [[ "${2:-}" == "${STATE_FAULT_UNIT:-}" ]]; then
+          printf '%s' "${STATE_FAULT_OUTPUT:-}"
+          printf '%s' "${STATE_FAULT_DIAGNOSTIC:-}" >&2
+          return "${STATE_FAULT_EXIT:-0}"
+        fi
+        if [[ "${2:-}" == "${PRIVILEGED_HELPER_NAME}.socket" && "${STATE_HELPER_ABSENT:-false}" == true ]]; then
+          printf 'LoadState=not-found\nActiveState=inactive\nUnitFileState=\n'
+        else
+          printf 'LoadState=loaded\nActiveState=%s\nUnitFileState=%s\n' "${STATE_ACTIVE:-active}" "${STATE_ENABLED:-enabled}"
+        fi
+        return
+      fi
       case "${4:-}" in
         FragmentPath) printf '%s\n' "$SAFE_PROFILE_COLLECTOR_UNIT" ;;
         DropInPaths) printf '\n' ;;
       esac
       ;;
-    is-active|is-enabled) return 0 ;;
+    is-active|is-enabled)
+      [[ "${3:-}" != "${STATE_FAULT_UNIT:-}" ]] || return 1
+      return 0 ;;
   esac
   return 0
 }
