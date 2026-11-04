@@ -105,8 +105,11 @@ else
             *) return 98 ;;
         esac
     }
-    timeout() { shift; "$@"; }
-    sleep() { :; }
+    # The service double runs in this shell. Consume the production kill-grace
+    # options and advance its elapsed clock without sleeping in a unit fixture;
+    # real deadlines/process groups are covered by ServiceDeadlines separately.
+    timeout() { [[ "$1" != -k ]] || shift 2; shift; "$@"; }
+    sleep() { : "$((SECONDS += $1))"; }
     # Inject the same failure at the actual extracted script, not only a
     # direct helper. Archive installation is itself always an if/OR callee.
     cp() {
