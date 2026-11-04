@@ -66,12 +66,18 @@ func fsInfoFixtureKey() string {
 // passed to the next poll keeps whatever the poll recorded.
 func ageVMFSInfoRead(t *testing.T, m *Monitor, by time.Duration) {
 	t.Helper()
-	entry, ok := m.vmFSInfoCache[fsInfoFixtureKey()]
+	ageVMFSInfoReadForGuest(t, m, fsInfoFixtureResource.VMID, by)
+}
+
+func ageVMFSInfoReadForGuest(t *testing.T, m *Monitor, vmid int, by time.Duration) {
+	t.Helper()
+	key := guestMemoryCacheKey(fsInfoFixtureInstance, fsInfoFixtureResource.Node, vmid)
+	entry, ok := m.vmFSInfoCache[key]
 	if !ok {
 		t.Fatal("no cached filesystem reply to age")
 	}
 	entry.fetchedAt = entry.fetchedAt.Add(-by)
-	m.vmFSInfoCache[fsInfoFixtureKey()] = entry
+	m.vmFSInfoCache[key] = entry
 }
 
 func pollFSInfoGuest(t *testing.T, m *Monitor, client PVEClientInterface, prev *models.VM) models.VM {
@@ -313,7 +319,14 @@ func TestGuestFSInfoAroundABackupLock(t *testing.T) {
 
 // A real client, so the replication check itself is in the path: a reuse costs
 // neither the guest command nor the protected status read in front of it.
+//
+// The client records replication guests per endpoint for the whole process, and
+// a later test's server can be given this one's port. Its guest ID is unique so
+// that recording can't send any other test's guest through the replication check.
 func TestGuestFSInfoAroundReplication(t *testing.T) {
+	const vmid = 79105
+	res := fsInfoFixtureResource
+	res.VMID = vmid
 	const statusNone = `{"data":[]}`
 	var status atomic.Value
 	status.Store(statusNone)
@@ -324,7 +337,7 @@ func TestGuestFSInfoAroundReplication(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/config"):
 			fmt.Fprint(w, `{"data":{}}`)
 		case strings.HasSuffix(r.URL.Path, "/cluster/replication"):
-			fmt.Fprint(w, `{"data":[{"id":"105-0","guest":105}]}`)
+			fmt.Fprintf(w, `{"data":[{"id":"%d-0","guest":%d}]}`, vmid, vmid)
 		case strings.HasSuffix(r.URL.Path, "/nodes/node/replication"):
 			statusCalls.Add(1)
 			fmt.Fprint(w, status.Load().(string))
@@ -346,7 +359,7 @@ func TestGuestFSInfoAroundReplication(t *testing.T) {
 	m := newFSInfoPollMonitor()
 	read := func() string {
 		t.Helper()
-		_, _, _, _, _, _, reason, _ := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), fsInfoFixtureInstance, fsInfoFixtureResource, client, 2000, 0, 0)
+		_, _, _, _, _, _, reason, _ := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), fsInfoFixtureInstance, res, client, 2000, 0, 0)
 		return reason
 	}
 
@@ -354,12 +367,12 @@ func TestGuestFSInfoAroundReplication(t *testing.T) {
 		t.Fatalf("first read: reason=%q agent=%d status=%d", got, agentCalls.Load(), statusCalls.Load())
 	}
 
-	status.Store(fmt.Sprintf(`{"data":[{"id":"105-0","guest":105,"pid":4242,"last_try":%d}]}`, time.Now().Unix()))
+	status.Store(fmt.Sprintf(`{"data":[{"id":"%d-0","guest":%d,"pid":4242,"last_try":%d}]}`, vmid, vmid, time.Now().Unix()))
 	if got := read(); got != "" || agentCalls.Load() != 1 || statusCalls.Load() != 1 {
 		t.Fatalf("reuse during a run: reason=%q agent=%d status=%d", got, agentCalls.Load(), statusCalls.Load())
 	}
 
-	ageVMFSInfoRead(t, m, vmFSInfoCacheTTL)
+	ageVMFSInfoReadForGuest(t, m, vmid, vmFSInfoCacheTTL)
 	if got := read(); got != "replication-active" || agentCalls.Load() != 1 {
 		t.Fatalf("expired reply during a run: reason=%q agent=%d", got, agentCalls.Load())
 	}
