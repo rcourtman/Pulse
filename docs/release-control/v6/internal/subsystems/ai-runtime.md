@@ -601,9 +601,19 @@ no node has that name and no more than one connection's guests use it, and an
 offline linked agent is never replaced by a hostname match. `pulse_query` list and
 search answer a node's flag, and a guest's `node_command_agent_connected`, through
 that lookup, and add `id` and `instance` only to node rows whose shown name repeats.
+A system or Docker host row's flag, and the topology Docker host flag and count,
+ask `routeCommandTarget` about the row's ID, so they report where a command would
+go: a Docker host in a guest answers for the guest's node. A topology Docker host
+row carries `id` only when another Docker host has its hostname. Routing never sends
+a command for a guest row to an agent inside that guest, so a guest's own
+`command_agent_connected` instead reports an agent linked to or folded into the
+guest, or, while no agent is linked to it, an unlinked agent with its name when no
+node and no other guest has that name.
 `TestCommandConnectivityDoesNotReplaceMonitoringEvidence`,
 `TestTopologyOmitsUnobservedCommandConnections`,
-`TestQueryCommandFlagsFollowTheNodeNotItsName` and
+`TestQueryCommandFlagsFollowTheNodeNotItsName`,
+`TestQueryHostFlagsFollowCommandRouting`,
+`TestQueryGuestOwnFlagFollowsItsAgentNotItsName` and
 `TestAssistantInventoryDoesNotInventCommandConnectionObservations` cover these
 projection and continuity boundaries. Existing persisted tool records are not
 rewritten, and this contract does not qualify model diagnosis or recovery.

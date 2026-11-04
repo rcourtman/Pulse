@@ -85,8 +85,8 @@ func TestCanonicalCommandTargetKeepsProviderScopedParent(t *testing.T) {
 			t.Fatalf("canonical guest routed through another provider: %s %+v", instance, result)
 		}
 	}
-	if id := executor.findAgentForNode("node1"); id != "" {
-		t.Fatalf("ambiguous legacy node name selected %s", id)
+	if agent, found := connectedAgentForNodeReference(rr, "node1", server.agents); found {
+		t.Fatalf("ambiguous legacy node name selected %s", agent.AgentID)
 	}
 }
 

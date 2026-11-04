@@ -2324,22 +2324,29 @@ func resourceHostCandidates(resource unifiedresources.Resource) []string {
 
 // commandConnectionObservation keeps an unqueried snapshot distinct from an
 // observed disconnected transport. It says nothing about telemetry freshness.
-func commandConnectionObservation(snapshot map[string]bool, value bool) *bool {
-	if snapshot == nil {
+func commandConnectionObservation(agents []agentexec.ConnectedAgent, value bool) *bool {
+	if agents == nil {
 		return nil
 	}
 	return &value
 }
 
-// queryCommandConnections answers the command flags on pulse_query rows. Proxmox
-// makes a node name unique only within its connection, so a node answers through
-// the lookup command routing uses and the flag matches where a command would go.
+// queryCommandConnections answers the command flags on pulse_query rows. A name
+// can repeat across connections and machines, so a row a command can target asks
+// routing what that command would do, and the flag matches where it would go.
 type queryCommandConnections struct {
 	rs               unifiedresources.ReadState
-	agents           []agentexec.ConnectedAgent
-	hostnames        map[string]bool // nil means command connections were not observed
-	nodeAnswers      map[string]bool // by node reference: a search asks once per guest
+	agents           []agentexec.ConnectedAgent // nil means command connections were not observed
+	nodeAnswers      map[string]bool            // by node reference: a search asks once per guest
 	nodesByShownName map[string]int
+	guestAgents      *queryGuestAgents // read on the first guest row
+}
+
+// queryGuestAgents records which agents the inventory says run inside a guest.
+type queryGuestAgents struct {
+	connectedByGuest map[string]bool // by guest ID: whether an agent linked to it is connected
+	linked           map[string]bool // agent IDs already linked to a node or guest
+	nameFitsOneGuest map[string]bool // by agent hostname
 }
 
 func newQueryCommandConnections(rs unifiedresources.ReadState, agents []agentexec.ConnectedAgent) *queryCommandConnections {
@@ -2348,12 +2355,6 @@ func newQueryCommandConnections(rs unifiedresources.ReadState, agents []agentexe
 		agents:           agents,
 		nodeAnswers:      make(map[string]bool),
 		nodesByShownName: make(map[string]int),
-	}
-	if agents != nil {
-		connections.hostnames = make(map[string]bool, len(agents))
-		for _, agent := range agents {
-			connections.hostnames[agent.Hostname] = true
-		}
 	}
 	for _, node := range rs.Nodes() {
 		if node != nil {
@@ -2379,7 +2380,7 @@ func (c *queryCommandConnections) node(reference string) *bool {
 		_, connected = connectedAgentForNodeReference(c.rs, reference, c.agents)
 		c.nodeAnswers[reference] = connected
 	}
-	return commandConnectionObservation(c.hostnames, connected)
+	return commandConnectionObservation(c.agents, connected)
 }
 
 // guestParentNode answers for the node a command to this guest would go through.
@@ -2398,30 +2399,108 @@ func (c *queryCommandConnections) repeatedNodeIdentity(node *unifiedresources.No
 	return "", ""
 }
 
-func (c *queryCommandConnections) resource(resource unifiedresources.Resource) *bool {
-	if resource.Type == unifiedresources.ResourceTypeAgent && resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.NodeName) != "" {
-		return c.node(resource.ID)
+// commandRouteReaches answers for a row by what routing does with its ID. Routing
+// reads an empty target as "the only connected agent", and a row is not that.
+func commandRouteReaches(rs unifiedresources.ReadState, agents []agentexec.ConnectedAgent, id string) bool {
+	id = strings.TrimSpace(id)
+	return id != "" && len(agents) > 0 && routeCommandTarget(rs, agents, id).AgentID != ""
+}
+
+// target answers for a system or Docker host row.
+func (c *queryCommandConnections) target(id string) *bool {
+	return commandConnectionObservation(c.agents, commandRouteReaches(c.rs, c.agents, id))
+}
+
+// guest answers whether a connected agent runs inside this guest. Routing never
+// sends a command for a guest row to such an agent: it goes through the parent,
+// which node_command_agent_connected reports, and the agent is reached through its
+// own row. A parent's agent is never the guest's connection, so this reads the
+// guest's name and not its identity hostnames, which can include its host's.
+func (c *queryCommandConnections) guest(guestID, name string) *bool {
+	return commandConnectionObservation(c.agents, c.guestHasOwnAgent(guestID, name))
+}
+
+func (c *queryCommandConnections) guestHasOwnAgent(guestID, name string) bool {
+	if len(c.agents) == 0 {
+		return false
 	}
-	connected := c.hostnames
-	// A guest's provider node/host identifies placement, not a command
-	// connection inside the guest. Parent transport is projected separately.
-	candidates := []string{resourceDisplayName(resource)}
-	candidates = append(candidates, resource.Identity.Hostnames...)
-	if resource.Agent != nil {
-		candidates = append(candidates, resource.Agent.Hostname)
-	}
-	switch resource.Type {
-	case unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer, unifiedresources.ResourceTypeAppContainer:
-		// Only the guest's own identity can establish its direct connection.
-	default:
-		candidates = append(candidates, resourceHostCandidates(resource)...)
-	}
-	for _, candidate := range candidates {
-		if key := strings.TrimSpace(candidate); key != "" && connected[key] {
-			return commandConnectionObservation(connected, true)
+	// A manual link folds the agent's record into the guest.
+	if resolver, ok := c.rs.(unifiedresources.ReferenceReadState); ok {
+		if guest, _, found := resolver.GetByReference(guestID); found && guest != nil && guest.Agent != nil && guest.Agent.AgentID != "" {
+			_, connected := connectedAgentByID(c.agents, guest.Agent.AgentID)
+			return connected
 		}
 	}
-	return commandConnectionObservation(connected, false)
+	known := c.readGuestAgents()
+	// A linked guest belongs to its agent. While that agent is offline, another
+	// machine with the same hostname cannot stand in for it.
+	if connected, linked := known.connectedByGuest[guestID]; linked {
+		return connected
+	}
+	for _, agent := range c.agents {
+		if !known.linked[agent.AgentID] && unifiedresources.HostnamesEquivalent(agent.Hostname, name) && c.agentNameFitsOneGuest(agent.Hostname) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *queryCommandConnections) readGuestAgents() *queryGuestAgents {
+	if c.guestAgents != nil {
+		return c.guestAgents
+	}
+	known := &queryGuestAgents{
+		connectedByGuest: make(map[string]bool),
+		linked:           make(map[string]bool),
+		nameFitsOneGuest: make(map[string]bool),
+	}
+	for _, host := range c.rs.Hosts() {
+		if host == nil {
+			continue
+		}
+		if host.LinkedNodeID() != "" || host.LinkedVMID() != "" || host.LinkedContainerID() != "" {
+			known.linked[host.AgentID()] = true
+		}
+		_, connected := connectedAgentByID(c.agents, host.AgentID())
+		for _, link := range []string{host.LinkedVMID(), host.LinkedContainerID()} {
+			if link != "" {
+				guestID := canonicalLinkedResourceID(c.rs, link)
+				known.connectedByGuest[guestID] = known.connectedByGuest[guestID] || connected
+			}
+		}
+	}
+	c.guestAgents = known
+	return known
+}
+
+// agentNameFitsOneGuest is the automatic guest link's own test for an agent not yet
+// linked: a name a node has is that node's, and a name two guests have says nothing.
+func (c *queryCommandConnections) agentNameFitsOneGuest(hostname string) bool {
+	known := c.readGuestAgents()
+	fits, answered := known.nameFitsOneGuest[hostname]
+	if answered {
+		return fits
+	}
+	fits = true
+	for _, node := range c.rs.Nodes() {
+		if node != nil && unifiedresources.HostnamesEquivalent(node.NodeName(), hostname) {
+			fits = false
+		}
+	}
+	guests := 0
+	for _, vm := range c.rs.VMs() {
+		if vm != nil && unifiedresources.HostnamesEquivalent(vm.Name(), hostname) {
+			guests++
+		}
+	}
+	for _, container := range c.rs.Containers() {
+		if container != nil && unifiedresources.HostnamesEquivalent(container.Name(), hostname) {
+			guests++
+		}
+	}
+	fits = fits && guests <= 1
+	known.nameFitsOneGuest[hostname] = fits
+	return fits
 }
 
 func appContainerProviderID(resource unifiedresources.Resource) string {
@@ -2949,7 +3028,7 @@ func addCanonicalGuestSearchMatches(
 			NodeCommandAgentConnected: connections.guestParentNode(resource.ID),
 			Platform:                  canonicalResourcePlatform(resource),
 			VMID:                      vmid,
-			CommandAgentConnected:     connections.resource(resource),
+			CommandAgentConnected:     connections.guest(resource.ID, resource.Name),
 		})
 	}
 }
@@ -2989,7 +3068,7 @@ func addGuestViewSearchMatches[V queryGuestView](
 			NodeCommandAgentConnected: connections.guestParentNode(g.ID()),
 			Platform:                  "proxmox",
 			VMID:                      g.VMID(),
-			CommandAgentConnected:     commandConnectionObservation(connections.hostnames, connections.hostnames[g.Name()]),
+			CommandAgentConnected:     connections.guest(g.ID(), g.Name()),
 		})
 	}
 }
@@ -3463,7 +3542,7 @@ func canonicalSystemSummaryFromResource(resource unifiedresources.Resource, conn
 		Status:                string(resource.Status),
 		Platform:              canonicalResourcePlatform(resource),
 		ChildCount:            resource.ChildCount,
-		CommandAgentConnected: connections.resource(resource),
+		CommandAgentConnected: connections.target(resource.ID),
 		CPU:                   metricPercent(resourceMetric(resource, "cpu")),
 		Memory:                metricPercent(resourceMetric(resource, "memory")),
 		Disk:                  metricPercent(resourceMetric(resource, "disk")),
@@ -3988,7 +4067,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Hostname:                 hostname,
 				DisplayName:              displayName,
 				ContainerCount:           len(hostContainers),
-				CommandAgentConnected:    commandConnectionObservation(connections.hostnames, connections.hostnames[hostname] || connections.hostnames[displayName]),
+				CommandAgentConnected:    connections.target(host.ID()),
 			}
 			for _, container := range hostContainers {
 				state := strings.TrimSpace(container.ContainerState())
@@ -4255,6 +4334,23 @@ func proxmoxTopologyNodeKeyOf(node *unifiedresources.NodeView) proxmoxTopologyNo
 	return proxmoxTopologyNodeKey{instance: node.Instance(), name: firstNonEmptyString(node.NodeName(), node.Name())}
 }
 
+// dockerHostsSharingAHostname finds rows a hostname cannot select, so they carry
+// an ID. Hostnames can differ only by a domain, so these are not exact matches.
+func dockerHostsSharingAHostname(hosts []*unifiedresources.DockerHostView) map[string]bool {
+	repeats := make(map[string]bool)
+	for i, left := range hosts {
+		if left == nil {
+			continue
+		}
+		for _, right := range hosts[i+1:] {
+			if right != nil && unifiedresources.HostnamesEquivalent(left.Hostname(), right.Hostname()) {
+				repeats[left.ID()], repeats[right.ID()] = true, true
+			}
+		}
+	}
+	return repeats
+}
+
 func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options TopologyBuildOptions) TopologyResponse {
 	response := EmptyTopologyResponse()
 	if rs == nil {
@@ -4269,13 +4365,6 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 	includeDocker := include == "all" || include == "app-containers"
 	includeKubernetes := include == "all" || include == "kubernetes"
 	connectedAgents := options.ConnectedAgents
-	var connectedAgentHostnames map[string]bool
-	if connectedAgents != nil {
-		connectedAgentHostnames = make(map[string]bool, len(connectedAgents))
-		for _, agent := range connectedAgents {
-			connectedAgentHostnames[agent.Hostname] = true
-		}
-	}
 	governance := newGovernedQueryMetadataResolver(rs)
 
 	summary := TopologySummary{
@@ -4290,7 +4379,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		TotalK8sPods:          len(rs.Pods()),
 	}
 
-	if connectedAgentHostnames != nil {
+	if connectedAgents != nil {
 		summary.NodesWithCommandAgents = new(int)
 		summary.DockerHostsWithCommandAgents = new(int)
 	}
@@ -4305,13 +4394,13 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 			(*summary.NodesWithCommandAgents)++
 		}
 	}
+	dockerHostsWithAgents := make(map[string]bool)
 	for _, host := range rs.DockerHosts() {
 		if host == nil {
 			continue
 		}
-		hostname := strings.TrimSpace(host.Hostname())
-		displayName := strings.TrimSpace(host.Name())
-		if connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName] {
+		if commandRouteReaches(rs, connectedAgents, host.ID()) {
+			dockerHostsWithAgents[host.ID()] = true
 			(*summary.DockerHostsWithCommandAgents)++
 		}
 	}
@@ -4470,8 +4559,8 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 			if !known && bareNodeNameCanRoute(rs, key.name) {
 				_, hasAgent = uniqueConnectedAgent(connectedAgents, key.name)
 			}
-			node.CommandAgentConnected = commandConnectionObservation(connectedAgentHostnames, hasAgent)
-			node.CanExecute = commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled)
+			node.CommandAgentConnected = commandConnectionObservation(connectedAgents, hasAgent)
+			node.CanExecute = commandConnectionObservation(connectedAgents, hasAgent && options.ControlEnabled)
 			if len(keysByShownName[strings.ToLower(node.Name)]) > 1 {
 				node.Instance, node.ID = key.instance, nodeID
 			}
@@ -4510,13 +4599,17 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 	}
 
 	dockerHosts := []DockerHostTopology{}
+	dockerHostnameRepeats := make(map[string]bool)
+	if includeDocker && !options.SummaryOnly {
+		dockerHostnameRepeats = dockerHostsSharingAHostname(rs.DockerHosts())
+	}
 	for _, host := range rs.DockerHosts() {
 		if host == nil {
 			continue
 		}
 		hostname := strings.TrimSpace(host.Hostname())
 		displayName := strings.TrimSpace(host.Name())
-		hasAgent := connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName]
+		hasAgent := dockerHostsWithAgents[host.ID()]
 		hostContainers := containersByHost[host.ID()]
 		runningCount := 0
 		var containers []DockerContainerSummary
@@ -4553,12 +4646,17 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 			if hostname == "" {
 				hostname = displayName
 			}
+			id := ""
+			if dockerHostnameRepeats[host.ID()] {
+				id = host.ID()
+			}
 			dockerHosts = append(dockerHosts, DockerHostTopology{
 				GovernedResourceMetadata: governance.Resolve(host.Hostname(), host.Name(), host.HostSourceID(), host.ID()),
+				ID:                       id,
 				Hostname:                 hostname,
 				DisplayName:              displayName,
-				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, hasAgent),
-				CanExecute:               commandConnectionObservation(connectedAgentHostnames, hasAgent && options.ControlEnabled),
+				CommandAgentConnected:    commandConnectionObservation(connectedAgents, hasAgent),
+				CanExecute:               commandConnectionObservation(connectedAgents, hasAgent && options.ControlEnabled),
 				Containers:               containers,
 				ContainerCount:           len(hostContainers),
 				ReturnedCount:            len(containers),
@@ -4568,7 +4666,11 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 		}
 	}
 	sort.Slice(dockerHosts, func(i, j int) bool {
-		return strings.ToLower(dockerHosts[i].Hostname) < strings.ToLower(dockerHosts[j].Hostname)
+		left, right := strings.ToLower(dockerHosts[i].Hostname), strings.ToLower(dockerHosts[j].Hostname)
+		if left != right {
+			return left < right
+		}
+		return dockerHosts[i].ID < dockerHosts[j].ID
 	})
 
 	k8sClusters := []KubernetesClusterTopology{}
@@ -5802,7 +5904,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Status:                   status,
 				Host:                     canonicalAgentHost(resource),
 				Platform:                 canonicalResourcePlatform(resource),
-				CommandAgentConnected:    connections.resource(resource),
+				CommandAgentConnected:    connections.target(resource.ID),
 			})
 		}
 	}

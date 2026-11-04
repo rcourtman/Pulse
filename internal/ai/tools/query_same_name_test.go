@@ -413,8 +413,8 @@ func TestQueryOmitsUnobservedCommandConnections(t *testing.T) {
 	for label, flag := range map[string]*bool{
 		"node":             unobserved.node(node.ID()),
 		"guest parent":     unobserved.guestParentNode(guest.ID()),
-		"node resource":    unobserved.resource(resource),
-		"non-node":         unobserved.resource(standalone),
+		"node resource":    unobserved.target(resource.ID),
+		"non-node":         unobserved.target(standalone.ID),
 		"system summary":   canonicalSystemSummaryFromResource(resource, unobserved).CommandAgentConnected,
 		"standalone agent": canonicalSystemSummaryFromResource(standalone, unobserved).CommandAgentConnected,
 	} {
@@ -427,8 +427,8 @@ func TestQueryOmitsUnobservedCommandConnections(t *testing.T) {
 	for label, flag := range map[string]*bool{
 		"node":          observed.node(node.ID()),
 		"guest parent":  observed.guestParentNode(guest.ID()),
-		"node resource": observed.resource(resource),
-		"non-node":      observed.resource(standalone),
+		"node resource": observed.target(resource.ID),
+		"non-node":      observed.target(standalone.ID),
 	} {
 		if flag == nil || *flag {
 			t.Fatalf("observed %s with no agents should read false: %v", label, flag)

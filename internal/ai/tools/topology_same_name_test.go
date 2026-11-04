@@ -379,8 +379,8 @@ func TestLinkedAgentOfflineNeverFallsBackToTheHostname(t *testing.T) {
 		{ID: "host-a", Type: unifiedresources.ResourceTypeAgent, Name: "rack-host", Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent}, Agent: &unifiedresources.AgentData{AgentID: "linked", Hostname: "rack-host", LinkedNodeID: "node-a", CommandsEnabled: true}},
 	})
 	executor := sameNameExecutor(registry, agentexec.ConnectedAgent{AgentID: "other-machine", Hostname: "pmx1"})
-	if id := executor.findAgentForNode("node-a"); id != "" {
-		t.Fatalf("offline linked agent replaced by a hostname match: %s", id)
+	if routed := executor.resolveTargetForCommandFull("node-a"); routed.AgentID != "" {
+		t.Fatalf("offline linked agent replaced by a hostname match: %+v", routed)
 	}
 	if _, nodes := sameNameTopology(t, executor, nil); len(nodes) != 1 || nodes[0]["command_agent_connected"] != false {
 		t.Fatalf("topology must agree with routing: %+v", nodes)

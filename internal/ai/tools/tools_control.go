@@ -161,20 +161,27 @@ type CommandRoutingResult struct {
 
 // resolveTargetForCommandFull resolves a target_host to full routing info including provenance.
 // Use this for write operations where you need to verify execution context.
+func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) CommandRoutingResult {
+	var agents []agentexec.ConnectedAgent
+	if e.agentServer != nil {
+		agents = e.agentServer.GetConnectedAgents()
+	}
+	// With no read state, a target can only match a connected agent.
+	rs, _ := e.readStateForControl()
+	return routeCommandTarget(rs, agents, targetHost)
+}
+
+// routeCommandTarget decides where a command for a target goes. pulse_query flags
+// ask it too, so a flag cannot disagree with what a command would do.
 //
 // CRITICAL ORDERING: Topology resolution (state.ResolveResource) happens FIRST.
 // Agent hostname matching is a FALLBACK only when the state doesn't know the resource.
 // This prevents the "hostname collision" bug where an agent with hostname matching an LXC name
 // causes commands to execute on the node instead of inside the LXC via pct exec.
-func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) CommandRoutingResult {
+func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.ConnectedAgent, targetHost string) CommandRoutingResult {
 	result := CommandRoutingResult{
 		TargetType: "agent",
 		Transport:  "direct",
-	}
-
-	var agents []agentexec.ConnectedAgent
-	if e.agentServer != nil {
-		agents = e.agentServer.GetConnectedAgents()
 	}
 
 	if targetHost == "" {
@@ -191,7 +198,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	// STEP 1: Consult topology (state) FIRST — this is authoritative.
 	// If the state knows about this resource, use topology-based routing.
 	// This prevents hostname collisions from masquerading as host targets.
-	loc := e.resolveResourceLocation(targetHost)
+	loc := resourceLocationInReadState(rs, targetHost)
 
 	if loc.Ambiguous {
 		result.ResolvedKind = "ambiguous"
@@ -210,7 +217,8 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		if reference == "" {
 			reference = loc.Node
 		}
-		return e.findAgentForNode(reference)
+		agent, _ := connectedAgentForNodeReference(rs, reference, agents)
+		return agent.AgentID
 	}
 	if loc.Found {
 		result.ResolvedKind = loc.ResourceType
@@ -430,22 +438,6 @@ func uniqueConnectedAgent(agents []agentexec.ConnectedAgent, reference string) (
 	return result, found
 }
 
-func (e *PulseToolExecutor) findAgentForNode(reference string) string {
-	if e.agentServer == nil {
-		return ""
-	}
-	agents := e.agentServer.GetConnectedAgents()
-	rs, err := e.readStateForControl()
-	if err != nil {
-		if agent, found := uniqueConnectedAgent(agents, reference); found {
-			return agent.AgentID
-		}
-		return ""
-	}
-	agent, _ := connectedAgentForNodeReference(rs, reference, agents)
-	return agent.AgentID
-}
-
 // connectedAgentForNodeReference answers for a canonical node ID, or for a bare
 // node name with no node record behind it.
 func connectedAgentForNodeReference(rs unifiedresources.ReadState, reference string, agents []agentexec.ConnectedAgent) (agentexec.ConnectedAgent, bool) {
@@ -478,14 +470,7 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 		if host == nil || host.LinkedNodeID() == "" {
 			continue
 		}
-		linkedID := host.LinkedNodeID()
-		if resolver, ok := rs.(unifiedresources.ReferenceReadState); ok {
-			_, id, resolved := resolver.GetByReference(linkedID)
-			if resolved {
-				linkedID = id
-			}
-		}
-		if linkedID != nodeID {
+		if canonicalLinkedResourceID(rs, host.LinkedNodeID()) != nodeID {
 			continue
 		}
 		linked = true
@@ -511,6 +496,17 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 		}
 	}
 	return uniqueConnectedAgent(agents, hostname)
+}
+
+// canonicalLinkedResourceID turns the source ID an agent's link holds into the
+// canonical ID its resource goes by.
+func canonicalLinkedResourceID(rs unifiedresources.ReadState, link string) string {
+	if resolver, ok := rs.(unifiedresources.ReferenceReadState); ok {
+		if _, id, resolved := resolver.GetByReference(link); resolved {
+			return id
+		}
+	}
+	return link
 }
 
 // bareNodeNameCanRoute reports whether a node name with no node record behind it
