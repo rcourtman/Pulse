@@ -29,6 +29,10 @@ func clusterSourceOrDisplayName(c *K8sClusterView) string {
 // When rewriteTarget is true (docker container lookups), TargetHost is rewritten
 // to the backing guest name. When false (docker host lookups), TargetHost stays
 // as the docker hostname — matching StateSnapshot.ResolveResource parity.
+//
+// loc.AgentID arrives holding the agent that reports this Docker resource, since
+// a hostname cannot say which machine it means. An agent record found on the way
+// up replaces it, and a backing guest replaces it with the agent on its node.
 func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTarget bool, loc *models.ResourceLocation) {
 	var guest *Resource
 	if resolver, ok := rs.(ReferenceReadState); ok && sourceID != "" {
@@ -242,6 +246,9 @@ func populateAppContainerLocation(rs ReadState, resource Resource, loc *models.R
 	}
 
 	loc.DockerHostName = hostName
+	if resource.Docker != nil {
+		loc.AgentID = resource.Docker.AgentID
+	}
 	hostSourceID := hostName
 	if resource.ParentID != nil {
 		if parentID := strings.TrimSpace(*resource.ParentID); parentID != "" {

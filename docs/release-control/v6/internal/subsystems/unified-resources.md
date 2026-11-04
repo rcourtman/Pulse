@@ -4046,6 +4046,23 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Docker command identity (4 November 2026)
+
+`ResolveResourceContext` fills `ResourceLocation.AgentID` for a Docker host or
+Docker container from the agent its report names. An agent record merged into the
+resource still replaces it, and a backing guest replaces it with the agent on the
+guest's node, so `proxmox-lxc-docker:` hosts keep their guest route. No session
+holds a synthetic ID, so one whose guest is gone routes nowhere. A Docker-only agent
+(`--enable-host=false`) holds no command session, so its host routes nowhere while
+another machine with its hostname is connected. A unified agent's Docker module
+normally reports the ID its host module registers for commands. The two differ when
+Pulse resolves a pinned `--agent-id` to another host ID; if the records also stay
+apart (an operator split, or a module with no machine ID), the Docker host reads as
+not connected, because that state looks the same as two machines. Its agent row still
+routes. A record naming no agent keeps the hostname fallback; `ApplyDockerReport`
+never writes one. `TestResolveResource_DockerLocationNamesItsOwnAgent` and
+`TestQueryHostFlagsFollowCommandRouting` pin this.
+
 ### Retained Machines and Debug status (11 October 2026)
 
 The Machines row status, health chip counts and selected filter membership
