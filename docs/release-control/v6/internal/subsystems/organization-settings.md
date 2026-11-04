@@ -669,12 +669,33 @@ administrator or native IdP recovery.
 
 User Access action feedback is owned by that same reader, not the global toast
 queue: success notices withdraw on context change or a new confirmation, and
-failures stay beside the current save/removal controls without discarding the
-draft. Directory failure has one persistent read-only Retry notice. Account
+definite rejections stay beside the current save/removal controls without
+discarding the draft. Directory failure has one persistent read-only Retry notice. Account
 principals must not survive an organisation switch in an old notification.
 Paired directory/role reads are aborted when their combined read settles so a
 failed sibling does not leave an unowned pending request. The registered
 reader-lifetime/paywall tests and actual App browser witness cover this bound.
+
+### Unconfirmed user changes require a saved-access check
+
+A lost response, server failure or unreadable success after updating a user's
+roles or removing their access does not prove that the server rolled back.
+User Access withdraws its accepted directory, role catalogue, saved permissions,
+draft and removal confirmation. It neither replays the mutation nor presents
+an empty directory. A local, focused warning says the change may already have
+been applied and offers **Check saved access**, an explicit read-only refresh.
+Only accepted current user and role inventories clear that warning and enable
+further changes. Failed or malformed recovery keeps access unknown; concurrent
+checks coalesce. Definite client rejections retain their correction path and
+the existing self-removal explanation. Reader withdrawal erases the warning
+and invalidates late permission, mutation and recovery responses.
+
+`UserAccessReaderLifetime.test.tsx` and `RBACPaywallPanels.test.tsx` cover
+committed-but-unconfirmed updates/removals, recovery failure and serialisation,
+stale callbacks, delayed reads, definite rejection and consuming-panel focus.
+Paired desktop/narrow browser captures exercise the real panel, state, RBAC API
+and client with safe HTTP fixtures. This changes no grant, endpoint, entitlement,
+authorization or IdP semantics and is not original saved-account recovery.
 
 ### User Access requests retain their confirmed context
 
