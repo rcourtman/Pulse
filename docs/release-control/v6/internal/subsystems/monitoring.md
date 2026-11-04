@@ -2495,6 +2495,25 @@ not. A retained `prev-` reading stays a History gap.
 `guest_fsinfo_cache_test.go` covers this with fixture clients; no native run has
 measured the effect on the collision rate.
 
+A guest whose linked Pulse agent currently supplies its disks sends no
+`get-fsinfo`. `linkedHostAgentSuppliesGuestDisks` asks the same question as
+`preferLinkedHostAgentDiskInventory`, so the read stops only where its reading
+would have been replaced. An agent that is stale, offline, unlinked or reporting
+no usable disks doesn't qualify. The poll that loses the agent reads at once,
+because each linked poll drops any earlier reply. If that read fails the row shows
+the failure, since an agent reading is never retained as guest-agent data.
+Metadata keeps going out, so `GuestAgentEvidence` and the expected-unreachable
+incident keep working for a guest that answers it, and memory reads are unchanged.
+
+Two things get weaker for these guests. A guest that answers only `get-fsinfo`
+loses its evidence after ten minutes, and with it the incident and the read
+without a status reply; that first poll after the agent then shows `no-status`.
+A replication run or a failing guest agent now shows `deferred` only on a poll
+whose metadata or memory read hits it, so between those the drawer can say "Reported
+available" during a run. A config lock still shows `deferred`. This removes one
+command a minute per guest; no native run has measured the effect on the collision
+rate. `guest_linked_agent_disks_test.go` covers the handover in both directions.
+
 The [bounded backup observation tools](../../../../../tests/qualification/guest-agent-backup/README.md)
 provide an independent guest filesystem writer (file/directory fsync and
 synthetic readback over non-QGA stdout) and a fail-closed checker for native
