@@ -2331,7 +2331,78 @@ func commandConnectionObservation(snapshot map[string]bool, value bool) *bool {
 	return &value
 }
 
-func resourceCommandAgentConnected(resource unifiedresources.Resource, connected map[string]bool) *bool {
+// queryCommandConnections answers the command flags on pulse_query rows. Proxmox
+// makes a node name unique only within its connection, so a node answers through
+// the lookup command routing uses and the flag matches where a command would go.
+type queryCommandConnections struct {
+	rs               unifiedresources.ReadState
+	agents           []agentexec.ConnectedAgent
+	hostnames        map[string]bool // nil means command connections were not observed
+	nodeAnswers      map[string]bool // by node reference: a search asks once per guest
+	nodesByShownName map[string]int
+}
+
+func newQueryCommandConnections(rs unifiedresources.ReadState, agents []agentexec.ConnectedAgent) *queryCommandConnections {
+	connections := &queryCommandConnections{
+		rs:               rs,
+		agents:           agents,
+		nodeAnswers:      make(map[string]bool),
+		nodesByShownName: make(map[string]int),
+	}
+	if agents != nil {
+		connections.hostnames = make(map[string]bool, len(agents))
+		for _, agent := range agents {
+			connections.hostnames[agent.Hostname] = true
+		}
+	}
+	for _, node := range rs.Nodes() {
+		if node != nil {
+			connections.nodesByShownName[strings.ToLower(node.Name())]++
+		}
+	}
+	return connections
+}
+
+func (e *PulseToolExecutor) observeQueryCommandConnections(rs unifiedresources.ReadState) *queryCommandConnections {
+	// A non-nil list records that connections were observed, even when none are up.
+	agents := []agentexec.ConnectedAgent{}
+	if e.agentServer != nil {
+		agents = append(agents, e.agentServer.GetConnectedAgents()...)
+	}
+	return newQueryCommandConnections(rs, agents)
+}
+
+// node answers for a canonical node ID, or a bare node name with no record behind it.
+func (c *queryCommandConnections) node(reference string) *bool {
+	connected, answered := c.nodeAnswers[reference]
+	if !answered {
+		_, connected = connectedAgentForNodeReference(c.rs, reference, c.agents)
+		c.nodeAnswers[reference] = connected
+	}
+	return commandConnectionObservation(c.hostnames, connected)
+}
+
+// guestParentNode answers for the node a command to this guest would go through.
+func (c *queryCommandConnections) guestParentNode(guestID string) *bool {
+	location := resourceLocationInReadState(c.rs, guestID)
+	return c.node(firstNonEmptyString(location.NodeResourceID, location.Node))
+}
+
+// repeatedNodeIdentity names a node whose shown name another node also shows.
+// Assistant refuses a repeated name and asks for the ID, and a row without one
+// could not be told from its namesake.
+func (c *queryCommandConnections) repeatedNodeIdentity(node *unifiedresources.NodeView) (id, instance string) {
+	if c.nodesByShownName[strings.ToLower(node.Name())] > 1 {
+		return node.ID(), node.Instance()
+	}
+	return "", ""
+}
+
+func (c *queryCommandConnections) resource(resource unifiedresources.Resource) *bool {
+	if resource.Type == unifiedresources.ResourceTypeAgent && resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.NodeName) != "" {
+		return c.node(resource.ID)
+	}
+	connected := c.hostnames
 	// A guest's provider node/host identifies placement, not a command
 	// connection inside the guest. Parent transport is projected separately.
 	candidates := []string{resourceDisplayName(resource)}
@@ -2848,7 +2919,7 @@ func addCanonicalGuestSearchMatches(
 	resources []unifiedresources.Resource,
 	queryLower, statusFilter string,
 	governance *governedQueryMetadataResolver,
-	connectedAgentHostnames map[string]bool,
+	connections *queryCommandConnections,
 	matchesQuery func(query string, candidates ...string) bool,
 	addMatch func(ResourceMatch),
 ) {
@@ -2875,10 +2946,10 @@ func addCanonicalGuestSearchMatches(
 			Name:                      resourceDisplayName(resource),
 			Status:                    status,
 			Node:                      node,
-			NodeCommandAgentConnected: commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node]),
+			NodeCommandAgentConnected: connections.guestParentNode(resource.ID),
 			Platform:                  canonicalResourcePlatform(resource),
 			VMID:                      vmid,
-			CommandAgentConnected:     resourceCommandAgentConnected(resource, connectedAgentHostnames),
+			CommandAgentConnected:     connections.resource(resource),
 		})
 	}
 }
@@ -2890,7 +2961,7 @@ func addGuestViewSearchMatches[V queryGuestView](
 	guests []V,
 	queryLower, statusFilter string,
 	governance *governedQueryMetadataResolver,
-	connectedAgentHostnames map[string]bool,
+	connections *queryCommandConnections,
 	matchesQuery func(query string, candidates ...string) bool,
 	addMatch func(ResourceMatch),
 ) {
@@ -2915,10 +2986,10 @@ func addGuestViewSearchMatches[V queryGuestView](
 			Name:                      g.Name(),
 			Status:                    status,
 			Node:                      g.Node(),
-			NodeCommandAgentConnected: commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[g.Node()]),
+			NodeCommandAgentConnected: connections.guestParentNode(g.ID()),
 			Platform:                  "proxmox",
 			VMID:                      g.VMID(),
-			CommandAgentConnected:     commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[g.Name()]),
+			CommandAgentConnected:     commandConnectionObservation(connections.hostnames, connections.hostnames[g.Name()]),
 		})
 	}
 }
@@ -3385,14 +3456,14 @@ func resolvedAppContainerRegistration(resource unifiedresources.Resource) (Resou
 	return reg, true
 }
 
-func canonicalSystemSummaryFromResource(resource unifiedresources.Resource, connected map[string]bool) SystemSummary {
+func canonicalSystemSummaryFromResource(resource unifiedresources.Resource, connections *queryCommandConnections) SystemSummary {
 	return SystemSummary{
 		ID:                    strings.TrimSpace(resource.ID),
 		Name:                  resourceDisplayName(resource),
 		Status:                string(resource.Status),
 		Platform:              canonicalResourcePlatform(resource),
 		ChildCount:            resource.ChildCount,
-		CommandAgentConnected: resourceCommandAgentConnected(resource, connected),
+		CommandAgentConnected: connections.resource(resource),
 		CPU:                   metricPercent(resourceMetric(resource, "cpu")),
 		Memory:                metricPercent(resourceMetric(resource, "memory")),
 		Disk:                  metricPercent(resourceMetric(resource, "disk")),
@@ -3609,13 +3680,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 		return strings.ToLower(strings.TrimSpace(clusterName))
 	}
 
-	// Build a set of connected agent hostnames for quick lookup
-	connectedAgentHostnames := make(map[string]bool)
-	if e.agentServer != nil {
-		for _, agent := range e.agentServer.GetConnectedAgents() {
-			connectedAgentHostnames[agent.Hostname] = true
-		}
-	}
+	connections := e.observeQueryCommandConnections(rs)
 
 	systemResources := []unifiedresources.Resource{}
 	appContainerResources := []unifiedresources.Resource{}
@@ -3703,7 +3768,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				count++
 				continue
 			}
-			summary := canonicalSystemSummaryFromResource(resource, connectedAgentHostnames)
+			summary := canonicalSystemSummaryFromResource(resource, connections)
 			summary.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID)
 			response.Systems = append(response.Systems, summary)
 			count++
@@ -3728,11 +3793,14 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				count++
 				continue
 			}
+			id, instance := connections.repeatedNodeIdentity(node)
 			response.Nodes = append(response.Nodes, NodeSummary{
 				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
 				Name:                     node.Name(),
 				Status:                   string(node.Status()),
-				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node.Name()]),
+				ID:                       id,
+				Instance:                 instance,
+				CommandAgentConnected:    connections.node(node.ID()),
 			})
 			count++
 		}
@@ -3920,7 +3988,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 				Hostname:                 hostname,
 				DisplayName:              displayName,
 				ContainerCount:           len(hostContainers),
-				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[hostname] || connectedAgentHostnames[displayName]),
+				CommandAgentConnected:    commandConnectionObservation(connections.hostnames, connections.hostnames[hostname] || connections.hostnames[displayName]),
 			}
 			for _, container := range hostContainers {
 				state := strings.TrimSpace(container.ContainerState())
@@ -5698,13 +5766,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		storagePoolResources = canonicalStoragePoolResources(e.unifiedResourceProvider)
 	}
 
-	// Build a set of connected agent hostnames for quick lookup
-	connectedAgentHostnames := make(map[string]bool)
-	if e.agentServer != nil {
-		for _, agent := range e.agentServer.GetConnectedAgents() {
-			connectedAgentHostnames[agent.Hostname] = true
-		}
-	}
+	connections := e.observeQueryCommandConnections(rs)
 
 	matches := make([]ResourceMatch, 0, limit)
 	total := 0
@@ -5740,7 +5802,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Status:                   status,
 				Host:                     canonicalAgentHost(resource),
 				Platform:                 canonicalResourcePlatform(resource),
-				CommandAgentConnected:    resourceCommandAgentConnected(resource, connectedAgentHostnames),
+				CommandAgentConnected:    connections.resource(resource),
 			})
 		}
 	}
@@ -5754,26 +5816,29 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			if !matchesQuery(queryLower, node.Name(), node.ID()) {
 				continue
 			}
+			id, instance := connections.repeatedNodeIdentity(node)
 			addMatch(ResourceMatch{
 				GovernedResourceMetadata: governance.Resolve(node.Name(), node.ID()),
 				Type:                     "node",
+				ID:                       id,
 				Name:                     node.Name(),
+				Instance:                 instance,
 				Status:                   status,
-				CommandAgentConnected:    commandConnectionObservation(connectedAgentHostnames, connectedAgentHostnames[node.Name()]),
+				CommandAgentConnected:    connections.node(node.ID()),
 			})
 		}
 	}
 
 	if (typeFilter == "" || typeFilter == "vm") && len(vmResources) > 0 {
-		addCanonicalGuestSearchMatches("vm", vmResources, queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
+		addCanonicalGuestSearchMatches("vm", vmResources, queryLower, statusFilter, governance, connections, matchesQuery, addMatch)
 	} else if typeFilter == "" || typeFilter == "vm" {
-		addGuestViewSearchMatches("vm", rs.VMs(), queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
+		addGuestViewSearchMatches("vm", rs.VMs(), queryLower, statusFilter, governance, connections, matchesQuery, addMatch)
 	}
 
 	if (typeFilter == "" || typeFilter == "system-container") && len(systemContainerResources) > 0 {
-		addCanonicalGuestSearchMatches("system-container", systemContainerResources, queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
+		addCanonicalGuestSearchMatches("system-container", systemContainerResources, queryLower, statusFilter, governance, connections, matchesQuery, addMatch)
 	} else if typeFilter == "" || typeFilter == "system-container" {
-		addGuestViewSearchMatches("system-container", rs.Containers(), queryLower, statusFilter, governance, connectedAgentHostnames, matchesQuery, addMatch)
+		addGuestViewSearchMatches("system-container", rs.Containers(), queryLower, statusFilter, governance, connections, matchesQuery, addMatch)
 	}
 
 	if typeFilter == "" || typeFilter == "docker-host" {

@@ -239,6 +239,7 @@ type ResourceMatch struct {
 	Type                      string `json:"type"` // "agent", "node", "vm", "system-container", "app-container", "docker-host", "storage"
 	ID                        string `json:"id,omitempty"`
 	Name                      string `json:"name"`
+	Instance                  string `json:"instance,omitempty"` // Connection that reports a node match; set only when another node shows the same name
 	Status                    string `json:"status,omitempty"`
 	Node                      string `json:"node,omitempty"`                         // Hypervisor node this resource is on
 	NodeCommandAgentConnected *bool  `json:"node_command_agent_connected,omitempty"` // Live command connection on the parent node, independent of telemetry collection
@@ -268,7 +269,8 @@ type NodeSummary struct {
 	GovernedResourceMetadata
 	Name                  string `json:"name"`
 	Status                string `json:"status"`
-	ID                    string `json:"id,omitempty"`
+	ID                    string `json:"id,omitempty"`                      // Canonical resource ID; set only when another node shows the same name, since the name cannot select this one
+	Instance              string `json:"instance,omitempty"`                // Connection that reports this node; set only when another node shows the same name
 	CommandAgentConnected *bool  `json:"command_agent_connected,omitempty"` // True if an execution agent is connected for this node
 }
 

@@ -442,21 +442,27 @@ func (e *PulseToolExecutor) findAgentForNode(reference string) string {
 		}
 		return ""
 	}
-	for _, node := range rs.Nodes() {
-		if node != nil && node.ID() == reference {
-			agent, _ := connectedAgentForNode(rs, node, agents)
-			return agent.AgentID
-		}
-	}
-	if !bareNodeNameCanRoute(rs, reference) {
-		return ""
-	}
-	agent, _ := uniqueConnectedAgent(agents, reference)
+	agent, _ := connectedAgentForNodeReference(rs, reference, agents)
 	return agent.AgentID
 }
 
+// connectedAgentForNodeReference answers for a canonical node ID, or for a bare
+// node name with no node record behind it.
+func connectedAgentForNodeReference(rs unifiedresources.ReadState, reference string, agents []agentexec.ConnectedAgent) (agentexec.ConnectedAgent, bool) {
+	for _, node := range rs.Nodes() {
+		if node != nil && node.ID() == reference {
+			return connectedAgentForNode(rs, node, agents)
+		}
+	}
+	if !bareNodeNameCanRoute(rs, reference) {
+		return agentexec.ConnectedAgent{}, false
+	}
+	return uniqueConnectedAgent(agents, reference)
+}
+
 // connectedAgentForNode names the connected agent that runs commands on a known
-// node. Topology reports the same answer, so its hint matches where a command goes.
+// node. Topology and pulse_query report the same answer, so their hints match
+// where a command goes.
 func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources.NodeView, agents []agentexec.ConnectedAgent) (agentexec.ConnectedAgent, bool) {
 	if node == nil || len(agents) == 0 {
 		return agentexec.ConnectedAgent{}, false
