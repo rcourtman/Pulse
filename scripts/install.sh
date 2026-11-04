@@ -6129,7 +6129,9 @@ while [[ $# -gt 0 ]]; do
         --enable-action-runner) ACTION_RUNNER_ENABLED="true"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
         --disable-action-runner) ACTION_RUNNER_ENABLED="false"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
         --uninstall-action-runner) UNINSTALL_ACTION_RUNNER="true"; shift ;;
-        --action-token-file) ACTION_TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --action-token-file)
+            [[ $# -ge 2 && -n "$2" ]] || fail "--action-token-file requires a non-empty path" "$EXIT_MISSING_ARGS"
+            ACTION_TOKEN_FILE_PATH="$2"; shift 2 ;;
         --grant-smart) GRANT_SMART="true"; shift ;;
         --grant-pct) GRANT_PCT="true"; shift ;;
         --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
@@ -6149,7 +6151,11 @@ while [[ $# -gt 0 ]]; do
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
         --disk-include) DISK_INCLUDES+=("$2"); shift 2 ;;
         --non-interactive) NON_INTERACTIVE="true"; shift ;;
-        --token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --token-file)
+            # An explicitly selected file must not silently become inline or
+            # saved-credential fallback when its argument is empty.
+            [[ $# -ge 2 && -n "$2" ]] || fail "--token-file requires a non-empty path" "$EXIT_MISSING_ARGS"
+            TOKEN_FILE_PATH="$2"; shift 2 ;;
         --pulse-url) PULSE_URL="$2"; shift 2 ;;
         --output) OUTPUT_FORMAT="$2"; shift 2 ;;
         --preflight-only) PREFLIGHT_ONLY="true"; shift ;;
