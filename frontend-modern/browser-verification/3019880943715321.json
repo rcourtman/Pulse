@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "e9d961189fb4cd5784a5d0d115fbd170158bdf73",
+  "verified_at": "2026-11-04T00:00:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "a46c2849d4e9ff0f0610e40bf0e47050dec905ed6dbc9b50b84549d38311be01"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 700,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Mock stack built from this change: Coverage with protected, attention and not-evaluated rows",
+    "Header reads \"Protection\" at 1280 and 700, and \"Status\" at 390 and 320",
+    "Filter label reads \"Protection\" at 1280",
+    "A scan of text, title, aria-label and placeholder finds no \"posture\" at 1280, default or with a row expanded",
+    "Visible page text has no \"posture\" at 700, 390 and 320",
+    "Protected rows at 390 and 320: 34 words, none clipped, rows at 32px",
+    "No horizontal overflow at 1280, 700, 390 or 320"
+  ],
+  "interactions": [
+    "Sorted the phone table with the Status header at 390: aria-sort changes from ascending to descending and protected rows come into view",
+    "Sorted the same way at 320",
+    "Expanded and collapsed a Coverage row at 1280",
+    "Loaded Coverage fresh at each width and read the header and row words"
+  ]
+}

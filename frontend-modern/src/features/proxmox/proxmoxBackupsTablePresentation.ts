@@ -134,7 +134,7 @@ export const COVERAGE_COLUMNS: readonly BackupTableColumn<CoverageColumnId>[] = 
   { id: 'type', label: 'Type', kind: 'text' },
   { id: 'targetId', label: 'Target ID', kind: 'text' },
   { id: 'node', label: 'Node', kind: 'text' },
-  { id: 'posture', label: 'Posture', kind: 'text' },
+  { id: 'posture', label: 'Protection', kind: 'text' },
   { id: 'latest', label: 'Last backup', kind: 'numeric-value' },
   { id: 'task', label: 'Task', kind: 'text' },
 ];
