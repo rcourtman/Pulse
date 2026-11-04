@@ -25,6 +25,9 @@ establish safe recovery.
   [saved-settings access recovery](#signed-in-but-saved-infrastructure-settings-are-unavailable).
   An unreadable connection is not evidence that it was removed; keep its saved
   credentials, TLS trust and collection scope.
+- **A connection edit or removal says “Configuration saved but failed to apply changes”:**
+  distinguish the [saved change from live monitoring](#infrastructure-changes-were-saved-but-not-applied).
+  An error does not mean the removal was undone.
 - **Server installation finished but Pulse is unavailable:** distinguish
   [container state, Pulse service state and web access](INSTALL.md#installation-did-not-reach-a-usable-server).
   Preserve the existing installation; a success banner is not readiness.
@@ -563,6 +566,30 @@ account or organisation change. Use observations already available; do not
 run Diagnostics or replay a mutation just to collect them. Keep tokens,
 cookies, passwords, full configuration, **Copy as cURL** and network exports
 private; a cropped error must not expose saved credentials or private hosts.
+
+#### Infrastructure changes were saved but not applied
+
+**Configuration saved but failed to apply changes** means Pulse saved the
+connection change, but could not reload monitoring to use it. After a removal,
+the connection may already be absent from the saved list. **Failed to save
+configuration** is a different error. A timeout or lost response alone does not
+establish which stage completed.
+
+Do not repeat the removal, recreate the connection or change an unrelated
+setting to force a reload. Refreshing your browser reloads the page, not the
+server's monitoring configuration.
+
+If the page is usable, check the existing **Settings → Infrastructure** list
+under the intended account and organisation, without another Test or Save.
+Keep that saved inventory separate from live readings. An old dashboard row or
+[green health response](#health-is-green-but-the-dashboard-is-stalled) does not
+prove monitoring is still updating. Use the monitored platform's own status
+and other existing alerts while Pulse's readings or delivery are uncertain.
+
+For [help](#-getting-help), retain the original action, time, exact error and
+version where known, plus whether readings continued afterwards. Unknown is
+valid. Do not repeat the action or run Diagnostics to obtain evidence. Keep
+saved credentials, certificate trust, data and encryption keys intact and private.
 
 #### Audit Log verification shows unsigned events
 
