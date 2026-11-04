@@ -171,6 +171,62 @@ func TestResolveResource_DockerHost(t *testing.T) {
 	}
 }
 
+// A Docker location names the agent that reports it, so routing never has to
+// guess the machine from a hostname another machine can also hold.
+func TestResolveResource_DockerLocationNamesItsOwnAgent(t *testing.T) {
+	container := models.DockerContainer{ID: "ctr-1", Name: "web", State: "running"}
+
+	t.Run("a standalone host and its container", func(t *testing.T) {
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{{
+			ID: "dh-1", AgentID: "agent-1", Hostname: "dock", MachineID: "machine-1",
+			Containers: []models.DockerContainer{container},
+		}}})
+		if loc := ResolveResource(rr, "dock"); loc.ResourceType != "docker-host" || loc.AgentID != "agent-1" {
+			t.Fatalf("host location: %+v", loc)
+		}
+		if loc := ResolveResource(rr, "web"); loc.ResourceType != "app-container" || loc.AgentID != "agent-1" {
+			t.Fatalf("container location: %+v", loc)
+		}
+	})
+
+	t.Run("an agent record merged into the host speaks for it", func(t *testing.T) {
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(models.StateSnapshot{
+			Hosts:       []models.Host{{ID: "host-1", Hostname: "dock", MachineID: "machine-1", Status: "online"}},
+			DockerHosts: []models.DockerHost{{ID: "dh-1", AgentID: "docker-module", Hostname: "dock", MachineID: "machine-1", Containers: []models.DockerContainer{container}}},
+		})
+		if loc := ResolveResource(rr, "web"); loc.AgentID != "host-1" {
+			t.Fatalf("container location: %+v", loc)
+		}
+	})
+
+	guestLocation := func(snapshot models.StateSnapshot) models.ResourceLocation {
+		snapshot.Containers = []models.Container{{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: "dock", Type: "lxc", Status: "running"}}
+		snapshot.DockerHosts = []models.DockerHost{{ID: "proxmox-lxc-docker:lab:pve1:200", AgentID: "proxmox-lxc-docker:lab:pve1:200", Hostname: "dock", Containers: []models.DockerContainer{container}}}
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(snapshot)
+		return ResolveResource(rr, "web")
+	}
+
+	t.Run("a backing guest answers with its node's agent", func(t *testing.T) {
+		loc := guestLocation(models.StateSnapshot{
+			Nodes: []models.Node{{ID: "lab-pve1", Instance: "lab", Name: "pve1", Status: "online", LinkedAgentID: "node-agent"}},
+			Hosts: []models.Host{{ID: "node-agent", Hostname: "pve1", Status: "online", LinkedNodeID: "lab-pve1"}},
+		})
+		if loc.DockerHostType != "system-container" || loc.DockerHostVMID != 200 || loc.AgentID != "node-agent" {
+			t.Fatalf("container location: %+v", loc)
+		}
+	})
+
+	t.Run("a backing guest with no agent on its node names none", func(t *testing.T) {
+		loc := guestLocation(models.StateSnapshot{})
+		if loc.DockerHostType != "system-container" || loc.DockerHostVMID != 200 || loc.AgentID != "" {
+			t.Fatalf("container location: %+v", loc)
+		}
+	})
+}
+
 func TestResolveResource_TrueNASAppDoesNotUseDockerRouting(t *testing.T) {
 	rr := newTrueNASAppRegistryFixture()
 

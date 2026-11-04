@@ -83,6 +83,7 @@ func resourceContext(rs ReadState, resource *Resource) ResolvedResourceContext {
 			view := NewDockerHostView(resource)
 			loc.ResourceType = "docker-host"
 			loc.Name, loc.DockerHostName, loc.TargetHost = view.Hostname(), view.Hostname(), view.Hostname()
+			loc.AgentID = view.AgentID()
 			resolveDockerHostParent(rs, view.Hostname(), view.HostSourceID(), false, &loc)
 		default:
 			view := NewHostView(resource)

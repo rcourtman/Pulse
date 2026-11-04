@@ -18,6 +18,15 @@ func routingFixtureDocker(id, hostname, displayName string) models.DockerHost {
 	return models.DockerHost{ID: id, AgentID: id, Hostname: hostname, DisplayName: displayName, MachineID: "machine-" + id, Status: "online", LastSeen: time.Now()}
 }
 
+// routingFixtureDockerOfAgent is a Docker host with no agent record merged into
+// it, the shape a Docker-only agent leaves: its report names the agent, and the
+// host's ID says nothing about it.
+func routingFixtureDockerOfAgent(id, agentID, hostname string) models.DockerHost {
+	host := routingFixtureDocker(id, hostname, "")
+	host.AgentID = agentID
+	return host
+}
+
 // routingFixtureDockerResourceID finds a Docker host by the ID it reported, since
 // rows carry the canonical ID.
 func routingFixtureDockerResourceID(t *testing.T, registry *unifiedresources.ResourceRegistry, sourceID string) string {
@@ -113,6 +122,27 @@ func TestQueryHostFlagsFollowCommandRouting(t *testing.T) {
 			},
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-x", Hostname: "shared"}},
 			docker: map[string]string{"dock-a": ""},
+		},
+		{
+			name: "two Docker hosts with no agent records share a hostname",
+			snapshot: models.StateSnapshot{DockerHosts: []models.DockerHost{
+				routingFixtureDockerOfAgent("dh-a", "agent-a", "dock"),
+				routingFixtureDockerOfAgent("dh-b", "agent-b", "dock"),
+			}},
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-a", Hostname: "dock"}},
+			docker: map[string]string{"dh-a": "agent-a", "dh-b": ""},
+		},
+		{
+			name:     "a Docker host with no session, beside a machine with its hostname",
+			snapshot: models.StateSnapshot{DockerHosts: []models.DockerHost{routingFixtureDockerOfAgent("dh-b", "agent-b", "dock")}},
+			agents:   []agentexec.ConnectedAgent{{AgentID: "agent-a", Hostname: "dock"}},
+			docker:   map[string]string{"dh-b": ""},
+		},
+		{
+			name:     "a Docker host whose own agent connects under another name",
+			snapshot: models.StateSnapshot{DockerHosts: []models.DockerHost{routingFixtureDockerOfAgent("dh-a", "agent-a", "dock")}},
+			agents:   []agentexec.ConnectedAgent{{AgentID: "agent-a", Hostname: "renamed"}},
+			docker:   map[string]string{"dh-a": "agent-a"},
 		},
 		{
 			name:     "a Docker host in a container, with only the agent inside it connected",
@@ -211,6 +241,72 @@ func TestQueryHostFlagsFollowCommandRouting(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// A container's command goes where its Docker host's would, so it cannot reach
+// the other machine either.
+func TestContainerCommandFollowsItsDockerHostsOwnAgent(t *testing.T) {
+	withContainer := func(id, agentID string) models.DockerHost {
+		host := routingFixtureDockerOfAgent(id, agentID, "dock")
+		host.Containers = []models.DockerContainer{{ID: "ctr-" + id, Name: "web-" + id, State: "running", Status: "Up 1 hour"}}
+		return host
+	}
+	registry := sameNameRegistry(models.StateSnapshot{DockerHosts: []models.DockerHost{
+		withContainer("dh-a", "agent-a"),
+		withContainer("dh-b", "agent-b"),
+	}})
+	agents := []agentexec.ConnectedAgent{{AgentID: "agent-a", Hostname: "dock"}}
+
+	want := map[string]string{"web-dh-a": "agent-a", "web-dh-b": ""}
+	seen := 0
+	for _, container := range registry.DockerContainers() {
+		agent, known := want[container.Name()]
+		if !known {
+			t.Fatalf("unexpected container %q", container.Name())
+		}
+		seen++
+		routed := routeCommandTarget(registry, agents, container.ID())
+		if routed.AgentID != agent || routed.ResolvedKind != "app-container" {
+			t.Fatalf("%s routed to %q as %q, want %q", container.Name(), routed.AgentID, routed.ResolvedKind, agent)
+		}
+	}
+	if seen != len(want) {
+		t.Fatalf("saw %d containers, want %d", seen, len(want))
+	}
+}
+
+// Pulse finds these hosts by probing a guest through its node, so their agent ID
+// is synthetic and no session can hold it. The guest's node reaches them.
+func TestLXCDiscoveredDockerHostRoutesThroughItsGuest(t *testing.T) {
+	synthetic := "proxmox-lxc-docker:lab:pve1:200"
+	registry := sameNameRegistry(models.StateSnapshot{
+		Nodes:       []models.Node{{ID: "lab-pve1", Instance: "lab", Name: "pve1", Status: "online"}},
+		Containers:  []models.Container{{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: "dock", Type: "lxc", Status: "running"}},
+		DockerHosts: []models.DockerHost{routingFixtureDockerOfAgent(synthetic, synthetic, "dock")},
+	})
+	id := routingFixtureDockerResourceID(t, registry, synthetic)
+
+	routed := routeCommandTarget(registry, []agentexec.ConnectedAgent{{AgentID: "node-agent", Hostname: "pve1"}}, id)
+	if routed.AgentID != "node-agent" || routed.Transport != "pct_exec" || routed.TargetType != "container" || routed.TargetID != "200" {
+		t.Fatalf("expected the node's agent to reach the guest: %+v", routed)
+	}
+	routed = routeCommandTarget(registry, []agentexec.ConnectedAgent{{AgentID: "someone-else", Hostname: "dock"}}, id)
+	if routed.AgentID != "" {
+		t.Fatalf("a namesake's agent cannot stand in for the guest's node: %+v", routed)
+	}
+}
+
+// An agent ID that no longer has a guest behind it names nothing a session could
+// hold, so the host's hostname still cannot pick a machine.
+func TestLXCDiscoveredDockerHostWithoutItsGuestRoutesNowhere(t *testing.T) {
+	synthetic := "proxmox-lxc-docker:lab:pve1:200"
+	registry := sameNameRegistry(models.StateSnapshot{DockerHosts: []models.DockerHost{routingFixtureDockerOfAgent(synthetic, synthetic, "dock")}})
+	id := routingFixtureDockerResourceID(t, registry, synthetic)
+
+	routed := routeCommandTarget(registry, []agentexec.ConnectedAgent{{AgentID: "someone-else", Hostname: "dock"}}, id)
+	if routed.AgentID != "" {
+		t.Fatalf("expected no route: %+v", routed)
 	}
 }
 
