@@ -2990,6 +2990,8 @@ check_existing_installation() {
     local BINARY_PATH=""
     local detected_service="$SERVICE_NAME"
     local service_available=false
+    local service_running=false
+    local active_state=""
 
     # Check for the binary in expected locations
     if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
@@ -3009,12 +3011,30 @@ check_existing_installation() {
         service_available=true
     fi
 
+    # A failed or stuck manager read is not evidence that Pulse is stopped or
+    # absent. Refuse before main can select fresh installation or replacement.
+    # Keep this observation separate from the unit-file inventory above: a
+    # successful inventory does not establish that the manager is reachable.
+    if [[ "$service_available" == true ]]; then
+        if ! active_state=$(LC_ALL=C timeout -k 1 5 systemctl show "$detected_service" --property=ActiveState --value 2>/dev/null); then
+            print_error "Cannot determine the Pulse service state. No installation changes were made; inspect systemctl status $detected_service before retrying." >&2
+            return 2
+        fi
+        case "$active_state" in
+            active|reloading|refreshing) service_running=true ;;
+            inactive|failed) ;;
+            *)
+                print_error "Cannot determine the Pulse service state: it is unknown or still changing. No installation changes were made; inspect systemctl status $detected_service before retrying." >&2
+                return 2 ;;
+        esac
+    fi
+
     # Try to get version if binary exists
     if [[ -n "$BINARY_PATH" ]]; then
-        CURRENT_VERSION=$($BINARY_PATH --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
+        CURRENT_VERSION=$("$BINARY_PATH" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
     fi
     
-    if [[ "$service_available" == true ]] && systemctl is-active --quiet "$detected_service" 2>/dev/null; then
+    if [[ "$service_running" == true ]]; then
         if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
             print_info "Pulse $CURRENT_VERSION is currently running"
         else
