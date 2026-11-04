@@ -302,8 +302,10 @@ test("populated platform tables expose one named disclosure control per resource
 test("the logged-out entry surface has no automatically detectable WCAG A/AA violations", async ({
   browser,
 }, testInfo) => {
+  // browser.newContext inherits this file's signed-in storage state unless told otherwise.
   const context = await browser.newContext({
     baseURL: testInfo.project.use.baseURL,
+    storageState: { cookies: [], origins: [] },
   });
   const page = await context.newPage();
 
