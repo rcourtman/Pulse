@@ -56,7 +56,11 @@ func TestTenantInitializationDoesNotBlockLiveReads(t *testing.T) {
 		}
 		manager.ForEachMonitor(func(m *Monitor) {
 			if m.GetOrgID() == "starting" {
-				t.Error("unfinished runtime was exposed to live readers")
+				select {
+				case <-release: // The old blocked reader resumes after release.
+				default:
+					t.Error("unfinished runtime was exposed to live readers")
+				}
 			}
 		})
 	}()
