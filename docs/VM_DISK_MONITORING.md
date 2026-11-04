@@ -15,6 +15,12 @@ freeze-enabled backups, even when it only reads disk or memory information.
 There is a [report of a VM remaining frozen despite an OK backup task](https://github.com/rcourtman/Pulse/issues/2439).
 The reported command-ID collision is not established as a reproduced cause.
 
+Pulse pauses its own guest-agent reads while Proxmox reports a VM lock, such as
+a backup, and for up to the first hour of a replication job on the VM, because
+replication freezes the guest without setting a VM lock. Cloning a running VM or
+importing disks from one can also freeze it without a lock, and Pulse can't
+detect those.
+
 If your installation is affected, stop the Pulse service before the backup
 and keep it stopped until the backup has ended and independent checks confirm
 **thaw, fresh successful writes to every filesystem covered by the backup, and

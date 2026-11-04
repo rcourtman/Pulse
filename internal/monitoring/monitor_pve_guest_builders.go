@@ -973,7 +973,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 
 func guestAgentDiskDeferred(reason string) bool {
 	switch strings.TrimPrefix(reason, "prev-") {
-	case "vm-locked", "lock-unverified", "agent-busy", "agent-cooldown", "agent-capacity", "agent-timeout", "agent-response-incomplete", "agent-redirect", "agent-transport-unverified", "agent-completion-unverified":
+	case "vm-locked", "replication-active", "lock-unverified", "agent-busy", "agent-cooldown", "agent-capacity", "agent-timeout", "agent-response-incomplete", "agent-redirect", "agent-transport-unverified", "agent-completion-unverified":
 		return true
 	}
 	return false

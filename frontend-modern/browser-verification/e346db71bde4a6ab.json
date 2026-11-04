@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "577591d4b9455d97bce0b42cbf4c6a39908ae414",
+  "verified_at": "2026-11-04T15:39:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "cac9a733d995cd10363246812c4c317a693fa7d2bc9cf3973e8d210be562e156",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "040e25bc3648008cc53d6f3836b754f31ed2ec75b0916009330f7c4874df32cb"
+  },
+  "routes": [
+    "/browser-tests/guest-disk-deferral.html"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "replication-active on a retained reading and with no reading, in the production row, tooltip, list and drawer",
+    "the other deferral reasons unchanged",
+    "fresh resumption after a deferral",
+    "desktop light and phone dark, both on Chromium"
+  ],
+  "interactions": [
+    "hovered the disk cell for its tooltip",
+    "switched between bars and sparklines",
+    "opened the drawer and read the filesystem status",
+    "moved one VM between reasons without a row remount"
+  ]
+}

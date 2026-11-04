@@ -72,6 +72,7 @@ func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, er
 	for _, entry := range *raw.Data {
 		jobs = append(jobs, parseReplicationJob(entry))
 	}
+	recordGuestReplicationJobs(c.baseURL, jobs)
 
 	// Enrich jobs with status data from the per-node status endpoint
 	// The /cluster/replication endpoint only returns config, not status

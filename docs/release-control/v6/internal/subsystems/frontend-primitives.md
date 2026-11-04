@@ -1610,6 +1610,8 @@ and `browser-tests/guest-disk-deferral.cjs` cover the fixed reasons, retained/no
 previous data and fresh resumption with production components and CSS on desktop
 Chromium and touch WebKit. Synthetic observations do not establish the native
 command-ID cause, guest thaw, fresh History collection or containing release.
+`replication-active` is one of those fixed reasons: its copy says a Proxmox
+replication job is running on the VM, and the retained-reading treatment is unchanged.
 
 The shipped row also keeps a filesystem provenance cue in every disk
 presentation: resting bars, selected sparklines, the pointer/focus history lens

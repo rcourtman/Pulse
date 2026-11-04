@@ -57,7 +57,13 @@ var guestAgentGuards = struct {
 	aliases     map[string][]string
 	entries     map[guestAgentGuardKey]guestAgentGuardEntry
 	nextCleanup time.Time
-}{aliases: make(map[string][]string), entries: make(map[guestAgentGuardKey]guestAgentGuardEntry)}
+	// Guests with a replication job, by endpoint. See guest_agent_replication.go.
+	replicationGuests map[string]map[int]bool
+}{
+	aliases:           make(map[string][]string),
+	entries:           make(map[guestAgentGuardKey]guestAgentGuardEntry),
+	replicationGuests: make(map[string]map[int]bool),
+}
 
 func registerGuestAgentEndpoints(host string, endpoints []string) {
 	guestAgentGuards.Lock()
@@ -213,6 +219,9 @@ func (c *Client) getGuestAgent(ctx context.Context, path, node string, vmid int)
 	}
 	defer commandClient.CloseIdleConnections()
 	if err := c.verifyGuestAgentUnlocked(ctx, node, vmid); err != nil {
+		return nil, err
+	}
+	if err := c.verifyGuestAgentNotReplicating(ctx, node, vmid); err != nil {
 		return nil, err
 	}
 	// A password-session 401 must not replay this command after re-authentication:

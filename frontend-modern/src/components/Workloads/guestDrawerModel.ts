@@ -503,6 +503,7 @@ export const GUEST_DRAWER_BACKUP_PRECAUTION =
 
 const guestReadDeferrals = new Set([
   'vm-locked',
+  'replication-active',
   'lock-unverified',
   'agent-busy',
   'agent-cooldown',
