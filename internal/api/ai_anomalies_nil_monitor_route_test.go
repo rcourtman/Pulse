@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // A helper's default fallback is not evidence that a tenant can read it. Pin
@@ -17,6 +18,11 @@ import (
 func TestRoutedAnomaliesNilMonitorBoundary(t *testing.T) {
 	t.Setenv("PULSE_AUTH_BYPASS", "false")
 	rig := newTenantPatrolRig(t)
+	// A known but ungranted org tests authorization, not the earlier
+	// invalid-org guard for an unprovisioned selector.
+	if err := rig.router.multiTenant.SaveOrganization(&models.Organization{ID: "other-org", DisplayName: "OTHER"}); err != nil {
+		t.Fatal(err)
+	}
 	rig.server.Client().Timeout = 10 * time.Second
 	manager := rig.router.mtMonitor
 	defaultID := readStateNodeID(t, rig.defaultMonitor)
