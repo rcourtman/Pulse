@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import unittest
@@ -28,6 +29,35 @@ def ignore_entries() -> list[str]:
 
 
 class GitleaksIgnoreTest(unittest.TestCase):
+    def test_portal_receipt_exceptions_are_public_auth_source_blob_ids(self) -> None:
+        receipt_path = "internal/cloudcp/portal/browser-verification/faa976065fe7bd60.json"
+        source_commit = "3b4ef64ed6a0c2e2356d775478ad4d64418a2222"
+        receipt_text = (REPO_ROOT / receipt_path).read_text(encoding="utf-8")
+        receipt = json.loads(receipt_text)
+        source_lines = {
+            9: "internal/cloudcp/portal/frontend/src/auth_controller.test.ts",
+            10: "internal/cloudcp/portal/frontend/src/auth_controller.ts",
+        }
+        expected_entries = {
+            f"{receipt_path}:generic-api-key:{line}" for line in source_lines
+        }
+        self.assertEqual(
+            {entry for entry in ignore_entries() if receipt_path in entry},
+            expected_entries,
+        )
+        for line, source_path in source_lines.items():
+            with self.subTest(source_path=source_path):
+                blob_id = subprocess.check_output(
+                    ["git", "rev-parse", f"{source_commit}:{source_path}"],
+                    cwd=REPO_ROOT, text=True,
+                ).strip()
+                self.assertRegex(blob_id, r"^[0-9a-f]{40}$")
+                self.assertEqual(receipt["verified_blobs"][source_path], blob_id)
+                self.assertEqual(
+                    json.loads("{" + receipt_text.splitlines()[line - 1].rstrip(",") + "}"),
+                    {source_path: blob_id},
+                )
+
     def test_entries_are_exact_fingerprints(self) -> None:
         invalid = [
             entry

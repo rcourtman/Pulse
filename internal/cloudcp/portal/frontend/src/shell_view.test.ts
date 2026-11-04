@@ -122,6 +122,13 @@ describe('shell view', function() {
     expect(html).toContain('owner@example.com');
     expect(html).toContain('id="logout-btn"');
     expect(html).toContain('Sign out');
+    var root = document.createElement('div');
+    root.innerHTML = html;
+    expect(root.querySelector('#logout-btn')?.getAttribute('aria-describedby')).toBe('portal-logout-error');
+    var error = root.querySelector('#portal-logout-error') as HTMLElement;
+    expect(error.hidden).toBe(true);
+    expect(error.getAttribute('role')).toBe('alert');
+    expect(error.textContent).toBe('');
   });
 
   it('renders signed-out header with create-account link', function() {
@@ -134,6 +141,7 @@ describe('shell view', function() {
     expect(html).toContain('href="/signup"');
     expect(html).toContain('Create account');
     expect(html).not.toContain('logout-btn" id="logout-btn"');
+    expect(html).not.toContain('portal-logout-error');
   });
 
   it('hides create-account actions when signup is unavailable', function() {

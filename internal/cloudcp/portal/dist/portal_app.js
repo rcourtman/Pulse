@@ -1755,10 +1755,42 @@
     return document.getElementById(id);
   }
   function installAuthController(deps) {
+    var logoutRequest = createMutationState();
+    function renderLogoutState() {
+      if (!deps.store.getBootstrap().authenticated) resetMutationState(logoutRequest);
+      var button = getElement2("logout-btn");
+      if (button) {
+        button.disabled = logoutRequest.pending;
+        button.textContent = logoutRequest.pending ? "Signing out\u2026" : "Sign out";
+        button.setAttribute("aria-busy", String(logoutRequest.pending));
+      }
+      var error = getElement2("portal-logout-error");
+      if (error) {
+        error.textContent = logoutRequest.error;
+        error.hidden = !logoutRequest.error;
+      }
+    }
+    async function signOut() {
+      if (logoutRequest.pending || !deps.store.getBootstrap().authenticated) return;
+      beginMutationState(logoutRequest);
+      renderLogoutState();
+      try {
+        await deps.api.logout();
+      } catch (_) {
+        failMutationState(logoutRequest, "Sign out could not be confirmed. You may still be signed in. Try Sign out again.");
+        renderLogoutState();
+        getElement2("logout-btn")?.focus();
+        return;
+      }
+      window.location.href = deps.store.getBootstrap().portal_path;
+    }
     deps.store.updateLoginState(function(loginState) {
       var bootstrap = deps.store.getBootstrap();
       syncLoginStateBootstrapEmail(loginState, bootstrap.email || "");
     }, { notify: false });
+    deps.store.subscribeBootstrap(renderLogoutState);
+    deps.store.subscribeLogin(renderLogoutState);
+    renderLogoutState();
     async function sendMagicLink() {
       if (deps.store.getBootstrap().email_sign_in_available === false) {
         return;
@@ -1827,15 +1859,7 @@
         return;
       }
       event.preventDefault();
-      logoutBtn.disabled = true;
-      logoutBtn.textContent = "Signing out\u2026";
-      (async function() {
-        try {
-          await deps.api.logout();
-        } catch (_) {
-        }
-        window.location.href = deps.store.getBootstrap().portal_path;
-      })();
+      void signOut();
     });
     document.addEventListener("input", function(event) {
       var target = asHTMLElement2(event.target);
@@ -3766,7 +3790,7 @@
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {
-      return '<div class="header-account-chip"><span class="header-account-email">' + escapeHTML(context.bootstrap.email || "") + '</span><button class="logout-btn" id="logout-btn" type="button">Sign out</button></div>';
+      return '<div class="header-account-chip"><span class="header-account-email">' + escapeHTML(context.bootstrap.email || "") + '</span><button class="logout-btn" id="logout-btn" type="button" aria-describedby="portal-logout-error">Sign out</button></div><div class="header-logout-error" id="portal-logout-error" role="alert" aria-atomic="true" hidden></div>';
     }
     if (!hasSignupPath(context.signupPath)) {
       return "";
