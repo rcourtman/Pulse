@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
   E2E_CREDENTIALS,
   apiRequest,
@@ -8,6 +8,23 @@ import {
   logout,
   setMockMode,
 } from './helpers';
+
+
+async function recordBrowserReview(page: Page, testInfo: TestInfo, state: string) {
+  if (!process.env.CI || !['chromium', 'mobile-safari'].includes(testInfo.project.name)) return;
+  const frame = await page.screenshot({ type: 'jpeg', quality: 80, animations: 'disabled' });
+  await testInfo.attach('browser-review-' + state, { body: frame, contentType: 'image/jpeg' });
+  const encoded = frame.toString('base64');
+  const id = testInfo.project.name + ':' + state + ':' + testInfo.retry;
+  const chunks = Math.ceil(encoded.length / 6000);
+  console.log('PULSE_BROWSER_REVIEW ' + JSON.stringify({
+    id, state, url: page.url(), viewport: page.viewportSize(), revision: process.env.GITHUB_SHA,
+    bytes: frame.length, chunks,
+  }));
+  for (let index = 0; index < chunks; index++) {
+    console.log('PULSE_BROWSER_REVIEW_CHUNK ' + JSON.stringify({ id, index, data: encoded.slice(index * 6000, (index + 1) * 6000) }));
+  }
+}
 
 const truthy = (value: string | undefined) => {
   if (!value) return false;
@@ -32,7 +49,10 @@ test.describe.serial('Core E2E flows', () => {
     expect(stateRes.ok()).toBeTruthy();
   });
 
-  test('Alerts page - create and delete threshold override', async ({ page }) => {
+  test('Alerts page - create and delete threshold override', async ({ page, isMobile }, testInfo) => {
+    // Exercise the desktop row commit boundary as well as the phone card
+    // Save action covered by the mobile projects.
+    if (!isMobile) await page.setViewportSize({ width: 1920, height: 1080 });
     await ensureAuthenticated(page);
 
     await page.goto('/alerts/overview');
@@ -137,6 +157,7 @@ test.describe.serial('Core E2E flows', () => {
       .getByRole('button', { name: /^Cancel (editing|threshold edits)$/ })
       .first();
     await expect(cancelButton).toBeVisible();
+    if (!isMobile) await expect(cancelButton.locator('xpath=ancestor::tr')).toHaveCount(1);
     const editorContainer = cancelButton.locator(
       'xpath=ancestor::*[.//input[@type="number"]][1]',
     );
@@ -149,12 +170,15 @@ test.describe.serial('Core E2E flows', () => {
     await cpuInput.press('Tab');
     expect(await editorContainer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
     await expect(unsaved).toHaveCount(0);
+    await recordBrowserReview(page, testInfo, 'alert-editor-draft');
     // Desktop commits when focus leaves the whole row. Cards retain the
     // draft until Save. Move focus outside the editor, including its slider,
     // and wait for the active layout's actual commit boundary.
     await page.getByPlaceholder('Search resources...').focus();
-    const commitMobileEdit = page.getByRole('button', {
-      name: `Save threshold edits for ${resourceName}`,
+    // Resource labels can refresh while the draft is open. Keep the action
+    // scoped to this editor rather than a captured presentation name.
+    const commitMobileEdit = editorContainer.getByRole('button', {
+      name: /^Save threshold edits for /,
     });
     await expect(unsaved.or(commitMobileEdit).first()).toBeVisible();
     if (await commitMobileEdit.isVisible().catch(() => false)) {
@@ -188,6 +212,7 @@ test.describe.serial('Core E2E flows', () => {
     const updatedResourceContainer = await resourceContainerForEditControl(editControls.first());
     const revertOverride = updatedResourceContainer.getByRole('button', { name: /^Revert to defaults for / });
     await expect(revertOverride).toBeVisible();
+    await recordBrowserReview(page, testInfo, 'alert-override-persisted');
 
     await revertOverride.click();
     await expect(unsaved).toBeVisible();

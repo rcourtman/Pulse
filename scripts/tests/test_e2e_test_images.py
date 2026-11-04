@@ -282,6 +282,82 @@ class E2EImageBundleTest(unittest.TestCase):
 
 
 class E2EImageWorkflowTest(unittest.TestCase):
+    def assert_partition_admission(self, workflow):
+        selection = job_block(workflow, "tier-selection")
+        command = "run: node scripts/check-probation-shards.mjs"
+        self.assertEqual(selection.count(command), 1)
+        start = selection.rindex("      - name:", 0, selection.index(command))
+        end = selection.find("\n      - name:", selection.index(command))
+        proof = selection[start:end if end >= 0 else None]
+        self.assertIn("working-directory: tests/integration", proof)
+        self.assertLess(selection.index("npm ci"), start)
+        for ignored in ("continue-on-error", "if:", "||"):
+            self.assertNotIn(ignored, proof)
+        # The actual enumeration proof must block the single image producer
+        # and every downstream consumer, rather than run beside fan-out.
+        self.assert_workflow(workflow)
+
+    def test_complete_partition_proof_blocks_image_fanout(self):
+        source = WORKFLOW.read_text()
+        self.assert_partition_admission(source)
+        command = "run: node scripts/check-probation-shards.mjs"
+        for replacement in (
+            "run: echo omitted",
+            command + " || true",
+            "if: false\n        " + command,
+            "continue-on-error: true\n        " + command,
+        ):
+            with self.subTest(mutation=replacement):
+                with self.assertRaises(AssertionError):
+                    self.assert_partition_admission(source.replace(command, replacement))
+
+    def assert_retry_qualification(self, workflow):
+        # Qualification consumes admitted images and cannot soften a flaky PR.
+        self.assert_workflow(workflow)
+        selection = job_block(workflow, "tier-selection")
+        command = "run: node --test scripts/flaky-qualification.test.mjs"
+        self.assertEqual(selection.count(command), 1)
+        start = selection.rindex("      - name:", 0, selection.index(command))
+        end = selection.index("\n      - name:", selection.index(command))
+        proof = selection[start:end]
+        self.assertLess(selection.index("npm ci"), start)
+        self.assertIn("working-directory: tests/integration", proof)
+        for ignored in ("continue-on-error", "if:", "||"):
+            self.assertNotIn(ignored, proof)
+        consumer = job_block(workflow, "e2e")
+        for name, selector in (
+            ("stable", "github.event_name == 'pull_request' && needs.scope.outputs.run_probation == 'true'"),
+            ("probation", "github.event_name == 'pull_request'"),
+        ):
+            start = consumer.index(f"- name: Run {name}-tier E2E suite\n")
+            end = consumer.index("\n      - name:", start)
+            suite = consumer[start:end]
+            self.assertIn("PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ " + selector + " }}", suite)
+            shell = suite.split("        run: |\n", 1)[1]
+            self.assertNotIn("${{", shell)
+            self.assertEqual(shell.count("--fail-on-flaky-tests"), 1)
+            self.assertIn('if [ "$PULSE_E2E_FAIL_ON_FLAKY_TESTS" = "true" ]; then', shell)
+            self.assertNotIn("|| true", shell)
+        self.assertIn("continue-on-error: ${{ github.event_name != 'pull_request' }}", consumer)
+
+    def test_source_bound_qualification_rejects_flaky_retries(self):
+        source = WORKFLOW.read_text()
+        self.assert_retry_qualification(source)
+        stable_policy = "PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ github.event_name == 'pull_request' && needs.scope.outputs.run_probation == 'true' }}"
+        probation_policy = "PULSE_E2E_FAIL_ON_FLAKY_TESTS: ${{ github.event_name == 'pull_request' }}"
+        mutations = {
+            "missing runner proof": source.replace("run: node --test scripts/flaky-qualification.test.mjs", "run: echo omitted"),
+            "ignored runner proof": source.replace("run: node --test scripts/flaky-qualification.test.mjs", "run: node --test scripts/flaky-qualification.test.mjs || true"),
+            "missing stable flag": source.replace("--fail-on-flaky-tests", "--pass-with-no-tests", 1),
+            "widened stable policy": source.replace(stable_policy, probation_policy, 1),
+            "inverted probation policy": source.replace(probation_policy, probation_policy.replace(" == ", " != "), 1),
+        }
+        for name, mutation in mutations.items():
+            with self.subTest(mutation=name):
+                self.assertNotEqual(mutation, source)
+                with self.assertRaises(AssertionError):
+                    self.assert_retry_qualification(mutation)
+
     def test_browser_fixture_budgets_are_explicit_bounded_and_dev_only(self):
         source = IMAGES.COMPOSE.read_text().split("\n  pulse-test:\n", 1)[1]
         source = source.split("\nvolumes:\n", 1)[0]
@@ -373,7 +449,8 @@ class E2EImageWorkflowTest(unittest.TestCase):
         self.assertNotIn("registry", producer.split("steps:", 1)[0])
         for job in ("e2e", "agent-registration"):
             consumer = job_block(workflow, job)
-            self.assertIn("needs: [tier-selection, test-images]", consumer)
+            dependencies = "scope, tier-selection, test-images" if job == "e2e" else "tier-selection, test-images"
+            self.assertIn(f"needs: [{dependencies}]", consumer)
             self.assertIn("PULSE_E2E_SEED_IMAGE: pulse-e2e-seed:test", consumer)
             self.assertIn("artifact-ids: ${{ needs.test-images.outputs.artifact-id }}", consumer)
             self.assertIn("PULSE_E2E_MANIFEST_SHA256: ${{ needs.test-images.outputs.manifest-sha256 }}", consumer)
@@ -436,6 +513,7 @@ class E2EImageWorkflowTest(unittest.TestCase):
     def test_rebuild_cross_run_and_ignored_admission_mutants_rejected(self):
         source = WORKFLOW.read_text()
         for old, new in (
+            ("needs: [scope, tier-selection, test-images]", "needs: [scope, tier-selection]"),
             ("needs: [tier-selection, test-images]", "needs: tier-selection"),
             ("artifact-ids: ${{ needs.test-images.outputs.artifact-id }}", "name: latest-test-images"),
             ('python3 scripts/e2e_test_images.py load "$RUNNER_TEMP/pulse-e2e-images"', 'docker build -t pulse:test .'),

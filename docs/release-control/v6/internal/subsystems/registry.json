@@ -4721,6 +4721,9 @@
         ".github/scripts/check-demo-reachability.sh",
         ".github/scripts/demo-runtime-transaction.py",
         ".github/scripts/dispatch-demo-runtime.py",
+        ".github/scripts/e2e-probation-scope.mjs",
+        ".github/scripts/e2e-probation-seconds.json",
+        ".github/scripts/e2e-probation-shards.mjs",
         ".github/scripts/internal-api-test-seconds.txt",
         ".github/scripts/record-internal-api-test-seconds.py",
         ".github/scripts/recover-demo-runtime.sh",
@@ -4732,6 +4735,7 @@
         ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/build-and-test.yml",
         ".github/workflows/build-release-candidate.yml",
+        ".github/workflows/canonical-governance.yml",
         ".github/workflows/compile-release-payload.yml",
         ".github/workflows/create-release.yml",
         ".github/workflows/demo-runtime-native.yml",
@@ -4840,6 +4844,7 @@
         "scripts/release_control/control_plane.py",
         "scripts/release_control/customer_promotion_lease.sh",
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
+        "scripts/release_control/pr_validation_base.py",
         "scripts/release_control/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/release_promotion_policy_support.py",
         "scripts/release_control/release_snapshot.py",
@@ -4881,6 +4886,8 @@
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
         "tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs",
+        "tests/integration/scripts/check-probation-shards.mjs",
+        "tests/integration/scripts/flaky-qualification.test.mjs",
         "tests/integration/scripts/hosted-mobile-token-runtime.mjs",
         "tests/integration/scripts/hosted-tenant-runtime.mjs",
         "tests/integration/scripts/managed-dev-runtime.mjs",
@@ -5514,13 +5521,27 @@
             ]
           },
           {
+            "id": "e2e-probation-scope",
+            "label": "changed probation spec and configuration selection proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/scripts/e2e-probation-scope.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_e2e_probation_scope.mjs"
+            ]
+          },
+          {
             "id": "e2e-image-distribution",
             "label": "same-run source-bound E2E image distribution proof",
             "match_prefixes": [],
             "match_files": [
               ".github/workflows/test-e2e.yml",
               "scripts/e2e_test_images.py",
-              "tests/integration/docker-compose.test.yml"
+              "tests/integration/docker-compose.test.yml",
+              "tests/integration/scripts/flaky-qualification.test.mjs"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -5568,6 +5589,36 @@
             "exact_files": [
               "tests/integration/scripts/settings-scroll-audit.test.mjs",
               "tests/integration/tests/05-settings-mobile-audit.spec.ts"
+            ]
+          },
+          {
+            "id": "e2e-probation-shards",
+            "label": "complete runtime-balanced probation file/project allocation proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/scripts/e2e-probation-seconds.json",
+              ".github/scripts/e2e-probation-shards.mjs",
+              "tests/integration/playwright.config.ts",
+              "tests/integration/scripts/check-probation-shards.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_e2e_probation_shards.mjs"
+            ]
+          },
+          {
+            "id": "ci-pr-merge-base",
+            "label": "exact checked-out PR merge target and source identity proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/canonical-governance.yml",
+              "scripts/release_control/pr_validation_base.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_pr_validation_base.py"
             ]
           }
         ],
@@ -5656,6 +5707,7 @@
         "frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts",
         "frontend-modern/src/components/Settings/useDiscoverySettingsState.ts",
         "frontend-modern/src/components/Settings/useReportingPanelState.ts",
+        "frontend-modern/src/components/Settings/useSettingsAccess.ts",
         "frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts",
         "frontend-modern/src/components/Settings/useSettingsNavigation.ts",
         "frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx",
@@ -6416,6 +6468,19 @@
               "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.source-isolation.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.sparse.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/GuestDrawerHistory.window.test.tsx"
+            ]
+          },
+          {
+            "id": "settings-navigation-refresh",
+            "label": "canonical Settings navigation identity and refreshed visibility proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/useSettingsAccess.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/useSettingsAccess.test.tsx"
             ]
           }
         ],

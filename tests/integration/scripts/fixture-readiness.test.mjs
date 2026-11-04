@@ -213,6 +213,77 @@ test('stable receipt conditions retain failed attempts before probation can be c
       [report, junit], `${outcome}, failed attempt: ${failedAttempt}, cancelled: ${cancelled}`);
   }
   assert.match(step('Upload failed fixture admission'), /!cancelled\(\) && steps\.fixture\.outcome == 'failure'/);
-  assert.match(step('Run probation-tier E2E suite (non-gating)'), /continue-on-error: true/);
   assert.ok(steps.includes('timeout-minutes: 60'));
+});
+
+test('selected probation coverage blocks PRs and remains observational on branches', () => {
+  const probation = step('Run probation-tier E2E suite');
+  assert.ok(probation, 'missing probation execution step');
+  const condition = probation.match(/^\s+if: \$\{\{ (.+) \}\}$/m)?.[1];
+  const continuation = probation.match(/^\s+continue-on-error: \$\{\{ (.+) \}\}$/m)?.[1];
+  assert.ok(condition, 'missing probation selection expression');
+  assert.ok(continuation, 'missing probation failure policy');
+  for (const [event, selected, stable, cancelled, runs, continues] of [
+    ['pull_request', 'true', 'success', false, true, false],
+    ['pull_request', 'true', 'failure', false, true, false],
+    ['pull_request', 'false', 'success', false, false, false],
+    ['pull_request', 'true', 'skipped', false, false, false],
+    ['pull_request', 'true', 'success', true, false, false],
+    ['push', 'true', 'success', false, true, true],
+    ['workflow_dispatch', 'true', 'success', false, true, true],
+    ['push', 'true', 'failure', false, true, true],
+    ['push', 'true', 'success', true, false, true],
+  ]) {
+    const context = {
+      github: { event_name: event },
+      needs: { scope: { outputs: { run_probation: selected } } },
+      steps: { stable: { conclusion: stable } },
+      cancelled: () => cancelled,
+    };
+    assert.deepEqual([condition, continuation].map(expression => runInNewContext(expression, context)),
+      [runs, continues], `${event}, selected: ${selected}, stable: ${stable}, cancelled: ${cancelled}`);
+  }
+});
+
+
+test('full PR qualification rejects flaky retries through env and actual shell arguments', () => {
+  const names = ['Run stable-tier E2E suite', 'Run probation-tier E2E suite'];
+  const suites = names.map(name => {
+    const body = step(name);
+    const expression = body?.match(/PULSE_E2E_FAIL_ON_FLAKY_TESTS: \$\{\{ (.+) \}\}/)?.[1];
+    const command = body?.split(/\n        run: \|\n/)[1];
+    assert.ok(expression, 'missing flaky-result env policy: ' + name);
+    assert.ok(command, 'missing suite shell: ' + name);
+    assert.doesNotMatch(command, /\$\{\{/);
+    return { expression, command };
+  });
+  assert.match(step(names[0]), /PULSE_E2E_SHARD: \$\{\{ matrix\.shard \}\}\/8/);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-qualification-command-'));
+  try {
+    fs.writeFileSync(path.join(directory, 'npm'), "#!/bin/sh\nprintf '%s\\n' \"$@\"\n", { mode: 0o700 });
+    for (const [event, selected, expected] of [
+      ['pull_request', 'true', [true, true]],
+      ['pull_request', 'false', [false, true]],
+      ['push', 'true', [false, false]],
+      ['workflow_dispatch', 'true', [false, false]],
+    ]) {
+      const context = { github: { event_name: event }, needs: { scope: { outputs: { run_probation: selected } } } };
+      const policies = suites.map(({ expression }) => runInNewContext(expression, context));
+      assert.deepEqual(policies, expected, event + ', selected: ' + selected);
+      for (const [index, { command }] of suites.entries()) {
+        const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', command], {
+          cwd: integrationRoot, encoding: 'utf8', timeout: 5000,
+          env: { ...process.env, PATH: directory + ':' + process.env.PATH,
+            PULSE_E2E_SHARD: '3/8', PULSE_E2E_FAIL_ON_FLAKY_TESTS: String(policies[index]) },
+        });
+        assert.ifError(result.error);
+        assert.equal(result.status, 0, result.stdout + result.stderr);
+        const argumentsForTier = index === 0 ? ['--shard=3/8'] :
+          ['--pass-with-no-tests', '--max-failures=5', '--global-timeout=600000'];
+        assert.deepEqual(result.stdout.split('\n').slice(0, -1),
+          ['test', '--', ...argumentsForTier, ...(expected[index] ? ['--fail-on-flaky-tests'] : [])],
+          names[index] + ', ' + event + ', selected: ' + selected);
+      }
+    }
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
