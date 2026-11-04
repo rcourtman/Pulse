@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -18,21 +19,36 @@ import (
 type MultiTenantMonitor struct {
 	// Serialize constructors and dependency wiring without holding mu across
 	// persistence or callbacks. Live tenant reads only need mu, not initMu.
-	initMu         sync.Mutex
-	mu             sync.RWMutex
-	monitors       map[string]*Monitor
-	tenantCancel   map[string]context.CancelFunc
-	tenantDone     map[string]chan struct{}
-	tenantDeleting map[string]struct{}
-	tenantStopping map[string]struct{}
-	persistence    *config.MultiTenantPersistence
-	baseConfig     *config.Config
-	wsHub          *websocket.Hub
-	recoveryMgr    *recoverymanager.Manager
-	initializer    func(*Monitor)
-	globalCtx      context.Context
-	globalCancel   context.CancelFunc
-	stopped        bool // Terminal admission fence, protected by mu.
+	initMu       sync.Mutex
+	mu           sync.RWMutex
+	monitors     map[string]*Monitor
+	tenantCancel map[string]context.CancelFunc
+	tenantDone   map[string]chan struct{}
+	// A visitor racing construction invalidates its instance-settings snapshot.
+	// Protected by mu; settings I/O and callbacks never run while holding mu.
+	propagationGeneration uint64
+	instanceSettings      tenantInstanceSettings
+	tenantDeleting        map[string]struct{}
+	tenantStopping        map[string]struct{}
+	persistence           *config.MultiTenantPersistence
+	baseConfig            *config.Config
+	wsHub                 *websocket.Hub
+	recoveryMgr           *recoverymanager.Manager
+	initializer           func(*Monitor)
+	globalCtx             context.Context
+	globalCancel          context.CancelFunc
+	stopped               bool // Terminal admission fence, protected by mu.
+}
+
+// Copy instance settings at the propagation boundary, after the settings
+// handler updates the canonical config. Constructors must not read that mutable
+// config later or retain callbacks that close over request-local state.
+type tenantInstanceSettings struct {
+	publicURL      string
+	backupEnabled  bool
+	backupInterval time.Duration
+	pbsInterval    time.Duration
+	pmgInterval    time.Duration
 }
 
 // NewMultiTenantMonitor creates a new multi-tenant monitor manager.
@@ -109,21 +125,31 @@ func (mtm *MultiTenantMonitor) SetMonitorInitializer(initializer func(*Monitor))
 	}
 }
 
-// ForEachMonitor runs fn against every live tenant monitor. Use it to
-// propagate instance-wide runtime settings (e.g. webhook security allowlist)
-// that every org's monitor must observe.
+// ForEachMonitor runs fn synchronously against every live tenant monitor.
+// Instance-setting saves and reloads also invalidate an admitted constructor's
+// settings snapshot, which it reconciles before publication. Do not wait for
+// construction here: callers can hold router settings locks needed by live
+// requests. Do not retain fn: callers can close over request-local mutable state.
 func (mtm *MultiTenantMonitor) ForEachMonitor(fn func(*Monitor)) {
 	if mtm == nil || fn == nil {
 		return
 	}
-	mtm.mu.RLock()
+	mtm.mu.Lock()
+	mtm.propagationGeneration++
+	if cfg := mtm.baseConfig; cfg != nil {
+		mtm.instanceSettings = tenantInstanceSettings{
+			publicURL: cfg.PublicURL, backupEnabled: cfg.EnableBackupPolling,
+			backupInterval: cfg.BackupPollingInterval,
+			pbsInterval:    cfg.PBSPollingInterval, pmgInterval: cfg.PMGPollingInterval,
+		}
+	}
 	monitors := make([]*Monitor, 0, len(mtm.monitors))
 	for _, monitor := range mtm.monitors {
 		if monitor != nil {
 			monitors = append(monitors, monitor)
 		}
 	}
-	mtm.mu.RUnlock()
+	mtm.mu.Unlock()
 	for _, monitor := range monitors {
 		fn(monitor)
 	}
@@ -214,17 +240,46 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	tenantDone := make(chan struct{})
 	mtm.tenantCancel[orgID] = tenantCancel
 	mtm.tenantDone[orgID] = tenantDone
+	generation := mtm.propagationGeneration
 	mtm.mu.Unlock()
 
 	monitor, err := mtm.initializeTenantMonitor(orgID)
 	mtm.mu.Lock()
-	defer mtm.mu.Unlock()
+	for err == nil {
+		if _, deleting = mtm.tenantDeleting[orgID]; mtm.stopped || deleting || generation == mtm.propagationGeneration {
+			break
+		}
+		generation = mtm.propagationGeneration
+		instanceSettings := mtm.instanceSettings
+		mtm.mu.Unlock()
+		err = mtm.reconcileTenantInstanceSettings(monitor, instanceSettings)
+		mtm.mu.Lock()
+		// A save can race this read too. Publication shares mu with the
+		// visitor: repeat until it cannot miss a completed settings update.
+	}
 	if err != nil {
 		tenantCancel()
-		delete(mtm.tenantCancel, orgID)
-		delete(mtm.tenantDone, orgID)
+		mtm.mu.Unlock()
+		var cleanupErr error
+		if monitor != nil {
+			cleanupErr = monitor.stop()
+		}
+		mtm.mu.Lock()
+		if cleanupErr == nil {
+			delete(mtm.tenantCancel, orgID)
+			delete(mtm.tenantDone, orgID)
+		} else {
+			// Failed settings admission cannot lose an incompletely stopped
+			// constructor or expose it as a live runtime on the next lookup.
+			mtm.monitors[orgID] = monitor
+			if mtm.tenantDeleting == nil {
+				mtm.tenantDeleting = make(map[string]struct{})
+			}
+			mtm.tenantDeleting[orgID] = struct{}{}
+		}
 		close(tenantDone)
-		return nil, err
+		mtm.mu.Unlock()
+		return nil, errors.Join(err, cleanupErr)
 	}
 	mtm.monitors[orgID] = monitor
 	if _, deleting = mtm.tenantDeleting[orgID]; mtm.stopped || deleting {
@@ -233,13 +288,48 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 		// the remover (or a later retry) can stop all of its writers safely.
 		tenantCancel()
 		close(tenantDone)
+		mtm.mu.Unlock()
 		return nil, fmt.Errorf("organization %q initialization was cancelled", orgID)
 	}
 	go func() {
 		defer close(tenantDone)
 		monitor.Start(tenantCtx, mtm.wsHub)
 	}()
+	mtm.mu.Unlock()
 	return monitor, nil
+}
+
+// Reconcile only the existing instance-wide settings propagated by the settings
+// API and router. Use the committed security policy and captured runtime
+// settings, not a caller's callback or the mutable base configuration. The caller
+// owns initMu, not mu, and rechecks the generation and lifecycle fences before
+// publication. Failed policy reads refuse admission instead of reviving grants.
+func (mtm *MultiTenantMonitor) reconcileTenantInstanceSettings(monitor *Monitor, runtime tenantInstanceSettings) error {
+	persistence, err := mtm.persistence.GetPersistence("default")
+	if err != nil {
+		return fmt.Errorf("load instance settings persistence: %w", err)
+	}
+	settings, err := persistence.LoadSystemSettings()
+	if err != nil {
+		return fmt.Errorf("reconcile instance settings during tenant admission: %w", err)
+	}
+	if settings == nil {
+		// Match New's deny-private default when no settings file exists.
+		settings = &config.SystemSettings{}
+	}
+	nets, err := notifications.ParseAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs)
+	if err != nil {
+		return fmt.Errorf("reconcile notification policy during tenant admission: %w", err)
+	}
+	if nm := monitor.GetNotificationManager(); nm != nil {
+		nm.ApplyAllowedPrivateCIDRs(settings.WebhookAllowedPrivateCIDRs, nets)
+		nm.SetPublicURL(runtime.publicURL)
+	}
+	monitor.SetBackupPollingEnabled(runtime.backupEnabled)
+	monitor.SetBackupPollingInterval(runtime.backupInterval)
+	monitor.SetPBSPollingInterval(runtime.pbsInterval)
+	monitor.SetPMGPollingInterval(runtime.pmgInterval)
+	return nil
 }
 
 // initializeTenantMonitor runs under initMu, never mu. Constructors remain
