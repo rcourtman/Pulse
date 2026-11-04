@@ -1606,13 +1606,22 @@ func TestPortalPageTemplate_UsesPulseAccountBrandingWhenSignedOut(t *testing.T) 
 		`"authenticated":false`,
 		fmt.Sprintf(`"magic_link_request_path":"%s"`, PortalMagicLinkRequestPath),
 		fmt.Sprintf(`"signup_path":"%s"`, PortalSignupPath),
-		`data-portal-action="send-magic-link"`,
+		`<form id="portal-login-form" data-portal-form="sign-in"`,
+		`id="portal-login-email" type="email"`,
+		`data-portal-input="login-email" required`,
+		`id="portal-login-send" type="submit"`,
 		`data-portal-action="resend-magic-link"`,
 	}
 	for _, needle := range mustContain {
 		if !strings.Contains(html, needle) {
 			t.Errorf("expected %q in rendered HTML", needle)
 		}
+	}
+	// The embedded app now owns sign-in through native form submission. Keep
+	// the served-bundle smoke check aligned with that contract, not the old
+	// click-only action. Controller tests and browser proof exercise behaviour.
+	if strings.Contains(html, `data-portal-action="send-magic-link"`) {
+		t.Error("rendered app still contains the obsolete click-only sign-in action")
 	}
 }
 

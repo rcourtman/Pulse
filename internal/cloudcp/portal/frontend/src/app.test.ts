@@ -210,7 +210,7 @@ describe('portal app', function() {
     emailInput!.value = 'buyer@example.com';
     emailInput!.dispatchEvent(new Event('input', { bubbles: true }));
 
-    document.getElementById('portal-login-send')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    (document.getElementById('portal-login-send') as HTMLButtonElement).click();
     await flushAsync();
 
     expect(fetchMock).toHaveBeenCalledWith(

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "b166997dc31b0244deca1c2f84b9b05ab2e7f35f",
+  "verified_at": "2026-11-04T03:50:47.896926Z",
+  "result": "passed",
+  "changed_paths": [
+    "internal/cloudcp/portal/dist/build_manifest.json",
+    "internal/cloudcp/portal/dist/portal_app.js",
+    "internal/cloudcp/portal/frontend/src/auth_controller.ts",
+    "internal/cloudcp/portal/frontend/src/shell_view.ts"
+  ],
+  "content_sha256": {
+    "internal/cloudcp/portal/frontend/src/auth_controller.ts": "f16a78cba74aee374ee48a65a1754979cf28510d2c48ef3d4d1d34ac38b7b946",
+    "internal/cloudcp/portal/frontend/src/shell_view.ts": "b4752ba1bcf3c9eb6e431636962f2139f43272613b3bbc54b09e039075ddaf49",
+    "internal/cloudcp/portal/dist/portal_app.js": "27bf086e6ddce754b7f9ec790981a4b08ee52c4768394a19cdc219d27633abe3",
+    "internal/cloudcp/portal/dist/build_manifest.json": "cf440478fd78aafc84614fc54928b79500655e030dc5317601a3800f7a427ec5"
+  },
+  "routes": [
+    "/portal (production embedded HTML, JS and CSS with synthetic bootstrap and mail-request API)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Same fixture data, light theme, en-GB, UTC and viewport before/after: entered email, Enter, sending, rate-limit error, generic success, and no-email operator route. All 24 captures opened with native view_image.",
+    "Enter changes from zero requests to one. One pending request disables the address/button and sets aria-busy; failure preserves the address and restores input focus and deliberate retry. No information or controls removed, aggregated or moved behind disclosure.",
+    "Production CSS/template byte-identical to parent. The form adds normal form spacing, making the card 16px shorter without hiding content. The unrelated no-email 390px page retains its pre-existing 405px scroll width.",
+    "Chromium 141.0.7390.37 before29/final39 checks; final WebKit26.0 39 interaction checks, no extra pixels. Playwright1.56.1 matches integration lock. Fixtures do not prove live mail, token redemption or original installed account recovery."
+  ],
+  "interactions": [
+    "Enter and pointer submit; forced repeated submit and repeated click while pending; 429 then deliberate retry; explicit resend; invalid/empty native email; both provider/commercial labels and no-email capability control.",
+    "Same /magic-link POST payload with email and target=portal. Unrelated handoff submits and generic unknown-account response are preserved in registered tests.",
+    "Email-enabled surface has no horizontal clipping at either viewport; no page exception. Only no-email control retains existing overflow."
+  ],
+  "evidence": [
+    "RECEIPTS.md",
+    "CAPTURES.md",
+    "SIGNIN-BROWSER-BEFORE.json",
+    "SIGNIN-BROWSER-AFTER.json",
+    "SIGNIN-BROWSER-WEBKIT.json"
+  ]
+}

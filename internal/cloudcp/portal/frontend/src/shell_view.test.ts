@@ -64,6 +64,37 @@ function createContext(overrides: Partial<ShellViewContext> = {}): ShellViewCont
 }
 
 describe('shell view', function() {
+  it.each([false, true])('renders a native, busy-aware email form in provider mode %s', function(providerMode) {
+    var context = createContext({
+      bootstrap: createBootstrap({ authenticated: false, provider_hosted_mode: providerMode }),
+      loginState: createLoginState({ emailValue: 'buyer@example.com', request: { pending: true, error: '' } }),
+    });
+    var root = document.createElement('div');
+    root.innerHTML = renderSignedOutPortalHTML(context);
+    var form = root.querySelector<HTMLFormElement>('#portal-login-form')!;
+    expect(form).toBeInstanceOf(HTMLFormElement);
+    expect(form.getAttribute('data-portal-form')).toBe('sign-in');
+    expect(form.getAttribute('aria-busy')).toBe('true');
+    var input = form.querySelector<HTMLInputElement>('input')!;
+    expect(input.type).toBe('email');
+    expect(input.required).toBe(true);
+    expect(input.disabled).toBe(true);
+    expect(input.value).toBe('buyer@example.com');
+    expect(form.querySelector<HTMLButtonElement>('button')?.type).toBe('submit');
+    expect(form.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
+
+    context.loginState.request.pending = false;
+    root.innerHTML = renderSignedOutPortalHTML(context);
+    expect(root.querySelector('form')?.getAttribute('aria-busy')).toBe('false');
+    expect(root.querySelector<HTMLInputElement>('input')?.disabled).toBe(false);
+    expect(root.querySelector<HTMLButtonElement>('button')?.disabled).toBe(false);
+
+    context.bootstrap.email_sign_in_available = false;
+    root.innerHTML = renderSignedOutPortalHTML(context);
+    expect(root.querySelector('form')).toBeNull();
+    expect(root.textContent).toContain('Sign-in links come from your control plane host');
+  });
+
   it('renders native client creation forms without intercepting workspace handoffs', function() {
     var account = {
       id: 'acct_1', name: 'Example MSP', kind: 'msp', kind_label: 'MSP',
