@@ -64,6 +64,9 @@ func TestEnrollmentPublishesPrivateStateWithoutFollowingLinks(t *testing.T) {
 					}
 				case "symlink":
 					if err := os.Symlink(victim, path); err != nil {
+						if runtime.GOOS == "windows" {
+							t.Skipf("creating a Windows symlink requires an available native privilege: %v", err)
+						}
 						t.Fatal(err)
 					}
 				case "hardlink":
@@ -134,10 +137,22 @@ func TestAgentStatePublicationDoesNotTruncateOpenPredecessor(t *testing.T) {
 			defer previous.Close()
 			a := &Agent{stateDir: dir, collector: NewDefaultCollector(), logger: zerolog.Nop()}
 			publishStateFixture(a, file, "synthetic-replacement")
-			assertPrivateStateFile(t, path, "synthetic-replacement")
+			if runtime.GOOS != "windows" {
+				assertPrivateStateFile(t, path, "synthetic-replacement")
+			}
 			old, err := io.ReadAll(previous)
 			if err != nil || string(old) != "synthetic-previous-state" {
 				t.Fatal("publication truncated or rewrote an already-open predecessor")
+			}
+			if runtime.GOOS == "windows" {
+				// Windows opens without FILE_SHARE_DELETE. A refused rename
+				// must retain the old bytes, then allow a save after close;
+				// do not require Unix's open-inode replacement semantics.
+				if err := previous.Close(); err != nil {
+					t.Fatal(err)
+				}
+				publishStateFixture(a, file, "synthetic-replacement")
+				assertPrivateStateFile(t, path, "synthetic-replacement")
 			}
 		})
 	}
