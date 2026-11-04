@@ -264,13 +264,8 @@ export const groupAPITokenScopes = (): [ScopeGroup, ScopeOption[]][] => {
 };
 
 export const matchesScopePreset = (selectedScopes: string[], presetScopes: string[]): boolean => {
-  const selection = [...selectedScopes]
-    .filter((scope) => scope !== API_TOKEN_WILDCARD_SCOPE)
-    .sort();
+  const selection = [...selectedScopes].sort();
   const target = [...presetScopes].sort();
-  if (target.length === 0) {
-    return selectedScopes.length === 0 || selectedScopes.includes(API_TOKEN_WILDCARD_SCOPE);
-  }
   if (selection.length !== target.length) return false;
   return target.every((scope) => selection.includes(scope));
 };

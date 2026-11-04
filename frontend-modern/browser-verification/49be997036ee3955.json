@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "fd4661a24c893715258c15726bafd8817f5797a2",
+  "verified_at": "2026-11-04T16:50:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts": "a43a687a6d15681b41e7f91971f9e16a9f5d8e327fe7d0ca8acc8a33b310e20a",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "46e99443df9ea6ae285e9ba88bb552714b731de249ce6dfab60496de5a34012a"
+  },
+  "routes": [
+    "/settings/api-access (isolated real APIAccessPanel consumer fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1; Chromium 141.0.7390.37 and WebKit 26.0; desktop light, phone dark; verified locked offline npm graph e2185308, not stale shared node_modules.",
+    "Comparable unmodified-parent and final-source captures: expanded Custom scopes after Full access then Monitoring & alerts (read), and resulting API response. All 16 retained captures opened with native view_image.",
+    "Before: Full access and Kiosk / Monitoring both appear selected, and real SecurityAPI/createToken sends mixed scopes to the wire stub; mirrored existing backend rule rejects with 400 and generic toast. After: only Kiosk and the custom read capability are selected, payload has only monitoring:read, and existing token reveal renders. No controls, individual scopes or information removed.",
+    "Fixture renders real APIAccessPanel, APITokenManager, state/model, API client, toast and token reveal. Resource/WebSocket inputs are inert; HTTP is secret-free local Playwright stubbing, not an installed/authenticated backend or customer account."
+  ],
+  "interactions": [
+    "In both engines and viewports: empty selection disables Generate; Full access then custom Monitoring replaces wildcard; Generate sends exactly monitoring:read with existing CSRF header and displays existing API token ready dialog.",
+    "Deselecting the last custom scope leaves no selection and disables Generate; no implicit wildcard fallback. Space and Enter select Monitoring and Audit scopes, whose sorted wire payload is audit:read and monitoring:read.",
+    "Deliberately choosing Full access again clears custom selections and generates only the wildcard. All four final cases have three exact request payloads, no page errors or horizontal overflow."
+  ],
+  "evidence": {
+    "before": "before-results.json",
+    "after": "after-results.json",
+    "pairs": "CAPTURES.md",
+    "proof_script": "BROWSER-EVIDENCE.tar.xz"
+  }
+}

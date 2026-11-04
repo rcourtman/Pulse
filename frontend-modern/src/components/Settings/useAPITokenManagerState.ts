@@ -425,10 +425,13 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   const toggleScope = (scope: string) => {
     setSelectedScopes((previous) => {
-      if (previous.includes(scope)) {
-        return previous.filter((value) => value !== scope);
+      // Full access and explicit scopes are mutually exclusive at the API.
+      // Choosing a custom capability narrows the selection, as in the editor.
+      const scoped = previous.filter((value) => value !== API_TOKEN_WILDCARD_SCOPE);
+      if (scoped.includes(scope)) {
+        return scoped.filter((value) => value !== scope);
       }
-      return [...previous, scope];
+      return [...scoped, scope];
     });
   };
 

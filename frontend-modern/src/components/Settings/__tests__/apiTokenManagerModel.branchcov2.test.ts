@@ -577,18 +577,16 @@ describe('matchesScopePreset', () => {
     expect(matchesScopePreset([], [])).toBe(true);
   });
 
-  it('returns true for an empty preset when the selection is just the wildcard', () => {
-    expect(matchesScopePreset(['*'], [])).toBe(true);
+  it('does not label wildcard access as an empty scoped selection', () => {
+    expect(matchesScopePreset(['*'], [])).toBe(false);
   });
 
   it('returns false for an empty preset when the selection has a non-wildcard scope', () => {
     expect(matchesScopePreset(['monitoring:read'], [])).toBe(false);
   });
 
-  it('ignores the wildcard when comparing against a non-empty preset that otherwise matches', () => {
-    // The '*' is filtered out before the length/equality check, so ['a','*']
-    // matches preset ['a'].
-    expect(matchesScopePreset(['a', '*'], ['a'])).toBe(true);
+  it('never labels a mixed wildcard selection as a least-privilege preset', () => {
+    expect(matchesScopePreset(['a', '*'], ['a'])).toBe(false);
   });
 
   it('still returns false when a wildcard is present but the remaining scope does not match', () => {
