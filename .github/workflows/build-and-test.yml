@@ -84,6 +84,12 @@ jobs:
           # every branch/tag exhausted this job's five-minute admission budget.
           fetch-depth: 1
 
+      # Reject deterministic docs drift before any further acquisition or
+      # dependency work. Keep the independent per-push secret scan and Public
+      # docs check unchanged.
+      - name: Check shipped docs before dependency work
+        run: python3 scripts/check_docs_mirror.py
+
       - name: Fetch exact comparison base
         env:
           COMPARISON_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
@@ -103,11 +109,6 @@ jobs:
                --no-tags --no-recurse-submodules --depth=1 origin "$COMPARISON_BASE"; then
             echo "::warning::Comparison base fetch failed; retaining complete runtime checks if unavailable."
           fi
-
-      # Reject deterministic docs drift before queuing builds/tests. Keep the
-      # independent per-push secret scan and Public docs check unchanged.
-      - name: Check shipped docs before dependency work
-        run: python3 scripts/check_docs_mirror.py
 
       - name: Validate browser receipt-only CI admission
         run: python3 scripts/tests/test_ci_browser_proof_only.py

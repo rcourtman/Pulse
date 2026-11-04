@@ -107,6 +107,12 @@ class ComparisonCheckoutTest(unittest.TestCase):
         self.assertEqual(self.prepare["env"]["COMPARISON_BASE"],
                          "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}")
         steps = self.job["steps"]
+        # A comparison fetch must not displace the existing fail-fast mirror
+        # gate or make it conditional on history being available.
+        self.assertEqual(steps[1]["run"], "python3 scripts/check_docs_mirror.py")
+        self.assertNotIn("if", steps[1])
+        self.assertNotIn("continue-on-error", steps[1])
+        self.assertGreater(steps.index(self.prepare), 1)
         self.assertLess(steps.index(self.prepare),
                         next(index for index, step in enumerate(steps) if step.get("id") == "filter"))
         secret = yaml.safe_load(WORKFLOW.read_text())["jobs"]["secret-scan"]
