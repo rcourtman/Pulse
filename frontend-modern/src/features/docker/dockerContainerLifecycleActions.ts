@@ -132,3 +132,12 @@ export const getDockerContainerLifecycleDisabledReason = (
 
   return undefined;
 };
+
+/** Each distinct reason an action is unavailable, in action order. Actions often share one. */
+export const getDockerContainerLifecycleDisabledReasons = (resource: Resource): string[] => [
+  ...new Set(
+    DOCKER_CONTAINER_LIFECYCLE_ACTIONS.flatMap(
+      ({ action }) => getDockerContainerLifecycleDisabledReason(resource, action) ?? [],
+    ),
+  ),
+];

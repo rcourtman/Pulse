@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { JSX } from 'solid-js';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { ContainerUpdateBadge, UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { getUpdatePlanErrorMessage } from '@/components/shared/containerUpdateBadgeModel';
+import { createTooltipSystem, hideTooltip } from '@/components/shared/Tooltip';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import {
   getContainerUpdateState,
@@ -42,6 +44,8 @@ vi.mock('@/stores/systemSettings', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
+  hideTooltip();
   vi.mocked(getContainerUpdateState).mockReturnValue(undefined);
 });
 
@@ -171,6 +175,67 @@ describe('ContainerUpdateBadge', () => {
     expect(status.getAttribute('aria-label')).toContain('container manager on the host');
     fireEvent.click(status);
     expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
+  });
+
+  describe('on a touch screen', () => {
+    const renderOnTouchScreen = (button: () => JSX.Element) => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn().mockReturnValue({ matches: false, media: '(hover: hover) and (pointer: fine)' }),
+      );
+      const TooltipRoot = createTooltipSystem();
+      render(() => (
+        <>
+          <TooltipRoot />
+          {button()}
+        </>
+      ));
+    };
+    const tooltipText = () => document.body.querySelector('[data-tooltip="true"]')?.textContent;
+
+    it('explains a locked update on a tap', () => {
+      renderOnTouchScreen(() => (
+        <UpdateButton
+          agentId="agent-1"
+          containerId="container-1"
+          containerName="web"
+          resourceId="resource-1"
+          actionReadiness={[
+            {
+              name: 'update',
+              available: false,
+              reasonCode: 'command_agent_disconnected',
+              reason: 'Docker / Podman command agent is not connected.',
+            },
+          ]}
+          updateStatus={{
+            updateAvailable: true,
+            currentDigest: 'sha256:current',
+            latestDigest: 'sha256:latest',
+            lastChecked: 0,
+          }}
+        />
+      ));
+
+      fireEvent.click(screen.getByLabelText(/Pulse cannot apply it/));
+
+      expect(tooltipText()).toContain('Docker / Podman command agent is not connected.');
+    });
+
+    it('says why an update failed on a tap', () => {
+      vi.mocked(getContainerUpdateState).mockReturnValue({
+        state: 'error',
+        startedAt: Date.now() - 1_000,
+        message: 'Image pull timed out.',
+      });
+      renderOnTouchScreen(() => (
+        <UpdateButton agentId="agent-1" containerId="container-1" containerName="web" />
+      ));
+
+      fireEvent.click(screen.getByRole('button', { name: /Update failed/ }));
+
+      expect(tooltipText()).toContain('Image pull timed out.');
+    });
   });
 
   it('offers no update the server does not advertise', () => {

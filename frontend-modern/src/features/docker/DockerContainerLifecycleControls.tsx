@@ -16,6 +16,7 @@ import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SquareIcon from 'lucide-solid/icons/square';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+import { hideTooltip, showPressedTooltip } from '@/components/shared/Tooltip';
 import { useMenuButton } from '@/components/shared/useMenuButton';
 import { notificationStore } from '@/stores/notifications';
 import type { ActionDetailResponse } from '@/types/actionAudit';
@@ -25,6 +26,7 @@ import {
   dockerContainerLifecycleName,
   dockerContainerRuntimeLabel,
   getDockerContainerLifecycleDisabledReason,
+  getDockerContainerLifecycleDisabledReasons,
   type DockerContainerLifecycleAction,
 } from './dockerContainerLifecycleActions';
 
@@ -95,16 +97,19 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
     if (!menuTriggerRef || typeof window === 'undefined') return;
     const rect = menuTriggerRef.getBoundingClientRect();
     const menuWidth = 208;
-    const estimatedMenuHeight = 132;
+    // Reasons make the height vary, and the portal mounts just after this first runs.
+    const menuHeight = menuRef?.offsetHeight || 132;
+    const fitsBelow = rect.bottom + 4 + menuHeight + 8 <= window.innerHeight;
     setMenuPosition({
       left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
-      top: Math.max(8, Math.min(window.innerHeight - estimatedMenuHeight - 8, rect.bottom + 4)),
+      top: fitsBelow ? rect.bottom + 4 : Math.max(8, rect.top - menuHeight - 4),
     });
   };
 
   createEffect(() => {
     if (!menuOpen() || typeof window === 'undefined') return;
     updateMenuPosition();
+    queueMicrotask(updateMenuPosition);
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Element && target.closest('[data-docker-lifecycle-menu-root]')) return;
@@ -152,6 +157,9 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
     }
   };
 
+  const disabledReasons = () => getDockerContainerLifecycleDisabledReasons(props.resource);
+  const reasonsId = () => `${menuButton.menuId}-reasons`;
+
   const titleForAction = (action: DockerContainerLifecycleAction, label: string): string => {
     const disabledReason = getDockerContainerLifecycleDisabledReason(props.resource, action);
     const containerName = dockerContainerLifecycleName(props.resource);
@@ -173,22 +181,33 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
         fallback={
           <For each={DOCKER_CONTAINER_LIFECYCLE_ACTIONS}>
             {(spec) => {
-              const disabled = () =>
-                Boolean(getDockerContainerLifecycleDisabledReason(props.resource, spec.action)) ||
-                (planningAction() !== null && planningAction() !== spec.action);
+              const unavailable = () =>
+                Boolean(getDockerContainerLifecycleDisabledReason(props.resource, spec.action));
+              const busy = () => planningAction() !== null && planningAction() !== spec.action;
               const Icon = iconForAction(spec.action);
               return (
                 <button
                   type="button"
-                  class={`${buttonBaseClass} ${planningAction() === spec.action ? runningButtonClass : disabled() ? disabledButtonClass : enabledButtonClass}`}
-                  disabled={disabled()}
+                  class={`${buttonBaseClass} ${planningAction() === spec.action ? runningButtonClass : unavailable() || busy() ? disabledButtonClass : enabledButtonClass}`}
+                  disabled={busy()}
+                  // Not `disabled`, which would swallow the tap that asks why.
+                  aria-disabled={unavailable() ? 'true' : undefined}
                   title={titleForAction(spec.action, spec.label)}
                   aria-label={titleForAction(spec.action, spec.label)}
                   data-docker-container-action={spec.action}
                   onMouseDown={(event) => event.stopPropagation()}
+                  onMouseLeave={() => hideTooltip()}
+                  onBlur={() => hideTooltip()}
                   onKeyDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (unavailable()) {
+                      showPressedTooltip(
+                        titleForAction(spec.action, spec.label),
+                        event.currentTarget,
+                      );
+                      return;
+                    }
                     void prepareLifecycleReview(spec.action);
                   }}
                 >
@@ -242,6 +261,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
               data-docker-lifecycle-menu-root
               role="menu"
               aria-labelledby={menuButton.triggerId}
+              aria-describedby={disabledReasons().length > 0 ? reasonsId() : undefined}
               class="fixed z-9999 w-52 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
               style={{ left: `${menuPosition().left}px`, top: `${menuPosition().top}px` }}
               onMouseDown={(event) => event.stopPropagation()}
@@ -286,6 +306,15 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
                   );
                 }}
               </For>
+              <Show when={disabledReasons().length > 0}>
+                <div
+                  id={reasonsId()}
+                  class="mt-1 space-y-1 border-t border-border-subtle px-2 pt-1.5 pb-1 text-[11px] leading-snug text-muted"
+                  data-docker-lifecycle-disabled-reasons
+                >
+                  <For each={disabledReasons()}>{(reason) => <div>{reason}</div>}</For>
+                </div>
+              </Show>
             </div>
           </Portal>
         </Show>

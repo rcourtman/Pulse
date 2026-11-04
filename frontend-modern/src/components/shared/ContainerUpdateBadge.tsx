@@ -1,6 +1,6 @@
 import { Component, Match, Show, Switch } from 'solid-js';
 import LockIcon from 'lucide-solid/icons/lock';
-import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { showPressedTooltip, showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import {
   getContainerUpdateBadgeTooltip,
@@ -251,7 +251,12 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
               class={`${getUpdateButtonClass(state.currentState(), state.isUpdateUnavailable())}${
                 props.touchTarget ? UPDATE_TOUCH_TARGET_CLASS : ''
               }`}
-              onClick={state.handleClick}
+              onClick={(event) => {
+                if (state.currentState() === 'error' || state.currentState() === 'success') {
+                  showPressedTooltip(state.buttonTooltip(), event.currentTarget);
+                }
+                void state.handleClick(event);
+              }}
               onMouseDown={(e) => {
                 e.stopPropagation();
               }}
@@ -326,7 +331,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
             data-prevent-toggle
             onClick={(event) => {
               event.stopPropagation();
-              showReadOnlyUpdateExplanation(event.currentTarget);
+              showPressedTooltip(readOnlyUpdateExplanation(), event.currentTarget);
             }}
             onMouseEnter={(event) => showReadOnlyUpdateExplanation(event.currentTarget)}
             onMouseLeave={() => hideTooltip()}

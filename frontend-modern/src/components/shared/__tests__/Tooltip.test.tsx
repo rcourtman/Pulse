@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import {
   Tooltip,
   createTooltipSystem,
+  showPressedTooltip,
   showTooltip,
   hideTooltip,
 } from '@/components/shared/Tooltip';
@@ -94,6 +95,62 @@ describe('Tooltip', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('disk')).toBeNull();
+    });
+  });
+
+  describe('showPressedTooltip', () => {
+    const useTouchScreen = () =>
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn().mockReturnValue({ matches: false, media: '(hover: hover) and (pointer: fine)' }),
+      );
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      hideTooltip();
+    });
+
+    it('shows on a touch screen and outlasts the synthesized hover events', () => {
+      useTouchScreen();
+      const TooltipRoot = createTooltipSystem();
+      render(() => <TooltipRoot />);
+
+      showPressedTooltip('why', document.body);
+      expect(screen.getByText('why')).toBeInTheDocument();
+
+      hideTooltip();
+      showTooltip('hover detail', 1, 1);
+      expect(screen.getByText('why')).toBeInTheDocument();
+      expect(screen.queryByText('hover detail')).toBeNull();
+
+      fireEvent.pointerDown(document.body);
+      expect(screen.queryByText('why')).toBeNull();
+    });
+
+    it('ends on a scroll anywhere, since it no longer sits by its target', () => {
+      useTouchScreen();
+      const TooltipRoot = createTooltipSystem();
+      const { container } = render(() => (
+        <>
+          <TooltipRoot />
+          <div data-testid="scroller" />
+        </>
+      ));
+
+      showPressedTooltip('why', document.body);
+      fireEvent.scroll(container.querySelector('[data-testid="scroller"]') as Element);
+      expect(screen.queryByText('why')).toBeNull();
+    });
+
+    it('ends on mouse leave where the pointer can hover', () => {
+      const TooltipRoot = createTooltipSystem();
+      render(() => <TooltipRoot />);
+
+      showPressedTooltip('why', document.body);
+      expect(screen.getByText('why')).toBeInTheDocument();
+
+      hideTooltip();
+      expect(screen.queryByText('why')).toBeNull();
     });
   });
 });
