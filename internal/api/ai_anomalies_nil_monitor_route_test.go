@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
 // A helper's default fallback is not evidence that a tenant can read it. Pin
@@ -18,6 +20,22 @@ import (
 func TestRoutedAnomaliesNilMonitorBoundary(t *testing.T) {
 	t.Setenv("PULSE_AUTH_BYPASS", "false")
 	rig := newTenantPatrolRig(t)
+	// The shared route-only rig injects read adapters; reload republishes from
+	// each monitor's owned model state and organisation. Seed those native
+	// owners as production initialization does, not just the old adapters.
+	for org, monitor := range map[string]*monitoring.Monitor{"default": rig.defaultMonitor, "org-a": rig.tenantMonitor} {
+		monitor.SetOrgID(org)
+		state := models.NewState()
+		state.Nodes = []models.Node{{ID: org + "-node", Name: org + "-node", Status: "online", CPU: 0.9}}
+		setUnexportedField(t, monitor, "state", state)
+		cfg := rig.router.config
+		if org != "default" {
+			persistence := rig.router.persistenceForOrg(tenantContext(org))
+			cfg = &config.Config{DataPath: persistence.DataDir(), ConfigPath: persistence.DataDir()}
+		}
+		setUnexportedField(t, monitor, "config", cfg)
+		syncTestResourceStore(t, monitor, state)
+	}
 	// A known but ungranted org tests authorization, not the earlier
 	// invalid-org guard for an unprovisioned selector.
 	if err := rig.router.multiTenant.SaveOrganization(&models.Organization{ID: "other-org", DisplayName: "OTHER"}); err != nil {
