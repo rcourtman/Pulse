@@ -36,6 +36,8 @@ func safeProfileTransactionFunctions(t *testing.T) string {
 		extractInstallShellFunction(t, "safe_profile_snapshot_state_metadata") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_restore_state_metadata") + "\n" +
 		extractInstallShellFunction(t, "read_agent_removal_unit_state") + "\n" +
+		extractInstallShellFunction(t, "confirm_agent_unit_quiescent") + "\n" +
+		extractInstallShellFunction(t, "quiesce_agent_units_for_removal") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_read_recovery_flags") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_begin_transaction") + "\n" +
 		extractInstallShellFunction(t, "safe_profile_restore_entry") + "\n" +
@@ -996,7 +998,10 @@ systemctl() {
         if [[ "${2:-}" == "${PRIVILEGED_HELPER_NAME}.socket" && "${STATE_HELPER_ABSENT:-false}" == true ]]; then
           printf 'LoadState=not-found\nActiveState=inactive\nUnitFileState=\n'
         else
-          printf 'LoadState=loaded\nActiveState=%s\nUnitFileState=%s\n' "${STATE_ACTIVE:-active}" "${STATE_ENABLED:-enabled}"
+          local active="${STATE_ACTIVE:-active}" enabled="${STATE_ENABLED:-enabled}"
+          [[ ! -f "$EXPECTED_DIR/stopped-${2:-}" ]] || active=inactive
+          [[ ! -f "$EXPECTED_DIR/disabled-${2:-}" ]] || enabled=disabled
+          printf 'LoadState=loaded\nActiveState=%s\nUnitFileState=%s\n' "$active" "$enabled"
         fi
         return
       fi
@@ -1008,6 +1013,8 @@ systemctl() {
     is-active|is-enabled)
       [[ "${3:-}" != "${STATE_FAULT_UNIT:-}" ]] || return 1
       return 0 ;;
+    stop) touch "$EXPECTED_DIR/stopped-${2:-}" ;;
+    disable) touch "$EXPECTED_DIR/disabled-${2:-}" ;;
   esac
   return 0
 }
