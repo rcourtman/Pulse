@@ -4285,3 +4285,8 @@ honours inheritance and deny precedence, or a proxy user admitted with the
 admin role, bound to that username) and explicit members of its strictly
 loaded `org.json`. Live WebSocket, SSE and agent-event reads re-check the
 policy every 10 seconds. API-token bindings are unchanged.
+Websocket `actionReadinessCatalog` entries omit a refusal's `detail`, which can name a
+host's enrollment token ID, agent ID and hostname, so that text stays on the REST and
+error surfaces that already carried it. The catalog is per-tenant state like the rows
+that reference it, and the refusal pass reads session state without granting or
+widening any action.

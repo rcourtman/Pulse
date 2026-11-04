@@ -5509,3 +5509,6 @@ and their hand-off models (`alertAssistantHandoffModel.ts`,
 `incidentAssistantHandoffModel.ts`, `IncidentAssistantHandoffButton.tsx`) are
 gone, as is the chat-only `alertTargetTypes.ts` resolver. The `alerts.assistant.*`
 catalog keys became `alerts.investigate.*` in English, German, and Spanish.
+The websocket store expands `actionReadinessRef` through `actionReadinessCatalog`
+beside the other catalogs and removes `actionReadiness` from a row with no ref.
+Alert state and alert frames are unchanged.

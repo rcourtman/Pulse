@@ -783,9 +783,8 @@ const scopeStillSupported = (scope: string, incoming: Resource): boolean => {
 // The REST-only enrichments the realtime payload never carries are kept where
 // the departed sources did not own them: platform scopes, minus the departed
 // sources' own that no surviving source, Docker LXC host or non-host facet supports, source status
-// of the sources that remain, discovery readiness unless its target coordinates now differ
-// from the row's, and action readiness unless the agent left. Everything else
-// REST adds returns with the next REST refresh.
+// of the sources that remain, and discovery readiness unless its target coordinates now differ
+// from the row's. Everything else REST adds returns with the next REST refresh.
 const replaceRecomposedResource = (
   incoming: Resource,
   existingCanonical: Resource,
@@ -810,15 +809,12 @@ const replaceRecomposedResource = (
     platformData?.sourceStatus,
     asRecord(existingCanonical.platformData)?.sourceStatus,
   );
-  const agentLeft = sourceListHas(departedSources, 'agent');
   const rebuilt: Resource = {
     ...replacement,
     platformScopes:
       keptScopes && keptScopes.length > 0
         ? normalizeSourcePlatformScopes(keptScopes, replacement.platformType)
         : replacement.platformScopes,
-    actionReadiness:
-      replacement.actionReadiness ?? (agentLeft ? undefined : existingCanonical.actionReadiness),
   };
   if (sourceStatus) {
     rebuilt.sourceStatus = sourceStatus as Resource['sourceStatus'];
@@ -847,6 +843,10 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
     ...incoming,
     ...(hasWithdrawnProxmoxMemory(incoming) ? { memory: undefined } : {}),
     clusterId: incoming.clusterId ?? existingCanonical.clusterId,
+    // Websocket and REST rows both carry the server's current refusals, and a
+    // row with none refuses nothing, so an earlier row's list never survives.
+    actionReadiness: incoming.actionReadiness,
+    actionReadinessRef: incoming.actionReadinessRef,
     platformScopes: normalizeSourcePlatformScopes(
       incoming.platformScopes ?? existingCanonical.platformScopes,
       incoming.platformType ?? existingCanonical.platformType,

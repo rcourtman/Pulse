@@ -7,7 +7,7 @@ import type {
   ResolvedAlert,
   ConnectedInfrastructureItem,
 } from '@/types/api';
-import type { Resource, ResourceCapability } from '@/types/resource';
+import type { Resource, ResourceActionReadiness, ResourceCapability } from '@/types/resource';
 import { createDefaultResourcePolicy } from '@/types/resource';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
@@ -508,12 +508,14 @@ export function createWebSocketStore(url: string) {
   // capabilitiesRef instead of inline capability blobs; ingestion expands the
   // ref back into `capabilities` so consumers keep the inline shape.
   let capabilityCatalog: Record<string, ResourceCapability[]> = {};
+  let actionReadinessCatalog: Record<string, ResourceActionReadiness[]> = {};
   // Same dedupe contract for non-default policies and AI-safe summaries.
   let policyCatalog: Record<string, Resource['policy']> = {};
   let aiSafeSummaryCatalog: Record<string, string> = {};
   // Records which catalog ref an expanded capabilities array or policy was
   // cloned from, so a patched row re-expands only when its ref changed.
   const capabilitiesExpandedFromRef = new WeakMap<object, string>();
+  const actionReadinessExpandedFromRef = new WeakMap<object, string>();
   const policyExpandedFromRef = new WeakMap<object, string>();
 
   const hydrateSlimResource = (resource: Resource): void => {
@@ -531,6 +533,23 @@ export function createWebSocketStore(url: string) {
           resource.capabilities = expanded;
         }
       }
+    }
+    // The server sends refusals only as refs, so a row without one refuses
+    // nothing, and a patch that removed the ref must take the old list with it.
+    const actionReadinessRef = resource.actionReadinessRef;
+    if (actionReadinessRef) {
+      const current = resource.actionReadiness as unknown as object | undefined;
+      if (!current || actionReadinessExpandedFromRef.get(current) !== actionReadinessRef) {
+        const entry = actionReadinessCatalog[actionReadinessRef];
+        if (entry) {
+          // Per-row clone: reconcile mutates adopted objects in place.
+          const expanded = structuredClone(entry);
+          actionReadinessExpandedFromRef.set(expanded as unknown as object, actionReadinessRef);
+          resource.actionReadiness = expanded;
+        }
+      }
+    } else {
+      delete resource.actionReadiness;
     }
     const policyRef = resource.policyRef;
     if (policyRef) {
@@ -1175,6 +1194,9 @@ export function createWebSocketStore(url: string) {
             // first resource that references a new entry.
             if (message.data.capabilityCatalog !== undefined) {
               capabilityCatalog = message.data.capabilityCatalog ?? {};
+            }
+            if (message.data.actionReadinessCatalog !== undefined) {
+              actionReadinessCatalog = message.data.actionReadinessCatalog ?? {};
             }
             if (message.data.policyCatalog !== undefined) {
               policyCatalog = message.data.policyCatalog ?? {};

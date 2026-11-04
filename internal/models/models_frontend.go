@@ -978,6 +978,10 @@ type StateFrontend struct {
 	// top-level state fields generically, so catalog changes ride the same
 	// frame as the resource refs that need them.
 	CapabilityCatalog map[string]json.RawMessage `json:"capabilityCatalog,omitempty"`
+	// ActionReadinessCatalog dedupes refusal lists the same way. Every container
+	// on a disconnected host refuses with the same words, so one entry serves
+	// them all and a refused row costs one ref on the wire.
+	ActionReadinessCatalog map[string]json.RawMessage `json:"actionReadinessCatalog,omitempty"`
 	// PolicyCatalog and AISafeSummaryCatalog dedupe the equally small sets of
 	// distinct non-default policy postures and templated AI-safe summaries the
 	// same way, referenced by ResourceFrontend.PolicyRef and
@@ -1097,6 +1101,10 @@ type ResourceFrontend struct {
 	// resolve the ref at ingestion. Inline Capabilities remains valid for
 	// producers that do not carry a catalog.
 	CapabilitiesRef string `json:"capabilitiesRef,omitempty"`
+	// ActionReadinessRef references an entry in
+	// StateFrontend.ActionReadinessCatalog: the actions the server refuses on
+	// this row right now. A row with no ref has nothing refused.
+	ActionReadinessRef string `json:"actionReadinessRef,omitempty"`
 	// PolicyRef and AISafeSummaryRef reference entries in
 	// StateFrontend.PolicyCatalog / AISafeSummaryCatalog under the same
 	// dedupe contract; inline Policy / AISafeSummary remain valid for

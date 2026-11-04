@@ -4051,6 +4051,22 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Action refusals on websocket rows (4 November 2026)
+
+A refusal changes with the command agent's connection, which no REST read of a
+mounted route observes, so a Docker page open while its agent disconnected kept
+Stop and Restart enabled, and kept a stale refusal after the agent returned.
+`actionlifecycle.AttachActionRefusals` now runs on every broadcast through
+`Monitor.SetBroadcastActionAvailability`, and each row with a refusal carries an
+`actionReadinessRef` into `actionReadinessCatalog`. The websocket store expands
+the ref and removes the list when a row has none, and `mergeCanonicalResource`
+takes `actionReadiness` from the incoming row alone. REST and websocket rows
+therefore both state the current answer, and an absent list means nothing is
+refused. Broadcast rows keep `capabilities` whole, while REST still strips what it
+refuses, so consumers read refusals from `actionReadiness` and not from a missing
+capability. The operator policy form depends on that whole set for a host that
+is disconnected.
+
 ### Docker command identity (4 November 2026)
 
 `ResolveResourceContext` fills `ResourceLocation.AgentID` for a Docker host or

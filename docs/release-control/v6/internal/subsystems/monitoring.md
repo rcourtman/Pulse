@@ -9585,3 +9585,8 @@ HTTP delivery before any router exists for default and tenant paths, saved
 public URL precedence and deployment lock, and a tenant grant that cannot override installation revocation.
 `TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation` covers corrupt
 settings and invalid CIDRs without creating queue storage.
+`Monitor.SetBroadcastActionAvailability` installs the action refusal pass on every
+state a monitor builds, including tenant monitors and reload replacements through
+`configureMonitorDependencies`. It writes top-level fields of the broadcast's own
+rows and never the store's. `TestBroadcastStateRunsTheRefusalProjectionOnItsOwnRows`
+and `TestConfigureMonitorDependenciesAttachesRefusalsToTheBroadcast` hold this.

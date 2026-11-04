@@ -1368,8 +1368,8 @@ describe('useUnifiedResources', () => {
   it('revalidates a prefer-ws-then-rest screen seeded from a websocket-only cache on mount', async () => {
     // In-app navigation onto a platform page: the all-resources cache is fed
     // by the websocket alone, so the scoped route seeds from it and reads as
-    // fresh. Action readiness only arrives over REST, and a route that never
-    // fetched it offered Docker updates the server had already refused.
+    // fresh. REST-only enrichment needs its own read, and the REST row's
+    // refusal must reach the route like any other REST field.
     apiFetchMock.mockImplementation(() => new Promise(() => undefined));
 
     let disposeAll = () => {};
@@ -2059,6 +2059,92 @@ describe('useUnifiedResources', () => {
       expect(row.actionReadiness).toEqual(testCase.actionReadiness);
       expect(row.technology).toBe('docker');
       expect(getDockerContainerLifecycleDisabledReason(row, 'restart')).toBe(testCase.expected);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('follows the server action refusals through websocket updates and a REST read', async () => {
+    const disconnected = {
+      name: 'stop',
+      available: false,
+      reasonCode: 'command_agent_disconnected',
+      reason: 'Docker / Podman command agent is not connected.',
+    };
+    const noCommandAgent = {
+      name: 'stop',
+      available: false,
+      reasonCode: 'no_command_agent',
+      reason: "Pulse sees this guest's containers through its Proxmox node.",
+    };
+    const container = {
+      id: 'docker-container-1',
+      type: 'app-container',
+      name: 'edge-web',
+      displayName: 'edge-web',
+      platformType: 'docker',
+      sourceType: 'agent',
+      sources: ['docker'],
+      status: 'online',
+      lastSeen: Date.parse('2026-02-06T12:00:00Z'),
+      sourceStatus: { docker: { status: 'online', lastSeen: '2026-02-06T12:00:00Z' } },
+      docker: { runtime: 'docker', agentId: 'agent-edge', containerState: 'running' },
+      capabilities: [{ name: 'stop', type: 'lifecycle', platform: 'docker' }],
+    } as unknown as Resource;
+    const restRow = {
+      id: 'docker-container-1',
+      type: 'app-container',
+      name: 'edge-web',
+      status: 'running',
+      lastSeen: '2026-02-06T12:00:00Z',
+      sources: ['docker'],
+      docker: { runtime: 'docker', agentId: 'agent-edge', containerState: 'running' },
+    };
+    const tick = (version: number, actionReadiness: Resource['actionReadiness']) =>
+      batch(() => {
+        setWsState('resources', 0, 'actionReadiness', actionReadiness);
+        setWsResourceChange({ version, changedIds: new Set(['docker-container-1']) });
+        setWsState('lastUpdate', 1738843200000 + version);
+      });
+    apiFetchMock.mockImplementation(() => new Promise(() => undefined));
+    setWsState('resources', [{ ...container, actionReadiness: [disconnected] }]);
+    setWsResourceChange({ version: 1, changedIds: null });
+
+    let dispose = () => {};
+    let result!: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']>;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=agent,docker-host,app-container&source=docker',
+        cacheKey: 'docker-overview',
+        initialHydration: 'prefer-ws-then-rest',
+      });
+    });
+    const stopReason = () =>
+      getDockerContainerLifecycleDisabledReason(result.resources()[0], 'stop');
+    try {
+      // First paint comes from the websocket, before any REST row exists.
+      await waitForResourceCount(() => result.resources().length);
+      expect(stopReason()).toBe(disconnected.reason);
+
+      // The agent came back: the refusal leaves with the next frame.
+      tick(2, undefined);
+      await waitForValue(stopReason, undefined);
+
+      // The agent went away, or the row turned out to have none to reach.
+      tick(3, [noCommandAgent]);
+      await waitForValue(stopReason, noCommandAgent.reason);
+      tick(4, [disconnected]);
+      await waitForValue(stopReason, disconnected.reason);
+
+      // A REST read and the next frame stay on the server's current answer.
+      apiFetchMock.mockResolvedValue(
+        resourceResponse([{ ...restRow, actionReadiness: [noCommandAgent] }]),
+      );
+      await result.refetch();
+      expect(stopReason()).toBe(noCommandAgent.reason);
+      tick(5, undefined);
+      await waitForValue(stopReason, undefined);
     } finally {
       dispose();
     }

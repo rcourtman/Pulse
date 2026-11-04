@@ -11067,3 +11067,7 @@ when its lease is missing or expired, so agents bound to that workspace keep
 reporting while it falls back to Community behaviour. The change sits in
 `internal/api/middleware_tenant.go` (`isHostedWorkspaceOpen`) and leaves the agent
 routes, token scopes and report payloads as they were.
+A command agent's connect or disconnect now reaches browsers in the next state
+broadcast as an action refusal on its rows, with no change to agent registration,
+session admission or lifecycle state. An availability pass still validates sessions
+through `connectionForOrganization`, once per agent per pass.
