@@ -21084,10 +21084,8 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	if strings.Index(src, "commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)") >
 		strings.Index(src, "commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)") ||
 		strings.Index(src, "commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)") >
-			strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") ||
-		strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") >
-			strings.Index(src, "commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))") {
-		t.Fatal("docker lifecycle executor must resolve the reporting token, exact identity, then legacy agent-id and hostname fallbacks")
+			strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") {
+		t.Fatal("docker lifecycle executor must resolve the reporting token, exact identity, then a tokenless resource's own agent ID")
 	}
 }
 

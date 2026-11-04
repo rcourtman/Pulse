@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,6 +19,11 @@ const (
 	dockerContainerLifecycleHandler = "docker.container.lifecycle"
 	dockerContainerUpdateHandler    = "docker.container.update"
 )
+
+// errDockerHostHasNoCommandAgent marks a Docker host Pulse found inside a Proxmox
+// guest and reads through the node's agent with pct exec. A typed action runs on
+// the daemon local to the agent that receives it, so no session can carry one.
+var errDockerHostHasNoCommandAgent = errors.New("docker container command agent is not available: no Pulse agent runs on this Docker host")
 
 type dockerContainerActionExecutor struct {
 	resources *ResourceHandlers
@@ -385,6 +391,9 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 		return unavailableDockerActionReadiness(operation, dockerActionUnavailableReasonCode(err), dockerActionUnavailableReason(err))
 	}
 	agentID, connectErr := e.connectedDockerCommandAgentID(ctx, resource)
+	if errors.Is(connectErr, errDockerHostHasNoCommandAgent) {
+		return unavailableDockerActionReadiness(operation, "no_command_agent", "Pulse sees this guest's containers through its Proxmox node and cannot control them from there. Install the Pulse agent inside the guest to manage them.")
+	}
 	if connectErr != nil {
 		readiness := unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
 		readiness.Detail = connectErr.Error()
@@ -479,8 +488,20 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 	if resource.Docker == nil {
 		return "", fmt.Errorf("docker resource metadata missing")
 	}
-	if agentID, ok := commandAgentForToken(ctx, e.agents, resource.Docker.TokenID); ok {
-		return strings.TrimSpace(agentID), nil
+	if unified.IsProxmoxLXCDockerHostID(resource.Docker.AgentID) {
+		return "", errDockerHostHasNoCommandAgent
+	}
+	// The report token finds this resource's agent even when its session registered
+	// under the commandAgentId Pulse acknowledged, not the ID its Docker module
+	// reports. A token alone does not name a machine, because a module on another
+	// machine can report under it, so the session must also hold this resource's
+	// agent ID or hostname.
+	if tokenAgentID, ok := commandAgentForToken(ctx, e.agents, resource.Docker.TokenID); ok {
+		agentID := strings.TrimSpace(tokenAgentID)
+		hostAgentID, _ := commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))
+		if agentID != "" && (agentID == strings.TrimSpace(resource.Docker.AgentID) || agentID == strings.TrimSpace(hostAgentID)) {
+			return agentID, nil
+		}
 	}
 	// Telemetry retains its last-seen token ID across enrollment-token rotation.
 	// A token miss may therefore use the live admission only when its tenant,
@@ -490,18 +511,14 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 		if agentID, ok := commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname); ok {
 			return strings.TrimSpace(agentID), nil
 		}
-		return "", fmt.Errorf("docker container command agent is not connected: no live command session matches enrollment token %s or the exact agent %q and hostname %q identity", tokenID, strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
+		return "", fmt.Errorf("docker container command agent is not connected: no live command session on this host matches enrollment token %s or the exact agent %q and hostname %q identity", tokenID, strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
 	}
+	// With no token, only the resource's own agent ID identifies its session. A
+	// hostname cannot: another machine's agent can hold the same name (#2681).
 	if agentID := strings.TrimSpace(resource.Docker.AgentID); agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
 		return agentID, nil
 	}
-	if agentID, ok := commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname)); ok {
-		agentID = strings.TrimSpace(agentID)
-		if agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
-			return agentID, nil
-		}
-	}
-	return "", fmt.Errorf("docker container command agent is not connected: no live command session for agent %q or hostname %q", strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
+	return "", fmt.Errorf("docker container command agent is not connected: no live command session for agent %q", strings.TrimSpace(resource.Docker.AgentID))
 }
 
 func unavailableDockerActionReadiness(operation, reasonCode, reason string) unified.ResourceActionReadiness {

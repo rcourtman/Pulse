@@ -3148,8 +3148,8 @@ not storage or recovery controls: storage/recovery consumers may render their
 redacted action history as context, but must not treat container lifecycle
 capabilities, `DockerData`, or agent command verification as backup freshness,
 restore support, or a recovery-local execution path. When the API-owned Docker
-lifecycle executor resolves a command agent by Docker source ID or canonical
-host name and dispatches a trusted internal container command after action
+lifecycle executor resolves a command agent from the resource's report token
+or agent identity and dispatches a trusted internal container command after action
 approval, storage and recovery consumers may observe only the resulting action
 audit and verification evidence; they must not reinterpret that trusted command
 path as recovery authority or a storage-owned action transport. Canonical

@@ -2455,6 +2455,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		AgentID:            strings.TrimSpace(host.AgentID),
 		ContainerID:        ct.ID,
 		Hostname:           host.Hostname,
+		TokenID:            strings.TrimSpace(host.TokenID),
 		Image:              ct.Image,
 		ImageID:            ct.ImageDigest,
 		UptimeSeconds:      ct.UptimeSeconds,

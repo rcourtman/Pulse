@@ -3653,8 +3653,10 @@ a new API state machine, queue contract, or verification-accounting field.
    evidence only, never approval, dispatch authority, durable receipt,
    execution success, or verification.
    Docker / Podman lifecycle execution resolves the command WebSocket by the
-   Docker reporting agent ID first, then by canonical Docker host name when the
-   runtime source ID differs from the command-agent registration ID. Once
+   report token when that session also holds the resource's agent ID or
+   hostname, then by exact agent ID and hostname. A resource with no token uses
+   only its own agent ID. A hostname alone never selects a session, and a
+   synthetic `proxmox-lxc-docker:` host reads as `no_command_agent`. Once
    `/api/actions/{id}/execute` has entered the API-owned execution contract,
    the executor may dispatch the vetted container lifecycle and verification
    commands as trusted agent commands; the host-agent hard-block policy still

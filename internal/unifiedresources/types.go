@@ -1155,7 +1155,7 @@ type DockerData struct {
 	ContainersUsage       *DockerStorageUsageMeta            `json:"containersUsage,omitempty"`
 	VolumesUsage          *DockerStorageUsageMeta            `json:"volumesUsage,omitempty"`
 	BuildCacheUsage       *DockerStorageUsageMeta            `json:"buildCacheUsage,omitempty"`
-	TokenID               string                             `json:"tokenId,omitempty"`
+	TokenID               string                             `json:"tokenId,omitempty"` // Also set on app containers: action dispatch finds their agent's session by it.
 	TokenName             string                             `json:"tokenName,omitempty"`
 	TokenHint             string                             `json:"tokenHint,omitempty"`
 	TokenLastUsedAt       *time.Time                         `json:"tokenLastUsedAt,omitempty"`
