@@ -1843,6 +1843,7 @@ type patrolGuestInventoryRow struct {
 	name, gType, node, status string
 	cpu, mem, disk            float64
 	memory                    patrolGuestMemoryReading
+	instance                  string
 	vmid                      int
 	ip                        string
 	lastBackup                time.Time
@@ -1987,6 +1988,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				mem:        vmv.MemoryPercent(),
 				memory:     readPatrolGuestMemory(vmv.MemoryPercent(), observation, hasMemory, unifiedresources.GuestMemoryKindFor(hasProxmox || vmv.VMID() > 0, false)),
 				disk:       vmv.DiskPercent(),
+				instance:   vmv.Instance(),
 				vmid:       vmv.VMID(),
 				ip:         patrolFirstIP(vmv.IPAddresses()),
 				lastBackup: vmv.LastBackup(),
@@ -2010,6 +2012,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 				mem:        ctv.MemoryPercent(),
 				memory:     readPatrolGuestMemory(ctv.MemoryPercent(), observation, hasMemory, unifiedresources.GuestMemoryKindFor(hasProxmox || ctv.VMID() > 0, true)),
 				disk:       ctv.DiskPercent(),
+				instance:   ctv.Instance(),
 				vmid:       ctv.VMID(),
 				ip:         patrolFirstIP(ctv.IPAddresses()),
 				lastBackup: ctv.LastBackup(),
@@ -2035,6 +2038,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			mem:        vm.Memory.Usage,
 			memory:     readPatrolGuestMemory(vm.Memory.Usage, vm.Memory.Observation, vm.Memory.HasKnownUsage(), unifiedresources.GuestMemoryKindFor(vm.VMID > 0 || vm.Type == "qemu", false)),
 			disk:       vm.Disk.Usage,
+			instance:   vm.Instance,
 			vmid:       vm.VMID,
 			ip:         patrolFirstIP(vm.IPAddresses),
 			lastBackup: vm.LastBackup,
@@ -2056,6 +2060,7 @@ func patrolGuestInventoryRows(snap patrolRuntimeState, scopedSet map[string]bool
 			mem:        ct.Memory.Usage,
 			memory:     readPatrolGuestMemory(ct.Memory.Usage, ct.Memory.Observation, ct.Memory.HasKnownUsage(), unifiedresources.GuestMemoryKindFor(ct.VMID > 0 || ct.Type == "lxc", true)),
 			disk:       ct.Disk.Usage,
+			instance:   ct.Instance,
 			vmid:       ct.VMID,
 			ip:         patrolFirstIP(ct.IPAddresses),
 			lastBackup: ct.LastBackup,
@@ -3264,22 +3269,50 @@ func (p *PatrolService) seedPMGSnapshotState(sb *strings.Builder, snap patrolRun
 	sb.WriteString("\n")
 }
 
+// patrolGuestBackupKey names a guest by what a backup record reports about it. A
+// VMID is unique only inside its connection, and a name not even there.
+type patrolGuestBackupKey struct {
+	instance string
+	vmid     int
+}
+
 // seedBackupAnalysis builds the backup status section.
 func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedSet map[string]bool, now time.Time) string {
 	type backupInfo struct {
 		lastBackup time.Time
 		source     string
 	}
-	guestBackups := make(map[string]*backupInfo)
 
-	vmidToName := make(map[int]string)
 	guestRows := patrolGuestInventoryRows(snap, scopedSet, nil)
 	if snap.readState == nil {
 		log.Warn().Msg("seedBackupAnalysis: ReadState not wired, backup analysis will be incomplete")
 	}
+	totalGuests := len(guestRows)
+	if totalGuests == 0 {
+		return ""
+	}
+
+	type backupGuest struct{ id, kind string }
+	guestsByKey := make(map[patrolGuestBackupKey]backupGuest, totalGuests)
+	guestNameUses := make(map[string]int, totalGuests)
 	for _, guest := range guestRows {
+		guestNameUses[guest.name]++
 		if guest.vmid > 0 {
-			vmidToName[guest.vmid] = guest.name
+			kind := "vm"
+			if guest.gType == "Container" {
+				kind = "ct"
+			}
+			guestsByKey[patrolGuestBackupKey{instance: strings.TrimSpace(guest.instance), vmid: guest.vmid}] = backupGuest{id: guest.id, kind: kind}
+		}
+	}
+
+	guestBackups := make(map[string]*backupInfo, totalGuests)
+	credit := func(guestID string, when time.Time, source string) {
+		if guestID == "" {
+			return
+		}
+		if existing, ok := guestBackups[guestID]; !ok || when.After(existing.lastBackup) {
+			guestBackups[guestID] = &backupInfo{lastBackup: when, source: source}
 		}
 	}
 
@@ -3287,59 +3320,33 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 		if bt.Status != "OK" {
 			continue
 		}
-		name := vmidToName[bt.VMID]
-		if scopedSet != nil && name == "" {
-			continue
-		}
-		if name == "" {
-			name = fmt.Sprintf("vmid-%d", bt.VMID)
-		}
-		if existing, ok := guestBackups[name]; !ok || bt.EndTime.After(existing.lastBackup) {
-			guestBackups[name] = &backupInfo{lastBackup: bt.EndTime, source: "PVE task history"}
-		}
+		credit(guestsByKey[patrolGuestBackupKey{instance: strings.TrimSpace(bt.Instance), vmid: bt.VMID}].id, bt.EndTime, "PVE task history")
 	}
 
 	for _, stb := range snap.PVEBackups.StorageBackups {
-		name := vmidToName[stb.VMID]
-		if scopedSet != nil && name == "" {
+		guest := guestsByKey[patrolGuestBackupKey{instance: strings.TrimSpace(stb.Instance), vmid: stb.VMID}]
+		// As on the badge: a partial archive is no backup yet, and a retained one
+		// keeps its guest kind when another kind reuses the VMID.
+		if kind := stb.GuestKind(); stb.InProgress || (kind != "" && kind != guest.kind) {
 			continue
 		}
-		if name == "" {
-			name = fmt.Sprintf("vmid-%d", stb.VMID)
-		}
-		if existing, ok := guestBackups[name]; !ok || stb.Time.After(existing.lastBackup) {
-			guestBackups[name] = &backupInfo{lastBackup: stb.Time, source: "PVE storage backup"}
-		}
+		credit(guest.id, stb.Time, "PVE storage backup")
 	}
 
+	// The guest backup badge does not count an incomplete snapshot or one the
+	// evidence leaves unsettled, so neither can make a guest look covered here.
 	for _, pb := range snap.PBSBackups {
-		name := pb.VMID
-		if id, err := strconv.Atoi(pb.VMID); err == nil {
-			if n := vmidToName[id]; n != "" {
-				name = n
-			}
-		}
-		if scopedSet != nil && name == pb.VMID {
+		guest, ok := pb.Guest()
+		if !ok || pb.InProgress {
 			continue
 		}
-		if existing, ok := guestBackups[name]; !ok || pb.BackupTime.After(existing.lastBackup) {
-			guestBackups[name] = &backupInfo{lastBackup: pb.BackupTime, source: formatPBSBackupSource(pb)}
-		}
+		credit(guestsByKey[patrolGuestBackupKey{instance: guest.Instance, vmid: guest.VMID}].id, pb.BackupTime, formatPBSBackupSource(pb.PBSBackup))
 	}
 
 	for _, guest := range guestRows {
-		if guest.lastBackup.IsZero() {
-			continue
+		if !guest.lastBackup.IsZero() {
+			credit(guest.id, guest.lastBackup, "PVE guest metadata")
 		}
-		if existing, ok := guestBackups[guest.name]; !ok || guest.lastBackup.After(existing.lastBackup) {
-			guestBackups[guest.name] = &backupInfo{lastBackup: guest.lastBackup, source: "PVE guest metadata"}
-		}
-	}
-
-	totalGuests := len(guestRows)
-
-	if totalGuests == 0 {
-		return ""
 	}
 
 	var sb strings.Builder
@@ -3349,13 +3356,12 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 	recentCount := 0
 	threshold48h := now.Add(-48 * time.Hour)
 
-	allGuestNames := make(map[string]bool, len(guestRows))
 	for _, guest := range guestRows {
-		allGuestNames[guest.name] = true
-	}
-
-	for name := range allGuestNames {
-		info, hasBackup := guestBackups[name]
+		name := guest.name
+		if instance := strings.TrimSpace(guest.instance); guestNameUses[guest.name] > 1 && instance != "" {
+			name = fmt.Sprintf("%s on %s", guest.name, instance)
+		}
+		info, hasBackup := guestBackups[guest.id]
 		if !hasBackup {
 			staleGuests = append(staleGuests, fmt.Sprintf("%s (never; no PVE/PBS backup seen)", name))
 		} else if info.lastBackup.Before(threshold48h) {

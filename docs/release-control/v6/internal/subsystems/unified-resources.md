@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### PBS rollups read the attribution rule (4 November 2026)
+
+PBS protected-workload counts and datastore consumers name the guest
+`models.AttributePBSBackups` names, read from `StateSnapshot.AttributedPBSBackups`,
+not a namespace rule of their own. A snapshot captured from state holds the PVE
+storage evidence, so it answers like the guest badge and the Backups table. A
+snapshot the rule leaves unsettled counts for nobody, and a host backup with a
+guest's VMID no longer counts as that guest (#2681).
+
+A registry seeded from resources, as the resources API seeds from the monitor, never
+read PBS backups. It keeps the rollups its seed carries instead of clearing them, so
+REST and websocket rows agree. A registry that read a snapshot recalculates them.
+
 ### Platform host rows scope node alert matches by connection (4 November 2026)
 
 The Proxmox, vSphere and TrueNAS host tables pass an `AlertNodeScope` rather than

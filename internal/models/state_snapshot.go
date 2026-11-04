@@ -1,6 +1,7 @@
 package models
 
 import (
+	"maps"
 	"strings"
 	"time"
 )
@@ -36,6 +37,11 @@ type StateSnapshot struct {
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
 	PVETagStyles                 map[string]PVETagStyle     `json:"pveTagStyles,omitempty"`
+
+	// pbsGuestConfirmations is the PVE storage evidence behind PBS attribution,
+	// so a snapshot names the same guest as State. The sets inside are replaced
+	// whole and never edited, so a captured copy needs only its own outer map.
+	pbsGuestConfirmations map[string]map[PBSGuestConfirmation]struct{}
 }
 
 // EmptyStateSnapshot returns a normalized zero-value snapshot for runtime
@@ -197,6 +203,7 @@ func (s StateSnapshot) Clone() StateSnapshot {
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 		PVETagColors:                 cloneStringMap(s.PVETagColors),
 		PVETagStyles:                 clonePVETagStyles(s.PVETagStyles),
+		pbsGuestConfirmations:        s.pbsGuestConfirmations,
 	}
 	for key, healthy := range s.ConnectionHealth {
 		snapshot.ConnectionHealth[key] = healthy
@@ -253,6 +260,7 @@ func (s *State) getSnapshot(cloneClusters func([]KubernetesCluster) []Kubernetes
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 		PVETagColors:                 cloneStringMap(s.PVETagColors),
 		PVETagStyles:                 clonePVETagStyles(s.PVETagStyles),
+		pbsGuestConfirmations:        maps.Clone(s.pbsGuestConfirmations),
 	}
 
 	snapshot.NormalizeCollections()

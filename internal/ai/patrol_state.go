@@ -90,11 +90,13 @@ type patrolRuntimeState struct {
 	Storage                 []models.Storage
 	PBSInstances            []models.PBSInstance
 	PMGInstances            []models.PMGInstance
-	PBSBackups              []models.PBSBackup
-	PVEBackups              models.PVEBackups
-	ConnectionHealth        map[string]bool
-	ActiveAlerts            []models.Alert
-	RecentlyResolved        []models.ResolvedAlert
+	// PBSBackups carries each snapshot's guest as the attribution rule answered it
+	// over the whole state, so narrowing the scope cannot change the answer.
+	PBSBackups       []models.AttributedPBSBackup
+	PVEBackups       models.PVEBackups
+	ConnectionHealth map[string]bool
+	ActiveAlerts     []models.Alert
+	RecentlyResolved []models.ResolvedAlert
 	// thresholdProvider carries the user's alert thresholds into the run. Nil
 	// means the factory alert configuration.
 	thresholdProvider ThresholdProvider
@@ -129,7 +131,7 @@ func newPatrolRuntimeStateWithProviders(
 		Storage:                 snapshot.Storage,
 		PBSInstances:            snapshot.PBSInstances,
 		PMGInstances:            snapshot.PMGInstances,
-		PBSBackups:              snapshot.PBSBackups,
+		PBSBackups:              snapshot.AttributedPBSBackups(),
 		PVEBackups:              snapshot.PVEBackups,
 		ConnectionHealth:        snapshot.ConnectionHealth,
 		ActiveAlerts:            snapshot.ActiveAlerts,

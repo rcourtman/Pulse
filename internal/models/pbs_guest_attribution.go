@@ -23,6 +23,25 @@ func (b AttributedPBSBackup) NormalizeCollections() AttributedPBSBackup {
 	return b
 }
 
+// PBSGuestRef names the guest a snapshot belongs to: a VMID is unique inside a
+// connection, and a type keeps a VM's snapshots off a container reusing its ID.
+type PBSGuestRef struct {
+	Instance   string
+	BackupType string // "vm" or "ct"
+	VMID       int
+}
+
+// Guest returns the guest this snapshot belongs to. It reports false when the
+// evidence does not settle one, so a reader cannot fall back to the bare VMID.
+func (b AttributedPBSBackup) Guest() (PBSGuestRef, bool) {
+	instance := strings.TrimSpace(b.GuestInstance)
+	subject, ok := subjectOfPBSBackup(b.PBSBackup)
+	if instance == "" || !ok {
+		return PBSGuestRef{}, false
+	}
+	return PBSGuestRef{Instance: instance, BackupType: subject.backupType, VMID: subject.vmid}, true
+}
+
 // PBSGuestCandidate is a live guest that a PBS snapshot of its type and VMID
 // could belong to.
 type PBSGuestCandidate struct {
@@ -51,10 +70,11 @@ func subjectOfPBSBackup(backup PBSBackup) (pbsBackupSubject, bool) {
 }
 
 // AttributePBSBackups decides which PVE connection's guest owns each snapshot.
-// It is the one attribution rule: guest backup badges, recovery points and the
-// Backups table all read its answer, so one snapshot cannot read as different
-// guests on different surfaces. The result lines up with backups, and an empty
-// entry means the evidence does not settle that snapshot.
+// It is the one attribution rule: guest backup badges, recovery points, the
+// Backups table, PBS protected-workload counts, datastore consumers and Patrol
+// all read its answer, so one snapshot cannot read as different guests on
+// different surfaces. The result lines up with backups, and an empty entry means
+// the evidence does not settle that snapshot.
 //
 // Source inference learns from the snapshots attributable on their own evidence
 // (unique typed VMIDs, placement or name matches, exclusive storage views), then
@@ -94,31 +114,35 @@ func AttributePBSBackups(backups []PBSBackup, guests []PBSGuestCandidate, exclus
 		})
 	}
 
-	learner := proxmoxidentity.NewPBSSourceLearner()
-	teaches := func(backup PBSBackup) bool { return !backup.InProgress && !backup.CarriedOver }
-	for _, input := range inputs {
-		backup := backups[input.index]
-		if !teaches(backup) {
-			continue
+	// Only a collision consults the learner, so most estates can skip teaching it.
+	var learner *proxmoxidentity.PBSSourceLearner
+	if pbsGuestsCollide(guests) {
+		learner = proxmoxidentity.NewPBSSourceLearner()
+		teaches := func(backup PBSBackup) bool { return !backup.InProgress && !backup.CarriedOver }
+		for _, input := range inputs {
+			backup := backups[input.index]
+			if !teaches(backup) {
+				continue
+			}
+			for _, guest := range input.guests {
+				learner.RegisterCandidate(backup.Instance, guest.Instance)
+			}
 		}
-		for _, guest := range input.guests {
-			learner.RegisterCandidate(backup.Instance, guest.Instance)
-		}
-	}
-	for _, input := range inputs {
-		backup := backups[input.index]
-		if !teaches(backup) {
-			continue
-		}
-		attributed := attributePBSBackup(backup, input.guests, input.confirmer, nil)
-		if attributed == "" {
-			// An exclusive view is positive evidence about the source even when
-			// that connection no longer has this guest, and it makes the cluster
-			// behind it visible to the learner's coverage check.
-			attributed = input.confirmer
-		}
-		if attributed != "" {
-			learner.Observe(backup.Instance, backup.Datastore, backup.Owner, attributed)
+		for _, input := range inputs {
+			backup := backups[input.index]
+			if !teaches(backup) {
+				continue
+			}
+			attributed := attributePBSBackup(backup, input.guests, input.confirmer, nil)
+			if attributed == "" {
+				// An exclusive view is positive evidence about the source even when
+				// that connection no longer has this guest, and it makes the cluster
+				// behind it visible to the learner's coverage check.
+				attributed = input.confirmer
+			}
+			if attributed != "" {
+				learner.Observe(backup.Instance, backup.Datastore, backup.Owner, attributed)
+			}
 		}
 	}
 
@@ -257,13 +281,17 @@ func pbsGuestsCollide(guests []PBSGuestCandidate) bool {
 	return false
 }
 
-func (s *State) pbsGuestInstancesLocked() []string {
-	guests := pbsGuestCandidates(s.PBSBackups, s.VMs, s.Containers)
+func pbsGuestInstances(backups []PBSBackup, vms []VM, containers []Container, confirmations map[string]map[PBSGuestConfirmation]struct{}) []string {
+	guests := pbsGuestCandidates(backups, vms, containers)
 	var confirmers map[PBSSnapshotRef]string
 	if pbsGuestsCollide(guests) {
-		confirmers = s.pbsExclusiveConfirmersLocked()
+		confirmers = pbsExclusiveConfirmers(confirmations)
 	}
-	return AttributePBSBackups(s.PBSBackups, guests, confirmers)
+	return AttributePBSBackups(backups, guests, confirmers)
+}
+
+func (s *State) pbsGuestInstancesLocked() []string {
+	return pbsGuestInstances(s.PBSBackups, s.VMs, s.Containers, s.pbsGuestConfirmations)
 }
 
 // GetAttributedPBSBackups returns the PBS snapshots with the guest each one
@@ -287,14 +315,27 @@ func (s *State) PBSBackupGuestInstances() map[string]string {
 }
 
 // AttributedPBSBackups is the complete-snapshot form of GetAttributedPBSBackups.
-// A snapshot carries no PVE storage views, so only the rest of the evidence
-// applies; mock mode reads through here.
+// A snapshot captured from State holds the same evidence as State, so it gives
+// the same answer. Read it on the whole snapshot: narrowing the guests first can
+// leave one candidate where the evidence had not settled on it. A hand-built
+// snapshot, such as mock mode's fixture, has no PVE storage views to read.
 func (s StateSnapshot) AttributedPBSBackups() []AttributedPBSBackup {
-	return attributedPBSBackups(s.PBSBackups, AttributePBSBackups(s.PBSBackups, pbsGuestCandidates(s.PBSBackups, s.VMs, s.Containers), nil))
+	return attributedPBSBackups(s.PBSBackups, pbsGuestInstances(s.PBSBackups, s.VMs, s.Containers, s.pbsGuestConfirmations))
+}
+
+// PBSBackupGuests returns the guest of each snapshot, lined up with s.PBSBackups,
+// without copying the rows. A snapshot the evidence does not settle has a zero ref.
+func (s StateSnapshot) PBSBackupGuests() []PBSGuestRef {
+	guestInstances := pbsGuestInstances(s.PBSBackups, s.VMs, s.Containers, s.pbsGuestConfirmations)
+	guests := make([]PBSGuestRef, len(s.PBSBackups))
+	for i := range s.PBSBackups {
+		guests[i], _ = AttributedPBSBackup{PBSBackup: s.PBSBackups[i], GuestInstance: guestInstances[i]}.Guest()
+	}
+	return guests
 }
 
 // PBSBackupGuestInstances is the complete-snapshot form of
-// State.PBSBackupGuestInstances, with the same limit as AttributedPBSBackups.
+// State.PBSBackupGuestInstances.
 func (s StateSnapshot) PBSBackupGuestInstances() map[string]string {
-	return pbsGuestInstancesByID(s.PBSBackups, AttributePBSBackups(s.PBSBackups, pbsGuestCandidates(s.PBSBackups, s.VMs, s.Containers), nil))
+	return pbsGuestInstancesByID(s.PBSBackups, pbsGuestInstances(s.PBSBackups, s.VMs, s.Containers, s.pbsGuestConfirmations))
 }

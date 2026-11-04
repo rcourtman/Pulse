@@ -3349,6 +3349,70 @@ func TestResourceListIncludesPBSPrimaryIncidentRollup(t *testing.T) {
 	}
 }
 
+// A running monitor seeds REST from its resources, not a snapshot, so the rebuild
+// has no backups to count and must keep the answer the seed carries. The Storage
+// page reads these rows and storage-summary reads only this path.
+func TestPBSRollupsSurviveTheMonitorResourceSeed(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		LastUpdate: now,
+		PBSInstances: []models.PBSInstance{{
+			ID: "pbs-1", Name: "pbs-main", Host: "https://pbs-main.local:8007", Status: "online", LastSeen: now,
+			Datastores: []models.PBSDatastore{{Name: "backup-store", Status: "online", Total: 100, Used: 10}},
+		}},
+		PBSBackups: []models.PBSBackup{
+			{ID: "pbs-1/backup-store/vm/100", Instance: "pbs-main", Datastore: "backup-store", BackupType: "vm", VMID: "100", BackupTime: now},
+		},
+		VMs: []models.VM{{ID: "vm-100", Name: "app01", Node: "pve-1", Instance: "pve", Status: "running", LastSeen: now, VMID: 100}},
+	}
+	adapter := unified.NewMonitorAdapter(unified.NewRegistry(nil))
+	adapter.PopulateFromSnapshot(snapshot)
+
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: snapshot, resources: adapter.GetAll()})
+
+	rec := httptest.NewRecorder()
+	h.HandleListResources(rec, httptest.NewRequest(http.MethodGet, "/api/resources?type=pbs,storage", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	var sawServer, sawDatastore bool
+	for _, resource := range resp.Data {
+		switch {
+		case resource.Type == unified.ResourceTypePBS:
+			sawServer = true
+			if resource.PBS == nil || resource.PBS.ProtectedWorkloadCount != 1 || len(resource.PBS.ProtectedWorkloadNames) != 1 || resource.PBS.ProtectedWorkloadNames[0] != "app01" {
+				t.Fatalf("PBS rollup lost in the rebuild: %+v", resource.PBS)
+			}
+		case resource.Type == unified.ResourceTypeStorage:
+			sawDatastore = true
+			if resource.Storage == nil || resource.Storage.ConsumerCount != 1 || len(resource.Storage.TopConsumers) != 1 || resource.Storage.TopConsumers[0].Name != "app01" {
+				t.Fatalf("datastore consumers lost in the rebuild: %+v", resource.Storage)
+			}
+		}
+	}
+	if !sawServer || !sawDatastore {
+		t.Fatalf("expected a PBS row and a datastore row, got %+v", resp.Data)
+	}
+
+	rec = httptest.NewRecorder()
+	h.HandleStorageSummary(rec, httptest.NewRequest(http.MethodGet, "/api/resources/storage-summary", nil))
+	var summary struct {
+		ProtectedWorkloadCount int `json:"protectedWorkloadCount"`
+		DependentResourceCount int `json:"dependentResourceCount"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&summary); err != nil {
+		t.Fatalf("decode summary: %v", err)
+	}
+	if summary.ProtectedWorkloadCount != 1 || summary.DependentResourceCount != 1 {
+		t.Fatalf("storage summary lost the rollups: %+v", summary)
+	}
+}
+
 func TestPBSResourceListIncludesProtectedWorkloadRollup(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{

@@ -24,7 +24,9 @@ operator splits and node reservations still apply after inference, unchanged.
 
 Guest backup badges now read `models.AttributePBSBackups` instead of a private
 ranking inside `SyncGuestBackupTimes`, and `PBSBackup` gains an internal
-`CarriedOver` mark. Neither touches agent reports, install, update or removal.
+`CarriedOver` mark. Neither touches agent reports, install, update or removal. The
+agent lookup registry reads the same answer from its snapshot, which changes only
+PBS and datastore summaries it never serves to an agent.
 
 ### Uninstall errors report the service stage actually reached
 

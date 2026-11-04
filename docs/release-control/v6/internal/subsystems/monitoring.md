@@ -39,7 +39,9 @@ would cost the common case, a second site added after the first, its agent link.
 `models.AttributePBSBackups` over the state's guests and exclusive views. Recovery
 points take that answer on their own PBS instance's next read. The read copies only
 guests a listed snapshot could belong to, and reads exclusive views only when those
-guests collide, so it stays independent of the unrelated estate. An
+guests collide, so it stays independent of the unrelated estate. A captured
+`StateSnapshot` shares the state's exclusive views, so the unified resource registry
+and Patrol read the same answer from it. An
 exclusive view settles an exact label tie between guests on different connections.
 It does not outvote a stronger label match. Workload chart keys built
 from a node name alone apply only to a guest with no connection, because a

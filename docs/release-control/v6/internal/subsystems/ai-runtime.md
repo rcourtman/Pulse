@@ -25,6 +25,16 @@ that same result. Successful reads retain their content and execution provenance
 
 ## Purpose
 
+### Patrol credits a backup to the guest that owns it (4 November 2026)
+
+The backup section of Patrol's seed credits guests by connection and VMID, not by
+VMID alone or by name. PBS snapshots follow `models.AttributePBSBackups`, answered
+over the whole state before a scope narrows it, so a run scoped to one guest cannot
+take the backup of another connection's guest with the same VMID, and a snapshot the
+rule leaves unsettled covers nobody. As on the badge, an incomplete snapshot, a
+partial archive or an archive of the other guest kind does not make a guest look
+covered. Guests sharing a name are reported separately (#2681).
+
 ### Pulse MCP does not forward credentials to a redirected origin
 
 The adapter's standard-client requests share the agent HTTP origin boundary for

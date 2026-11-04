@@ -1934,11 +1934,20 @@ func collectPatrolScopedGuestSnapshots(snapshots []models.GuestSnapshot, include
 	return filtered
 }
 
-func collectPatrolScopedPBSBackups(backups []models.PBSBackup, includedGuestVMIDs map[int]bool) []models.PBSBackup {
-	filtered := make([]models.PBSBackup, 0, len(backups))
+// collectPatrolScopedPBSBackups keeps the snapshots whose guest is in scope. A
+// matching VMID is not enough: the same one can belong to another connection's
+// guest, or to no guest the evidence settles.
+func collectPatrolScopedPBSBackups(backups []models.AttributedPBSBackup, vms []models.VM, containers []models.Container) []models.AttributedPBSBackup {
+	included := make(map[models.PBSGuestRef]bool, len(vms)+len(containers))
+	for _, vm := range vms {
+		included[models.PBSGuestRef{Instance: strings.TrimSpace(vm.Instance), BackupType: "vm", VMID: vm.VMID}] = true
+	}
+	for _, container := range containers {
+		included[models.PBSGuestRef{Instance: strings.TrimSpace(container.Instance), BackupType: "ct", VMID: container.VMID}] = true
+	}
+	filtered := make([]models.AttributedPBSBackup, 0, len(backups))
 	for _, backup := range backups {
-		vmid, err := strconv.Atoi(backup.VMID)
-		if err == nil && includedGuestVMIDs[vmid] {
+		if guest, ok := backup.Guest(); ok && included[guest] {
 			filtered = append(filtered, backup)
 		}
 	}
@@ -1962,7 +1971,7 @@ func copyScopedPatrolMetadata(dst *patrolRuntimeState, snap patrolRuntimeState, 
 	dst.PVEBackups.BackupTasks = collectPatrolScopedBackupTasks(snap.PVEBackups.BackupTasks, includedGuestVMIDs)
 	dst.PVEBackups.StorageBackups = collectPatrolScopedStorageBackups(snap.PVEBackups.StorageBackups, includedGuestVMIDs)
 	dst.PVEBackups.GuestSnapshots = collectPatrolScopedGuestSnapshots(snap.PVEBackups.GuestSnapshots, includedGuestVMIDs)
-	dst.PBSBackups = collectPatrolScopedPBSBackups(snap.PBSBackups, includedGuestVMIDs)
+	dst.PBSBackups = collectPatrolScopedPBSBackups(snap.PBSBackups, dst.VMs, dst.Containers)
 }
 
 func filterPatrolStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {

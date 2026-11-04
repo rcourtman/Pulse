@@ -3646,7 +3646,7 @@ func TestResourceRegistry_IngestResourcesDerivesPrimaryIncidentRollups(t *testin
 	if !ok {
 		t.Fatal("expected pbs resource")
 	}
-	if pbs.IncidentCount != 2 || pbs.IncidentCode != "pbs_datastore_state" || pbs.IncidentSeverity != storagehealth.RiskWarning || pbs.IncidentSummary != "PBS datastore archive is READ_ONLY" || pbs.IncidentCategory != IncidentCategoryRecoverability || pbs.IncidentLabel != "Backup Coverage At Risk" || pbs.IncidentPriority != 3500 || pbs.IncidentImpactSummary != "" || pbs.IncidentUrgency != IncidentUrgencyToday || pbs.IncidentAction != "Investigate backup target health and preserve backup coverage" {
+	if pbs.IncidentCount != 2 || pbs.IncidentCode != "pbs_datastore_state" || pbs.IncidentSeverity != storagehealth.RiskWarning || pbs.IncidentSummary != "PBS datastore archive is READ_ONLY" || pbs.IncidentCategory != IncidentCategoryRecoverability || pbs.IncidentLabel != "Backup Coverage At Risk" || pbs.IncidentPriority != 3500 || pbs.IncidentImpactSummary != "Puts backups for 2 protected workloads at risk: media01, app01" || pbs.IncidentUrgency != IncidentUrgencyToday || pbs.IncidentAction != "Investigate backup target health and preserve backup coverage" {
 		t.Fatalf("unexpected pbs incident rollup %+v", pbs)
 	}
 }
