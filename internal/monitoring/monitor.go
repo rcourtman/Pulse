@@ -1395,6 +1395,7 @@ type Monitor struct {
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmAgentMemCache            map[string]agentMemCacheEntry
 	vmAgentMemInFlight         map[string]*guestMemoryFetch    // Guarded by rrdCacheMu; retained until the read returns, even after invalidation.
+	vmFSInfoCache              map[string]vmFSInfoCacheEntry   // Guarded by rrdCacheMu; completed get-fsinfo replies.
 	removedDockerHosts         map[string]time.Time            // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string               // Track token ID -> Docker host identity bindings to enforce uniqueness
 	dockerIdentityFlaps        map[string]*identityFlapTracker // Track per-host identity flapping (cloned VMs sharing machine-id)
@@ -1423,6 +1424,7 @@ type Monitor struct {
 	guestAgentWorkSlots        chan struct{}
 	// Configurable guest agent timeouts (refs #592)
 	guestAgentFSInfoTimeout   time.Duration
+	guestAgentFSInfoCacheTTL  time.Duration // Zero reads filesystems on every poll.
 	guestAgentNetworkTimeout  time.Duration
 	guestAgentOSInfoTimeout   time.Duration
 	guestAgentVersionTimeout  time.Duration
@@ -2060,6 +2062,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		vmAgentMemCache:            make(map[string]agentMemCacheEntry),
+		vmFSInfoCache:              make(map[string]vmFSInfoCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
 		dockerIdentityFlaps:        make(map[string]*identityFlapTracker),
@@ -2082,6 +2085,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestMetadataRetryBackoff:  retryBackoff,
 		guestMetadataHoldDuration:  holdDuration,
 		guestAgentFSInfoTimeout:    guestAgentFSInfoTimeout,
+		guestAgentFSInfoCacheTTL:   vmFSInfoCacheTTL,
 		guestAgentNetworkTimeout:   guestAgentNetworkTimeout,
 		guestAgentOSInfoTimeout:    guestAgentOSInfoTimeout,
 		guestAgentVersionTimeout:   guestAgentVersionTimeout,

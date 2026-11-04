@@ -55,4 +55,9 @@ func (m *Monitor) retireGuestMemoryCache(instanceName string) {
 			delete(m.vmAgentMemCache, key)
 		}
 	}
+	for key := range m.vmFSInfoCache {
+		if guestMemoryCacheBelongsToInstance(key, instanceName) {
+			delete(m.vmFSInfoCache, key)
+		}
+	}
 }

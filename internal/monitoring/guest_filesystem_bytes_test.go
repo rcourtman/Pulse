@@ -93,7 +93,7 @@ func TestVMFilesystemInvalidWireReadingDoesNotBecomeHealthyZero(t *testing.T) {
 			}
 			m := &Monitor{}
 			res := proxmox.ClusterResource{Node: "node", VMID: 105, MaxDisk: 1000}
-			total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "fixture", res, c, 1000, 0, 0)
+			total, used, free, usage, disks, fromAgent, reason, _ := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "fixture", res, c, 1000, 0, 0)
 			if total != 1000 || used != 0 || free != 1000 || usage != -1 || len(disks) != 0 || fromAgent || reason == "" {
 				t.Fatalf("invalid wire reading was published as usage: %d/%d/%d %v %+v %v %q", total, used, free, usage, disks, fromAgent, reason)
 			}
@@ -101,7 +101,7 @@ func TestVMFilesystemInvalidWireReadingDoesNotBecomeHealthyZero(t *testing.T) {
 				t.Fatalf("invalid aggregate was misreported as special mounts: %q", reason)
 			}
 			// A later ordinary poll with an explicit zero is genuinely current usage.
-			total, used, free, usage, disks, fromAgent, reason = m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "fixture", res, c, 1000, 0, 0)
+			total, used, free, usage, disks, fromAgent, reason, _ = m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "fixture", res, c, 1000, 0, 0)
 			if total != 1000 || used != 0 || free != 1000 || usage != 0 || len(disks) != 1 || !fromAgent || reason != "" || calls.Load() != 2 {
 				t.Fatalf("ordinary corrected reading did not recover: %d/%d/%d %v %+v %v %q calls=%d", total, used, free, usage, disks, fromAgent, reason, calls.Load())
 			}

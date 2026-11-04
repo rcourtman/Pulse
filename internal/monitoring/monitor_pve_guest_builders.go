@@ -34,6 +34,7 @@ type vmBuildState struct {
 	diskFromAgent           bool
 	diskStatusReason        string
 	diskObservation         models.GuestDiskObservation
+	diskReused              bool // The reading is an earlier poll's reply; no command was sent for it.
 	guestAgentStatus        string
 	guestAgentExpected      bool
 	guestAgentEvidence      models.GuestAgentEvidence
@@ -79,6 +80,8 @@ func (m *Monitor) applyVMStatusDetails(
 	if status.Agent.IsAvailable() {
 		m.applyVMGuestAgentFSInfo(ctx, instanceName, res, client, state)
 	} else {
+		// An agent that comes back gets its own read, even if a lock hid the gap.
+		m.clearVMFSInfoCache(instanceName, res.Node, res.VMID)
 		// Agent disabled - show allocated disk size
 		if state.diskTotal > 0 {
 			state.diskUsage = -1 // Show as allocated size
@@ -147,14 +150,15 @@ func (m *Monitor) applyVMStatusDetails(
 
 func (m *Monitor) applyVMGuestAgentFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface, state *vmBuildState) {
 	var fsDisks []models.Disk
-	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
+	var read vmFSInfoRead
+	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason, read = m.updateVMDisksFromGuestAgentFSInfo(
 		ctx, instanceName, res, client, state.diskTotal, state.diskUsed, state.diskUsage,
 	)
 	if len(fsDisks) > 0 {
 		state.individualDisks = fsDisks
 	}
 	if state.diskFromAgent {
-		state.diskObservation.ObservedAt = time.Now()
+		state.diskObservation.ObservedAt, state.diskReused = read.observedAt, read.reused
 		renewGuestAgentEvidence(&state.guestAgentEvidence, state.diskObservation.ObservedAt, state.diskObservation.ObservedAt)
 	}
 	if guestAgentDiskDeferred(state.diskStatusReason) {
@@ -269,6 +273,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		// A subsequent start must obtain its own guest memory observation rather
 		// than inherit a success or failure from before this stopped poll.
 		m.clearGuestMemoryCache(instanceName, res.Node, res.VMID)
+		m.clearVMFSInfoCache(instanceName, res.Node, res.VMID)
 		if state.diskTotal > 0 {
 			state.diskUsage = -1
 			state.diskStatusReason = "vm-stopped"
@@ -346,7 +351,7 @@ func (m *Monitor) buildVMFromClusterResource(
 			// Cached strings are display continuity, not a new successful read.
 			metadataAt := m.guestMetadataEvidenceTime(instanceName, res.Node, res.VMID)
 			metadataObserved := !metadataAt.Before(prePollTime) && !metadataAt.After(time.Now())
-			if state.guestAgentStatus != "deferred" && (state.diskFromAgent || metadataObserved) {
+			if state.guestAgentStatus != "deferred" && ((state.diskFromAgent && !state.diskReused) || metadataObserved) {
 				state.guestAgentStatus = "available"
 			}
 		}
@@ -438,7 +443,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		sampleTime,
 		guestAgentSignalsHealthy(
 			state.detailedStatus,
-			state.diskFromAgent,
+			state.diskFromAgent && !state.diskReused,
 			state.ipAddresses,
 			state.networkInterfaces,
 			state.osName,
@@ -630,9 +635,25 @@ type vmFSInfoSummary struct {
 	invalidBytes    bool
 }
 
-func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface) ([]proxmox.VMFileSystem, string, bool) {
+func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface) ([]proxmox.VMFileSystem, string, bool, vmFSInfoRead) {
 	if res.Lock != "" {
-		return nil, "vm-locked", false
+		return nil, "vm-locked", false, vmFSInfoRead{}
+	}
+	// Every guest-agent command can collide with a freeze that starts while it
+	// runs (#2439), and filesystem usage moves slowly enough to read less often.
+	// A reuse sends nothing to the guest, so it needs no admission check either.
+	if entry, ok := m.cachedVMFSInfo(instanceName, res.Node, res.VMID, res.Uptime, time.Now()); ok {
+		log.Debug().
+			Str("instance", instanceName).
+			Int("vmid", res.VMID).
+			Time("readAt", entry.fetchedAt).
+			Msg("Reusing guest filesystem reply; no guest agent command sent")
+		read := vmFSInfoRead{observedAt: entry.fetchedAt, reused: true}
+		if len(entry.filesystems) == 0 {
+			logVMFilesystemUnavailable(ctx, instanceName, res, "no-filesystems")
+			return nil, "no-filesystems", false, read
+		}
+		return entry.filesystems, "", true, read
 	}
 	// Use retry logic for guest agent calls to handle transient timeouts (refs #630)
 	fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
@@ -646,17 +667,23 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 	}
 	if err != nil {
 		if reason := proxmox.GuestAgentDeferredReason(err); reason != "" {
-			return nil, reason, false
+			return nil, reason, false, vmFSInfoRead{}
 		}
 		reason := classifyGuestAgentDiskStatusError(err)
 		logVMFilesystemUnavailable(ctx, instanceName, res, reason)
-		return nil, classifyGuestAgentDiskStatusError(err), false
+		return nil, classifyGuestAgentDiskStatusError(err), false, vmFSInfoRead{}
+	}
+	read := vmFSInfoRead{observedAt: time.Now()}
+	// A cancelled collection is obsolete; it must not repopulate what a newer
+	// lifecycle may have cleared while its command ran.
+	if ctx.Err() == nil {
+		m.storeVMFSInfo(instanceName, res.Node, res.VMID, res.Uptime, fsInfo, read.observedAt)
 	}
 	if len(fsInfo) == 0 {
 		logVMFilesystemUnavailable(ctx, instanceName, res, "no-filesystems")
-		return nil, "no-filesystems", false
+		return nil, "no-filesystems", false, read
 	}
-	return fsInfo, "", true
+	return fsInfo, "", true, read
 }
 
 // Keep ordinary process logging when no context logger is installed. Tests and
@@ -882,14 +909,14 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 	diskTotal uint64,
 	diskUsed uint64,
 	diskUsage float64,
-) (uint64, uint64, uint64, float64, []models.Disk, bool, string) {
+) (uint64, uint64, uint64, float64, []models.Disk, bool, string, vmFSInfoRead) {
 	log.Debug().
 		Str("instance", instanceName).
 		Str("vm", res.Name).
 		Int("vmid", res.VMID).
-		Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
+		Msg("Guest agent enabled, reading filesystem info for accurate disk usage")
 
-	fsInfo, diskStatusReason, ok := m.fetchVMFSInfo(ctx, instanceName, res, client)
+	fsInfo, diskStatusReason, ok, read := m.fetchVMFSInfo(ctx, instanceName, res, client)
 	if !ok {
 		// No trustworthy usage data: cluster/resources reports 0 used for
 		// QEMU, so passing it through renders a confident "0%" in the UI.
@@ -899,7 +926,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		if diskTotal > 0 {
 			diskUsage = -1
 		}
-		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, diskStatusReason
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, diskStatusReason, read
 	}
 
 	log.Debug().
@@ -950,7 +977,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 			Uint64("old_disk", res.Disk).
 			Uint64("old_maxdisk", res.MaxDisk).
 			Msg("Using guest agent data for accurate disk usage (replacing cluster/resources data)")
-		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks, true, ""
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks, true, "", read
 	}
 
 	// No usable aggregate - show allocated disk size instead. Invalid counters
@@ -966,9 +993,9 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		Msg("Guest agent provided filesystem info but no usable disk aggregate was available")
 
 	if summary.invalidBytes {
-		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "agent-error"
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "agent-error", read
 	}
-	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "special-filesystems-only"
+	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "special-filesystems-only", read
 }
 
 func guestAgentDiskDeferred(reason string) bool {

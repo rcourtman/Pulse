@@ -155,7 +155,7 @@ func TestUpdateVMDisksFromGuestAgentFSInfoErrorUsesUnavailableSentinel(t *testin
 	res := proxmox.ClusterResource{Node: "pve1", VMID: 100, Name: "vm100", MaxDisk: 128849018880}
 	client := failingFSInfoClient{err: errors.New("guest agent request timeout")}
 
-	total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(
+	total, used, free, usage, disks, fromAgent, reason, _ := m.updateVMDisksFromGuestAgentFSInfo(
 		context.Background(),
 		"test-instance",
 		res,

@@ -40,13 +40,13 @@ func TestVMFilesystemIncompleteAlternateClientCannotPublishRemainder(t *testing.
 			c := &incompleteFilesystemClient{filesystems: []proxmox.VMFileSystem{peer, bad}}
 			m := &Monitor{}
 			res := proxmox.ClusterResource{Node: "node", VMID: 105, MaxDisk: 10000}
-			total, used, free, usage, disks, fresh, reason := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "partial", res, c, 10000, 0, -1)
+			total, used, free, usage, disks, fresh, reason, _ := m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "partial", res, c, 10000, 0, -1)
 			if total != 10000 || used != 0 || free != 10000 || usage != -1 || len(disks) != 0 || fresh || reason != "agent-error" {
 				t.Fatalf("invalid peer became a complete current aggregate: %d/%d/%d usage=%v rows=%+v fresh=%t reason=%q", total, used, free, usage, disks, fresh, reason)
 			}
 			// A real subsequent complete inventory may remove the other volume.
 			c.filesystems = []proxmox.VMFileSystem{peer}
-			total, used, free, usage, disks, fresh, reason = m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "partial", res, c, 10000, 0, -1)
+			total, used, free, usage, disks, fresh, reason, _ = m.updateVMDisksFromGuestAgentFSInfo(context.Background(), "partial", res, c, 10000, 0, -1)
 			if total != 1000 || used != 0 || free != 1000 || usage != 0 || len(disks) != 1 || !fresh || reason != "" {
 				t.Fatal("complete inventory removal/zero was treated as partial")
 			}
@@ -250,7 +250,7 @@ func TestVMFilesystemIncompleteColdPollRemainsUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := proxmox.ClusterResource{Node: "node", VMID: 105, MaxDisk: 10000}
-	_, _, _, usage, disks, fresh, reason := (&Monitor{}).updateVMDisksFromGuestAgentFSInfo(context.Background(), "cold-partial", res, client, 10000, 0, -1)
+	_, _, _, usage, disks, fresh, reason, _ := (&Monitor{}).updateVMDisksFromGuestAgentFSInfo(context.Background(), "cold-partial", res, client, 10000, 0, -1)
 	if usage != -1 || fresh || len(disks) != 0 || reason != "agent-error" {
 		t.Fatalf("cold partial result became healthy usage: %v/%+v/%t/%q", usage, disks, fresh, reason)
 	}

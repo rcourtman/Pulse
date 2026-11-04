@@ -937,7 +937,7 @@ func TestGuestFilesystemFailureGuidanceUsesObservedEvidence(t *testing.T) {
 			ctx := logger.WithContext(context.Background())
 			m := &Monitor{guestAgentFSInfoTimeout: time.Second, guestAgentRetries: 2}
 			res := proxmox.ClusterResource{Node: "node", VMID: 105, Name: "fixture-vm", Type: "qemu", Status: "running", MaxDisk: 1000}
-			total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(ctx, "fixture-instance", res, client, 1000, 0, 0)
+			total, used, free, usage, disks, fromAgent, reason, _ := m.updateVMDisksFromGuestAgentFSInfo(ctx, "fixture-instance", res, client, 1000, 0, 0)
 			if reason != tc.reason || fromAgent || usage != -1 || total != 1000 || used != 0 || free != 1000 || disks != nil {
 				t.Errorf("unavailable reading = %d/%d/%d/%v/%v/%t/%q", total, used, free, usage, disks, fromAgent, reason)
 			}
