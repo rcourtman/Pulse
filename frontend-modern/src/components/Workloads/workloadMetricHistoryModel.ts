@@ -174,11 +174,15 @@ export const getWorkloadChartKeyCandidates = (guest: WorkloadGuest): string[] =>
   const node = (guest.node || '').trim();
   const instance = (guest.instance || '').trim();
   if (node && Number.isFinite(guest.vmid) && guest.vmid > 0) {
-    pushCandidate(candidates, `${node}-${guest.vmid}`);
-    pushCandidate(candidates, `${node}:${node}:${guest.vmid}`);
+    // Node names and VMIDs repeat across installations, and a standalone
+    // connection can be named like another's node. With a connection to scope
+    // by, a key built from the node alone could read that guest's history.
     if (instance) {
       pushCandidate(candidates, `${instance}-${node}-${guest.vmid}`);
       pushCandidate(candidates, `${instance}:${node}:${guest.vmid}`);
+    } else {
+      pushCandidate(candidates, `${node}-${guest.vmid}`);
+      pushCandidate(candidates, `${node}:${node}:${guest.vmid}`);
     }
   }
 

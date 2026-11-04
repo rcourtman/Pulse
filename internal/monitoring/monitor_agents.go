@@ -3709,21 +3709,22 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		host.TokenLastUsedAt = previous.TokenLastUsedAt()
 	}
 
-	// Link host agent to matching PVE node/VM/container by hostname
-	// This prevents duplication when users install agents on PVE cluster nodes
-	linkedNodeID, linkedVMID, linkedContainerID := m.findLinkedProxmoxEntityWithHints(
-		hostname,
-		report.Host.ReportIP,
-		report.Network,
-	)
-	// Unknown legacy provenance is not permission to erase an operator link.
-	// Only associations created with explicit automatic provenance are cleaned.
 	prior, exists := m.hostByID(host.ID)
 	if !exists && m.hostContinuityStore != nil {
 		if entry, ok := m.hostContinuityStore.Get(host.ID); ok {
 			prior = hostFromContinuityEntry(entry)
 		}
 	}
+	// Link host agent to matching PVE node/VM/container by hostname
+	// This prevents duplication when users install agents on PVE cluster nodes
+	linkedNodeID, linkedVMID, linkedContainerID := m.findLinkedProxmoxEntityFromPrior(
+		hostname,
+		report.Host.ReportIP,
+		report.Network,
+		prior,
+	)
+	// Unknown legacy provenance is not permission to erase an operator link.
+	// Only associations created with explicit automatic provenance are cleaned.
 	inferredNodeID, inferredVMID, inferredContainerID := linkedNodeID, linkedVMID, linkedContainerID
 	host.NodeLinkSource = "automatic"
 	if prior.NodeLinkSource == "manual" || prior.NodeLinkSource == "unlinked" ||
@@ -4719,6 +4720,148 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 	reportIP string,
 	network []agentshost.NetworkInterface,
 ) (nodeID, vmID, containerID string) {
+	return m.findLinkedProxmoxEntityFromPrior(hostname, reportIP, network, models.Host{})
+}
+
+// guestNamedLikeAgent is one VM or container whose name matches an agent's
+// hostname, with the addresses Pulse knows it holds.
+type guestNamedLikeAgent struct {
+	id          string
+	isContainer bool
+	ips         map[string]struct{}
+}
+
+func newGuestNamedLikeAgent(id string, isContainer bool, network []unifiedresources.NetworkInterface, addresses []string) guestNamedLikeAgent {
+	ips := collectNodeNetworkIPs(network)
+	if len(network) == 0 {
+		for _, address := range addresses {
+			if normalized := normalizeAgentLinkIP(address); normalized != "" {
+				ips[normalized] = struct{}{}
+			}
+		}
+	}
+	return guestNamedLikeAgent{id: id, isContainer: isContainer, ips: ips}
+}
+
+// addressesContradict reports whether Pulse knows this guest's addresses and
+// the agent's, and they have none in common.
+func (g guestNamedLikeAgent) addressesContradict(reportedIPs map[string]struct{}) bool {
+	if len(g.ips) == 0 || len(reportedIPs) == 0 {
+		return false
+	}
+	for ip := range g.ips {
+		if _, reported := reportedIPs[ip]; reported {
+			return false
+		}
+	}
+	return true
+}
+
+// sameProxmoxGuestReference compares guest source IDs. A guest keeps its
+// connection and VMID across a migration; the node segment moves with it.
+func sameProxmoxGuestReference(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	aInstance, _, aVMID, aOK := unifiedresources.ParseProxmoxGuestSourceID(a)
+	bInstance, _, bVMID, bOK := unifiedresources.ParseProxmoxGuestSourceID(b)
+	return aOK && bOK && aInstance == bInstance && aVMID == bVMID
+}
+
+// agentLinkAddressCanRepeatAcrossSites reports whether separate sites can both use
+// an address: the private ranges, and the shared range CGNAT and overlay networks
+// hand out.
+func agentLinkAddressCanRepeatAcrossSites(address string) bool {
+	ip := net.ParseIP(address)
+	if ip == nil {
+		return true
+	}
+	if ip.IsPrivate() {
+		return true
+	}
+	v4 := ip.To4()
+	return v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64
+}
+
+// guestProvenByAddress finds the guest holding an address the agent reports, when
+// that address cannot be anyone else's. Two guests holding one address proves
+// nothing, since sites reuse ranges. For the same reason an address from a reusable
+// range held by the only guest Pulse knows the addresses of proves nothing either:
+// a guest whose addresses are unknown may hold it too.
+func guestProvenByAddress(guests []guestNamedLikeAgent, reportedIPs map[string]struct{}) *guestNamedLikeAgent {
+	owners := make(map[string]int)
+	allKnown := true
+	for _, guest := range guests {
+		if len(guest.ips) == 0 {
+			allKnown = false
+		}
+		for ip := range guest.ips {
+			owners[ip]++
+		}
+	}
+	var proven *guestNamedLikeAgent
+	for i := range guests {
+		for ip := range guests[i].ips {
+			if _, reported := reportedIPs[ip]; !reported || owners[ip] != 1 {
+				continue
+			}
+			if !allKnown && agentLinkAddressCanRepeatAcrossSites(ip) {
+				continue
+			}
+			if proven != nil && proven.id != guests[i].id {
+				return nil
+			}
+			proven = &guests[i]
+		}
+	}
+	return proven
+}
+
+// resolveGuestNamedLikeAgent picks the guest an agent runs in. A name fits every
+// guest that has it, whichever installation or kind each is, and adding an
+// installation must not cost a guest its working link (#2681). Among several: an
+// address that proves one of them decides; otherwise the guest the agent is already
+// linked to keeps it, unless its known addresses have nothing in common with the
+// report. Anything else stays unlinked rather than guessing.
+//
+// A guest's known addresses can be stale (an LXC's configured address, a VM's
+// cached guest-agent reply), so they only ever refuse a choice among several. They
+// do not remove the link of the only guest with that name.
+func resolveGuestNamedLikeAgent(guests []guestNamedLikeAgent, reportedIPs map[string]struct{}, prior models.Host) *guestNamedLikeAgent {
+	if len(guests) == 1 {
+		return &guests[0]
+	}
+	if proven := guestProvenByAddress(guests, reportedIPs); proven != nil {
+		return proven
+	}
+	for i := range guests {
+		priorID := prior.LinkedVMID
+		if guests[i].isContainer {
+			priorID = prior.LinkedContainerID
+		}
+		if !sameProxmoxGuestReference(priorID, guests[i].id) {
+			continue
+		}
+		if guests[i].addressesContradict(reportedIPs) {
+			return nil
+		}
+		return &guests[i]
+	}
+	return nil
+}
+
+// findLinkedProxmoxEntityFromPrior is findLinkedProxmoxEntityWithHints for an
+// agent whose earlier link is known, which settles a name other installations
+// also use when the reported addresses cannot.
+func (m *Monitor) findLinkedProxmoxEntityFromPrior(
+	hostname string,
+	reportIP string,
+	network []agentshost.NetworkInterface,
+	prior models.Host,
+) (nodeID, vmID, containerID string) {
 	if hostname == "" {
 		return "", "", ""
 	}
@@ -4791,6 +4934,14 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 		return matchingNodes[0].id, "", ""
 	}
 	if len(matchingNodes) > 1 {
+		// A node added later under the same name does not end a link the agent
+		// already holds. Its endpoint and address evidence, checked above, had
+		// their chance to say otherwise.
+		for _, node := range matchingNodes {
+			if node.id == prior.LinkedNodeID {
+				return node.id, "", ""
+			}
+		}
 		// Multiple nodes with the same hostname - can't auto-link, would cause data mixing
 		log.Warn().
 			Str("hostname", hostname).
@@ -4806,47 +4957,34 @@ func (m *Monitor) findLinkedProxmoxEntityWithHints(
 		return "", "", ""
 	}
 
-	// Check VMs - same pattern for ambiguity detection
-	var matchingVMs []linkedEntityMatch
+	// Guests next. VMs and containers share one list: a VM added elsewhere under
+	// a container's name must not take the agent from that container.
+	var guests []guestNamedLikeAgent
 	for _, vm := range readState.VMs() {
 		if matchHostname(vm.Name()) {
-			matchingVMs = append(matchingVMs, linkedEntityMatch{
-				id: vm.SourceID(),
-			})
+			guests = append(guests, newGuestNamedLikeAgent(vm.SourceID(), false, vm.NetworkInterfaces(), vm.IPAddresses()))
 		}
 	}
-	if len(matchingVMs) == 1 {
-		return "", matchingVMs[0].id, ""
-	}
-	if len(matchingVMs) > 1 {
-		log.Warn().
-			Str("hostname", hostname).
-			Int("matchCount", len(matchingVMs)).
-			Msg("Multiple VMs match hostname - cannot auto-link host agent. Manual linking required via UI.")
-		return "", "", ""
-	}
-
-	// Check containers - same pattern
-	var matchingCTs []linkedEntityMatch
 	for _, ct := range readState.Containers() {
 		if matchHostname(ct.Name()) {
-			matchingCTs = append(matchingCTs, linkedEntityMatch{
-				id: ct.SourceID(),
-			})
+			guests = append(guests, newGuestNamedLikeAgent(ct.SourceID(), true, ct.NetworkInterfaces(), ct.IPAddresses()))
 		}
 	}
-	if len(matchingCTs) == 1 {
-		return "", "", matchingCTs[0].id
-	}
-	if len(matchingCTs) > 1 {
-		log.Warn().
-			Str("hostname", hostname).
-			Int("matchCount", len(matchingCTs)).
-			Msg("Multiple containers match hostname - cannot auto-link host agent. Manual linking required via UI.")
+	if len(guests) == 0 {
 		return "", "", ""
 	}
-
-	return "", "", ""
+	guest := resolveGuestNamedLikeAgent(guests, reportedIPs, prior)
+	if guest == nil {
+		log.Warn().
+			Str("hostname", hostname).
+			Int("matchCount", len(guests)).
+			Msg("Guests named like this host cannot be told apart - cannot auto-link host agent. Manual linking required via UI.")
+		return "", "", ""
+	}
+	if guest.isContainer {
+		return "", "", guest.id
+	}
+	return "", guest.id, ""
 }
 
 // linkNodeToHostAgent updates a PVE node to link to its host agent.

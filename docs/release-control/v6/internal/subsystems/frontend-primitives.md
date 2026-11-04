@@ -20,6 +20,13 @@
 
 ## Purpose
 
+### Platform host rows scope node alert matches by connection (4 November 2026)
+
+The Proxmox, vSphere and TrueNAS host tables pass `getAlertStyles` and the node
+drawer an `AlertNodeScope` rather than a name. The rows and drawer keep their
+existing presentation; only which alerts they admit changes (#2681). The alerts
+contract holds the matching rules.
+
 ### Backups bars use the metric bar colours (2 November 2026)
 
 The Backup health rows (`ProxmoxBackupsCoverageStrip`) and the Backup jobs

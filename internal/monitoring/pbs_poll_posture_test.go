@@ -168,7 +168,7 @@ func (f *pbsPosturePollFixture) assertProtected(t *testing.T, instance string) {
 			raw = append(raw, b)
 		}
 	}
-	mapped, err := proxmoxmapper.FromPBSBackupsWithEvidence(raw, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), time.Now())
+	mapped, err := proxmoxmapper.FromPBSBackupsWithEvidence(raw, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), nil, time.Now())
 	if err != nil || len(mapped) != len(f.ids) {
 		t.Fatalf("raw/mapped=%d/%d err=%v", len(raw), len(mapped), err)
 	}

@@ -2,6 +2,7 @@ package proxmoxmapper
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,11 +58,19 @@ func subjectResourceID(resourceType unifiedresources.ResourceType, resourceID, s
 	return ""
 }
 
+func pbsSnapshotVMID(vmid string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(vmid))
+	if err != nil {
+		return 0
+	}
+	return parsed
+}
+
 func preferredPBSBackupSubjectName(comment, vmid string) string {
 	return proxmoxidentity.PreferredPBSBackupSubjectName(comment, vmid)
 }
 
-func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidate, learner *proxmoxidentity.PBSSourceLearner) (GuestCandidate, bool) {
+func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidate, learner *proxmoxidentity.PBSSourceLearner, exclusiveConfirmer string) (GuestCandidate, bool) {
 	if len(candidates) == 0 {
 		return GuestCandidate{}, false
 	}
@@ -69,35 +78,44 @@ func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidat
 		return candidates[0], true
 	}
 
+	// Rank by the snapshot's own labels, the way guest backup badges do: the guest
+	// they fit best takes it, and only guests they fit equally remain.
 	matched := candidates
-	if namespace := strings.TrimSpace(backup.Namespace); namespace != "" {
-		filtered := make([]GuestCandidate, 0, len(matched))
-		for _, candidate := range matched {
-			if proxmoxidentity.NamespaceLocationScore(namespace, candidate.InstanceName, candidate.NodeName) > proxmoxidentity.NamespaceNoLocationMatch {
-				filtered = append(filtered, candidate)
-			}
+	strongest := 0
+	strongestMatches := make([]GuestCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		score := proxmoxidentity.BackupGuestMatchScore(backup.Namespace, backup.Comment, backup.VMID, candidate.DisplayName, candidate.InstanceName, candidate.NodeName)
+		if score > strongest {
+			strongest = score
+			strongestMatches = strongestMatches[:0]
 		}
-		if len(filtered) == 1 {
-			return filtered[0], true
-		}
-		if len(filtered) > 1 {
-			matched = filtered
+		if score == strongest && score > 0 {
+			strongestMatches = append(strongestMatches, candidate)
 		}
 	}
+	if len(strongestMatches) == 1 {
+		return strongestMatches[0], true
+	}
+	if len(strongestMatches) > 1 {
+		matched = strongestMatches
+	}
 
-	if preferredName := strings.ToLower(strings.TrimSpace(preferredPBSBackupSubjectName(backup.Comment, backup.VMID))); preferredName != "" {
-		filtered := make([]GuestCandidate, 0, len(matched))
+	// A connection whose exclusive storage view listed the snapshot wrote it,
+	// which settles guests the snapshot's own labels fit equally (#2681). The
+	// learned mapping must not disagree, as guest backup badges require. If that
+	// connection has no such guest here, the guest it wrote this for is gone or
+	// ranks below another, and no other guest takes the snapshot on inference.
+	if exclusiveConfirmer != "" {
+		attributed, decisive := learner.Resolve(backup.Instance, backup.Datastore, backup.Owner)
+		if decisive && attributed != exclusiveConfirmer {
+			return GuestCandidate{}, false
+		}
 		for _, candidate := range matched {
-			if strings.ToLower(strings.TrimSpace(candidate.DisplayName)) == preferredName {
-				filtered = append(filtered, candidate)
+			if candidate.InstanceName == exclusiveConfirmer {
+				return candidate, true
 			}
 		}
-		if len(filtered) == 1 {
-			return filtered[0], true
-		}
-		if len(filtered) > 1 {
-			matched = filtered
-		}
+		return GuestCandidate{}, false
 	}
 
 	// Last resort for collision VMIDs with no namespace or name evidence:
@@ -480,6 +498,10 @@ func FromPVEGuestSnapshotsWithEvidence(
 }
 
 func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]GuestCandidate) []recovery.RecoveryPoint {
+	return fromPBSBackups(backups, candidatesByKey, nil)
+}
+
+func fromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]GuestCandidate, exclusiveConfirmers map[models.PBSSnapshotRef]string) []recovery.RecoveryPoint {
 	if len(backups) == 0 {
 		return nil
 	}
@@ -491,6 +513,13 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 	// connection that contributes no attributable backup keeps the learner
 	// inconclusive instead of letting a source it may share resolve to the
 	// connections that happened to be attributable.
+	confirmerOf := func(b models.PBSBackup) string {
+		return exclusiveConfirmers[models.PBSSnapshotRef{
+			BackupType: strings.ToLower(strings.TrimSpace(b.BackupType)),
+			VMID:       pbsSnapshotVMID(b.VMID),
+			Time:       b.BackupTime.Unix(),
+		}]
+	}
 	learner := proxmoxidentity.NewPBSSourceLearner()
 	for _, b := range backups {
 		if strings.TrimSpace(b.ID) == "" {
@@ -506,7 +535,7 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 			continue
 		}
 		key := strings.ToLower(strings.TrimSpace(b.BackupType)) + ":" + strings.TrimSpace(b.VMID)
-		if c, ok := selectPBSGuestCandidate(b, candidatesByKey[key], nil); ok {
+		if c, ok := selectPBSGuestCandidate(b, candidatesByKey[key], nil, confirmerOf(b)); ok {
 			learner.Observe(b.Instance, b.Datastore, b.Owner, c.InstanceName)
 		}
 	}
@@ -526,7 +555,7 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 
 		// Link to a unified resource when the candidate set is already singular or can be
 		// disambiguated by PBS namespace / guest label without guessing across guest collisions.
-		if c, ok := selectPBSGuestCandidate(b, candidates, learner); ok {
+		if c, ok := selectPBSGuestCandidate(b, candidates, learner, confirmerOf(b)); ok {
 			subjectRID = subjectResourceID(c.ResourceType, c.ResourceID, c.SourceID)
 			subjectRef = proxmoxSubjectRef(c.ResourceType, GuestInfo{Name: c.DisplayName, ResourceType: c.ResourceType, SourceID: c.SourceID}, c.InstanceName, c.NodeName, c.VMID, c.SourceID)
 		} else {
@@ -633,10 +662,11 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 func FromPBSBackupsWithEvidence(
 	backups []models.PBSBackup,
 	candidatesByKey map[string][]GuestCandidate,
+	exclusiveConfirmers map[models.PBSSnapshotRef]string,
 	ingestedAt time.Time,
 ) ([]recovery.RecoveryPoint, error) {
 	return withRecoveryPointEvidence(
-		FromPBSBackups(backups, candidatesByKey),
+		fromPBSBackups(backups, candidatesByKey, exclusiveConfirmers),
 		"pbs-backup-inventory",
 		ingestedAt,
 	)

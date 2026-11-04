@@ -756,7 +756,7 @@ func (m *Monitor) checkMockAlerts() {
 				Msg("Reached guest check limit for this cycle")
 			break
 		}
-		scope.run(func() { m.alertManager.CheckGuest(vm, "mock") })
+		scope.run(func() { m.alertManager.CheckGuest(vm, vm.Instance) })
 		guestsChecked++
 	}
 
@@ -765,7 +765,7 @@ func (m *Monitor) checkMockAlerts() {
 		if guestsChecked >= maxGuestsPerCycle {
 			break
 		}
-		scope.run(func() { m.alertManager.CheckGuest(container, "mock") })
+		scope.run(func() { m.alertManager.CheckGuest(container, container.Instance) })
 		guestsChecked++
 	}
 

@@ -46,7 +46,7 @@ describe('workloadMetricHistoryModel', () => {
     } as WorkloadGuest;
 
     expect(getWorkloadChartKeyCandidates(guest)).toEqual(
-      expect.arrayContaining(['cluster-a:pve:101', 'cluster-a-pve-101', 'pve-101', 'pve:pve:101']),
+      expect.arrayContaining(['cluster-a:pve:101', 'cluster-a-pve-101']),
     );
   });
 

@@ -89,7 +89,7 @@ describe('workloadMetricHistoryModel (branch coverage)', () => {
       expect(getWorkloadChartKeyCandidates(guest)).toEqual(['pve-101', 'pve:pve:101']);
     });
 
-    it('emits canonical, raw, node, and instance candidates in deduped order', () => {
+    it('keeps to instance-scoped candidates when the guest has an instance', () => {
       const guest = makeGuest({
         id: 'cluster-a-pve-101',
         instance: 'cluster-a',
@@ -100,9 +100,14 @@ describe('workloadMetricHistoryModel (branch coverage)', () => {
       expect(getWorkloadChartKeyCandidates(guest)).toEqual([
         'cluster-a-pve-101',
         'cluster-a:pve:101',
-        'pve-101',
-        'pve:pve:101',
       ]);
+    });
+
+    it("does not read a standalone connection's history for a same-named node's guest", () => {
+      // A connection named pmx1 keys its guests pmx1:pmx1:100.
+      const guest = makeGuest({ id: 'vm-home', instance: 'home', node: 'pmx1', vmid: 100 });
+      expect(getWorkloadChartKeyCandidates(guest)).not.toContain('pmx1:pmx1:100');
+      expect(getWorkloadChartKeyCandidates(guest)).toContain('home:pmx1:100');
     });
 
     it('includes containerId and skips the node block when node is empty', () => {

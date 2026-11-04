@@ -15,6 +15,26 @@
 
 ## Purpose
 
+### Node matches name a connection, not just a node (4 November 2026)
+
+Proxmox installations can reuse node names, so `getAlertsForResource` and
+`getAlertStyles` now take a `{node, instances}` scope instead of a bare name. A
+Proxmox node's drawer lists `getAlertsForProxmoxNode`: its own alerts through
+the unified matcher, plus alerts raised under its native node name on its own
+connection. That removes another installation's guest alerts, which the bare
+name admitted (#2681), and keeps linked-agent alerts, whose `instance` is the
+agent's platform. vSphere rows pass their connection. TrueNAS rows pass the labels
+its producers use (`TrueNAS`, `Truenas`), because its alerts name no connection, so
+two TrueNAS systems sharing a hostname still share a row match.
+
+The local-storage match accepts the connection or the cluster name, because a
+clustered connection records storage under the cluster's name. Storage alerts
+carry nothing else to separate them, so a connection named exactly like another
+cluster's shared name can still see that cluster's alerts for a same-named node.
+Mock guest alerts now carry the guest's connection, as the poller's do, rather
+than the literal `mock`. No evaluation, identity or notification behaviour
+changes.
+
 ### Host rows show their own alerts, including Proxmox physical disks (2 November 2026)
 
 The Proxmox node row's alert stripe and tint read the node's own alerts

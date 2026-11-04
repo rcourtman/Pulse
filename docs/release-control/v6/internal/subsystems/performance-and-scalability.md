@@ -15,6 +15,12 @@
 
 ## Purpose
 
+### Workload chart keys stop at the guest connection (4 November 2026)
+
+`getWorkloadChartKeyCandidates` emits node-only keys only for a guest with no
+connection, so it tries fewer candidates. It adds no request, poll or loop over
+resources (#2681).
+
 ### PBS job failure carry is bounded per instance (3 November 2026)
 
 Each PBS poll copies only that instance's stored job results

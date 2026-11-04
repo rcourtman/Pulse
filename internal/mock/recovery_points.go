@@ -334,6 +334,7 @@ func mockProxmoxRecoveryPoints(
 	appendMapped(proxmoxmapper.FromPBSBackupsWithEvidence(
 		snapshot.PBSBackups,
 		candidates,
+		nil,
 		ingestedAt,
 	))
 	return out

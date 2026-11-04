@@ -2313,6 +2313,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
 		observedBackups,
 		candidates,
+		m.state.PBSExclusiveConfirmers(),
 		protectionObservedAt,
 	)
 	if evidenceErr != nil {
