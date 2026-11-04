@@ -74,6 +74,13 @@ func ageVMFSInfoRead(t *testing.T, m *Monitor, by time.Duration) {
 	m.vmFSInfoCache[fsInfoFixtureKey()] = entry
 }
 
+// replicationFixtureHost is for a real client that reads replication jobs. The
+// client records them for the life of the process under its address, and a later
+// test's server can get the same port. No other test's server.URL matches this name.
+func replicationFixtureHost(server *httptest.Server) string {
+	return strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
+}
+
 func pollFSInfoGuest(t *testing.T, m *Monitor, client PVEClientInterface, prev *models.VM) models.VM {
 	t.Helper()
 	vm, _, _, _, _, ok := m.buildVMFromClusterResource(context.Background(), fsInfoFixtureInstance, fsInfoFixtureResource, client, makeGuestID(fsInfoFixtureInstance, "node", 105), nil, prev)
@@ -336,7 +343,7 @@ func TestGuestFSInfoAroundReplication(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: replicationFixtureHost(server), TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 	if err != nil {
 		t.Fatal(err)
 	}

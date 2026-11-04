@@ -1169,7 +1169,7 @@ func TestReplicationObservedOutcomeSurvivesNormalPolling(t *testing.T) {
 		w.WriteHeader(404)
 	}))
 	defer server.Close()
-	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "test@pve!token", TokenValue: "fixture", Timeout: time.Second})
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: replicationFixtureHost(server), TokenName: "test@pve!token", TokenValue: "fixture", Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
