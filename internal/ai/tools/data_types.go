@@ -247,7 +247,7 @@ type ResourceMatch struct {
 	Platform                  string `json:"platform,omitempty"`
 	VMID                      int    `json:"vmid,omitempty"`
 	Image                     string `json:"image,omitempty"`
-	CommandAgentConnected     *bool  `json:"command_agent_connected,omitempty"` // Live command connection for this resource, independent of telemetry collection
+	CommandAgentConnected     *bool  `json:"command_agent_connected,omitempty"` // Live command connection for this resource, independent of telemetry collection. On a guest: an agent running inside it, never its parent node's
 }
 
 // SystemSummary is a summarized infrastructure system for list responses.
@@ -543,6 +543,7 @@ func (t DockerTopology) NormalizeCollections() DockerTopology {
 // DockerHostTopology represents a Docker host with its containers
 type DockerHostTopology struct {
 	GovernedResourceMetadata
+	ID                    string                   `json:"id,omitempty"` // Canonical resource ID; set only when another Docker host has the same hostname, since the name cannot select this one
 	Hostname              string                   `json:"hostname"`
 	DisplayName           string                   `json:"display_name,omitempty"`
 	CommandAgentConnected *bool                    `json:"command_agent_connected,omitempty"`

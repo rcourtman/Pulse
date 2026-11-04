@@ -48,10 +48,10 @@ func TestCommandConnectivityDoesNotReplaceMonitoringEvidence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			server := &mockAgentServer{}
 			if tc.connected {
-				server.agents = []agentexec.ConnectedAgent{{Hostname: "command-host"}, {Hostname: "node-one"}}
+				server.agents = []agentexec.ConnectedAgent{{AgentID: "command-host-agent", Hostname: "command-host"}, {AgentID: "node-one-agent", Hostname: "node-one"}}
 			}
 			if tc.guestConnected {
-				server.agents = append(server.agents, agentexec.ConnectedAgent{Hostname: "guest-one"})
+				server.agents = append(server.agents, agentexec.ConnectedAgent{AgentID: "guest-one-agent", Hostname: "guest-one"})
 			}
 			controlLevel := ControlLevelReadOnly
 			if tc.controlEnabled {
