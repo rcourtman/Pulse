@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Control-plane account responses are not HTTP-cacheable by default
+
+`CPSecurityHeaders`, which wraps the registered control-plane routes in the
+server, sets `Cache-Control: no-store` before a downstream handler writes.
+This covers identity/account bootstrap HTML and JSON, redirects, and refusal
+or error responses. Public static handlers can retain an explicit cache
+policy; the favicon still uses `public, max-age=86400` for GET and HEAD.
+Response bodies, status codes, cookies, CSP, account membership and session
+revocation are unchanged. This does not purge previously stored responses,
+erase client memory, or guarantee browser history/back-forward-cache behaviour.
+
+Normal-suite `security_cache_test.go` checks the committed response headers,
+preserved bodies/cookies/statuses, real registered portal/bootstrap/dashboard
+and membership routes with synthetic sessions, unauthenticated and revoked
+readers, and the unchanged public favicon cache. This is HTTP metadata
+hardening, not a rendered-page change or installed account-recovery proof.
+
 ### Billing Admin reads and changes use an accepted global snapshot
 
 Hosted Billing Admin remains a platform-administration surface, not an

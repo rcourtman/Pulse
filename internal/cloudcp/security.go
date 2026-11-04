@@ -25,6 +25,11 @@ func generateCPCSPNonce() string {
 // cpsec.NonceFromContext.
 func CPSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Portal HTML and API responses carry account/session data. Do not let
+		// HTTP caches retain them, including redirects and authentication errors.
+		// Public static handlers can still set their explicit cache policy.
+		w.Header().Set("Cache-Control", "no-store")
+
 		nonce := generateCPCSPNonce()
 		if nonce != "" {
 			r = r.WithContext(cpsec.WithNonce(r.Context(), nonce))
