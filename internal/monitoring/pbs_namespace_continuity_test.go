@@ -114,6 +114,9 @@ func (f *pbsNamespaceContinuityFixture) live() map[string]models.PBSBackup {
 	out := map[string]models.PBSBackup{}
 	for _, b := range f.m.state.GetSnapshot().PBSBackups {
 		if b.Instance == "pbs-main" {
+			// The mark only records whether this poll read the row. Every field
+			// a reader sees must survive a read that failed.
+			b.CarriedOver = false
 			out[b.VMID] = b
 		}
 	}

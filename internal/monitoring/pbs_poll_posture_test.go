@@ -168,7 +168,7 @@ func (f *pbsPosturePollFixture) assertProtected(t *testing.T, instance string) {
 			raw = append(raw, b)
 		}
 	}
-	mapped, err := proxmoxmapper.FromPBSBackupsWithEvidence(raw, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), nil, time.Now())
+	mapped, err := proxmoxmapper.FromPBSBackupsWithEvidence(raw, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), f.m.state.PBSBackupGuestInstances(), time.Now())
 	if err != nil || len(mapped) != len(f.ids) {
 		t.Fatalf("raw/mapped=%d/%d err=%v", len(raw), len(mapped), err)
 	}
@@ -193,6 +193,265 @@ func (f *pbsPosturePollFixture) assertProtected(t *testing.T, instance string) {
 		}
 	}
 	t.Logf("raw=%d mapped=%d persisted=%d protected=%d; original backup timestamp retained", len(raw), len(mapped), len(persisted), len(f.ids))
+}
+
+// A colliding VMID reads as one guest everywhere: on the badge, on the recovery
+// point behind protection posture, and on the row the Backups table reads (#2681).
+func TestPBSCollidingGuestReadsAsOneGuestOnEverySurface(t *testing.T) {
+	backupAt := time.Now().Add(-14 * time.Hour).Truncate(time.Second)
+	owners := map[string]string{"100": "home@pbs!token", "200": "home@pbs!token", "300": "hetzner@pbs!token"}
+	for _, tc := range []struct {
+		name string
+		view bool
+		want string
+	}{
+		// The owner token says home, but inference does not break a tie between
+		// labels (#2292). Recovery points used to, against the badge.
+		{name: "labels fit both guests", want: ""},
+		{name: "an exclusive storage view settles the tie", view: true, want: "home"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, manager := recoveryIngestTestMonitor(t)
+			m.state = models.NewState()
+			m.state.UpdateVMs([]models.VM{
+				{ID: makeGuestID("home", "pmx1", 100), VMID: 100, Instance: "home", Node: "pmx1", Name: "docker1", Status: "running"},
+				{ID: makeGuestID("hetzner", "pmx1", 100), VMID: 100, Instance: "hetzner", Node: "pmx1", Name: "docker1", Status: "running"},
+				{ID: makeGuestID("home", "pmx2", 200), VMID: 200, Instance: "home", Node: "pmx2", Name: "web", Status: "running"},
+				{ID: makeGuestID("hetzner", "pmx3", 300), VMID: 300, Instance: "hetzner", Node: "pmx3", Name: "mail", Status: "running"},
+			})
+			if tc.view {
+				m.state.UpdatePBSGuestConfirmationsForInstance("home", []models.PBSGuestConfirmation{
+					{Storage: "pbs", BackupType: "vm", VMID: 100, Time: backupAt.Unix()},
+				})
+			}
+			store, err := manager.StoreForOrg("default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := &pbsPosturePollFixture{m: m, store: store}
+			t.Cleanup(func() { f.wait(t); _ = store.Close() })
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/groups"):
+					groups := make([]map[string]any, 0, len(owners))
+					for id, owner := range owners {
+						groups = append(groups, map[string]any{"backup-type": "vm", "backup-id": id, "last-backup": backupAt.Unix(), "backup-count": 1, "owner": owner})
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": groups})
+				case strings.HasSuffix(r.URL.Path, "/snapshots"):
+					id := r.URL.Query().Get("backup-id")
+					snapshot := map[string]any{"backup-type": "vm", "backup-id": id, "backup-time": backupAt.Unix(), "size": 1024, "files": []string{"index.json.blob"}, "owner": owners[id]}
+					if id == "100" {
+						snapshot["comment"] = "docker1"
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{snapshot}})
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(server.Close)
+			client, err := pbs.NewClient(pbs.ClientConfig{Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.pollPBSBackups(context.Background(), "pbs-main", client, []models.PBSDatastore{{Name: "main"}}, nil)
+			f.wait(t)
+
+			badges := make(map[string]bool)
+			for _, vm := range m.state.GetSnapshot().VMs {
+				if vm.VMID == 100 && vm.LastBackup.Equal(backupAt) {
+					badges[vm.Instance] = true
+				}
+			}
+			var table string
+			var tableRows int
+			for _, backup := range m.AttributedPBSBackupsSnapshot() {
+				if backup.VMID == "100" {
+					table = backup.GuestInstance
+					tableRows++
+				}
+			}
+			var subject string
+			var points int
+			persisted, _, err := store.ListPoints(context.Background(), recovery.ListPointsOptions{Limit: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, point := range persisted {
+				if point.Details["vmid"] == "100" {
+					subject = point.SubjectResourceID
+					points++
+				}
+			}
+			if tableRows != 1 || points != 1 {
+				t.Fatalf("VM 100 rows=%d points=%d, want one of each", tableRows, points)
+			}
+
+			wantSubject := ""
+			wantBadges := map[string]bool{}
+			if tc.want != "" {
+				wantSubject = unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, tc.want, 100)
+				wantBadges[tc.want] = true
+			}
+			if table != tc.want {
+				t.Errorf("table reads %q, want %q", table, tc.want)
+			}
+			if subject != wantSubject {
+				t.Errorf("recovery point subject = %q, want %q", subject, wantSubject)
+			}
+			if !reflect.DeepEqual(badges, wantBadges) {
+				t.Errorf("badges = %+v, want %+v", badges, wantBadges)
+			}
+		})
+	}
+}
+
+// A failed read keeps its rows listed, but they stop teaching: the collision
+// snapshot in the group that was read loses the source only those rows taught.
+func TestPBSCarriedRowsStopTeachingGuestSources(t *testing.T) {
+	backupAt := time.Now().Add(-14 * time.Hour).Truncate(time.Second)
+	owners := map[string]string{"100": "home@pbs!token", "200": "home@pbs!token", "300": "hetzner@pbs!token"}
+	var failTeacher, failAll atomic.Bool
+	m, manager := recoveryIngestTestMonitor(t)
+	m.state = models.NewState()
+	m.state.UpdateVMs([]models.VM{
+		{ID: makeGuestID("home", "pmx1", 100), VMID: 100, Instance: "home", Node: "pmx1", Name: "docker1", Status: "running"},
+		{ID: makeGuestID("hetzner", "pmx1", 100), VMID: 100, Instance: "hetzner", Node: "pmx1", Name: "docker1", Status: "running"},
+		{ID: makeGuestID("home", "pmx2", 200), VMID: 200, Instance: "home", Node: "pmx2", Name: "web", Status: "running"},
+		{ID: makeGuestID("hetzner", "pmx3", 300), VMID: 300, Instance: "hetzner", Node: "pmx3", Name: "mail", Status: "running"},
+	})
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &pbsPosturePollFixture{m: m, store: store}
+	t.Cleanup(func() { f.wait(t); _ = store.Close() })
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/groups"):
+			if failAll.Load() {
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			groups := make([]map[string]any, 0, len(owners))
+			for id, owner := range owners {
+				groups = append(groups, map[string]any{"backup-type": "vm", "backup-id": id, "last-backup": backupAt.Unix(), "backup-count": 1, "owner": owner})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": groups})
+		case strings.HasSuffix(r.URL.Path, "/snapshots"):
+			id := r.URL.Query().Get("backup-id")
+			if id == "200" && failTeacher.Load() {
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"backup-type": "vm", "backup-id": id, "backup-time": backupAt.Unix(), "size": 1024, "files": []string{"index.json.blob"}, "owner": owners[id]}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := pbs.NewClient(pbs.ClientConfig{Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	poll := func() map[string]string {
+		m.mu.Lock()
+		clear(m.pbsBackupCacheTime)
+		m.mu.Unlock()
+		m.pollPBSBackups(context.Background(), "pbs-main", client, []models.PBSDatastore{{Name: "main"}}, nil)
+		f.wait(t)
+		out := make(map[string]string)
+		for _, backup := range m.AttributedPBSBackupsSnapshot() {
+			out[backup.VMID] = backup.GuestInstance
+		}
+		return out
+	}
+
+	got := poll()
+	if got["100"] != "home" || got["200"] != "home" || got["300"] != "hetzner" {
+		t.Fatalf("after a complete read = %+v, want VM 100 on home through its owner token", got)
+	}
+	failTeacher.Store(true)
+	got = poll()
+	if got["200"] != "home" {
+		t.Fatalf("after a failed read = %+v, want the carried row still on its own guest", got)
+	}
+	if got["100"] != "" {
+		t.Fatalf("after a failed read = %+v, want VM 100 unattributed: only the carried row taught home's source", got)
+	}
+
+	// A poll that read nothing changes nothing: recovery points are not rewritten
+	// then either, so every surface keeps its last answer until the next read.
+	failTeacher.Store(false)
+	if got = poll(); got["100"] != "home" {
+		t.Fatalf("after recovery = %+v, want VM 100 back on home", got)
+	}
+	failAll.Store(true)
+	if got = poll(); got["100"] != "home" || got["200"] != "home" || got["300"] != "hetzner" {
+		t.Fatalf("after a poll that read nothing = %+v, want every row unchanged", got)
+	}
+}
+
+// Adding a second installation with the same VMID and guest name withdraws a link
+// the evidence no longer supports, on every surface. History must not put it back
+// on the recovery point alone (#2681).
+func TestPBSSecondInstallationWithdrawsUnsettledAttribution(t *testing.T) {
+	backupAt := time.Now().Add(-14 * time.Hour).Truncate(time.Second)
+	m, manager := recoveryIngestTestMonitor(t)
+	m.state = models.NewState()
+	home := models.VM{ID: makeGuestID("home", "pmx1", 100), VMID: 100, Instance: "home", Node: "pmx1", Name: "docker1", Status: "running"}
+	m.state.UpdateVMs([]models.VM{home})
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &pbsPosturePollFixture{m: m, store: store}
+	t.Cleanup(func() { f.wait(t); _ = store.Close() })
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/groups"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"backup-type": "vm", "backup-id": "100", "last-backup": backupAt.Unix(), "backup-count": 1}}})
+		case strings.HasSuffix(r.URL.Path, "/snapshots"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"backup-type": "vm", "backup-id": "100", "backup-time": backupAt.Unix(), "size": 1024, "files": []string{"index.json.blob"}, "comment": "docker1"}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := pbs.NewClient(pbs.ClientConfig{Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func() (badge bool, subject, table string) {
+		m.mu.Lock()
+		clear(m.pbsBackupCacheTime)
+		m.mu.Unlock()
+		m.pollPBSBackups(context.Background(), "pbs-main", client, []models.PBSDatastore{{Name: "main"}}, nil)
+		f.wait(t)
+		for _, vm := range m.state.GetSnapshot().VMs {
+			if vm.Instance == "home" {
+				badge = vm.LastBackup.Equal(backupAt)
+			}
+		}
+		points, _, err := store.ListPoints(context.Background(), recovery.ListPointsOptions{Limit: 10})
+		if err != nil || len(points) != 1 {
+			t.Fatalf("points = %d, err = %v", len(points), err)
+		}
+		rows := m.AttributedPBSBackupsSnapshot()
+		if len(rows) != 1 {
+			t.Fatalf("rows = %d", len(rows))
+		}
+		return badge, points[0].SubjectResourceID, rows[0].GuestInstance
+	}
+
+	wantHome := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "home", 100)
+	if badge, subject, table := read(); !badge || subject != wantHome || table != "home" {
+		t.Fatalf("one installation: badge=%t subject=%q table=%q, want all on home", badge, subject, table)
+	}
+	m.state.UpdateVMs([]models.VM{home, {ID: makeGuestID("hetzner", "pmx1", 100), VMID: 100, Instance: "hetzner", Node: "pmx1", Name: "docker1", Status: "running"}})
+	if badge, subject, table := read(); badge || subject != "" || table != "" {
+		t.Fatalf("two installations: badge=%t subject=%q table=%q, want none naming a guest", badge, subject, table)
+	}
 }
 
 func TestPBSOrdinaryPollRootNamespacePostureLifecycle(t *testing.T) {

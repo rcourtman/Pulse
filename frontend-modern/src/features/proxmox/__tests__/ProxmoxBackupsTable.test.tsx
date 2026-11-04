@@ -119,6 +119,7 @@ const pbsPayload = {
         verified: true,
         files: ['index.json.blob', 'root.pxar.didx'],
         owner: 'backup@pbs',
+        guestInstance: 'pve-a',
       },
     ],
   },
@@ -2005,7 +2006,7 @@ describe('backup-date-evidence connected inventory', () => {
 });
 
 describe('backup-identity: connected Coverage and By date', () => {
-  const mockIdentityAPIs = () => {
+  const mockIdentityAPIs = (pbs = identityPBS()) => {
     apiFetchMock.mockImplementation((url: string) =>
       Promise.resolve(
         jsonResponse({
@@ -2016,7 +2017,7 @@ describe('backup-identity: connected Coverage and By date', () => {
                   guestSnapshots: [identitySnapshot()],
                   backupTasks: [identityTask()],
                 }
-              : { backups: [identityPBS()] },
+              : { backups: [pbs] },
         }),
       ),
     );
@@ -2113,27 +2114,21 @@ describe('backup-identity: connected Coverage and By date', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 
-  it('withdraws ambiguous PBS ownership without losing the artifact, PVE owner or server posture', async () => {
-    mockIdentityAPIs();
+  it('keeps an unattributed PBS point listed without losing the PVE owner or server posture', async () => {
+    mockIdentityAPIs(identityPBS({ guestInstance: undefined }));
     window.history.replaceState({}, '', '/proxmox/backups/date');
     const east = identityGuest('east-100', 'east', 'pve-1');
-    const west = identityGuest('west-100', 'west', 'pve-10');
-    const [workloads, setWorkloads] = createSignal([west, east]);
+    const west = identityGuest('west-100', 'west', 'pve-1');
     const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[west, east]} />
     ));
     const artifacts = () =>
       Array.from(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]'));
     await waitFor(() => expect(artifacts()).toHaveLength(3));
-    expect(artifacts().every((row) => row.textContent?.includes('east-100'))).toBe(true);
-    setWorkloads([identityGuest('west-100', 'west', 'pve-1'), east]);
-    await waitFor(() =>
-      expect(artifacts().filter((row) => row.textContent?.includes('east-100'))).toHaveLength(2),
-    );
+    expect(artifacts().filter((row) => row.textContent?.includes('east-100'))).toHaveLength(2);
     const unresolved = artifacts().find((row) => !row.textContent?.includes('east-100'))!;
     expect(unresolved).toHaveTextContent('VM 100');
     expect(unresolved).toHaveTextContent('PBS');
-    expect(artifacts()).toHaveLength(3);
     await fireEvent.click(screen.getByRole('link', { name: 'Coverage' }));
     await fireEvent.click(screen.getByRole('button', { name: /1 unmatched backup/ }));
     await waitFor(() =>

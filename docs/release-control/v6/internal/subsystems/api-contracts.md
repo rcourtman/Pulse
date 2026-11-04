@@ -2136,7 +2136,11 @@ carry the PBS-authored `models.PBSBackup` fields, including datastore,
 namespace, backup type, VMID, backup time, size, protection, verification,
 files, owner, and comment. Recovery history may index those artifacts, but it
 must not be the only API path for PBS protection or verification state when a
-platform page needs source-native backup columns.
+platform page needs source-native backup columns. Each row also carries
+`guestInstance`, the PVE connection whose guest of that type and VMID owns the
+snapshot, omitted when the evidence does not settle it. It is the same answer
+guest backup badges and recovery points use. Clients read it rather than inferring
+ownership from namespace, comment or VMID.
 
 `/api/backups/jobs` owns summarized PVE backup job outcomes for the Backups
 page: counts for the last 24 hours and for each of the last 14 days in the

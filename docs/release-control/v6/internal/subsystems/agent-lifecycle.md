@@ -22,6 +22,10 @@ so adding an installation that reuses a guest or node name does not end a link t
 agent already holds (#2681). The rules are in the monitoring contract. Manual links,
 operator splits and node reservations still apply after inference, unchanged.
 
+Guest backup badges now read `models.AttributePBSBackups` instead of a private
+ranking inside `SyncGuestBackupTimes`, and `PBSBackup` gains an internal
+`CarriedOver` mark. Neither touches agent reports, install, update or removal.
+
 ### Uninstall errors report the service stage actually reached
 
 Missing saved-URL admission says that no service stop or disable was attempted.

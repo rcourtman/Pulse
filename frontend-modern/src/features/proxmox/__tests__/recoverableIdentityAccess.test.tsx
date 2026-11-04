@@ -243,7 +243,14 @@ describe('restore-point identity without hover', () => {
         }),
         pbs: () =>
           kind === 'pbs'
-            ? [identityPBS({ instance: reader, namespace: 'pve-1', datastore: location })]
+            ? [
+                identityPBS({
+                  instance: reader,
+                  namespace: 'pve-1',
+                  datastore: location,
+                  guestInstance: scopes[0],
+                }),
+              ]
             : [],
       });
       const [point] = await rows();
@@ -336,10 +343,10 @@ describe('restore-point identity without hover', () => {
 
 it('names multiple dates, readers and same-time snapshots independently in the raw inventory consumer', async () => {
   const dated = [
-    identityPBS({ id: 'newer', backupTime: '2026-10-04T10:00:01Z' }),
-    identityPBS({ id: 'older', backupTime: '2026-10-03T10:00:01Z' }),
-    identityPBS({ id: 'offsite', instance: 'offsite-reader', backupTime: '2026-10-04T10:00:01Z' }),
-  ];
+    { id: 'newer', backupTime: '2026-10-04T10:00:01Z' },
+    { id: 'older', backupTime: '2026-10-03T10:00:01Z' },
+    { id: 'offsite', instance: 'offsite-reader', backupTime: '2026-10-04T10:00:01Z' },
+  ].map((fields) => identityPBS({ ...fields, guestInstance: scopes[0] }));
   mount({
     guests: workloads().slice(0, 1),
     pve: () => ({

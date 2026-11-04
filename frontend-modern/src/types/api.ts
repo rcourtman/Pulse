@@ -826,6 +826,12 @@ export interface PBSBackup {
   comment?: string;
   files: string[];
   owner?: string;
+  /**
+   * PVE connection whose guest of this type and VMID owns the snapshot. The server
+   * decides this once, for guest backup badges and protection posture too. Absent
+   * when the evidence does not settle it.
+   */
+  guestInstance?: string;
 }
 
 export interface PBSBackupsPayload {

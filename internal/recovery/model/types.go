@@ -84,6 +84,11 @@ type RecoveryPoint struct {
 	SubjectRef           *ExternalRef `json:"subjectRef,omitempty"`
 	RepositoryRef        *ExternalRef `json:"repositoryRef,omitempty"`
 
+	// SubjectUnsettled says live guests could own this point and the evidence
+	// picked none of them. The store must not relink it from history, or it would
+	// name a guest that backup badges and the Backups table do not. Not persisted.
+	SubjectUnsettled bool `json:"-"`
+
 	// Provider-specific details for drill-down (kept small).
 	Details map[string]any `json:"details,omitempty"`
 

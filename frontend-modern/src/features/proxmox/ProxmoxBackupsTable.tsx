@@ -1053,7 +1053,7 @@ export const ProxmoxBackupsTable: Component<{
                     {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
                   </span>
                   <span class="w-full text-[11px] text-muted sm:w-auto">
-                    No unambiguous inventory match
+                    Not matched to a single monitored guest
                   </span>
                 </button>
                 <Show when={showOrphaned()}>

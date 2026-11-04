@@ -7966,7 +7966,9 @@ platform-page primitives: the Proxmox Backups tab and the TrueNAS Protection
 tab.
 The Proxmox Backups tab parses `/api/backups/pve` and `/api/backups/pbs`
 inside `ProxmoxBackupsTable.tsx` and reads posture through
-`frontend-modern/src/hooks/useProtectionPostures.ts`. The TrueNAS Protection
+`frontend-modern/src/hooks/useProtectionPostures.ts`. `resolvePBSWorkload` groups a
+PBS row under a guest only through the row's server-reported `guestInstance`, and
+holds no attribution of its own. The TrueNAS Protection
 tab reads recovery points, and what binds that path is the decode boundary.
 `frontend-modern/src/utils/recoveryPlatformModel.ts` maps the transport
 names onto the canonical runtime model: `provider` to `platform`,

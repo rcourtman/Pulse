@@ -532,7 +532,7 @@ func TestFromPBSBackupsWithEvidenceAddsProviderScopeAndCorrelation(t *testing.T)
 		},
 	}
 
-	points, err := FromPBSBackupsWithEvidence(backups, candidates, nil, ingestedAt)
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, attributeBatchOverCandidates(backups, candidates, nil), ingestedAt)
 	if err != nil {
 		t.Fatalf("FromPBSBackupsWithEvidence() error = %v", err)
 	}
@@ -1114,7 +1114,7 @@ func TestFromPBSBackupsExclusiveConfirmerSettlesTiedGuests(t *testing.T) {
 		{name: "a connection with no such guest", confirmers: map[models.PBSSnapshotRef]string{ref: "elsewhere"}, want: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			points, err := FromPBSBackupsWithEvidence(backups, candidates, tc.confirmers, backupTime)
+			points, err := FromPBSBackupsWithEvidence(backups, candidates, attributeBatchOverCandidates(backups, candidates, tc.confirmers), backupTime)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1129,6 +1129,33 @@ func TestFromPBSBackupsExclusiveConfirmerSettlesTiedGuests(t *testing.T) {
 				t.Fatalf("SubjectResourceID = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestFromPBSBackupsMarksPointsLeftUnsettledBetweenLiveGuests(t *testing.T) {
+	backupTime := time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC)
+	backups := []models.PBSBackup{
+		{ID: "tied", VMID: "100", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-main", Comment: "docker1"},
+		{ID: "gone", VMID: "999", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-main"},
+		{ID: "settled", VMID: "200", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-main"},
+	}
+	guest := func(instance string, vmid int) GuestCandidate {
+		return GuestCandidate{
+			ResourceID: fmt.Sprintf("vm-%s-%d", instance, vmid), SourceID: fmt.Sprintf("%s:pmx1:%d", instance, vmid),
+			ResourceType: unifiedresources.ResourceTypeVM, DisplayName: "docker1", InstanceName: instance, NodeName: "pmx1", VMID: vmid,
+		}
+	}
+	points := FromPBSBackups(backups, map[string][]GuestCandidate{
+		"vm:100": {guest("home", 100), guest("hetzner", 100)},
+		"vm:200": {guest("home", 200)},
+	})
+	unsettled := make(map[string]bool, len(points))
+	for _, point := range points {
+		unsettled[point.ID] = point.SubjectUnsettled
+	}
+	want := map[string]bool{"pbs-backup:tied": true, "pbs-backup:gone": false, "pbs-backup:settled": false}
+	if !reflect.DeepEqual(unsettled, want) {
+		t.Fatalf("unsettled = %+v, want %+v", unsettled, want)
 	}
 }
 
@@ -1148,7 +1175,7 @@ func TestFromPBSBackupsStrongerLabelMatchOutranksExclusiveConfirmer(t *testing.T
 	confirmers := map[models.PBSSnapshotRef]string{
 		{BackupType: "vm", VMID: 100, Time: backupTime.Unix()}: "pve",
 	}
-	points, err := FromPBSBackupsWithEvidence(backups, candidates, confirmers, backupTime)
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, attributeBatchOverCandidates(backups, candidates, confirmers), backupTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1180,7 +1207,7 @@ func TestFromPBSBackupsConfirmerWithNoSuchGuestFailsClosedAgainstLearner(t *test
 	confirmers := map[models.PBSSnapshotRef]string{
 		{BackupType: "vm", VMID: 100, Time: backupTime.Unix()}: "c",
 	}
-	points, err := FromPBSBackupsWithEvidence(backups, candidates, confirmers, backupTime)
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, attributeBatchOverCandidates(backups, candidates, confirmers), backupTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1203,7 +1230,7 @@ func TestFromPBSBackupsNameMatchDoesNotOutrankStrongerNamespace(t *testing.T) {
 		{ResourceID: "vm-a", SourceID: "pve:alpha:100", ResourceType: unifiedresources.ResourceTypeVM, DisplayName: "web", InstanceName: "pve", NodeName: "alpha", VMID: 100},
 		{ResourceID: "vm-b", SourceID: "remote:pve:100", ResourceType: unifiedresources.ResourceTypeVM, DisplayName: "database", InstanceName: "remote", NodeName: "pve", VMID: 100},
 	}}
-	points, err := FromPBSBackupsWithEvidence(backups, candidates, nil, backupTime)
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, attributeBatchOverCandidates(backups, candidates, nil), backupTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1236,7 +1263,7 @@ func TestFromPBSBackupsConfirmedSnapshotTeachesSourceLearner(t *testing.T) {
 	confirmers := map[models.PBSSnapshotRef]string{
 		{BackupType: "vm", VMID: 100, Time: confirmedTime.Unix()}: "home",
 	}
-	points, err := FromPBSBackupsWithEvidence(backups, candidates, confirmers, laterTime)
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, attributeBatchOverCandidates(backups, candidates, confirmers), laterTime)
 	if err != nil {
 		t.Fatal(err)
 	}

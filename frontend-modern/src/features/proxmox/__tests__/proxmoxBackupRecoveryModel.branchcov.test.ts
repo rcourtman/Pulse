@@ -51,6 +51,7 @@ const pbsBackup = (overrides: Partial<PBSBackup> = {}): PBSBackup => ({
   verified: true,
   files: ['index.json.blob'],
   owner: 'backup@pbs',
+  guestInstance: 'inst-a',
   ...overrides,
 });
 
@@ -509,8 +510,8 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
   it('aggregates bytes, PBS-row, current, and attention counts', () => {
     const model = buildModel({
       workloads: [
-        workload({ id: 'vm-840', proxmox: { vmid: 840, node: 'a' } }),
-        workload({ id: 'vm-830', proxmox: { vmid: 830, node: 'b' } }),
+        workload({ id: 'vm-840', proxmox: { vmid: 840, node: 'a', instance: 'inst-a' } }),
+        workload({ id: 'vm-830', proxmox: { vmid: 830, node: 'b', instance: 'inst-a' } }),
       ],
       pbsBackups: [
         pbsBackup({ id: 'pbs-840', vmid: '840', backupTime: isoDaysAgo(1), size: 2_000 }),
@@ -532,9 +533,9 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
     ]);
     const canonicalModel = buildModel({
       workloads: [
-        workload({ id: 'vm-840', proxmox: { vmid: 840, node: 'a' } }),
-        workload({ id: 'vm-830', proxmox: { vmid: 830, node: 'b' } }),
-        workload({ id: 'vm-850', proxmox: { vmid: 850, node: 'c' } }),
+        workload({ id: 'vm-840', proxmox: { vmid: 840, node: 'a', instance: 'inst-a' } }),
+        workload({ id: 'vm-830', proxmox: { vmid: 830, node: 'b', instance: 'inst-a' } }),
+        workload({ id: 'vm-850', proxmox: { vmid: 850, node: 'c', instance: 'inst-a' } }),
       ],
       pbsBackups: [
         pbsBackup({ id: 'pbs-840', vmid: '840', backupTime: isoDaysAgo(1) }),

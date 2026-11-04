@@ -82,6 +82,7 @@ const pbsShape: RowShape = {
   inProgress: optional(isBoolean),
   writeActivityObserved: optional(isBoolean),
   writeActive: optional(isBoolean),
+  guestInstance: optional(isString),
 };
 
 function inventoryData(payload: unknown): Record<string, unknown> {

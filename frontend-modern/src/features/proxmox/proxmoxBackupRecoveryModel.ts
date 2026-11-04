@@ -102,6 +102,10 @@ export interface WorkloadCoverageRow {
   // with no unambiguous live inventory match (absent or conflicting). Host backups can also carry a
   // `backup:` key, but they are first-class backup targets, not orphaned guests.
   isOrphaned: boolean;
+  /** Live guests with the type and VMID of an unattributed PBS row. Not ownership. */
+  sameVmidGuestLabels?: string[];
+  /** Unattributed PBS entries with this guest's type and VMID. */
+  unmatchedPBSEntries?: number;
 }
 
 export interface ProxmoxBackupRecoveryModel {
@@ -390,6 +394,11 @@ function buildWorkloadCandidateIndex(
   return { byTypeAndVmid, byVmid };
 }
 
+function guestOnConnectionLabel(workload: WorkloadReference): string {
+  const name = workload.name || workload.label;
+  return workload.instance ? `${name} on ${workload.instance}` : name;
+}
+
 function uniqueWorkload<T>(matches: readonly T[]): T | undefined {
   return matches.length === 1 ? matches[0] : undefined;
 }
@@ -461,22 +470,15 @@ function resolvePBSWorkload(
 ): WorkloadReference {
   const type = backupTypeLabel(backup.backupType);
   const typed = candidates.byTypeAndVmid.get(workloadTypeVmidKey(type, backup.vmid)) ?? [];
-  // PBS instance/datastore identify a repository, not a PVE connection. A
-  // namespace can disambiguate a repeated VMID only with one exact native
-  // node/alias or connection match. A display name or substring proves none.
-  const namespace = normalizeKey(backup.namespace);
-  const matched = namespace
-    ? uniqueWorkload(
-        typed.filter(
-          (workload) =>
-            matchesNativeNode(workload, backup.namespace) ||
-            normalizeKey(workload.instance) === namespace,
-        ),
-      )
+  // The server decides which guest owns a snapshot, so this row reads as the same
+  // guest as its backup badge and protection posture. Whatever it leaves
+  // unattributed stays that way, even when only one guest here has this VMID.
+  const guestInstance = normalizeKey(backup.guestInstance);
+  const attributed = guestInstance
+    ? uniqueWorkload(typed.filter((workload) => normalizeKey(workload.instance) === guestInstance))
     : undefined;
   return (
-    matched ??
-    uniqueWorkload(typed) ??
+    attributed ??
     fallbackWorkload(
       type,
       backup.vmid,
@@ -690,8 +692,20 @@ export function buildProxmoxBackupRecoveryModel(
     else row.snapshotCount += 1;
   };
 
+  // Unattributed PBS rows name the live guests sharing their VMID, and those guests
+  // point back, so a fail-closed row does not read as a missing guest.
+  const unattributedPBSByRow = new Map<string, number>();
+  const unattributedPBSByTypedVmid = new Map<string, number>();
   for (const backup of input.pbsBackups) {
     const workload = resolvePBSWorkload(candidateIndex, backup);
+    if (!workload.resourceId && !normalizeKey(backup.guestInstance)) {
+      const typedVmid = workloadTypeVmidKey(workload.type, workload.vmid);
+      unattributedPBSByRow.set(workload.key, (unattributedPBSByRow.get(workload.key) ?? 0) + 1);
+      unattributedPBSByTypedVmid.set(
+        typedVmid,
+        (unattributedPBSByTypedVmid.get(typedVmid) ?? 0) + 1,
+      );
+    }
     const parsedMs = parseBackupTimestampMs(backup.backupTime);
     const createdMs =
       getRecoveryAgeBand(parsedMs, input.nowMs) === 'unknown' ? undefined : parsedMs;
@@ -817,6 +831,7 @@ export function buildProxmoxBackupRecoveryModel(
   }
 
   const coverageRows = Array.from(rows.values()).map((row) => {
+    const typedVmid = workloadTypeVmidKey(row.workload.type, row.workload.vmid);
     const protectionPosture = row.workload.resourceId
       ? input.protectionPostures?.get(row.workload.resourceId)
       : undefined;
@@ -835,6 +850,12 @@ export function buildProxmoxBackupRecoveryModel(
       isOrphaned:
         !row.key.startsWith('resource:') &&
         (row.workload.type === 'vm' || row.workload.type === 'ct'),
+      sameVmidGuestLabels: unattributedPBSByRow.has(row.key)
+        ? (candidateIndex.byTypeAndVmid.get(typedVmid) ?? []).map(guestOnConnectionLabel).sort()
+        : undefined,
+      unmatchedPBSEntries: row.workload.resourceId
+        ? unattributedPBSByTypedVmid.get(typedVmid)
+        : undefined,
     };
   });
 

@@ -2285,6 +2285,22 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		return
 	}
 
+	// Failed reads may retain raw artifacts for continuity, but cannot renew
+	// their point evidence or use them to infer another backup's guest identity.
+	// Successful, unchanged group listings retain the existing bounded TTL reuse.
+	observedBackups := make([]models.PBSBackup, 0, len(allBackups))
+	for i, backup := range allBackups {
+		key := pbsBackupGroupKey{
+			datastore: backup.Datastore, namespace: normalizePBSNamespacePath(backup.Namespace),
+			backupType: backup.BackupType, backupID: backup.VMID,
+		}
+		_, observed := observedGroups[key]
+		allBackups[i].CarriedOver = !observed
+		if observed {
+			observedBackups = append(observedBackups, allBackups[i])
+		}
+	}
+
 	// Publication is the commit boundary: no cancellation return may split a
 	// successful read time from its matching payload. Per-instance poller
 	// admission serializes this publication with the next ordinary poll.
@@ -2294,26 +2310,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
 	}
 
-	// Failed reads may retain raw artifacts for continuity, but cannot renew
-	// their point evidence or use them to infer another backup's guest identity.
-	// Successful, unchanged group listings retain the existing bounded TTL reuse.
-	observedBackups := make([]models.PBSBackup, 0, len(allBackups))
-	for _, backup := range allBackups {
-		key := pbsBackupGroupKey{
-			datastore: backup.Datastore, namespace: normalizePBSNamespacePath(backup.Namespace),
-			backupType: backup.BackupType, backupID: backup.VMID,
-		}
-		if _, observed := observedGroups[key]; observed {
-			observedBackups = append(observedBackups, backup)
-		}
-	}
-
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
 	points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
 		observedBackups,
 		candidates,
-		m.state.PBSExclusiveConfirmers(),
+		m.state.PBSBackupGuestInstances(),
 		protectionObservedAt,
 	)
 	if evidenceErr != nil {
@@ -2358,6 +2360,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Immediately broadcast the updated state so frontend sees new backups
 	m.broadcastStateUpdate()
+}
+
+// AttributedPBSBackupsSnapshot returns the current PBS recovery artifacts with the
+// guest each one belongs to.
+func (m *Monitor) AttributedPBSBackupsSnapshot() []models.AttributedPBSBackup {
+	return readMetadataSnapshot(m, (*models.State).GetAttributedPBSBackups, models.StateSnapshot.AttributedPBSBackups)
 }
 
 func hasIncompletePBSBackup(backups []models.PBSBackup) bool {

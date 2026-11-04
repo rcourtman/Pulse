@@ -129,6 +129,7 @@ describe('backup inventory response boundary', () => {
     ['inProgress', 'true'],
     ['writeActivityObserved', {}],
     ['writeActive', null],
+    ['guestInstance', 1],
   ])(
     'rejects mistyped PBS %s without inventing an identity or completion state',
     (field, value) => {

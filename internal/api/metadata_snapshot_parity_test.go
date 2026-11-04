@@ -66,7 +66,7 @@ func TestMetadataSnapshotHTTPParity(t *testing.T) {
 			want = PVEBackupsResponse{Data: data, Meta: PVEBackupsMeta{len(data.BackupTasks), len(data.StorageBackups), len(data.GuestSnapshots)}}
 		case "/api/backups/pbs":
 			router.handleListPBSBackups(rec, req)
-			data := filterPBSBackups(full.PBSBackups, req)
+			data := filterPBSBackups(full.AttributedPBSBackups(), req)
 			want = PBSBackupsResponse{Data: PBSBackupsPayload{data}, Meta: PBSBackupsMeta{len(data)}}
 		case "/api/replication/jobs":
 			router.handleListReplicationJobs(rec, req)

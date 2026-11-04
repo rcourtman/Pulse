@@ -208,13 +208,22 @@ const providerEvidenceSourceLabel = (source: string | undefined): string => {
   }
 };
 
+const unmatchedBackupsNote = (count: number): string =>
+  count === 1 ? '1 unmatched backup has this VMID.' : `${count} unmatched backups have this VMID.`;
+
 const postureExplanation = (row: WorkloadCoverageRow): string => {
-  if (row.protectionPosture?.explanation) return row.protectionPosture.explanation;
+  const unmatched = row.unmatchedPBSEntries
+    ? ` ${unmatchedBackupsNote(row.unmatchedPBSEntries)}`
+    : '';
+  if (row.protectionPosture?.explanation) return `${row.protectionPosture.explanation}${unmatched}`;
   if (row.posture === 'checking') return "Pulse is checking this guest's backups.";
   if (row.posture === 'not-evaluated') {
-    return 'This backup does not match a guest Pulse currently monitors, so it is not rated.';
+    const guests = row.sameVmidGuestLabels ?? [];
+    return guests.length > 0
+      ? `Guests with this VMID: ${guests.join(', ')}. Pulse cannot tell which one this backup belongs to, so it is not counted. A PBS namespace named after each connection can settle it.`
+      : 'This backup does not match a guest Pulse currently monitors, so it is not rated.';
   }
-  return 'Pulse cannot tell yet whether this guest is backed up.';
+  return `Pulse cannot tell yet whether this guest is backed up.${unmatched}`;
 };
 
 const TASK_ORDER_NOTICE =
