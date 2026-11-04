@@ -614,20 +614,18 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager canManage />);
     await waitFor(() => expect(listTokensMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Full access', exact: true }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Full access' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring & alerts (read)' }));
 
-    expect(screen.getByRole('button', { name: 'Full access', exact: true })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Full access' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
-    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring', exact: true })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Generate', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     await waitFor(() =>
       expect(createTokenMock).toHaveBeenCalledWith(
         undefined,
@@ -637,15 +635,13 @@ describe('APITokenManager', () => {
     );
 
     // Removing the last explicit capability must not fall back to a broad token.
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
-    );
-    expect(screen.getByRole('button', { name: 'Generate', exact: true })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Full access', exact: true })).toHaveAttribute(
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring & alerts (read)' }));
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Full access' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
-    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring', exact: true })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
@@ -657,16 +653,14 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager canManage />);
     await waitFor(() => expect(listTokensMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Full access', exact: true }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Audit logs (read)', exact: true }));
-    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring', exact: true })).toHaveAttribute(
+    fireEvent.click(screen.getByRole('button', { name: 'Full access' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring & alerts (read)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Audit logs (read)' }));
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Generate', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     await waitFor(() =>
       expect(createTokenMock).toHaveBeenLastCalledWith(
         undefined,
@@ -675,21 +669,22 @@ describe('APITokenManager', () => {
       ),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Full access', exact: true }));
-    expect(
-      screen.getByRole('button', { name: 'Monitoring & alerts (read)', exact: true }),
-    ).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: 'Audit logs (read)', exact: true })).toHaveAttribute(
+    fireEvent.click(screen.getByRole('button', { name: 'Full access' }));
+    expect(screen.getByRole('button', { name: 'Monitoring & alerts (read)' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Generate', exact: true }));
+    expect(screen.getByRole('button', { name: 'Audit logs (read)' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     await waitFor(() =>
       expect(createTokenMock).toHaveBeenLastCalledWith(undefined, ['*'], expect.any(Object)),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear selection', exact: true }));
-    expect(screen.getByRole('button', { name: 'Generate', exact: true })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
     expect(createTokenMock).toHaveBeenCalledTimes(2);
   });
 
