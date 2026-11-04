@@ -7,7 +7,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
@@ -117,39 +116,7 @@ func (m *Monitor) collectVMsWithNodes(ctx context.Context, instanceName string, 
 			Msg("Preserved prior VMs for nodes whose enumeration failed")
 	}
 
-	if !shouldSkipNativeMockStateMetricWrites() {
-		now := time.Now()
-		stagePVEGuestEffect(ctx, func() {
-			for _, vm := range allVMs {
-				if !guestObservedInCycle(vm.LastSeen, startTime) {
-					continue
-				}
-				if vm.Status != "running" {
-					continue
-				}
-				diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
-					vm.DiskRead,
-					vm.DiskWrite,
-					vm.NetworkIn,
-					vm.NetworkOut,
-					vm.IORateValidity,
-				)
-				m.recordGuestMetric(
-					"vm",
-					vm.ID,
-					unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
-					historyMemoryUsage(vm.Memory),
-					historyMemoryUsed(vm.Memory),
-					vm.Disk.Usage,
-					diskRead,
-					diskWrite,
-					networkIn,
-					networkOut,
-					now,
-				)
-			}
-		})
-	}
+	stagePVEGuestEffect(ctx, func() { m.recordGuestMetrics(allVMs, nil, startTime) })
 
 	duration := time.Since(startTime)
 	log.Debug().

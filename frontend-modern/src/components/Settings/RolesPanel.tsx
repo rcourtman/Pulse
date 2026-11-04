@@ -14,6 +14,25 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
+import type { Role } from '@/types/rbac';
+
+// Keep the same complete grants in the desktop column and phone identity cell.
+const RolePermissions: Component<{ role: Role }> = (props) => (
+  <Show
+    when={props.role.permissions.length > 0}
+    fallback={<span class="text-xs italic text-muted">No permissions</span>}
+  >
+    <ul aria-label={`Permissions for ${props.role.name}`} class="flex min-w-0 flex-wrap gap-1">
+      <For each={props.role.permissions}>
+        {(permission) => (
+          <li class="max-w-full rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border whitespace-normal [overflow-wrap:anywhere]">
+            {permission.action}:{permission.resource}
+          </li>
+        )}
+      </For>
+    </ul>
+  </Show>
+);
 
 export const RolesPanel: Component<RolesPanelProps> = (props) => {
   const state = useRolesPanelState(props);
@@ -128,14 +147,18 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                 key: 'role',
                 label: 'Role',
                 render: (role) => (
-                  <div class="flex flex-col">
+                  <div class="flex min-w-0 flex-col whitespace-normal [overflow-wrap:anywhere]">
                     <span class="font-medium text-base-content flex items-center gap-1">
-                      {role.name}
+                      <span class="min-w-0">{role.name}</span>
                       <Show when={role.isBuiltIn}>
-                        <BadgeCheck class="w-4 h-4 text-blue-500" />
+                        <BadgeCheck class="w-4 h-4 shrink-0 text-blue-500" />
                       </Show>
                     </span>
                     <span class="text-xs text-muted">{role.description}</span>
+                    <div class="mt-3 space-y-1 sm:hidden">
+                      <p class="text-[11px] font-medium text-muted">Permissions</p>
+                      <RolePermissions role={role} />
+                    </div>
                   </div>
                 ),
               },
@@ -143,17 +166,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                 key: 'permissions',
                 label: 'Permissions',
                 hiddenOnMobile: true,
-                render: (role) => (
-                  <div class="flex flex-wrap gap-1">
-                    <For each={role.permissions}>
-                      {(perm) => (
-                        <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-xs font-medium text-muted border border-border">
-                          {perm.action}:{perm.resource}
-                        </span>
-                      )}
-                    </For>
-                  </div>
-                ),
+                render: (role) => <RolePermissions role={role} />,
               },
               {
                 key: 'actions',
@@ -192,6 +205,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
             ]}
             keyExtractor={(role) => role.id}
             emptyState={getRolesEmptyState()}
+            class="[&_table]:table-fixed sm:[&_table]:table-auto [&_th:last-child]:w-28 sm:[&_th:last-child]:w-auto"
             desktopMinWidth="620px"
             frame="flush"
           />

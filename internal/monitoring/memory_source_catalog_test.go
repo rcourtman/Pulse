@@ -135,27 +135,6 @@ func TestDescribeMemorySourceCanonicalizesAliases(t *testing.T) {
 	}
 }
 
-func TestMockVMPollingDefersMemoryHistoryToCanonicalSampler(t *testing.T) {
-	t.Parallel()
-
-	data, err := os.ReadFile("monitor_polling_vm.go")
-	if err != nil {
-		t.Fatalf("failed to read monitor_polling_vm.go: %v", err)
-	}
-	source := string(data)
-
-	requiredSnippets := []string{
-		"if !shouldSkipNativeMockStateMetricWrites() {",
-		"guestHistoryRates(",
-		"m.recordGuestMetric(",
-	}
-	for _, snippet := range requiredSnippets {
-		if !strings.Contains(source, snippet) {
-			t.Fatalf("monitor_polling_vm.go must contain %q", snippet)
-		}
-	}
-}
-
 func TestPollVMPrefersCanonicalLinkedHostAgentDiskInventory(t *testing.T) {
 	t.Parallel()
 

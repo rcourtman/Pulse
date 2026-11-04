@@ -35,6 +35,7 @@ type vmBuildState struct {
 	diskStatusReason        string
 	diskObservation         models.GuestDiskObservation
 	diskReused              bool // The reading is an earlier poll's reply; no command was sent for it.
+	linkedAgentDisks        bool // A current linked Pulse agent supplies this poll's disks, so no filesystem read is sent.
 	guestAgentStatus        string
 	guestAgentExpected      bool
 	guestAgentEvidence      models.GuestAgentEvidence
@@ -149,6 +150,11 @@ func (m *Monitor) applyVMStatusDetails(
 }
 
 func (m *Monitor) applyVMGuestAgentFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface, state *vmBuildState) {
+	// The agent's inventory replaces this reading later in the poll, so sending
+	// the command would only add a chance of colliding with a freeze (#2439).
+	if state.linkedAgentDisks {
+		return
+	}
 	var fsDisks []models.Disk
 	var read vmFSInfoRead
 	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason, read = m.updateVMDisksFromGuestAgentFSInfo(
@@ -246,6 +252,7 @@ func (m *Monitor) buildVMFromClusterResource(
 	state := vmBuildState{
 		guestAgentEvidence:      retainGuestAgentEvidence(prevVM, prePollTime),
 		diskObservation:         models.GuestDiskObservation{Source: "guest-agent"},
+		linkedAgentDisks:        linkedHostAgentSuppliesGuestDisks(guestID, vmIDToHostAgent),
 		memTotal:                res.MaxMem,
 		memUsed:                 res.Mem,
 		memorySource:            "cluster-resources",
@@ -268,6 +275,10 @@ func (m *Monitor) buildVMFromClusterResource(
 	// Set to -1 to indicate "unknown" rather than showing misleading 0%
 	if res.Type == "qemu" && state.diskUsed == 0 && state.diskTotal > 0 && res.Status == "running" {
 		state.diskUsage = -1
+	}
+	if state.linkedAgentDisks {
+		// The poll that loses the agent gets its own read, not a reply from before.
+		m.clearVMFSInfoCache(instanceName, res.Node, res.VMID)
 	}
 	if res.Status != "running" {
 		// A subsequent start must obtain its own guest memory observation rather
@@ -443,7 +454,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		sampleTime,
 		guestAgentSignalsHealthy(
 			state.detailedStatus,
-			state.diskFromAgent && !state.diskReused,
+			// A current report from inside the guest shows it is up, as a new
+			// filesystem reply would have.
+			(state.diskFromAgent && !state.diskReused) || state.linkedAgentDisks,
 			state.ipAddresses,
 			state.networkInterfaces,
 			state.osName,

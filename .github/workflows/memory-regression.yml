@@ -89,8 +89,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  # Scheduled runs have no caller watching them. Keep one open issue while the
-  # watch fails and close it when memory is back within tolerance.
+  # Report only marked, untouched watch issues. A passing check is not
+  # resolution of a human report; recovery comments never close issues.
   report-scheduled-result:
     name: Report scheduled result
     needs: compare
@@ -98,39 +98,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      contents: read
       issues: write
     steps:
-      - name: Open, update or close the memory regression issue
+      - name: Checkout exact reporter source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Report the watch observation without resolving issues
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RESULT: ${{ needs.compare.result }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          title="Pulse memory grew against the last stable release"
-          number="$(gh issue list --state open --search "\"${title}\" in:title" \
-            --limit 100 --json number,title \
-            --jq "map(select(.title == \"${title}\")) | first | .number // empty")"
-          case "${RESULT}" in
-            success)
-              if [[ -n "${number}" ]]; then
-                gh issue close "${number}" --comment "Memory is back within tolerance: ${RUN_URL}"
-              fi
-              ;;
-            failure)
-              if [[ -n "${number}" ]]; then
-                gh issue comment "${number}" --body "It failed again: ${RUN_URL}"
-              else
-                gh issue create --title "${title}" --body "The daily memory comparison failed: ${RUN_URL}
-
-          The run summary compares main with the latest stable release on the same small mock estate, split into the Go heap, memory outside Go and file pages. The memory-regression artifact holds both heap profiles and heap-growth.txt, which lists what grew by function. Check that list for internal/mock first: mock fixtures live in the heap and are not production memory. A failure with no samples means a build or startup failed, not a memory change.
-
-          This issue closes itself when the comparison passes again."
-              fi
-              ;;
-            *)
-              echo "The comparison ended as ${RESULT}; nothing to report."
-              ;;
-          esac
+        run: python3 .github/scripts/report-ci-watch.py memory "$RESULT"
