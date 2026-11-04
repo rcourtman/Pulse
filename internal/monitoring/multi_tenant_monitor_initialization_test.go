@@ -57,9 +57,15 @@ func TestTenantInitializationDoesNotBlockLiveReads(t *testing.T) {
 		if m, ok := manager.PeekMonitor("starting"); ok || m != nil {
 			t.Error("unfinished runtime was exposed to live readers")
 		}
-		// ForEachMonitor is a settings-propagation barrier, not a cached
-		// read. Its admission ordering is exercised through the real settings
-		// handler by TestTenantInitializationSettingsSaveReachesAdmittedMonitor.
+		manager.ForEachMonitor(func(m *Monitor) {
+			if m.GetOrgID() == "starting" {
+				select {
+				case <-release: // The original blocked reader resumes after release.
+				default:
+					t.Error("unfinished runtime was exposed to live readers")
+				}
+			}
+		})
 	}()
 	select {
 	case <-read:

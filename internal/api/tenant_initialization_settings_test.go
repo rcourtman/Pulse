@@ -69,7 +69,7 @@ func TestTenantInitializationSettingsSaveReachesAdmittedMonitor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := &Router{config: cfg, persistence: persistence, mtMonitor: manager}
+	router := &Router{config: cfg, persistence: persistence, mtMonitor: manager, mux: http.NewServeMux()}
 	entered := make(chan *monitoring.Monitor, 1)
 	release := make(chan struct{})
 	var releaseOnce sync.Once
@@ -112,6 +112,7 @@ func TestTenantInitializationSettingsSaveReachesAdmittedMonitor(t *testing.T) {
 	handler.mtMonitor = observer
 	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{"pbsPollingInterval":300,"pmgPollingInterval":420,"publicURL":"https://new.pulse.invalid","webhookAllowedPrivateCIDRs":""}`))
 	req.Header.Set("X-API-Token", token)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "live"))
 	rec := httptest.NewRecorder()
 	saved := make(chan struct{})
 	go func() { handler.HandleUpdateSystemSettings(rec, req); close(saved) }()
@@ -121,21 +122,26 @@ func TestTenantInitializationSettingsSaveReachesAdmittedMonitor(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("settings request did not reach the real iterator")
 	}
-	// The held constructor makes the vulnerable ordering explicit. Time bounds
-	// detect lack of progress; they do not schedule or simulate the race.
+	// The save must complete while initialization is held. Router settings
+	// reload also visits every monitor while holding its settings-cache lock;
+	// waiting for construction there would block unrelated HTTP requests.
 	select {
 	case <-saved:
-		t.Error("settings save completed while an admitted monitor still held the old policy")
-	case <-time.After(250 * time.Millisecond):
+	case <-time.After(2 * time.Second):
+		t.Fatal("instance settings propagation waited for another tenant's initializer")
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save = %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Waiting to propagate settings must not reacquire the live-reader lock.
+	// Recording deferred settings must not reacquire the live-reader lock.
 	connections := NewConnectionsHandlers(
 		func(context.Context) *config.Config { return live.GetConfig() },
 		func(context.Context) *config.ConfigPersistence { return live.GetConfigPersistence() },
 		router.getTenantMonitor,
 	)
 	guarded := router.tenantMonitorGuardMiddleware(http.HandlerFunc(connections.HandleList))
+	router.mux.Handle("/api/connections", guarded)
 	readDone := make(chan struct{})
 	var read *httptest.ResponseRecorder
 	go func() {
@@ -148,7 +154,8 @@ func TestTenantInitializationSettingsSaveReachesAdmittedMonitor(t *testing.T) {
 		}
 		read = httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/api/connections", nil)
-		guarded.ServeHTTP(read, r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, "live")))
+		r.Header.Set("X-API-Token", token)
+		router.ServeHTTP(read, r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, "live")))
 	}()
 	select {
 	case <-readDone:

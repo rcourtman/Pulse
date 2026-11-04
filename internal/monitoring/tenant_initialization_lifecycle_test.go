@@ -53,6 +53,9 @@ func TestTenantInitializationRetainsLifecycleOwnership(t *testing.T) {
 			case <-time.After(10 * time.Second):
 				t.Fatal("initializer did not enter")
 			}
+			// A raced settings visitor cannot bypass the later stop/deletion
+			// fence when the constructor returns for reconciliation/publication.
+			manager.ForEachMonitor(func(*Monitor) {})
 			previous, previousDeletion := tenantMonitorShutdownTimeout, tenantDeletionShutdownTimeout
 			tenantMonitorShutdownTimeout, tenantDeletionShutdownTimeout = 20*time.Millisecond, 20*time.Millisecond
 			t.Cleanup(func() { tenantMonitorShutdownTimeout, tenantDeletionShutdownTimeout = previous, previousDeletion })

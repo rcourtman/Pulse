@@ -109,18 +109,13 @@ func (mtm *MultiTenantMonitor) SetMonitorInitializer(initializer func(*Monitor))
 	}
 }
 
-// ForEachMonitor runs fn against every live tenant monitor. This is a
-// propagation boundary, not a non-blocking read: wait for an admitted
-// constructor to publish before taking the snapshot, or a successful settings
-// save could miss a monitor that already loaded the old policy. New admissions
-// after this snapshot load the saved settings themselves. GetMonitor's cached
-// path and PeekMonitor remain available while this visitor waits.
-// Callbacks run outside both manager locks.
+// ForEachMonitor runs fn against every live tenant monitor. Use it to
+// propagate instance-wide runtime settings (e.g. webhook security allowlist)
+// that every org's monitor must observe.
 func (mtm *MultiTenantMonitor) ForEachMonitor(fn func(*Monitor)) {
 	if mtm == nil || fn == nil {
 		return
 	}
-	mtm.initMu.Lock()
 	mtm.mu.RLock()
 	monitors := make([]*Monitor, 0, len(mtm.monitors))
 	for _, monitor := range mtm.monitors {
@@ -129,7 +124,6 @@ func (mtm *MultiTenantMonitor) ForEachMonitor(fn func(*Monitor)) {
 		}
 	}
 	mtm.mu.RUnlock()
-	mtm.initMu.Unlock()
 	for _, monitor := range monitors {
 		fn(monitor)
 	}
