@@ -177,7 +177,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
 
     api.json.mockRejectedValue(new Error('synthetic unavailable assessment'));
     await vi.advanceTimersByTimeAsync(30_000);
-    await screen.findByText(/Protection posture is unavailable/);
+    await screen.findByText(/Protection status is unavailable/);
     expect(within(panel).queryByText('Protection assessment', { exact: true })).toBeNull();
     expect(panel.querySelectorAll('time')).toHaveLength(0);
     expect(within(panel).getByRole('img', { name: 'Unknown' })).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
 
     const inventoryReads = api.fetch.mock.calls.length;
     api.json.mockResolvedValue(reply([assessment()]));
-    fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry protection status' }));
     await within(panel).findByText('Protection assessment', { exact: true });
     expect(valueRow(panel, 'Evaluated').querySelector('time')).toHaveAttribute(
       'datetime',
@@ -198,7 +198,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
     'never renders a malformed reported assessment time (%s)',
     async (invalid) => {
       mount([assessment({ evaluatedAt: invalid })]);
-      await screen.findByText(/Protection posture is unavailable/);
+      await screen.findByText(/Protection status is unavailable/);
       fireEvent.click(await screen.findByRole('button', { name: /Expand details for east-100/ }));
       const panel = await screen.findByTestId('proxmox-coverage-detail');
       expect(within(panel).queryByText('Protection assessment', { exact: true })).toBeNull();

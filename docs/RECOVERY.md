@@ -36,7 +36,7 @@ There is no top-level Recovery page. Open the existing platform view:
 
 - **Proxmox → Backups** (`/proxmox/backups`): **By date** lists recorded
   artifacts; **Coverage** groups them by workload. Expand a coverage row to
-  inspect its posture reason and individual artifacts. Backup servers have
+  inspect its protection reason and individual artifacts. Backup servers have
   their own rows on the same page.
 - **TrueNAS → Protection** (`/truenas/protection`): snapshots and replication
   activity reported by the TrueNAS connection.
@@ -299,7 +299,7 @@ A recent backup and a failed task can both be genuine. In **Proxmox → Backups
 |---|---|
 | **Last backup** (**Backup** or **Age** at narrower widths) | The latest completed backup visible for the selected backup location, not the result of the latest task. A guest snapshot does not fill this column. |
 | **Task** | A collected task result for this workload, where the evidence establishes which task started last. It does not verify an artifact or replace its timestamp. |
-| **Posture** | Pulse's assessment of subject-linked protection evidence, not a synonym for either task success or backup age. A location filter does not recalculate this assessment. |
+| **Protection** (**Status** on a phone) | Pulse's assessment of subject-linked protection evidence, not a synonym for either task success or backup age. A location filter does not recalculate this assessment. |
 
 Expand the workload, including on a phone, to inspect **Latest task**: **Status**,
 **Started**, **Duration**, **Error** and **Task ID**, where reported. Keep the
@@ -371,8 +371,8 @@ protected. Compare one existing archive with the same workload in Pulse:
    Keep the native task's completion result separate from the archive's
    creation time. The PVE source names the inventory reader, not necessarily
    local storage: a PBS-backed storage target can also appear as a PVE file.
-3. Open **Coverage**, clear its posture filter and expand that same workload.
-   Read the posture explanation and **Provider evidence**: provider,
+3. Open **Coverage**, clear its Protection filter and expand that same workload.
+   Read the protection explanation and **Provider evidence**: provider,
    **Scope**, **Source**, **Reported outcome**, **History** and **Access**.
    A successful inventory read is not a backup-job completion result; keep task
    and restore-point states separate. Keep **All backup locations** for a
@@ -392,7 +392,7 @@ protected. Compare one existing archive with the same workload in Pulse:
 Use consistent private aliases when comparing installations: names, VMIDs and
 storage names can repeat. If the readings still disagree, report the running
 Pulse version, affected view, one archive's time/state and that workload's
-posture explanation and Provider evidence. Keep the full volume identifier,
+protection explanation and Provider evidence. Keep the full volume identifier,
 private paths, hostnames, credentials and full inventories out of public
 reports; retain the exact originals privately.
 

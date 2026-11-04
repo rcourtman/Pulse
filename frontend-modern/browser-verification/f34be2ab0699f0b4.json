@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "4d8a02b9f274706939cb7de5e0f54edb436a77fa",
+  "verified_at": "2026-11-03T23:35:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "aff1164c45875d9ecb59a372534f38d2723d644d213f08789f29440b010eb689",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "5dbe375674c40f605c0f7c31614d231fe4cc20443ab09867693a08f11cfae51b"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 700,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Mock stack built from this change: Coverage with protected, attention and not-evaluated rows",
+    "Header reads \"Protection\" at 1280 and 700, and \"Status\" at 390 and 320",
+    "Filter group is labelled \"Protection\"",
+    "A scan of text, title, aria-label and placeholder finds no \"posture\" in the default view or with a row expanded at 1280",
+    "Real protected rows read \"Protected\" on the phone; the word fits its cell at 390 and 320 (53px in 53px) with rows at 32px",
+    "No horizontal overflow at 390 or 320; name column keeps its width"
+  ],
+  "interactions": [
+    "Sorted the phone table with the renamed header: aria-sort changes and protected rows come into view",
+    "Expanded and collapsed a Coverage row at 1280",
+    "Opened the phone Filters panel and read the filter controls and count",
+    "Loaded Coverage fresh at each width and read the header and row words"
+  ]
+}
