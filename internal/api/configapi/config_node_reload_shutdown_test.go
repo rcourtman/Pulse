@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -37,6 +39,24 @@ func TestNodeRemovalKeepsIncompleteReloadUnavailable(t *testing.T) {
 	if err := p.SaveNodesConfig(instances, nil, nil); err != nil {
 		t.Fatal(err)
 	}
+	tokens := []config.APITokenRecord{{ID: "saved-fixture-agent", Hash: "synthetic-fixture-hash", Scopes: []string{config.ScopeAgentReport}}}
+	if err := p.SaveAPITokens(tokens); err != nil {
+		t.Fatal(err)
+	}
+	// These are actual persisted credential/key files, not substitute witnesses.
+	credentialFiles := func() map[string]string {
+		t.Helper()
+		files := make(map[string]string)
+		for _, name := range []string{".encryption.key", "api_tokens.json"} {
+			data, err := os.ReadFile(filepath.Join(p.GetConfigDir(), name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[name] = string(data)
+		}
+		return files
+	}
+	credentialsBefore := credentialFiles()
 	rm, err := monitoring.NewReloadableMonitor(cfg, persistence, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +87,9 @@ func TestNodeRemovalKeepsIncompleteReloadUnavailable(t *testing.T) {
 	h := &ConfigHandlers{
 		mtPersistence: persistence, mtMonitor: retired, defaultConfig: cfg,
 		defaultMonitor: monitor, defaultPersistence: p, runtime: defaultRuntimeDependencies(),
+		// The constructor normally owns this map. Retained inventory readback
+		// must not attempt unrelated cluster discovery against inert endpoints.
+		lastClusterDetection: map[string]time.Time{"keep-me": time.Now()},
 	}
 	rebind := func() {
 		h.SetMonitor(rm.GetMonitor())
@@ -122,6 +145,9 @@ func TestNodeRemovalKeepsIncompleteReloadUnavailable(t *testing.T) {
 	if saved == nil || !reflect.DeepEqual(saved.PVEInstances, instances[1:]) {
 		t.Fatal("saved removal lost the remaining endpoint, pause setting or TLS trust")
 	}
+	if !reflect.DeepEqual(credentialFiles(), credentialsBefore) {
+		t.Fatal("incomplete reload changed saved credentials or encryption key")
+	}
 	if m, err := retired.GetMonitor("default"); m != nil || err == nil {
 		t.Error("incomplete runtime reopened admission")
 	}
@@ -135,6 +161,9 @@ func TestNodeRemovalKeepsIncompleteReloadUnavailable(t *testing.T) {
 	rebind()
 	if rm.GetMultiTenantMonitor() == retired || rm.GetConfig() != cfg {
 		t.Fatal("completed drain did not recover through a distinct owner and canonical config")
+	}
+	if !reflect.DeepEqual(credentialFiles(), credentialsBefore) || !reflect.DeepEqual(cfg.APITokens, tokens) {
+		t.Fatal("recovered reload lost saved credentials or encryption key")
 	}
 	rec := httptest.NewRecorder()
 	h.HandleGetNodes(rec, httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil))

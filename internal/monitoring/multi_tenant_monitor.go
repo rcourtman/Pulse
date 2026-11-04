@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -321,6 +322,13 @@ func (mtm *MultiTenantMonitor) PeekMonitor(orgID string) (*Monitor, bool) {
 // Stop permanently closes admission and stops all tenant monitors. A new
 // manager, rather than a lookup on this retired one, owns replacement runtimes.
 func (mtm *MultiTenantMonitor) Stop() {
+	// Process shutdown remains best effort and logs each incomplete tenant.
+	// A reload must additionally check stop's result before replacing this
+	// manager: retained runtimes still own their saved state until drained.
+	_ = mtm.stop()
+}
+
+func (mtm *MultiTenantMonitor) stop() error {
 	log.Info().Msg("stopping MultiTenantMonitor and all tenant instances")
 
 	mtm.mu.Lock()
@@ -333,11 +341,14 @@ func (mtm *MultiTenantMonitor) Stop() {
 		orgIDs = append(orgIDs, orgID)
 	}
 	mtm.mu.Unlock()
+	var incomplete []error
 	for _, orgID := range orgIDs {
 		if err := mtm.removeTenant(orgID, false); err != nil {
 			log.Error().Err(err).Str("org_id", orgID).Msg("tenant shutdown incomplete; retaining runtime ownership and data")
+			incomplete = append(incomplete, err)
 		}
 	}
+	return errors.Join(incomplete...)
 }
 
 // RemoveTenant stops and removes a specific tenant's monitor.

@@ -173,7 +173,13 @@ func (rm *ReloadableMonitor) doReload() error {
 	// Stop the underlying multi-tenant monitor to ensure its global context is canceled
 	// and all child monitors are stopped.
 	if rm.mtMonitor != nil {
-		rm.mtMonitor.Stop()
+		if err := rm.mtMonitor.stop(); err != nil {
+			// Keep the retired manager as the owner of its incomplete loops and
+			// writers. Do not refresh the shared config or open replacement
+			// runtimes over their saved state. A later reload can finish cleanup
+			// once that independently owned work has actually returned.
+			return fmt.Errorf("reloadable monitor stop previous runtime: %w", err)
+		}
 	}
 
 	// Wait a moment for cleanup
