@@ -471,7 +471,7 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"/v1/provider-msp/eval-license",
 		"PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE",
 		"reusing existing evaluation license",
-		"could not reach the license server",
+		"license server rejected the evaluation request (HTTP ${http_status})",
 		"PULSE_PROVIDER_MSP_EVAL_EMAIL",
 		"PULSE_PROVIDER_MSP_SIGNUP_SOURCE",
 		`setup_stage: "images_ready"`,
@@ -729,12 +729,19 @@ func TestProviderMSPSetupLeavesPlatformRunning(t *testing.T) {
 	)
 	assertNotContainsAny(t, script, "Pulse Provider MSP setup prepared.")
 
-	// The closing summary points at Plan without claiming checkout is live,
-	// and no longer asks the provider to carry a lease signing key to anyone.
+	// The closing summary points at the actual licence status in Plan, not
+	// portal readiness, without claiming checkout is live or asking the
+	// provider to carry a lease signing key to anyone. Ignore prose wrapping.
 	summary := script[strings.Index(script, "Pulse Provider MSP is running."):]
 	summary = summary[:strings.Index(summary, "EOF")]
-	assertContainsAll(t, summary, "Open Plan in the portal to see whether", "Keep within two clients until Plan confirms a", "Manage billing")
-	assertNotContainsAny(t, summary, "must bind this key", "derive_lease_signing_public_key", "checkout is by Stripe", "applies within\nseconds")
+	assertContainsAll(t, strings.Join(strings.Fields(summary), " "),
+		"check Plan in the portal for this deployment's licence status",
+		"A successfully issued evaluation covers two clients",
+		"a running portal alone does not confirm active client MSP capabilities",
+		"Keep within two clients until Plan confirms a higher active limit",
+		"Manage billing",
+	)
+	assertNotContainsAny(t, summary, "Plan: the evaluation covers two clients", "must bind this key", "derive_lease_signing_public_key", "checkout is by Stripe", "applies within\nseconds")
 
 	sequence := "  ensure_eval_license\n  validate_compose_config\n  start_provider_services\n  check_portal_readiness\n  run_install_proof_if_requested\n  print_summary\n"
 	if !strings.Contains(script, sequence) {
@@ -1041,7 +1048,7 @@ validate_compose_config
 			if strings.Count(string(output), "same-compose-config\n") != 2 {
 				t.Fatalf("pre/final validation did not both use the same config: %s", output)
 			}
-			if skip == "0" && !strings.Contains(string(output), "could not reach the license server") {
+			if skip == "0" && !strings.Contains(string(output), "evaluation license request failed (curl exit 7)") {
 				t.Fatal("fixture did not exercise unavailable licence issuance")
 			}
 			after, err := os.ReadFile(filepath.Join(dir, ".env"))
