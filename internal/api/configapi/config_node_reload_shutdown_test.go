@@ -39,7 +39,7 @@ func TestNodeRemovalKeepsIncompleteReloadUnavailable(t *testing.T) {
 	if err := p.SaveNodesConfig(instances, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	tokens := []config.APITokenRecord{{ID: "saved-fixture-agent", Hash: "synthetic-fixture-hash", Scopes: []string{config.ScopeAgentReport}}}
+	tokens := []config.APITokenRecord{{ID: "saved-fixture-agent", OrgID: "default", Hash: "synthetic-fixture-hash", Scopes: []string{config.ScopeAgentReport}}}
 	if err := p.SaveAPITokens(tokens); err != nil {
 		t.Fatal(err)
 	}
