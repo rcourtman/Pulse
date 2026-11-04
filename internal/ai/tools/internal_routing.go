@@ -10,6 +10,10 @@ func (e *PulseToolExecutor) resolveResourceLocation(reference string) models.Res
 	if err != nil {
 		return models.ResourceLocation{Name: reference}
 	}
+	return resourceLocationInReadState(rs, reference)
+}
+
+func resourceLocationInReadState(rs unifiedresources.ReadState, reference string) models.ResourceLocation {
 	if selected := unifiedresources.ResolveResourceReferenceContext(rs, reference); selected.Resource != nil {
 		return selected.Location
 	}

@@ -598,9 +598,12 @@ and adds `instance` and the canonical `id` only to rows whose shown name repeats
 Its command flags come from `connectedAgentForNode`, the same answer command
 routing uses. A name with no node record behind it routes by hostname only while
 no node has that name and no more than one connection's guests use it, and an
-offline linked agent is never replaced by a hostname match.
+offline linked agent is never replaced by a hostname match. `pulse_query` list and
+search answer a node's flag, and a guest's `node_command_agent_connected`, through
+that lookup, and add `id` and `instance` only to node rows whose shown name repeats.
 `TestCommandConnectivityDoesNotReplaceMonitoringEvidence`,
-`TestTopologyOmitsUnobservedCommandConnections` and
+`TestTopologyOmitsUnobservedCommandConnections`,
+`TestQueryCommandFlagsFollowTheNodeNotItsName` and
 `TestAssistantInventoryDoesNotInventCommandConnectionObservations` cover these
 projection and continuity boundaries. Existing persisted tool records are not
 rewritten, and this contract does not qualify model diagnosis or recovery.
