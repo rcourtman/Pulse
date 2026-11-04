@@ -24,8 +24,9 @@ print_success() { printf 'SUCCESS: %s\n' "$*"; }
 PULSE_WAS_ACTIVE="$PRIOR_ACTIVE"
 STARTS=0
 QUERIES=0
-sleep() { :; }
+sleep() { : "$((SECONDS += $1))"; }
 timeout() {
+    [[ "$1" != -k ]] || shift 2
     local duration="$1"; shift
     printf '%s %s\n' "$duration" "$*" >> "$FIXTURE/deadlines"
     [[ "$FAULT:$*" != "start-timeout:systemctl start "* ]] || return 124

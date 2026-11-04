@@ -887,6 +887,7 @@ PORTAL_CERTIFICATE_READY=0
 PORTAL_READINESS_REPORT=""
 check_portal_readiness() {
   local env_path domain waited acme_error="" reason name missing=() missing_list
+  local certificate certificate_sans
   env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
   domain="$(env_value DOMAIN "${env_path}")"
   [[ "${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}" =~ ^[0-9]+$ ]] \
@@ -894,8 +895,14 @@ check_portal_readiness() {
 
   log "waiting up to ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s for the certificate for ${domain} and *.${domain}"
   for (( waited = 0; waited <= PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS; waited += 5 )); do
-    if timeout 10 openssl s_client -connect 127.0.0.1:443 -servername "${domain}" </dev/null 2>/dev/null \
-      | openssl x509 -noout -ext subjectAltName 2>/dev/null | grep -qF "DNS:*.${domain}"; then
+    # s_client normally prints the peer's certificate even when it is expired,
+    # untrusted or for another host. Require verification before reading its
+    # SANs, then match the whole wildcard name, not a different domain's prefix.
+    if certificate="$(timeout 10 openssl s_client -connect 127.0.0.1:443 -servername "${domain}" \
+      -verify_return_error -verify_hostname "${domain}" </dev/null 2>/dev/null)" \
+      && certificate_sans="$(printf '%s\n' "${certificate}" | openssl x509 -noout -ext subjectAltName 2>/dev/null)" \
+      && printf '%s\n' "${certificate_sans}" | tr ',' '\n' \
+        | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -qxF "DNS:*.${domain}"; then
       PORTAL_CERTIFICATE_READY=1
       break
     fi
@@ -912,16 +919,16 @@ check_portal_readiness() {
   done
 
   if [[ "${PORTAL_CERTIFICATE_READY}" -eq 1 && "${#missing[@]}" -eq 0 ]]; then
-    PORTAL_READINESS_REPORT="Certificate: issued for ${domain} and *.${domain}."
+    PORTAL_READINESS_REPORT="Certificate: verified on this host for ${domain} and *.${domain}."
   else
     PORTAL_READINESS_REPORT="NOT READY YET:"
     if [[ "${PORTAL_CERTIFICATE_READY}" -ne 1 ]]; then
       if [[ -n "${acme_error}" ]]; then
         reason="$(explain_acme_failure "${acme_error}")"
       else
-        reason="No certificate after ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s and no error from Traefik yet; it may still arrive."
+        reason="No trusted, current certificate covering ${domain} and *.${domain} after ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s. Check Traefik's ACME logs and this host's clock; issuance may still be pending."
       fi
-      PORTAL_READINESS_REPORT+=$'\n'"  - No TLS certificate yet, so browsers and agents cannot connect."
+      PORTAL_READINESS_REPORT+=$'\n'"  - No verified TLS certificate yet; browsers and agents may refuse the connection."
       PORTAL_READINESS_REPORT+=$'\n'"    ${reason}"
       [[ -n "${acme_error}" ]] && PORTAL_READINESS_REPORT+=$'\n'"    Traefik said: ${acme_error}"
     fi
