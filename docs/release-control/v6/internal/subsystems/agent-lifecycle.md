@@ -4169,7 +4169,11 @@ unauthenticated bootstrap behavior.
    Reconfiguring the checker resets the backoff so command execution enabled
    at runtime retries immediately. A warn log is diagnosis, not discovery, so
    the capability must still be provisioned up front rather than diagnosed
-   later. The `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` allowlist must gate
+   later. These commands go only to the agent linked to the guest's node on its
+   connection, not to whichever agent shares the node's name, and a node with
+   no linked agent logs once at warn and is skipped (#2681). Agent registration
+   and session admission are unchanged. The
+   `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` allowlist must gate
    the socket probe as well as inventory collection, so opting into specific
    guests never leaves every other guest probed each cycle.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.

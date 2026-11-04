@@ -1670,22 +1670,7 @@ func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {
 		return
 	}
 
-	execFunc := func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
-		agentID, found := r.agentExecServer.GetAgentForHost(hostname)
-		if !found {
-			return "", -1, fmt.Errorf("no agent connected for host %s", hostname)
-		}
-		result, err := r.agentExecServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-			RequestID: fmt.Sprintf("docker-check-%d", time.Now().UnixNano()),
-			Command:   command,
-			Timeout:   timeout,
-			Trusted:   true,
-		})
-		if err != nil {
-			return "", -1, err
-		}
-		return result.Stdout + result.Stderr, result.ExitCode, nil
-	}
+	execFunc := proxmoxGuestDockerCommandExecutor(r.agentExecServer, m)
 
 	allowedVMIDs, invalidVMIDs := monitoring.ParseProxmoxGuestDockerInventoryVMIDs(r.config.ProxmoxGuestDockerInventoryVMIDs)
 	if len(invalidVMIDs) > 0 {

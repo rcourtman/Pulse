@@ -9618,3 +9618,9 @@ A provider MSP client's own workspace stays reachable without a valid lease, thr
 `isHostedWorkspaceOpen` in `internal/api/middleware_tenant.go`, so its recovery views
 keep working during the fall back to Community behaviour. Recovery routes and their
 payloads are unchanged.
+
+### Proxmox guest Docker routing opens no storage path (4 November 2026)
+
+`internal/api/proxmox_guest_docker_routing.go` changes which agent runs the
+existing Docker socket probe and inventory commands. It reads and writes no backup,
+restore or storage data, and opens no new storage or recovery path.

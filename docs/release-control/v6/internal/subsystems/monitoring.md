@@ -4957,7 +4957,10 @@ service-history reads plus denial/recovery without fabricated samples.
    detections from before the current Docker checker configuration must be
    rechecked after monitor/router startup, so explicit guest Docker inventory
    can repopulate immediately after backend restarts instead of waiting for the
-   normal negative-cache cadence.
+   normal negative-cache cadence. Both commands run only through the agent
+   `Monitor.ProxmoxNodeAgentForContainer` proves is on the guest's node on its
+   connection, never through a lookup by node name, and a guest with no proven
+   agent is skipped without a failure streak.
 15. Add or change mock-mode Discovery context through the canonical mock
     fixture graph. Mock Discovery records must be derived from the same authored
     state graph as mock nodes, guests, Docker hosts, containers, and Kubernetes
@@ -8560,7 +8563,23 @@ result caching (minipc probe-storm incident, 2026-08-20):
   node on the existing 1m→30m backoff schedule (a node-level stall such as
   NFS flapping fails every guest, including newly appearing ones); any
   completed success closes the breaker. Checker reconfiguration resets
-  claims, streaks, and breakers.
+  claims, streaks, and breakers. The breaker belongs to one node on one
+  connection, because node names repeat across connections.
+- **Proven node agent (#2681).** A command goes only to the agent whose link
+  monitoring holds on both sides for the guest's node on its connection
+  (`models.Host.LinkedNodeID`, `models.Node.LinkedAgentID`), with one machine
+  added through two connections counted as one node. A hostname match proves
+  nothing, two agents claiming one node prove neither, and an operator's split
+  ends the proof at once. With no proof `ErrNoProvenProxmoxNodeAgent` skips the
+  guest: nothing is dispatched, no streak or breaker builds, the guest is left
+  unchecked so a skipped restart is not lost, and the next poll decides again.
+  A linked agent with no live session stays a probe failure. The router finds
+  the session by agent ID and hostname. Only a session bound to an earlier ID
+  falls back to the agent's token, and only when live state shows no other agent
+  owns that session or holds the token under an equivalent hostname, because the
+  command server admits one session per hostname and a second machine must not
+  borrow the first one's. A node whose endpoint address the agent does not report
+  (NAT, proxy) loses its automatic link on each node poll and needs a manual link.
 
 Proofs in `internal/monitoring/monitor_docker_test.go`:
 `TestCheckContainersForDocker_InFlightProbeNotReissued`,
@@ -8568,6 +8587,11 @@ Proofs in `internal/monitoring/monitor_docker_test.go`:
 `TestCheckContainersForDocker_AbandonedProbeHoldsClaimWithoutFailure`,
 `TestCheckContainersForDocker_NodeCircuitBreaker`,
 `TestCollectProxmoxGuestDockerInventory_InFlightAndExpiredContext`.
+Routing proofs: `TestProxmoxNodeAgentForContainer` and
+`TestCheckContainersForDocker_NodeCircuitBreakerScopedByConnection` in
+`internal/monitoring/docker_detection_test.go`, and
+`TestProxmoxGuestDockerProbesStayOnTheGuestsOwnNode` in
+`internal/api/proxmox_guest_docker_routing_test.go`, which drives real sessions.
 
 ### Docker storage inventory is decoupled from live telemetry
 

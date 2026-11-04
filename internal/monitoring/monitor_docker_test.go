@@ -2298,7 +2298,8 @@ type blockingDockerChecker struct {
 	errs    map[int]error
 }
 
-func (c *blockingDockerChecker) CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error) {
+func (c *blockingDockerChecker) CheckDockerInContainer(ctx context.Context, container models.Container) (bool, error) {
+	vmid := container.VMID
 	c.mu.Lock()
 	c.calls = append(c.calls, vmid)
 	first := len(c.calls) == 1
@@ -2494,7 +2495,7 @@ func TestCheckContainersForDocker_NodeCircuitBreaker(t *testing.T) {
 	if got := checker.callCount(); got != 3 {
 		t.Fatalf("expected 3 dispatches in first cycle, got %d", got)
 	}
-	if !monitor.dockerNodeProbeBreakerOpen("node1") {
+	if !monitor.dockerNodeProbeBreakerOpen(models.Container{Node: "node1"}) {
 		t.Fatalf("expected node1 breaker open after %d consecutive failures", proxmoxGuestDockerNodeFailureThreshold)
 	}
 
@@ -2514,7 +2515,7 @@ func TestCheckContainersForDocker_NodeCircuitBreaker(t *testing.T) {
 	// Breaker backoff expires: node1 is retried, and the success closes the
 	// breaker.
 	monitor.dockerProbeFailureMu.Lock()
-	monitor.dockerNodeProbeFailures["node1"].lastAt = time.Now().Add(-time.Hour)
+	monitor.dockerNodeProbeFailures[dockerNodeProbeKey(models.Container{Node: "node1"})].lastAt = time.Now().Add(-time.Hour)
 	monitor.dockerProbeFailureMu.Unlock()
 	monitor.CheckContainersForDocker(context.Background(), []models.Container{
 		{ID: "ct-4", VMID: 104, Name: "new-on-bad-node", Node: "node1", Status: "running"},
@@ -2523,7 +2524,7 @@ func TestCheckContainersForDocker_NodeCircuitBreaker(t *testing.T) {
 		t.Fatalf("expected node1 retried after breaker backoff, got %d dispatches", got)
 	}
 	monitor.dockerProbeFailureMu.Lock()
-	_, stillTracked := monitor.dockerNodeProbeFailures["node1"]
+	_, stillTracked := monitor.dockerNodeProbeFailures[dockerNodeProbeKey(models.Container{Node: "node1"})]
 	monitor.dockerProbeFailureMu.Unlock()
 	if stillTracked {
 		t.Fatalf("expected breaker to close after a successful command on node1")

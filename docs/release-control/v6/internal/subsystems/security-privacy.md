@@ -1703,6 +1703,9 @@ tokens, and path-normalization variants.
     path must remain read-only, VMID-allowlistable, and limited to Docker
     host/container summary fields plus aggregate stats, with no
     `docker inspect`, environment, mount, file, command, or process collection.
+    Its trusted `pct exec` commands go only to the agent proven to run on the
+    guest's node on its connection, so a same-named node elsewhere can neither
+    run them nor have its guest's answer attributed here (#2681).
 
 13. A rejected legacy RBAC import must not destroy the store. The import is
     transactional and leaves the legacy files in place, so a failure leaves the
