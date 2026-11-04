@@ -42,6 +42,9 @@ type SystemSettingsMonitor interface {
 
 // SystemSettingsHandler handles system settings
 type SystemSettingsHandler struct {
+	// Serialize the complete persisted read/modify/apply transaction. Locking
+	// only the final writes would still lose fields from concurrent partial saves.
+	updateMu                 sync.Mutex
 	stateMu                  sync.RWMutex
 	config                   *config.Config
 	persistence              *config.ConfigPersistence
@@ -147,6 +150,20 @@ func (h *SystemSettingsHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenan
 	if defaultMonitor != nil {
 		h.defaultMonitor = defaultMonitor
 	}
+}
+
+// updateInstanceConfig shares the actual mutation/capture boundary with tenant
+// construction. Only config writes belong in fn; initialization and runtime
+// side effects stay outside it. The call is synchronous, never queued.
+func (h *SystemSettingsHandler) updateInstanceConfig(fn func()) {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	h.stateMu.RUnlock()
+	if updater, ok := mtMonitor.(interface{ UpdateInstanceSettings(func()) }); ok && updater != nil {
+		updater.UpdateInstanceSettings(fn)
+		return
+	}
+	fn()
 }
 
 // forEachNotificationManager applies fn to the notification manager of every
@@ -850,6 +867,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
+	h.updateMu.Lock()
+	defer h.updateMu.Unlock()
+
 	if !h.ensureWriteAccess(w, r) {
 		return
 	}
@@ -1062,69 +1082,81 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
-	// ---- Apply all in-memory config mutations (safe: disk is committed) ----
-	if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {
-		newInterval := time.Duration(settings.PVEPollingInterval) * time.Second
-		if newInterval < 10*time.Second {
-			newInterval = 10 * time.Second
+	// ---- Apply config and capture tenant runtime settings together ----
+	// Disk has committed. Do not let a generic visitor read a partial config,
+	// or run runtime callbacks while holding the constructor-template lock.
+	guestDockerInventoryChanged, telemetryChanged := false, false
+	h.updateInstanceConfig(func() {
+		if _, ok := rawRequest["pvePollingInterval"]; ok && settings.PVEPollingInterval > 0 {
+			newInterval := time.Duration(settings.PVEPollingInterval) * time.Second
+			if newInterval < 10*time.Second {
+				newInterval = 10 * time.Second
+			}
+			h.config.PVEPollingInterval = newInterval
 		}
-		h.config.PVEPollingInterval = newInterval
-	}
-	if allowedOriginsUpdated && !allowedOriginsLocked {
-		h.config.AllowedOrigins = settings.AllowedOrigins
-	}
-	if settings.ConnectionTimeout > 0 {
-		h.config.ConnectionTimeout = time.Duration(settings.ConnectionTimeout) * time.Second
-	}
-	if settings.PBSPollingInterval > 0 {
-		h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
-	}
-	if settings.PMGPollingInterval > 0 {
-		h.config.PMGPollingInterval = time.Duration(settings.PMGPollingInterval) * time.Second
-	}
-	if _, ok := rawRequest["backupPollingInterval"]; ok {
-		if settings.BackupPollingInterval <= 0 {
-			h.config.BackupPollingInterval = 0
-		} else {
-			h.config.BackupPollingInterval = time.Duration(settings.BackupPollingInterval) * time.Second
+		if allowedOriginsUpdated && !allowedOriginsLocked {
+			h.config.AllowedOrigins = settings.AllowedOrigins
 		}
-	}
-	if settings.BackupPollingEnabled != nil {
-		h.config.EnableBackupPolling = *settings.BackupPollingEnabled
-	}
-	h.config.UpdateChannel = settings.UpdateChannel
-	h.config.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
-	h.config.DiscoveryEnabled = settings.DiscoveryEnabled
-	if settings.DiscoverySubnet != "" {
-		h.config.DiscoverySubnet = settings.DiscoverySubnet
-	}
-	h.config.Discovery = config.CloneDiscoveryConfig(settings.DiscoveryConfig)
-	if tempToggleRequested {
-		h.config.TemperatureMonitoringEnabled = settings.TemperatureMonitoringEnabled
-	}
-	h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
-	if guestDockerInventoryToggleRequested &&
-		h.config.EnableProxmoxGuestDockerInventory != settings.EnableProxmoxGuestDockerInventory {
-		h.config.EnableProxmoxGuestDockerInventory = settings.EnableProxmoxGuestDockerInventory
+		if settings.ConnectionTimeout > 0 {
+			h.config.ConnectionTimeout = time.Duration(settings.ConnectionTimeout) * time.Second
+		}
+		if settings.PBSPollingInterval > 0 {
+			h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
+		}
+		if settings.PMGPollingInterval > 0 {
+			h.config.PMGPollingInterval = time.Duration(settings.PMGPollingInterval) * time.Second
+		}
+		if _, ok := rawRequest["backupPollingInterval"]; ok {
+			if settings.BackupPollingInterval <= 0 {
+				h.config.BackupPollingInterval = 0
+			} else {
+				h.config.BackupPollingInterval = time.Duration(settings.BackupPollingInterval) * time.Second
+			}
+		}
+		if settings.BackupPollingEnabled != nil {
+			h.config.EnableBackupPolling = *settings.BackupPollingEnabled
+		}
+		// The background updater and full reload share config.Mu for channel
+		// selection; the ordinary settings writer must publish on it too.
+		config.Mu.Lock()
+		h.config.UpdateChannel = settings.UpdateChannel
+		h.config.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
+		config.Mu.Unlock()
+		h.config.DiscoveryEnabled = settings.DiscoveryEnabled
+		if settings.DiscoverySubnet != "" {
+			h.config.DiscoverySubnet = settings.DiscoverySubnet
+		}
+		h.config.Discovery = config.CloneDiscoveryConfig(settings.DiscoveryConfig)
+		if tempToggleRequested {
+			h.config.TemperatureMonitoringEnabled = settings.TemperatureMonitoringEnabled
+		}
+		h.config.DisableDockerUpdateActions = settings.DisableDockerUpdateActions
+		if guestDockerInventoryToggleRequested &&
+			h.config.EnableProxmoxGuestDockerInventory != settings.EnableProxmoxGuestDockerInventory {
+			h.config.EnableProxmoxGuestDockerInventory = settings.EnableProxmoxGuestDockerInventory
+			guestDockerInventoryChanged = true
+		}
+		// A null/omitted preference is not a transition, even if disk and runtime
+		// differ. Repeated saves must not restart the telemetry sender either.
+		if updates.TelemetryEnabled != nil && h.config.TelemetryEnabled != *updates.TelemetryEnabled {
+			h.config.TelemetryEnabled = *updates.TelemetryEnabled
+			telemetryChanged = true
+		}
+		if _, ok := rawRequest["publicURL"]; ok {
+			h.config.PublicURL = settings.PublicURL
+			// Operator input, even empty, supersedes any auto-detected guess.
+			h.config.PublicURLAutoDetected = false
+		}
+	})
+	if guestDockerInventoryChanged {
 		if h.guestDockerInventoryToggleFunc != nil {
 			h.guestDockerInventoryToggleFunc()
 		}
-		log.Info().
-			Bool("enabled", settings.EnableProxmoxGuestDockerInventory).
+		log.Info().Bool("enabled", settings.EnableProxmoxGuestDockerInventory).
 			Msg("Proxmox guest Docker inventory opt-in changed via settings")
 	}
-	// A null/omitted preference is not a transition, even if disk and runtime
-	// differ. Repeated saves must not restart the telemetry sender either.
-	if updates.TelemetryEnabled != nil && h.config.TelemetryEnabled != *updates.TelemetryEnabled {
-		h.config.TelemetryEnabled = *updates.TelemetryEnabled
-		if h.telemetryToggleFunc != nil {
-			h.telemetryToggleFunc(*updates.TelemetryEnabled)
-		}
-	}
-	if _, ok := rawRequest["publicURL"]; ok {
-		h.config.PublicURL = settings.PublicURL
-		// Operator input, even empty, supersedes any auto-detected guess.
-		h.config.PublicURLAutoDetected = false
+	if telemetryChanged && h.telemetryToggleFunc != nil {
+		h.telemetryToggleFunc(*updates.TelemetryEnabled)
 	}
 
 	// ---- Side effects (discovery, temperature, notifications) ----

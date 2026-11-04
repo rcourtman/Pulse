@@ -216,9 +216,7 @@ func TestTenantDeletionRetainsBlockedAlertPassThenRemovesCompletedRuntime(t *tes
 	if err := manager.BeginTenantDeletion("alert-owner"); err == nil {
 		t.Fatal("deletion accepted an unfinished alert pass")
 	}
-	if got, ok := manager.PeekMonitor("alert-owner"); !ok || got != monitor {
-		t.Fatal("blocked alert writer lost its runtime owner")
-	}
+	assertTenantCleanupOwner(t, manager, "alert-owner", monitor)
 	manager.FinishTenantDeletion("alert-owner")
 	if _, err := manager.GetMonitor("alert-owner"); err == nil {
 		t.Fatal("deferred cleanup released the unfinished writer's guard")
