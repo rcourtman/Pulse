@@ -18,8 +18,7 @@ func metadataMonitorFixture(size int) *Monitor {
 	stamp := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	rate := 64.0
 	state.PVEBackups = models.PVEBackups{BackupTasks: []models.BackupTask{{ID: "task", VMID: 100, Status: "OK"}}}
-	state.PBSBackups = []models.PBSBackup{{ID: "pbs", BackupType: "vm", VMID: "100000", Files: []string{"index.json.blob"}, Protected: true, BackupTime: stamp}}
-	state.VMs = []models.VM{{ID: "guest", VMID: 100000, Instance: "pve", Node: "node"}}
+	state.PBSBackups = []models.PBSBackup{{ID: "pbs", Files: []string{"index.json.blob"}, Protected: true, BackupTime: stamp}}
 	state.PMGBackups = []models.PMGBackup{{ID: "pmg", BackupTime: stamp}}
 	state.ReplicationJobs = []models.ReplicationJob{{ID: "job", LastSyncTime: &stamp, NextSyncTime: &stamp, RateLimitMbps: &rate}}
 	state.ConnectionHealth = map[string]bool{"pve": true, "pbs": false}
@@ -31,11 +30,6 @@ func metadataMonitorFixture(size int) *Monitor {
 	}
 	if size > 0 {
 		state.KubernetesClusters = []models.KubernetesCluster{cluster}
-		confirmations := make([]models.PBSGuestConfirmation, 0, size)
-		for i := 0; i < size; i++ {
-			confirmations = append(confirmations, models.PBSGuestConfirmation{Storage: "pbs", BackupType: "vm", VMID: i + 1, Time: stamp.Unix()})
-		}
-		state.UpdatePBSGuestConfirmationsForInstance("pve", confirmations)
 	}
 	return &Monitor{state: state}
 }
@@ -167,6 +161,36 @@ func TestMetadataMonitorProjectionAllocationScaling(t *testing.T) {
 		if grown >= old {
 			t.Errorf("%s scoped=%.0f did not reduce full-estate=%.0f allocations", reader.name, grown, old)
 		}
+	}
+}
+
+// A snapshot with a live guest takes the attribution path. Guests and storage views
+// it has nothing to do with must not add to the read.
+func TestAttributedPBSBackupsAllocationIgnoresUnrelatedEstate(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, false)
+	defer mustSetMockEnabled(t, previous)
+	stamp := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	fixture := func(size int) *Monitor {
+		state := models.NewState()
+		state.PBSBackups = []models.PBSBackup{{ID: "pbs", BackupType: "vm", VMID: "100000", Files: []string{"index.json.blob"}, BackupTime: stamp}}
+		state.VMs = []models.VM{{ID: "guest", VMID: 100000, Instance: "pve", Node: "node"}}
+		confirmations := make([]models.PBSGuestConfirmation, 0, size)
+		for i := 0; i < size; i++ {
+			state.VMs = append(state.VMs, models.VM{ID: fmt.Sprint(i), VMID: i + 1, Instance: "pve", Node: "node"})
+			confirmations = append(confirmations, models.PBSGuestConfirmation{Storage: "pbs", BackupType: "vm", VMID: i + 1, Time: stamp.Unix()})
+		}
+		state.UpdatePBSGuestConfirmationsForInstance("pve", confirmations)
+		return &Monitor{state: state}
+	}
+	small, large := fixture(0), fixture(1000)
+	if got := small.AttributedPBSBackupsSnapshot(); len(got) != 1 || got[0].GuestInstance != "pve" {
+		t.Fatalf("attributed = %+v, want the row on its guest", got)
+	}
+	baseline := testing.AllocsPerRun(10, func() { metadataBenchmarkResult = small.AttributedPBSBackupsSnapshot() })
+	grown := testing.AllocsPerRun(10, func() { metadataBenchmarkResult = large.AttributedPBSBackupsSnapshot() })
+	if grown != baseline {
+		t.Errorf("unrelated estate increased allocations: small=%.0f large=%.0f", baseline, grown)
 	}
 }
 
