@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### A namespace named after a connection settles a shared node name (4 November 2026)
+
+`NamespaceLocationScore` ranks exact node, exact connection, node suffix, then
+connection suffix. Connection `Hetzner pmx1` ends in node name `pmx1`, which another
+installation can also use, so namespace `hetzner-pmx1` used to count as a node match
+on both and tie. It now goes to that connection (#2681). Guests a namespace fits at
+the same rank still score the same, as with a namespace equal to the shared node
+name, so it settles nothing between them (#2292, #1639). A guest-name comment or an
+exclusive storage view only settles guests at the same rank, so a suffix match they
+favour now loses to an exact name it used to tie with. This changes only which guest
+a snapshot links to. It opens no new storage or recovery path.
+
 ### PBS restore points use the same attribution as guest badges (4 November 2026)
 
 `selectPBSGuestCandidate` ranks candidates with `BackupGuestMatchScore`, as

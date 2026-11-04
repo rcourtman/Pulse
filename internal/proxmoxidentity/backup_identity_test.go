@@ -70,6 +70,82 @@ func TestBackupGuestMatchScoreRanksNodeMatchAboveClusterEntrypoint(t *testing.T)
 	}
 }
 
+// Two installations reuse node name pmx1, and one connection's name ends in it
+// (#2681). A namespace named after that connection says which installation wrote
+// the snapshot. Anything both guests fit equally stays a tie (#1639, #2292).
+func TestBackupGuestMatchScoreConnectionNamespaceSettlesSharedNodeName(t *testing.T) {
+	const hetzner, home, node = "Hetzner pmx1", "Home", "pmx1"
+	score := func(namespace, instance string) int {
+		return BackupGuestMatchScore(namespace, "100", "100", "docker1", instance, node)
+	}
+
+	for _, tc := range []struct{ namespace, owner, other string }{
+		{"Hetzner pmx1", hetzner, home},
+		{"hetzner-pmx1", hetzner, home},
+		{"Home", home, hetzner},
+	} {
+		t.Run(tc.namespace, func(t *testing.T) {
+			owner, other := score(tc.namespace, tc.owner), score(tc.namespace, tc.other)
+			if owner <= other {
+				t.Fatalf("namespace %q scores %s = %d, %s = %d, want the named connection ahead",
+					tc.namespace, tc.owner, owner, tc.other, other)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name, namespace string
+		positive        bool
+	}{
+		{"the shared node name", "pmx1", true},
+		{"a longer label ending in the node name", "site-pmx1", true},
+		{"a parent path ahead of the connection name", "prod/hetzner-pmx1", true},
+		{"only part of the connection name", "hetzner", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			first, second := score(tc.namespace, hetzner), score(tc.namespace, home)
+			if first != second {
+				t.Fatalf("namespace %q scores %s = %d, %s = %d, want a tie", tc.namespace, hetzner, first, home, second)
+			}
+			if (first > 0) != tc.positive {
+				t.Fatalf("namespace %q scores %d, want positive = %v", tc.namespace, first, tc.positive)
+			}
+		})
+	}
+
+	// A guest-name comment is weaker than the namespace naming a connection.
+	if got, other := score("hetzner-pmx1", hetzner),
+		BackupGuestMatchScore("hetzner-pmx1", "docker1", "100", "docker1", home, node); got <= other {
+		t.Fatalf("connection namespace = %d, should outrank node suffix+comment = %d", got, other)
+	}
+}
+
+func TestNamespaceLocationScoreRanksExactNamesAboveSuffixes(t *testing.T) {
+	for _, tc := range []struct {
+		name, namespace                                    string
+		strongInstance, strongNode, weakInstance, weakNode string
+	}{
+		{"exact connection over node suffix", "hetzner-pmx1", "Hetzner pmx1", "pmx1", "Home", "pmx1"},
+		{"exact connection on another node over node suffix", "hetzner-pmx1", "Hetzner pmx1", "node7", "Home", "pmx1"},
+		{"exact connection with no node over node suffix", "hetzner-pmx1", "Hetzner pmx1", "", "Home", "pmx1"},
+		{"exact node over exact connection", "delly", "other", "delly", "delly", "minipc"},
+		{"exact node over exact connection that also suffix-matches its node", "pve", "Home", "pve", "pve", "site-pve"},
+		{"exact node over node suffix", "nat", "other", "nat", "home", "pve-nat"},
+		{"exact connection over connection suffix", "nat", "nat", "pve1", "pve-nat", "pve2"},
+		{"node suffix over connection suffix", "site-pve", "other", "pve", "pve", "minipc"},
+		{"connection suffix over nothing", "nat", "pve-nat", "pve1", "home", "pve2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			strong := NamespaceLocationScore(tc.namespace, tc.strongInstance, tc.strongNode)
+			weak := NamespaceLocationScore(tc.namespace, tc.weakInstance, tc.weakNode)
+			if strong <= weak {
+				t.Fatalf("namespace %q scores %s/%s = %d, %s/%s = %d, want the first ahead",
+					tc.namespace, tc.strongInstance, tc.strongNode, strong, tc.weakInstance, tc.weakNode, weak)
+			}
+		})
+	}
+}
+
 func TestBackupGuestMatchScoreNodeVMIDNameComment(t *testing.T) {
 	const comment = "pdm21.21008.pulse"
 	if got := BackupGuestMatchScore("", comment, "21008", "pulse", "cluster-a", "pdm21"); got <= 0 {
