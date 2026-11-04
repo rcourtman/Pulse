@@ -1762,6 +1762,7 @@
         return;
       }
       var loginState = deps.store.getLoginState();
+      if (loginState.request.pending) return;
       var email = String(loginState.emailValue || "").trim();
       if (!email) {
         var input = getElement2("portal-login-email");
@@ -1796,24 +1797,23 @@
             error instanceof PortalAPIError && error.status === 429 ? "Too many requests. Please wait a moment and try again." : "Network error. Please check your connection and try again."
           );
         });
+        getElement2("portal-login-email")?.focus();
       }
     }
+    document.addEventListener("submit", function(event) {
+      var form = event.target;
+      if (!(form instanceof HTMLFormElement) || form.getAttribute("data-portal-form") !== "sign-in") return;
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      void sendMagicLink();
+    });
     document.addEventListener("click", function(event) {
       var portalActionEl = asHTMLElement2(event.target)?.closest("[data-portal-action]");
       if (portalActionEl) {
         var portalAction = portalActionEl.getAttribute("data-portal-action") || "";
         switch (portalAction) {
-          case "send-magic-link":
-            event.preventDefault();
-            void sendMagicLink();
-            return;
           case "resend-magic-link":
             event.preventDefault();
-            deps.store.updateLoginState(function(nextState) {
-              nextState.success = false;
-              nextState.successMessage = "";
-              resetMutationState(nextState.request);
-            });
             void sendMagicLink();
             return;
           default:
@@ -3830,10 +3830,10 @@
     var providerMode = context.bootstrap.provider_hosted_mode === true;
     var statusHTML = "";
     if (context.loginState.request.error) {
-      statusHTML = '<div class="billing-status visible error">' + escapeHTML(context.loginState.request.error) + "</div>";
+      statusHTML = '<div class="billing-status visible error" role="alert">' + escapeHTML(context.loginState.request.error) + "</div>";
     } else if (context.loginState.success) {
       var successMessage = context.loginState.successMessage || "If that email is registered, a sign-in link is on the way.";
-      statusHTML = '<div class="billing-status visible success">' + escapeHTML(successMessage) + '<br><br><strong>Need another link?</strong> <a href="#" data-portal-action="resend-magic-link">Send it again</a>.</div>';
+      statusHTML = '<div class="billing-status visible success" role="status">' + escapeHTML(successMessage) + '<br><br><strong>Need another link?</strong> <a href="#" data-portal-action="resend-magic-link">Send it again</a>.</div>';
     }
     var signupHTML = hasSignupPath(context.signupPath) ? '<p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>' : "";
     var introHTML = providerMode ? '<h1>Sign in to Pulse Account</h1><p>This portal manages the client workspaces on your Pulse control plane.</p><div class="portal-auth-scope-list" aria-label="Pulse Account scope">' + renderAuthScopeRow("Clients", "Add clients, follow onboarding, and review client health and alerts.") + renderAuthScopeRow("Access", "Invite provider staff and keep every person on the smallest useful role.") + renderAuthScopeRow("Isolation", "Each client runs in its own workspace boundary; opening a client hands you into that boundary.") + "</div>" : '<h1>Sign in to Pulse Account</h1><p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p><div class="portal-auth-scope-list" aria-label="Pulse Account scope">' + renderAuthScopeRow("Workspaces", "Open hosted workspaces and review workspace state.") + renderAuthScopeRow("Access", "Review account access and manage roles when permitted.") + renderAuthScopeRow("Billing", "Open hosted billing or self-hosted commercial tools when they apply.") + "</div>";
@@ -3843,7 +3843,7 @@
     } else {
       var emailLabel = providerMode ? "Email" : "Commercial email";
       var emailIntro = providerMode ? "Enter the email address for your Pulse account. A sign-in link will be sent to that address." : "Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.";
-      cardHTML = '<h2 id="portal-auth-title">Email sign-in link</h2><p>' + escapeHTML(emailIntro) + '</p><div class="form-group portal-auth-form-group"><label for="portal-login-email">' + escapeHTML(emailLabel) + '</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions portal-auth-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send sign-in link") + "</button></div>" + signupHTML + statusHTML;
+      cardHTML = '<h2 id="portal-auth-title">Email sign-in link</h2><p>' + escapeHTML(emailIntro) + '</p><form id="portal-login-form" data-portal-form="sign-in" aria-labelledby="portal-auth-title" aria-busy="' + String(context.loginState.request.pending) + '"><div class="form-group portal-auth-form-group"><label for="portal-login-email">' + escapeHTML(emailLabel) + '</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email" required' + (context.loginState.request.pending ? " disabled" : "") + '></div><div class="form-actions portal-auth-actions"><button class="btn-primary" id="portal-login-send" type="submit"' + (context.loginState.request.pending ? " disabled" : "") + ">" + (context.loginState.request.pending ? "Sending\u2026" : "Send sign-in link") + "</button></div></form>" + signupHTML + statusHTML;
     }
     return '<section class="portal-auth-shell"><div class="portal-auth-intro">' + introHTML + '</div><section class="portal-auth-panel" aria-labelledby="portal-auth-title"><div class="portal-auth-card">' + cardHTML + "</div></section></section>";
   }
