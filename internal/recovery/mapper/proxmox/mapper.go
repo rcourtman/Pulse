@@ -70,82 +70,23 @@ func preferredPBSBackupSubjectName(comment, vmid string) string {
 	return proxmoxidentity.PreferredPBSBackupSubjectName(comment, vmid)
 }
 
-func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidate, learner *proxmoxidentity.PBSSourceLearner, exclusiveConfirmer string) (GuestCandidate, bool) {
-	if len(candidates) == 0 {
+// selectPBSGuestCandidate links a snapshot to the guest of the connection
+// models.AttributePBSBackups attributed it to. Anything short of one such guest
+// stays unlinked.
+func selectPBSGuestCandidate(candidates []GuestCandidate, guestInstance string) (GuestCandidate, bool) {
+	guestInstance = strings.TrimSpace(guestInstance)
+	if guestInstance == "" {
 		return GuestCandidate{}, false
 	}
-	if len(candidates) == 1 {
-		return candidates[0], true
-	}
-
-	// Rank by the snapshot's own labels, the way guest backup badges do: the guest
-	// they fit best takes it, and only guests they fit equally remain.
-	matched := candidates
-	strongest := 0
-	strongestMatches := make([]GuestCandidate, 0, len(candidates))
+	var selected GuestCandidate
+	matches := 0
 	for _, candidate := range candidates {
-		score := proxmoxidentity.BackupGuestMatchScore(backup.Namespace, backup.Comment, backup.VMID, candidate.DisplayName, candidate.InstanceName, candidate.NodeName)
-		if score > strongest {
-			strongest = score
-			strongestMatches = strongestMatches[:0]
-		}
-		if score == strongest && score > 0 {
-			strongestMatches = append(strongestMatches, candidate)
+		if strings.TrimSpace(candidate.InstanceName) == guestInstance {
+			selected = candidate
+			matches++
 		}
 	}
-	if len(strongestMatches) == 1 {
-		return strongestMatches[0], true
-	}
-	if len(strongestMatches) > 1 {
-		matched = strongestMatches
-	}
-
-	// A connection whose exclusive storage view listed the snapshot wrote it,
-	// which settles guests the snapshot's own labels fit equally (#2681). The
-	// learned mapping must not disagree, as guest backup badges require. If that
-	// connection has no such guest here, the guest it wrote this for is gone or
-	// ranks below another, and no other guest takes the snapshot on inference.
-	if exclusiveConfirmer != "" {
-		attributed, decisive := learner.Resolve(backup.Instance, backup.Datastore, backup.Owner)
-		if decisive && attributed != exclusiveConfirmer {
-			return GuestCandidate{}, false
-		}
-		for _, candidate := range matched {
-			if candidate.InstanceName == exclusiveConfirmer {
-				return candidate, true
-			}
-		}
-		return GuestCandidate{}, false
-	}
-
-	// Last resort for collision VMIDs with no namespace or name evidence:
-	// the learned submission-source mapping (owner token / datastore / PBS
-	// instance, learned from this batch's attributable backups) can name the
-	// cluster the backup came from (#1639). A decisive attribution to a
-	// connection with no candidate here means the backup's own guest is
-	// gone; never link it to another cluster's guest.
-	if learner != nil {
-		if attributed, decisive := learner.Resolve(backup.Instance, backup.Datastore, backup.Owner); decisive {
-			filtered := make([]GuestCandidate, 0, len(matched))
-			for _, candidate := range matched {
-				if candidate.InstanceName == attributed {
-					filtered = append(filtered, candidate)
-				}
-			}
-			if len(filtered) == 1 {
-				return filtered[0], true
-			}
-			if len(filtered) == 0 {
-				return GuestCandidate{}, false
-			}
-			matched = filtered
-		}
-	}
-
-	if len(matched) == 1 {
-		return matched[0], true
-	}
-	return GuestCandidate{}, false
+	return selected, matches == 1
 }
 
 func proxmoxSubjectRef(resourceType unifiedresources.ResourceType, info GuestInfo, instanceName, nodeName string, vmid int, sourceID string) *recovery.ExternalRef {
@@ -497,47 +438,37 @@ func FromPVEGuestSnapshotsWithEvidence(
 	)
 }
 
+// FromPBSBackups attributes a batch over these candidates alone, then maps it.
+// Live ingestion uses FromPBSBackupsWithEvidence with the state's answer instead,
+// which sees every PBS instance and the PVE storage views.
 func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]GuestCandidate) []recovery.RecoveryPoint {
-	return fromPBSBackups(backups, candidatesByKey, nil)
+	return fromPBSBackups(backups, candidatesByKey, attributeBatchOverCandidates(backups, candidatesByKey, nil))
 }
 
-func fromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]GuestCandidate, exclusiveConfirmers map[models.PBSSnapshotRef]string) []recovery.RecoveryPoint {
+func attributeBatchOverCandidates(backups []models.PBSBackup, candidatesByKey map[string][]GuestCandidate, confirmers map[models.PBSSnapshotRef]string) map[string]string {
+	var guests []models.PBSGuestCandidate
+	for key, candidates := range candidatesByKey {
+		backupType, _, _ := strings.Cut(key, ":")
+		for _, candidate := range candidates {
+			guests = append(guests, models.PBSGuestCandidate{
+				BackupType: backupType, VMID: candidate.VMID, Instance: candidate.InstanceName,
+				Node: candidate.NodeName, Name: candidate.DisplayName,
+			})
+		}
+	}
+	attributed := models.AttributePBSBackups(backups, guests, confirmers)
+	out := make(map[string]string, len(backups))
+	for i, backup := range backups {
+		out[backup.ID] = attributed[i]
+	}
+	return out
+}
+
+// fromPBSBackups maps PBS snapshots to recovery points. guestInstances names the
+// attributed PVE connection by backup ID (see models.AttributePBSBackups).
+func fromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]GuestCandidate, guestInstances map[string]string) []recovery.RecoveryPoint {
 	if len(backups) == 0 {
 		return nil
-	}
-
-	// First pass: learn each PBS submission source's cluster from the
-	// backups that are attributable on their own evidence, so the second
-	// pass can resolve collision VMIDs with no evidence of their own (#1639).
-	// Every connection owning a candidate guest is registered first, so a
-	// connection that contributes no attributable backup keeps the learner
-	// inconclusive instead of letting a source it may share resolve to the
-	// connections that happened to be attributable.
-	confirmerOf := func(b models.PBSBackup) string {
-		return exclusiveConfirmers[models.PBSSnapshotRef{
-			BackupType: strings.ToLower(strings.TrimSpace(b.BackupType)),
-			VMID:       pbsSnapshotVMID(b.VMID),
-			Time:       b.BackupTime.Unix(),
-		}]
-	}
-	learner := proxmoxidentity.NewPBSSourceLearner()
-	for _, b := range backups {
-		if strings.TrimSpace(b.ID) == "" {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(b.BackupType)) + ":" + strings.TrimSpace(b.VMID)
-		for _, candidate := range candidatesByKey[key] {
-			learner.RegisterCandidate(b.Instance, candidate.InstanceName)
-		}
-	}
-	for _, b := range backups {
-		if strings.TrimSpace(b.ID) == "" {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(b.BackupType)) + ":" + strings.TrimSpace(b.VMID)
-		if c, ok := selectPBSGuestCandidate(b, candidatesByKey[key], nil, confirmerOf(b)); ok {
-			learner.Observe(b.Instance, b.Datastore, b.Owner, c.InstanceName)
-		}
 	}
 
 	out := make([]recovery.RecoveryPoint, 0, len(backups))
@@ -552,13 +483,13 @@ func fromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 
 		var subjectRID string
 		var subjectRef *recovery.ExternalRef
+		subjectUnsettled := false
 
-		// Link to a unified resource when the candidate set is already singular or can be
-		// disambiguated by PBS namespace / guest label without guessing across guest collisions.
-		if c, ok := selectPBSGuestCandidate(b, candidates, learner, confirmerOf(b)); ok {
+		if c, ok := selectPBSGuestCandidate(candidates, guestInstances[b.ID]); ok {
 			subjectRID = subjectResourceID(c.ResourceType, c.ResourceID, c.SourceID)
 			subjectRef = proxmoxSubjectRef(c.ResourceType, GuestInfo{Name: c.DisplayName, ResourceType: c.ResourceType, SourceID: c.SourceID}, c.InstanceName, c.NodeName, c.VMID, c.SourceID)
 		} else {
+			subjectUnsettled = len(candidates) > 0
 			guestType := strings.ToLower(strings.TrimSpace(b.BackupType))
 			refType := "proxmox-guest"
 			if guestType == "vm" {
@@ -640,6 +571,7 @@ func fromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 			Verified:          verifiedPtr,
 			Immutable:         immutable,
 			SubjectResourceID: subjectRID,
+			SubjectUnsettled:  subjectUnsettled,
 			SubjectRef:        subjectRef,
 			RepositoryRef: &recovery.ExternalRef{
 				Type:      "proxmox-pbs-datastore",
@@ -662,11 +594,11 @@ func fromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 func FromPBSBackupsWithEvidence(
 	backups []models.PBSBackup,
 	candidatesByKey map[string][]GuestCandidate,
-	exclusiveConfirmers map[models.PBSSnapshotRef]string,
+	guestInstances map[string]string,
 	ingestedAt time.Time,
 ) ([]recovery.RecoveryPoint, error) {
 	return withRecoveryPointEvidence(
-		fromPBSBackups(backups, candidatesByKey, exclusiveConfirmers),
+		fromPBSBackups(backups, candidatesByKey, guestInstances),
 		"pbs-backup-inventory",
 		ingestedAt,
 	)

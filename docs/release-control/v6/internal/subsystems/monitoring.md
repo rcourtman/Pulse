@@ -35,10 +35,13 @@ guest-agent replies when a read fails. A wrong earlier link can persist while no
 address separates the guests. That is accepted, because dropping every such link
 would cost the common case, a second site added after the first, its agent link.
 
-`State.PBSExclusiveConfirmers` exposes the exclusive-view evidence guest backup
-badges use, so PBS recovery ingestion attributes with the same evidence. An
-exclusive view now settles an exact label tie between guests on different
-connections. It does not outvote a stronger label match. Workload chart keys built
+`SyncGuestBackupTimes`, PBS recovery ingestion and `/api/backups/pbs` all read
+`models.AttributePBSBackups` over the state's guests and exclusive views. Recovery
+points take that answer on their own PBS instance's next read. The read copies only
+guests a listed snapshot could belong to, and reads exclusive views only when those
+guests collide, so it stays independent of the unrelated estate. An
+exclusive view settles an exact label tie between guests on different connections.
+It does not outvote a stronger label match. Workload chart keys built
 from a node name alone apply only to a guest with no connection, because a
 standalone connection can be named like another's node.
 
@@ -720,7 +723,11 @@ namespace-discovery failure similarly retains known but unqueried namespaces,
 without guessing or issuing hidden-namespace requests. Accepted rows take
 priority over carried rows at the existing live-state bound. Carried dates,
 identities and snapshot-cache times are unchanged, and carried rows never enter
-the observed-group batch or renew recovery-point evidence. Provider history
+the observed-group batch or renew recovery-point evidence. The poller marks them
+`CarriedOver` in state, so a carried row is still attributed itself but teaches
+source inference nothing about other snapshots. A poll that read nothing publishes
+nothing, so rows, marks and recovery points all keep their last answer until the
+next read. Provider history
 stays partial/unavailable rather than claiming protection.
 
 An actual access rejection still withdraws that namespace's raw rows, including

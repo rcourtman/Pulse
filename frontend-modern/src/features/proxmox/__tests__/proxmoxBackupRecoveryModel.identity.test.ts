@@ -127,9 +127,8 @@ describe('backup-identity: native ownership rather than first label match', () =
     const result = model({
       workloads: [misleading, identityGuest('east-100', '', 'pve-1')],
       archives: [identityArchive({ instance: '' })],
-      pbsBackups: [identityPBS()],
     });
-    expect(owners(result)).toEqual(['east-100', 'east-100']);
+    expect(owners(result)).toEqual(['east-100']);
     expect(
       result.coverageRows.find((row) => row.workload.resourceId === 'west-100')?.workload.node,
     ).toBe('pve-1');
@@ -167,53 +166,82 @@ describe('backup-identity: native ownership rather than first label match', () =
     expect(decodeURIComponent(key)).toContain('backup server');
   });
 
-  it('does not turn a reused namespace/node or alias into a unique PBS owner', () => {
-    const result = model({
-      workloads: [
-        identityGuest('west-100', 'west', 'shared', { nodeAliases: ['pve-1'] }),
-        identityGuest('east-100', 'east', 'shared', { nodeAliases: ['pve-1'] }),
-      ],
-      pbsBackups: [identityPBS()],
-    });
-    expect(owners(result)).toEqual([undefined]);
+  it('groups a PBS snapshot under the guest the server attributed it to', () => {
+    const workloads = [
+      identityGuest('west-100', 'west', 'pve-1'),
+      identityGuest('east-100', 'east', 'pve-1'),
+    ];
     expect(
-      result.coverageRows
-        .filter((row) => row.workload.resourceId)
-        .every((row) => row.pbsCount === 0),
-    ).toBe(true);
+      owners(model({ workloads, pbsBackups: [identityPBS({ guestInstance: 'west' })] })),
+    ).toEqual(['west-100']);
+    expect(
+      owners(model({ workloads, pbsBackups: [identityPBS({ guestInstance: ' EAST ' })] })),
+    ).toEqual(['east-100']);
   });
 
-  it('does not use a datastore label as a PVE workload identity', () => {
+  it.each([
+    ['labels that fit one guest', { namespace: 'pve-1' }, 'pve-10'],
+    ['an exact connection namespace', { namespace: 'east' }, 'pve-10'],
+    ['no labels at all', { namespace: '' }, 'pve-10'],
+  ])(
+    'leaves a snapshot the server did not attribute unresolved despite %s',
+    (_name, labels, otherNode) => {
+      const pbsBackups = [identityPBS({ ...labels, guestInstance: undefined })];
+      expect(
+        owners(
+          model({
+            workloads: [
+              identityGuest('west-100', 'west', otherNode),
+              identityGuest('east-100', 'east', 'pve-1'),
+            ],
+            pbsBackups,
+          }),
+        ),
+      ).toEqual([undefined]);
+      // Even a lone visible guest with this VMID: another connection may own it.
+      const lone = model({ workloads: [identityGuest('east-100', 'east', 'pve-1')], pbsBackups });
+      expect(owners(lone)).toEqual([undefined]);
+      expect(lone.coverageRows.find((row) => row.workload.resourceId)?.pbsCount).toBe(0);
+    },
+  );
+
+  it('names the guests sharing the VMID of an unattributed PBS row, and points them back at it', () => {
     const result = model({
       workloads: [
-        identityGuest('west-100', 'west', 'main'),
+        identityGuest('west-100', 'west', 'pve-1'),
         identityGuest('east-100', 'east', 'pve-1'),
+        identityGuest('east-101', 'east', 'pve-1', { vmid: 101 }),
       ],
-      pbsBackups: [identityPBS({ namespace: '' })],
+      pbsBackups: [identityPBS({ guestInstance: undefined })],
     });
-    expect(owners(result)).toEqual([undefined]);
+    const row = (id: string) => result.coverageRows.find((r) => r.workload.resourceId === id)!;
+    const orphan = result.coverageRows.find((r) => r.isOrphaned)!;
+    expect(orphan.sameVmidGuestLabels).toEqual(['east-100 on east', 'west-100 on west']);
+    expect(row('east-100').unmatchedPBSEntries).toBe(1);
+    expect(row('west-100').unmatchedPBSEntries).toBe(1);
+    expect(row('east-101').unmatchedPBSEntries).toBeUndefined();
   });
 
-  it('preserves root-namespace PBS for a unique VMID and exact instance namespace with collisions', () => {
+  it("does not call another connection's guest a possible owner of an attributed snapshot", () => {
+    const result = model({
+      workloads: [identityGuest('west-100', 'west', 'pve-1')],
+      pbsBackups: [identityPBS({ guestInstance: 'east' })],
+    });
+    expect(result.coverageRows.find((r) => r.isOrphaned)?.sameVmidGuestLabels).toBeUndefined();
+    expect(
+      result.coverageRows.find((r) => r.workload.resourceId === 'west-100')?.unmatchedPBSEntries,
+    ).toBeUndefined();
+  });
+
+  it('does not hand an attributed snapshot to another connection when its own guest is absent', () => {
     expect(
       owners(
         model({
-          workloads: [identityGuest('east-100', 'east', 'pve-1')],
-          pbsBackups: [identityPBS({ namespace: '' })],
+          workloads: [identityGuest('west-100', 'west', 'pve-1')],
+          pbsBackups: [identityPBS({ guestInstance: 'east' })],
         }),
       ),
-    ).toEqual(['east-100']);
-    expect(
-      owners(
-        model({
-          workloads: [
-            identityGuest('west-100', 'west', 'pve-1'),
-            identityGuest('east-100', 'east', 'pve-1'),
-          ],
-          pbsBackups: [identityPBS({ namespace: ' EAST ' })],
-        }),
-      ),
-    ).toEqual(['east-100']);
+    ).toEqual([undefined]);
   });
 
   it('retains exact-node matching without instance metadata and the unscoped singleton control', () => {

@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/filesystem"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
@@ -3005,6 +3004,10 @@ type PBSBackup struct {
 	Comment               string   `json:"comment,omitempty"`
 	Files                 []string `json:"files"`
 	Owner                 string   `json:"owner,omitempty"` // User who created the backup
+	// CarriedOver marks a snapshot the latest poll of its PBS instance could not
+	// re-read. The row stays listed for continuity, but lends nothing to source
+	// inference about other snapshots.
+	CarriedOver bool `json:"-"`
 }
 
 func (b PBSBackup) NormalizeCollections() PBSBackup {
@@ -4807,17 +4810,11 @@ func (s *State) pbsExclusiveConfirmersLocked() map[PBSSnapshotRef]string {
 // LastBackup only ever reflects completed backups; in-flight PBS snapshots
 // and partial vzdump archives surface through BackupInProgress instead.
 // Call this after updating storage backups or PBS backups to ensure guest backup indicators are accurate.
-// Matching is done by instance+VMID to prevent cross-instance VMID collisions.
-// For PBS backups with namespaces, namespace matching is ranked against the guest's node and
-// connection instance so clustered API entrypoints do not shadow the guest's actual placement.
+// Matching is done by instance+VMID to prevent cross-instance VMID collisions, and
+// AttributePBSBackups decides which guest owns each PBS snapshot.
 func (s *State) SyncGuestBackupTimes() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	type pbsSubjectKey struct {
-		backupType string
-		vmid       int
-	}
 
 	// A retained archive may belong to the other guest kind after VMID reuse.
 	// Keep its kind as well as its connection; the live occupant cannot turn
@@ -4878,216 +4875,39 @@ func (s *State) SyncGuestBackupTimes() {
 		return latest
 	}
 
-	// Process PBS backups (VMID is string, BackupTime is the timestamp).
-	// Group by PBS subject type and VMID so VM and CT IDs do not cross-match.
-	// In-flight snapshots are kept apart: they only feed the backup-running
-	// flag, never the completed-backup ages or the attribution learner.
-	pbsBackupsBySubject := make(map[pbsSubjectKey][]PBSBackup)
-	pbsInProgressBySubject := make(map[pbsSubjectKey][]PBSBackup)
-	for _, backup := range s.PBSBackups {
-		vmid, err := strconv.Atoi(backup.VMID)
-		if err != nil || vmid <= 0 {
+	// Process PBS backups. In-flight snapshots are kept apart: they only feed the
+	// backup-running flag, never the completed-backup ages.
+	type pbsGuestKey struct {
+		instance string
+		subject  pbsBackupSubject
+	}
+	latestPBSBackup := make(map[pbsGuestKey]time.Time)
+	latestPBSInFlight := make(map[pbsGuestKey]time.Time)
+	guestInstances := s.pbsGuestInstancesLocked()
+	for i, backup := range s.PBSBackups {
+		if guestInstances[i] == "" {
 			continue
 		}
-		backupType := strings.ToLower(strings.TrimSpace(backup.BackupType))
-		if backupType != "vm" && backupType != "ct" {
+		subject, ok := subjectOfPBSBackup(backup)
+		if !ok {
 			continue
 		}
-		key := pbsSubjectKey{backupType: backupType, vmid: vmid}
+		key := pbsGuestKey{instance: guestInstances[i], subject: subject}
+		latest := latestPBSBackup
 		if backup.InProgress {
 			// When task visibility is unavailable, retain the conservative
 			// historical behaviour and report a manifestless snapshot as
 			// running. With an authoritative running-task read, only a live
 			// writer may drive the guest badge; failed sync artifacts remain
 			// incomplete but no longer pin "Backup Running" indefinitely.
-			if !backup.WriteActivityObserved || backup.WriteActive {
-				pbsInProgressBySubject[key] = append(pbsInProgressBySubject[key], backup)
-			}
-			continue
-		}
-		pbsBackupsBySubject[key] = append(pbsBackupsBySubject[key], backup)
-	}
-
-	// Build a set of typed VMIDs that appear on more than one PVE location.
-	// When a typed VMID is ambiguous, we must not fall back to VMID-only matching
-	// because we can't tell which guest the backup belongs to.
-	type pbsSubjectGuest struct {
-		instance string
-		node     string
-		name     string
-	}
-	subjectLocations := make(map[pbsSubjectKey]map[string]struct{})
-	subjectGuests := make(map[pbsSubjectKey][]pbsSubjectGuest)
-	for i := range s.VMs {
-		key := pbsSubjectKey{backupType: "vm", vmid: s.VMs[i].VMID}
-		m, ok := subjectLocations[key]
-		if !ok {
-			m = make(map[string]struct{})
-			subjectLocations[key] = m
-		}
-		m[backupKey(s.VMs[i].Instance, s.VMs[i].VMID)+"@"+s.VMs[i].Node] = struct{}{}
-		subjectGuests[key] = append(subjectGuests[key], pbsSubjectGuest{instance: s.VMs[i].Instance, node: s.VMs[i].Node, name: s.VMs[i].Name})
-	}
-	for i := range s.Containers {
-		key := pbsSubjectKey{backupType: "ct", vmid: s.Containers[i].VMID}
-		m, ok := subjectLocations[key]
-		if !ok {
-			m = make(map[string]struct{})
-			subjectLocations[key] = m
-		}
-		m[backupKey(s.Containers[i].Instance, s.Containers[i].VMID)+"@"+s.Containers[i].Node] = struct{}{}
-		subjectGuests[key] = append(subjectGuests[key], pbsSubjectGuest{instance: s.Containers[i].Instance, node: s.Containers[i].Node, name: s.Containers[i].Name})
-	}
-	subjectIsAmbiguous := make(map[pbsSubjectKey]bool)
-	for key, locations := range subjectLocations {
-		if len(locations) > 1 {
-			subjectIsAmbiguous[key] = true
-		}
-	}
-
-	exclusiveConfirmer := s.pbsExclusiveConfirmersLocked()
-
-	// Learn which PVE connection each PBS submission source (owner token,
-	// datastore, PBS instance) belongs to from the backups that CAN be
-	// attributed — unique typed VMIDs, or placement/name matches. The
-	// learned mapping then resolves collision-VMID snapshots that carry no
-	// namespace or comment evidence of their own (#1639).
-	sourceLearner := proxmoxidentity.NewPBSSourceLearner()
-	for key, backups := range pbsBackupsBySubject {
-		guests := subjectGuests[key]
-		if len(guests) == 0 {
-			continue
-		}
-		for _, backup := range backups {
-			for _, guest := range guests {
-				sourceLearner.RegisterCandidate(backup.Instance, guest.instance)
-			}
-		}
-	}
-	for key, backups := range pbsBackupsBySubject {
-		guests := subjectGuests[key]
-		if len(guests) == 0 {
-			continue
-		}
-		for _, backup := range backups {
-			attributed := ""
-			if !subjectIsAmbiguous[key] {
-				attributed = guests[0].instance
-			} else {
-				matched := make(map[string]struct{})
-				for _, guest := range guests {
-					if proxmoxidentity.BackupGuestMatchScore(backup.Namespace, backup.Comment, backup.VMID, guest.name, guest.instance, guest.node) > 0 {
-						matched[guest.instance] = struct{}{}
-					}
-				}
-				if len(matched) == 1 {
-					for instance := range matched {
-						attributed = instance
-					}
-				}
-				if attributed == "" {
-					// An exclusive storage view is positive attribution too,
-					// and it makes the cluster behind it visible to the
-					// coverage check.
-					attributed = exclusiveConfirmer[PBSSnapshotRef{BackupType: key.backupType, VMID: key.vmid, Time: backup.BackupTime.Unix()}]
-				}
-			}
-			if attributed != "" {
-				sourceLearner.Observe(backup.Instance, backup.Datastore, backup.Owner, attributed)
-			}
-		}
-	}
-
-	// findBestPBSBackup finds the newest attributable PBS backup for a given
-	// typed VMID and guest location. Match strength decides which guest owns
-	// each snapshot, not whether an older owned snapshot outranks a newer one.
-	// Returns zero time if no suitable backup found. The subject map is a
-	// parameter so the same attribution rules apply to completed snapshots
-	// (feeding LastBackup) and to in-flight ones (feeding BackupInProgress).
-	findBestPBSBackup := func(bySubject map[pbsSubjectKey][]PBSBackup, vmid int, backupType string, instance string, node string, name string) time.Time {
-		subjectKey := pbsSubjectKey{backupType: backupType, vmid: vmid}
-		backups, ok := bySubject[subjectKey]
-		if !ok || len(backups) == 0 {
-			return time.Time{}
-		}
-
-		var bestTime time.Time
-		for _, backup := range backups {
-			score := proxmoxidentity.BackupGuestMatchScore(
-				backup.Namespace,
-				backup.Comment,
-				backup.VMID,
-				name,
-				instance,
-				node,
-			)
-			snapshotKey := PBSSnapshotRef{BackupType: backupType, VMID: vmid, Time: backup.BackupTime.Unix()}
-			if score > 0 && subjectIsAmbiguous[subjectKey] {
-				// A namespace such as "pve" can match two clusters with the
-				// same node label. A positive score is not attribution when a
-				// different connection matches the same snapshot at least as
-				// strongly. Do not use batch-learned source inference to break a
-				// positive tie: it can see the other connection on another PBS
-				// instance without proving which one wrote this snapshot (#2292).
-				strongestOther := 0
-				for _, other := range subjectGuests[subjectKey] {
-					if other.instance == instance {
-						continue
-					}
-					otherScore := proxmoxidentity.BackupGuestMatchScore(
-						backup.Namespace, backup.Comment, backup.VMID,
-						other.name, other.instance, other.node,
-					)
-					if otherScore > strongestOther {
-						strongestOther = otherScore
-					}
-				}
-				// An exclusive storage view is not that inference: it says which
-				// connection wrote the snapshot, so it settles an exact tie. It
-				// does not outvote a stronger match elsewhere (#2681).
-				if strongestOther > score ||
-					(strongestOther == score && exclusiveConfirmer[snapshotKey] != instance) {
-					continue
-				}
-			}
-			if score == 0 {
-				if !subjectIsAmbiguous[subjectKey] {
-					score = 1
-				} else {
-					// Two independent evidence paths, neither authoritative
-					// over the other. An exclusive storage view (one no other
-					// connection's listing overlaps) is authorship evidence;
-					// the learned submission-source mapping is inference from
-					// the batch's attributable snapshots. Where both speak
-					// they must agree, otherwise the snapshot stays dropped
-					// as it did before #1639.
-					confirmer, confirmed := exclusiveConfirmer[snapshotKey]
-					attributed, learned := sourceLearner.Resolve(backup.Instance, backup.Datastore, backup.Owner)
-					switch {
-					case confirmed && learned:
-						if confirmer == instance && attributed == instance {
-							score = 1
-						}
-					case confirmed:
-						if confirmer == instance {
-							score = 1
-						}
-					case learned:
-						if attributed == instance {
-							score = 1
-						}
-					}
-				}
-			}
-			if score <= 0 {
+			if backup.WriteActivityObserved && !backup.WriteActive {
 				continue
 			}
-			if backup.BackupTime.After(bestTime) {
-				bestTime = backup.BackupTime
-			}
+			latest = latestPBSInFlight
 		}
-
-		return bestTime
+		if backup.BackupTime.After(latest[key]) {
+			latest[key] = backup.BackupTime
+		}
 	}
 
 	// Update VMs - recompute from current backup evidence instead of preserving stale values
@@ -5095,7 +4915,8 @@ func (s *State) SyncGuestBackupTimes() {
 		lastBackup := latestLocalBackup(s.VMs[i].Instance, s.VMs[i].VMID, "vm")
 		key := backupKey(s.VMs[i].Instance, s.VMs[i].VMID)
 		// Check if PBS has a more recent backup
-		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
+		guestKey := pbsGuestKey{instance: s.VMs[i].Instance, subject: pbsBackupSubject{backupType: "vm", vmid: s.VMs[i].VMID}}
+		pbsTime := latestPBSBackup[guestKey]
 		if !pbsTime.IsZero() {
 			if lastBackup.IsZero() || pbsTime.After(lastBackup) {
 				lastBackup = pbsTime
@@ -5108,7 +4929,7 @@ func (s *State) SyncGuestBackupTimes() {
 		// sync, not a backup being written now, and one older than the
 		// running-task cutoff has been abandoned. Neither may pin the guest
 		// as backing up (#1815).
-		inFlight := findBestPBSBackup(pbsInProgressBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
+		inFlight := latestPBSInFlight[guestKey]
 		s.VMs[i].BackupInProgress = taskRunning ||
 			(inFlight.After(lastBackup) && !inFlight.Before(runningTaskCutoff))
 	}
@@ -5118,7 +4939,8 @@ func (s *State) SyncGuestBackupTimes() {
 		lastBackup := latestLocalBackup(s.Containers[i].Instance, s.Containers[i].VMID, "ct")
 		key := backupKey(s.Containers[i].Instance, s.Containers[i].VMID)
 		// Check if PBS has a more recent backup
-		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
+		guestKey := pbsGuestKey{instance: s.Containers[i].Instance, subject: pbsBackupSubject{backupType: "ct", vmid: s.Containers[i].VMID}}
+		pbsTime := latestPBSBackup[guestKey]
 		if !pbsTime.IsZero() {
 			if lastBackup.IsZero() || pbsTime.After(lastBackup) {
 				lastBackup = pbsTime
@@ -5127,7 +4949,7 @@ func (s *State) SyncGuestBackupTimes() {
 		s.Containers[i].LastBackup = lastBackup
 		_, taskRunning := runningBackupTask[key]
 		// Same partial-copy and abandonment guards as the VM loop (#1815).
-		inFlight := findBestPBSBackup(pbsInProgressBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
+		inFlight := latestPBSInFlight[guestKey]
 		s.Containers[i].BackupInProgress = taskRunning ||
 			(inFlight.After(lastBackup) && !inFlight.Before(runningTaskCutoff))
 	}

@@ -65,7 +65,7 @@ func TestPBSConflictingSnapshotIdentityRetainsUnreadScope(t *testing.T) {
 							if row.Namespace != "tenant" {
 								continue
 							}
-							if !warm || !reflect.DeepEqual(row, before["101"]) {
+							if !warm || !reflect.DeepEqual(f.live()["101"], before["101"]) {
 								t.Errorf("malformed group published or rewrote raw history: %+v", row)
 							}
 						}

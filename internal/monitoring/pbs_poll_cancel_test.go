@@ -119,7 +119,7 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 			f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores, nil)
 			f.wait(t)
 			raw = f.m.state.GetSnapshot().PBSBackups
-			mapped, err := proxmoxmapper.FromPBSBackupsWithEvidence(raw, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), nil, time.Now())
+			mapped, err := proxmoxmapper.FromPBSBackupsWithEvidence(raw, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), f.m.state.PBSBackupGuestInstances(), time.Now())
 			points = f.points(t, "pbs-main")
 			postures := f.postures(t)
 			if snapshotReads.Load() != 3 || len(raw) != 1 || raw[0].Verified || raw[0].InProgress || err != nil || len(mapped) != 1 || mapped[0].Verified == nil || *mapped[0].Verified || len(points) != 1 || points[0].Verified == nil || *points[0].Verified || postures[0].State != recovery.ProtectionStateAttention || postures[0].Verification != recovery.ProtectionVerificationUnverified {

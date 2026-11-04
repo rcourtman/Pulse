@@ -63,6 +63,7 @@ export const identityPBS = (extra: Partial<PBSBackup> = {}): PBSBackup => ({
   files: ['index.json.blob'],
   protected: false,
   verified: true,
+  guestInstance: 'east',
   ...extra,
 });
 

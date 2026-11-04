@@ -18,7 +18,8 @@ func metadataMonitorFixture(size int) *Monitor {
 	stamp := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
 	rate := 64.0
 	state.PVEBackups = models.PVEBackups{BackupTasks: []models.BackupTask{{ID: "task", VMID: 100, Status: "OK"}}}
-	state.PBSBackups = []models.PBSBackup{{ID: "pbs", Files: []string{"index.json.blob"}, Protected: true, BackupTime: stamp}}
+	state.PBSBackups = []models.PBSBackup{{ID: "pbs", BackupType: "vm", VMID: "100000", Files: []string{"index.json.blob"}, Protected: true, BackupTime: stamp}}
+	state.VMs = []models.VM{{ID: "guest", VMID: 100000, Instance: "pve", Node: "node"}}
 	state.PMGBackups = []models.PMGBackup{{ID: "pmg", BackupTime: stamp}}
 	state.ReplicationJobs = []models.ReplicationJob{{ID: "job", LastSyncTime: &stamp, NextSyncTime: &stamp, RateLimitMbps: &rate}}
 	state.ConnectionHealth = map[string]bool{"pve": true, "pbs": false}
@@ -30,6 +31,11 @@ func metadataMonitorFixture(size int) *Monitor {
 	}
 	if size > 0 {
 		state.KubernetesClusters = []models.KubernetesCluster{cluster}
+		confirmations := make([]models.PBSGuestConfirmation, 0, size)
+		for i := 0; i < size; i++ {
+			confirmations = append(confirmations, models.PBSGuestConfirmation{Storage: "pbs", BackupType: "vm", VMID: i + 1, Time: stamp.Unix()})
+		}
+		state.UpdatePBSGuestConfirmationsForInstance("pve", confirmations)
 	}
 	return &Monitor{state: state}
 }
@@ -42,6 +48,7 @@ var metadataReaders = []struct {
 	{"backups", func(m *Monitor) any { return m.BackupsSnapshot() }, func(m *Monitor) any { return m.GetState().Backups }},
 	{"pve", func(m *Monitor) any { return m.PVEBackupsSnapshot() }, func(m *Monitor) any { return m.GetState().PVEBackups }},
 	{"pbs", func(m *Monitor) any { return m.PBSBackupsSnapshot() }, func(m *Monitor) any { return m.GetState().PBSBackups }},
+	{"pbs-attributed", func(m *Monitor) any { return m.AttributedPBSBackupsSnapshot() }, func(m *Monitor) any { return m.GetState().AttributedPBSBackups() }},
 	{"replication", func(m *Monitor) any { return m.ReplicationJobsSnapshot() }, func(m *Monitor) any { return m.GetState().ReplicationJobs }},
 	{"health", func(m *Monitor) any { return m.ConnectionHealthSnapshot() }, func(m *Monitor) any { return m.GetState().ConnectionHealth }},
 }

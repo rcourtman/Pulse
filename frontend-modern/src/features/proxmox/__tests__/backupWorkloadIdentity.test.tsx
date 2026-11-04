@@ -416,6 +416,46 @@ describe('backup workload identity in real inventory consumers', () => {
     expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
   });
 
+  it('reads a colliding PBS point under the guest the server attributed it to (#2681)', async () => {
+    mount({
+      pve: emptyPVE,
+      pbs: [identityPBS({ instance: 'pbs-reader', namespace: '', guestInstance: 'west' })],
+    });
+    const rows = await coverageRows();
+    expect(rows).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /unmatched/i })).not.toBeInTheDocument();
+    const west = rows.find((row) => connectionOf(row) === 'PVE: west')!;
+    fireEvent.click(within(west).getByRole('button', { name: /expand details/i }));
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
+    expect(connectionRow(detail)).toHaveTextContent('west');
+    expect(detail.querySelector('[data-backup-source-connection]')).toHaveTextContent('pbs-reader');
+  });
+
+  it('keeps a colliding PBS point unmatched when the server could not attribute it (#2681)', async () => {
+    mount({
+      pve: emptyPVE,
+      pbs: [identityPBS({ instance: 'pbs-reader', guestInstance: undefined })],
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
+    const rows = await coverageRows();
+    expect(rows).toHaveLength(3);
+    const orphan = await screen.findByRole('button', {
+      name: 'Expand details for VM 100 · PVE connection: Not reported',
+    });
+    fireEvent.click(orphan);
+    const detail = revealCoverageDetail(screen.getByTestId('proxmox-coverage-detail'));
+    expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
+    expect(detail).toHaveTextContent(
+      'Guests with this VMID: same-name on east, same-name on west. Pulse cannot tell which one this backup belongs to, so it is not counted.',
+    );
+    fireEvent.click(orphan);
+    const east = rows.find((row) => connectionOf(row) === 'PVE: east')!;
+    fireEvent.click(within(east).getByRole('button', { name: /expand details/i }));
+    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent(
+      '1 unmatched backup has this VMID.',
+    );
+  });
+
   it('replaces unknown placement only with a live matched workload and withdraws it when that owner disappears', async () => {
     const setWorkloads = mount({
       workloads: [],

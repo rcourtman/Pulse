@@ -23,15 +23,24 @@
 
 ### PBS restore points use the same attribution as guest badges (4 November 2026)
 
-`selectPBSGuestCandidate` ranks candidates with `BackupGuestMatchScore`, as
-`SyncGuestBackupTimes` does, replacing its separate namespace and name filters.
-The guest the labels fit best takes the snapshot. A tie goes to the connection
-whose exclusive storage view listed it, and that evidence also teaches the source
-learner. If that connection has no such guest, or the learner disagrees, the
-snapshot stays unlinked rather than going to another cluster (#2681). This changes
-only which guest a snapshot links to. It opens no new storage or recovery path. The
-Backups table's own artifact grouping still resolves only a unique VMID or an exact
-namespace.
+`models.AttributePBSBackups` is the one rule for which guest owns a PBS snapshot.
+Guest backup badges, recovery points and the Backups table all read its answer, so
+one snapshot cannot read as different guests. The guest the labels fit best takes
+the snapshot. A tie goes to the connection whose exclusive storage view listed it,
+and that evidence also teaches the source learner. If that connection has no such
+guest, the learner disagrees or nothing settles it, the snapshot stays unattributed
+rather than going to another cluster (#2681).
+
+`selectPBSGuestCandidate` now only finds the attributed connection's guest. Recovery
+ingestion gets its answer from the state, so the learner sees every PBS instance and
+no longer breaks a tie between labels, which recovery points used to do against the
+badge (#2292). A recovery point follows on its own PBS instance's next read. A point
+left unsettled between live guests is marked so the store does not relink it from
+history, which would name a guest the badge and the table do not. `/api/backups/pbs`
+reports the answer as `guestInstance` and the Backups table groups by it, reading no
+namespace or lone VMID of its own. An unmatched row names the guests sharing its VMID
+and those guests point back to it. This changes only which guest a snapshot links
+to. It opens no new storage or recovery path.
 
 ### Slow Assistant JSON refusal preserves recovery state
 
@@ -1749,11 +1758,11 @@ rescued by a reused node name or a singleton fallback. With no connection scope,
 an exact native node/alias must identify one candidate; wholly unscoped singleton
 observations retain their existing compatibility behaviour.
 
-PBS instance and datastore identify a repository, not a PVE workload. A PBS
-namespace disambiguates repeated VMIDs only with a unique exact native node,
-alias or PVE connection label. Unique type/VMID PBS inventory retains the
-existing root-namespace association. This bounded presentation fix does not
-implement the runtime PBS source learner or alter server-owned protection policy.
+PBS instance and datastore identify a repository, not a PVE workload. A PBS row
+takes its workload from the server's `guestInstance`, the attribution described at
+the top of this contract. No namespace, label or lone VMID can pool it onto a guest
+in the browser, and a connection with no such guest here leaves the row unresolved.
+This does not alter server-owned protection policy.
 
 Unresolved artifacts remain listed once and keep complete, collision-safe source
 keys (PVE connection/node or PBS instance/datastore/namespace), including host
@@ -6803,7 +6812,10 @@ between historical PBS namespaces: if recovery history already proves one
 canonical linked guest identity for the same friendly label, guest type, and
 VMID/CTID, the store must relink later unresolved PBS points and backfill older
 split rows onto that canonical protected item instead of leaving protected
-inventory freshness to disagree with recovery events.
+inventory freshness to disagree with recovery events. A point marked
+`SubjectUnsettled`, where live guests share the VMID and the evidence picked none, is
+not relinked on ingest. The mark is not stored, so the backfill at startup can relink
+it until its PBS instance's next read.
 That same key boundary is node-independent for Proxmox guests (#1669).
 Unified guest canonical IDs derive from instance+VMID
 (`unifiedresources.ProxmoxGuestCanonicalID`), so recovery subject identity

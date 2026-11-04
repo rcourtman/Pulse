@@ -120,7 +120,7 @@ func adoptHistoricalProxmoxPBSGuestIdentity(
 	identities map[string]historicalSubjectIdentity,
 	looseIdentities map[string]historicalSubjectIdentity,
 ) {
-	if p == nil || (len(identities) == 0 && len(looseIdentities) == 0) {
+	if p == nil || p.SubjectUnsettled || (len(identities) == 0 && len(looseIdentities) == 0) {
 		return
 	}
 	if strings.TrimSpace(string(p.Provider)) != string(recovery.ProviderProxmoxPBS) {

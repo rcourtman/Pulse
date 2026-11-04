@@ -40,6 +40,7 @@ const pbsBackup = (overrides: Partial<PBSBackup> = {}): PBSBackup => ({
   verified: true,
   files: ['index.json.blob', 'root.pxar.didx'],
   owner: 'backup@pbs',
+  guestInstance: 'homelab',
   ...overrides,
 });
 

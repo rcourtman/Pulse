@@ -80,6 +80,64 @@ func TestHandleListPBSBackupsReturnsArtifacts(t *testing.T) {
 	}
 }
 
+// The route reports the guest each snapshot belongs to, and says nothing when the
+// evidence does not settle it, so the Backups table never works it out itself.
+func TestHandleListPBSBackupsReportsAttributedGuest(t *testing.T) {
+	backupTime := time.Date(2026, 5, 25, 1, 34, 25, 0, time.UTC)
+	state := models.NewState()
+	state.UpdateVMs([]models.VM{
+		{ID: "home:pmx1:100", VMID: 100, Instance: "home", Node: "pmx1", Name: "docker1"},
+		{ID: "hetzner:pmx1:100", VMID: 100, Instance: "hetzner", Node: "pmx1", Name: "docker1"},
+		{ID: "home:pmx2:101", VMID: 101, Instance: "home", Node: "pmx2", Name: "web"},
+	})
+	state.UpdatePBSBackups("pbs-main", []models.PBSBackup{
+		{ID: "unique", Instance: "pbs-main", Datastore: "main", BackupType: "vm", VMID: "101", BackupTime: backupTime, Files: []string{}},
+		{ID: "tied", Instance: "pbs-main", Datastore: "main", BackupType: "vm", VMID: "100", BackupTime: backupTime, Comment: "docker1", Files: []string{}},
+		{ID: "gone", Instance: "pbs-main", Datastore: "main", BackupType: "vm", VMID: "999", BackupTime: backupTime, Files: []string{}},
+	})
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	router := &Router{monitor: monitor}
+
+	for _, tc := range []struct {
+		path string
+		want map[string]string
+	}{
+		{path: "/api/backups/pbs", want: map[string]string{"unique": "home", "tied": "", "gone": ""}},
+		{path: "/api/backups/pbs?vmid=101", want: map[string]string{"unique": "home"}},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.handleListPBSBackups(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+			}
+			var body struct {
+				Data struct {
+					Backups []map[string]any `json:"backups"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if len(body.Data.Backups) != len(tc.want) {
+				t.Fatalf("rows = %d, want %d", len(body.Data.Backups), len(tc.want))
+			}
+			for _, row := range body.Data.Backups {
+				id, _ := row["id"].(string)
+				got, present := row["guestInstance"]
+				if want := tc.want[id]; want == "" {
+					if present {
+						t.Errorf("%s reports guest %v, want the field omitted", id, got)
+					}
+				} else if got != want {
+					t.Errorf("%s reports guest %v, want %s", id, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestHandleListPBSBackupsInitializesEmptyCollections(t *testing.T) {
 	monitor := &monitoring.Monitor{}
 	setUnexportedField(t, monitor, "state", models.NewState())

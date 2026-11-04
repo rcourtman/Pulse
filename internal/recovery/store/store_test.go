@@ -748,6 +748,59 @@ func TestStore_UpsertPointsRelinksHistoricalProxmoxPBSGuestIdentity(t *testing.T
 	}
 }
 
+// History keeps a link while a guest is away. It must not choose between live
+// guests the evidence could not settle (#2681).
+func TestStore_UpsertPointsDoesNotRelinkUnsettledProxmoxPBSPoint(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	linkedTime := time.Date(2026, 2, 23, 2, 30, 19, 0, time.UTC)
+	currentTime := linkedTime.Add(24 * time.Hour)
+	homeRID := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "home", 100)
+	details := map[string]any{"backupType": "vm", "comment": "docker1", "vmid": "100"}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{{
+		ID: "pbs-linked", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote,
+		Outcome: recovery.OutcomeSuccess, StartedAt: &linkedTime, CompletedAt: &linkedTime,
+		SubjectResourceID: homeRID,
+		SubjectRef:        &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "home", Name: "docker1", ID: "home:pmx1:100", Class: "pmx1"},
+		Details:           details,
+	}}); err != nil {
+		t.Fatalf("UpsertPoints(linked) error = %v", err)
+	}
+
+	unresolved := func(id string, unsettled bool) recovery.RecoveryPoint {
+		return recovery.RecoveryPoint{
+			ID: id, Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote,
+			Outcome: recovery.OutcomeSuccess, StartedAt: &currentTime, CompletedAt: &currentTime,
+			SubjectUnsettled: unsettled,
+			SubjectRef:       &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "pbs-main", Name: "docker1", ID: "100"},
+			Details:          details,
+		}
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{unresolved("pbs-unsettled", true), unresolved("pbs-away", false)}); err != nil {
+		t.Fatalf("UpsertPoints(unresolved) error = %v", err)
+	}
+	points, _, err := store.ListPoints(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListPoints() error = %v", err)
+	}
+	subjects := make(map[string]string, len(points))
+	for _, point := range points {
+		subjects[point.ID] = point.SubjectResourceID
+	}
+	if subjects["pbs-unsettled"] != "" {
+		t.Errorf("unsettled point relinked to %q, want no guest", subjects["pbs-unsettled"])
+	}
+	if subjects["pbs-away"] != homeRID {
+		t.Errorf("point of an absent guest linked to %q, want %q from history", subjects["pbs-away"], homeRID)
+	}
+}
+
 func TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows(t *testing.T) {
 	t.Parallel()
 

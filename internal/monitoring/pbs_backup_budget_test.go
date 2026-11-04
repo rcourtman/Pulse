@@ -190,6 +190,8 @@ func exercisePBSBudgetAcceptedListings(t *testing.T) {
 								t.Error("unread live tasks invented terminal or successful write evidence")
 							}
 						} else {
+							// The mark only records that this poll did not read the row.
+							row.CarriedOver = false
 							found := false
 							for _, old := range oldRaw {
 								found = found || reflect.DeepEqual(row, old)

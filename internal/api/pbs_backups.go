@@ -14,14 +14,16 @@ import (
 // PBSBackupsResponse is the source-specific payload for
 // `GET /api/backups/pbs`. PBS backups are deduplicated server-side
 // recovery artifacts, so their protection and verification state lives
-// on the PBS snapshot model rather than on PVE's local vzdump file list.
+// on the PBS snapshot model rather than on PVE's local vzdump file list. Each
+// backup also says which guest it belongs to, the same answer guest backup badges
+// and recovery points use, so clients must not work that out for themselves.
 type PBSBackupsResponse struct {
 	Data PBSBackupsPayload `json:"data"`
 	Meta PBSBackupsMeta    `json:"meta"`
 }
 
 type PBSBackupsPayload struct {
-	Backups []models.PBSBackup `json:"backups"`
+	Backups []models.AttributedPBSBackup `json:"backups"`
 }
 
 type PBSBackupsMeta struct {
@@ -42,7 +44,7 @@ func (r *Router) handleListPBSBackups(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	backups := monitor.PBSBackupsSnapshot()
+	backups := monitor.AttributedPBSBackupsSnapshot()
 	payload := PBSBackupsPayload{Backups: filterPBSBackups(backups, req)}
 
 	response := PBSBackupsResponse{
@@ -64,7 +66,7 @@ func (r *Router) handleListPBSBackups(w http.ResponseWriter, req *http.Request) 
 //	namespace=<name>  - only backups in a namespace
 //	type=<vm|ct|host> - only backups of a backup type
 //	vmid=<id>         - only backups for a guest id
-func filterPBSBackups(backups []models.PBSBackup, req *http.Request) []models.PBSBackup {
+func filterPBSBackups(backups []models.AttributedPBSBackup, req *http.Request) []models.AttributedPBSBackup {
 	query := req.URL.Query()
 	instance := strings.TrimSpace(query.Get("instance"))
 	datastore := strings.TrimSpace(query.Get("datastore"))
@@ -76,7 +78,7 @@ func filterPBSBackups(backups []models.PBSBackup, req *http.Request) []models.PB
 		return normalizePBSBackups(backups)
 	}
 
-	out := make([]models.PBSBackup, 0, len(backups))
+	out := make([]models.AttributedPBSBackup, 0, len(backups))
 	for _, backup := range backups {
 		if instance != "" && !strings.EqualFold(backup.Instance, instance) {
 			continue
@@ -98,11 +100,11 @@ func filterPBSBackups(backups []models.PBSBackup, req *http.Request) []models.PB
 	return out
 }
 
-func normalizePBSBackups(backups []models.PBSBackup) []models.PBSBackup {
+func normalizePBSBackups(backups []models.AttributedPBSBackup) []models.AttributedPBSBackup {
 	if backups == nil {
-		return []models.PBSBackup{}
+		return []models.AttributedPBSBackup{}
 	}
-	out := make([]models.PBSBackup, 0, len(backups))
+	out := make([]models.AttributedPBSBackup, 0, len(backups))
 	for _, backup := range backups {
 		out = append(out, backup.NormalizeCollections())
 	}

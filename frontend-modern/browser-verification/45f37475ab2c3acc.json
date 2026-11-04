@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "d2165457a1448a472a3d8c5c33e5f4baaf4a9e76",
+  "verified_at": "2026-11-04T16:28:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "7eae533417499a15fd1d63f093fe805132f7f6760dc005362eb1a6d5d03cafa2",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "7f0feb0f3be89d07f871b595677a9a5352053767fb98f4e3c113a7e8fee1d22f",
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts": "9fbc385a0f05cfdede232ac587818890a7ecec1c27748ab515fc011e40bb3da2",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "294f83bc54a71e4a27c41a77c7d3c1fc75c5090d71a36e3571a91174b1d040e4",
+    "frontend-modern/src/types/api.ts": "cd1bd9f8484346eb4154af9112bd82fdc5759d5b21717813f03ead1b1c027b22"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Two connections sharing a node name with colliding VMIDs: labels that name one guest, labels that fit both, a tied label with a decisive owner token, no label with a decisive owner token, and unique VMIDs",
+    "Before the change on the same rig: bravo reads Protected with last backup Unknown and its snapshot on an unmatched VM 9100 row; docker1 on hetzner and cache on Production West read Protected though no badge names them",
+    "After the change: bravo and db on hetzner read Protected, 5h ago; their namesakes read Unknown; docker1 and cache read Unknown on both connections with their snapshots on 2 unmatched rows",
+    "Backup badge on the Overview table agrees with the Coverage row for all eleven rig guests",
+    "Unmatched row drawer names the guests sharing its VMID; a guest drawer says an unmatched backup has its VMID; rows stay one line at both widths with no sideways scroll on the phone"
+  ],
+  "interactions": [
+    "Open Backups Coverage on the main build and the branch build and compare the rig rows",
+    "Expand the unmatched section and open an unmatched row",
+    "Open the bravo, alpha and docker1 drawers and read their summaries",
+    "Open By date and expand a colliding guest's PBS point",
+    "Read the Backup column on the Overview table for each rig guest",
+    "Repeat Coverage at phone width with the unmatched drawer open"
+  ]
+}
