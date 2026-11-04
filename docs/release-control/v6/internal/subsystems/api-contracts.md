@@ -13743,3 +13743,9 @@ organization so handlers agree with that decision. Other refusals of the
 default organization answer `default_org_access_denied`; the browser client
 clears that stale selection and retries reads only. WebSocket and SSE reads
 re-check the policy every 10 seconds. API-token bindings are unchanged.
+
+The hosted `402 subscription_required` payload applies to Pulse Cloud tenants. A
+provider MSP client runtime, marked `PULSE_PROVIDER_HOSTED=true` by its control plane,
+does not answer it for the workspace it was provisioned for: without a valid lease
+that workspace opens with Community behaviour. Organization routes and further
+organizations in that runtime still answer it.

@@ -70,6 +70,25 @@ func TestOrgHandlersRequireMultiTenantGate_HostedModeBypassesFeatureLicense(t *t
 	}
 }
 
+// Organization management is a paid capability, so a provider client's fall back to
+// Community behaviour must not open it.
+func TestOrgHandlersRequireMultiTenantGate_ProviderClientWithoutLeaseStaysBlocked(t *testing.T) {
+	setupHostedLicenseProvider(t, pkglicensing.SubStateExpired, nil)
+	t.Setenv(pkglicensing.ProviderHostedRuntimeEnvVar, "true")
+	t.Setenv("PULSE_TENANT_ID", "t-client")
+	h := NewOrgHandlers(nil, nil)
+	h.SetHostedMode(true)
+	req := httptest.NewRequest(http.MethodPost, "/api/orgs", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "t-client"))
+	rec := httptest.NewRecorder()
+	if h.requireMultiTenantGate(rec, req) {
+		t.Fatal("organization routes must stay gated without a valid lease")
+	}
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, want 402", rec.Code)
+	}
+}
+
 func TestOrgHandlersRequireMultiTenantGate_HostedModeBlocksInactiveSubscription(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)

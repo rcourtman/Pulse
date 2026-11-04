@@ -4062,3 +4062,43 @@ plans to free users who open it. The link carries
 `utm_source=pulse&utm_medium=app&utm_campaign=msp` so website visits that start
 here are counted apart. `ProLicensePanel.test.tsx` pins the free-install
 rendering, the hosted and commercial-hidden absence, and the link attributes.
+
+Provider-hosted clients locked with `402 subscription_required` when their one-day
+entitlement lease could not renew, with or without a licence, although `/msp` and
+`docs/MSP.md` promise a fall back to Community behaviour. The hosted gate treated
+them as Pulse Cloud subscribers, and on an isolated client network the renewal URL
+resolved only through the host's public path, which private-address DNS, the
+runtime's refusal of private addresses, a missing NAT hairpin or a filtering firewall
+can all defeat. Lab clients from 25 October showed exactly this on 4 November. 
+The control plane now marks its clients with `PULSE_PROVIDER_HOSTED=true`, and
+`isHostedWorkspaceOpen` lets a marked runtime open the workspace named by its
+`PULSE_TENANT_ID`, in the tenant middleware and the websocket check. Capabilities
+still come only from a verified lease, and organization routes and any further
+organization keep `isHostedSubscriptionValid`, so nothing paid is granted. Pulse
+Cloud tenants keep the 402. The marker is part of the runtime contract, so a client
+created by an older control plane is recreated even on the right image.
+`internal/cloudcp/docker/manager.go` also attaches Traefik to a client network with
+the control plane's host name as an alias, rejoining an existing attachment through
+the health monitor's support-container reconcile, but only when the client's running
+runtime carries the `pulse.runtime.private-lease-renewal` image label from
+`Dockerfile`. Older runtimes refuse private addresses and `upgrade.sh` leaves client
+runtimes unchanged by default, so giving them the name would break a renewal that
+works over the public path. A client rollback made by this control plane removes it;
+a control plane that has itself been rolled back first cannot, so client runtimes
+have to go back before their control plane.
+`internal/api/hosted_entitlement_refresh.go` admits private addresses only when the
+deployment configured its own control plane URL, with TLS verification unchanged.
+A client created with no licence holds an unchained lease, so its first request
+renews immediately, while the tenant is still provisioning. That answered 410, which
+the runtime treats as permanent, so it discarded its refresh token and could never
+gain capabilities once a licence arrived. A provisioning tenant now answers a
+retryable 503. A client that already discarded its token on an earlier release is
+not repaired by this.
+`TestRefreshEntitlementAnswersRetryablyWhileTheTenantProvisions`,
+`TestTenantMiddleware_ProviderHostedClientOpensItsOwnWorkspaceWithoutAValidLease`,
+`TestOrgHandlersRequireMultiTenantGate_ProviderClientWithoutLeaseStaysBlocked`,
+`TestTenantRuntimeMatchesContractRequiresTheProviderClientMarker`,
+`TestProviderHostedControlPlaneMarksItsClientRuntimes`,
+`TestEnsureSupportContainersGivesTraefikTheControlPlaneNameForCapableRuntimes` and
+`TestHostedEntitlementRefreshAdmitsPrivateAddressesOnlyForConfiguredControlPlane`
+pin it.

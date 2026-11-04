@@ -10,6 +10,8 @@ import (
 type TenantRuntimeRoutingContract struct {
 	Host      string
 	PublicURL string
+	// ProviderHosted says the runtime must carry the provider client marker.
+	ProviderHosted bool
 }
 
 // CanonicalTenantRuntimeRouting derives the canonical hosted route host and

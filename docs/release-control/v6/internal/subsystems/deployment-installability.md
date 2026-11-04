@@ -5027,8 +5027,9 @@ edit and a `docker compose up -d --force-recreate traefik control-plane` retry
 (the control plane carries the `DOMAIN` routing labels). Verified on
 that VM for a refused email, a refused Cloudflare token, an unresolvable host
 name and, with a self-signed wildcard certificate and hosts entries, the ready
-report. A real Let's Encrypt issuance has not been run: the lab has no domain
-with an API token. `docs/MSP.md` carries the one-line v6.7.0 workaround while
+report. A real Let's Encrypt issuance later passed on a disposable VM using
+hand-added DNS proof records; the Cloudflare API with a real token is still
+unexercised. `docs/MSP.md` carries the one-line v6.7.0 workaround while
 it pins that bundle. `TestProviderMSPTraefikStaticConfigComesFromComposeFlags`,
 `TestProviderMSPSetupReportsPortalReadiness` and
 `TestProviderMSPEvaluationDocsUsePublishedSignedBundle` pin the change.
@@ -9523,6 +9524,18 @@ and the actual three update entries. The discovered Go installer suite executes
 it on the existing repository test routes. These are disposable filesystem
 and caller controls, not application-consistent backup, power-loss durability,
 installed upgrade/rollback acceptance or the original guest-thaw recovery.
+
+Provider-hosted clients locked with `402 subscription_required` when their one-day
+entitlement lease could not renew, with or without a licence, although `/msp` and
+`docs/MSP.md` promise a fall back to Community behaviour. The hosted gate treated
+them as Pulse Cloud subscribers, and on an isolated client network the renewal URL
+resolved only through the host's public path, which private-address DNS, the
+runtime's refusal of private addresses, a missing NAT hairpin or a filtering firewall
+can all defeat. Lab clients from 25 October showed exactly this on 4 November. 
+From the next bundle, a provider's clients fall back to Community behaviour instead
+of locking, `DOMAIN` may point at a private address, and `docs/MSP.md` describes
+renewal, including that client runtimes on v6.7.0 or earlier still lock and need a
+public address until `upgrade.sh --rollout-tenants` moves them on.
 
 ## Release-body updater ownership (30 September 2026)
 

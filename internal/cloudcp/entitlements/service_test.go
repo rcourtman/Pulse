@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -625,5 +626,22 @@ func TestProviderHostedLeaseNeverClaimsPulseServiceCapabilitiesWhenUnlicensed(t 
 	}
 	if !capabilities[pkglicensing.FeatureMultiTenant] {
 		t.Fatalf("provider-hosted eval lease should still carry multi_tenant: %v", claims.Capabilities)
+	}
+}
+
+// A client created with no licence renews on its first request, while its tenant is
+// still provisioning. The runtime discards its refresh token on a permanent answer,
+// so this one has to stay retryable or the client could never gain capabilities.
+func TestRefreshEntitlementAnswersRetryablyWhileTheTenantProvisions(t *testing.T) {
+	svc, _, reg := newTestService(t)
+	tenant := &registry.Tenant{ID: "t-PROVISIONING", Email: "owner@example.com", State: registry.TenantStateProvisioning}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, _, err := reg.StoreOrIssueHostedEntitlement(tenant.ID, "etr_provisioning", time.Unix(1710000000, 0).UTC()); err != nil {
+		t.Fatalf("StoreOrIssueHostedEntitlement: %v", err)
+	}
+	if _, err := svc.RefreshEntitlement("etr_provisioning", "t-provisioning.cloud.example.com"); !errors.Is(err, ErrHostedEntitlementNotReady) {
+		t.Fatalf("err=%v, want %v", err, ErrHostedEntitlementNotReady)
 	}
 }

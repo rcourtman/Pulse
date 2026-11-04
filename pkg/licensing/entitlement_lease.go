@@ -4,11 +4,29 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// ProviderHostedRuntimeEnvVar marks a client runtime run by a provider MSP control
+// plane. A provider's clients are not Pulse Cloud subscribers: their licence decides
+// which capabilities they carry, never whether the client's workspace opens.
+const ProviderHostedRuntimeEnvVar = "PULSE_PROVIDER_HOSTED"
+
+// IsProviderHostedWorkspace reports whether orgID is the workspace this provider
+// client runtime was provisioned for. Further organizations are a paid capability,
+// so they do not count.
+func IsProviderHostedWorkspace(orgID string) bool {
+	if !strings.EqualFold(strings.TrimSpace(os.Getenv(ProviderHostedRuntimeEnvVar)), "true") {
+		return false
+	}
+	tenantID := strings.TrimSpace(os.Getenv("PULSE_TENANT_ID"))
+	// Organization IDs are case-sensitive everywhere they are stored and bound.
+	return tenantID != "" && strings.TrimSpace(orgID) == tenantID
+}
 
 const (
 	// HostedEntitlementLeaseIssuer is the JWT issuer for hosted entitlement cache leases.

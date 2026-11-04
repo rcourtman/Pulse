@@ -9581,3 +9581,8 @@ recovery path beyond default-organization membership in the existing
 `org.json` and a one-time marker, `default-org-access-migration.json`, in the
 base data directory. The migration writes nothing when tenant metadata or RBAC
 assignments cannot be read, so recovery of those stores is unchanged.
+
+A provider MSP client's own workspace stays reachable without a valid lease, through
+`isHostedWorkspaceOpen` in `internal/api/middleware_tenant.go`, so its recovery views
+keep working during the fall back to Community behaviour. Recovery routes and their
+payloads are unchanged.

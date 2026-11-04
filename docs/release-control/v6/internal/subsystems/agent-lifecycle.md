@@ -11029,3 +11029,9 @@ access policy, so a user who loses default-organization membership or
 instance administration stops receiving findings and approval events within
 10 seconds. Token streams keep their existing credential and binding checks.
 Agent enrollment, reports and command channels are unchanged.
+
+A provider MSP client's own workspace no longer answers `402 subscription_required`
+when its lease is missing or expired, so agents bound to that workspace keep
+reporting while it falls back to Community behaviour. The change sits in
+`internal/api/middleware_tenant.go` (`isHostedWorkspaceOpen`) and leaves the agent
+routes, token scopes and report payloads as they were.

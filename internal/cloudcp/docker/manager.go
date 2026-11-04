@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -36,7 +39,9 @@ type ManagerConfig struct {
 	// commercial base URL so entitlement lease refresh targets this
 	// control plane instead of the built-in Pulse Cloud default.
 	ControlPlaneBaseURL string
-	TrustedProxyCIDRs   []string
+	// ProviderHosted marks client runtimes as run by a provider MSP control plane.
+	ProviderHosted    bool
+	TrustedProxyCIDRs []string
 	// TenantDisplayName resolves a tenant's workspace display name at
 	// container-create time; the value is injected as PULSE_TENANT_NAME so
 	// alert webhook payloads carry a human-readable workspace label instead
@@ -77,6 +82,8 @@ type RuntimeContainerInfo struct {
 	Running   bool
 	RouteHost string
 	PublicURL string
+	// ProviderHosted reports whether the container carries the provider client marker.
+	ProviderHosted bool
 }
 
 type DiskUsageClass struct {
@@ -132,10 +139,13 @@ const (
 )
 
 const (
-	providerSupportTraefikLabel      = "pulse.provider-msp.role=traefik"
-	providerSupportControlPlaneLabel = "pulse.provider-msp.role=control-plane"
-	tenantRuntimeNetworkLabel        = "pulse.provider-msp.network"
-	tenantRuntimeNetworkLabelValue   = "tenant"
+	providerSupportTraefikLabel = "pulse.provider-msp.role=traefik"
+	// tenantRuntimePrivateLeaseRenewalLabel is set by the Dockerfile on runtime
+	// images that accept a private address for entitlement lease renewal.
+	tenantRuntimePrivateLeaseRenewalLabel = "pulse.runtime.private-lease-renewal"
+	providerSupportControlPlaneLabel      = "pulse.provider-msp.role=control-plane"
+	tenantRuntimeNetworkLabel             = "pulse.provider-msp.network"
+	tenantRuntimeNetworkLabelValue        = "tenant"
 )
 
 // NewManager creates a Docker manager connected to the local daemon.
@@ -181,7 +191,9 @@ func (m *Manager) DesiredRuntimeRouting(tenantID string) TenantRuntimeRoutingCon
 	if m == nil {
 		return TenantRuntimeRoutingContract{}
 	}
-	return CanonicalTenantRuntimeRouting(tenantID, m.cfg.BaseDomain)
+	routing := CanonicalTenantRuntimeRouting(tenantID, m.cfg.BaseDomain)
+	routing.ProviderHosted = m.cfg.ProviderHosted
+	return routing
 }
 
 func (m *Manager) DiskUsage(ctx context.Context) (*DiskUsageSnapshot, error) {
@@ -401,7 +413,7 @@ func isOwnedTenantNetwork(labels map[string]string, tenantID string) bool {
 	return tenantID != "" && labels["pulse.tenant.id"] == tenantID && labels[tenantRuntimeNetworkLabel] == tenantRuntimeNetworkLabelValue
 }
 
-func (m *Manager) connectSupportContainersToTenantNetwork(ctx context.Context, networkName string) error {
+func (m *Manager) connectSupportContainersToTenantNetwork(ctx context.Context, networkName string, runtimeLabels map[string]string) error {
 	if m == nil || !m.cfg.IsolateTenantNetworks {
 		return nil
 	}
@@ -410,14 +422,14 @@ func (m *Manager) connectSupportContainersToTenantNetwork(ctx context.Context, n
 		if label == "" {
 			continue
 		}
-		if err := m.connectSupportContainersByLabel(ctx, networkName, label); err != nil {
+		if err := m.connectSupportContainersByLabel(ctx, networkName, label, runtimeLabels); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *Manager) connectSupportContainersByLabel(ctx context.Context, networkName, label string) error {
+func (m *Manager) connectSupportContainersByLabel(ctx context.Context, networkName, label string, runtimeLabels map[string]string) error {
 	providerNetwork := strings.TrimSpace(m.cfg.Network)
 	if providerNetwork == "" {
 		return fmt.Errorf("provider ingress network is required to select support containers")
@@ -441,26 +453,103 @@ func (m *Manager) connectSupportContainersByLabel(ctx context.Context, networkNa
 		if item.ID == "" {
 			continue
 		}
-		if err := m.ensureContainerConnectedToNetwork(ctx, networkName, item.ID); err != nil {
+		if err := m.ensureContainerConnectedToNetwork(ctx, networkName, item.ID, m.leaseRenewalNameFor(label, runtimeLabels)); err != nil {
 			return fmt.Errorf("connect provider support container %s to tenant network %q: %w", item.ID[:min(len(item.ID), 12)], networkName, err)
 		}
 	}
 	return nil
 }
 
-func (m *Manager) ensureContainerConnectedToNetwork(ctx context.Context, networkName, containerID string) error {
+// leaseRenewalName says what name a support container should answer to on a
+// client's isolated network. An empty host leaves the current attachment as it is.
+type leaseRenewalName struct {
+	host   string
+	wanted bool
+}
+
+// leaseRenewalNameFor decides the name for one support container. Client runtimes
+// renew their entitlement leases at the control plane's public URL. Traefik answers
+// that name on the client's own network, so renewal does not depend on public DNS,
+// NAT hairpin or firewall rules; a client that cannot renew locks when its one-day
+// lease expires.
+//
+// Older runtimes refuse private addresses, and upgrade.sh leaves client runtimes on
+// their current version by default. Giving one of those the name would break a
+// renewal that works today, so a runtime has to declare that it can use it. Unknown
+// runtime labels (nil) mean no running client to judge by, so nothing changes.
+func (m *Manager) leaseRenewalNameFor(supportLabel string, runtimeLabels map[string]string) leaseRenewalName {
+	if supportLabel != providerSupportTraefikLabel || runtimeLabels == nil {
+		return leaseRenewalName{}
+	}
+	parsed, err := url.Parse(strings.TrimSpace(m.cfg.ControlPlaneBaseURL))
+	if err != nil {
+		return leaseRenewalName{}
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" || net.ParseIP(host) != nil {
+		return leaseRenewalName{}
+	}
+	return leaseRenewalName{host: host, wanted: runtimeLabels[tenantRuntimePrivateLeaseRenewalLabel] == "true"}
+}
+
+// runningTenantRuntimeLabels returns the labels of a tenant's running runtime, which
+// include those of its image. It returns nil when there is no running runtime or
+// Docker cannot say. If several are running, one without the capability decides.
+func (m *Manager) runningTenantRuntimeLabels(ctx context.Context, tenantID string) map[string]string {
+	filters := client.Filters{}
+	filters = filters.Add("label", "pulse.tenant.id="+tenantID)
+	result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{Filters: filters})
+	if err != nil {
+		return nil
+	}
+	var labels map[string]string
+	for _, item := range result.Items {
+		if labels == nil || item.Labels[tenantRuntimePrivateLeaseRenewalLabel] != "true" {
+			labels = item.Labels
+		}
+	}
+	return labels
+}
+
+func (m *Manager) ensureContainerConnectedToNetwork(ctx context.Context, networkName, containerID string, name leaseRenewalName) error {
 	inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
 	if err != nil {
 		return fmt.Errorf("inspect tenant network %q: %w", networkName, err)
 	}
 	if networkHasContainer(inspect.Network.Containers, containerID) {
-		return nil
+		if name.host == "" {
+			return nil
+		}
+		current, err := m.cli.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+		if err != nil {
+			return fmt.Errorf("inspect support container: %w", err)
+		}
+		if endpointHasAlias(current.Container.NetworkSettings, networkName, name.host) == name.wanted {
+			return nil
+		}
+		// Docker fixes an endpoint's aliases when it connects, so changing them
+		// means rejoining the network.
+		if _, err := m.cli.NetworkDisconnect(ctx, networkName, client.NetworkDisconnectOptions{Container: containerID}); err != nil {
+			return fmt.Errorf("rejoin support container to change aliases: %w", err)
+		}
+	}
+	var aliases []string
+	if name.wanted {
+		aliases = []string{name.host}
 	}
 	_, err = m.cli.NetworkConnect(ctx, networkName, client.NetworkConnectOptions{
 		Container:      containerID,
-		EndpointConfig: &network.EndpointSettings{},
+		EndpointConfig: &network.EndpointSettings{Aliases: aliases},
 	})
 	return err
+}
+
+func endpointHasAlias(settings *container.NetworkSettings, networkName, alias string) bool {
+	if settings == nil {
+		return false
+	}
+	endpoint := settings.Networks[networkName]
+	return endpoint != nil && slices.Contains(endpoint.Aliases, alias)
 }
 
 func networkHasContainer(containers map[string]network.EndpointResource, containerID string) bool {
@@ -564,7 +653,13 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		return "", fmt.Errorf("create container for %s: %w", tenantID, err)
 	}
 
-	if err := m.connectSupportContainersToTenantNetwork(ctx, tenantNetworkName); err != nil {
+	// The new runtime decides the name Traefik answers to. If Docker cannot say,
+	// the health monitor settles it once the runtime is running.
+	var runtimeLabels map[string]string
+	if created, inspectErr := m.cli.ContainerInspect(ctx, resp.ID, client.ContainerInspectOptions{}); inspectErr == nil && created.Container.Config != nil {
+		runtimeLabels = created.Container.Config.Labels
+	}
+	if err := m.connectSupportContainersToTenantNetwork(ctx, tenantNetworkName, runtimeLabels); err != nil {
 		_, _ = m.cli.ContainerRemove(ctx, resp.ID, client.ContainerRemoveOptions{Force: true})
 		return resp.ID, err
 	}
@@ -598,11 +693,15 @@ func (m *Manager) ReconcileTenantRuntimeMountSources(tenantDataDir string) error
 }
 
 func tenantRuntimeContainerConfig(tenantID string, cfg ManagerConfig, labels map[string]string, trustedProxyCIDRs []string) *container.Config {
+	env := tenantEnvForRuntime(tenantID, tenantDisplayNameFor(cfg, tenantID), cfg.BaseDomain, cfg.TrialActivationPublicKey, cfg.ControlPlaneBaseURL, trustedProxyCIDRs, tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg), cfg.TenantReportBrand)
+	if cfg.ProviderHosted {
+		env = append(env, pkglicensing.ProviderHostedRuntimeEnvVar+"=true")
+	}
 	return &container.Config{
 		Image:  cfg.Image,
 		User:   tenantRuntimeUserFor(cfg),
 		Labels: labels,
-		Env:    tenantEnvForRuntime(tenantID, tenantDisplayNameFor(cfg, tenantID), cfg.BaseDomain, cfg.TrialActivationPublicKey, cfg.ControlPlaneBaseURL, trustedProxyCIDRs, tenantRuntimeUIDFor(cfg), tenantRuntimeGIDFor(cfg), cfg.TenantReportBrand),
+		Env:    env,
 	}
 }
 
@@ -925,7 +1024,7 @@ func (m *Manager) EnsureSupportContainersOnTenantNetwork(ctx context.Context, te
 	if !isOwnedTenantNetwork(inspected.Network.Labels, tenantID) {
 		return fmt.Errorf("network %q is not the isolated network for tenant %q", networkName, tenantID)
 	}
-	return m.connectSupportContainersToTenantNetwork(ctx, networkName)
+	return m.connectSupportContainersToTenantNetwork(ctx, networkName, m.runningTenantRuntimeLabels(ctx, tenantID))
 }
 
 // Start starts a stopped tenant container.
@@ -1081,14 +1180,19 @@ func (m *Manager) Inspect(ctx context.Context, containerIDOrName string) (*Runti
 		routeHost = routeHostFromLabels(inspect.Config.Labels)
 		publicURL = envValue(inspect.Config.Env, "PULSE_PUBLIC_URL")
 	}
+	providerHosted := false
+	if inspect.Config != nil {
+		providerHosted = envValue(inspect.Config.Env, pkglicensing.ProviderHostedRuntimeEnvVar) == "true"
+	}
 	return &RuntimeContainerInfo{
-		ID:        inspect.ID,
-		Name:      strings.TrimPrefix(strings.TrimSpace(inspect.Name), "/"),
-		ImageRef:  imageRef,
-		ImageID:   strings.TrimSpace(inspect.Image),
-		Running:   running,
-		RouteHost: routeHost,
-		PublicURL: publicURL,
+		ProviderHosted: providerHosted,
+		ID:             inspect.ID,
+		Name:           strings.TrimPrefix(strings.TrimSpace(inspect.Name), "/"),
+		ImageRef:       imageRef,
+		ImageID:        strings.TrimSpace(inspect.Image),
+		Running:        running,
+		RouteHost:      routeHost,
+		PublicURL:      publicURL,
 	}, nil
 }
 

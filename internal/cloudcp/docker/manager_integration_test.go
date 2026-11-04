@@ -246,10 +246,10 @@ func TestIntegrationProviderPairNetworkIsolation(t *testing.T) {
 		t.Fatalf("provision B tenant network: %v", err)
 	}
 	t.Cleanup(func() { _ = b.removeTenantNetwork(context.Background(), bTenant) })
-	if err := a.connectSupportContainersToTenantNetwork(ctx, aTenant); err != nil {
+	if err := a.connectSupportContainersToTenantNetwork(ctx, aTenant, nil); err != nil {
 		t.Fatalf("attach A support: %v", err)
 	}
-	if err := b.connectSupportContainersToTenantNetwork(ctx, bTenant); err != nil {
+	if err := b.connectSupportContainersToTenantNetwork(ctx, bTenant, nil); err != nil {
 		t.Fatalf("attach B support: %v", err)
 	}
 	createTenantContainer := func(mgr *Manager, provider, networkName string) string {

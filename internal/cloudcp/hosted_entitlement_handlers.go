@@ -65,6 +65,10 @@ func (h *HostedEntitlementHandlers) HandleRefresh(w http.ResponseWriter, r *http
 	case errors.Is(err, entitlements.ErrHostedEntitlementTargetMismatch):
 		http.Error(w, "invalid entitlement refresh target", http.StatusUnauthorized)
 		return
+	case errors.Is(err, entitlements.ErrHostedEntitlementNotReady):
+		// Retryable: the runtime keeps its refresh token and asks again.
+		http.Error(w, "hosted entitlement workspace is still provisioning", http.StatusServiceUnavailable)
+		return
 	case errors.Is(err, entitlements.ErrHostedEntitlementInactive):
 		http.Error(w, "hosted entitlement is no longer active", http.StatusGone)
 		return

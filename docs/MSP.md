@@ -433,6 +433,14 @@ isolation all still work, but client workspaces will not carry MSP capabilities
 until a licence is installed, because release-build client runtimes only trust
 entitlement leases chained to a Pulse-signed licence.
 
+Client workspaces renew a one-day lease from the control plane. A client that
+cannot renew loses its MSP capabilities and falls back to Community behaviour until
+it can, so core monitoring keeps running. From the release after v6.7.0, renewal
+stays on the deployment's Docker network, so `DOMAIN` can point at a private
+address. Client runtimes on v6.7.0 or earlier renew over the host's own network and
+lock instead of falling back: for them `DOMAIN` must be a public address that
+containers on this host can reach. `upgrade.sh --rollout-tenants` moves them on.
+
 `setup.sh` also resolves the four image pins from their published tags when
 you leave them blank, writing the resolved digests back into `.env`. The
 images are public, so this needs no credentials.

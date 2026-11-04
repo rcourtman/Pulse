@@ -267,6 +267,10 @@ RUN apk --no-cache add python3 py3-pip && \
 # Base operating-system surface shared by source-built and candidate-assembled
 # Pulse server images.
 FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS pulse-runtime-foundation
+# Read by the provider MSP control plane: this runtime accepts a private address
+# for entitlement lease renewal, so Traefik can answer the portal's name on the
+# client's own network. Older runtimes lack it and keep renewing over the host.
+LABEL pulse.runtime.private-lease-renewal="true"
 
 ARG APPRISE_VERSION
 
