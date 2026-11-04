@@ -301,10 +301,10 @@ const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSect
         </p>
       </Show>
       <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-        Task connection and node are reported by the task, not the workload’s current placement.
+        Connection and node are where the task ran.
       </p>
       <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-        Task status does not verify a restore or guest responsiveness.
+        A task result doesn't prove a restore works.
       </p>
     </>
   ),
@@ -444,9 +444,8 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
           ]),
           footerContent: (
             <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-              Evaluation time is not a backup completion time. These are the server assessment’s
-              recorded times, independent of the current list and its filters. They do not verify a
-              restore or guest responsiveness.
+              From the server assessment, independent of this filtered list. Evaluated isn't a
+              backup time, and Last verified doesn't prove a restore works.
             </p>
           ),
         }
@@ -488,8 +487,8 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
       ),
       footerContent: row.protectionPosture?.providerStates.length ? (
         <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-          Provider evidence describes inventory reads or retained restore points, not a backup job
-          result. Task and restore-point states are shown separately.
+          What Pulse could read from inventory and restore points. Reported outcome isn't a backup
+          job result.
         </p>
       ) : undefined,
     },
