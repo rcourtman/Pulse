@@ -17,6 +17,31 @@
 
 ## Purpose
 
+### An agent keeps its guest when another installation reuses the name (4 November 2026)
+
+Agent-to-guest linking treats every VM and container with the agent's hostname
+as one candidate list. The only candidate keeps today's name match. Among several
+(#2681), an address the agent reports decides when exactly one guest holds it and
+it cannot also be another's: an address from a reusable range (private or
+100.64.0.0/10) counts only when Pulse knows every candidate's addresses. Otherwise
+the guest the agent is already linked to keeps it, compared by connection and VMID
+so a migration does not end the link, unless that guest's known addresses have
+nothing in common with the report. Anything else stays unlinked. A node added later
+under the same name also leaves an agent on the node it already holds.
+
+Known addresses never remove the only candidate's link, because they can be stale:
+a configured LXC address stops the live interface read, and a VM keeps cached
+guest-agent replies when a read fails. A wrong earlier link can persist while no
+address separates the guests. That is accepted, because dropping every such link
+would cost the common case, a second site added after the first, its agent link.
+
+`State.PBSExclusiveConfirmers` exposes the exclusive-view evidence guest backup
+badges use, so PBS recovery ingestion attributes with the same evidence. An
+exclusive view now settles an exact label tie between guests on different
+connections. It does not outvote a stronger label match. Workload chart keys built
+from a node name alone apply only to a guest with no connection, because a
+standalone connection can be named like another's node.
+
 ### Retired tenant managers cannot create replacement runtimes
 
 `MultiTenantMonitor.Stop` closes admission under the same lock as lazy

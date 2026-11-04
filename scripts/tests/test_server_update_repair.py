@@ -33,6 +33,10 @@ if args == ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
     # Model systemd's actual empty-root status. Absence must permit recreating
     # the missing default unit, not fail the existing-install recovery path.
     sys.exit(1)
+if args == ["show", "pulse", "--property=ActiveState", "--value"]:
+    # This fixture's missing unit is inactive, not an unavailable manager.
+    print("inactive")
+    sys.exit(0)
 if args == ["daemon-reload"]:
     sys.exit(0)
 sys.exit(97)
@@ -137,6 +141,7 @@ class ServerUpdateRepair(unittest.TestCase):
                 with self.subTest(pinned=pinned, automatic=automatic):
                     e = self.exercise(pinned=pinned, automatic=automatic)
                     self.assertEqual(e["result"].returncode, 0, e["result"].stdout + e["result"].stderr)
+                    self.assertEqual(e["calls"].count(["show", "pulse", "--property=ActiveState", "--value"]), 1)
                     self.assertEqual(e["config_mode"], 0o700)
                     self.assertEqual(e["env_mode"], 0o600)
                     self.assertIn("PULSE_MOCK_MODE=false", e["env"])
@@ -152,6 +157,7 @@ class ServerUpdateRepair(unittest.TestCase):
                 with self.subTest(pinned=pinned, automatic=automatic):
                     e = self.exercise(pinned=pinned, automatic=automatic, unit_error=True)
                     self.assertEqual(e["result"].returncode, 1, e["result"].stdout + e["result"].stderr)
+                    self.assertEqual(e["calls"].count(["show", "pulse", "--property=ActiveState", "--value"]), 1)
                     self.assertEqual(e["events"], ["preflight", "backup", "user", "download", "helper", "refused-unit"])
                     self.assertEqual(e["unit"], "")
                     self.assertNotIn(["daemon-reload"], e["calls"])

@@ -252,6 +252,7 @@ func extractQueryTopologyFacts(resultText string) []FactEntry {
 		Proxmox struct {
 			Nodes []struct {
 				Name          string                           `json:"name"`
+				Instance      string                           `json:"instance"`
 				Status        string                           `json:"status"`
 				Policy        *unifiedresources.ResourcePolicy `json:"policy"`
 				AISafeSummary string                           `json:"ai_safe_summary"`
@@ -278,6 +279,10 @@ func extractQueryTopologyFacts(resultText string) []FactEntry {
 				unifiedresources.ResourceRedactionHostname,
 				unifiedresources.ResourceRedactionPlatformID,
 			)
+		}
+		// Only name the connection beside a name the policy lets through.
+		if instance := strings.TrimSpace(n.Instance); instance != "" && label == strings.TrimSpace(n.Name) {
+			label = fmt.Sprintf("%s (%s)", label, instance)
 		}
 		nodeDescs = append(nodeDescs, fmt.Sprintf("%s=%s", label, status))
 	}

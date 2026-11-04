@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import tarfile
 import tempfile
@@ -62,15 +63,19 @@ if args[0] == "list-unit-files":
     if os.environ.get("ERR"):
         os.write(2, os.environ["ERR"].encode())
     sys.exit(int(os.environ["QUERY_EXIT"]))
+if args[0] in ("show", "is-active"):
+    if os.environ["STATE_MODE"] == "hang":
+        time.sleep(30)
+    state = "inactive" if (f / "stopped").exists() else os.environ["ACTIVE_STATE"]
+    code = int(os.environ["STATE_EXIT"])
 if args[0] == "show":
-    state = "inactive" if (f / "stopped").exists() else "active"
     if "--value" in args:
         print(state)
     else:
         print("LoadState=loaded\nActiveState=" + state)
-    sys.exit(0)
+    sys.exit(code)
 if args[0] == "is-active":
-    sys.exit(1 if (f / "stopped").exists() else 0)
+    sys.exit(code or (0 if state in ("active", "reloading", "refreshing") else 3))
 if args[0] == "stop":
     (f / "stopped").write_text(args[1])
     sys.exit(0)
@@ -105,7 +110,7 @@ IN_CONTAINER=true
 IN_DOCKER=false
 mark_mutation() { echo "$*" >> "$FIXTURE/mutations"; return 97; }
 case "$FLOW" in
-    unavailable)
+    unavailable|existing-non-systemd)
         command() {
             [[ "$*" != '-v systemctl' ]] || return 1
             builtin command "$@"
@@ -182,7 +187,7 @@ status=0
 case "$FLOW" in
     query|unavailable) selected=$(detect_service_name) || status=$?
         [[ "$status" -ne 0 ]] || printf 'SERVICE=%s\n' "$selected" ;;
-    existing) check_existing_installation || status=$?
+    existing|existing-non-systemd) check_existing_installation || status=$?
         [[ "$status" -ne 0 ]] || printf 'SERVICE=%s\n' "$SERVICE_NAME" ;;
     main|late-main) main || status=$? ;;
     archive) install_pulse_archive "$FIXTURE/pulse-v6.6.0-linux-amd64.tar.gz" v6.6.0 || status=$? ;;
@@ -200,7 +205,8 @@ exit "$status"
 
 class ServiceDiscovery(unittest.TestCase):
     def run_fixture(self, *, rows="", mode="rows", query_exit=0, flow="query", explicit=None,
-                    producer="installer", err="", units_present=True):
+                    producer="installer", err="", units_present=True, active_state="active",
+                    state_exit=0, state_mode="rows", binary_present=True):
         with tempfile.TemporaryDirectory(prefix="pulse-service-discovery-") as directory:
             f = Path(directory)
             for name in ["bin", "install/bin", "config", "units", "root/etc/systemd/system"]:
@@ -209,8 +215,12 @@ class ServiceDiscovery(unittest.TestCase):
             (f / "bin/systemctl").chmod(0o755)
             old = b"#!/bin/sh\necho 'Pulse v6.5.0'\n"
             new = b"#!/bin/sh\necho 'Pulse v6.6.0'\n"
-            (f / "install/bin/pulse").write_bytes(old)
-            (f / "install/bin/pulse").chmod(0o755)
+            if binary_present:
+                (f / "install/bin/pulse").write_bytes(old)
+                (f / "install/bin/pulse").chmod(0o755)
+            saved_state = f / "config/saved-state"
+            saved_state.write_bytes(b"private synthetic saved state\n")
+            saved_state.chmod(0o600)
             (f / "new-pulse").write_bytes(new)
             (f / "new-pulse").chmod(0o755)
             (f / "served-installer.sh").write_text(
@@ -236,6 +246,7 @@ class ServiceDiscovery(unittest.TestCase):
             env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER), UPDATER=str(UPDATER),
                        PRODUCER=producer, FLOW=flow, MODE=mode,
                        ROWS=rows, QUERY_EXIT=str(query_exit), ERR=err,
+                       ACTIVE_STATE=active_state, STATE_EXIT=str(state_exit), STATE_MODE=state_mode,
                        REAL_SYSTEMCTL=REAL_SYSTEMCTL or "",
                        PATH=str(f / "bin") + os.pathsep + os.environ["PATH"],
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"),
@@ -243,13 +254,28 @@ class ServiceDiscovery(unittest.TestCase):
             if explicit is not None:
                 env["PULSE_SERVICE_NAME"] = explicit
             start_time = time.monotonic()
-            result = subprocess.run(["bash", "-c", HARNESS], env=env, cwd=f,
-                                    text=True, capture_output=True, timeout=15)
+            process = subprocess.Popen(["bash", "-c", HARNESS], env=env, cwd=f,
+                                       text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       start_new_session=True)
+            try:
+                stdout, stderr = process.communicate(timeout=15)
+            except subprocess.TimeoutExpired:
+                # Only this fixture-created group, never the host manager.
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.communicate(timeout=3)
+                raise
+            result = subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+            self.assertEqual(saved_state.read_bytes(), b"private synthetic saved state\n")
+            self.assertEqual(saved_state.stat().st_mode & 0o777, 0o600)
             return dict(result=result, seconds=time.monotonic() - start_time,
                         calls=[json.loads(line) for line in (f / "calls").read_text().splitlines()]
                         if (f / "calls").exists() else [],
                         mutations=(f / "mutations").read_text() if (f / "mutations").exists() else "",
-                        binary=(f / "install/bin/pulse").read_bytes(), old=old, new=new,
+                        binary=(f / "install/bin/pulse").read_bytes()
+                        if (f / "install/bin/pulse").exists() else None, old=old, new=new,
                         units=[p.name for p in (f / "units").iterdir()],
                         installer_service=(f / "installer-service").read_text()
                         if (f / "installer-service").exists() else None,
@@ -367,6 +393,67 @@ class ServiceDiscovery(unittest.TestCase):
                              err="Failed to get unit file list: No such file or directory\n")
         self.assert_refused(e)
         self.assertEqual(e["result"].returncode, 2)
+
+    def assert_state_refused(self, e, binary_present=True):
+        self.assertEqual(e["result"].returncode, 2, e["result"])
+        self.assertIn("Cannot determine the Pulse service state", e["result"].stderr)
+        self.assertIn("No installation changes were made", e["result"].stderr)
+        self.assertNotIn("installed but not running", e["result"].stderr)
+        self.assertNotIn("SERVICE=", e["result"].stdout)
+        self.assertEqual(e["binary"], e["old"] if binary_present else None)
+        self.assertEqual(e["mutations"], "")
+        self.assertEqual(e["units"], [])
+        self.assertEqual(e["calls"], [QUERY, ["show", "pulse", "--property=ActiveState", "--value"]])
+
+    def test_failed_state_read_never_means_stopped_or_fresh_installation(self):
+        for flow in ("existing", "main"):
+            for binary_present in (True, False):
+                for state_exit in (1, 124, 137):
+                    with self.subTest(flow=flow, binary_present=binary_present, code=state_exit):
+                        e = self.run_fixture(flow=flow, state_exit=state_exit,
+                                             binary_present=binary_present)
+                        self.assert_state_refused(e, binary_present)
+
+    def test_malformed_or_transitional_state_cannot_admit_changes(self):
+        for state in ("", "active\ninactive", "future-state", "activating", "deactivating", "maintenance"):
+            for flow in ("existing", "main"):
+                with self.subTest(state=state, flow=flow):
+                    self.assert_state_refused(self.run_fixture(flow=flow, active_state=state))
+
+    def test_existing_status_query_is_bounded_without_a_second_sample(self):
+        e = self.run_fixture(flow="main", state_mode="hang")
+        self.assert_state_refused(e)
+        self.assertLess(e["seconds"], 7.5)
+
+    def test_confirmed_running_and_stopped_states_remain_usable(self):
+        for state in ("active", "reloading", "refreshing", "inactive", "failed"):
+            for binary_present in (True, False):
+                with self.subTest(state=state, binary_present=binary_present):
+                    e = self.run_fixture(flow="existing", active_state=state,
+                                         binary_present=binary_present)
+                    running = state in ("active", "reloading", "refreshing")
+                    self.assertEqual(e["result"].returncode, 0 if binary_present or running else 1,
+                                     e["result"])
+                    if running:
+                        self.assertIn("is currently running", e["result"].stderr)
+                    elif binary_present:
+                        self.assertIn("is installed but not running", e["result"].stderr)
+                    self.assertEqual(e["calls"], [QUERY, ["show", "pulse", "--property=ActiveState", "--value"]])
+                    self.assertEqual(e["mutations"], "")
+
+    def test_explicit_instance_state_read_keeps_exact_identity(self):
+        service = "pulse.department" + "x" * 140
+        e = self.run_fixture(flow="existing", explicit=service)
+        self.assertEqual(e["result"].returncode, 0, e["result"])
+        self.assertEqual(e["result"].stdout, "SERVICE=" + service + "\n")
+        self.assertEqual(e["calls"], [["show", service, "--property=ActiveState", "--value"]])
+
+    def test_non_systemd_existing_detection_does_not_query_a_manager(self):
+        for binary_present in (True, False):
+            with self.subTest(binary_present=binary_present):
+                e = self.run_fixture(flow="existing-non-systemd", binary_present=binary_present)
+                self.assertEqual(e["result"].returncode, 0 if binary_present else 1, e["result"])
+                self.assertEqual(e["calls"], [])
 
     def test_all_mutating_callers_refuse_when_errexit_is_disabled(self):
         for flow in ["main", "late-main", "archive", "build", "uninstall", "reset", "unit", "ensure-unit"]:

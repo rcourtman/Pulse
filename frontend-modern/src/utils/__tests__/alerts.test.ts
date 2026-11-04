@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getAlertsForProxmoxNode,
   getAlertsForResource,
   getAlertsForUnifiedResource,
   getOwnAlertsForUnifiedResource,
   getUnifiedResourceAlertResourceIds,
   getAlertStyles,
   getUnifiedResourceAlertStyles,
+  TRUENAS_ALERT_INSTANCES,
 } from '@/utils/alerts';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -207,6 +209,159 @@ describe('getAlertStyles', () => {
         ),
       ).toEqual(['CPU is hot', 'Disk is full']);
       expect(getAlertsForResource(['resource-1'], alerts, false)).toEqual([]);
+    });
+
+    it('keeps alerts on a same-named node of another installation out of a node match', () => {
+      const alerts = createActiveAlerts(
+        createAlert({ id: 'own', resourceId: 'home:pmx1:100', node: 'pmx1', instance: 'home' }),
+        createAlert({
+          id: 'other',
+          resourceId: 'hetzner:pmx1:100',
+          node: 'pmx1',
+          instance: 'hetzner',
+        }),
+      );
+
+      const ids = (instance: string) =>
+        getAlertsForResource([], alerts, true, { node: 'pmx1', instances: [instance] }).map(
+          (alert) => alert.id,
+        );
+
+      expect(ids('home')).toEqual(['own']);
+      expect(ids('hetzner')).toEqual(['other']);
+      expect(
+        getAlertStyles([], alerts, true, { node: 'pmx1', instances: ['home'] }).alertCount,
+      ).toBe(1);
+    });
+
+    it('matches a TrueNAS alert under either spelling its producers use', () => {
+      const alerts = createActiveAlerts(
+        createAlert({
+          id: 'pool',
+          resourceId: 'pool-1',
+          node: 'truenas-main',
+          instance: 'Truenas',
+        }),
+        createAlert({
+          id: 'system',
+          resourceId: 'sys-1',
+          node: 'truenas-main',
+          instance: 'TrueNAS',
+        }),
+        createAlert({ id: 'pve', resourceId: 'pve-1', node: 'truenas-main', instance: 'home' }),
+      );
+
+      expect(
+        getAlertsForResource([], alerts, true, {
+          node: 'truenas-main',
+          instances: TRUENAS_ALERT_INSTANCES,
+        }).map((alert) => alert.id),
+      ).toEqual(['pool', 'system']);
+    });
+
+    it('keeps connections whose names differ only by case apart', () => {
+      const alerts = createActiveAlerts(
+        createAlert({ id: 'upper', resourceId: 'r-1', node: 'pmx1', instance: 'Home' }),
+        createAlert({ id: 'lower', resourceId: 'r-2', node: 'pmx1', instance: 'home' }),
+      );
+
+      expect(
+        getAlertsForResource([], alerts, true, { node: 'pmx1', instances: ['home'] }).map(
+          (alert) => alert.id,
+        ),
+      ).toEqual(['lower']);
+    });
+
+    describe('getAlertsForProxmoxNode', () => {
+      const node = (overrides: Partial<Resource> = {}): Resource =>
+        ({
+          id: 'node-home',
+          type: 'agent',
+          name: 'Home pmx1',
+          displayName: 'Home pmx1',
+          platformType: 'proxmox-pve',
+          sourceType: 'hybrid',
+          status: 'online',
+          lastSeen: 0,
+          proxmox: {
+            sourceId: 'home-pmx1',
+            instance: 'home',
+            clusterName: 'Lab',
+            nodeName: 'pmx1',
+          },
+          canonicalIdentity: { aliases: ['agent:agent-1'] },
+          ...overrides,
+        }) as unknown as Resource;
+
+      const listed = (...alerts: Alert[]) =>
+        getAlertsForProxmoxNode(node(), createActiveAlerts(...alerts), true).map(
+          (alert) => alert.id,
+        );
+
+      it("lists its guests' alerts on this connection, not a namesake's", () => {
+        expect(
+          listed(
+            createAlert({
+              id: 'guest',
+              resourceId: 'home:pmx1:100',
+              node: 'pmx1',
+              instance: 'home',
+            }),
+            createAlert({
+              id: 'guest-filesystem',
+              resourceId: 'home:pmx1:100-disk-root',
+              node: 'pmx1',
+              instance: 'home',
+            }),
+            createAlert({
+              id: 'namesake',
+              resourceId: 'hetzner:pmx1:100',
+              node: 'pmx1',
+              instance: 'hetzner',
+            }),
+          ).sort(),
+        ).toEqual(['guest', 'guest-filesystem']);
+      });
+
+      it('keeps its linked agent’s alerts, which carry the platform as their instance', () => {
+        expect(
+          listed(
+            createAlert({
+              id: 'agent-disk',
+              resourceId: 'agent:agent-1/disk:/var',
+              node: 'pmx1',
+              instance: 'linux',
+            }),
+          ),
+        ).toEqual(['agent-disk']);
+      });
+
+      it('keeps local storage alerts recorded under the cluster name', () => {
+        expect(
+          listed(
+            createAlert({
+              id: 'local-zfs',
+              resourceId: 'Lab-pmx1-local-zfs',
+              node: 'pmx1',
+              instance: 'Lab',
+              metadata: { resourceType: 'storage' },
+            }),
+          ),
+        ).toEqual(['local-zfs']);
+      });
+
+      it('leaves out a linked agent on a namesake', () => {
+        expect(
+          listed(
+            createAlert({
+              id: 'other-agent-disk',
+              resourceId: 'agent:agent-2/disk:/var',
+              node: 'pmx1',
+              instance: 'linux',
+            }),
+          ),
+        ).toEqual([]);
+      });
     });
 
     it('returns empty styles when no alerts for resource', () => {
@@ -558,7 +713,12 @@ describe('getAlertsForUnifiedResource', () => {
       expect(styles.severity).toBe('warning');
       expect(styles.unacknowledgedCount).toBe(3);
       // The row's previous id + display-name match found none of them.
-      expect(getAlertStyles(dockerHost.id, active, true, 'Ops Services 01').hasAlert).toBe(false);
+      expect(
+        getAlertStyles(dockerHost.id, active, true, {
+          node: 'Ops Services 01',
+          instances: ['Ops Services 01'],
+        }).hasAlert,
+      ).toBe(false);
     });
 
     it('tints a machine row for an alert on its agent key', () => {

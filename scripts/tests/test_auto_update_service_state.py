@@ -696,10 +696,17 @@ class RunningExecutable(unittest.TestCase):
             f = Path(directory); (f / "tools").mkdir(); (f / "install/bin").mkdir(parents=True)
             installed = f / "install/bin/pulse"
             shutil.copyfile(sys.executable, installed); installed.chmod(0o700)
-            tool = f / "tools/systemctl"; tool.write_text(PROCESS_MANAGER); tool.chmod(0o700)
+            # Match UpdaterFixture's stdlib-only manager launch. Repeated site
+            # startup and PATH interpreter resolution do not exercise identity
+            # admission, but can consume the entire unchanged Go watchdog.
+            manager = f / "manager.py"; manager.write_text(PROCESS_MANAGER)
+            tool = f / "tools/systemctl"
+            tool.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable) + " -I -S "
+                            + shlex.quote(str(manager)) + ' "$@"\n')
+            tool.chmod(0o700)
             # Run the copied executable, then replace its path: /proc/PID/exe
             # still observes the actual old executable, not the new path bytes.
-            child = subprocess.Popen([str(installed), "-c", "import time; print('ready', flush=True); time.sleep(30)"],
+            child = subprocess.Popen([str(installed), "-I", "-S", "-c", "import time; print('ready', flush=True); time.sleep(30)"],
                                      stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             try:
                 self.assertEqual(child.stdout.readline(), b"ready\n")

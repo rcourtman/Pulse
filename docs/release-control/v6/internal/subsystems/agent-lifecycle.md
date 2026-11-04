@@ -15,6 +15,13 @@
 
 ## Purpose
 
+### Guest links survive another installation reusing a name (4 November 2026)
+
+`ApplyHostReport` passes the agent's earlier link into guest and node inference,
+so adding an installation that reuses a guest or node name does not end a link the
+agent already holds (#2681). The rules are in the monitoring contract. Manual links,
+operator splits and node reservations still apply after inference, unchanged.
+
 ### Uninstall errors report the service stage actually reached
 
 Missing saved-URL admission says that no service stop or disable was attempted.

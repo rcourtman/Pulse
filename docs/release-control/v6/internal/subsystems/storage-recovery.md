@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### PBS restore points use the same attribution as guest badges (4 November 2026)
+
+`selectPBSGuestCandidate` ranks candidates with `BackupGuestMatchScore`, as
+`SyncGuestBackupTimes` does, replacing its separate namespace and name filters.
+The guest the labels fit best takes the snapshot. A tie goes to the connection
+whose exclusive storage view listed it, and that evidence also teaches the source
+learner. If that connection has no such guest, or the learner disagrees, the
+snapshot stays unlinked rather than going to another cluster (#2681). This changes
+only which guest a snapshot links to. It opens no new storage or recovery path. The
+Backups table's own artifact grouping still resolves only a unique VMID or an exact
+namespace.
+
 ### Slow Assistant JSON refusal preserves recovery state
 
 Current token authority is also retained at the synchronous Assistant execute
