@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -180,7 +181,7 @@ func NormalizePulseURL(raw string, authoritative bool, allowPlaintext bool) (str
 		parsed, err := url.Parse(strings.TrimSpace(raw))
 		if err == nil && parsed.Hostname() != "" && strings.EqualFold(parsed.Scheme, "http") &&
 			!securityutil.IsLoopbackHost(parsed.Hostname()) {
-			return "", fmt.Errorf("Pulse URL %q must use https unless the observer explicitly allows plaintext HTTP", raw)
+			return "", errors.New("Pulse URL must use https unless the observer explicitly allows plaintext HTTP")
 		}
 	}
 	parsed, err := securityutil.NormalizePulseHTTPBaseURLWithOptions(raw, securityutil.PulseURLValidationOptions{
@@ -188,9 +189,52 @@ func NormalizePulseURL(raw string, authoritative bool, allowPlaintext bool) (str
 		AllowOperatorPlaintextHTTP: allowPlaintext,
 	})
 	if err != nil {
-		return "", err
+		return "", pulseURLDiagnostic(raw, authoritative)
 	}
 	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+// The shared normalizer's refusal remains authoritative. Its errors can
+// contain the entire rejected URL (including credentials and query values), so
+// agent startup/configuration diagnostics must not wrap or print those errors.
+// Classify a failure only to retain useful, content-free correction guidance.
+func pulseURLDiagnostic(raw string, authoritative bool) error {
+	if strings.TrimSpace(raw) == "" {
+		return errors.New("Pulse URL is required")
+	}
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return errors.New("Pulse URL is invalid; check the host, port and URL escaping")
+	}
+	if parsed.Scheme == "" {
+		return errors.New("Pulse URL must include scheme (https:// or permitted http://)")
+	}
+	if parsed.Host == "" || parsed.Hostname() == "" {
+		return errors.New("Pulse URL must include host")
+	}
+	if parsed.User != nil {
+		return errors.New("Pulse URL must not include user credentials")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("Pulse URL must not include query or fragment")
+	}
+	if port := parsed.Port(); port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return errors.New("Pulse URL has invalid port: must be between 1 and 65535")
+		}
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http":
+		if authoritative {
+			return errors.New("Pulse URL must use https unless host is loopback or local/private")
+		}
+		return errors.New("Pulse URL must use https unless the observer explicitly allows plaintext HTTP")
+	case "https":
+		return errors.New("Pulse URL is invalid")
+	default:
+		return errors.New("Pulse URL has unsupported scheme; use https:// or permitted http://")
+	}
 }
 
 func validateName(name string) error {

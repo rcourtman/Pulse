@@ -18,6 +18,24 @@
 
 ## Purpose
 
+### Agent destination validation keeps rejected URLs out of diagnostics
+
+Agent primary/observer URL normalization still delegates admission to the shared
+transport validator, including the observer's separate plaintext opt-in. When
+it refuses a destination, startup/configuration errors give a static correction
+hint, never the rejected URL, its host/path, userinfo, query, fragment or nested
+parser error. The configuration wrapper retains the primary/observer index so
+an operator can select the right setting without copying credentials into logs.
+Successful URLs, TLS/plaintext policy, config files and wire data are unchanged.
+
+`TestNormalizePulseURLDoesNotDiscloseRejectedInput`,
+`TestLoadObserversDoesNotDiscloseRejectedURL` and
+`TestNormalizePulseURLPreservesDestinationPolicy` exercise the actual normalizer
+and owner-private configuration loader with synthetic rejected credentials,
+malformed URLs and accepted HTTPS/loopback/explicit-HTTP controls. They run in
+the ordinary `internal/agenttarget` suite; this is source proof, not an installed
+agent result or a claim about past exposure.
+
 ### Requested metric history retains its admitted reader
 
 The existing `/api/metrics-store/history` chart read and canonical agent

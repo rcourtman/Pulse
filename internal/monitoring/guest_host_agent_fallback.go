@@ -29,6 +29,13 @@ func resolveGuestDiskFromLinkedHostAgent(guestID string, vmIDToHostAgent map[str
 	}, disks, true
 }
 
+// linkedHostAgentSuppliesGuestDisks reports whether preferLinkedHostAgentDiskInventory
+// will replace this poll's reading with the linked agent's inventory.
+func linkedHostAgentSuppliesGuestDisks(guestID string, vmIDToHostAgent map[string]models.Host) bool {
+	summary, _, ok := resolveGuestDiskFromLinkedHostAgent(guestID, vmIDToHostAgent)
+	return ok && summary.Total > 0
+}
+
 func preferLinkedHostAgentDiskInventory(
 	guestID string,
 	vmIDToHostAgent map[string]models.Host,
