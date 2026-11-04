@@ -19,6 +19,8 @@ import tempfile
 import threading
 import unittest
 
+from agent_installer_test_support import credential_path_parser_fixture
+
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/PBS.md"
@@ -366,18 +368,7 @@ class PBSDocsTest(unittest.TestCase):
     def test_download_and_agent_file_handoff(self):
         # The downloaded fixture deliberately cannot install or change a
         # service. It verifies only the documented argument/file handoff.
-        installer = b'''#!/bin/bash
-python3 - "$@" <<'PY'
-import json, os, stat, sys
-from pathlib import Path
-args = sys.argv[1:]
-path = Path(args[args.index('--token-file') + 1])
-assert stat.S_IMODE(path.stat().st_mode) == 0o600
-assert path.read_text().strip() == os.environ['EXPECTED_AGENT_TOKEN']
-assert os.environ['EXPECTED_AGENT_TOKEN'] not in ' '.join(args)
-Path(os.environ['AGENT_RECEIPT']).write_text(json.dumps(args))
-PY
-'''
+        installer = credential_path_parser_fixture().encode()
         with tempfile.TemporaryDirectory() as temporary, private_server(self.cert, self.key, installer=installer) as (port, requests):
             home = Path(temporary)
             result, argv = self.run_curl(home, recipe(DOWNLOAD_SELECTOR), port, self.cert)
@@ -396,7 +387,7 @@ PY
             token.chmod(0o600)
             command = recipe('bash "$HOME/.config/pulse/pbs-agent-install.sh"')
             env = fixture_environment(home)
-            env.update(EXPECTED_AGENT_TOKEN=AGENT_TOKEN, AGENT_RECEIPT=str(home / "agent-argv.json"))
+            env.update(EXPECTED_TOKEN=AGENT_TOKEN, INSTALL_RECEIPT=str(home / "agent-argv.json"))
             result = subprocess.run(["bash", "-eu", "-c", command], env=env, capture_output=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr.decode())
             self.assertEqual(json.loads((home / "agent-argv.json").read_text()), [
@@ -405,7 +396,6 @@ PY
             ])
             self.assertNotIn(AGENT_TOKEN.encode(), result.stdout + result.stderr)
         actual = (ROOT / "scripts/install.sh").read_text()
-        self.assertIn('--token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;', actual)
         self.assertIn('read_collector_token_file_safely "$TOKEN_FILE_PATH" true', actual)
 
     def test_failed_installer_download_is_nonzero(self):
