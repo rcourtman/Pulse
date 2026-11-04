@@ -712,6 +712,10 @@
     var spinner = getElement("ws-spinner-" + accountID);
     if (!form) return;
     form.classList.toggle("visible", entry.addWorkspaceOpen);
+    form.setAttribute("aria-busy", String(entry.createWorkspace.pending));
+    form.querySelectorAll("input, button").forEach(function(control) {
+      control.disabled = entry.createWorkspace.pending;
+    });
     if (spinner) {
       spinner.hidden = !entry.createWorkspace.pending;
     }
@@ -809,6 +813,15 @@
 
   // src/account_controller.ts
   function installAccountController(deps) {
+    document.addEventListener("submit", function(event) {
+      var form = event.target;
+      if (!(form instanceof HTMLFormElement) || form.getAttribute("data-account-form") !== "create-workspace") return;
+      event.preventDefault();
+      var accountID = form.getAttribute("data-account-id") || "";
+      if (!accountID) return;
+      deps.setShellSection("workspaces");
+      void deps.runtime.createWorkspace(accountID);
+    });
     document.addEventListener("click", function(event) {
       var target = asHTMLElement(event.target);
       if (!target) return;
@@ -844,11 +857,6 @@
         case "invite-member":
           event.preventDefault();
           void deps.runtime.inviteMember(accountID);
-          return;
-        case "create-workspace":
-          event.preventDefault();
-          deps.setShellSection("workspaces");
-          void deps.runtime.createWorkspace(accountID);
           return;
         case "select-workspace":
           event.preventDefault();
@@ -1520,6 +1528,7 @@
       return "Your plan limit for " + entity + " is reached" + counts + ". Remove a " + (clientLanguage ? "client" : "workspace") + " or move to a bigger plan to add more.";
     }
     var createWorkspace = async function(accountID) {
+      if (deps.store.getAccountState().byAccountID[accountID]?.createWorkspace.pending) return;
       var nameEl = getElement("ws-name-" + accountID);
       if (!nameEl) return;
       var name = nameEl.value.trim();
@@ -1537,7 +1546,7 @@
           deps.store.updateAccountState(function(accountState) {
             var entry = ensurePortalAccountUIEntry(accountState, accountID);
             resetMutationState(entry.createWorkspace);
-          }, { notify: false });
+          });
           return;
         }
         var createdWorkspaceID = created && typeof created.id === "string" ? created.id : "";
@@ -1564,7 +1573,7 @@
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           failMutationState(entry.createWorkspace, message);
-        }, { notify: false });
+        });
         deps.showToast(message, true);
       }
     };
@@ -3687,7 +3696,7 @@
         workspaceHeaderActions += '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(addEntityLabel) + "</button>";
       }
       if (account.kind === "msp") {
-        addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Client name" : "Workspace name (for example, a client name)") + '</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(addEntityLabel) + '</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
+        addWorkspaceForm = '<form class="add-workspace-form" data-account-form="create-workspace" data-account-id="' + escapeAttr(account.id) + '" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Client name" : "Workspace name (for example, a client name)") + '</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off" required><div class="form-actions"><button type="submit" class="btn-primary">' + escapeHTML(addEntityLabel) + '</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></form>';
       }
       workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><h3>' + escapeHTML(onboardingLabel) + "</h3><p>" + escapeHTML(clientLanguage ? "Finish setup while each client keeps a separate workspace boundary." : "Finish the client setup steps without mixing client data across workspaces.") + '</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><h4>' + escapeHTML(clientLanguage ? "Add a client" : "Create a workspace") + "</h4><p>" + escapeHTML(clientLanguage ? "Create an isolated client workspace for a customer." : "Add a new hosted workspace for a customer or operating boundary.") + "</p></div>" + addWorkspaceForm + '</div><div class="workspace-management-empty-note">' + escapeHTML(workspaceManagementEmptyNote) + '</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Setup</span><strong id="workspace-management-setup-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Agents</span><strong id="workspace-management-agents-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Alert routes</span><strong id="workspace-management-alerts-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Report schedules</span><strong id="workspace-management-reports-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-identity" id="workspace-management-identity-' + escapeAttr(account.id) + '"></div><div class="workspace-setup-guide" aria-label="' + escapeAttr(clientLanguage ? "Guided client onboarding" : "Guided workspace setup") + '"><div class="workspace-setup-guide-copy"><span>Current step</span><h4 id="workspace-management-guide-title-' + escapeAttr(account.id) + '"></h4><p id="workspace-management-guide-description-' + escapeAttr(account.id) + '"></p><ul id="workspace-management-guide-diagnostics-' + escapeAttr(account.id) + '"></ul></div><form method="POST" id="workspace-management-primary-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-primary-' + escapeAttr(account.id) + '">Continue setup</button></form></div><div class="workspace-setup-checklist" aria-label="' + escapeAttr(clientLanguage ? "Client onboarding checklist" : "Workspace setup checklist") + '"><div class="workspace-setup-step workspace-setup-step-created"><span class="workspace-setup-status" id="workspace-management-check-created-' + escapeAttr(account.id) + '"></span><div><strong>' + escapeHTML(clientLanguage ? "Client added" : "Workspace created") + "</strong><span>" + escapeHTML(clientLanguage ? "A separate workspace boundary keeps this client isolated." : "This client has a separate workspace boundary.") + '</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-install-' + escapeAttr(account.id) + '"></span><div><strong>Install the first agent</strong><span>Use the workspace-bound install path so data lands in this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-alerts-' + escapeAttr(account.id) + '"></span><div><strong>Configure alert routes</strong><span>Keep notifications scoped to this client.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-reports-' + escapeAttr(account.id) + '"></span><div><strong>Schedule reports</strong><span>Send client performance reports from this workspace.</span></div></div><div class="workspace-setup-step"><span class="workspace-setup-status" id="workspace-management-check-access-' + escapeAttr(account.id) + '"></span><div><strong>Review access</strong><span>Invite provider staff or client users from Access.</span></div></div></div><div class="workspace-management-next-steps" id="workspace-management-next-steps-' + escapeAttr(account.id) + '"><div class="workspace-next-step"><div><strong>' + escapeHTML(openEntityLabel) + "</strong><span>" + escapeHTML(clientLanguage ? "Work inside this client workspace boundary." : "Work inside this client boundary.") + '</span></div><form method="POST" id="workspace-management-open-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-primary btn-compact" id="workspace-management-open-' + escapeAttr(account.id) + '">' + escapeHTML(openEntityLabel) + '</button></form></div><div class="workspace-next-step"><div><strong>Install agents</strong><span>Open the workspace-bound install commands.</span></div><form method="POST" id="workspace-management-install-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-install-' + escapeAttr(account.id) + '">Install agents</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Alerts and reports</strong><span>Alerts and performance reports stay inside the client workspace.</span></div><form method="POST" id="workspace-management-reporting-form-' + escapeAttr(account.id) + '"><button type="submit" class="btn-secondary btn-compact" id="workspace-management-reporting-' + escapeAttr(account.id) + '">Open reports</button></form></div><div class="workspace-next-step workspace-next-step-readonly"><div><strong>Access</strong><span>Invite people or adjust roles from the account access boundary.</span></div><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open Access</button></div></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">' + escapeHTML(clientLanguage ? "Manage client" : "Manage workspace") + "</button></div></div></section>";
     }

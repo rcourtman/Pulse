@@ -126,6 +126,46 @@ describe('account runtime', function() {
     expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
   });
 
+  it('admits one create request and restores the named form for explicit retry after failure', async function() {
+    deps.store.setBootstrap({ authenticated: true, email: 'owner@example.com', accounts: [{
+      id: 'acct_1', name: 'Example MSP', kind: 'msp', kind_label: 'MSP', role: 'owner',
+      can_manage: true, has_billing: false, members: [], workspaces: [],
+    }] });
+    var rejectRequests: Array<(error: Error) => void> = [];
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(function() {
+      return new Promise(function(_resolve, reject) { rejectRequests.push(reject); });
+    }));
+    document.body.innerHTML = '<form id="add-ws-form-acct_1"><input id="ws-name-acct_1" value="Acme Clinic"><button type="submit">Add client</button><button type="button">Cancel</button><div id="ws-spinner-acct_1" hidden></div></form>';
+    var first = runtime.createWorkspace('acct_1');
+    await flushAsync();
+    var duplicate = runtime.createWorkspace('acct_1');
+    await flushAsync();
+    var requestCount = vi.mocked(fetch).mock.calls.length;
+    var pendingDisabled = (document.getElementById('ws-name-acct_1') as HTMLInputElement).disabled;
+    rejectRequests.forEach(function(reject) { reject(new Error('Temporary failure')); });
+    await Promise.all([first, duplicate]);
+    expect(requestCount).toBe(1);
+    expect(pendingDisabled).toBe(true);
+    expect(deps.store.getAccountState().byAccountID.acct_1.createWorkspace.pending).toBe(false);
+    expect((document.getElementById('ws-spinner-acct_1') as HTMLElement).hidden).toBe(true);
+    expect((document.getElementById('ws-name-acct_1') as HTMLInputElement).disabled).toBe(false);
+    expect((document.getElementById('ws-name-acct_1') as HTMLInputElement).value).toBe('Acme Clinic');
+    expect(deps.showToast).toHaveBeenCalledWith('Failed to create workspace.', true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('Deliberate retry failure'));
+    await runtime.createWorkspace('acct_1');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(deps.store.getAccountState().byAccountID.acct_1.createWorkspace.pending).toBe(false);
+  });
+
+  it('does not submit a whitespace-only client name', async function() {
+    vi.stubGlobal('fetch', vi.fn());
+    document.body.innerHTML = '<input id="ws-name-acct_1" value="   ">';
+    await runtime.createWorkspace('acct_1');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(document.activeElement?.id).toBe('ws-name-acct_1');
+  });
+
   it('selects a workspace and routes explicit workspace actions through the management panel', async function() {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
     var confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);

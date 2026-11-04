@@ -1106,7 +1106,9 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 
     if (account.kind === 'msp') {
       addWorkspaceForm =
-        '<div class="add-workspace-form" id="add-ws-form-' +
+        '<form class="add-workspace-form" data-account-form="create-workspace" data-account-id="' +
+        escapeAttr(account.id) +
+        '" id="add-ws-form-' +
         escapeAttr(account.id) +
         '">' +
           '<label for="ws-name-' +
@@ -1114,11 +1116,9 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '">' + escapeHTML(clientLanguage ? 'Client name' : 'Workspace name (for example, a client name)') + '</label>' +
           '<input type="text" id="ws-name-' +
           escapeAttr(account.id) +
-          '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
+          '" placeholder="Acme Corp" maxlength="80" autocomplete="off" required>' +
           '<div class="form-actions">' +
-            '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' +
-            escapeAttr(account.id) +
-            '">' + escapeHTML(addEntityLabel) + '</button>' +
+            '<button type="submit" class="btn-primary">' + escapeHTML(addEntityLabel) + '</button>' +
             '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' +
             escapeAttr(account.id) +
             '">Cancel</button>' +
@@ -1126,7 +1126,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
             escapeAttr(account.id) +
             '" hidden></div>' +
           '</div>' +
-        '</div>';
+        '</form>';
     }
     workspaceManagement =
       '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' +
