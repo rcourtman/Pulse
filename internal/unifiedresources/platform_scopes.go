@@ -7,6 +7,13 @@ import (
 
 const proxmoxLXCDockerHostSourcePrefix = "proxmox-lxc-docker:"
 
+// IsProxmoxLXCDockerHostID reports whether a Docker host or agent ID is the
+// synthetic one Pulse gives a host it discovered inside a Proxmox LXC guest. No
+// agent reports such a host: the node's agent reads it with pct exec.
+func IsProxmoxLXCDockerHostID(id string) bool {
+	return strings.HasPrefix(strings.TrimSpace(id), proxmoxLXCDockerHostSourcePrefix)
+}
+
 var canonicalPlatformScopeOrder = []string{
 	"agent",
 	"truenas",
@@ -53,8 +60,7 @@ func RefreshPlatformScopes(resource *Resource) {
 	}
 
 	if resource.Docker != nil {
-		hostSourceID := strings.TrimSpace(resource.Docker.HostSourceID)
-		if strings.HasPrefix(hostSourceID, proxmoxLXCDockerHostSourcePrefix) {
+		if IsProxmoxLXCDockerHostID(resource.Docker.HostSourceID) {
 			add("proxmox-pve")
 			add("docker")
 		}

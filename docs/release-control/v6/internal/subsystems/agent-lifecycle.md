@@ -2810,10 +2810,10 @@ follow that same boundary: lifecycle UI may consume unified-resource
 capabilities for enabled or disabled presentation, but execution must stay
 inside the API-owned action executor wired from `internal/api/router.go` and
 must not shell out, SSH, or call Docker / Podman from lifecycle-local code.
-That API-owned executor may resolve the command WebSocket by Docker source ID
-or canonical Docker host name and may mark its vetted container lifecycle
-dispatch as a trusted agent command after the API action has entered
-execution; lifecycle surfaces still consume only the resource payload, action
+That API-owned executor may resolve the command WebSocket through the
+resource's report token or its own agent identity, never by hostname alone, and
+may mark its vetted container lifecycle dispatch as a trusted agent command
+after the API action has entered execution; lifecycle surfaces still consume only the resource payload, action
 readiness, and action-audit result rather than issuing or approving
 command-agent grants themselves. Because the agent and Pulse server have
 independent clocks, the API-owned Docker result projector validates raw
@@ -8991,6 +8991,18 @@ resource. Independent ID-only or hostname-only fallback remains forbidden for
 token-named resources, preventing a stale report from crossing identities
 while restoring start, stop, restart, and update control for the same agent
 (#1728).
+
+Container resources carry their host's report token for that lookup. A token
+hit counts only when the session also holds the resource's agent ID or hostname,
+because a module on another machine can report under the same token. A resource
+with no token may use only a session under its own agent ID. A hostname alone
+never selects a session, because another machine's agent can hold the same name.
+These checks compare identifiers, not machines: one token reused on two machines
+with one hostname still cannot be told apart. A synthetic `proxmox-lxc-docker:`
+host, which Pulse reads through the Proxmox node's agent, has no agent that can
+carry an action, so its actions read as unavailable with `no_command_agent`. An
+agent installed inside the guest reports its own Docker host and stays a valid
+target (#2681).
 
 A blocked registration is not a silent skip. When the pre-registration check
 reports `canRegister=false`, the agent must log at error level, return a setup

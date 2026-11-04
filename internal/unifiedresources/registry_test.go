@@ -1941,6 +1941,38 @@ func TestResourceRegistry_IngestRecords_CanonicalizesSourceIDWhitespace(t *testi
 	}
 }
 
+func TestResourceRegistry_DockerContainerCarriesItsHostReportToken(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Now().UTC()
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{
+			ID:       "docker-host-1",
+			AgentID:  "pinned-agent",
+			Hostname: "tower",
+			TokenID:  "report-token",
+			Status:   "online",
+			LastSeen: now,
+			Containers: []models.DockerContainer{{
+				ID:    "0123456789abcdef",
+				Name:  "api",
+				State: "running",
+			}},
+		}},
+	})
+
+	for _, resource := range rr.List() {
+		if resource.Type != ResourceTypeAppContainer {
+			continue
+		}
+		if resource.Docker == nil || resource.Docker.TokenID != "report-token" {
+			t.Fatalf("container docker facet = %#v, want the token its host reports under", resource.Docker)
+		}
+		return
+	}
+	t.Fatal("no app container resource was ingested")
+}
+
 func TestResourceRegistry_IngestSnapshotUnifiesLinkedProxmoxNodeViewsByHostIdentity(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

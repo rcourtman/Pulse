@@ -171,7 +171,7 @@ func TestDockerCommandSessionResolutionUsesTenantAndRecoversFromStaleReportToken
 	agents := &scopedFakeDockerActionAgentCommander{
 		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{
 			connected:   map[string]bool{"canonical-agent": true, "stale-agent": true},
-			agentByHost: map[string]string{"docker-host": "stale-agent"},
+			agentByHost: map[string]string{"docker-host": "canonical-agent"},
 		},
 		tokenAgents: map[string]string{"fresh-token": "canonical-agent"},
 	}
@@ -267,22 +267,23 @@ func TestDockerContainerActionExecutorUsesProductionDaemonObservationForIndepend
 	}
 }
 
-func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *testing.T) {
+func TestDockerContainerActionExecutorReachesOwnAgentUnderAcknowledgedID(t *testing.T) {
 	now := time.Now().UTC()
 	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
-	resource.Docker.AgentID = "docker-source-1"
+	resource.Docker.AgentID = "pinned-agent-id"
 	resource.Docker.Hostname = "tower"
+	resource.Docker.TokenID = "report-token"
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot:  models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{resource},
 	})
-	agents := &fakeDockerActionAgentCommander{
-		connected: map[string]bool{
-			"docker-source-1": false,
-			"command-agent-1": true,
+	agents := &scopedFakeDockerActionAgentCommander{
+		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{
+			connected:   map[string]bool{"acknowledged-agent-id": true},
+			agentByHost: map[string]string{"tower": "acknowledged-agent-id"},
 		},
-		agentByHost: map[string]string{"tower": "command-agent-1"},
+		tokenAgents: map[string]string{"report-token": "acknowledged-agent-id"},
 	}
 	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
 
@@ -294,7 +295,7 @@ func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *te
 		RequestedBy:    "operator",
 	}, resource)
 	if !readiness.Available {
-		t.Fatalf("CheckActionAvailable readiness = %#v, want available through hostname-resolved command agent", readiness)
+		t.Fatalf("CheckActionAvailable readiness = %#v, want available through the agent's own session", readiness)
 	}
 
 	record := dockerContainerActionRecord("act_container", "app-container:api", "restart")
@@ -305,14 +306,191 @@ func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *te
 	if result == nil || !result.Success {
 		t.Fatalf("result = %#v, want successful execution", result)
 	}
-	if len(agents.callAgents) != 1 {
-		t.Fatalf("call agents = %#v, want one typed dispatch through hostname-resolved agent", agents.callAgents)
+	if len(agents.callAgents) != 1 || agents.callAgents[0] != "acknowledged-agent-id" {
+		t.Fatalf("call agents = %#v, want one typed dispatch through acknowledged-agent-id", agents.callAgents)
 	}
-	for _, agentID := range agents.callAgents {
-		if agentID != "command-agent-1" {
-			t.Fatalf("called agent %q, want command-agent-1; all calls %#v", agentID, agents.callAgents)
+}
+
+// The command server admits one session per hostname per tenant, so a hostname
+// lookup finds at most one agent, but that agent can be on another machine (#2681).
+func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
+	const namesake = "namesake-agent"
+	tests := []struct {
+		name        string
+		docker      unified.DockerData
+		connected   map[string]bool
+		agentByHost map[string]string
+		tokenAgents map[string]string
+		wantAgent   string
+	}{
+		{
+			name:        "tokenless host with no session of its own stays off a namesake",
+			docker:      unified.DockerData{AgentID: "docker-source-1", Hostname: "tower"},
+			connected:   map[string]bool{namesake: true},
+			agentByHost: map[string]string{"tower": namesake},
+		},
+		{
+			name:        "tokenless host with its own session uses it",
+			docker:      unified.DockerData{AgentID: "docker-source-1", Hostname: "tower"},
+			connected:   map[string]bool{"docker-source-1": true, namesake: true},
+			agentByHost: map[string]string{"tower": namesake},
+			wantAgent:   "docker-source-1",
+		},
+		{
+			name:        "token held by a session on another machine is refused",
+			docker:      unified.DockerData{TokenID: "shared-token", AgentID: "docker-source-1", Hostname: "tower"},
+			connected:   map[string]bool{"other-machine-agent": true},
+			agentByHost: map[string]string{"other-machine": "other-machine-agent"},
+			tokenAgents: map[string]string{"shared-token": "other-machine-agent"},
+		},
+		{
+			name:        "token session that holds the resource's agent ID survives a rename",
+			docker:      unified.DockerData{TokenID: "report-token", AgentID: "agent-1", Hostname: "old-name"},
+			connected:   map[string]bool{"agent-1": true},
+			agentByHost: map[string]string{"new-name": "agent-1"},
+			tokenAgents: map[string]string{"report-token": "agent-1"},
+			wantAgent:   "agent-1",
+		},
+		{
+			name:        "token session on the resource's hostname may hold another ID",
+			docker:      unified.DockerData{TokenID: "report-token", AgentID: "pinned-agent-id", Hostname: "tower"},
+			connected:   map[string]bool{"acknowledged-agent-id": true},
+			agentByHost: map[string]string{"tower": "acknowledged-agent-id"},
+			tokenAgents: map[string]string{"report-token": "acknowledged-agent-id"},
+			wantAgent:   "acknowledged-agent-id",
+		},
+		{
+			name:        "guest discovered host never reaches an agent with the guest's name",
+			docker:      unified.DockerData{AgentID: "proxmox-lxc-docker:pve-a:node-a:141", Hostname: "frigate"},
+			connected:   map[string]bool{namesake: true},
+			agentByHost: map[string]string{"frigate": namesake},
+		},
+		{
+			name:        "guest discovered host is refused even if a session claims its ID",
+			docker:      unified.DockerData{TokenID: "claimed-token", AgentID: "proxmox-lxc-docker:pve-a:node-a:141", Hostname: "frigate"},
+			connected:   map[string]bool{"proxmox-lxc-docker:pve-a:node-a:141": true},
+			agentByHost: map[string]string{"frigate": "proxmox-lxc-docker:pve-a:node-a:141"},
+			tokenAgents: map[string]string{"claimed-token": "proxmox-lxc-docker:pve-a:node-a:141"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := dockerContainerActionExecutor{agents: &scopedFakeDockerActionAgentCommander{
+				fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{connected: tt.connected, agentByHost: tt.agentByHost},
+				tokenAgents:                    tt.tokenAgents,
+			}}
+			docker := tt.docker
+			agentID, err := executor.connectedDockerCommandAgentID(context.Background(), unified.Resource{Docker: &docker})
+			if tt.wantAgent == "" {
+				if err == nil {
+					t.Fatalf("resolved %q, want no command session", agentID)
+				}
+				return
+			}
+			if err != nil || agentID != tt.wantAgent {
+				t.Fatalf("resolved %q, %v; want %q", agentID, err, tt.wantAgent)
+			}
+		})
+	}
+}
+
+func TestDockerContainerActionExecutorDoesNotDispatchToANamesake(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	resource.Docker.AgentID = "docker-source-1"
+	resource.Docker.Hostname = "tower"
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+	agents := &fakeDockerActionAgentCommander{
+		connected:   map[string]bool{"namesake-agent": true},
+		agentByHost: map[string]string{"tower": "namesake-agent"},
+	}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	request := unified.ActionRequest{RequestID: "req-namesake", ResourceID: "app-container:api", CapabilityName: "restart", Reason: "operator requested restart", RequestedBy: "operator"}
+
+	if readiness := executor.CheckActionAvailable(context.Background(), request, resource); readiness.Available || readiness.ReasonCode != "command_agent_disconnected" {
+		t.Fatalf("readiness = %#v, want a disconnected agent", readiness)
+	}
+	record := dockerContainerActionRecord("act_container", "app-container:api", "restart")
+	if _, err := executor.BindActionDispatch(context.Background(), record, unified.ActionDispatchAttempt{ID: "act_container.dispatch.1", ActionID: record.ID}); err == nil {
+		t.Fatal("BindActionDispatch bound the action to a namesake's session")
+	}
+	if _, err := executor.ExecuteAction(actionDispatchTestContext(t, record.ID), record); err == nil || !strings.Contains(err.Error(), "is not connected") {
+		t.Fatalf("ExecuteAction error = %v, want the disconnected agent, not a later binding check", err)
+	}
+	if len(agents.callAgents) != 0 || len(agents.typedCalls) != 0 {
+		t.Fatalf("agent calls = %#v / %#v, want none", agents.callAgents, agents.typedCalls)
+	}
+}
+
+func TestDockerContainerActionExecutorNamesTheFixForAGuestDiscoveredHost(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:frigate", "docker", "running", now)
+	resource.Docker.AgentID = "proxmox-lxc-docker:pve-a:node-a:141"
+	resource.Docker.HostSourceID = resource.Docker.AgentID
+	resource.Docker.Hostname = "frigate"
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+	executor := newDockerContainerActionExecutor(h, &fakeDockerActionAgentCommander{
+		connected:   map[string]bool{"namesake-agent": true},
+		agentByHost: map[string]string{"frigate": "namesake-agent"},
+	}).(dockerContainerActionExecutor)
+
+	readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{
+		RequestID: "req-guest", ResourceID: resource.ID, CapabilityName: "restart", Reason: "operator requested restart", RequestedBy: "operator",
+	}, resource)
+	if readiness.Available || readiness.ReasonCode != "no_command_agent" || !strings.Contains(readiness.Reason, "Install the Pulse agent inside the guest") {
+		t.Fatalf("readiness = %#v, want the guest's own fix named", readiness)
+	}
+
+	// Websocket rows carry no readiness, so the plan refusal is where a user reads this.
+	h.SetActionExecutor(executor)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"req-guest-plan",
+		"resourceId":"app-container:frigate",
+		"capabilityName":"restart",
+		"reason":"operator requested restart",
+		"requestedBy":"operator"
+	}`))
+	h.HandlePlanAction(rec, actionHandlerTestRequest(req, ""))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Install the Pulse agent inside the guest") {
+		t.Fatalf("plan status = %d, body = %s, want a refusal naming the guest's own fix", rec.Code, rec.Body.String())
+	}
+}
+
+// A real snapshot host, not a seeded resource, proves the token reaches the executor.
+func TestDockerContainerActionExecutorRoutesASnapshotContainerByItsHostToken(t *testing.T) {
+	now := time.Now().UTC()
+	registry := unified.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{{
+		ID: "docker-host-1", AgentID: "pinned-agent-id", Hostname: "tower", TokenID: "report-token", Status: "online", LastSeen: now,
+		Containers: []models.DockerContainer{{ID: "0123456789abcdef", Name: "api", State: "running"}},
+	}}})
+	executor := dockerContainerActionExecutor{agents: &scopedFakeDockerActionAgentCommander{
+		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{
+			connected:   map[string]bool{"acknowledged-agent-id": true},
+			agentByHost: map[string]string{"tower": "acknowledged-agent-id"},
+		},
+		tokenAgents: map[string]string{"report-token": "acknowledged-agent-id"},
+	}}
+	for _, resource := range registry.List() {
+		if resource.Type != unified.ResourceTypeAppContainer {
+			continue
 		}
+		agentID, err := executor.connectedDockerCommandAgentID(context.Background(), resource)
+		if err != nil || agentID != "acknowledged-agent-id" {
+			t.Fatalf("resolved %q, %v; want acknowledged-agent-id", agentID, err)
+		}
+		return
 	}
+	t.Fatal("no app container resource was ingested")
 }
 
 func TestDockerContainerActionExecutorFailsWhenCapabilityNoLongerAdvertised(t *testing.T) {

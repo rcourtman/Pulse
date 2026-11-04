@@ -2716,6 +2716,11 @@ view must preserve independent copies, while consumers treat each hostname as
 untrusted observational topology evidence rather than command, discovery, or
 action authority. Raw health-check command text never belongs in the unified
 resource contract.
+App-container `DockerData.TokenID` carries the token ID its Docker host reports
+under, because action dispatch finds a container's agent session through it. It
+is an identifier, not a credential, and it does not prove which machine a session
+is on. `IsProxmoxLXCDockerHostID` is the one test for the synthetic
+`proxmox-lxc-docker:` ID of a Docker host Pulse reads through a Proxmox node.
 Docker host duplicate-identity evidence is monitoring-authored and rides
 `DockerData.IdentityConflict` unchanged: the adapter, resource clone, and
 typed `DockerHostView` accessor must each hand out an independent copy so
