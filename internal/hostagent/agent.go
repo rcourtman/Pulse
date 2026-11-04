@@ -1633,7 +1633,7 @@ func (a *Agent) persistAgentID(agentID string) {
 		return
 	}
 	agentIDPath := filepath.Join(a.stateDir, "agent-id")
-	if err := a.collector.WriteFile(agentIDPath, []byte(agentID), 0600); err != nil {
+	if err := writePrivateAgentState(a.collector, agentIDPath, []byte(agentID)); err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to persist agent-id")
 		return
 	}
