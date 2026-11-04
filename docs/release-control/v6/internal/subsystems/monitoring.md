@@ -9389,6 +9389,11 @@ its efficient route. This changes no TLS/pin, credentials, permissions,
 polling cadence, guest-command/backup-lock checks, completion uncertainty,
 publication ownership or grace-period rules.
 
+Both VM collectors write History through `recordGuestMetrics`, so the fallback
+follows the efficient route's rule: a disk reading with a status reason, either
+a retained `prev-` value or a failed read's allocation, writes no disk sample.
+`TestGuestHistoryObservationAcrossVMCollectors` runs both real collectors.
+
 `guest_inventory_response_test.go` covers complete-body and all-or-nothing
 admission on all three real HTTP readers; `io_counters_test.go` covers
 scoped-empty, extended fields, counter presence and receipt-time controls.

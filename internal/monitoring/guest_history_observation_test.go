@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -310,5 +312,164 @@ func TestGuestHistoryPollFailureAndRecovery(t *testing.T) {
 		if got := m.metricsHistory.GetGuestMetrics(id, metric, time.Hour); len(got) != 2 {
 			t.Errorf("real current recovery did not resume %s History: %d points", metric, len(got))
 		}
+	}
+}
+
+// guestHistoryVMCollector runs one real VM collector against a loopback PVE:
+// "cluster-resources" is the normal path, and "per-node" takes over when that
+// endpoint is unavailable. Guest 105 has a guest agent whose filesystem read
+// fails while phase is 1. Guest 106 never answers a status request, so it only
+// ever has a positive cluster allocation.
+func guestHistoryVMCollector(t *testing.T, collector string) (*Monitor, *atomic.Int32, func() map[int]models.VM) {
+	t.Helper()
+	const mib = uint64(1024 * 1024)
+	phase := &atomic.Int32{}
+	listing := func(vmid int) string {
+		return fmt.Sprintf(`{"type":"qemu","id":"qemu/%d","node":"node","name":"guest-%d","vmid":%d,"status":"running","cpu":0.1,"maxcpu":2,"cpus":2,"mem":%d,"maxmem":%d,"disk":%d,"maxdisk":%d}`,
+			vmid, vmid, vmid, 1000*mib, 1000*mib, 400*mib, 1000*mib)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/cluster/resources"):
+			if collector != "cluster-resources" {
+				http.Error(w, "not available", http.StatusInternalServerError)
+				return
+			}
+			fmt.Fprintf(w, `{"data":[%s,%s]}`, listing(105), listing(106))
+		case strings.HasSuffix(r.URL.Path, "/nodes/node/qemu"):
+			fmt.Fprintf(w, `{"data":[%s,%s]}`, listing(105), listing(106))
+		case strings.HasSuffix(r.URL.Path, "/config"):
+			fmt.Fprint(w, `{"data":{}}`)
+		case strings.HasSuffix(r.URL.Path, "/status/current"):
+			if strings.Contains(r.URL.Path, "/106/") {
+				http.Error(w, "permission denied", http.StatusForbidden)
+				return
+			}
+			meminfo := ""
+			if phase.Load() != 1 {
+				meminfo = fmt.Sprintf(`,"meminfo":{"total":%d,"available":%d}`, 1000*mib, 800*mib)
+			}
+			fmt.Fprintf(w, `{"data":{"status":"running","agent":1,"maxmem":%d,"mem":%d%s}}`, 1000*mib, 1000*mib, meminfo)
+		case strings.HasSuffix(r.URL.Path, "file-read"):
+			http.Error(w, "permission denied", http.StatusForbidden)
+		case strings.HasSuffix(r.URL.Path, "get-fsinfo"):
+			if phase.Load() == 1 {
+				http.Error(w, "permission denied", http.StatusForbidden)
+				return
+			}
+			fmt.Fprintf(w, `{"data":{"result":[{"mountpoint":"/","type":"ext4","total-bytes":%d,"used-bytes":%d}]}}`, 1000*mib, 300*mib)
+		case strings.HasSuffix(r.URL.Path, "network-get-interfaces"):
+			fmt.Fprint(w, `{"data":{"result":[]}}`)
+		case strings.HasSuffix(r.URL.Path, "get-osinfo"):
+			fmt.Fprint(w, `{"data":{"name":"Linux","version":"fixture"}}`)
+		case strings.HasSuffix(r.URL.Path, "info"):
+			fmt.Fprint(w, `{"data":{"result":{"version":"1.0"}}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := guestHistoryObservationMonitor(t)
+	m.alertManager = alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(m.alertManager.Stop)
+	m.config, m.state, m.rateTracker = &config.Config{}, models.NewState(), NewRateTracker()
+	m.guestMetadataLimiter = make(map[string]time.Time)
+	m.resourceStore = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	online := map[string]string{"node": "online"}
+	poll := func() map[int]models.VM {
+		t.Helper()
+		ctx := context.Background()
+		if collector == "per-node" {
+			m.pollVMsWithNodes(ctx, "collectors", "", false, client, []proxmox.Node{{Node: "node", Status: "online"}}, online)
+		} else if !m.pollVMsAndContainersEfficient(ctx, "collectors", "", false, client, online) {
+			t.Fatal("cluster/resources collector fell back")
+		}
+		// Publication is what supplies the next poll's previous guests.
+		m.updateResourceStore(m.currentStateWithScope())
+		vms := make(map[int]models.VM)
+		for _, vm := range m.state.GetSnapshot().VMs {
+			vms[vm.VMID] = vm
+		}
+		if len(vms) != 2 {
+			t.Fatalf("%s collector published %d guests, want 2", collector, len(vms))
+		}
+		return vms
+	}
+	return m, phase, poll
+}
+
+func TestGuestHistoryObservationAcrossVMCollectors(t *testing.T) {
+	for _, collector := range []string{"cluster-resources", "per-node"} {
+		t.Run(collector, func(t *testing.T) {
+			m, phase, poll := guestHistoryVMCollector(t, collector)
+			fetching, allocated := makeGuestID("collectors", "node", 105), makeGuestID("collectors", "node", 106)
+			assertPoints := func(when, id, metric string, want int) {
+				t.Helper()
+				if got := m.metricsHistory.GetGuestMetrics(id, metric, time.Hour); len(got) != want {
+					t.Errorf("%s: %s %s in-memory History has %d points, want %d", when, id, metric, len(got), want)
+				}
+				if got := guestHistoryStoredPoints(t, m, "vm", id, metric); len(got) != want {
+					t.Errorf("%s: %s %s persisted History has %d points, want %d", when, id, metric, len(got), want)
+				}
+			}
+
+			initial := poll()
+			if vm := initial[105]; vm.DiskStatusReason != "" || vm.Disk.Usage != 30 || vm.Memory.Observation.State != "current" {
+				t.Fatalf("first poll did not read the guest: reason=%q disk=%v memory=%q", vm.DiskStatusReason, vm.Disk.Usage, vm.Memory.Observation.State)
+			}
+			if vm := initial[106]; vm.DiskStatusReason == "" || vm.Disk.Usage <= 0 {
+				t.Fatalf("fixture lost the failed read's positive allocation: reason=%q disk=%v", vm.DiskStatusReason, vm.Disk.Usage)
+			}
+			assertPoints("first poll", fetching, "disk", 1)
+			assertPoints("first poll", fetching, "memory", 1)
+			assertPoints("first poll", allocated, "disk", 0)
+
+			// Persisted points use second precision. Cross a second so a falsely
+			// renewed point cannot hide behind the original key.
+			time.Sleep(1100 * time.Millisecond)
+			phase.Store(1)
+			failed := poll()
+			if vm := failed[105]; !strings.HasPrefix(vm.DiskStatusReason, "prev-") || vm.Disk.Usage != 30 || vm.Memory.Observation.State != "last-known" {
+				t.Fatalf("fixture did not retain readings: reason=%q disk=%v memory=%q", vm.DiskStatusReason, vm.Disk.Usage, vm.Memory.Observation.State)
+			}
+			assertPoints("failed poll", fetching, "disk", 1)
+			assertPoints("failed poll", fetching, "memory", 1)
+			assertPoints("failed poll", fetching, "memoryused", 1)
+			assertPoints("failed poll", allocated, "disk", 0)
+			assertPoints("failed poll", fetching, "cpu", 2)
+
+			time.Sleep(1100 * time.Millisecond)
+			phase.Store(2)
+			if vm := poll()[105]; vm.DiskStatusReason != "" || vm.Disk.Usage != 30 {
+				t.Fatalf("recovery did not read the guest again: reason=%q disk=%v", vm.DiskStatusReason, vm.Disk.Usage)
+			}
+			assertPoints("recovery", fetching, "disk", 2)
+			assertPoints("recovery", fetching, "memory", 2)
+			assertPoints("recovery", allocated, "disk", 0)
+		})
+	}
+}
+
+func TestMockVMPollingDefersMemoryHistoryToCanonicalSampler(t *testing.T) {
+	for _, collector := range []string{"cluster-resources", "per-node"} {
+		t.Run(collector, func(t *testing.T) {
+			m, _, poll := guestHistoryVMCollector(t, collector)
+			mustSetMockEnabled(t, true)
+			poll()
+			id := makeGuestID("collectors", "node", 105)
+			for _, metric := range []string{"cpu", "memory", "disk"} {
+				if got := m.metricsHistory.GetGuestMetrics(id, metric, time.Hour); len(got) != 0 {
+					t.Errorf("mock mode wrote native %s History: %d points", metric, len(got))
+				}
+				if got := guestHistoryStoredPoints(t, m, "vm", id, metric); len(got) != 0 {
+					t.Errorf("mock mode persisted native %s History: %d points", metric, len(got))
+				}
+			}
+		})
 	}
 }
