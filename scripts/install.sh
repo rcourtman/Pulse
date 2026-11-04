@@ -2821,17 +2821,52 @@ safe_profile_restore_state_metadata() {
     done < "$metadata_file"
 }
 
+safe_profile_read_recovery_flags() {
+    local unit="$1" allow_absent="${2:-false}"
+    local state="" load="" active="" enabled=""
+    local was_active="false" was_enabled="false"
+
+    state=$(read_agent_removal_unit_state "$unit") || return 1
+    read -r load active enabled <<< "$state"
+    if [[ "$load" == not-found ]]; then
+        [[ "$allow_absent" == true ]] || return 1
+    else
+        [[ "$load" == loaded ]] || return 1
+        [[ "$active" != active ]] || was_active="true"
+        # The existing rollback manifest records permanent enablement as a
+        # boolean. Do not turn runtime-only enablement, masks, links or other
+        # unrepresentable states into a different recovery configuration.
+        case "$enabled" in
+            enabled) was_enabled="true" ;;
+            disabled) ;;
+            *) return 1 ;;
+        esac
+    fi
+    printf '%s %s\n' "$was_active" "$was_enabled"
+}
+
 safe_profile_begin_transaction() {
     local unit_path="$SAFE_PROFILE_COLLECTOR_UNIT"
     local prior_profile=""
     local transaction_id=""
     local manifest_file=""
     local docker_member="false"
+    local collector_flags="" helper_flags=""
+    local collector_active="" collector_enabled="" helper_active="" helper_enabled=""
 
     [[ -x "${INSTALL_DIR}/${BINARY_NAME}" && -f "$unit_path" ]] ||
         fail "--safe-profile-apply requires an existing Linux systemd Pulse collector installation" "$EXIT_MISSING_ARGS"
     safe_profile_effective_unit_unoverridden ||
         fail "Refusing safe-profile migration while the collector has a different effective FragmentPath or any systemd drop-in override; consolidate the effective unit first" "$EXIT_GENERAL"
+    # Read each unit's complete bounded state before creating a snapshot or
+    # reducing credentials. is-active/is-enabled failures are not evidence of
+    # an inactive, disabled installation that rollback should leave stopped.
+    collector_flags=$(safe_profile_read_recovery_flags "${AGENT_NAME}.service") ||
+        fail "Refusing safe-profile migration: collector service recovery state could not be confirmed; installed files, service state and credentials were left unchanged" "$EXIT_GENERAL"
+    helper_flags=$(safe_profile_read_recovery_flags "${PRIVILEGED_HELPER_NAME}.socket" true) ||
+        fail "Refusing safe-profile migration: helper socket recovery state could not be confirmed; installed files, service state and credentials were left unchanged" "$EXIT_GENERAL"
+    read -r collector_active collector_enabled <<< "$collector_flags"
+    read -r helper_active helper_enabled <<< "$helper_flags"
     [[ ! -L "$SAFE_PROFILE_STATE_DIR" ]] ||
         fail "Refusing symlinked safe-profile transaction directory: ${SAFE_PROFILE_STATE_DIR}" "$EXIT_GENERAL"
     mkdir -p "$SAFE_PROFILE_STATE_DIR"
@@ -2850,10 +2885,10 @@ safe_profile_begin_transaction() {
         "PRIOR_PROFILE=${prior_profile}" \
         "TARGET_PROFILE=typed-helper-monitoring-only" \
         "STATE_DIR=${STATE_DIR}" \
-        "COLLECTOR_ACTIVE=$(systemctl is-active --quiet "${AGENT_NAME}.service" 2>/dev/null && printf true || printf false)" \
-        "COLLECTOR_ENABLED=$(systemctl is-enabled --quiet "${AGENT_NAME}.service" 2>/dev/null && printf true || printf false)" \
-        "HELPER_ACTIVE=$(systemctl is-active --quiet "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null && printf true || printf false)" \
-        "HELPER_ENABLED=$(systemctl is-enabled --quiet "${PRIVILEGED_HELPER_NAME}.socket" 2>/dev/null && printf true || printf false)" >> "$manifest_file"
+        "COLLECTOR_ACTIVE=${collector_active}" \
+        "COLLECTOR_ENABLED=${collector_enabled}" \
+        "HELPER_ACTIVE=${helper_active}" \
+        "HELPER_ENABLED=${helper_enabled}" >> "$manifest_file"
     if id -nG "$LEAST_PRIVILEGE_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
         docker_member="true"
     fi
