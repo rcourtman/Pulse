@@ -56,7 +56,7 @@ describe('PBS protection disagreement help', () => {
     expect(steps[1]).toContain('confirm the owning installation');
     expect(steps[1]).toContain('choose the newest point whose Source is PBS');
     expect(steps[1]).toContain('Created time and State');
-    expect(steps[1]).toContain('Hover the Created age for its absolute timestamp');
+    expect(steps[1]).toContain('Tap the point for its absolute Created time');
     expect(steps[1]).toContain('if unavailable, keep the time unknown');
     expect(steps[1]).toContain('refresh time is not a matching backup timestamp');
     expect(steps[1]).toContain('guest snapshot is not a PBS backup');
