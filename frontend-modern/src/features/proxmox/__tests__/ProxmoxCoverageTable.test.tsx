@@ -566,9 +566,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(task).toHaveTextContent(completedWithWarning.latestTask!.error!);
     expect(task).toHaveTextContent('task-with-warning');
     expect(task).toHaveTextContent('Not reported');
-    expect(
-      within(task).getByText('Task status does not verify a restore or guest responsiveness.'),
-    ).toHaveClass('whitespace-normal');
+    expect(within(task).getByText("A task result doesn't prove a restore works.")).toHaveClass(
+      'whitespace-normal',
+    );
     // A reported OK does not erase a provider warning or override protection.
     expect(screen.getByText(completedWithWarning.latestTask!.error!)).toHaveClass(
       'whitespace-pre-wrap',
@@ -959,9 +959,8 @@ describe('Coverage provider-outcome-meaning', () => {
     // Replacing Job with Collection would create another unsupported claim.
     expect(panel).not.toHaveTextContent('Collection Success');
     expect(panel).toHaveTextContent(
-      'Provider evidence describes inventory reads or retained restore points, not a backup job result.',
+      "What Pulse could read from inventory and restore points. Reported outcome isn't a backup job result.",
     );
-    expect(panel).toHaveTextContent('Task and restore-point states are shown separately.');
   });
 
   it.each(['success', 'warning', 'failed', 'running', 'unknown'])(
@@ -1337,9 +1336,7 @@ describe('indeterminate task order in the canonical Coverage consumer', () => {
       expect(panel).toHaveTextContent('unknown-start');
       expect(panel).toHaveTextContent('retained failure');
       expect(panel).toHaveTextContent('dated-ok');
-      expect(panel).toHaveTextContent(
-        'Task status does not verify a restore or guest responsiveness.',
-      );
+      expect(panel).toHaveTextContent("A task result doesn't prove a restore works.");
     },
   );
 });

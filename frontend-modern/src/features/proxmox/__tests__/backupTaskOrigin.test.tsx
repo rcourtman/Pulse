@@ -81,10 +81,8 @@ describe('task-reported origin through the inventory consumer', () => {
       expect(value(section(panel), 'Task node')).toHaveTextContent('historical-node');
       expect(value(section(panel), 'Task connection')).toHaveTextContent('east');
       expect(value(section(panel), 'Status')).toHaveTextContent('Failed');
-      expect(section(panel)).toHaveTextContent('not the workload’s current placement');
-      expect(section(panel)).toHaveTextContent(
-        'Task status does not verify a restore or guest responsiveness.',
-      );
+      expect(section(panel)).toHaveTextContent('Connection and node are where the task ran.');
+      expect(section(panel)).toHaveTextContent("A task result doesn't prove a restore works.");
       expect(api.fetch).toHaveBeenCalledTimes(2);
       fireEvent.click(within(panel).getByRole('button', { name: 'Collapse same-name details' }));
       const west = await open('west');

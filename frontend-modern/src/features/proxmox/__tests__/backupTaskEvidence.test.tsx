@@ -98,12 +98,10 @@ describe('latest backup task evidence through the inventory consumer', () => {
       'wrap-anywhere',
     );
     expect(value(section, 'Error').querySelector('svg')).toBeNull();
-    expect(section).toHaveTextContent(
-      'Task status does not verify a restore or guest responsiveness.',
+    expect(section).toHaveTextContent("A task result doesn't prove a restore works.");
+    expect(within(section).getByText("A task result doesn't prove a restore works.")).toHaveClass(
+      'whitespace-normal',
     );
-    expect(
-      within(section).getByText('Task status does not verify a restore or guest responsiveness.'),
-    ).toHaveClass('whitespace-normal');
     expect(panel).toHaveTextContent('Restore points');
     expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);

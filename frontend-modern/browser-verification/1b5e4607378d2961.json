@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "be2a8c0f2811c05b0509a116bcc401f139fbd513",
+  "verified_at": "2026-11-04T12:00:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "19cad3ce2f038a83a8f4b919e0808e0ce29f589198ac9dc7f15c9dd9f2585dde"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock stack built from this change, with one assessment phrase reworded after this check and covered by the test that pins it",
+    "More details at 390 and 1280 shows four short limit lines across Protection assessment, Latest task and Provider evidence",
+    "Open row with More details is 1148px at 390 and 695px at 1280, with no horizontal overflow"
+  ],
+  "interactions": [
+    "Expanded a Coverage row and opened More details at 390 and 1280",
+    "Read each limit line from the page at 390"
+  ]
+}

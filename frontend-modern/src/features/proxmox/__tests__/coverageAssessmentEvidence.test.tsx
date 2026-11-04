@@ -106,8 +106,9 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
         expect(time).toHaveClass('whitespace-normal');
       }
       expect(valueRow(panel, 'Last verified')).toHaveTextContent('03:00:00');
-      expect(panel).toHaveTextContent('Evaluation time is not a backup completion time.');
-      expect(panel).toHaveTextContent('They do not verify a restore or guest responsiveness.');
+      expect(panel).toHaveTextContent(
+        "From the server assessment, independent of this filtered list. Evaluated isn't a backup time, and Last verified doesn't prove a restore works.",
+      );
       expect(panel.querySelector(`time[datetime="${freshArchiveAt}"]`)).toBeNull();
       expect(within(panel).getByRole('img', { name: 'Needs attention' })).toBeInTheDocument();
       expect(panel).toHaveTextContent('PVE connection');
@@ -144,7 +145,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
       'datetime',
       pointAt,
     );
-    expect(panel).toHaveTextContent('independent of the current list and its filters');
+    expect(panel).toHaveTextContent('independent of this filtered list');
     fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
     await waitFor(() =>
       expect(screen.queryByRole('note', { name: 'Restore point scope' })).toBeNull(),

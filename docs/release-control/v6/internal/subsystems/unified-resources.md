@@ -140,6 +140,12 @@ workload's canonical latest backup, so guest snapshots and incomplete points nev
 count and an undated completed point leaves it unnamed. Tapped points and More details survive
 polling and width changes and close when another workload opens.
 
+Each More details section keeps its limits short: assessment times are the server's
+and not the filtered list, Evaluated is not a backup time and Last verified does not
+prove a restore works, a provider's reported outcome is not a backup job result, a
+task's connection and node are where it ran, and a task result does not prove a
+restore works.
+
 Normal-suite `coverageRestorePointIdentity.test.tsx` covers the default state and
 both taps at phone and desktop widths.
 
