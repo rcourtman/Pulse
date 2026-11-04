@@ -115,6 +115,45 @@ func TestIssue2681ExclusiveStorageViewDoesNotOutvoteStrongerMatch(t *testing.T) 
 	}
 }
 
+// The reporter's names: connection "Hetzner pmx1" ends in the node name both
+// installations use. A namespace named after a connection gives its guest the
+// badge, and one that fits both guests equally gives it to neither.
+func TestIssue2681ConnectionNamespaceSettlesSharedNodeName(t *testing.T) {
+	backupTime := time.Now().Add(-2 * time.Hour).Truncate(time.Second)
+	for _, tc := range []struct{ namespace, wantOwner string }{
+		{namespace: "Hetzner pmx1", wantOwner: "Hetzner pmx1"},
+		{namespace: "hetzner-pmx1", wantOwner: "Hetzner pmx1"},
+		{namespace: "Home", wantOwner: "Home"},
+		{namespace: "pmx1"},
+		{namespace: "site-pmx1"},
+		{namespace: "hetzner"},
+	} {
+		t.Run(tc.namespace, func(t *testing.T) {
+			state := NewState()
+			state.UpdateVMs([]VM{
+				{VMID: 100, Name: "docker1", Instance: "Home", Node: "pmx1"},
+				{VMID: 100, Name: "docker1", Instance: "Hetzner pmx1", Node: "pmx1"},
+			})
+			state.mu.Lock()
+			state.PBSBackups = []PBSBackup{{
+				ID: "b-100", VMID: "100", BackupType: "vm", BackupTime: backupTime,
+				Instance: "pbs-main", Datastore: "backups", Namespace: tc.namespace,
+			}}
+			state.mu.Unlock()
+			state.SyncGuestBackupTimes()
+			for _, vm := range state.GetSnapshot().VMs {
+				if vm.Instance == tc.wantOwner {
+					if !vm.LastBackup.Equal(backupTime) {
+						t.Errorf("%s LastBackup = %v, want %v", vm.Instance, vm.LastBackup, backupTime)
+					}
+				} else if !vm.LastBackup.IsZero() {
+					t.Errorf("%s LastBackup = %v, want none", vm.Instance, vm.LastBackup)
+				}
+			}
+		})
+	}
+}
+
 func TestPBSExclusiveConfirmersOmitsOverlappingViews(t *testing.T) {
 	state := NewState()
 	state.UpdatePBSGuestConfirmationsForInstance("home", []PBSGuestConfirmation{

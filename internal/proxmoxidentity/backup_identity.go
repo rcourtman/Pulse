@@ -4,8 +4,16 @@ import "strings"
 
 const (
 	NamespaceNoLocationMatch = iota
+	// NamespaceInstanceSuffixMatch: only a suffix of the connection's name.
+	NamespaceInstanceSuffixMatch
+	// NamespaceNodeSuffixMatch: only a suffix of the node's name.
+	NamespaceNodeSuffixMatch
+	// NamespaceWeakInstanceMatch: the connection's exact name, for a guest on a
+	// node with another name.
 	NamespaceWeakInstanceMatch
+	// NamespaceInstanceMatch: the connection's exact name, with no node known.
 	NamespaceInstanceMatch
+	// NamespaceNodeMatch: the node's exact name.
 	NamespaceNodeMatch
 )
 
@@ -34,20 +42,24 @@ func NamespaceMatchesLocation(namespace, location string) bool {
 }
 
 // NamespaceLocationScore ranks how strongly a PBS namespace identifies the
-// current guest placement. Node matches are strongest because clustered PVE
+// current guest placement. An exact name outranks any suffix: installations can
+// reuse a node name, so "hetzner-pmx1" ending in node "pmx1" does not say which
+// installation wrote a snapshot, while equalling connection "Hetzner pmx1" does
+// (#2681). Within each, the node outranks the connection because clustered PVE
 // connections can use an API entrypoint name that is not the guest's node.
 func NamespaceLocationScore(namespace, instanceName, nodeName string) int {
-	nodeMatches := NamespaceMatchesLocation(namespace, nodeName)
-	instanceMatches := NamespaceMatchesLocation(namespace, instanceName)
-
 	switch {
-	case nodeMatches:
+	case LocationLabelsEqual(namespace, nodeName):
 		return NamespaceNodeMatch
-	case instanceMatches && (normalizeLocationLabel(nodeName) == "" ||
-		normalizeLocationLabel(nodeName) == normalizeLocationLabel(instanceName)):
-		return NamespaceInstanceMatch
-	case instanceMatches:
+	case LocationLabelsEqual(namespace, instanceName):
+		if normalizeLocationLabel(nodeName) == "" {
+			return NamespaceInstanceMatch
+		}
 		return NamespaceWeakInstanceMatch
+	case NamespaceMatchesLocation(namespace, nodeName):
+		return NamespaceNodeSuffixMatch
+	case NamespaceMatchesLocation(namespace, instanceName):
+		return NamespaceInstanceSuffixMatch
 	default:
 		return NamespaceNoLocationMatch
 	}
