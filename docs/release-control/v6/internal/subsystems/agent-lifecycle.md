@@ -4175,8 +4175,11 @@ unauthenticated bootstrap behavior.
    the capability must still be provisioned up front rather than diagnosed
    later. These commands go only to the agent linked to the guest's node on its
    connection, not to whichever agent shares the node's name, and a node with
-   no linked agent logs once at warn and is skipped (#2681). Agent registration
-   and session admission are unchanged. The
+   no linked agent logs once at warn and is skipped (#2681). When an agent reports
+   addresses but not the node's endpoint IP (NAT, proxy), its automatic link holds
+   across node polls while the node's own inventory corroborates the agent
+   (`TestPVEPollKeepsNATNodeAgentLinkThroughTheGuestPoll`). Agent registration and
+   session admission are unchanged. The
    `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` allowlist must gate
    the socket probe as well as inventory collection, so opting into specific
    guests never leaves every other guest probed each cycle.

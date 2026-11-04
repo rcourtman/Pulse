@@ -3779,7 +3779,24 @@ match is not machine identity across sites that reuse RFC1918 ranges, so
 every hostname- or IP-based agent match is rejected when the candidate
 agent's linked nodes live in a different named cluster or carry a different
 TLS fingerprint, and a hostname-based match is also rejected when the node's
-endpoint IP is absent from the candidate agent's reported IPs. Weak-evidence
+endpoint IP is absent from the candidate agent's reported IPs. The node's own
+inventory can answer only that last mismatch, because a node whose endpoint is a
+NAT or proxy IP gives it with its own agent too: the rejection, and the node
+poll's clearing of an automatic link, stands down when the provider-observed
+`NetworkInterfaces` list an address the agent reports that no other machine's
+inventory lists. A private or shared-range address, which any machine at another
+site can hold, also needs the agent's hostname to match the node's name and no
+same-named node of unknown inventory. Loopback, link-local, Docker bridge and
+other host-local addresses are never evidence (`NodeLinkAddress`,
+`IsHostLocalLinkInterface` and `LinkAddressCanRepeatAcrossSites` in
+`internal/models/node_machine_identity.go`, which monitoring's report-time
+matcher shares). A same-named machine holding the same private address that is
+not itself monitored as a node cannot be told apart this way. Proofs:
+`internal/models/state_host_test.go`
+(`TestUpdateNodesForInstanceNATNodeLinkFollowsItsInventory`,
+`TestUpdateNodesForInstanceNATAgentsStayOnTheirOwnConnections`) and
+`internal/monitoring/monitor_host_agents_test.go`
+(`TestPVEPollKeepsNATNodeAgentLinkThroughTheGuestPoll`). Weak-evidence
 folds across connection instances — a bare-hostname endpoint alias or a
 shared linked-agent identity — additionally require positive same-machine
 proof (matching non-empty cluster identity or matching TLS fingerprints)
@@ -8585,8 +8602,10 @@ result caching (minipc probe-storm incident, 2026-08-20):
   falls back to the agent's token, and only when live state shows no other agent
   owns that session or holds the token under an equivalent hostname, because the
   command server admits one session per hostname and a second machine must not
-  borrow the first one's. A node whose endpoint address the agent does not report
-  (NAT, proxy) loses its automatic link on each node poll and needs a manual link.
+  borrow the first one's. When an agent reports addresses but not the node's
+  endpoint IP (NAT, proxy), the automatic link holds while the node's own inventory
+  corroborates the agent. Otherwise each node poll clears it and it needs a manual
+  link.
 
 Proofs in `internal/monitoring/monitor_docker_test.go`:
 `TestCheckContainersForDocker_InFlightProbeNotReissued`,

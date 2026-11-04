@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net"
 	"slices"
 	"strings"
 	"sync"
@@ -4605,54 +4604,21 @@ func (m *Monitor) findLinkedProxmoxEntity(hostname string) (nodeID, vmID, contai
 	return m.findLinkedProxmoxEntityWithHints(hostname, "", nil)
 }
 
-// Host-local addresses may be unique among the monitored PVE nodes while also
-// existing on an unrelated agent host. They are not machine identity evidence.
-func normalizeAgentLinkIP(address string) string {
-	normalized := unifiedresources.NormalizeIP(address)
-	if ip := net.ParseIP(normalized); ip != nil && ip.IsGlobalUnicast() {
-		return normalized
-	}
-	return ""
-}
-
-// Do not discard all bridges: Proxmox management addresses commonly use vmbr0,
-// and operators may use names such as br-mgmt. Docker's automatically named
-// user-defined bridges use br- followed by the first 12 hex characters of the
-// network ID. Explicit report-IP and endpoint hints remain usable for routable
-// addresses.
-func isHostLocalAgentLinkInterface(name string) bool {
-	name = strings.ToLower(strings.TrimSpace(name))
-	if name == "lo" || strings.HasPrefix(name, "docker") {
-		return true
-	}
-
-	bridgeID, found := strings.CutPrefix(name, "br-")
-	if !found || len(bridgeID) != 12 {
-		return false
-	}
-	for _, character := range bridgeID {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
 func collectReportedHostIPs(
 	reportIP string,
 	network []agentshost.NetworkInterface,
 ) map[string]struct{} {
 	ips := make(map[string]struct{})
-	if normalized := normalizeAgentLinkIP(reportIP); normalized != "" {
+	if normalized := models.NodeLinkAddress(reportIP); normalized != "" {
 		ips[normalized] = struct{}{}
 	}
 
 	for _, nic := range network {
-		if isHostLocalAgentLinkInterface(nic.Name) {
+		if models.IsHostLocalLinkInterface(nic.Name) {
 			continue
 		}
 		for _, address := range nic.Addresses {
-			if normalized := normalizeAgentLinkIP(address); normalized != "" {
+			if normalized := models.NodeLinkAddress(address); normalized != "" {
 				ips[normalized] = struct{}{}
 			}
 		}
@@ -4664,11 +4630,11 @@ func collectReportedHostIPs(
 func collectNodeNetworkIPs(network []unifiedresources.NetworkInterface) map[string]struct{} {
 	ips := make(map[string]struct{})
 	for _, nic := range network {
-		if isHostLocalAgentLinkInterface(nic.Name) {
+		if models.IsHostLocalLinkInterface(nic.Name) {
 			continue
 		}
 		for _, address := range nic.Addresses {
-			if normalized := normalizeAgentLinkIP(address); normalized != "" {
+			if normalized := models.NodeLinkAddress(address); normalized != "" {
 				ips[normalized] = struct{}{}
 			}
 		}
@@ -4735,7 +4701,7 @@ func newGuestNamedLikeAgent(id string, isContainer bool, network []unifiedresour
 	ips := collectNodeNetworkIPs(network)
 	if len(network) == 0 {
 		for _, address := range addresses {
-			if normalized := normalizeAgentLinkIP(address); normalized != "" {
+			if normalized := models.NodeLinkAddress(address); normalized != "" {
 				ips[normalized] = struct{}{}
 			}
 		}
@@ -4771,21 +4737,6 @@ func sameProxmoxGuestReference(a, b string) bool {
 	return aOK && bOK && aInstance == bInstance && aVMID == bVMID
 }
 
-// agentLinkAddressCanRepeatAcrossSites reports whether separate sites can both use
-// an address: the private ranges, and the shared range CGNAT and overlay networks
-// hand out.
-func agentLinkAddressCanRepeatAcrossSites(address string) bool {
-	ip := net.ParseIP(address)
-	if ip == nil {
-		return true
-	}
-	if ip.IsPrivate() {
-		return true
-	}
-	v4 := ip.To4()
-	return v4 != nil && v4[0] == 100 && v4[1]&0xc0 == 64
-}
-
 // guestProvenByAddress finds the guest holding an address the agent reports, when
 // that address cannot be anyone else's. Two guests holding one address proves
 // nothing, since sites reuse ranges. For the same reason an address from a reusable
@@ -4808,7 +4759,7 @@ func guestProvenByAddress(guests []guestNamedLikeAgent, reportedIPs map[string]s
 			if _, reported := reportedIPs[ip]; !reported || owners[ip] != 1 {
 				continue
 			}
-			if !allKnown && agentLinkAddressCanRepeatAcrossSites(ip) {
+			if !allKnown && models.LinkAddressCanRepeatAcrossSites(ip) {
 				continue
 			}
 			if proven != nil && proven.id != guests[i].id {
