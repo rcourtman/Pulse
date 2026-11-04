@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "parent": "ed6e696218b5226a8836f28a908328d943487143",
+  "content_fingerprint": "065c2475dcf5f534",
+  "verified_blobs": {
+    "internal/cloudcp/portal/dist/build_manifest.json": "6abb1053e09159fbdf093848707facf994c13539",
+    "internal/cloudcp/portal/dist/portal_app.css": "088f77be5d5fdeaf48729c3cce38d79530fa1179",
+    "internal/cloudcp/portal/frontend/src/styles.css": "74b2f01a53b2691bfee323595d07318fe46151a1"
+  },
+  "verified_at": "2026-11-04T13:18:21.078874+00:00",
+  "surface": "Native embedded Pulse Account header through authenticated Access roster and signed-out no-email recovery",
+  "command": "pulse-worker-browser tmp/portal-header-evidence/verify.cjs",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 780,
+      "theme": "dark"
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "theme": "dark"
+    }
+  ],
+  "checks": 385,
+  "result": "passed",
+  "fixture": "Unchanged native Go template and JS; real built CSS; reserved example.com/.net account/member identities; 254-character synthetic identity stress. Fixture-only GET bootstrap/roster and POST logout. No production, live accounts or external network.",
+  "comparisons": "Before: 320px page is 339px wide in both browsers, 390px identity ellipsized, maximum-length identity also overflows desktop (2019/2020px). After: whole identity, theme and single-line Sign out fit every tested width; glyph containment and unchanged main/header text pass. Theme persists; real keyboard logout POSTs once with empty body, reloads signed-out bootstrap and withdraws account controls.",
+  "captures": {
+    "count": 16,
+    "pairs": 8,
+    "location": "Current output captures/; originals captured before source edit, after captures use final CSS. All opened with native view_image; CAPTURES.md indexes comparable pairs."
+  },
+  "limits": "CSS-only reflow; template/JS byte-identical to base. No API, authorization, grant, route, mail, customer/native/installed or release proof. Existing owner/Core/Delivery recovery and excluded investigations unchanged. Portal is outside the main-frontend guard classifier; its skip is not proof."
+}
