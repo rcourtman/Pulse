@@ -1744,7 +1744,7 @@ header .logout-btn:hover,
 .portal-auth-scope-row h3 { margin: 0; font-size: 13px; font-weight: 600; }
 .portal-auth-scope-row p { margin: 0; font-size: 13px; color: var(--ink-secondary); }
 
-.portal-auth-panel { position: sticky; top: 72px; }
+.portal-auth-panel { position: sticky; top: 72px; min-width: 0; }
 
 .portal-auth-card {
   display: flex;
@@ -1797,7 +1797,8 @@ header .logout-btn:hover,
 .portal-auth-command code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12.5px;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   color: var(--ink);
 }
 .access-invite-delivery-note {
@@ -1905,7 +1906,7 @@ header .logout-btn:hover,
   .billing-action-row,
   .billing-action-row-surface { grid-template-columns: 1fr; }
 
-  .portal-auth-shell { grid-template-columns: 1fr; min-height: 0; }
+  .portal-auth-shell { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .portal-auth-panel { position: static; order: -1; }
 
   .portal-support-simple-row { grid-template-columns: 1fr; gap: 4px; }

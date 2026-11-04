@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "parent": "26b81dcbb4122df99619b219020d0ef6c8c3bdfc",
+  "content_fingerprint": "08c293564ecc0571",
+  "verified_blobs": {
+    "internal/cloudcp/portal/frontend/src/styles.css": "43fc388aa0e91cb5a5540bb1f36ebb2ce6d1f3ec",
+    "internal/cloudcp/portal/dist/portal_app.css": "731c60a7b0e95d250557d3fdafedc577482421b4",
+    "internal/cloudcp/portal/dist/build_manifest.json": "15b5026881545fc3ce14d3db9534f8e7103f2ef5"
+  },
+  "verified_at": "2026-11-04T09:57:58.469Z",
+  "surface": "Native embedded Pulse Account sign-in with email unavailable and available",
+  "command": "pulse-worker-browser tmp/no-email-reflow/browser.cjs",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 780
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "checks": 253,
+  "result": "passed",
+  "fixture": "Real portal.html and compiled served assets; synthetic bootstrap and 429/success sign-in HTTP responses. No live mail, command execution, saved account or production access.",
+  "comparisons": "Both engines: 24 no-email before/after cases; unchanged page text, exact selected command bytes, no after overflow, keyboard theme control; email Enter/pending/retry/resend at all three widths. No page exceptions.",
+  "captures": {
+    "count": 16,
+    "location": "Current Web output captures/; individual pairs indexed in CAPTURES.md and retained with OUTCOME.md. All 16 original images opened using native view_image before commit."
+  },
+  "limits": "No new authentication, mail, command, access grant, production redemption, installed/reverse recovery or release outcome. Portal is outside the main-frontend classifier; its skip does not establish this proof."
+}
