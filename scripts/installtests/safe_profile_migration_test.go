@@ -338,12 +338,19 @@ safe_profile_restore_transaction "$SAFE_PROFILE_TRANSACTION_DIR" recovery-contro
 				if err != nil {
 					t.Fatal(err)
 				}
+				// Quiescence temporarily disables units before restoring files.
+				// Check the saved enable/start intent in the restoration phase,
+				// not those earlier safety operations.
+				restored := strings.SplitN(string(calls), "systemctl daemon-reload\n", 2)
+				if len(restored) != 2 {
+					t.Fatalf("recovery did not reload the restored units:\n%s", calls)
+				}
 				for _, want := range []struct{ unit, active, enabled string }{
 					{"pulse-agent.service", state.wantActive, state.wantEnabled},
 					{"pulse-agent-helper.socket", helperActive, helperEnabled},
 				} {
 					for verb, expected := range map[string]bool{"start": want.active == "true", "enable": want.enabled == "true", "disable": want.enabled == "false"} {
-						got := strings.Contains(string(calls), "systemctl "+verb+" "+want.unit+"\n")
+						got := strings.Contains(restored[1], "systemctl "+verb+" "+want.unit+"\n")
 						if got != expected {
 							t.Fatalf("recovery %s %s=%t, want %t:\n%s", verb, want.unit, got, expected, calls)
 						}
@@ -841,6 +848,7 @@ exit 23
 	if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 23 {
 		t.Fatalf("exit trap status=%v\n%s", err, out)
 	}
+	t.Logf("exit trap output:\n%s", out)
 	assertFileBody(t, filepath.Join(root, "bin", "pulse-agent"), "old-binary\n")
 	assertFileBody(t, filepath.Join(root, "state", "proxmox-registered"), "legacy-generic\n")
 	assertFileBody(t, filepath.Join(root, "runner-sentinel"), "runner-unchanged\n")
@@ -1003,7 +1011,10 @@ systemctl() {
           [[ ! -f "$EXPECTED_DIR/disabled-${2:-}" ]] || enabled=disabled
           printf 'LoadState=loaded\nActiveState=%s\nUnitFileState=%s\n' "$active" "$enabled"
         fi
-        return
+        # A bare return inside an EXIT trap inherits the migration's original
+        # failure, not the successful model observation. Real systemctl emits
+        # an explicit process status, so model that success explicitly too.
+        return 0
       fi
       case "${4:-}" in
         FragmentPath) printf '%s\n' "$SAFE_PROFILE_COLLECTOR_UNIT" ;;
