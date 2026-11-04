@@ -8,6 +8,9 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+
+import agent_installer_test_support
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -129,6 +132,32 @@ main "$@"
         result = self.run_script(["--health-addr", ""], parser=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout.removeprefix("PARSER_ACCEPTED=")), ["", "", ""])
+
+    def test_documented_command_fixture_rejects_dropped_or_changed_file_paths(self):
+        source = INSTALLER.read_text()
+        assignment = '            TOKEN_FILE_PATH="$2"; shift 2 ;;'
+        self.assertEqual(source.count(assignment), 1)
+        token = self.home / "documented token"
+        token.write_text(TOKEN + "\n")
+        token.chmod(0o600)
+        receipt = self.home / "documented-command.json"
+        self.env.update(EXPECTED_TOKEN=TOKEN, INSTALL_RECEIPT=str(receipt))
+        for replacement in ('shift 2 ;;', 'TOKEN_FILE_PATH="${2}/changed"; shift 2 ;;'):
+            with self.subTest(replacement=replacement):
+                changed = self.home / "changed-installer.sh"
+                changed.write_text(source.replace(assignment, replacement))
+                with patch.object(agent_installer_test_support, "INSTALLER", changed):
+                    self.parser.write_text(agent_installer_test_support.credential_path_parser_fixture())
+                result = self.run_script(["--token-file", str(token)], parser=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(receipt.exists(), "changed handoff produced passing evidence")
+
+    def test_documented_command_fixture_refuses_a_missing_parser_boundary(self):
+        changed = self.home / "changed-installer.sh"
+        changed.write_text("#!/bin/bash\nexit 0\n")
+        with patch.object(agent_installer_test_support, "INSTALLER", changed):
+            with self.assertRaisesRegex(AssertionError, "parser boundary missing"):
+                agent_installer_test_support.credential_path_parser_fixture()
 
 
 if __name__ == "__main__":

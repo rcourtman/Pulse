@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import unittest
 
+from agent_installer_test_support import credential_path_parser_fixture
 from test_pbs_docs import certificate, fixture_environment, server
 
 
@@ -322,20 +323,7 @@ Path(os.environ['HOME'], '.config/pulse/agent-install.sh').write_text('other sav
         for name in NAMES:
             profiles.extend(block for block in blocks(name) if 'bash "$HOME/.config/pulse/agent-install.sh"' in block and "--token-file" in block)
         self.assertEqual(len(profiles), 10)
-        fixture = '''#!/bin/bash
-python3 - "$@" <<'PY'
-import json, os, stat, sys
-from pathlib import Path
-args = sys.argv[1:]
-token = Path(args[args.index('--token-file') + 1])
-assert args.count('--token-file') == 1
-assert token.read_text().strip() == os.environ['EXPECTED_TOKEN']
-assert stat.S_IMODE(token.stat().st_mode) == 0o600
-assert os.environ['EXPECTED_TOKEN'] not in ' '.join(args)
-assert '--token' not in args
-Path(os.environ['INSTALL_RECEIPT']).write_text(json.dumps(args))
-PY
-'''
+        fixture = credential_path_parser_fixture()
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
             private = home / ".config/pulse"
@@ -370,7 +358,6 @@ PY
                 # Compare the actual argv tokens, retaining the type's value.
                 self.assertIn(" ".join(expected), [" ".join(a) for a in actual_profiles])
         source = (ROOT / "scripts/install.sh").read_text()
-        self.assertIn('--token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;', source)
         self.assertIn('read_collector_token_file_safely "$TOKEN_FILE_PATH" true', source)
 
     def test_skipped_or_failed_recipe_cannot_reuse_a_previous_receipt(self):
