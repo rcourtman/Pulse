@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, createEffect, For, on, onCleanup, Show } from 'solid-js';
 import { ActionIconButton, Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
@@ -17,6 +17,19 @@ import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 
 export const RolesPanel: Component<RolesPanelProps> = (props) => {
   const state = useRolesPanelState(props);
+  let inventoryNotice: HTMLDivElement | undefined;
+  let focusTimer: number | undefined;
+  createEffect(
+    on(state.unconfirmedChange, (change) => {
+      window.clearTimeout(focusTimer);
+      if (!change) return;
+      // The former editor/confirmation is gone; keep keyboard recovery local.
+      focusTimer = window.setTimeout(() => {
+        if (state.unconfirmedChange() === change) inventoryNotice?.focus();
+      }, 0);
+    }),
+  );
+  onCleanup(() => window.clearTimeout(focusTimer));
 
   return (
     <div class="space-y-6">
@@ -53,6 +66,25 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
           />
         </Show>
 
+        <Show when={state.accessAllowed() && state.unconfirmedChange()}>
+          {(message) => (
+            <InlineNotice
+              ref={inventoryNotice}
+              tabindex={-1}
+              tone="warning"
+              layout="banner"
+              role="alert"
+              aria-live="polite"
+              class="break-words"
+              icon={<TriangleAlert />}
+              actionLabel={state.loading() ? undefined : 'Check saved roles'}
+              actionOnClick={() => void state.loadRoles()}
+            >
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+
         <Show when={state.loading()}>
           <div class="flex items-center justify-center py-8">
             <LoadingSpinner size="xl" tone="info" label="Loading roles" />
@@ -73,7 +105,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
               tone="danger"
               layout="banner"
               icon={<TriangleAlert />}
-              actionLabel="Retry"
+              actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
               actionOnClick={() => void state.loadRoles()}
             >
               {message()}
@@ -81,7 +113,14 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
           )}
         </Show>
 
-        <Show when={!state.loading() && state.accessAllowed() && !state.loadError()}>
+        <Show
+          when={
+            !state.loading() &&
+            state.accessAllowed() &&
+            !state.loadError() &&
+            !state.unconfirmedChange()
+          }
+        >
           <PulseDataGrid
             data={state.roles()}
             columns={[

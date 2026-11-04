@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "286844a76a2f33597eb7d89e3d11aa1d32d56b6e",
+  "verified_at": "2026-11-04T20:23:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "33db8f8bdf858fb655480e90576949e7f60c8158b4d3a5cd2971e1e0fe0a7125",
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "2b1802d50af9150cd0a1ad274102e3e6825d41651649fb0ae0c42b061d004150"
+  },
+  "routes": [
+    "/settings/roles (real RolesPanel, state, RBACAPI, runtime gate and CSS in isolated HTTP fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Locked Playwright 1.56.1, Chromium 141.0.7390.37 and WebKit 26.0; desktop light and narrow dark. Same synthetic roles, viewport, theme and operation before/after. All 36 retained captures were opened using native view_image.",
+    "Applied role PUT, POST and DELETE each return fixture 502. Parent keeps the old inventory and a repeat-write dialog; final withdraws the stale snapshot and obsolete confirmation, explains possible application and blocks writes until an accepted read.",
+    "Eight cases in each phase: Chromium create/update/delete at both widths, WebKit update at both widths. This is consuming-panel proof with explicit safe HTTP inputs, not installed-account, backend or production-bundle pixel acceptance."
+  ],
+  "interactions": [
+    "Exactly one write per case, through the real API client and RBACAPI, with existing organization and CSRF headers. There is no automatic mutation or recovery read.",
+    "Update recovery first receives 503; the warning and write fence survive. A subsequent delayed read coalesces double activation and retains the fence until valid inventory. Readback shows audit_logs in the real editor, including on narrow screens.",
+    "Creation and deletion recovery use keyboard Enter on the read-only action. Accepted inventory shows the actual created role or confirmed empty list, without replaying a write.",
+    "Focus moves from the obsolete dialog to the uncertainty notice. No page errors or horizontal overflow in completed cases. HTTP console errors are deliberately induced fixture 502/503 responses, not hidden failures."
+  ],
+  "evidence": {
+    "before": "before-results.json",
+    "after": "after-results.json",
+    "captures": "CAPTURES.md",
+    "identities": "CAPTURE-IDENTITIES.json",
+    "fixture": "BROWSER-EVIDENCE.tar.xz"
+  }
+}

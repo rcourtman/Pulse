@@ -104,8 +104,15 @@ valid inventory enables actions. An unread or malformed response is unavailable,
 not an empty role list, and its inline Retry performs only a read. Built-in and
 obsolete row objects remain uneditable. Save and delete are serialised; deletion
 requires the current in-page confirmation, which is withdrawn on context loss.
-A failed save preserves the live draft with fixed inline feedback. Closing an
-editor erases its draft. Saved permission strings outside the editor's shortcut
+A definite request/permission/validation rejection preserves the live draft or
+deletion confirmation with fixed inline feedback. A missing response, timeout,
+server error or unreadable success leaves the result unconfirmed: the old
+inventory, editor and confirmation withdraw, further writes remain disabled,
+and a focused notice offers an explicit read-only saved-role check. Failed or
+malformed reads keep that uncertainty; only a current, valid inventory restores
+actions, without replaying a write or claiming that it was rolled back. The
+notice and its role name withdraw with their reader. Closing an editor erases
+its draft. Saved permission strings outside the editor's shortcut
 list remain visible and unchanged unless explicitly edited. Success feedback
 belongs to this panel rather than a global identity-bearing notification. The
 containing Settings renderer reads optional current entry props rather than
@@ -116,7 +123,8 @@ draft. Backend authorisation, endpoints and permission semantics remain unchange
 
 Normal `RolesReaderLifetime`, RBAC API, paywall and registry tests cover
 read/write races, revoked authority, licence loss, disposal, stale row IDs,
-malformed reads, exact request binding and explicit recovery. Browser proof
+malformed reads, exact request binding, definite rejections and unconfirmed
+create/update/delete recovery. Browser proof
 exercises actual App/Settings/Role consumers at desktop and narrow widths using
 safe synthetic HTTP producers; it is not installed administrator or IdP recovery.
 
