@@ -20,7 +20,8 @@ from dataclasses import dataclass
 
 
 REPOSITORY = "rcourtman/Pulse"
-BOT = {"__typename": "Bot", "login": "github-actions[bot]", "databaseId": 41898282}
+# GraphQL's Bot login, not the REST `github-actions[bot]` presentation.
+BOT = {"__typename": "Bot", "login": "github-actions", "databaseId": 41898282}
 ACTOR = "author { __typename login ... on Bot { databaseId } }"
 WATCHES = {
     "memory": (
@@ -123,8 +124,12 @@ def complete(connection):
 
 
 def find_report(call, watch):
+    # Enumerate the bounded open inventory without a createdBy alias filter.
+    # REST and GraphQL spell the Actions login differently; an empty filtered
+    # response cannot prove that no report exists. Exact node ownership is
+    # still required by untouched() before any comment, even for copied markers.
     query = f"""query($after:String) {{ repository(owner:"rcourtman", name:"Pulse") {{
-      issues(first:100, after:$after, states:OPEN, filterBy:{{createdBy:"github-actions[bot]"}},
+      issues(first:100, after:$after, states:OPEN,
         orderBy:{{field:CREATED_AT, direction:ASC}}) {{
         totalCount pageInfo {{ hasNextPage endCursor }}
         nodes {{ id number title body {ACTOR} }}
