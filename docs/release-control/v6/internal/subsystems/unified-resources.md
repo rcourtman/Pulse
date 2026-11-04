@@ -23,6 +23,13 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Platform host rows scope node alert matches by connection (4 November 2026)
+
+The Proxmox, vSphere and TrueNAS host tables pass an `AlertNodeScope` rather than
+a bare name when they admit alerts raised under a host, because host names repeat
+across installations (#2681). The alerts contract holds the matching rules. Resource
+identity and the registry are unchanged.
+
 ### Backups names PBS restore points as backups (3 November 2026)
 
 The Backups source presentation reads PBS items from the same PBS resource

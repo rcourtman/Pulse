@@ -400,7 +400,14 @@ export const VsphereHostsTable: Component<{
                         props.vmScope ? props.vmScope.onShow(host) : drawer.toggle(host),
                     });
                     const hostAlertStyles = createMemo(() =>
-                      getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
+                      getAlertStyles(host.id, activeAlerts, alertsEnabled(), {
+                        node: name(),
+                        instances: [
+                          host.vmware?.connectionName?.trim() ||
+                            host.vmware?.vcenterHost?.trim() ||
+                            'vSphere',
+                        ],
+                      }),
                     );
                     const hostAlertBg = () => {
                       const s = hostAlertStyles();

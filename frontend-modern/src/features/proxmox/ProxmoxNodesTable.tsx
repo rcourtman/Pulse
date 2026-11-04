@@ -10,7 +10,11 @@ import {
 } from 'solid-js';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
-import { getAlertsForResource, getUnifiedResourceAlertStyles } from '@/utils/alerts';
+import {
+  getAlertsForProxmoxNode,
+  getAlertsForResource,
+  getUnifiedResourceAlertStyles,
+} from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -815,11 +819,11 @@ export const ProxmoxNodesTable: Component<{
                             node={selectedNode()}
                             webInterfaceUrl={externalUrl()}
                             onClose={() => setSelectedNodeId(null)}
-                            alerts={getAlertsForResource(
-                              alertResourceIds(),
+                            alerts={getAlertsForProxmoxNode(
+                              node,
                               activeAlerts,
                               alertsEnabled(),
-                              node.name,
+                              alertResourceIds(),
                             )}
                             // Without the node-name match: the node's own alerts,
                             // not its guests', drive its trend cards.

@@ -18,15 +18,31 @@ const noAlertStyles = {
   hasAcknowledgedOnlyAlert: false,
 };
 
+/**
+ * The host an alert was raised under, on the connection that raised it.
+ * Installations can reuse host names, so a name alone does not identify one.
+ * `instances` are the labels a platform's alerts carry for that connection.
+ */
+export interface AlertNodeScope {
+  node: string;
+  instances: readonly string[];
+}
+
+// TrueNAS alerts name no connection, and the producers spell the platform differently.
+export const TRUENAS_ALERT_INSTANCES = ['TrueNAS', 'Truenas'] as const;
+
+const alertIsOnNode = (alert: Alert, scope: AlertNodeScope | undefined): boolean =>
+  scope !== undefined && alert.node === scope.node && scope.instances.includes(alert.instance);
+
 // Get alert highlighting styles based on active alerts for a resource.
-// When nodeMatch is provided, also includes alerts whose `node` field matches
+// When nodeMatch is provided, also includes alerts raised under that node
 // (covers storage/topology/disk alerts that belong to a node but have a
 // different resourceId than the node itself).
 export const getAlertStyles = (
   resourceId: string | string[],
   activeAlerts: Record<string, Alert>,
   alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
-  nodeMatch?: string,
+  nodeMatch?: AlertNodeScope,
 ) => {
   if (!alertsEnabled) {
     return noAlertStyles;
@@ -163,16 +179,23 @@ export function getAlertsForResource(
   resourceIds: string[],
   activeAlerts: Record<string, Alert>,
   alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
-  nodeMatch?: string,
+  nodeMatch?: AlertNodeScope,
 ): Alert[] {
   if (!alertsEnabled) return [];
   const ids = new Set(resourceIds.filter(Boolean));
   return Object.values(activeAlerts).filter(
-    (alert) => ids.has(alert.resourceId) || (nodeMatch !== undefined && alert.node === nodeMatch),
+    (alert) => ids.has(alert.resourceId) || alertIsOnNode(alert, nodeMatch),
   );
 }
 
 const ALERT_LEVEL_RANK: Record<Alert['level'], number> = { critical: 0, warning: 1, info: 2 };
+
+const sortAlertsBySeverity = (alerts: Alert[]): Alert[] =>
+  alerts.sort(
+    (a, b) =>
+      (ALERT_LEVEL_RANK[a.level] ?? 3) - (ALERT_LEVEL_RANK[b.level] ?? 3) ||
+      Date.parse(a.startTime) - Date.parse(b.startTime),
+  );
 
 // The alert keys one unified resource answers to. Alerts raised on the unified
 // resource itself (provider incidents, availability, TrueNAS, vSphere,
@@ -186,7 +209,7 @@ const getUnifiedResourceAlertKeys = (
 ): {
   exact: Set<string>;
   componentPrefixes: string[];
-  localStorage?: { node: string; instance?: string };
+  localStorage?: { node: string; instances: string[] };
 } => {
   const exact = new Set<string>();
   const add = (value: string | undefined) => {
@@ -216,7 +239,7 @@ const getUnifiedResourceAlertKeys = (
 
   const machine = new Set<string>();
   const componentPrefixes: string[] = [];
-  let localStorage: { node: string; instance?: string } | undefined;
+  let localStorage: { node: string; instances: string[] } | undefined;
   if (resource.type === 'agent' || resource.type === 'docker-host') {
     const agentId = getActionableAgentIdFromResource(resource);
     if (agentId) machine.add(agentId.startsWith('agent:') ? agentId : `agent:${agentId}`);
@@ -240,8 +263,17 @@ const getUnifiedResourceAlertKeys = (
     if (instance && nodeName) componentPrefixes.push(`${instance}:${nodeName}:disk:`);
     // Its own storage (local, local-zfs) raises usage, offline and ZFS alerts
     // on the storage id under the node's name. Storage shared across a cluster
-    // is recorded under "cluster", so it never matches one node.
-    if (nodeName) localStorage = { node: nodeName, instance };
+    // is recorded under "cluster", so it never matches one node. A clustered
+    // connection records storage under the cluster's name, not its own, unless
+    // another cluster shares that name; its alerts name no connection beyond it.
+    if (nodeName) {
+      localStorage = {
+        node: nodeName,
+        instances: [instance, resource.proxmox?.clusterName?.trim()].filter(
+          (value): value is string => Boolean(value),
+        ),
+      };
+    }
   }
   machine.forEach(add);
   componentPrefixes.push(...[...machine].map((key) => `${key}/`));
@@ -250,14 +282,18 @@ const getUnifiedResourceAlertKeys = (
 
 const isLocalStorageAlert = (
   alert: Alert,
-  localStorage: { node: string; instance?: string } | undefined,
+  localStorage: { node: string; instances: string[] } | undefined,
 ): boolean => {
   if (!localStorage || alert.node !== localStorage.node) return false;
   const resourceType = alert.metadata?.resourceType;
   if (typeof resourceType !== 'string' || resourceType.trim().toLowerCase() !== 'storage') {
     return false;
   }
-  return !localStorage.instance || !alert.instance || alert.instance === localStorage.instance;
+  return (
+    localStorage.instances.length === 0 ||
+    !alert.instance ||
+    localStorage.instances.includes(alert.instance)
+  );
 };
 
 /**
@@ -281,18 +317,14 @@ export function getAlertsForUnifiedResource(
 ): Alert[] {
   if (!alertsEnabled) return [];
   const { exact, componentPrefixes, localStorage } = getUnifiedResourceAlertKeys(resource);
-  return Object.values(activeAlerts)
-    .filter(
+  return sortAlertsBySeverity(
+    Object.values(activeAlerts).filter(
       (alert) =>
         exact.has(alert.resourceId) ||
         componentPrefixes.some((prefix) => alert.resourceId?.startsWith(prefix)) ||
         isLocalStorageAlert(alert, localStorage),
-    )
-    .sort(
-      (a, b) =>
-        (ALERT_LEVEL_RANK[a.level] ?? 3) - (ALERT_LEVEL_RANK[b.level] ?? 3) ||
-        Date.parse(a.startTime) - Date.parse(b.startTime),
-    );
+    ),
+  );
 }
 
 /**
@@ -308,4 +340,33 @@ export function getOwnAlertsForUnifiedResource(
   if (!alertsEnabled) return [];
   const { exact } = getUnifiedResourceAlertKeys(resource);
   return Object.values(activeAlerts).filter((alert) => exact.has(alert.resourceId));
+}
+
+/**
+ * What a Proxmox node's drawer lists: its own alerts and those of the guests it
+ * hosts on this connection. `extraResourceIds` are further identities the node's
+ * alerts may be keyed on.
+ */
+export function getAlertsForProxmoxNode(
+  node: Resource,
+  activeAlerts: Record<string, Alert>,
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
+  extraResourceIds: string[] = [],
+): Alert[] {
+  if (!alertsEnabled) return [];
+  const nodeName = node.proxmox?.nodeName?.trim() || node.name;
+  const instance = node.proxmox?.instance?.trim();
+  const byId = new Map<string, Alert>();
+  for (const alert of [
+    ...getAlertsForUnifiedResource(node, activeAlerts, alertsEnabled),
+    ...getAlertsForResource(
+      extraResourceIds,
+      activeAlerts,
+      alertsEnabled,
+      instance ? { node: nodeName, instances: [instance] } : undefined,
+    ),
+  ]) {
+    byId.set(alert.id, alert);
+  }
+  return sortAlertsBySeverity([...byId.values()]);
 }

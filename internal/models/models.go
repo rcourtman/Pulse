@@ -4736,6 +4736,72 @@ func (s *State) PBSGuestConfirmationsForInstance(instanceName string) []PBSGuest
 	return out
 }
 
+// PBSSnapshotRef names one PBS guest snapshot by what a PVE storage listing and
+// a PBS listing both report about it.
+type PBSSnapshotRef struct {
+	BackupType string
+	VMID       int
+	Time       int64
+}
+
+// PBSExclusiveConfirmers returns, per snapshot, the PVE connection whose
+// non-overlapping storage view listed it.
+func (s *State) PBSExclusiveConfirmers() map[PBSSnapshotRef]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pbsExclusiveConfirmersLocked()
+}
+
+// PVE-side confirmations say a connection's own pbs-type storage listed a
+// snapshot. That is visibility, not authorship: a shared token, a synced
+// datastore, or an offsite copy all make another cluster's snapshots appear in
+// this cluster's listing. Only a storage view that never lists a snapshot some
+// other connection also lists can be treated as authorship evidence; an
+// overlapping view has demonstrated it sees other clusters' snapshots, so
+// nothing it lists attributes anything (#1639).
+func (s *State) pbsExclusiveConfirmersLocked() map[PBSSnapshotRef]string {
+	type pbsStorageView struct {
+		instance string
+		storage  string
+	}
+	viewsBySnapshot := make(map[PBSSnapshotRef][]pbsStorageView)
+	for instanceName, confirmations := range s.pbsGuestConfirmations {
+		for confirmation := range confirmations {
+			key := PBSSnapshotRef{BackupType: confirmation.BackupType, VMID: confirmation.VMID, Time: confirmation.Time}
+			viewsBySnapshot[key] = append(viewsBySnapshot[key], pbsStorageView{instance: instanceName, storage: confirmation.Storage})
+		}
+	}
+	sharedViews := make(map[pbsStorageView]struct{})
+	for _, views := range viewsBySnapshot {
+		for i := range views {
+			for j := i + 1; j < len(views); j++ {
+				if views[i].instance == views[j].instance {
+					continue
+				}
+				sharedViews[views[i]] = struct{}{}
+				sharedViews[views[j]] = struct{}{}
+			}
+		}
+	}
+	// A snapshot two connections both list makes both their views overlapping,
+	// so it has no exclusive confirmer at all.
+	exclusiveConfirmer := make(map[PBSSnapshotRef]string)
+	for key, views := range viewsBySnapshot {
+		exclusive := make(map[string]struct{}, len(views))
+		for _, view := range views {
+			if _, shared := sharedViews[view]; !shared {
+				exclusive[view.instance] = struct{}{}
+			}
+		}
+		if len(exclusive) == 1 {
+			for instanceName := range exclusive {
+				exclusiveConfirmer[key] = instanceName
+			}
+		}
+	}
+	return exclusiveConfirmer
+}
+
 // SyncGuestBackupTimes updates LastBackup and BackupInProgress on VMs and
 // Containers from storage backups, PBS backups, and running backup tasks.
 // LastBackup only ever reflects completed backups; in-flight PBS snapshots
@@ -4879,58 +4945,7 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 	}
 
-	// PVE-side confirmations say a connection's own pbs-type storage listed a
-	// snapshot. That is visibility, not authorship: a shared token, a synced
-	// datastore, or an offsite copy all make another cluster's snapshots
-	// appear in this cluster's listing. Only a storage view that never lists
-	// a snapshot some other connection also lists can be treated as
-	// authorship evidence; an overlapping view has demonstrated it sees other
-	// clusters' snapshots, so nothing it lists attributes anything (#1639).
-	type pbsSnapshotKey struct {
-		backupType string
-		vmid       int
-		unixTime   int64
-	}
-	type pbsStorageView struct {
-		instance string
-		storage  string
-	}
-	viewsBySnapshot := make(map[pbsSnapshotKey][]pbsStorageView)
-	for instanceName, confirmations := range s.pbsGuestConfirmations {
-		for confirmation := range confirmations {
-			key := pbsSnapshotKey{backupType: confirmation.BackupType, vmid: confirmation.VMID, unixTime: confirmation.Time}
-			viewsBySnapshot[key] = append(viewsBySnapshot[key], pbsStorageView{instance: instanceName, storage: confirmation.Storage})
-		}
-	}
-	sharedViews := make(map[pbsStorageView]struct{})
-	for _, views := range viewsBySnapshot {
-		for i := range views {
-			for j := i + 1; j < len(views); j++ {
-				if views[i].instance == views[j].instance {
-					continue
-				}
-				sharedViews[views[i]] = struct{}{}
-				sharedViews[views[j]] = struct{}{}
-			}
-		}
-	}
-	// exclusiveConfirmer names the connection whose non-overlapping storage
-	// view listed a snapshot. A snapshot two connections both list makes both
-	// their views overlapping, so it has no exclusive confirmer at all.
-	exclusiveConfirmer := make(map[pbsSnapshotKey]string)
-	for key, views := range viewsBySnapshot {
-		exclusive := make(map[string]struct{}, len(views))
-		for _, view := range views {
-			if _, shared := sharedViews[view]; !shared {
-				exclusive[view.instance] = struct{}{}
-			}
-		}
-		if len(exclusive) == 1 {
-			for instanceName := range exclusive {
-				exclusiveConfirmer[key] = instanceName
-			}
-		}
-	}
+	exclusiveConfirmer := s.pbsExclusiveConfirmersLocked()
 
 	// Learn which PVE connection each PBS submission source (owner token,
 	// datastore, PBS instance) belongs to from the backups that CAN be
@@ -4974,7 +4989,7 @@ func (s *State) SyncGuestBackupTimes() {
 					// An exclusive storage view is positive attribution too,
 					// and it makes the cluster behind it visible to the
 					// coverage check.
-					attributed = exclusiveConfirmer[pbsSnapshotKey{backupType: key.backupType, vmid: key.vmid, unixTime: backup.BackupTime.Unix()}]
+					attributed = exclusiveConfirmer[PBSSnapshotRef{BackupType: key.backupType, VMID: key.vmid, Time: backup.BackupTime.Unix()}]
 				}
 			}
 			if attributed != "" {
@@ -5006,7 +5021,7 @@ func (s *State) SyncGuestBackupTimes() {
 				instance,
 				node,
 			)
-			snapshotKey := pbsSnapshotKey{backupType: backupType, vmid: vmid, unixTime: backup.BackupTime.Unix()}
+			snapshotKey := PBSSnapshotRef{BackupType: backupType, VMID: vmid, Time: backup.BackupTime.Unix()}
 			if score > 0 && subjectIsAmbiguous[subjectKey] {
 				// A namespace such as "pve" can match two clusters with the
 				// same node label. A positive score is not attribution when a
@@ -5027,7 +5042,11 @@ func (s *State) SyncGuestBackupTimes() {
 						strongestOther = otherScore
 					}
 				}
-				if strongestOther >= score {
+				// An exclusive storage view is not that inference: it says which
+				// connection wrote the snapshot, so it settles an exact tie. It
+				// does not outvote a stronger match elsewhere (#2681).
+				if strongestOther > score ||
+					(strongestOther == score && exclusiveConfirmer[snapshotKey] != instance) {
 					continue
 				}
 			}

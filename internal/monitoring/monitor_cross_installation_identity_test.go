@@ -141,8 +141,10 @@ func TestCrossInstallationIdentitySurvivesStandaloneAddition(t *testing.T) {
 			m.state.SyncGuestBackupTimes()
 			adapter.PopulateFromSnapshot(m.state.GetSnapshot())
 
-			// Hostname ambiguity may safely unbind an automatic association. It must
-			// not discard the agent, its Docker inventory, or the original VM's data.
+			// A later guest reusing the name does not end the original agent's
+			// automatic link (the link tests in issue2681_same_name_link_test.go hold
+			// the rules), and never discards the agent, its Docker inventory, or the
+			// original VM's data.
 			hostReport.Timestamp = now.Add(time.Second)
 			dockerReport.Timestamp = now.Add(time.Second)
 			assertUnchangedDocker("provider addition without agent reports")
@@ -150,12 +152,8 @@ func TestCrossInstallationIdentitySurvivesStandaloneAddition(t *testing.T) {
 				t.Fatal(err)
 			}
 			hosts := m.state.GetSnapshot().Hosts
-			wantLink := ""
-			if tc.fqdnGuests {
-				wantLink = homeGuestID
-			}
-			if len(hosts) != 1 || hosts[0].LinkedVMID != wantLink || hosts[0].LinkedNodeID != "" || hosts[0].LinkedContainerID != "" {
-				t.Fatalf("post-addition guest link = %+v, want %q with no node/container guess", hosts, wantLink)
+			if len(hosts) != 1 || hosts[0].LinkedVMID != homeGuestID || hosts[0].LinkedNodeID != "" || hosts[0].LinkedContainerID != "" {
+				t.Fatalf("post-addition guest link = %+v, want %q with no node/container guess", hosts, homeGuestID)
 			}
 			assertUnchangedDocker("host-only report after automatic guest-link reconciliation")
 			if _, err := m.ApplyDockerReport(dockerReport, token); err != nil {
@@ -192,11 +190,9 @@ func TestCrossInstallationIdentitySurvivesStandaloneAddition(t *testing.T) {
 			if len(guestNodes) != 1 || guestNodes[100] != "pmx1" {
 				t.Fatal("backup node lookup lost home scope")
 			}
-			if tc.fqdnGuests {
-				hosts := m.state.GetSnapshot().Hosts
-				if len(hosts) != 1 || hosts[0].LinkedVMID != homeGuestID {
-					t.Fatalf("distinct guest FQDNs erased or redirected the original agent link: %+v", hosts)
-				}
+			hosts = m.state.GetSnapshot().Hosts
+			if len(hosts) != 1 || hosts[0].LinkedVMID != homeGuestID {
+				t.Fatalf("the independent guest erased or redirected the original agent link: %+v", hosts)
 			}
 			if len(adapter.DockerHosts()) != 1 || len(adapter.DockerContainers()) != 1 {
 				t.Fatal("Docker monitoring disappeared after independent guest addition")

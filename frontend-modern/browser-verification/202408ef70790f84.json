@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "578d84d2c42978a8227109d1c61cc0da59c8e479",
+  "verified_at": "2026-11-04T13:45:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx",
+    "frontend-modern/src/utils/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts": "131ffe60041649cd0a37e6203453287d92a60c2abce0dd131101c91de2fae207",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "d3bf689a6d20530d42702b859c748cf6d4956d963f2b85092a3576f9ccb01164",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx": "3e2eb4e8eba1b384a30d5ebef0365f7482810c9e9a8047ff3b9ebe0f3ad1cf89",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx": "f0456d632ac85b4a71bdb07b9466623a622ab4f9567066006163a8b47535abdb",
+    "frontend-modern/src/utils/alerts.ts": "7c37c4660518080ce14f427080db7070a111f9c0ecfd27e402e61752f1de4dee"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/truenas",
+    "/vmware"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Two Proxmox nodes on different connections sharing a native node name, VMIDs and a guest name, each with guests over their alert level",
+    "Node drawer before the change: one node lists 16 alerts, mixing both installations, and the node with a display label lists none",
+    "Node drawer after the change: each node lists only its own guests' alerts, 3 and 10",
+    "Workload rows for the two same-named docker1 VMs stay separate with their own readings",
+    "Docker page with a same-named VM present: the agent's Docker host and its containers stay listed, before and after",
+    "TrueNAS system row and vSphere host row keep their alert tint under the scoped match, including a pool alert whose instance is Truenas"
+  ],
+  "interactions": [
+    "Expand each same-named node's row and read its Needs attention list",
+    "Collapse a node drawer and expand the other",
+    "Scroll to the docker1 workload rows",
+    "Open the Docker page filtered to the docker1 host",
+    "Open the TrueNAS and vSphere tables and read which rows are tinted"
+  ]
+}

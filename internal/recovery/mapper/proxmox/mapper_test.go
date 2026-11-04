@@ -1,6 +1,7 @@
 package proxmoxmapper
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -531,7 +532,7 @@ func TestFromPBSBackupsWithEvidenceAddsProviderScopeAndCorrelation(t *testing.T)
 		},
 	}
 
-	points, err := FromPBSBackupsWithEvidence(backups, candidates, ingestedAt)
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, nil, ingestedAt)
 	if err != nil {
 		t.Fatalf("FromPBSBackupsWithEvidence() error = %v", err)
 	}
@@ -1082,5 +1083,168 @@ func TestFromPVEGuestSnapshotsPostureKindIsolation(t *testing.T) {
 			}
 
 		}
+	}
+}
+
+// The default vzdump notes template leaves a snapshot's comment fitting both
+// same-named guests. The connection whose exclusive storage view listed it wrote
+// it, so its guest gets the recovery point (#2681).
+func TestFromPBSBackupsExclusiveConfirmerSettlesTiedGuests(t *testing.T) {
+	backupTime := time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC)
+	backups := []models.PBSBackup{{
+		ID: "pbs-1", VMID: "100", BackupType: "vm", BackupTime: backupTime,
+		Instance: "pbs-main", Datastore: "backups", Comment: "docker1",
+	}}
+	guest := func(instance string) GuestCandidate {
+		return GuestCandidate{
+			ResourceID: "vm-" + instance, SourceID: instance + ":pmx1:100", ResourceType: unifiedresources.ResourceTypeVM,
+			DisplayName: "docker1", InstanceName: instance, NodeName: "pmx1", VMID: 100,
+		}
+	}
+	candidates := map[string][]GuestCandidate{"vm:100": {guest("home"), guest("hetzner")}}
+	ref := models.PBSSnapshotRef{BackupType: "vm", VMID: 100, Time: backupTime.Unix()}
+
+	for _, tc := range []struct {
+		name       string
+		confirmers map[models.PBSSnapshotRef]string
+		want       string
+	}{
+		{name: "no storage view", want: ""},
+		{name: "home's view", confirmers: map[models.PBSSnapshotRef]string{ref: "home"}, want: "vm-home"},
+		{name: "a connection with no such guest", confirmers: map[models.PBSSnapshotRef]string{ref: "elsewhere"}, want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			points, err := FromPBSBackupsWithEvidence(backups, candidates, tc.confirmers, backupTime)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(points) != 1 {
+				t.Fatalf("points = %d, want 1", len(points))
+			}
+			got := ""
+			if points[0].SubjectResourceID != "" {
+				got = points[0].SubjectResourceID
+			}
+			if got != tc.want {
+				t.Fatalf("SubjectResourceID = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The mapper ranks a snapshot's labels as guest backup badges do. A view belonging
+// to a guest the labels fit less well does not take the snapshot from one they fit
+// better (#2681, #2292).
+func TestFromPBSBackupsStrongerLabelMatchOutranksExclusiveConfirmer(t *testing.T) {
+	backupTime := time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC)
+	backups := []models.PBSBackup{{
+		ID: "pbs-1", VMID: "100", BackupType: "vm", BackupTime: backupTime,
+		Instance: "pbs-main", Datastore: "backups", Namespace: "pve",
+	}}
+	candidates := map[string][]GuestCandidate{"vm:100": {
+		{ResourceID: "vm-a", SourceID: "pve:alpha:100", ResourceType: unifiedresources.ResourceTypeVM, DisplayName: "a", InstanceName: "pve", NodeName: "alpha", VMID: 100},
+		{ResourceID: "vm-b", SourceID: "remote:pve:100", ResourceType: unifiedresources.ResourceTypeVM, DisplayName: "b", InstanceName: "remote", NodeName: "pve", VMID: 100},
+	}}
+	confirmers := map[models.PBSSnapshotRef]string{
+		{BackupType: "vm", VMID: 100, Time: backupTime.Unix()}: "pve",
+	}
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, confirmers, backupTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 1 || points[0].SubjectResourceID != "vm-b" {
+		t.Fatalf("points = %+v, want the guest the namespace fits best", points)
+	}
+}
+
+// A snapshot confirmed by a connection with no guest of that VMID here belongs to
+// a guest that is gone. The source mapping does not hand it to another cluster.
+func TestFromPBSBackupsConfirmerWithNoSuchGuestFailsClosedAgainstLearner(t *testing.T) {
+	backupTime := time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC)
+	guest := func(instance string, vmid int) GuestCandidate {
+		return GuestCandidate{
+			ResourceID: fmt.Sprintf("vm-%s-%d", instance, vmid), SourceID: fmt.Sprintf("%s:pmx1:%d", instance, vmid),
+			ResourceType: unifiedresources.ResourceTypeVM, DisplayName: fmt.Sprintf("guest-%d", vmid), InstanceName: instance, NodeName: "pmx1", VMID: vmid,
+		}
+	}
+	candidates := map[string][]GuestCandidate{
+		"vm:100": {guest("a", 100), guest("b", 100)},
+		"vm:200": {guest("a", 200)},
+		"vm:300": {guest("b", 300)},
+	}
+	backups := []models.PBSBackup{
+		{ID: "gone", VMID: "100", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-main", Datastore: "b-store", Owner: "b@pbs!token"},
+		{ID: "a-own", VMID: "200", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-main", Datastore: "a-store", Owner: "a@pbs!token"},
+		{ID: "b-own", VMID: "300", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-main", Datastore: "b-store", Owner: "b@pbs!token"},
+	}
+	confirmers := map[models.PBSSnapshotRef]string{
+		{BackupType: "vm", VMID: 100, Time: backupTime.Unix()}: "c",
+	}
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, confirmers, backupTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, point := range points {
+		if point.Details["vmid"] == "100" && point.SubjectResourceID != "" {
+			t.Fatalf("VM 100 linked to %q, want no guest", point.SubjectResourceID)
+		}
+	}
+}
+
+// A matching comment on a guest the namespace fits less well does not outrank the
+// guest the namespace names exactly, as it does not for badges.
+func TestFromPBSBackupsNameMatchDoesNotOutrankStrongerNamespace(t *testing.T) {
+	backupTime := time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC)
+	backups := []models.PBSBackup{{
+		ID: "pbs-1", VMID: "100", BackupType: "vm", BackupTime: backupTime,
+		Instance: "pbs-main", Datastore: "backups", Namespace: "pve", Comment: "web",
+	}}
+	candidates := map[string][]GuestCandidate{"vm:100": {
+		{ResourceID: "vm-a", SourceID: "pve:alpha:100", ResourceType: unifiedresources.ResourceTypeVM, DisplayName: "web", InstanceName: "pve", NodeName: "alpha", VMID: 100},
+		{ResourceID: "vm-b", SourceID: "remote:pve:100", ResourceType: unifiedresources.ResourceTypeVM, DisplayName: "database", InstanceName: "remote", NodeName: "pve", VMID: 100},
+	}}
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, nil, backupTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 1 || points[0].SubjectResourceID != "vm-b" {
+		t.Fatalf("points = %+v, want the guest the namespace fits best", points)
+	}
+}
+
+// A confirmed snapshot teaches the learner too, as it does for badges, so a later
+// snapshot from the same source with no view of its own is attributable.
+func TestFromPBSBackupsConfirmedSnapshotTeachesSourceLearner(t *testing.T) {
+	confirmedTime := time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC)
+	laterTime := confirmedTime.Add(24 * time.Hour)
+	guest := func(instance string, vmid int, name string) GuestCandidate {
+		return GuestCandidate{
+			ResourceID: fmt.Sprintf("vm-%s-%d", instance, vmid), SourceID: fmt.Sprintf("%s:pmx1:%d", instance, vmid),
+			ResourceType: unifiedresources.ResourceTypeVM, DisplayName: name, InstanceName: instance, NodeName: "pmx1", VMID: vmid,
+		}
+	}
+	candidates := map[string][]GuestCandidate{
+		"vm:100": {guest("home", 100, "docker1"), guest("hetzner", 100, "docker1")},
+		"vm:200": {guest("home", 200, "web"), guest("hetzner", 200, "web")},
+		"vm:300": {guest("hetzner", 300, "mail")},
+	}
+	backups := []models.PBSBackup{
+		{ID: "confirmed", VMID: "100", BackupType: "vm", BackupTime: confirmedTime, Instance: "pbs-main", Datastore: "backups", Owner: "home@pbs!token"},
+		{ID: "later", VMID: "200", BackupType: "vm", BackupTime: laterTime, Instance: "pbs-main", Datastore: "backups", Owner: "home@pbs!token"},
+		{ID: "hetzner-own", VMID: "300", BackupType: "vm", BackupTime: laterTime, Instance: "pbs-main", Datastore: "offsite", Owner: "hetzner@pbs!token"},
+	}
+	confirmers := map[models.PBSSnapshotRef]string{
+		{BackupType: "vm", VMID: 100, Time: confirmedTime.Unix()}: "home",
+	}
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, confirmers, laterTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subjects := make(map[string]string, len(points))
+	for _, point := range points {
+		subjects[point.Details["vmid"].(string)] = point.SubjectResourceID
+	}
+	if subjects["200"] != "vm-home-200" {
+		t.Fatalf("subjects = %+v, want VM 200 attributed through what the confirmed snapshot taught", subjects)
 	}
 }

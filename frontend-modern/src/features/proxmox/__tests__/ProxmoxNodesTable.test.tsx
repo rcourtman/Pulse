@@ -584,6 +584,57 @@ describe('ProxmoxNodesTable', () => {
     );
   });
 
+  it("lists only its own guests' alerts when another installation reuses the node name", async () => {
+    const guestAlert = (id: string, instance: string) => ({
+      id,
+      resourceId: `${instance}:pmx1:100`,
+      node: 'pmx1',
+      instance,
+      level: 'critical',
+      type: 'memory',
+      acknowledged: false,
+    });
+    activeAlertsMock.value = {
+      home: guestAlert('home', 'home'),
+      hetzner: guestAlert('hetzner', 'hetzner'),
+    };
+
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            id: 'node-home',
+            name: 'pmx1',
+            displayName: 'pmx1',
+            proxmox: { clusterName: 'Home', instance: 'home', nodeName: 'pmx1' },
+          }),
+          // Named in Pulse; its alerts still carry the provider's node name.
+          makeNodeResource({
+            id: 'node-hetzner',
+            name: 'Hetzner pmx1',
+            displayName: 'Hetzner pmx1',
+            proxmox: { instance: 'hetzner', nodeName: 'pmx1' },
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const drawerAlertIds = () =>
+      (nodeDrawerMock.mock.lastCall?.[0] as { alerts: { id: string }[] }).alerts.map(
+        (alert) => alert.id,
+      );
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for pmx1' }));
+    expect(drawerAlertIds()).toEqual(['home']);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for Hetzner pmx1' }));
+    expect(drawerAlertIds()).toEqual(['hetzner']);
+  });
+
   it('does not present a retained stale update count as current in the node row', () => {
     render(() => (
       <ProxmoxNodesTable
