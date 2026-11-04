@@ -97,7 +97,7 @@ test.describe("Operational trust protection posture", () => {
 
     const coverageTable = page
       .locator("div.overflow-x-auto")
-      .filter({ has: page.locator('th:text-matches("^(Protection|Status)")') })
+      .filter({ has: page.locator("th", { hasText: /^(Protection|Status)/ }) })
       .first();
     await expect(coverageTable).toBeVisible();
     // The default mock estate now exceeds one 200-workload batch. Assert the
@@ -164,7 +164,7 @@ test.describe("Operational trust protection posture", () => {
     );
     await coverageLink.click();
     await expect(page).toHaveURL(/\/proxmox\/backups\/coverage$/);
-    await expect(page.locator('th:text-matches("^(Protection|Status)")').first()).toBeVisible();
+    await expect(page.locator("th", { hasText: /^(Protection|Status)/ }).first()).toBeVisible();
 
     const viewport = await page.evaluate(() => ({
       bodyScrollWidth: document.body.scrollWidth,
