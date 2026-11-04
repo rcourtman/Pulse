@@ -5254,6 +5254,12 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 			delete(m.vmAgentMemCache, key)
 		}
 	}
+
+	for key, entry := range m.vmFSInfoCache {
+		if now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge {
+			delete(m.vmFSInfoCache, key)
+		}
+	}
 }
 
 // cleanupMetricsHistory removes stale entries from the metrics history.

@@ -2466,6 +2466,35 @@ thawed with new writes resuming, so why the reported guest stayed frozen is not
 established. These are small counts with a held freeze, not HAOS or a rate. The
 pre-lock race remains on the #3892 build, so the workaround above stays.
 
+The lock checks cannot stop a read already running when a freeze starts, so each
+command Pulse doesn't send removes a chance of that collision. `get-fsinfo` was
+the only command sent on every poll. It now goes out about once a minute:
+`vmFSInfoCacheTTL` is 55 seconds, so 10-second polls read about every 60 seconds
+despite timer jitter. The age runs from the reply's completion, so a guest
+answering slowly can stretch that by a poll. This lowers the odds; the race
+remains, so the workaround above stays.
+
+A completed reply is reused, including an empty one or one whose counters can't
+be used. A failed or deferred read never is. A lock outranks a young reply, and an
+expired reply during a lock or replication sends nothing. A stopped listing, an
+agent status reporting unavailable, or falling uptime drops the reply, so the
+guest gets its own read when it returns; an agent that dies while its status still
+looks available is noticed at the next read. A collection cancelled during its
+read stores nothing.
+
+A reused usable reading stays current (`DiskStatusReason` empty), so alerts keep
+evaluating it, and duration timers run on it as they do on cached meminfo; a
+change reaches them at the next read. Internal evidence keeps the read's time:
+`DiskObservation.ObservedAt` and `GuestAgentEvidence` don't move, so retention
+still ends ten minutes after the read, and without a status reply a reuse doesn't
+report the agent as available. History still gets a point per poll, as cached
+meminfo does, so the series steps once a minute. Writing only fresh reads would
+break the drawer's disk line into dots, because `getGuestDrawerHistorySegments`
+breaks a series wherever another series in its panel has a reading and it does
+not. A retained `prev-` reading stays a History gap.
+`guest_fsinfo_cache_test.go` covers this with fixture clients; no native run has
+measured the effect on the collision rate.
+
 The [bounded backup observation tools](../../../../../tests/qualification/guest-agent-backup/README.md)
 provide an independent guest filesystem writer (file/directory fsync and
 synthetic readback over non-QGA stdout) and a fail-closed checker for native
