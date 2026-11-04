@@ -541,6 +541,8 @@ observations update values and remove the status. Mounted row/list/drawer contro
 and `browser-tests/guest-disk-deferral.cjs` verify same-row ownership in bar and
 sparkline modes with desktop and phone CSS. This is client behaviour proof, not
 native backup coordination, new History samples or a fleet performance result.
+The `replication-active` deferral adds one protected status read per guest-agent
+command, only for guests the existing replication inventory has listed with a job.
 
 Completed backup presentation follows the existing same-guest snapshot owner.
 Running activity and completed protection are independent derived detail rows;

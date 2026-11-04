@@ -15,6 +15,7 @@ const runtime = [
 ];
 const deferrals = [
   ['vm-locked', 'VM operation lock'],
+  ['replication-active', 'replication job runs'],
   ['lock-unverified', 'cannot verify that the VM is unlocked'],
   ['agent-busy', 'earlier guest request is still in progress'],
   ['agent-cooldown', 'after the cooldown'],

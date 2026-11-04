@@ -5,6 +5,10 @@ export const guestDiskDeferrals = [
     'Guest reads paused while Proxmox reports a VM operation lock, such as a backup. Pulse will check again on a later poll.',
   ],
   [
+    'replication-active',
+    'Guest reads paused while a Proxmox replication job runs on this VM. Pulse will check again on a later poll.',
+  ],
+  [
     'lock-unverified',
     'Guest reads deferred because Pulse cannot verify that the VM is unlocked. Pulse will check again on a later poll.',
   ],

@@ -2419,6 +2419,22 @@ post-config-body controls pin completion and cross-client admission.
 `TestUnverifiedVMConfigPreservesStatusCounterObservations` and the monitoring
 lifecycle pin live counter presence and rejection of cached disk/memory History
 refresh during an incomplete lock read, not just a decoder error.
+PVE's replication run freezes and thaws the guest through QGA holding only its
+local migration file lock, with no config `lock`, and only warns if the thaw
+fails. Guest commands therefore also defer as `replication-active` while the
+guest's job on that node reports a live `pid` and its `last_try` is under an hour
+old, PVE's own limit on a freeze; a longer run's transfer does not hold readings.
+An unreadable answer defers as `lock-unverified`. A complete HTTP 500 does not
+defer: `job_status` fails that way without quorum, and `get_next_job` calls it
+too, so no new job can start. The existing per-cycle `/cluster/replication`
+inventory limits that protected read to guests seen with a job, so a job goes
+unseen until the next complete inventory, including before the first one after a
+restart. Inventories only add guests, because each is filtered by its token's
+`VM.Audit`. Clones and disk imports from a running VM also freeze it
+with no config `lock` and stay undetected. `guest_agent_replication_test.go` is
+a synthetic source control, read against PVE 9.2's `Replication.pm`; no native
+replication has exercised it.
+
 These reproduce missing Pulse safety controls, **not** the reported native
 PVE/QGA command-ID collision or successful backup thaw. HTTP lock checks cannot
 atomically reserve PVE's serial channel against a backup beginning afterwards,

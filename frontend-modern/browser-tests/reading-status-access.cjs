@@ -376,6 +376,7 @@ for (const [p, digest] of Object.entries(binding.sources)) {
       await close('Memory', true);
       const deferrals = [
         'vm-locked',
+        'replication-active',
         'lock-unverified',
         'agent-busy',
         'agent-cooldown',
