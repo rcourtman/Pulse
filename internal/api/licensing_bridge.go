@@ -84,6 +84,10 @@ func upgradeURLForFeatureFromLicensing(feature string) string {
 	return pkglicensing.UpgradeURLForFeature(feature)
 }
 
+func isProviderHostedWorkspaceFromLicensing(orgID string) bool {
+	return pkglicensing.IsProviderHostedWorkspace(orgID)
+}
+
 func proTrialSignupURLFromLicensing(override string) string {
 	return pkglicensing.ResolveProTrialSignupURL(override)
 }

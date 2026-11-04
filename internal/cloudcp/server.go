@@ -78,6 +78,7 @@ func Run(ctx context.Context, version string) error {
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		ControlPlaneBaseURL:      cfg.BaseURL,
+		ProviderHosted:           cfg.IsProviderHostedMSP(),
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		TenantDisplayName:        tenantDisplayNameResolver(reg),
 		TenantReportBrand: cpDocker.TenantReportBrandConfig{

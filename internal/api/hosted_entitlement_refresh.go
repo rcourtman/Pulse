@@ -435,10 +435,7 @@ func (h *LicenseHandlers) requestHostedEntitlementLeaseRefresh(orgID, instanceHo
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := securityutil.NewRestrictedOutboundHTTPClient(5*time.Second, securityutil.RestrictedOutboundHTTPOptions{
-		AllowedSchemes: []string{"http", "https"},
-		AllowLoopback:  true,
-	})
+	client := securityutil.NewRestrictedOutboundHTTPClient(5*time.Second, hostedEntitlementRefreshOutboundOptions(h.cfg))
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("post hosted entitlement refresh request: %w", err)
@@ -461,6 +458,23 @@ func (h *LicenseHandlers) requestHostedEntitlementLeaseRefresh(orgID, instanceHo
 		return nil, fmt.Errorf("hosted entitlement refresh response missing entitlement_jwt")
 	}
 	return &response, nil
+}
+
+// hostedEntitlementRefreshOutboundOptions admits private addresses only when the
+// deployment configured its own control plane. A provider-hosted client runtime
+// reaches that control plane on the deployment's private Docker network, and a
+// domain may legitimately resolve to a LAN address. The built-in Pulse URL stays
+// public.
+func hostedEntitlementRefreshOutboundOptions(cfg *config.Config) securityutil.RestrictedOutboundHTTPOptions {
+	configured := ""
+	if cfg != nil {
+		configured = cfg.ProTrialSignupURL
+	}
+	return securityutil.RestrictedOutboundHTTPOptions{
+		AllowedSchemes:  []string{"http", "https"},
+		AllowLoopback:   true,
+		AllowPrivateIPs: proTrialSignupURLFromLicensing(configured) != proTrialSignupURLFromLicensing(""),
+	}
 }
 
 func normalizeHostedEntitlementOrgID(raw string) string {

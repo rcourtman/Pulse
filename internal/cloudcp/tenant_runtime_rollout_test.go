@@ -866,3 +866,15 @@ func (c *fakeTenantRuntimeRolloutClock) Now() time.Time {
 func (c *fakeTenantRuntimeRolloutClock) Sleep(duration time.Duration) {
 	c.now = c.now.Add(duration)
 }
+
+func TestTenantRuntimeMatchesContractRequiresTheProviderClientMarker(t *testing.T) {
+	routing := cpDocker.TenantRuntimeRoutingContract{Host: "t-acme.msp.example.com", PublicURL: "https://t-acme.msp.example.com", ProviderHosted: true}
+	live := &cpDocker.RuntimeContainerInfo{Name: "pulse-t-acme", ImageRef: "pulse:new", RouteHost: routing.Host, PublicURL: routing.PublicURL}
+	if tenantRuntimeMatchesContract(live, "pulse-t-acme", "pulse:new", routing) {
+		t.Fatal("a provider client without the marker must be recreated even on the right image")
+	}
+	live.ProviderHosted = true
+	if !tenantRuntimeMatchesContract(live, "pulse-t-acme", "pulse:new", routing) {
+		t.Fatal("a marked provider client on the right image matches")
+	}
+}

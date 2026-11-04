@@ -1058,3 +1058,25 @@ validate_compose_config
 		})
 	}
 }
+
+// The control plane gives Traefik the portal's name on a client's network only when
+// the runtime image declares this label, so losing it would quietly send renewal back
+// over the host. The guide states which runtimes need a public address.
+func TestProviderMSPRuntimeImageDeclaresPrivateLeaseRenewal(t *testing.T) {
+	dockerfile, err := os.ReadFile(repoFile("Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	assertContainsAll(t, string(dockerfile), `LABEL pulse.runtime.private-lease-renewal="true"`)
+	for _, path := range [][]string{{"docs", "MSP.md"}, {"frontend-modern", "public", "docs", "MSP.md"}} {
+		guide, err := os.ReadFile(repoFile(path...))
+		if err != nil {
+			t.Fatalf("read %v: %v", path, err)
+		}
+		assertContainsAll(t, strings.Join(strings.Fields(string(guide)), " "),
+			"falls back to Community behaviour",
+			"`DOMAIN` must be a public address",
+			"upgrade.sh --rollout-tenants",
+		)
+	}
+}

@@ -190,6 +190,7 @@ func providerMSPDockerManagerConfig(cfg *cloudcp.CPConfig) cpDocker.ManagerConfi
 		BaseDomain:               providerMSPBaseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		ControlPlaneBaseURL:      cfg.BaseURL,
+		ProviderHosted:           cfg.IsProviderHostedMSP(),
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		MemoryLimit:              cfg.TenantMemoryLimit,
 		CPUShares:                cfg.TenantCPUShares,

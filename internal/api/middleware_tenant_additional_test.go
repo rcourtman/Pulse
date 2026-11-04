@@ -259,6 +259,40 @@ func TestTenantMiddleware_HostedMode_UnboundedTrial_Blocked(t *testing.T) {
 	}
 }
 
+// /msp and the guide promise that a provider's clients fall back to Community
+// behaviour without a valid lease, so a lapsed licence or failed renewal must not
+// lock the client's workspace. Pulse Cloud tenants still answer 402, and so does any
+// further organization, because those are a paid capability.
+func TestTenantMiddleware_ProviderHostedClientOpensItsOwnWorkspaceWithoutAValidLease(t *testing.T) {
+	setupHostedLicenseProvider(t, pkglicensing.SubStateExpired, nil)
+	mw := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{HostedMode: true})
+	serve := func(orgID string) (*httptest.ResponseRecorder, bool) {
+		req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+		req.Header.Set("X-Pulse-Org-ID", orgID)
+		rec := httptest.NewRecorder()
+		reached := false
+		mw.Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			reached = true
+		})).ServeHTTP(rec, req)
+		return rec, reached
+	}
+
+	t.Setenv("PULSE_TENANT_ID", "t-client")
+	if rec, reached := serve("t-client"); reached || rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("Pulse Cloud tenant: reached=%v status=%d, want 402", reached, rec.Code)
+	}
+
+	t.Setenv(pkglicensing.ProviderHostedRuntimeEnvVar, "true")
+	if rec, reached := serve("t-client"); !reached {
+		t.Fatalf("provider client must open its own workspace without a valid lease, got status %d", rec.Code)
+	}
+	for _, further := range []string{"t-another", "T-CLIENT"} {
+		if rec, reached := serve(further); reached || rec.Code != http.StatusPaymentRequired {
+			t.Fatalf("further organization %q: reached=%v status=%d, want 402", further, reached, rec.Code)
+		}
+	}
+}
+
 // TestTenantMiddleware_HostedMode_ExpiredTrial_Blocked is the regression test
 // for a fix where isHostedSubscriptionValid only checked that TrialEndsAt was
 // non-nil, not that the trial had not yet expired. A tenant whose trial ended

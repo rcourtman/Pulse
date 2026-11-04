@@ -19,8 +19,12 @@ const defaultCloudPlanVersion = "cloud_starter"
 var (
 	ErrHostedEntitlementNotFound       = errors.New("hosted entitlement not found")
 	ErrHostedEntitlementTargetMismatch = errors.New("hosted entitlement target mismatch")
-	ErrHostedEntitlementInactive       = errors.New("hosted entitlement inactive")
-	ErrHostedEntitlementInvalid        = errors.New("hosted entitlement is invalid")
+	// ErrHostedEntitlementNotReady means the workspace is still being provisioned.
+	// Its runtime can ask before provisioning finishes, and an answer it treats as
+	// permanent would make it discard its refresh token for good.
+	ErrHostedEntitlementNotReady = errors.New("hosted entitlement workspace is still provisioning")
+	ErrHostedEntitlementInactive = errors.New("hosted entitlement inactive")
+	ErrHostedEntitlementInvalid  = errors.New("hosted entitlement is invalid")
 )
 
 type Service struct {
@@ -201,6 +205,9 @@ func (s *Service) refreshPaidEntitlement(entitlement *registry.HostedEntitlement
 	}
 	if tenant == nil {
 		return nil, ErrHostedEntitlementNotFound
+	}
+	if tenant.State == registry.TenantStateProvisioning {
+		return nil, ErrHostedEntitlementNotReady
 	}
 	if tenant.State != registry.TenantStateActive {
 		return nil, ErrHostedEntitlementInactive

@@ -222,6 +222,7 @@ func newTenantRuntimeRolloutServiceFromConfig(
 		BaseDomain:               baseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		ControlPlaneBaseURL:      cfg.BaseURL,
+		ProviderHosted:           cfg.IsProviderHostedMSP(),
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		TenantDisplayName:        tenantDisplayNameResolver(reg),
 		TenantReportBrand: cpDocker.TenantReportBrandConfig{
@@ -525,7 +526,9 @@ func tenantRuntimeMatchesContract(
 	if live.Name != canonicalName || live.ImageRef != image {
 		return false
 	}
-	return live.RouteHost == desiredRouting.Host && live.PublicURL == desiredRouting.PublicURL
+	// A runtime created by an older control plane can run the right image without the
+	// provider marker, so the marker has to match too or it would never be recreated.
+	return live.RouteHost == desiredRouting.Host && live.PublicURL == desiredRouting.PublicURL && live.ProviderHosted == desiredRouting.ProviderHosted
 }
 
 func (s *tenantRuntimeRolloutService) PlanContractReconcile(

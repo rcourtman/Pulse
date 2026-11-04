@@ -5,12 +5,14 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -160,4 +162,25 @@ func containsHostedRefreshCapability(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestHostedEntitlementRefreshAdmitsPrivateAddressesOnlyForConfiguredControlPlane(t *testing.T) {
+	dockerNetworkAddress := func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("172.18.0.2")}}, nil
+	}
+	const refreshURL = "https://portal.example.com/api/entitlements/refresh"
+
+	configured := hostedEntitlementRefreshOutboundOptions(&config.Config{ProTrialSignupURL: "https://portal.example.com"})
+	configured.ResolveIPAddrs = dockerNetworkAddress
+	if _, err := securityutil.ValidateOutboundFetchURL(context.Background(), refreshURL, configured); err != nil {
+		t.Fatalf("a configured control plane on a private network must be reachable: %v", err)
+	}
+
+	for name, cfg := range map[string]*config.Config{"nil config": nil, "built-in URL": {}} {
+		builtIn := hostedEntitlementRefreshOutboundOptions(cfg)
+		builtIn.ResolveIPAddrs = dockerNetworkAddress
+		if _, err := securityutil.ValidateOutboundFetchURL(context.Background(), refreshURL, builtIn); err == nil {
+			t.Fatalf("%s: the built-in Pulse URL must not resolve to a private address", name)
+		}
+	}
 }

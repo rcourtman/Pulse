@@ -44,7 +44,7 @@ func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID 
 		// Hosted mode: tenant routing is infrastructure. Check subscription lifecycle
 		// instead of FeatureMultiTenant so Cloud customers can connect.
 		checkCtx := context.WithValue(ctx, OrgIDContextKey, orgID)
-		if isHostedSubscriptionValid(checkCtx) {
+		if isHostedWorkspaceOpen(checkCtx, orgID) {
 			return websocket.MultiTenantCheckResult{
 				Allowed:        true,
 				FeatureEnabled: true,

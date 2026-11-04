@@ -178,7 +178,7 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			if m.hostedMode {
 				// Hosted mode: verify the org has a valid subscription or bounded trial.
 				checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
-				if !isHostedSubscriptionValid(checkCtx) {
+				if !isHostedWorkspaceOpen(checkCtx, orgID) {
 					writeHostedSubscriptionRequiredError(w)
 					return
 				}
@@ -344,6 +344,16 @@ func isHostedSubscriptionValid(ctx context.Context) bool {
 	default:
 		return false
 	}
+}
+
+// isHostedWorkspaceOpen decides whether a hosted organization opens at all. A provider
+// MSP client has no Pulse Cloud subscription to check: without a valid lease its own
+// workspace falls back to Community behaviour, with no paid capabilities, so a lapsed
+// licence or a failed renewal never takes monitoring away from the provider's clients.
+// Everything else, including further organizations in that runtime, still needs a
+// valid subscription or lease.
+func isHostedWorkspaceOpen(ctx context.Context, orgID string) bool {
+	return isProviderHostedWorkspaceFromLicensing(orgID) || isHostedSubscriptionValid(ctx)
 }
 
 // writeHostedSubscriptionRequiredError writes a 402 response for Cloud tenants

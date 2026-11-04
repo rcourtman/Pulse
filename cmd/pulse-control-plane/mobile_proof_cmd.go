@@ -319,6 +319,7 @@ func newMobileProofRuntime(ctx context.Context) (*mobileProofRuntime, error) {
 		BaseDomain:               mobileProofBaseDomainFromURL(cfg.BaseURL),
 		TrialActivationPublicKey: cfg.TrialActivationPublicKey,
 		ControlPlaneBaseURL:      cfg.BaseURL,
+		ProviderHosted:           cfg.IsProviderHostedMSP(),
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		MemoryLimit:              cfg.TenantMemoryLimit,
 		CPUShares:                cfg.TenantCPUShares,

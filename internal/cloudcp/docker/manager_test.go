@@ -7,12 +7,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/moby/moby/api/types/container"
 	mobynetwork "github.com/moby/moby/api/types/network"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestTenantImmutableOwnershipPaths(t *testing.T) {
@@ -849,5 +851,116 @@ func TestTenantNetworkCleanupDisconnectsOnlyAttachedLocalSupport(t *testing.T) {
 	}
 	if len(disconnected) != 1 || disconnected[0] != localAttached {
 		t.Fatalf("disconnected = %v, want only attached local support %s", disconnected, localAttached)
+	}
+}
+
+// Client runtimes renew leases at the control plane's public URL. Traefik answers
+// that name on a client's isolated network only when the client's runtime accepts a
+// private address. An older runtime refuses one, so giving it the name would break a
+// renewal that works today.
+func TestEnsureSupportContainersGivesTraefikTheControlPlaneNameForCapableRuntimes(t *testing.T) {
+	const (
+		networkName = "pulse-provider-msp-tenant-t-acme"
+		traefikID   = "traefik-container-id"
+		portalHost  = "msp.example.com"
+	)
+	capable := []map[string]any{{"Id": "client", "Labels": map[string]string{tenantRuntimePrivateLeaseRenewalLabel: "true"}}}
+	older := []map[string]any{{"Id": "client", "Labels": map[string]string{"pulse.tenant.id": "t-acme"}}}
+	connectName := "connect " + portalHost
+	for _, tc := range []struct {
+		name          string
+		runtimes      []map[string]any
+		attached      bool
+		currentAlias  []string
+		wantMutations []string
+	}{
+		{name: "capable, not attached", runtimes: capable, wantMutations: []string{connectName}},
+		{name: "capable, attached by an earlier version", runtimes: capable, attached: true, currentAlias: []string{"abc123"}, wantMutations: []string{"disconnect", connectName}},
+		{name: "capable, already has the name", runtimes: capable, attached: true, currentAlias: []string{portalHost}},
+		{name: "older runtime, not attached", runtimes: older, wantMutations: []string{"connect "}},
+		{name: "older runtime, no name to remove", runtimes: older, attached: true, currentAlias: []string{"abc123"}},
+		{name: "rolled back to an older runtime", runtimes: older, attached: true, currentAlias: []string{portalHost}, wantMutations: []string{"disconnect", "connect "}},
+		{name: "no running runtime leaves the attachment alone", runtimes: []map[string]any{}, attached: true, currentAlias: []string{portalHost}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mutations []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Api-Version", "1.47")
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/_ping"):
+					_, _ = w.Write([]byte("OK"))
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/disconnect"):
+					mutations = append(mutations, "disconnect")
+					_, _ = w.Write([]byte("{}"))
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/connect"):
+					var body struct {
+						EndpointConfig struct{ Aliases []string }
+					}
+					_ = json.NewDecoder(r.Body).Decode(&body)
+					mutations = append(mutations, "connect "+strings.Join(body.EndpointConfig.Aliases, ","))
+					_, _ = w.Write([]byte("{}"))
+				case strings.Contains(r.URL.Path, "/networks/"):
+					containers := map[string]any{}
+					if tc.attached {
+						containers[traefikID] = map[string]any{}
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"Name":       networkName,
+						"Labels":     map[string]string{"pulse.tenant.id": "t-acme", tenantRuntimeNetworkLabel: tenantRuntimeNetworkLabelValue},
+						"Containers": containers,
+					})
+				case strings.HasSuffix(r.URL.Path, "/containers/json"):
+					if strings.Contains(r.URL.Query().Get("filters"), "pulse.tenant.id") {
+						_ = json.NewEncoder(w).Encode(tc.runtimes)
+						return
+					}
+					_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": traefikID}})
+				case strings.HasSuffix(r.URL.Path, "/containers/"+traefikID+"/json"):
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"Id":              traefikID,
+						"NetworkSettings": map[string]any{"Networks": map[string]any{networkName: map[string]any{"Aliases": tc.currentAlias}}},
+					})
+				default:
+					t.Errorf("unexpected Docker request %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			t.Cleanup(srv.Close)
+			t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+			t.Setenv("DOCKER_TLS_VERIFY", "")
+			t.Setenv("DOCKER_CERT_PATH", "")
+
+			mgr, err := NewManager(ManagerConfig{
+				Image:                  "pulse:test",
+				Network:                "pulse-provider-msp",
+				IsolateTenantNetworks:  true,
+				SupportContainerLabels: []string{providerSupportTraefikLabel},
+				ControlPlaneBaseURL:    "https://" + portalHost,
+			})
+			if err != nil {
+				t.Fatalf("NewManager: %v", err)
+			}
+			t.Cleanup(func() { _ = mgr.Close() })
+
+			if err := mgr.EnsureSupportContainersOnTenantNetwork(context.Background(), "t-acme"); err != nil {
+				t.Fatalf("EnsureSupportContainersOnTenantNetwork: %v", err)
+			}
+			if !slices.Equal(mutations, tc.wantMutations) {
+				t.Fatalf("Docker mutations = %v, want %v", mutations, tc.wantMutations)
+			}
+		})
+	}
+}
+
+func TestProviderHostedControlPlaneMarksItsClientRuntimes(t *testing.T) {
+	const marker = pkglicensing.ProviderHostedRuntimeEnvVar + "=true"
+	provider := tenantRuntimeContainerConfig("t-acme", ManagerConfig{Image: "pulse:test", ProviderHosted: true}, nil, nil)
+	if !slices.Contains(provider.Env, marker) {
+		t.Fatalf("provider client env must carry %s: %v", marker, provider.Env)
+	}
+	cloud := tenantRuntimeContainerConfig("t-acme", ManagerConfig{Image: "pulse:test"}, nil, nil)
+	if slices.Contains(cloud.Env, marker) {
+		t.Fatalf("Pulse Cloud tenant env must not carry %s: %v", marker, cloud.Env)
 	}
 }
