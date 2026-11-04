@@ -47,9 +47,31 @@ const (
 	// dispatched to that node until a backoff window passes. Per-guest
 	// backoff alone is not enough: a node that is slow for host-level
 	// reasons (NFS flapping, load) fails every guest's probe, and newly
-	// appearing guests would still be probed immediately.
+	// appearing guests would still be probed immediately. The breaker belongs
+	// to one node on one connection, because node names repeat across
+	// connections.
 	proxmoxGuestDockerNodeFailureThreshold = 3
 )
+
+// ErrNoProvenProxmoxNodeAgent reports that no host agent is proven to run on
+// the Proxmox node hosting a guest, so a command for that guest has nowhere
+// safe to go. Pulse decided not to dispatch, so it counts as neither a probe
+// failure nor a node failure, and the guest is considered again next poll.
+var ErrNoProvenProxmoxNodeAgent = errors.New("no agent is linked to this guest's Proxmox node on its connection")
+
+// ProxmoxGuestCommandExecutor runs a command on the Proxmox node hosting
+// container and returns (stdout, exitCode, error). It returns
+// ErrNoProvenProxmoxNodeAgent rather than dispatch when no agent is proven to
+// run on that node.
+type ProxmoxGuestCommandExecutor func(ctx context.Context, container models.Container, command string, timeout int) (string, int, error)
+
+// ProxmoxNodeAgent identifies the host agent proven to run on a guest's Proxmox
+// node. A command session must match this identity, not just the node's name.
+type ProxmoxNodeAgent struct {
+	AgentID  string
+	Hostname string
+	TokenID  string
+}
 
 // dockerProbeFailureState tracks consecutive Docker socket probe failures for
 // one LXC container.
@@ -62,9 +84,9 @@ type dockerProbeFailureState struct {
 // This is typically implemented by wrapping the agentexec.Server.
 type DockerChecker interface {
 	// CheckDockerInContainer checks if Docker is installed inside an LXC container.
-	// Returns true if Docker socket exists, false otherwise.
-	// The node parameter is the Proxmox node hostname where the container runs.
-	CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error)
+	// Returns true if Docker socket exists, false otherwise. The container's
+	// connection and node say which machine the check belongs to.
+	CheckDockerInContainer(ctx context.Context, container models.Container) (bool, error)
 }
 
 // DockerInventoryCollector provides explicitly opted-in Docker inventory from
@@ -151,7 +173,7 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 			// A recent probe failure is still inside its backoff window.
 			reason = ""
 		}
-		if reason != "" && m.dockerNodeProbeBreakerOpen(ct.Node) {
+		if reason != "" && m.dockerNodeProbeBreakerOpen(ct) {
 			// The whole node is failing Docker commands; don't pile on.
 			reason = ""
 		}
@@ -196,7 +218,7 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 			ct := containers[result.index]
 			m.releaseDockerProbe(ct.ID, false)
 			m.clearDockerProbeFailure(ct)
-			m.recordDockerNodeProbeResult(ct.Node, false)
+			m.recordDockerNodeProbeResult(ct, false)
 		} else if result.err != nil {
 			// Check failed - preserve previous status if available
 			ct := containers[result.index]
@@ -206,9 +228,17 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 			}
 			abandoned := dockerProbeAbandoned(result.err)
 			m.releaseDockerProbe(ct.ID, abandoned)
+			if errors.Is(result.err, ErrNoProvenProxmoxNodeAgent) {
+				// The guest may have restarted, and that signal is gone once
+				// this poll is published. Marking it unchecked asks again as
+				// soon as an agent is proven, keeping the prior answer until then.
+				containers[result.index].DockerCheckedAt = time.Time{}
+				m.noteDockerProbeWithoutNodeAgent(ct)
+				continue
+			}
 			if !abandoned {
 				m.recordDockerProbeFailure(ct, result.err)
-				m.recordDockerNodeProbeResult(ct.Node, true)
+				m.recordDockerNodeProbeResult(ct, true)
 			}
 		}
 	}
@@ -381,6 +411,7 @@ func (m *Monitor) resetDockerProbeFailures() {
 	m.dockerProbeFailures = nil
 	m.dockerProbesInFlight = nil
 	m.dockerNodeProbeFailures = nil
+	m.dockerNodesWithoutProvenAgent = nil
 }
 
 // dockerProbeAbandoned reports whether a probe error means the server stopped
@@ -431,22 +462,60 @@ func (m *Monitor) releaseDockerProbe(key string, abandoned bool) {
 	delete(m.dockerProbesInFlight, key)
 }
 
-// recordDockerNodeProbeResult feeds the per-node circuit breaker. Any
-// completed Docker probe/inventory command counts: a success closes the
-// breaker for the node, a failure extends the streak.
-func (m *Monitor) recordDockerNodeProbeResult(node string, failed bool) {
-	node = strings.TrimSpace(node)
+// dockerNodeProbeKey names one Proxmox node on one connection. Node names repeat
+// across connections, and a node name cannot contain the separator.
+func dockerNodeProbeKey(ct models.Container) string {
+	node := strings.TrimSpace(ct.Node)
 	if node == "" {
+		return ""
+	}
+	return strings.TrimSpace(ct.Instance) + "\x00" + node
+}
+
+// noteDockerProbeWithoutNodeAgent logs once per node why its guests are not
+// being probed. A guest that was never checked is considered again next poll,
+// so an agent linked later takes effect without a restart.
+func (m *Monitor) noteDockerProbeWithoutNodeAgent(ct models.Container) {
+	key := dockerNodeProbeKey(ct)
+	if key == "" {
+		return
+	}
+	m.dockerProbeFailureMu.Lock()
+	_, noted := m.dockerNodesWithoutProvenAgent[key]
+	if !noted {
+		if m.dockerNodesWithoutProvenAgent == nil {
+			m.dockerNodesWithoutProvenAgent = make(map[string]struct{})
+		}
+		m.dockerNodesWithoutProvenAgent[key] = struct{}{}
+	}
+	m.dockerProbeFailureMu.Unlock()
+	if noted {
+		return
+	}
+	log.Warn().
+		Str("instance", ct.Instance).
+		Str("node", ct.Node).
+		Msg("Skipping Docker discovery for LXC guests on this Proxmox node: no agent is linked to it on this connection")
+}
+
+// recordDockerNodeProbeResult feeds the circuit breaker of the container's node
+// on its connection. Any completed Docker probe/inventory command counts: a
+// success closes the breaker for the node, a failure extends the streak.
+func (m *Monitor) recordDockerNodeProbeResult(ct models.Container, failed bool) {
+	key := dockerNodeProbeKey(ct)
+	if key == "" {
 		return
 	}
 	m.dockerProbeFailureMu.Lock()
 	if !failed {
-		state, wasOpen := m.dockerNodeProbeFailures[node]
-		delete(m.dockerNodeProbeFailures, node)
+		state, wasOpen := m.dockerNodeProbeFailures[key]
+		delete(m.dockerNodeProbeFailures, key)
+		delete(m.dockerNodesWithoutProvenAgent, key)
 		m.dockerProbeFailureMu.Unlock()
 		if wasOpen && state.failures >= proxmoxGuestDockerNodeFailureThreshold {
 			log.Info().
-				Str("node", node).
+				Str("instance", ct.Instance).
+				Str("node", ct.Node).
 				Int("previousFailures", state.failures).
 				Msg("Docker probe circuit breaker closed for node after successful command")
 		}
@@ -455,10 +524,10 @@ func (m *Monitor) recordDockerNodeProbeResult(node string, failed bool) {
 	if m.dockerNodeProbeFailures == nil {
 		m.dockerNodeProbeFailures = make(map[string]*dockerProbeFailureState)
 	}
-	state, ok := m.dockerNodeProbeFailures[node]
+	state, ok := m.dockerNodeProbeFailures[key]
 	if !ok {
 		state = &dockerProbeFailureState{}
-		m.dockerNodeProbeFailures[node] = state
+		m.dockerNodeProbeFailures[key] = state
 	}
 	state.failures++
 	state.lastAt = time.Now()
@@ -466,20 +535,21 @@ func (m *Monitor) recordDockerNodeProbeResult(node string, failed bool) {
 	m.dockerProbeFailureMu.Unlock()
 	if failures == proxmoxGuestDockerNodeFailureThreshold {
 		log.Warn().
-			Str("node", node).
+			Str("instance", ct.Instance).
+			Str("node", ct.Node).
 			Int("consecutiveFailures", failures).
 			Msg("Docker probe circuit breaker opened: suspending Docker command dispatch to node")
 	}
 }
 
-// dockerNodeProbeBreakerOpen reports whether the node's circuit breaker is
-// open, i.e. Docker probe/inventory commands must not be dispatched to it
-// right now. The suspension window grows with the failure streak on the same
-// schedule as the per-guest backoff.
-func (m *Monitor) dockerNodeProbeBreakerOpen(node string) bool {
+// dockerNodeProbeBreakerOpen reports whether the circuit breaker of the
+// container's node on its connection is open, i.e. Docker probe/inventory
+// commands must not be dispatched to it right now. The suspension window grows
+// with the failure streak on the same schedule as the per-guest backoff.
+func (m *Monitor) dockerNodeProbeBreakerOpen(ct models.Container) bool {
 	m.dockerProbeFailureMu.Lock()
 	defer m.dockerProbeFailureMu.Unlock()
-	state, ok := m.dockerNodeProbeFailures[node]
+	state, ok := m.dockerNodeProbeFailures[dockerNodeProbeKey(ct)]
 	if !ok || state.failures < proxmoxGuestDockerNodeFailureThreshold {
 		return false
 	}
@@ -519,7 +589,7 @@ func (m *Monitor) checkDockerParallel(ctx context.Context, checker DockerChecker
 			}
 
 			// Perform the check
-			hasDocker, err := checker.CheckDockerInContainer(ctx, chk.container.Node, chk.container.VMID)
+			hasDocker, err := checker.CheckDockerInContainer(ctx, chk.container)
 			if err != nil {
 				log.Debug().
 					Str("container", chk.container.Name).
@@ -581,7 +651,7 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 				Msg("Skipping Proxmox LXC Docker inventory because a guest-local host agent is linked")
 			continue
 		}
-		if m.dockerNodeProbeBreakerOpen(ct.Node) {
+		if m.dockerNodeProbeBreakerOpen(ct) {
 			continue
 		}
 		if !m.tryClaimDockerProbe(dockerInventoryClaimKey(ct.ID)) {
@@ -629,11 +699,19 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 			}
 
 			report, ok, err := collector.CollectDockerInventory(ctx, container)
+			if errors.Is(err, ErrNoProvenProxmoxNodeAgent) {
+				m.releaseDockerProbe(claimKey, false)
+				m.noteDockerProbeWithoutNodeAgent(container)
+				mu.Lock()
+				skipped++
+				mu.Unlock()
+				return
+			}
 			if err != nil {
 				abandoned := dockerProbeAbandoned(err)
 				m.releaseDockerProbe(claimKey, abandoned)
 				if !abandoned {
-					m.recordDockerNodeProbeResult(container.Node, true)
+					m.recordDockerNodeProbeResult(container, true)
 				}
 				log.Debug().
 					Err(err).
@@ -652,7 +730,7 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 				mu.Unlock()
 				return
 			}
-			m.recordDockerNodeProbeResult(container.Node, false)
+			m.recordDockerNodeProbeResult(container, false)
 
 			enrichGuestDockerReportFromContainer(&report, container)
 
@@ -708,6 +786,104 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 	}
 }
 
+// ProxmoxNodeAgentForContainer returns the host agent proven to run on the
+// Proxmox node hosting container. Docker discovery runs trusted pct exec commands,
+// so a matching hostname is not enough: node names repeat across connections,
+// and a VMID on another machine is a different guest. Proof is the link
+// monitoring holds on both sides, the agent naming this node on this connection
+// and the node naming that agent. One machine added through two connections
+// counts as one node (polledNodeSlot). Two agents claiming one node prove
+// neither, and an operator's split ends the proof at once, before the next
+// node poll reconciles the link away.
+func (m *Monitor) ProxmoxNodeAgentForContainer(container models.Container) (ProxmoxNodeAgent, bool) {
+	instance := strings.TrimSpace(container.Instance)
+	nodeName := strings.TrimSpace(container.Node)
+	if m == nil || m.state == nil || instance == "" || nodeName == "" {
+		return ProxmoxNodeAgent{}, false
+	}
+	instanceCfg := m.getInstanceConfig(instance)
+	if instanceCfg == nil {
+		return ProxmoxNodeAgent{}, false
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return ProxmoxNodeAgent{}, false
+	}
+	hosts := readState.Hosts()
+	slot := m.polledNodeSlot(hosts, readState.Nodes(), m.placeholderNodeForInstance(instance, instanceCfg, nodeName))
+
+	var claimant *unifiedresources.HostView
+	for _, host := range hosts {
+		if host == nil || !slot.hasID(host.LinkedNodeID()) {
+			continue
+		}
+		if claimant != nil {
+			return ProxmoxNodeAgent{}, false
+		}
+		claimant = host
+	}
+	if claimant == nil {
+		return ProxmoxNodeAgent{}, false
+	}
+
+	// The read state fills a node's linked agent in from the agent's own link,
+	// so only monitoring's state can show that both sides hold it.
+	linked, ok := m.state.GetHost(strings.TrimSpace(claimant.AgentID()))
+	if !ok || !slot.hasID(strings.TrimSpace(linked.LinkedNodeID)) {
+		return ProxmoxNodeAgent{}, false
+	}
+	nodeNamesAgent := false
+	for _, nodeID := range slot.ids {
+		if m.state.NodeAgentLinkSplit(nodeID, linked) {
+			return ProxmoxNodeAgent{}, false
+		}
+		if node, ok := m.state.GetNode(nodeID); ok && strings.TrimSpace(node.LinkedAgentID) == linked.ID {
+			nodeNamesAgent = true
+		}
+	}
+	if !nodeNamesAgent {
+		return ProxmoxNodeAgent{}, false
+	}
+
+	agent := ProxmoxNodeAgent{
+		AgentID:  strings.TrimSpace(linked.ID),
+		Hostname: strings.TrimSpace(linked.Hostname),
+		TokenID:  strings.TrimSpace(linked.TokenID),
+	}
+	if agent.AgentID == "" || agent.Hostname == "" {
+		return ProxmoxNodeAgent{}, false
+	}
+	return agent, true
+}
+
+// ProxmoxNodeAgentOwnsTokenSession reports whether a command session found
+// through agent's token can only be agent's own, registered under an earlier ID.
+// A session under another known agent's ID is that agent's, and a token held by
+// another agent of an equivalent hostname cannot tell the two machines apart: the
+// command server admits one session per hostname, so the other machine's session
+// is the one this lookup would find. It reads live state because an agent that
+// has just enrolled can reach its command channel before the read state lists it.
+func (m *Monitor) ProxmoxNodeAgentOwnsTokenSession(agent ProxmoxNodeAgent, sessionID string) bool {
+	sessionID = strings.TrimSpace(sessionID)
+	if m == nil || m.state == nil || sessionID == "" || agent.TokenID == "" {
+		return false
+	}
+	for _, host := range m.state.GetHosts() {
+		hostID := strings.TrimSpace(host.ID)
+		if hostID == agent.AgentID {
+			continue
+		}
+		if hostID == sessionID {
+			return false
+		}
+		if strings.TrimSpace(host.TokenID) == agent.TokenID &&
+			unifiedresources.HostnamesEquivalent(host.Hostname, agent.Hostname) {
+			return false
+		}
+	}
+	return true
+}
+
 func (m *Monitor) hasOnlineHostAgentForContainer(containerID string) bool {
 	containerID = strings.TrimSpace(containerID)
 	if m == nil || m.state == nil || containerID == "" {
@@ -743,13 +919,12 @@ func (m *Monitor) dockerHostHasContainers(agentID string) bool {
 // AgentDockerChecker implements DockerChecker using the agent execution system.
 // This wraps command execution to check for Docker inside LXC containers.
 type AgentDockerChecker struct {
-	executeCommand func(ctx context.Context, hostname string, command string, timeout int) (string, int, error)
+	executeCommand ProxmoxGuestCommandExecutor
 }
 
-// NewAgentDockerChecker creates a new checker that uses agent command execution.
-// The executeCommand function should execute a command on the given hostname and return
-// (stdout, exitCode, error).
-func NewAgentDockerChecker(executeCommand func(ctx context.Context, hostname string, command string, timeout int) (string, int, error)) *AgentDockerChecker {
+// NewAgentDockerChecker creates a new checker that uses agent command execution
+// on the Proxmox node hosting each guest.
+func NewAgentDockerChecker(executeCommand ProxmoxGuestCommandExecutor) *AgentDockerChecker {
 	return &AgentDockerChecker{
 		executeCommand: executeCommand,
 	}
@@ -757,15 +932,15 @@ func NewAgentDockerChecker(executeCommand func(ctx context.Context, hostname str
 
 // CheckDockerInContainer checks if Docker is installed inside an LXC container
 // by running a socket probe inside the guest through the owning Proxmox node.
-func (c *AgentDockerChecker) CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error) {
+func (c *AgentDockerChecker) CheckDockerInContainer(ctx context.Context, container models.Container) (bool, error) {
 	if c.executeCommand == nil {
 		return false, fmt.Errorf("no command executor configured")
 	}
 
 	probe := fmt.Sprintf("if test -S /var/run/docker.sock; then printf '%s\\tyes\\n'; else printf '%s\\tno\\n'; fi", proxmoxGuestDockerSocketMarker, proxmoxGuestDockerSocketMarker)
-	cmd := fmt.Sprintf("pct exec %d -- sh -c %s", vmid, shellSingleQuote(probe))
+	cmd := fmt.Sprintf("pct exec %d -- sh -c %s", container.VMID, shellSingleQuote(probe))
 
-	stdout, exitCode, err := c.executeCommand(ctx, node, cmd, 10) // 10 second timeout
+	stdout, exitCode, err := c.executeCommand(ctx, container, cmd, 10) // 10 second timeout
 	if err != nil {
 		return false, fmt.Errorf("command execution failed: %w", err)
 	}
@@ -797,7 +972,7 @@ func (c *AgentDockerChecker) CheckDockerInContainer(ctx context.Context, node st
 // aggregate docker stats. It does not call docker inspect and does not collect
 // labels, environment, mounts, commands, files, or process details.
 type AgentDockerInventoryCollector struct {
-	executeCommand func(ctx context.Context, hostname string, command string, timeout int) (string, int, error)
+	executeCommand ProxmoxGuestCommandExecutor
 	allowedVMIDs   map[int]struct{}
 }
 
@@ -813,7 +988,7 @@ type AgentDockerInventoryCollectorOptions struct {
 // execution on Proxmox nodes to run a minimal read-only Docker inventory script
 // inside LXC guests.
 func NewAgentDockerInventoryCollector(
-	executeCommand func(ctx context.Context, hostname string, command string, timeout int) (string, int, error),
+	executeCommand ProxmoxGuestCommandExecutor,
 	options AgentDockerInventoryCollectorOptions,
 ) *AgentDockerInventoryCollector {
 	allowed := make(map[int]struct{}, len(options.AllowedVMIDs))
@@ -843,7 +1018,7 @@ func (c *AgentDockerInventoryCollector) CollectDockerInventory(ctx context.Conte
 	}
 
 	command := buildProxmoxGuestDockerInventoryCommand(container.VMID)
-	stdout, exitCode, err := c.executeCommand(ctx, container.Node, command, 20)
+	stdout, exitCode, err := c.executeCommand(ctx, container, command, 20)
 	if err != nil {
 		return agentsdocker.Report{}, false, fmt.Errorf("command execution failed: %w", err)
 	}

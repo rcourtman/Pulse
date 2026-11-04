@@ -3,12 +3,15 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -20,7 +23,8 @@ type mockDockerChecker struct {
 	calls   []int // records vmids that were checked
 }
 
-func (m *mockDockerChecker) CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error) {
+func (m *mockDockerChecker) CheckDockerInContainer(ctx context.Context, container models.Container) (bool, error) {
+	vmid := container.VMID
 	m.mu.Lock()
 	m.calls = append(m.calls, vmid)
 	m.mu.Unlock()
@@ -325,11 +329,11 @@ func TestAgentDockerChecker_ParsesOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			checker := NewAgentDockerChecker(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+			checker := NewAgentDockerChecker(func(ctx context.Context, container models.Container, command string, timeout int) (string, int, error) {
 				return tt.stdout, tt.exitCode, nil
 			})
 
-			hasDocker, err := checker.CheckDockerInContainer(context.Background(), "node1", 101)
+			hasDocker, err := checker.CheckDockerInContainer(context.Background(), models.Container{Node: "node1", VMID: 101})
 
 			if tt.wantErr && err == nil {
 				t.Errorf("Expected error but got none")
@@ -346,12 +350,12 @@ func TestAgentDockerChecker_ParsesOutput(t *testing.T) {
 
 func TestAgentDockerChecker_ProbeRunsInsideContainer(t *testing.T) {
 	var gotCommand string
-	checker := NewAgentDockerChecker(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+	checker := NewAgentDockerChecker(func(ctx context.Context, container models.Container, command string, timeout int) (string, int, error) {
 		gotCommand = command
 		return proxmoxGuestDockerSocketMarker + "\tyes\n", 0, nil
 	})
 
-	hasDocker, err := checker.CheckDockerInContainer(context.Background(), "node1", 101)
+	hasDocker, err := checker.CheckDockerInContainer(context.Background(), models.Container{Node: "node1", VMID: 101})
 	if err != nil {
 		t.Fatalf("CheckDockerInContainer returned error: %v", err)
 	}
@@ -368,7 +372,7 @@ func TestAgentDockerChecker_ProbeRunsInsideContainer(t *testing.T) {
 
 func TestAgentDockerInventoryCollector_MinimalCommandAndReport(t *testing.T) {
 	var gotCommand string
-	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, container models.Container, command string, timeout int) (string, int, error) {
 		gotCommand = command
 		return strings.Join([]string{
 			proxmoxGuestDockerInventoryMarker,
@@ -443,7 +447,7 @@ func TestAgentDockerInventoryCollector_MinimalCommandAndReport(t *testing.T) {
 }
 
 func TestAgentDockerInventoryCollector_PartialOutputRefusesApply(t *testing.T) {
-	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, container models.Container, command string, timeout int) (string, int, error) {
 		return strings.Join([]string{
 			proxmoxGuestDockerInventoryMarker,
 			"HOSTNAME\tct-web",
@@ -471,7 +475,7 @@ func TestAgentDockerInventoryCollector_PartialOutputRefusesApply(t *testing.T) {
 }
 
 func TestAgentDockerInventoryCollector_PSOKWithZeroContainersApplies(t *testing.T) {
-	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, container models.Container, command string, timeout int) (string, int, error) {
 		return strings.Join([]string{
 			proxmoxGuestDockerInventoryMarker,
 			"HOSTNAME\tct-web",
@@ -564,7 +568,7 @@ func TestEnrichGuestDockerReportFromContainer_DoesNotOverrideReportedValues(t *t
 
 func TestAgentDockerInventoryCollector_AllowlistSkipsUnlistedVMID(t *testing.T) {
 	called := false
-	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+	collector := NewAgentDockerInventoryCollector(func(ctx context.Context, container models.Container, command string, timeout int) (string, int, error) {
 		called = true
 		return "", 0, nil
 	}, AgentDockerInventoryCollectorOptions{
@@ -1087,5 +1091,356 @@ func TestDockerProbeFailureBackoffSchedule(t *testing.T) {
 		if got := dockerProbeFailureBackoff(tc.failures); got != tc.want {
 			t.Errorf("backoff(%d) = %v, want %v", tc.failures, got, tc.want)
 		}
+	}
+}
+
+// Routing regressions for #2681: a Proxmox node name is not an address. Two
+// connections can each have a node called "pve", and pct exec on the wrong one
+// reads a different machine's guest under the same VMID.
+func dockerRoutingMonitor(t *testing.T, nodes []models.Node, hosts []models.Host) *Monitor {
+	t.Helper()
+	monitor := readStateMonitor(nodes, hosts)
+	instances := map[string]config.PVEInstance{}
+	for _, node := range nodes {
+		instances[node.Instance] = config.PVEInstance{Name: node.Instance}
+	}
+	cfg := &config.Config{}
+	for _, instance := range instances {
+		cfg.PVEInstances = append(cfg.PVEInstances, instance)
+	}
+	monitor.config = cfg
+	// Monitoring's own state holds the link; the read state only finds the node.
+	monitor.state.Nodes = nodes
+	monitor.state.Hosts = hosts
+	return monitor
+}
+
+func TestProxmoxNodeAgentForContainer(t *testing.T) {
+	guest := func(instance, node string) models.Container {
+		return models.Container{ID: instance + ":" + node + ":101", VMID: 101, Instance: instance, Node: node, Status: "running"}
+	}
+	sites := func() []models.Node {
+		return []models.Node{readStateTestNode("site-a", "pve"), readStateTestNode("site-b", "pve")}
+	}
+
+	t.Run("each same-named node has only its own agent", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, sites(), []models.Host{
+			{ID: "agent-a", Hostname: "pve.a.lan", TokenID: "token-a", LinkedNodeID: "site-a-pve"},
+			{ID: "agent-b", Hostname: "pve.b.lan", TokenID: "token-b", LinkedNodeID: "site-b-pve"},
+		})
+		for instance, want := range map[string]ProxmoxNodeAgent{
+			"site-a": {AgentID: "agent-a", Hostname: "pve.a.lan", TokenID: "token-a"},
+			"site-b": {AgentID: "agent-b", Hostname: "pve.b.lan", TokenID: "token-b"},
+		} {
+			if got, ok := monitor.ProxmoxNodeAgentForContainer(guest(instance, "pve")); !ok || got != want {
+				t.Errorf("%s: got %+v (proven=%v), want %+v", instance, got, ok, want)
+			}
+		}
+	})
+
+	t.Run("an agent linked to the other site's node proves nothing here", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, sites(), []models.Host{
+			{ID: "agent-a", Hostname: "pve", TokenID: "token-a", LinkedNodeID: "site-a-pve"},
+		})
+		if got, ok := monitor.ProxmoxNodeAgentForContainer(guest("site-b", "pve")); ok {
+			t.Fatalf("site-b's guest took site-a's agent: %+v", got)
+		}
+	})
+
+	t.Run("a matching hostname alone proves nothing", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, []models.Node{readStateTestNode("home", "pve")}, []models.Host{
+			{ID: "agent-x", Hostname: "pve", TokenID: "token-x"},
+		})
+		if got, ok := monitor.ProxmoxNodeAgentForContainer(guest("home", "pve")); ok {
+			t.Fatalf("an unlinked agent was taken on its hostname: %+v", got)
+		}
+	})
+
+	t.Run("two agents claiming one node prove neither", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, []models.Node{readStateTestNode("site-a", "pve")}, []models.Host{
+			{ID: "agent-a", Hostname: "pve", LinkedNodeID: "site-a-pve"},
+			{ID: "agent-b", Hostname: "pve", LinkedNodeID: "site-a-pve"},
+		})
+		if got, ok := monitor.ProxmoxNodeAgentForContainer(guest("site-a", "pve")); ok {
+			t.Fatalf("one of two claimants was taken: %+v", got)
+		}
+	})
+
+	t.Run("a link only the agent holds proves nothing", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, []models.Node{readStateTestNode("site-a", "pve")}, []models.Host{
+			{ID: "agent-a", Hostname: "pve", LinkedNodeID: "site-a-pve"},
+		})
+		monitor.state.Nodes[0].LinkedAgentID = ""
+		if got, ok := monitor.ProxmoxNodeAgentForContainer(guest("site-a", "pve")); ok {
+			t.Fatalf("a one-sided link was taken: %+v", got)
+		}
+	})
+
+	t.Run("a link only the node holds proves nothing", func(t *testing.T) {
+		node := readStateTestNode("site-a", "pve")
+		node.LinkedAgentID = "agent-a"
+		monitor := dockerRoutingMonitor(t, []models.Node{node}, []models.Host{{ID: "agent-a", Hostname: "pve"}})
+		if got, ok := monitor.ProxmoxNodeAgentForContainer(guest("site-a", "pve")); ok {
+			t.Fatalf("a one-sided link was taken: %+v", got)
+		}
+	})
+
+	t.Run("an operator's split ends the proof before the next node poll", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, []models.Node{readStateTestNode("site-a", "pve")}, []models.Host{
+			{ID: "agent-a", Hostname: "pve", LinkedNodeID: "site-a-pve"},
+		})
+		if _, ok := monitor.ProxmoxNodeAgentForContainer(guest("site-a", "pve")); !ok {
+			t.Fatal("expected the linked agent before the split")
+		}
+		// A real split reaches the links only when the state next reconciles, so
+		// install a decider directly and restore the link it holds back.
+		monitor.state.SetNodeAgentSplitDecider(dockerRoutingSplitDecider{nodeID: "site-a-pve", hostID: "agent-a"})
+		monitor.state.Nodes[0].LinkedAgentID = "agent-a"
+		monitor.state.Hosts[0].LinkedNodeID = "site-a-pve"
+		if got, ok := monitor.ProxmoxNodeAgentForContainer(guest("site-a", "pve")); ok {
+			t.Fatalf("a split agent was still used: %+v", got)
+		}
+	})
+
+	t.Run("a guest without a configured connection proves nothing", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, sites(), []models.Host{{ID: "agent-a", Hostname: "pve", LinkedNodeID: "site-a-pve"}})
+		for _, ct := range []models.Container{guest("elsewhere", "pve"), guest("", "pve"), guest("site-a", "")} {
+			if got, ok := monitor.ProxmoxNodeAgentForContainer(ct); ok {
+				t.Errorf("%+v took %+v", ct, got)
+			}
+		}
+	})
+
+	t.Run("one cluster added through two connections keeps its agent on both", func(t *testing.T) {
+		var instances []config.PVEInstance
+		for _, name := range []string{"enacon-a", "enacon-b"} {
+			instances = append(instances, config.PVEInstance{
+				Name: name, IsCluster: true, ClusterName: "enacon",
+				ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "pve01", Host: "https://192.168.1.11:8006", Fingerprint: "AA:AA"}},
+			})
+		}
+		adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		monitor := &Monitor{config: &config.Config{PVEInstances: instances}, state: models.NewState(), resourceStore: adapter}
+		view := func(instanceCfg *config.PVEInstance) models.Node {
+			return models.Node{
+				ID: monitor.pveNodeID(instanceCfg.Name, instanceCfg, "pve01"), NodeIdentity: monitor.pveNodeID(instanceCfg.Name, instanceCfg, "pve01"),
+				Name: "pve01", Instance: instanceCfg.Name, ClusterName: "enacon", IsClusterMember: true,
+				Host: "https://192.168.1.11:8006", TLSFingerprint: pveNodeTLSFingerprint(instanceCfg, "pve01"), Status: "online", LastSeen: time.Now(),
+			}
+		}
+		first := view(&instances[0])
+		monitor.state.UpdateNodesForInstance("enacon-a", []models.Node{first})
+		monitor.state.UpsertHost(models.Host{ID: "agent-pve01", Hostname: "pve01", Status: "online", LastSeen: time.Now()})
+		if err := monitor.state.LinkHostAgentToNode("agent-pve01", first.ID); err != nil {
+			t.Fatalf("LinkHostAgentToNode: %v", err)
+		}
+		monitor.state.UpdateNodesForInstance("enacon-b", []models.Node{view(&instances[1])})
+		adapter.PopulateFromSnapshot(monitor.state.GetSnapshot())
+
+		for _, instance := range []string{"enacon-a", "enacon-b"} {
+			if got, ok := monitor.ProxmoxNodeAgentForContainer(guest(instance, "pve01")); !ok || got.AgentID != "agent-pve01" {
+				t.Errorf("%s: got %+v (proven=%v), want agent-pve01", instance, got, ok)
+			}
+		}
+	})
+}
+
+// A guest with no proven agent is a routing decision, not a failure: nothing is
+// dispatched, the prior answer stands, no backoff or breaker builds up, and an
+// agent linked later is used on the next poll.
+func TestCheckContainersForDocker_NoProvenNodeAgentIsNotAFailure(t *testing.T) {
+	monitor := &Monitor{state: models.NewState()}
+	checker := &mockDockerChecker{
+		errs: map[int]error{101: fmt.Errorf("command execution failed: %w", ErrNoProvenProxmoxNodeAgent)},
+	}
+	monitor.SetDockerChecker(checker)
+	containers := func() []models.Container {
+		return []models.Container{{ID: "ct-1", VMID: 101, Name: "guest", Instance: "site-b", Node: "pve", Status: "running"}}
+	}
+
+	for cycle := 0; cycle < proxmoxGuestDockerNodeFailureThreshold+1; cycle++ {
+		result := monitor.CheckContainersForDocker(context.Background(), containers())
+		if !result[0].DockerCheckedAt.IsZero() || result[0].HasDocker {
+			t.Fatalf("cycle %d: guest marked as checked: %+v", cycle, result[0])
+		}
+		monitor.state.UpdateContainers(result)
+	}
+	if got := checker.callCount(); got != proxmoxGuestDockerNodeFailureThreshold+1 {
+		t.Fatalf("expected a fresh decision every poll, got %d", got)
+	}
+
+	monitor.dockerProbeFailureMu.Lock()
+	guestFailures := len(monitor.dockerProbeFailures)
+	nodeFailures := len(monitor.dockerNodeProbeFailures)
+	inFlight := len(monitor.dockerProbesInFlight)
+	_, noted := monitor.dockerNodesWithoutProvenAgent[dockerNodeProbeKey(containers()[0])]
+	monitor.dockerProbeFailureMu.Unlock()
+	if guestFailures != 0 || nodeFailures != 0 || inFlight != 0 {
+		t.Fatalf("skip left state behind: guest=%d node=%d inFlight=%d", guestFailures, nodeFailures, inFlight)
+	}
+	if !noted {
+		t.Fatal("expected the node to be noted as having no proven agent")
+	}
+
+	// Linking the agent later takes effect on the next poll.
+	checker.mu.Lock()
+	delete(checker.errs, 101)
+	checker.results = map[int]bool{101: true}
+	checker.mu.Unlock()
+	if result := monitor.CheckContainersForDocker(context.Background(), containers()); !result[0].HasDocker {
+		t.Fatalf("guest not probed after its agent was linked: %+v", result[0])
+	}
+}
+
+// A guest that restarts while no agent is proven must not lose that recheck:
+// the restart is no longer visible once the poll is published.
+func TestCheckContainersForDocker_SkippedRestartIsAskedAgain(t *testing.T) {
+	state := models.NewState()
+	state.UpdateContainers([]models.Container{{
+		ID: "ct-1", VMID: 101, Instance: "site-b", Node: "pve", Status: "running",
+		HasDocker: true, DockerCheckedAt: time.Now().Add(-time.Hour), Uptime: 3600,
+	}})
+	monitor := &Monitor{state: state}
+	checker := &mockDockerChecker{errs: map[int]error{101: ErrNoProvenProxmoxNodeAgent}}
+	monitor.SetDockerChecker(checker)
+
+	restarted := []models.Container{{ID: "ct-1", VMID: 101, Instance: "site-b", Node: "pve", Status: "running", Uptime: 60}}
+	result := monitor.CheckContainersForDocker(context.Background(), restarted)
+	if !result[0].HasDocker {
+		t.Fatalf("skip dropped the prior answer: %+v", result[0])
+	}
+	if !result[0].DockerCheckedAt.IsZero() {
+		t.Fatalf("skip kept the old check time, so the guest would not be asked again: %+v", result[0])
+	}
+	state.UpdateContainers(result)
+
+	// The agent is proven now, and Docker went away during the restart.
+	checker.mu.Lock()
+	checker.errs = nil
+	checker.results = map[int]bool{101: false}
+	checker.mu.Unlock()
+	result = monitor.CheckContainersForDocker(context.Background(), []models.Container{
+		{ID: "ct-1", VMID: 101, Instance: "site-b", Node: "pve", Status: "running", Uptime: 120},
+	})
+	if result[0].HasDocker || result[0].DockerCheckedAt.IsZero() {
+		t.Fatalf("guest was not asked again once an agent was proven: %+v", result[0])
+	}
+}
+
+// A shared token proves nothing about which machine a session belongs to. Live
+// state decides, because a same-token agent can hold a session before the read
+// state lists it.
+func TestProxmoxNodeAgentOwnsTokenSession(t *testing.T) {
+	agent := ProxmoxNodeAgent{AgentID: "agent-b", Hostname: "pve", TokenID: "shared"}
+	nodes := []models.Node{readStateTestNode("site-b", "pve")}
+	target := models.Host{ID: "agent-b", Hostname: "pve", TokenID: "shared", LinkedNodeID: "site-b-pve"}
+
+	t.Run("only this agent holds the token", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, nodes, []models.Host{target})
+		if !monitor.ProxmoxNodeAgentOwnsTokenSession(agent, "earlier-id") {
+			t.Fatal("a session under an unknown earlier ID should be this agent's")
+		}
+	})
+
+	t.Run("another agent under an equivalent hostname holds it", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, nodes, []models.Host{target, {ID: "agent-a", Hostname: "pve.lan", TokenID: "shared"}})
+		if monitor.ProxmoxNodeAgentOwnsTokenSession(agent, "earlier-id") {
+			t.Fatal("a token two same-named agents hold identified one of them")
+		}
+	})
+
+	t.Run("the other agent is in live state but not yet in the read state", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, nodes, []models.Host{target})
+		monitor.state.Hosts = append(monitor.state.Hosts, models.Host{ID: "agent-a", Hostname: "pve", TokenID: "shared"})
+		if monitor.ProxmoxNodeAgentOwnsTokenSession(agent, "agent-a") {
+			t.Fatal("the read state's stale host list decided the session's owner")
+		}
+	})
+
+	t.Run("the session belongs to another known agent", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, nodes, []models.Host{target, {ID: "agent-a", Hostname: "pve", TokenID: "rotated"}})
+		if monitor.ProxmoxNodeAgentOwnsTokenSession(agent, "agent-a") {
+			t.Fatal("another agent's session was taken as an earlier ID")
+		}
+	})
+
+	t.Run("a token shared under another hostname does not stop it", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, nodes, []models.Host{target, {ID: "agent-c", Hostname: "backup", TokenID: "shared"}})
+		if !monitor.ProxmoxNodeAgentOwnsTokenSession(agent, "earlier-id") {
+			t.Fatal("a differently named machine on the token blocked the lookup")
+		}
+	})
+
+	t.Run("no token proves nothing", func(t *testing.T) {
+		monitor := dockerRoutingMonitor(t, nodes, []models.Host{target})
+		if monitor.ProxmoxNodeAgentOwnsTokenSession(ProxmoxNodeAgent{AgentID: "agent-b", Hostname: "pve"}, "earlier-id") {
+			t.Fatal("a session was accepted with no token")
+		}
+	})
+}
+
+type dockerRoutingSplitDecider struct{ nodeID, hostID string }
+
+func (d dockerRoutingSplitDecider) ProxmoxNodeAgentSplit(node models.Node, host models.Host) bool {
+	return node.ID == d.nodeID && host.ID == d.hostID
+}
+
+type routedInventoryCollector struct {
+	err error
+}
+
+func (c *routedInventoryCollector) CollectDockerInventory(context.Context, models.Container) (agentsdocker.Report, bool, error) {
+	return agentsdocker.Report{}, false, c.err
+}
+
+func TestCollectProxmoxGuestDockerInventory_NoProvenNodeAgentIsNotAFailure(t *testing.T) {
+	monitor := &Monitor{state: models.NewState()}
+	monitor.SetDockerInventoryCollector(&routedInventoryCollector{err: fmt.Errorf("command execution failed: %w", ErrNoProvenProxmoxNodeAgent)})
+	container := models.Container{ID: "ct-1", VMID: 101, Name: "guest", Instance: "site-b", Node: "pve", Status: "running", HasDocker: true}
+
+	for cycle := 0; cycle < proxmoxGuestDockerNodeFailureThreshold+1; cycle++ {
+		monitor.CollectProxmoxGuestDockerInventory(context.Background(), []models.Container{container})
+	}
+
+	monitor.dockerProbeFailureMu.Lock()
+	defer monitor.dockerProbeFailureMu.Unlock()
+	if len(monitor.dockerNodeProbeFailures) != 0 || len(monitor.dockerProbesInFlight) != 0 {
+		t.Fatalf("skip left state behind: node=%d inFlight=%d", len(monitor.dockerNodeProbeFailures), len(monitor.dockerProbesInFlight))
+	}
+}
+
+// A same-named node on another connection is another machine, so its failing
+// commands must not stop this node's probes, and this node's success must not
+// close that node's breaker.
+func TestCheckContainersForDocker_NodeCircuitBreakerScopedByConnection(t *testing.T) {
+	monitor := &Monitor{state: models.NewState()}
+	checker := &mockDockerChecker{
+		errs:    map[int]error{101: errors.New("pct exec hung"), 102: errors.New("pct exec hung"), 103: errors.New("pct exec hung")},
+		results: map[int]bool{201: true},
+	}
+	monitor.SetDockerChecker(checker)
+	failing := models.Container{Instance: "site-a", Node: "pve"}
+	healthy := models.Container{Instance: "site-b", Node: "pve"}
+
+	monitor.CheckContainersForDocker(context.Background(), []models.Container{
+		{ID: "a-1", VMID: 101, Instance: "site-a", Node: "pve", Status: "running"},
+		{ID: "a-2", VMID: 102, Instance: "site-a", Node: "pve", Status: "running"},
+		{ID: "a-3", VMID: 103, Instance: "site-a", Node: "pve", Status: "running"},
+	})
+	if !monitor.dockerNodeProbeBreakerOpen(failing) {
+		t.Fatal("expected site-a's breaker to open")
+	}
+	if monitor.dockerNodeProbeBreakerOpen(healthy) {
+		t.Fatal("site-a's failures opened site-b's breaker")
+	}
+
+	result := monitor.CheckContainersForDocker(context.Background(), []models.Container{
+		{ID: "b-1", VMID: 201, Instance: "site-b", Node: "pve", Status: "running"},
+	})
+	if !result[0].HasDocker {
+		t.Fatalf("site-b's guest was not probed while site-a's breaker was open: %+v", result[0])
+	}
+	if !monitor.dockerNodeProbeBreakerOpen(failing) {
+		t.Fatal("site-b's success closed site-a's breaker")
 	}
 }

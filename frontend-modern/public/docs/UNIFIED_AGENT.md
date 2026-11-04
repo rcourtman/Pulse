@@ -1615,7 +1615,12 @@ summary-only collection is not a socket-permission defect.
 ### Docker visible in one LXC but missing in another
 
 Proxmox-side discovery uses the **owning node's** connected command-capable
-agent, not the agent on whichever node hosts Pulse. Check **Discover Docker in
+agent, not the agent on whichever node hosts Pulse. That agent must be linked to
+the node on that connection; an agent that only shares the node's name is never
+used, because another connection can have a node of the same name. Guests on a
+node with no linked agent are skipped and the server logs why once. If Pulse
+could not match the agent itself, [link it to the node](API.md#agent-linking-admin).
+Check **Discover Docker in
 LXC guests** in Settings → System → General and any configured
 `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` allowlist. Collection skips stopped
 guests and guests already linked to an online guest-local agent. In the latter

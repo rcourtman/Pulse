@@ -1470,12 +1470,15 @@ type Monitor struct {
 	// was still running the previous pct exec) cannot stack identical commands
 	// on the Proxmox host (minipc probe-storm incident, 2026-08-20).
 	dockerProbesInFlight map[string]time.Time
-	// Consecutive Docker probe/inventory failures per Proxmox node. Once a
-	// node accumulates enough back-to-back failures the circuit breaker
-	// suspends all Docker command dispatch to it, because the node itself
-	// (not one guest) is the likely problem — e.g. pct exec crawling under
-	// NFS flapping.
+	// Consecutive Docker probe/inventory failures per Proxmox node on one
+	// connection (dockerNodeProbeKey). Once a node accumulates enough
+	// back-to-back failures the circuit breaker suspends all Docker command
+	// dispatch to it, because the node itself (not one guest) is the likely
+	// problem — e.g. pct exec crawling under NFS flapping.
 	dockerNodeProbeFailures map[string]*dockerProbeFailureState
+	// Nodes already logged as having no agent proven to run on them, so a skip
+	// that repeats every poll logs once.
+	dockerNodesWithoutProvenAgent map[string]struct{}
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry

@@ -19,7 +19,7 @@ import (
 
 type fakeDockerChecker struct{}
 
-func (f *fakeDockerChecker) CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error) {
+func (f *fakeDockerChecker) CheckDockerInContainer(ctx context.Context, container models.Container) (bool, error) {
 	return false, nil
 }
 

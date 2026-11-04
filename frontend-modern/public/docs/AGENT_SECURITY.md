@@ -139,6 +139,8 @@ through `pct exec`, but only after an explicit server-side opt-in: the
 admin-only **Discover Docker in LXC guests** toggle in Settings → System →
 General, or starting the server with
 `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true` (which locks the toggle).
+These commands go only to the agent linked to the guest's own node on its
+connection, never to another machine that shares the node's name.
 Inventory collection is disabled by default, can be VMID-allowlisted, and is
 limited to the Docker page summary path: Docker host/runtime version, container
 ID, name, image, state/status, ports, and aggregate `docker stats` counters.
