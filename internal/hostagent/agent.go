@@ -30,7 +30,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
-	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -1857,14 +1856,7 @@ func normaliseRuntimePlatform(goos, reportedPlatform string) string {
 }
 
 func normalizePulseURL(rawURL string) (string, error) {
-	parsed, err := securityutil.NormalizePulseHTTPBaseURLWithOptions(rawURL, securityutil.PulseURLValidationOptions{
-		AllowLocalNetworkHTTP: true,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return parsed.String(), nil
+	return agenttarget.NormalizePulseURL(rawURL, true, false)
 }
 
 // collectTemperatures attempts to collect temperature data from the local system.
