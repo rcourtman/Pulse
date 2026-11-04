@@ -306,11 +306,55 @@ func TestProxmoxGuestDockerProbesStayOnTheGuestsOwnNode(t *testing.T) {
 		}
 	})
 
-	t.Run("an agent that does not report the address Pulse connects through needs a manual link", func(t *testing.T) {
+	t.Run("an agent behind NAT is probed while the node's inventory names its address", func(t *testing.T) {
+		rig := newDockerRouteRig(t, dockerRouteInstance("home", "203.0.113.10"))
+		node := dockerRouteNode("home", "pve", "203.0.113.10")
+		node.NetworkInterfaces = []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{"192.168.1.5/24"}}}
+		rig.state.UpdateNodesForInstance("home", []models.Node{node})
+		host := dockerRouteHost("agent-home", "pve", "token-home", "192.168.1.5")
+		host.LinkedNodeID = node.ID
+		host.NodeLinkSource = "automatic"
+		rig.state.UpsertHost(host)
+		rig.state.LinkNodeToHostAgent(node.ID, host.ID)
+		rig.state.UpdateNodesForInstance("home", []models.Node{node})
+		agent := rig.connectAgent("agent-home", "pve", "token-home", true)
+
+		guest := probeDocker(rig, dockerRouteGuest("home", "pve", 200))
+		if got := agent.ranCommands(); len(got) != 1 || !guest.HasDocker {
+			t.Fatalf("agent named by the node's inventory: ran %q, guest %+v", got, guest)
+		}
+	})
+
+	t.Run("an address two sites' nodes both list does not prove an agent behind NAT", func(t *testing.T) {
+		rig := newDockerRouteRig(t, dockerRouteInstance("site-a", "203.0.113.10"), dockerRouteInstance("site-b", "198.51.100.20"))
+		reused := []models.HostNetworkInterface{{Name: "vmbr0", Addresses: []string{"192.168.1.5/24"}}}
+		nodeA := dockerRouteNode("site-a", "pve", "203.0.113.10")
+		nodeA.NetworkInterfaces = reused
+		nodeB := dockerRouteNode("site-b", "pve", "198.51.100.20")
+		nodeB.NetworkInterfaces = reused
+		rig.state.UpdateNodesForInstance("site-a", []models.Node{nodeA})
+		rig.state.UpdateNodesForInstance("site-b", []models.Node{nodeB})
+		host := dockerRouteHost("agent-a", "pve", "token-a", "192.168.1.5")
+		host.LinkedNodeID = nodeA.ID
+		host.NodeLinkSource = "automatic"
+		rig.state.UpsertHost(host)
+		rig.state.LinkNodeToHostAgent(nodeA.ID, host.ID)
+		rig.state.UpdateNodesForInstance("site-a", []models.Node{nodeA})
+		agent := rig.connectAgent("agent-a", "pve", "token-a", true)
+
+		for _, instance := range []string{"site-a", "site-b"} {
+			probeDocker(rig, dockerRouteGuest(instance, "pve", 200))
+		}
+		if got := agent.ranCommands(); len(got) != 0 {
+			t.Fatalf("probed on an address that proves nothing: %q", got)
+		}
+	})
+
+	t.Run("an agent behind NAT with no inventory to name it needs a manual link", func(t *testing.T) {
 		// Reached through NAT, the node's endpoint is not one of the agent's
-		// addresses. That is the same evidence as a different machine of the same
-		// name, so the node poll drops the automatic link and nothing is probed
-		// until the operator says they are one machine.
+		// addresses. With no inventory saying otherwise that is the same evidence as
+		// a different machine of the same name, so the node poll drops the automatic
+		// link and nothing is probed until the operator says they are one machine.
 		rig := newDockerRouteRig(t, dockerRouteInstance("home", "203.0.113.10"))
 		node := dockerRouteNode("home", "pve", "203.0.113.10")
 		rig.state.UpdateNodesForInstance("home", []models.Node{node})

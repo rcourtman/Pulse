@@ -9024,3 +9024,110 @@ func TestHostDiskUsageRecordingSkipsAbsenceAndPreservesZero(t *testing.T) {
 		t.Fatalf("accepted no-disk report was not retained: %+v", got)
 	}
 }
+
+// natNodePollClient answers a poll of one Proxmox node reached through NAT, and
+// runs onGuestPoll as the poll cycle reaches its guest read.
+type natNodePollClient struct {
+	mockPVEClientExtended
+	inventory   []proxmox.NodeNetworkInterface
+	onGuestPoll func()
+}
+
+func (c *natNodePollClient) GetNodeNetworkInterfaces(context.Context, string) ([]proxmox.NodeNetworkInterface, error) {
+	return c.inventory, nil
+}
+
+func (c *natNodePollClient) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
+	if c.onGuestPoll != nil {
+		c.onGuestPoll()
+	}
+	return c.mockPVEClientExtended.GetClusterResources(ctx, resourceType)
+}
+
+// Guest polls run straight after the node poll, so anything that needs the link
+// there sees whatever the node poll left. On a node reached through NAT the agent
+// never reports the endpoint: only the node's own inventory can keep the link
+// between agent reports, and nothing else may relink it until the next one.
+func TestPVEPollKeepsNATNodeAgentLinkThroughTheGuestPoll(t *testing.T) {
+	const nodeID = "home-pve"
+	guest := models.Container{ID: "home:pve:200", VMID: 200, Name: "ct", Instance: "home", Node: "pve", Status: "running", Type: "lxc"}
+
+	for _, tc := range []struct {
+		name       string
+		inventory  []proxmox.NodeNetworkInterface
+		wantLinked bool
+	}{
+		{
+			name:       "the node's inventory names an address the agent reports",
+			inventory:  []proxmox.NodeNetworkInterface{{Iface: "vmbr0", CIDR: "192.168.1.5/24"}},
+			wantLinked: true,
+		},
+		{name: "the node has no inventory"},
+		{
+			name:      "the node's inventory names another address",
+			inventory: []proxmox.NodeNetworkInterface{{Iface: "vmbr0", CIDR: "192.168.1.6/24"}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PULSE_DATA_DIR", t.TempDir())
+			mon := newTestPVEMonitor("home")
+			defer mon.alertManager.Stop()
+			defer mon.notificationMgr.Stop()
+			mon.config.PVEInstances[0].Host = "https://203.0.113.10:8006"
+			mon.config.PVEInstances[0].MonitorContainers = true
+			mon.hostTokenBindings = make(map[string]string)
+			mon.hostReportOrders = make(map[string]hostReportOrder)
+
+			client := &natNodePollClient{inventory: tc.inventory}
+			client.nodes = []proxmox.Node{{Node: "pve", Status: "online", MaxMem: 1 << 30, Mem: 1 << 29}}
+			client.resources = []proxmox.ClusterResource{{Type: "lxc", VMID: 200, Name: "ct", Node: "pve", Status: "running"}}
+			mon.pveClients = map[string]PVEClientInterface{"home": client}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			mon.pollPVEInstance(ctx, "home", client)
+
+			report := issue1654Report(time.Now().UTC())
+			report.Host.Hostname = "pve"
+			report.Network = []agentshost.NetworkInterface{{Name: "vmbr0", Addresses: []string{"192.168.1.5/24"}}}
+			host, err := mon.ApplyHostReport(report, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if host.LinkedNodeID != nodeID {
+				t.Fatalf("agent report linked %q, want the only node of that name", host.LinkedNodeID)
+			}
+
+			wantNode, wantAgent := "", ""
+			if tc.wantLinked {
+				wantNode, wantAgent = nodeID, host.ID
+			}
+			for poll := 0; poll < 3; poll++ {
+				guestPolls := 0
+				client.onGuestPoll = func() {
+					guestPolls++
+					stored, ok := mon.state.GetHost(host.ID)
+					if !ok {
+						t.Errorf("poll %d: the agent's host is gone", poll)
+						return
+					}
+					node, ok := mon.state.GetNode(nodeID)
+					if !ok {
+						t.Errorf("poll %d: the node is gone", poll)
+						return
+					}
+					if stored.LinkedNodeID != wantNode || node.LinkedAgentID != wantAgent {
+						t.Errorf("poll %d: host names node %q and node names agent %q, want %q and %q",
+							poll, stored.LinkedNodeID, node.LinkedAgentID, wantNode, wantAgent)
+					}
+					if _, proven := mon.ProxmoxNodeAgentForContainer(guest); proven != tc.wantLinked {
+						t.Errorf("poll %d: guest's node agent proven = %v, want %v", poll, proven, tc.wantLinked)
+					}
+				}
+				mon.pollPVEInstance(ctx, "home", client)
+				if guestPolls == 0 {
+					t.Fatalf("poll %d never reached the guest read", poll)
+				}
+			}
+		})
+	}
+}

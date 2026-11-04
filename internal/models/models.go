@@ -4348,7 +4348,9 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// the evidence we do hold contradicts the node - the agent's linked nodes
 	// live in a different named cluster, carry a different TLS certificate
 	// fingerprint, or the node's endpoint IP is absent from the IPs the agent
-	// reports.
+	// reports. A node reached through NAT or an IP proxy gives that last mismatch
+	// with its own agent too, so its inventory can answer it.
+	inventory := newNodeInventoryIndex(nodeMap, dedupedNodes)
 	hostContradictsNode := func(hostID string, node Node) bool {
 		if hostAlreadyClaimsDifferentNode(hostID, node) {
 			return true
@@ -4369,7 +4371,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 		if nodeIP := normalizeIPAddress(extractHostEndpoint(node.Host)); nodeIP != "" {
 			if ips := hostIPsByID[hostID]; len(ips) > 0 {
-				if _, known := ips[nodeIP]; !known {
+				if _, known := ips[nodeIP]; !known && !inventory.corroborates(node, hostByID[hostID]) {
 					return true
 				}
 			}

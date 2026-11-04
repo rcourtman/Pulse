@@ -1799,6 +1799,298 @@ func TestUpdateNodesForInstanceHostnameMatchRejectedWhenIPContradicts(t *testing
 	}
 }
 
+func natNodeNIC(name string, addresses ...string) HostNetworkInterface {
+	return HostNetworkInterface{Name: name, Addresses: addresses}
+}
+
+func natNode(id, name, instance, address string, inventory ...HostNetworkInterface) Node {
+	return Node{
+		ID:                id,
+		Name:              name,
+		Instance:          instance,
+		Host:              "https://" + address + ":8006",
+		Status:            "online",
+		NetworkInterfaces: inventory,
+	}
+}
+
+func natAgent(id, hostname string, interfaces ...HostNetworkInterface) Host {
+	return Host{ID: id, Hostname: hostname, NodeLinkSource: "automatic", NetworkInterfaces: interfaces}
+}
+
+func nodeHoldingAgent(nodes []Node, agentID string) string {
+	for _, node := range nodes {
+		if node.LinkedAgentID == agentID {
+			return node.ID
+		}
+	}
+	return ""
+}
+
+// A node reached through NAT or an IP proxy has an endpoint its agent never
+// reports, which is the same evidence a different machine of that name would
+// give. An address Proxmox itself lists for the node tells the two apart, when no
+// other node could hold that address (#2681).
+func TestUpdateNodesForInstanceNATNodeLinkFollowsItsInventory(t *testing.T) {
+	const endpoint = "203.0.113.10"
+	home := func(inventory ...HostNetworkInterface) Node {
+		return natNode("home-pve", "pve", "home", endpoint, inventory...)
+	}
+	lan := natNodeNIC("vmbr0", "192.168.1.5/24")
+	agentOnLAN := natAgent("agent", "pve", natNodeNIC("vmbr0", "192.168.1.5/24"))
+
+	for _, tc := range []struct {
+		name       string
+		node       Node
+		host       Host
+		elsewhere  []Node // held from other connections
+		polledWith []Node // other members of this poll
+		wantLinked bool
+	}{
+		{name: "the inventory names an address the agent reports", node: home(lan), host: agentOnLAN, wantLinked: true},
+		{
+			name:       "the agent reports that address only as its report IP",
+			node:       home(lan),
+			host:       Host{ID: "agent", Hostname: "pve", NodeLinkSource: "automatic", ReportIP: "192.168.1.5"},
+			wantLinked: true,
+		},
+		{
+			name:       "the two spell one IPv6 address differently",
+			node:       home(natNodeNIC("vmbr0", "2001:db8::5/64")),
+			host:       natAgent("agent", "pve", natNodeNIC("eth0", "2001:0db8:0::5")),
+			wantLinked: true,
+		},
+		{
+			name:       "another node has no inventory but also another name",
+			node:       home(lan),
+			host:       agentOnLAN,
+			elsewhere:  []Node{natNode("other-backup", "backup", "other", "198.51.100.20")},
+			wantLinked: true,
+		},
+		{
+			name:       "another node holds a different address",
+			node:       home(lan),
+			host:       agentOnLAN,
+			elsewhere:  []Node{natNode("site-b-pve", "pve", "site-b", "198.51.100.20", natNodeNIC("vmbr0", "192.168.2.5/24"))},
+			wantLinked: true,
+		},
+		{name: "there is no inventory", node: home(), host: agentOnLAN},
+		{name: "the inventory lists no address", node: home(natNodeNIC("vmbr0")), host: agentOnLAN},
+		{name: "the inventory lists another address", node: home(natNodeNIC("vmbr0", "192.168.1.6/24")), host: agentOnLAN},
+		{
+			name:      "another connection's node holds the address, so sites reuse the range",
+			node:      home(lan),
+			host:      agentOnLAN,
+			elsewhere: []Node{natNode("site-b-pve", "pve", "site-b", "198.51.100.20", lan)},
+		},
+		{
+			name:       "every node in the poll shows the address on its bridge",
+			node:       home(lan),
+			host:       agentOnLAN,
+			polledWith: []Node{natNode("home-pve2", "pve2", "home", "203.0.113.11", lan)},
+		},
+		{
+			name:      "a same-named node elsewhere may hold the address, unseen",
+			node:      home(lan),
+			host:      agentOnLAN,
+			elsewhere: []Node{natNode("site-b-pve", "pve", "site-b", "198.51.100.20")},
+		},
+		{
+			name: "a machine of another name holds the private address, as any site's can",
+			node: home(lan),
+			host: natAgent("agent", "web1", natNodeNIC("eth0", "192.168.1.5/24")),
+		},
+		{
+			name: "a machine of another name holds the shared-range address",
+			node: home(natNodeNIC("vmbr0", "100.64.0.5/10")),
+			host: natAgent("agent", "web1", natNodeNIC("eth0", "100.64.0.5/10")),
+		},
+		{
+			name: "another full hostname holds the private address",
+			node: natNode("home-pve", "pve.home.lan", "home", endpoint, lan),
+			host: natAgent("agent", "pve.office.lan", natNodeNIC("vmbr0", "192.168.1.5/24")),
+		},
+		{
+			name:       "the agent names the node by its full hostname",
+			node:       home(lan),
+			host:       natAgent("agent", "pve.home.lan", natNodeNIC("vmbr0", "192.168.1.5/24")),
+			wantLinked: true,
+		},
+		{
+			name:       "only this machine can hold a public address, whatever its agent is called",
+			node:       home(natNodeNIC("vmbr0", "198.51.100.5/24")),
+			host:       natAgent("agent", "hosted-box", natNodeNIC("eth0", "198.51.100.5/24")),
+			wantLinked: true,
+		},
+		{
+			name:       "a same-named node elsewhere cannot hold this one's public address",
+			node:       home(natNodeNIC("vmbr0", "198.51.100.5/24")),
+			host:       natAgent("agent", "pve", natNodeNIC("eth0", "198.51.100.5/24")),
+			elsewhere:  []Node{natNode("site-b-pve", "pve", "site-b", "198.51.100.20")},
+			wantLinked: true,
+		},
+		{
+			name:      "another connection's node lists the public address too",
+			node:      home(natNodeNIC("vmbr0", "198.51.100.5/24")),
+			host:      natAgent("agent", "hosted-box", natNodeNIC("eth0", "198.51.100.5/24")),
+			elsewhere: []Node{natNode("site-b-pve", "pve", "site-b", "198.51.100.20", natNodeNIC("vmbr0", "198.51.100.5/24"))},
+		},
+		{
+			name: "only the node's Docker bridge matches",
+			node: home(natNodeNIC("docker0", "172.17.0.1/16")),
+			host: natAgent("agent", "pve", natNodeNIC("eth0", "172.17.0.1/16")),
+		},
+		{
+			name: "only the agent's Docker bridge matches",
+			node: home(natNodeNIC("vmbr0", "172.17.0.1/16")),
+			host: natAgent("agent", "pve", natNodeNIC("docker0", "172.17.0.1/16")),
+		},
+		{
+			name: "only a Docker network bridge matches",
+			node: home(natNodeNIC("vmbr0", "172.18.0.1/16")),
+			host: natAgent("agent", "pve", natNodeNIC("br-0123456789ab", "172.18.0.1/16")),
+		},
+		{
+			name: "only a loopback address matches",
+			node: home(natNodeNIC("vmbr0", "127.0.0.1/8")),
+			host: natAgent("agent", "pve", natNodeNIC("eth0", "127.0.0.1/8")),
+		},
+		{
+			name: "only a link-local address matches",
+			node: home(natNodeNIC("vmbr0", "fe80::1/64")),
+			host: natAgent("agent", "pve", natNodeNIC("eth0", "fe80::1/64")),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			held := tc.node
+			held.LinkedAgentID = tc.host.ID
+			host := tc.host
+			host.LinkedNodeID = tc.node.ID
+			state := &State{Hosts: []Host{host}, Nodes: append(append([]Node(nil), tc.elsewhere...), held)}
+
+			// Every poll decides again, so one kept link has to hold over several.
+			for poll := 0; poll < 3; poll++ {
+				state.UpdateNodesForInstance(tc.node.Instance, append([]Node{tc.node}, tc.polledWith...))
+
+				wantNode := ""
+				if tc.wantLinked {
+					wantNode = tc.node.ID
+				}
+				if got := nodeHoldingAgent(state.Nodes, "agent"); got != wantNode {
+					t.Fatalf("poll %d: node holding the agent = %q, want %q", poll, got, wantNode)
+				}
+				if got := state.Hosts[0].LinkedNodeID; got != wantNode {
+					t.Fatalf("poll %d: host LinkedNodeID = %q, want %q", poll, got, wantNode)
+				}
+			}
+		})
+	}
+}
+
+// One cluster added through two connections holds one address once: its two views
+// are one machine, not two owners.
+func TestUpdateNodesForInstanceNATNodeInventoryCountsOneMachineOnce(t *testing.T) {
+	lan := natNodeNIC("vmbr0", "192.168.1.5/24")
+	view := func(id, instance, address string) Node {
+		node := natNode(id, "pve", instance, address, lan)
+		node.TLSFingerprint = "AA:AA"
+		return node
+	}
+	host := natAgent("agent", "pve", natNodeNIC("vmbr0", "192.168.1.5/24"))
+	host.LinkedNodeID = "home-pve"
+	held := view("home-pve", "home", "203.0.113.10")
+	held.LinkedAgentID = "agent"
+	state := &State{Hosts: []Host{host}, Nodes: []Node{held, view("office-pve", "office", "198.51.100.20")}}
+
+	state.UpdateNodesForInstance("home", []Node{view("home-pve", "home", "203.0.113.10")})
+
+	if got := state.Hosts[0].LinkedNodeID; got == "" || got != nodeHoldingAgent(state.Nodes, "agent") {
+		t.Fatalf("host LinkedNodeID = %q, node holding the agent = %q, want both to name the machine", got, nodeHoldingAgent(state.Nodes, "agent"))
+	}
+}
+
+// The inventory answers the endpoint mismatch and nothing else: on the poll that
+// shows it, cluster or certificate evidence still rules an agent out, as it does
+// for a node reached directly.
+func TestUpdateNodesForInstanceNATNodeInventoryDoesNotOverrideStrongerEvidence(t *testing.T) {
+	lan := natNodeNIC("vmbr0", "192.168.1.5/24")
+	host := natAgent("agent", "pve", natNodeNIC("vmbr0", "192.168.1.5/24"))
+
+	t.Run("another named cluster", func(t *testing.T) {
+		linked := natNode("site-a-pve", "pve", "site-a", "10.0.0.5")
+		linked.ClusterName, linked.LinkedAgentID = "enacon", "agent"
+		state := &State{Hosts: []Host{host}, Nodes: []Node{linked}}
+
+		polled := natNode("site-b-pve", "pve", "site-b", "203.0.113.10", lan)
+		polled.ClusterName = "rewo"
+		state.UpdateNodesForInstance("site-b", []Node{polled})
+
+		if got := nodeHoldingAgent(state.Nodes, "agent"); got != "site-a-pve" {
+			t.Fatalf("node holding the agent = %q, want site-a-pve", got)
+		}
+	})
+
+	t.Run("another certificate", func(t *testing.T) {
+		held := natNode("home-pve", "pve", "home", "203.0.113.10", lan)
+		held.TLSFingerprint, held.LinkedAgentID = "AA:AA", "agent"
+		linkedHost := host
+		linkedHost.LinkedNodeID = held.ID
+		state := &State{Hosts: []Host{linkedHost}, Nodes: []Node{held}}
+
+		polled := natNode("home-pve", "pve", "home", "203.0.113.10", lan)
+		polled.TLSFingerprint = "BB:BB"
+		state.UpdateNodesForInstance("home", []Node{polled})
+
+		if got := nodeHoldingAgent(state.Nodes, "agent"); got != "" {
+			t.Fatalf("node holding the agent = %q, want none", got)
+		}
+	})
+}
+
+// Node names repeat across connections. However the polls fall, an agent stays
+// with the node whose inventory names it, and a same-named node with other
+// addresses never takes it.
+func TestUpdateNodesForInstanceNATAgentsStayOnTheirOwnConnections(t *testing.T) {
+	siteA := natNode("site-a-pve", "pve", "site-a", "203.0.113.10", natNodeNIC("vmbr0", "192.168.1.5/24"))
+	siteB := natNode("site-b-pve", "pve", "site-b", "198.51.100.20", natNodeNIC("vmbr0", "192.168.2.5/24"))
+	agentA := natAgent("agent-a", "pve", natNodeNIC("vmbr0", "192.168.1.5/24"))
+	agentB := natAgent("agent-b", "pve.site-b.lan", natNodeNIC("vmbr0", "192.168.2.5/24"))
+	poll := func(state *State, nodes ...Node) {
+		for _, node := range nodes {
+			state.UpdateNodesForInstance(node.Instance, []Node{node})
+		}
+	}
+
+	t.Run("one agent", func(t *testing.T) {
+		for _, order := range [][]Node{{siteA, siteB, siteA, siteB}, {siteB, siteA, siteB, siteA}} {
+			state := &State{Hosts: []Host{agentA}}
+			poll(state, order...)
+			if got := nodeHoldingAgent(state.Nodes, agentA.ID); got != siteA.ID {
+				t.Fatalf("polls %s first: node holding the agent = %q, want %q", order[0].Instance, got, siteA.ID)
+			}
+			if got := state.Hosts[0].LinkedNodeID; got != siteA.ID {
+				t.Fatalf("polls %s first: host LinkedNodeID = %q, want %q", order[0].Instance, got, siteA.ID)
+			}
+			for _, node := range state.Nodes {
+				if node.ID == siteB.ID && node.LinkedAgentID != "" {
+					t.Fatalf("polls %s first: site-b's node took agent %q", order[0].Instance, node.LinkedAgentID)
+				}
+			}
+		}
+	})
+
+	t.Run("two agents of one name", func(t *testing.T) {
+		state := &State{Hosts: []Host{agentA, agentB}}
+		poll(state, siteA, siteB, siteA, siteB)
+		if got := nodeHoldingAgent(state.Nodes, agentA.ID); got != siteA.ID {
+			t.Fatalf("node holding site-a's agent = %q, want %q", got, siteA.ID)
+		}
+		if got := nodeHoldingAgent(state.Nodes, agentB.ID); got != siteB.ID {
+			t.Fatalf("node holding site-b's agent = %q, want %q", got, siteB.ID)
+		}
+	})
+}
+
 // Two different clusters at different sites can reuse the same corosync
 // cluster name, the same member hostnames, and the same RFC1918 addressing
 // (MSP support case: two "enacon" clusters both exposing pve01 on
