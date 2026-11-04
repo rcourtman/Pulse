@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "parent": "5eec3e4eb53f0a85ef94a11759371eb77cff4edb",
+  "content_fingerprint": "faa976065fe7bd60",
+  "verified_blobs": {
+    "internal/cloudcp/portal/dist/build_manifest.json": "aab065cb904d6cde3032c640a1107154f1b4e2af",
+    "internal/cloudcp/portal/dist/portal_app.css": "acb562f3eb70cdc3624d2a759e726acc69e19f2d",
+    "internal/cloudcp/portal/dist/portal_app.js": "50f43188cdf5882faad3d10480e1b00690687856",
+    "internal/cloudcp/portal/frontend/src/auth_controller.test.ts": "219fcdb367d05ad1ce2425791cbeec92a2dfdd68",
+    "internal/cloudcp/portal/frontend/src/auth_controller.ts": "1a70bfbe022839d8a6686c003c4e12c1c910eab3",
+    "internal/cloudcp/portal/frontend/src/shell_view.test.ts": "da5d16271f1c9e643156ef4e434f755f292c4ee3",
+    "internal/cloudcp/portal/frontend/src/shell_view.ts": "a423ce3ed982183b35a7998b3664143568dd7516",
+    "internal/cloudcp/portal/frontend/src/styles.css": "ea1cf43b0f97ae103687e832917e6a65194d5dc0"
+  },
+  "verified_at": "2026-11-04T14:09:47.239278+00:00",
+  "surface": "Native embedded Pulse Account sign-out from Access > Change roles; success, HTTP failure and lost-response recovery",
+  "command": "pulse-worker-browser tmp/portal-logout-evidence/verify.cjs",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "theme": "dark"
+    },
+    {
+      "width": 320,
+      "height": 780,
+      "theme": "light"
+    }
+  ],
+  "checks": 242,
+  "result": "passed",
+  "fixture": "Real template/JS/CSS/manifest; reserved example.com/.net identities. HTTP503, browser-aborted network attempt, held startup bootstrap and successful POST logout. No live accounts or external network.",
+  "comparisons": "Both baseline engines silently reload after failed logout, lose selected Access task and remain signed in. Final source stays put, preserves every roster detail/control and task, exposes a persistent uncertainty alert and keyboard retry without automatic POST replay. Pending state survives header replacement. Success follows the unchanged signed-out route.",
+  "captures": {
+    "count": 24,
+    "pairs": 12,
+    "states": [
+      "ready",
+      "pending",
+      "HTTP503 failure"
+    ],
+    "location": "Current output captures/; pre-edit baseline retained as primary and compared with final-source after captures. CAPTURES.md records native image review."
+  },
+  "limits": "Frontend failure handling only, not server revocation, real account/installed/native/reverse recovery or release availability. No permissions/API/endpoints changed. Main-frontend guard classifier skips this module; this receipt independently binds its own parent/final content."
+}
