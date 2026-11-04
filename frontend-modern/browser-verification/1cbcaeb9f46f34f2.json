@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "1846618c6aeb2ce5d18551ee6424863d1c4c85c8",
+  "verified_at": "2026-11-04T21:49:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "a7a07db7f92214c6949fa61d2085d5b07c08bb1fab5c70a283af434ea8c9d91d"
+  },
+  "routes": [
+    "/settings/roles (real RolesPanel, reader state, RBACAPI, API client and CSS with safe HTTP fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 and WebKit 26.0. Eight cases per source: desktop/light, phone/light, phone/dark, 320px/dark long-name and eleven-permission list. All sixteen comparable before/final captures copied to current output and opened through native view_image.",
+    "Built-in wildcard, four custom saved permissions and accepted empty role permissions: parent hides grants and clips row actions on phones. Final shows every exact grant under its role on phones, including read-only built-ins, and explicitly labels an empty role. Desktop retains identity, descriptions, full Permissions column and row controls.",
+    "Long saved strings outside editor shortcuts wrap without hiding or summarising content. No final page/table horizontal overflow. CSS chooses one visible permission representation at each width. No hover, expansion or editor required to inspect grants."
+  ],
+  "interactions": [
+    "Real RBACAPI GET with existing expected-organization header and explicit synthetic served inventory. Exactly one roles read per case, no writes.",
+    "Keyboard Enter opens the custom role editor; every saved permission value remains exact. Editor Cancel, Delete/Cancel and New Role/Cancel retain the existing controls and dispatch no mutation. Built-in roles remain read-only.",
+    "No page errors or console errors in final paired browser runs. Proof is consuming-panel rendering, not full App shell, production-bundle pixels, installed account or original estate recovery."
+  ],
+  "evidence": {
+    "before": "before-results.json",
+    "after": "after-results.json",
+    "captures": "CAPTURES.md",
+    "identities": "CAPTURE-IDENTITIES.json",
+    "fixture": "BROWSER-EVIDENCE.tar.xz"
+  }
+}

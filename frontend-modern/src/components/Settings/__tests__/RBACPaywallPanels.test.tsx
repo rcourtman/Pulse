@@ -179,6 +179,54 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
   });
 
+  it('keeps complete saved grants in each role-list projection, including read-only roles', async () => {
+    const permissions = [
+      { action: '*', resource: '*' },
+      { action: 'read', resource: 'nodes' },
+      { action: 'read', resource: 'resource_beyond_the_editor_shortcuts' },
+    ];
+    getRolesMock.mockResolvedValueOnce([
+      {
+        id: 'auditor',
+        name: 'Saved auditor',
+        description: 'Review only',
+        permissions,
+        isBuiltIn: true,
+      },
+      {
+        id: 'draft',
+        name: 'Draft role',
+        description: 'Not configured',
+        permissions: [],
+        isBuiltIn: false,
+      },
+    ]);
+
+    render(() => <RolesPanel />);
+
+    const auditorName = await screen.findByText('Saved auditor');
+    const auditor = within(auditorName.closest('tr')!);
+    // CSS chooses the phone identity cell or desktop column; every projection
+    // must retain every grant rather than a count or an editable-only summary.
+    const lists = auditor.getAllByRole('list', { name: 'Permissions for Saved auditor' });
+    for (const list of lists) {
+      expect(within(list).getAllByRole('listitem')).toHaveLength(permissions.length);
+      for (const permission of permissions) {
+        expect(
+          within(list).getByText(`${permission.action}:${permission.resource}`),
+        ).toBeInTheDocument();
+      }
+    }
+    expect(auditor.getByText('Read-only')).toBeInTheDocument();
+    expect(auditor.queryByRole('button')).not.toBeInTheDocument();
+    const draft = within(screen.getByText('Draft role').closest('tr')!);
+    expect(draft.getAllByText('No permissions').length).toBeGreaterThan(0);
+    expect(draft.queryByRole('list')).not.toBeInTheDocument();
+    expect(draft.getByRole('button', { name: 'Edit role' })).toBeEnabled();
+    expect(draft.getByRole('button', { name: 'Delete role' })).toBeEnabled();
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps editable role actions touch-sized on mobile', async () => {
     getRolesMock.mockResolvedValueOnce([
       {

@@ -121,6 +121,19 @@ the existing safe navigation fallback usable instead of raising the route error
 boundary; a same-reader status refresh does not remount the panel or lose its
 draft. Backend authorisation, endpoints and permission semantics remain unchanged.
 
+The role list keeps every saved `action:resource` permission visible without an
+editor, hover, expansion or horizontal scrolling at phone widths, including
+built-in roles that cannot be edited. Phones place the complete list beneath
+its role identity; desktop keeps the Permissions column. Wildcards and saved
+strings beyond the editor shortcuts remain exact, long identities and grants
+wrap, and an accepted empty permission list says "No permissions" for that
+role, not that its users have no access. Identity, description, built-in
+read-only distinction and edit/delete controls remain available alongside the
+grants. The existing inventory-withdrawal boundary covers both projections.
+Registered RBAC panel tests cover the complete saved list and empty state;
+comparable desktop/narrow browser proof checks actual visibility, wrapping,
+all row controls and unchanged saved values through the editor.
+
 Normal `RolesReaderLifetime`, RBAC API, paywall and registry tests cover
 read/write races, revoked authority, licence loss, disposal, stale row IDs,
 malformed reads, exact request binding, definite rejections and unconfirmed
@@ -273,9 +286,9 @@ Organisation overview, access and sharing use the authenticated currentUsername 
    compensation around grids.
    Their phone projection must keep the identity, current access/state, and
    available row action needed for an immediate decision. Added/requested
-   timestamps, repeated permission detail, and other review metadata are
-   desktop detail columns; they must not squeeze those decision fields into an
-   unreadable six-column phone grid.
+   timestamps and other secondary review metadata are desktop detail columns;
+   actual role grants are decision information and remain visible on phones. Do
+   not squeeze these decision fields into an unreadable six-column phone grid.
    Organization role and share-status badges follow the same primitive
    boundary: role/status semantics remain organization-owned, but visible badge
    shell, tone vocabulary, and label rendering must compose
