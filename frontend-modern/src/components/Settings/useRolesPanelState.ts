@@ -34,6 +34,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
   const [actionError, setActionError] = createSignal<string | null>(null);
   const [successNotice, setSuccessNotice] = createSignal<string | null>(null);
   const [inventoryLoaded, setInventoryLoaded] = createSignal(false);
+  const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
 
   const featureGate = useRBACFeatureGateState({
     kind: 'roles',
@@ -61,6 +62,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     inventoryLoaded() &&
     !loading() &&
     !loadError() &&
+    !unconfirmedChange() &&
     !saving() &&
     !deleting();
   const isCurrentRole = (role: Role) => roles().some((current) => unwrap(current) === unwrap(role));
@@ -137,6 +139,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       batch(() => {
         setRoles(data);
         setInventoryLoaded(true);
+        setUnconfirmedChange(null);
       });
     } catch {
       if (isCurrentRead()) setLoadError(getRolesLoadErrorMessage());
@@ -160,6 +163,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       setRolePendingDeletion(null);
       setInventoryLoaded(false);
       setSuccessNotice(null);
+      setUnconfirmedChange(null);
       setLoadError(null);
       setSaving(false);
       setDeleting(false);
@@ -236,9 +240,24 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
         setSuccessNotice(`Role "${role.name}" ${remove ? 'deleted' : 'saved'}`);
       });
       saved = true;
-    } catch {
-      if (isCurrentWrite())
+    } catch (error) {
+      if (!isCurrentWrite()) return;
+      const status = (error as { status?: number } | null)?.status;
+      // A definite rejection can be corrected in the draft. A lost response,
+      // server error or unreadable success does not establish rollback.
+      if (status && [400, 401, 403, 404, 409, 422, 429].includes(status)) {
         setActionError(remove ? getRolesDeleteErrorMessage() : getRolesSaveErrorMessage());
+      } else {
+        batch(() => {
+          clearEditor();
+          setRolePendingDeletion(null);
+          setRoles([]);
+          setInventoryLoaded(false);
+          setUnconfirmedChange(
+            `The ${remove ? 'deletion' : 'save'} of role "${role.name}" could not be confirmed. It may already have been applied. Check saved roles and review their permissions before making another change.`,
+          );
+        });
+      }
     } finally {
       if (isCurrentWrite()) {
         mutationController = undefined;
@@ -322,6 +341,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     setFormName,
     showModal,
     successNotice,
+    unconfirmedChange,
     updatePermission,
   };
 }

@@ -17,6 +17,7 @@ const getUsersMock = vi.fn();
 const getUserPermissionsMock = vi.fn();
 const updateUserRolesMock = vi.fn();
 const deleteUserMock = vi.fn();
+const deleteRoleMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const loggerErrorMock = vi.fn();
@@ -63,7 +64,7 @@ vi.mock('@/api/rbac', () => ({
     updateUserRoles: (...args: unknown[]) => updateUserRolesMock(...args),
     deleteUser: (...args: unknown[]) => deleteUserMock(...args),
     saveRole: vi.fn(),
-    deleteRole: vi.fn(),
+    deleteRole: (...args: unknown[]) => deleteRoleMock(...args),
   },
 }));
 
@@ -96,6 +97,7 @@ describe('RBAC paywall settings panels', () => {
     getUserPermissionsMock.mockReset();
     updateUserRolesMock.mockReset();
     deleteUserMock.mockReset();
+    deleteRoleMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
     loggerErrorMock.mockReset();
@@ -125,6 +127,7 @@ describe('RBAC paywall settings panels', () => {
     getUserPermissionsMock.mockResolvedValue([]);
     updateUserRolesMock.mockResolvedValue(undefined);
     deleteUserMock.mockResolvedValue(undefined);
+    deleteRoleMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -231,6 +234,41 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByText('Admin')).toBeInTheDocument();
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('replaces uncertain confirmations with focused, read-only recovery in the consuming panel', async () => {
+    const north = {
+      id: 'fleet-auditor',
+      name: 'Fleet auditor',
+      description: 'Synthetic role',
+      permissions: [{ action: 'read', resource: 'nodes' }],
+      createdAt: '2026-11-01',
+    };
+    getRolesMock.mockResolvedValue([north]);
+    deleteRoleMock.mockRejectedValueOnce(new Error('PRIVATE DETAIL'));
+    render(() => <RolesPanel currentUser="reader-a" canManage={true} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete role' }));
+    const dialog = await screen.findByRole('dialog', { name: `Delete role: ${north.name}` });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete Role' }));
+    const notice = await screen.findByRole('alert');
+    expect(notice).toHaveTextContent('could not be confirmed');
+    expect(notice).not.toHaveTextContent('PRIVATE');
+    await waitFor(() => expect(notice).toHaveFocus());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('No roles available.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
+    getRolesMock.mockRejectedValueOnce(new Error('PRIVATE READ DETAIL'));
+    fireEvent.click(screen.getByRole('button', { name: 'Check saved roles' }));
+    expect(await screen.findByText('Failed to load roles')).toBeInTheDocument();
+    expect(notice).toHaveTextContent('could not be confirmed');
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    getRolesMock.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Check saved roles' }));
+    expect(await screen.findByText('No roles available.')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
+    expect(deleteRoleMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows the user assignments paywall for free entitlements and does not load users', async () => {

@@ -256,7 +256,7 @@ describe('Roles reader lifetime', () => {
     expect(state.showModal()).toBe(true);
     expect(state.rolePendingDeletion()).toBeNull();
     expect(mocks.saveRole).toHaveBeenCalledTimes(1);
-    old.reject(new Error('PRIVATE WRITE DETAIL'));
+    old.reject(Object.assign(new Error('PRIVATE WRITE DETAIL'), { status: 403 }));
     await pending;
     expect(state.formName()).toBe('Changed role');
     expect(state.actionError()).toBe('Failed to save role');
@@ -272,7 +272,9 @@ describe('Roles reader lifetime', () => {
   });
 
   it('keeps delete failure in the live confirmation and never retries it on a read', async () => {
-    mocks.deleteRole.mockRejectedValueOnce(new Error('PRIVATE DELETE DETAIL'));
+    mocks.deleteRole.mockRejectedValueOnce(
+      Object.assign(new Error('PRIVATE DELETE DETAIL'), { status: 403 }),
+    );
     const { state } = mount();
     await loaded(state);
     state.openDeleteRole(north);
@@ -306,6 +308,119 @@ describe('Roles reader lifetime', () => {
     expect(mocks.saveRole).not.toHaveBeenCalled();
     expect(mocks.deleteRole).not.toHaveBeenCalled();
   });
+
+  it.each(
+    (['create', 'update', 'delete'] as const).flatMap((operation) =>
+      [
+        ['lost response', new Error('PRIVATE TRANSPORT DETAIL')],
+        ['server error', Object.assign(new Error('PRIVATE SERVER DETAIL'), { status: 503 })],
+        ['timeout', Object.assign(new Error('PRIVATE TIMEOUT DETAIL'), { status: 408 })],
+        ['unreadable success', new SyntaxError('PRIVATE JSON DETAIL')],
+      ].map(([failure, error]) => ({ operation, failure, error })),
+    ),
+  )('requires an accepted read after $operation has a $failure', async ({ operation, error }) => {
+    const write = operation === 'delete' ? mocks.deleteRole : mocks.saveRole;
+    write.mockRejectedValueOnce(error);
+    const { state } = mount();
+    await loaded(state);
+    const changed = { ...north, permissions: [{ action: 'read', resource: 'audit_logs' }] };
+    if (operation === 'create') {
+      state.openCreateRole();
+      state.setFormId('new-auditor');
+      state.setFormName('New auditor');
+    } else if (operation === 'update') {
+      state.openEditRole(north);
+      state.updatePermission(0, 'resource', 'audit_logs');
+    } else state.openDeleteRole(north);
+    if (operation === 'delete') await state.handleDeleteRole();
+    else await state.handleSaveRole();
+
+    const message = state.unconfirmedChange();
+    expect(message).toContain('could not be confirmed');
+    expect(message).toContain(operation === 'create' ? 'New auditor' : north.name);
+    expect(message).not.toContain('PRIVATE');
+    expect(state.roles()).toEqual([]);
+    expect(state.showModal()).toBe(false);
+    expect(state.rolePendingDeletion()).toBeNull();
+    expect(state.actionError()).toBeNull();
+    expect(state.successNotice()).toBeNull();
+    expect(state.canEdit()).toBe(false);
+    expect(mocks.getRoles).toHaveBeenCalledTimes(1);
+
+    // Retained row references and handler calls cannot replay the write.
+    state.openEditRole(north);
+    state.openDeleteRole(north);
+    state.openCreateRole();
+    await state.handleSaveRole();
+    await state.handleDeleteRole();
+    expect(write).toHaveBeenCalledTimes(1);
+
+    // An invalid read is not an empty saved directory or a resolved write.
+    mocks.getRoles.mockResolvedValueOnce([{ ...north, permissions: null }]);
+    await state.loadRoles();
+    expect(state.unconfirmedChange()).toBe(message);
+    expect(state.loadError()).toBe('Failed to load roles');
+    expect(state.canEdit()).toBe(false);
+
+    const next = deferred<Role[]>();
+    mocks.getRoles.mockReturnValueOnce(next.promise);
+    const reading = state.loadRoles();
+    await state.loadRoles();
+    expect(mocks.getRoles).toHaveBeenCalledTimes(3);
+    expect(state.loading()).toBe(true);
+    expect(state.unconfirmedChange()).toBe(message);
+    expect(state.canEdit()).toBe(false);
+    const saved = operation === 'delete' ? [] : [changed];
+    next.resolve(saved);
+    await reading;
+    expect(state.roles()).toEqual(saved);
+    expect(state.unconfirmedChange()).toBeNull();
+    expect(state.loadError()).toBeNull();
+    expect(state.successNotice()).toBeNull();
+    expect(state.canEdit()).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([400, 401, 403, 404, 409, 422, 429])(
+    'keeps a definitely rejected %s save editable without inventing uncertainty',
+    async (status) => {
+      mocks.saveRole.mockRejectedValueOnce(Object.assign(new Error('PRIVATE'), { status }));
+      const { state } = mount();
+      await loaded(state);
+      state.openEditRole(north);
+      state.setFormName('Correctable draft');
+      await state.handleSaveRole();
+      expect(state.showModal()).toBe(true);
+      expect(state.formName()).toBe('Correctable draft');
+      expect(state.actionError()).toBe('Failed to save role');
+      expect(state.roles()).toEqual([north]);
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.canEdit()).toBe(true);
+      expect(mocks.getRoles).toHaveBeenCalledTimes(1);
+      expect(mocks.saveRole).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['authority', 'license', 'principal', 'organization', 'disposal'] as const)(
+    'withdraws an unconfirmed role name with its reader on %s change',
+    async (kind) => {
+      const [feature, setFeature] = createSignal(true);
+      enabled = feature;
+      mocks.deleteRole.mockRejectedValueOnce(new Error('PRIVATE'));
+      const { state, setUser, setAllowed, view } = mount();
+      await loaded(state);
+      state.openDeleteRole(north);
+      await state.handleDeleteRole();
+      expect(state.unconfirmedChange()).toContain(north.name);
+      if (kind === 'authority') setAllowed(false);
+      if (kind === 'license') setFeature(false);
+      if (kind === 'principal') setUser('reader-b');
+      if (kind === 'organization') switchOrg();
+      if (kind === 'disposal') view.unmount();
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(mocks.deleteRole).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each([
     null,
@@ -417,7 +532,9 @@ describe('Roles reader lifetime', () => {
 
   it('shows inline draft errors and a cancellable, withdrawable confirmation in the consuming panel', async () => {
     const [allowed, setAllowed] = createSignal(true);
-    mocks.saveRole.mockRejectedValueOnce(new Error('PRIVATE DETAIL'));
+    mocks.saveRole.mockRejectedValueOnce(
+      Object.assign(new Error('PRIVATE DETAIL'), { status: 422 }),
+    );
     render(() => <RolesPanel currentUser="reader-a" canManage={allowed()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Edit role' }));
     let dialog = await screen.findByRole('dialog', { name: 'Edit role' });
