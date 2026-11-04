@@ -4626,3 +4626,55 @@ for (const action of ["opened", "edited", "reopened"]) {
     }
   });
 }
+
+test("explicit corrections inside a form version field must agree across declaration layouts", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const declaration of ["Pulse version: ", "**Pulse version**\n", "- **Pulse version**: ", "1. **Pulse version**: "]) {
+    for (const [correction, expected] of [["v6.6.0", "6.6.0"], ["6.7.0-beta.2", null], ["unknown", null], ["6.6.0-", null]]) {
+      for (const values of [["6.6.0", correction], [correction, "6.6.0"]]) {
+        const body = `### Pulse version\n${values[0]}\n\n${declaration}${values[1]}\n\n### Agent version\n6.4.5`;
+        assert.equal(extractPulseVersion("Pulse 6.4.5 upgrade failed", body), expected, body);
+      }
+    }
+  }
+});
+
+test("a form version value can itself use an explicit legacy declaration", () => {
+  for (const declaration of ["Pulse version: ", "**Pulse version**\n", "- **Pulse version**: "]) {
+    const body = `### Pulse version\n${declaration}v6.6.0\n\n${declaration}6.6.0`;
+    assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), "6.6.0", body);
+  }
+});
+
+test("copied corrections inside the version field cannot override its declaration", () => {
+  for (const copied of [
+    "```text\nPulse version: 6.4.5\n```",
+    "> Pulse version: 6.4.5",
+    "<pre>\nPulse version: 6.4.5\n</pre>",
+    "<!-- Pulse version: 6.4.5 -->",
+    "- Copied output:\n  - Pulse version: 6.4.5",
+  ]) {
+    assert.equal(triage.internals.extractPulseVersion("Unversioned report",
+      `### Pulse version\n6.6.0\n\n${copied}\n\n### Agent version\n6.4.5`), "6.6.0", copied);
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`${action} ambiguous in-field corrections retain topic review and whole-thread labels`, async () => {
+    const protectedLabels = ["bug", "affects-6.4.5", "release-blocker", "stable-regression",
+      "needs-retest-on-latest", "needs-human", "operator-reviewed"];
+    const body = "### Pulse version\n6.6.0\n\nPulse version: 6.7.0-beta.2\n\n" +
+      "### Additional actionable topics\nA separate notification failure.";
+    const issue = { number: 42, state: "open", title: "Synthetic corrected version",
+      body, comments: 0, updated_at: "2026-11-04T05:20:00Z",
+      labels: protectedLabels.map(name => ({ name })) };
+    const { github, calls } = createGithub({ currentIssue: issue });
+    await syncLabels({ github, core: createCore(), context: createContext({ action, issue,
+      previousBody: "### Pulse version\n6.6.0\n\n### Additional actionable topics\nNone" }) });
+    assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+      [...protectedLabels, "needs-version-info", ...(action === "reopened" ? [] : ["needs-decomposition"])].sort());
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+  });
+}
