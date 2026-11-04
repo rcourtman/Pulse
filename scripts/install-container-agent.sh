@@ -16,13 +16,17 @@ Usage:
 
 Supported options:
   --url <url>             Pulse server URL (required when local install.sh is unavailable)
-  --token <token>         API token
+  --token-file <path>     Read token from a private file (preferred)
+  --token <token>         Compatibility option; exposes the token in process arguments
   --interval <duration>   Reporting interval (forwarded)
   --insecure              Skip TLS verification for self-signed certs
   --uninstall             Uninstall Pulse agent
   --help                  Show this help message
 
 Notes:
+  Prefer --token-file to keep API tokens out of history and process arguments;
+  the canonical installer validates the file and the caller owns input-file cleanup.
+
   This wrapper forwards to install.sh with:
     --enable-docker --enable-host
 
@@ -33,6 +37,7 @@ USAGE
 
 URL=""
 TOKEN=""
+TOKEN_FILE=""
 INTERVAL=""
 INSECURE="false"
 UNINSTALL="false"
@@ -55,6 +60,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --token)
       TOKEN="${2:-}"
+      shift 2
+      ;;
+    --token-file)
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "[ERROR] --token-file requires a path." >&2
+        exit 1
+      fi
+      TOKEN_FILE="$2"
       shift 2
       ;;
     --interval)
@@ -84,6 +97,9 @@ if [[ -n "$URL" ]]; then
 fi
 if [[ -n "$TOKEN" ]]; then
   forward_args+=(--token "$TOKEN")
+fi
+if [[ -n "$TOKEN_FILE" ]]; then
+  forward_args+=(--token-file "$TOKEN_FILE")
 fi
 if [[ -n "$INTERVAL" ]]; then
   forward_args+=(--interval "$INTERVAL")
