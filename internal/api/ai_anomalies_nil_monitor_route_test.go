@@ -70,7 +70,7 @@ func TestRoutedAnomaliesNilMonitorBoundary(t *testing.T) {
 				t.Fatalf("%s/%s: no positive anomaly witness: %s", stage, org, body)
 			}
 			for _, a := range payload.Anomalies {
-				if a.ID != expectedID || a.Name != expectedID {
+				if a.ID != expectedID || a.Name != org+"-node" {
 					t.Fatalf("%s/%s: wrong-org anomaly: %s", stage, org, body)
 				}
 			}
