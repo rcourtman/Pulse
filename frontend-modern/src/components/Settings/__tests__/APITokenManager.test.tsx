@@ -326,7 +326,7 @@ describe('APITokenManager', () => {
 
     const notice = await screen.findByRole('alert');
     expect(notice).toHaveTextContent('Unable to load API tokens.');
-    expect(notice).toHaveTextContent('Existing credentials have not been changed.');
+    expect(notice).toHaveTextContent('This read does not change credentials.');
     expect(screen.getAllByText('Unknown')).toHaveLength(3);
     expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
     expect(screen.queryByText(/no wildcard credentials detected/i)).not.toBeInTheDocument();
@@ -1074,7 +1074,90 @@ describe('APITokenManager', () => {
     await waitFor(() => expect(revokeTrigger).toHaveFocus());
   });
 
-  it('requires at least one changed scope and keeps failed edits open', async () => {
+  it.each(['create', 'scope', 'rename', 'revoke'] as const)(
+    'reconciles an applied %s with a read, not a repeated write after a lost response',
+    async (operation) => {
+      const original = makeToken({ scopes: ['*'] });
+      const applied =
+        operation === 'revoke'
+          ? []
+          : operation === 'create'
+            ? [original, makeToken({ id: 'orphan', name: 'Unconfirmed token' })]
+            : [
+                makeToken({
+                  scopes: operation === 'scope' ? [MONITORING_READ_SCOPE] : ['*'],
+                  name: operation === 'rename' ? 'Current name' : original.name,
+                }),
+              ];
+      listTokensMock.mockResolvedValueOnce([original]).mockResolvedValueOnce(applied);
+      const failure = new Error('synthetic-private-response-text');
+      const writes = {
+        create: createTokenMock,
+        scope: updateTokenScopesMock,
+        rename: renameTokenMock,
+        revoke: deleteTokenMock,
+      };
+      writes[operation].mockRejectedValueOnce(failure);
+      const onChanged = vi.fn();
+      render(() => <APITokenManager canManage onTokensChanged={onChanged} />);
+      const row = await findTokenTableRow(original.name!);
+      fireEvent.input(screen.getByLabelText('Token name'), { target: { value: 'Unsent draft' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
+      if (operation === 'create') {
+        fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+      } else {
+        const action = { scope: 'Edit scopes', rename: 'Rename', revoke: 'Revoke' }[operation];
+        fireEvent.click(within(row).getByRole('button', { name: action }));
+        const dialog = await screen.findByRole('dialog');
+        if (operation === 'scope') {
+          fireEvent.click(
+            within(dialog).getByRole('checkbox', { name: /Monitoring & alerts \(read\)/ }),
+          );
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Save scopes' }));
+        } else if (operation === 'rename') {
+          fireEvent.input(within(dialog).getByLabelText('Token name'), {
+            target: { value: 'Current name' },
+          });
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+        } else {
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke token' }));
+        }
+      }
+      const check = await screen.findByRole('button', { name: 'Check token inventory' });
+      const notice = screen.getByRole('alert');
+      expect(notice).toHaveTextContent('The change may already have been saved.');
+      if (operation === 'create') expect(notice).toHaveTextContent('revoke it');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      await waitFor(() => expect(notice).toHaveFocus());
+      expect(screen.getAllByText('Unknown')).toHaveLength(3);
+      expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+      expect(screen.queryByText(/No tokens yet/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Existing credentials have not been changed/),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/synthetic-private-response-text/)).not.toBeInTheDocument();
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+      expect(markAgentsTokenRevokedMock).not.toHaveBeenCalled();
+      expect(markDockerRuntimesTokenRevokedMock).not.toHaveBeenCalled();
+      fireEvent.click(check);
+      await waitFor(() => expect(screen.queryAllByText('Unknown')).toHaveLength(0));
+      expect(listTokensMock).toHaveBeenCalledTimes(2);
+      expect(writes[operation]).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled();
+      expect(screen.getByLabelText('Token name')).toHaveValue('Unsent draft');
+      expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      if (operation === 'revoke') await screen.findByText(/No tokens yet/);
+      else await screen.findAllByText(applied.at(-1)!.name!);
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+      expect(onChanged).not.toHaveBeenCalled();
+      expect(showTokenRevealMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires at least one changed scope and keeps explicitly rejected edits open', async () => {
     listTokensMock.mockResolvedValue([
       makeToken({
         id: 'token-edit-failure',
@@ -1082,7 +1165,9 @@ describe('APITokenManager', () => {
         scopes: [DOCKER_REPORT_SCOPE],
       }),
     ]);
-    updateTokenScopesMock.mockRejectedValueOnce(new Error('Cannot grant scope "monitoring:read"'));
+    updateTokenScopesMock.mockRejectedValueOnce(
+      Object.assign(new Error('Cannot grant scope "monitoring:read"'), { status: 403 }),
+    );
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
@@ -1112,7 +1197,7 @@ describe('APITokenManager', () => {
         expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
       );
     });
-    expect(notificationErrorMock).toHaveBeenCalledWith('Unable to update API token scopes.');
+    expect(notificationErrorMock).toHaveBeenCalledWith('Cannot grant scope "monitoring:read"');
     expect(screen.getByRole('dialog', { name: 'Edit API token scopes' })).toBeInTheDocument();
   });
 
