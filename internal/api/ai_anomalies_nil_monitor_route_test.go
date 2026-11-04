@@ -27,12 +27,35 @@ func TestRoutedAnomaliesNilMonitorBoundary(t *testing.T) {
 	manager := rig.router.mtMonitor
 	defaultID := readStateNodeID(t, rig.defaultMonitor)
 	tenantID := readStateNodeID(t, rig.tenantMonitor)
+	// Reload legitimately replaces the service's in-memory baseline store with
+	// the persisted org-owned store. Seed that real owner, with the normal
+	// minimum sample count, instead of treating a temporary injected store as
+	// saved state that must survive initialization.
 	for _, svc := range []*ai.Service{rig.defaultService, rig.tenantService} {
-		store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
-		addBaseline(t, store, defaultID, "node", "cpu", 10)
-		addBaseline(t, store, tenantID, "node", "cpu", 10)
+		cfg := ai.DefaultBaselineConfig()
+		cfg.DataDir = rig.router.persistenceForOrg(tenantContext(svc.GetOrgID())).DataDir()
+		store := ai.NewBaselineStore(cfg)
+		points := make([]ai.BaselineMetricPoint, cfg.MinSamples)
+		for i := range points {
+			points[i] = ai.BaselineMetricPoint{Value: 10, Timestamp: time.Now().Add(-time.Duration(i) * time.Minute)}
+		}
+		for _, id := range []string{defaultID, tenantID} {
+			if err := store.Learn(id, "node", "cpu", points); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := store.Save(); err != nil {
+			t.Fatal(err)
+		}
 		svc.SetBaselineStore(store)
 	}
+	t.Cleanup(func() {
+		rig.server.Close()
+		rig.router.ShutdownAIIntelligence()
+		rig.router.ShutdownBackgroundWorkers()
+		rig.router.ShutdownResourceStores()
+		rig.router.ShutdownRBAC()
+	})
 
 	read := func(stage, org, token string, want int, expectedID string) {
 		t.Helper()
