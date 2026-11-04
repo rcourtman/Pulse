@@ -24,7 +24,7 @@ func TestReloadRetainsIncompleteRuntimeOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved := []config.PVEInstance{{Name: "kept", Host: "https://kept.invalid:8006", Disabled: true, VerifySSL: true, Fingerprint: "saved-pin"}}
+	saved := []config.PVEInstance{{Name: "kept", Host: "https://kept.invalid:8006", Disabled: true, VerifySSL: true, Fingerprint: "saved-pin", TokenName: "pulse@pve!monitor", TokenValue: "synthetic-fixture-token"}}
 	if err := p.SaveNodesConfig(saved, nil, nil); err != nil {
 		t.Fatal(err)
 	}

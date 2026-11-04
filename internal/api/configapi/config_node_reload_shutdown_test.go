@@ -31,8 +31,8 @@ func TestNodeRemovalKeepsIncompleteReloadUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	instances := []config.PVEInstance{
-		{Name: "remove-me", Host: "https://removed.invalid:8006", Disabled: true, VerifySSL: true, Fingerprint: "removed-pin"},
-		{Name: "keep-me", Host: "https://kept.invalid:8006", Disabled: true, VerifySSL: true, Fingerprint: "kept-pin"},
+		{Name: "remove-me", Host: "https://removed.invalid:8006", Disabled: true, VerifySSL: true, Fingerprint: "removed-pin", TokenName: "pulse@pve!monitor", TokenValue: "synthetic-fixture-token"},
+		{Name: "keep-me", Host: "https://kept.invalid:8006", Disabled: true, VerifySSL: true, Fingerprint: "kept-pin", TokenName: "pulse@pve!monitor", TokenValue: "synthetic-fixture-token"},
 	}
 	if err := p.SaveNodesConfig(instances, nil, nil); err != nil {
 		t.Fatal(err)
