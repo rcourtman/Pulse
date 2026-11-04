@@ -140,12 +140,13 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  height: var(--header-height);
-  padding: 0 24px;
+  min-height: var(--header-height);
+  padding: 10px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-subtle);
 }
 header .brand {
+  flex-shrink: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--ink);
@@ -155,8 +156,10 @@ header .brand {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 header .theme-toggle {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -178,10 +181,20 @@ header .theme-toggle:hover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.user-info {
+  min-width: 0;
 }
 .header-account-email {
   font-size: 13px;
   color: var(--ink-secondary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+header .logout-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 header .logout-btn,
 .link-button,
@@ -2033,7 +2046,7 @@ header .logout-btn:hover,
 }
 @media (max-width: 768px) {
   header {
-    padding: 0 16px;
+    padding: 10px 16px;
   }
   .main {
     padding: 0 16px 48px;
@@ -2130,16 +2143,31 @@ header .logout-btn:hover,
 }
 @media (max-width: 480px) {
   header {
-    padding: 0 12px;
+    padding: 10px 12px;
   }
   .main {
     padding: 0 12px 40px;
   }
-  .header-account-email {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  header:has(.header-account-chip) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    padding: 8px 12px;
+  }
+  header:has(.header-account-chip) .header-controls {
+    display: contents;
+  }
+  header:has(.header-account-chip) .theme-toggle {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  header:has(.header-account-chip) .user-info {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .header-account-chip {
+    display: flex;
+    justify-content: space-between;
   }
   .portal-identity-bar h2 {
     font-size: 16px;
