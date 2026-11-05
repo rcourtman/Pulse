@@ -39,6 +39,17 @@ type Store struct {
 	pruneMu         sync.Mutex
 	lastPrune       time.Time
 	backupHistoryMu sync.Mutex
+
+	// unsettledSubjects holds, per provider connection, the guests its latest
+	// complete collection could not rule in or out as a backup's owner. It mirrors
+	// protection_unsettled_subjects, so a restart keeps the answer until the next
+	// complete collection replaces it.
+	// unsettledMu guards only the map and is never held across a database call,
+	// because a posture write reads the map inside its own transaction.
+	// unsettledWriteMu serializes writers across the table and the map.
+	unsettledMu       sync.RWMutex
+	unsettledSubjects map[string]map[string]struct{}
+	unsettledWriteMu  sync.Mutex
 }
 
 type historicalSubjectIdentity struct {
@@ -355,6 +366,10 @@ func Open(dbPath string) (*Store, error) {
 		}
 		return nil, initErr
 	}
+	if err := store.loadUnsettledProtectionSubjects(context.Background()); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("load unsettled protection subjects: %w", err)
+	}
 	// Best-effort backfill for deployments that wrote points before subject_key existed.
 	// This should never block startup; missing backfills only affect rollup completeness.
 	_ = store.BackfillKeys(context.Background())
@@ -666,6 +681,13 @@ func (s *Store) initSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_protection_postures_state
 		ON protection_postures(state, evaluated_at_ms DESC, subject_resource_id);
+
+		CREATE TABLE IF NOT EXISTS protection_unsettled_subjects (
+			scope TEXT NOT NULL,
+			subject_resource_id TEXT NOT NULL,
+			updated_at_ms INTEGER NOT NULL,
+			PRIMARY KEY (scope, subject_resource_id)
+		);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err

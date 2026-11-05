@@ -2,6 +2,7 @@ package proxmoxmapper
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -583,6 +584,55 @@ func fromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 		})
 	}
 
+	return out
+}
+
+// PBSCandidateResourceIDs names every live guest a snapshot could be attributed to.
+func PBSCandidateResourceIDs(candidatesByKey map[string][]GuestCandidate) []string {
+	var out []string
+	for _, candidates := range candidatesByKey {
+		for _, c := range candidates {
+			if id := subjectResourceID(c.ResourceType, c.ResourceID, c.SourceID); id != "" {
+				out = append(out, id)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// UnsettledPBSGuestResourceIDs names the live guests that could own a completed
+// snapshot the evidence does not attribute (see models.AttributePBSBackups).
+func UnsettledPBSGuestResourceIDs(
+	backups []models.PBSBackup,
+	candidatesByKey map[string][]GuestCandidate,
+	guestInstances map[string]string,
+) []string {
+	seen := make(map[string]struct{})
+	for _, b := range backups {
+		if b.InProgress {
+			continue
+		}
+		// An answer settles the snapshot even when it names a guest the recovery
+		// candidates leave out, such as a template.
+		if strings.TrimSpace(guestInstances[b.ID]) != "" {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(b.BackupType)) + ":" + strings.TrimSpace(b.VMID)
+		for _, c := range candidatesByKey[key] {
+			if id := subjectResourceID(c.ResourceType, c.ResourceID, c.SourceID); id != "" {
+				seen[id] = struct{}{}
+			}
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	sort.Strings(out)
 	return out
 }
 

@@ -879,3 +879,242 @@ func TestStoreProtectionPostureKeepsReReadPointsUnderPartialCollection(t *testin
 		t.Fatalf("retained point the latest collection did not read = %s, want attention", got.State)
 	}
 }
+
+// A guest with its own backup keeps its verdict; one that only might own a
+// backup reads unknown, on both read paths, until the evidence settles (#2681).
+func TestStoreUnsettledBackupReadsUnknownUntilSettled(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	observed := now.Add(-time.Minute)
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"Home",
+		recovery.OutcomeUnknown,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		observed,
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+	if err := store.UpsertProtectionProviderObservations(ctx, []recovery.ProtectionProviderObservation{observation}); err != nil {
+		t.Fatalf("UpsertProtectionProviderObservations() error = %v", err)
+	}
+	taskTime := now.Add(-time.Hour)
+	backupTime := now.Add(-time.Hour)
+	points := []recovery.RecoveryPoint{
+		{
+			ID: "pve-task:web1", Provider: recovery.ProviderProxmoxPVE, Kind: recovery.KindOther, Mode: recovery.ModeLocal,
+			Outcome: recovery.OutcomeSuccess, CompletedAt: &taskTime, SubjectResourceID: "resource:web1", ProviderScope: "Home",
+		},
+		{
+			ID: "pve-backup:owned", Provider: recovery.ProviderProxmoxPVE, Kind: recovery.KindBackup, Mode: recovery.ModeLocal,
+			Outcome: recovery.OutcomeSuccess, CompletedAt: &backupTime, SubjectResourceID: "resource:owned", ProviderScope: "Home",
+		},
+	}
+	if err := store.UpsertPoints(ctx, points); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+	read := func(id string) recovery.ProtectionPosture {
+		t.Helper()
+		postures, _, err := store.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{SubjectResourceIDs: []string{id}, Page: 1, Limit: 1})
+		if err != nil || len(postures) != 1 {
+			t.Fatalf("ListProtectionPostures(%s) = %v, %v", id, postures, err)
+		}
+		return postures[0]
+	}
+	stored := func(state recovery.ProtectionState) []recovery.ProtectionPosture {
+		t.Helper()
+		postures, _, err := store.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{State: state, Page: 1, Limit: 10})
+		if err != nil {
+			t.Fatalf("ListProtectionPostures(%s) error = %v", state, err)
+		}
+		return postures
+	}
+	if got := read("resource:web1"); got.State != recovery.ProtectionStateUnprotected {
+		t.Fatalf("before any snapshot: state = %s, want unprotected", got.State)
+	}
+
+	if err := store.UpdateUnsettledProtectionSubjects(ctx, "shared-pbs", []string{"resource:web1", "resource:owned"}, []string{"resource:web1", "resource:owned"}); err != nil {
+		t.Fatalf("UpdateUnsettledProtectionSubjects() error = %v", err)
+	}
+	got := read("resource:web1")
+	if got.State != recovery.ProtectionStateUnknown || got.Reason != recovery.ProtectionReasonNoHistory || got.Coverage != recovery.ProtectionCoverageUnknown {
+		t.Fatalf("unsettled guest = %s/%s/%s, want unknown/no-history/unknown", got.State, got.Reason, got.Coverage)
+	}
+	if !strings.Contains(got.Explanation, "cannot tell which guest") {
+		t.Fatalf("explanation = %q", got.Explanation)
+	}
+	if err := got.Validate(); err != nil {
+		t.Fatalf("qualified posture is invalid: %v", err)
+	}
+	if owned := read("resource:owned"); owned.State == recovery.ProtectionStateUnknown {
+		t.Fatalf("a guest with its own backup must keep its verdict, got %s", owned.State)
+	}
+	if rows := stored(recovery.ProtectionStateUnprotected); len(rows) != 0 {
+		t.Fatalf("materialized unprotected rows = %d, want 0", len(rows))
+	}
+
+	// Another connection's empty answer leaves this one's standing.
+	if err := store.UpdateUnsettledProtectionSubjects(ctx, "other-pbs", []string{"resource:web1"}, nil); err != nil {
+		t.Fatalf("UpdateUnsettledProtectionSubjects(other) error = %v", err)
+	}
+	if got := read("resource:web1"); got.State != recovery.ProtectionStateUnknown {
+		t.Fatalf("after another connection's empty answer: state = %s, want unknown", got.State)
+	}
+
+	// A collection that could not evaluate this guest has no answer for it.
+	if err := store.UpdateUnsettledProtectionSubjects(ctx, "shared-pbs", []string{"resource:owned"}, nil); err != nil {
+		t.Fatalf("UpdateUnsettledProtectionSubjects(not evaluated) error = %v", err)
+	}
+	if got := read("resource:web1"); got.State != recovery.ProtectionStateUnknown {
+		t.Fatalf("guest not evaluated: state = %s, want its last answer, unknown", got.State)
+	}
+
+	if err := store.UpdateUnsettledProtectionSubjects(ctx, "shared-pbs", []string{"resource:web1"}, nil); err != nil {
+		t.Fatalf("UpdateUnsettledProtectionSubjects(clear) error = %v", err)
+	}
+	if got := read("resource:web1"); got.State != recovery.ProtectionStateUnprotected {
+		t.Fatalf("once settled elsewhere: state = %s, want unprotected", got.State)
+	}
+	if rows := stored(recovery.ProtectionStateUnprotected); len(rows) != 1 {
+		t.Fatalf("materialized unprotected rows after settling = %d, want 1", len(rows))
+	}
+}
+
+func TestStoreUnsettledBackupSurvivesRestartAndFollowsItsConnection(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "recovery.db")
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"Home",
+		recovery.OutcomeUnknown,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		now.Add(-time.Minute),
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+	if err := store.UpsertProtectionProviderObservations(ctx, []recovery.ProtectionProviderObservation{observation}); err != nil {
+		t.Fatalf("UpsertProtectionProviderObservations() error = %v", err)
+	}
+	taskTime := now.Add(-time.Hour)
+	if err := store.UpsertPoints(ctx, []recovery.RecoveryPoint{{
+		ID: "pve-task:web1", Provider: recovery.ProviderProxmoxPVE, Kind: recovery.KindOther, Mode: recovery.ModeLocal,
+		Outcome: recovery.OutcomeSuccess, CompletedAt: &taskTime, SubjectResourceID: "resource:web1", ProviderScope: "Home",
+	}}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+	state := func(s *Store) recovery.ProtectionState {
+		t.Helper()
+		postures, _, err := s.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{SubjectResourceIDs: []string{"resource:web1"}, Page: 1, Limit: 1})
+		if err != nil || len(postures) != 1 {
+			t.Fatalf("ListProtectionPostures() = %v, %v", postures, err)
+		}
+		return postures[0].State
+	}
+	if err := store.UpdateUnsettledProtectionSubjects(ctx, "shared-pbs", []string{"resource:web1"}, []string{"resource:web1"}); err != nil {
+		t.Fatalf("UpdateUnsettledProtectionSubjects() error = %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen error = %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	if got := state(reopened); got != recovery.ProtectionStateUnknown {
+		t.Fatalf("after restart: state = %s, want unknown", got)
+	}
+	if err := reopened.RetainUnsettledProtectionScopes(ctx, []string{"shared-pbs", "other-pbs"}); err != nil {
+		t.Fatalf("RetainUnsettledProtectionScopes(kept) error = %v", err)
+	}
+	if got := state(reopened); got != recovery.ProtectionStateUnknown {
+		t.Fatalf("connection still configured: state = %s, want unknown", got)
+	}
+	if err := reopened.RetainUnsettledProtectionScopes(ctx, []string{"other-pbs"}); err != nil {
+		t.Fatalf("RetainUnsettledProtectionScopes(removed) error = %v", err)
+	}
+	if got := state(reopened); got != recovery.ProtectionStateUnprotected {
+		t.Fatalf("connection removed: state = %s, want unprotected", got)
+	}
+}
+
+// A posture write holds the store's one database connection while it reads the
+// set. An update must not hold the set while it waits for that connection.
+func TestStoreUnsettledUpdatesDoNotDeadlockAgainstPostureRefreshes(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	taskTime := now.Add(-time.Hour)
+	if err := store.UpsertPoints(ctx, []recovery.RecoveryPoint{{
+		ID: "pve-task:web1", Provider: recovery.ProviderProxmoxPVE, Kind: recovery.KindOther, Mode: recovery.ModeLocal,
+		Outcome: recovery.OutcomeSuccess, CompletedAt: &taskTime, SubjectResourceID: "resource:web1", ProviderScope: "Home",
+	}}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+	errs := make(chan error, 2)
+	go func() {
+		for i := 0; i < 200; i++ {
+			unsettled := []string{"resource:web1"}
+			if i%2 == 0 {
+				unsettled = nil
+			}
+			if err := store.UpdateUnsettledProtectionSubjects(ctx, "shared-pbs", []string{"resource:web1"}, unsettled); err != nil {
+				errs <- err
+				return
+			}
+		}
+		errs <- nil
+	}()
+	go func() {
+		for i := 0; i < 200; i++ {
+			if err := store.RefreshProtectionPostures(ctx, []string{"res:resource:web1"}); err != nil {
+				errs <- err
+				return
+			}
+		}
+		errs <- nil
+	}()
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent update and refresh: %v", err)
+		}
+	}
+}

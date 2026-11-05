@@ -27,6 +27,12 @@ type recoveryIngestBatch struct {
 	points       []recovery.RecoveryPoint
 	observations []recovery.ProtectionProviderObservation
 	reconcile    *recoveryReconcileScope
+	// evaluatedSubjects names the guests a complete enumeration could answer for,
+	// and unsettledSubjects those among them its unattributed backups could belong
+	// to. A partial read sets neither: it says nothing about the snapshots it did
+	// not reach. A guest that has not loaded is not evaluated and keeps its answer.
+	evaluatedSubjects []string
+	unsettledSubjects []string
 }
 
 type recoveryIngestCoalesceKey struct {
@@ -224,6 +230,54 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch reco
 			Str("instance", batch.reconcile.instance).
 			Str("idPrefix", batch.reconcile.idPrefix).
 			Msg("Failed to reconcile recovery points against source enumeration")
+	}
+	if len(batch.evaluatedSubjects) == 0 {
+		return
+	}
+	if err := store.UpdateUnsettledProtectionSubjects(ctx, batch.reconcile.instance, batch.evaluatedSubjects, batch.unsettledSubjects); err != nil {
+		log.Warn().
+			Err(err).
+			Str("org_id", orgID).
+			Str("instance", batch.reconcile.instance).
+			Msg("Failed to update guests with an unsettled backup")
+	}
+}
+
+// retireUnsettledBackupScopesBestEffort forgets the unsettled guests of PBS
+// connections that have been removed. It runs where the monitor starts, because
+// a removed connection never polls again to replace its own answer.
+func (m *Monitor) retireUnsettledBackupScopesBestEffort(ctx context.Context) {
+	if m == nil {
+		return
+	}
+	m.mu.RLock()
+	rm := m.recoveryManager
+	orgID := strings.TrimSpace(m.orgID)
+	var scopes []string
+	if m.config != nil {
+		for i := range m.config.PBSInstances {
+			scopes = append(scopes, m.config.PBSInstances[i].Name)
+		}
+	}
+	m.mu.RUnlock()
+	if rm == nil {
+		return
+	}
+	if orgID == "" {
+		orgID = "default"
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	retireCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	store, err := rm.StoreForOrg(orgID)
+	if err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to open recovery store to retire unsettled backup scopes")
+		return
+	}
+	if err := store.RetainUnsettledProtectionScopes(retireCtx, scopes); err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to retire unsettled backup scopes")
 	}
 }
 

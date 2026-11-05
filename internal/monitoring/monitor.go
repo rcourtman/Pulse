@@ -2330,6 +2330,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	// Best-effort startup cleanup: when direct PBS is configured, remove legacy
 	// PVE-proxied PBS backup points to prevent duplicate recovery entries.
 	m.purgeStalePVEPBSBackupsBestEffort(ctx)
+	m.retireUnsettledBackupScopesBestEffort(ctx)
 
 	// From here every mock-mode switch reaches this monitor. The sampler or
 	// discovery is chosen while no switch can run, so a switch cannot land
@@ -5378,6 +5379,7 @@ func (m *Monitor) SetRecoveryManager(manager *recoverymanager.Manager) {
 	// Try cleanup during wiring so monitors that are already running still get
 	// the migration once a recovery manager becomes available.
 	go m.purgeStalePVEPBSBackupsBestEffort(context.Background())
+	go m.retireUnsettledBackupScopesBestEffort(context.Background())
 }
 
 // GetNotificationManager returns the notification manager

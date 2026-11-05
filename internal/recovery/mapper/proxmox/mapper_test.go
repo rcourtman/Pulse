@@ -1275,3 +1275,49 @@ func TestFromPBSBackupsConfirmedSnapshotTeachesSourceLearner(t *testing.T) {
 		t.Fatalf("subjects = %+v, want VM 200 attributed through what the confirmed snapshot taught", subjects)
 	}
 }
+
+func TestUnsettledPBSGuestResourceIDsNamesOnlyGuestsAnUnsettledSnapshotFits(t *testing.T) {
+	candidate := func(instance, id string) GuestCandidate {
+		return GuestCandidate{
+			ResourceID: id, ResourceType: unifiedresources.ResourceTypeSystemContainer,
+			InstanceName: instance, NodeName: "pmx1", VMID: 101,
+		}
+	}
+	candidates := map[string][]GuestCandidate{
+		"ct:101": {candidate("Home", "ct-home-101"), candidate("Hetzner pmx1", "ct-hetzner-101")},
+		"ct:104": {candidate("Home", "ct-home-104"), candidate("Hetzner pmx1", "ct-hetzner-104")},
+		"ct:105": {candidate("Home", "ct-home-105"), candidate("Hetzner pmx1", "ct-hetzner-105")},
+	}
+	backups := []models.PBSBackup{
+		{ID: "tie", BackupType: "ct", VMID: "101"},
+		{ID: "settled", BackupType: "ct", VMID: "104"},
+		{ID: "running", BackupType: "ct", VMID: "105", InProgress: true},
+		{ID: "no-guest", BackupType: "ct", VMID: "999"},
+		// Attributed to a template the recovery candidates leave out: an answer,
+		// not ambiguity among whatever other guests share its VMID.
+		{ID: "template", BackupType: "ct", VMID: "106"},
+	}
+	candidates["ct:106"] = []GuestCandidate{candidate("Hetzner pmx1", "ct-hetzner-106")}
+	got := UnsettledPBSGuestResourceIDs(backups, candidates, map[string]string{"settled": "Home", "template": "Home"})
+	want := []string{"ct-hetzner-101", "ct-home-101"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("UnsettledPBSGuestResourceIDs() = %v, want %v", got, want)
+	}
+	if got := UnsettledPBSGuestResourceIDs(backups[1:2], candidates, map[string]string{"settled": "Home"}); got != nil {
+		t.Fatalf("all settled = %v, want nil", got)
+	}
+}
+
+func TestPBSCandidateResourceIDsNamesEveryGuestAnswered(t *testing.T) {
+	candidates := map[string][]GuestCandidate{
+		"vm:100": {
+			{ResourceID: "vm-b", ResourceType: unifiedresources.ResourceTypeVM},
+			{ResourceID: "vm-a", ResourceType: unifiedresources.ResourceTypeVM},
+		},
+		"ct:101": {{ResourceID: "ct-a", ResourceType: unifiedresources.ResourceTypeSystemContainer}},
+	}
+	want := []string{"ct-a", "vm-a", "vm-b"}
+	if got := PBSCandidateResourceIDs(candidates); !reflect.DeepEqual(got, want) {
+		t.Fatalf("PBSCandidateResourceIDs() = %v, want %v", got, want)
+	}
+}

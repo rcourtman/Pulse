@@ -592,3 +592,72 @@ func TestPVESnapshotCompleteRecoveryKeepsOtherClassesAndUnpolledRows(t *testing.
 		t.Fatalf("ordinary complete recovery failed to replace snapshot identities: %+v", after)
 	}
 }
+
+// The first PBS polls after a restart run before guests have loaded. Their empty
+// answer must not clear a guest a backup could belong to (#2681).
+func TestRecoveryIngestKeepsUnsettledGuestsUntilAPollCanEvaluateThem(t *testing.T) {
+	m, manager := recoveryIngestTestMonitor(t)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"Home",
+		recovery.OutcomeUnknown,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		now.Add(-time.Minute),
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation(): %v", err)
+	}
+	taskTime := now.Add(-time.Hour)
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+		observations: []recovery.ProtectionProviderObservation{observation},
+		points: []recovery.RecoveryPoint{{
+			ID: "pve-task:web1", Provider: recovery.ProviderProxmoxPVE, Kind: recovery.KindOther, Mode: recovery.ModeLocal,
+			Outcome: recovery.OutcomeSuccess, CompletedAt: &taskTime, SubjectResourceID: "resource:web1", ProviderScope: "Home",
+		}},
+	})
+	state := func() recovery.ProtectionState {
+		t.Helper()
+		postures, _, err := store.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{SubjectResourceIDs: []string{"resource:web1"}, Page: 1, Limit: 1})
+		if err != nil || len(postures) != 1 {
+			t.Fatalf("ListProtectionPostures() = %v, %v", postures, err)
+		}
+		return postures[0].State
+	}
+	pbs := func() *recoveryReconcileScope {
+		return &recoveryReconcileScope{provider: string(recovery.ProviderProxmoxPBS), idPrefix: "pbs-backup:", instance: "shared-pbs"}
+	}
+	if got := state(); got != recovery.ProtectionStateUnprotected {
+		t.Fatalf("no snapshot yet: state = %s, want unprotected", got)
+	}
+
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{reconcile: pbs(), evaluatedSubjects: []string{"resource:web1"}, unsettledSubjects: []string{"resource:web1"}})
+	if got := state(); got != recovery.ProtectionStateUnknown {
+		t.Fatalf("unsettled snapshot: state = %s, want unknown", got)
+	}
+
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{reconcile: pbs()})
+	if got := state(); got != recovery.ProtectionStateUnknown {
+		t.Fatalf("poll with no guests known: state = %s, want the last answer, unknown", got)
+	}
+
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{reconcile: pbs(), evaluatedSubjects: []string{"resource:other"}})
+	if got := state(); got != recovery.ProtectionStateUnknown {
+		t.Fatalf("poll before this guest loaded: state = %s, want the last answer, unknown", got)
+	}
+
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{reconcile: pbs(), evaluatedSubjects: []string{"resource:web1"}})
+	if got := state(); got != recovery.ProtectionStateUnprotected {
+		t.Fatalf("settled: state = %s, want unprotected", got)
+	}
+}
