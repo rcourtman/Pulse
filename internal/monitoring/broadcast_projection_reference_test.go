@@ -46,6 +46,14 @@ func convertResourcesForBroadcastReference(
 			input.CapabilitiesRef = id
 			input.Capabilities = nil
 		}
+		if encoded := broadcastActionRefusalsJSON(r.ActionReadiness); len(encoded) > 0 {
+			id := capabilityCatalogID(encoded)
+			if catalogs.actionReadiness == nil {
+				catalogs.actionReadiness = make(map[string]json.RawMessage)
+			}
+			catalogs.actionReadiness[id] = encoded
+			input.ActionReadinessRef = id
+		}
 		// Non-default policies and AI-safe summaries dedupe the same way:
 		// estates carry a handful of distinct postures and templated summary
 		// strings, so refs replace per-resource inline duplication.

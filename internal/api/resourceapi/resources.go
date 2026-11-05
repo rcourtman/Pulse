@@ -375,41 +375,7 @@ func (h *QueryService) HandleGetResource(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *QueryService) applyActionAvailability(ctx context.Context, resources []unified.Resource) {
-	checker := h.actionAvailability
-	if checker == nil {
-		return
-	}
-	for i := range resources {
-		if len(resources[i].Capabilities) == 0 {
-			continue
-		}
-		filtered := make([]unified.ResourceCapability, 0, len(resources[i].Capabilities))
-		readinesses := make([]unified.ResourceActionReadiness, 0, len(resources[i].Capabilities))
-		for _, capability := range resources[i].Capabilities {
-			req := unified.ActionRequest{
-				RequestID:      "resource-capability-availability",
-				ResourceID:     resources[i].ID,
-				CapabilityName: capability.Name,
-				Params:         map[string]any{},
-				Reason:         "Projecting currently executable resource capabilities.",
-				RequestedBy:    "system:resource-api",
-			}
-			readiness := checker.CheckActionAvailable(ctx, req, resources[i])
-			if readiness.Name != "" && !readiness.Available {
-				readinesses = append(readinesses, readiness)
-				continue
-			}
-			filtered = append(filtered, capability)
-		}
-		if len(filtered) == 0 {
-			resources[i].Capabilities = nil
-		} else {
-			resources[i].Capabilities = filtered
-		}
-		if len(readinesses) > 0 {
-			resources[i].ActionReadiness = readinesses
-		}
-	}
+	actionlifecycle.ProjectActionAvailability(ctx, h.actionAvailability, resources)
 }
 
 func presentationResourcesFromRegistry(registry *unified.ResourceRegistry) []unified.Resource {

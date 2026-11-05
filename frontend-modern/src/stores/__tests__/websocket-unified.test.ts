@@ -734,6 +734,90 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('expands action refusals from their catalog and drops them when the server stops refusing', async () => {
+    const { store, dispose } = await createStoreHarness();
+    const refusal = (reasonCode: string) => [
+      { name: 'stop', available: false, reasonCode, reason: `Refused: ${reasonCode}` },
+    ];
+    const container = () => store.state.resources.find((resource) => resource.id === 'container-1');
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          actionReadinessCatalog: { disconnected: refusal('command_agent_disconnected') },
+          resources: [
+            { id: 'container-1', type: 'app-container', name: 'web', status: 'running' },
+            {
+              id: 'container-2',
+              type: 'app-container',
+              name: 'db',
+              status: 'running',
+              actionReadinessRef: 'disconnected',
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+      expect(container()?.actionReadiness).toBeUndefined();
+      expect(
+        store.state.resources.find((resource) => resource.id === 'container-2')?.actionReadiness,
+      ).toEqual(refusal('command_agent_disconnected'));
+
+      // The refusal arrives in a delta; the catalog entry rides the same frame.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          actionReadinessCatalog: {
+            disconnected: refusal('command_agent_disconnected'),
+            noAgent: refusal('no_command_agent'),
+          },
+          resourceDelta: {
+            upserts: [{ id: 'container-1', actionReadinessRef: 'noAgent' }],
+            removed: [],
+            order: ['container-1', 'container-2'],
+          },
+        },
+      });
+      expect(container()?.actionReadiness).toEqual(refusal('no_command_agent'));
+
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: {
+            upserts: [{ id: 'container-1', actionReadinessRef: 'disconnected' }],
+            removed: [],
+            order: ['container-1', 'container-2'],
+          },
+        },
+      });
+      expect(container()?.actionReadiness).toEqual(refusal('command_agent_disconnected'));
+
+      // The agent came back: the patch nulls the ref and the list goes with it.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 400,
+          resourceDelta: {
+            upserts: [{ id: 'container-1', actionReadinessRef: null }],
+            removed: [],
+            order: ['container-1', 'container-2'],
+          },
+        },
+      });
+      expect(container()?.actionReadiness).toBeUndefined();
+      expect(container()?.actionReadinessRef).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
   it('serves unions from the bounded changed-id history so late consumers catch up incrementally', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

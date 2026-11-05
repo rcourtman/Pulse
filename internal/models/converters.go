@@ -1194,6 +1194,7 @@ type ResourceConvertInput struct {
 	AISafeSummary         string
 	Capabilities          json.RawMessage
 	CapabilitiesRef       string
+	ActionReadinessRef    string
 	PolicyRef             string
 	AISafeSummaryRef      string
 	Relationships         json.RawMessage
@@ -1273,6 +1274,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		AISafeSummary:         input.AISafeSummary,
 		Capabilities:          input.Capabilities,
 		CapabilitiesRef:       input.CapabilitiesRef,
+		ActionReadinessRef:    input.ActionReadinessRef,
 		PolicyRef:             input.PolicyRef,
 		AISafeSummaryRef:      input.AISafeSummaryRef,
 		Relationships:         input.Relationships,

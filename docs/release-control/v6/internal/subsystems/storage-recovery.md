@@ -9649,3 +9649,6 @@ payloads are unchanged.
 `internal/api/proxmox_guest_docker_routing.go` changes which agent runs the
 existing Docker socket probe and inventory commands. It reads and writes no backup,
 restore or storage data, and opens no new storage or recovery path.
+The action refusal pass on websocket rows in `internal/api/` reads command session
+state only. It reads and writes no backup, restore or storage data, and opens no new
+storage or recovery path.

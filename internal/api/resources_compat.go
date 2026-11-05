@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -22,6 +25,7 @@ type ResourceHandlers struct {
 	cfg                       *config.Config
 	tenantStateProvider       TenantStateProvider
 	actionExecutor            ActionExecutor
+	broadcastAvailability     atomic.Pointer[broadcastAvailabilityChecker]
 	actionCompleted           func(unified.ActionAuditRecord)
 	actionTransition          func(orgID string, record unified.ActionAuditRecord)
 	policyAdmission           *actionlifecycle.PolicyAdmissionCoordinator
@@ -79,6 +83,25 @@ func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor) {
 	h.actionExecutor = executor
 	checker, _ := executor.(actionlifecycle.AvailabilityChecker)
 	h.ensureQueryService().SetActionAvailabilityChecker(checker)
+	h.broadcastAvailability.Store(&broadcastAvailabilityChecker{checker: checker})
+}
+
+// broadcastAvailabilityChecker lets monitor goroutines, which can tick before
+// the router finishes wiring its executors, read the checker without a race.
+type broadcastAvailabilityChecker struct {
+	checker actionlifecycle.AvailabilityChecker
+}
+
+// AttachBroadcastActionRefusals records the server's action refusals on one
+// organization's broadcast rows, so a browser learns of a refusal, or of its
+// end, from the next websocket frame and not from its next REST read.
+func (h *ResourceHandlers) AttachBroadcastActionRefusals(orgID string, resources []unified.Resource) {
+	holder := h.broadcastAvailability.Load()
+	if holder == nil || holder.checker == nil {
+		return
+	}
+	ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, orgID)
+	actionlifecycle.AttachActionRefusals(ctx, holder.checker, resources)
 }
 
 func (h *ResourceHandlers) SetActionEmergencyStopChecker(checker func(orgID string) (bool, error)) {

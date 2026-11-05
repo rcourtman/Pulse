@@ -3722,6 +3722,12 @@ a new API state machine, queue contract, or verification-accounting field.
    refusal was judged against (for example the stale enrollment token id, or
    the agent-id / hostname session lookups that missed); `reason` stays the
    stable operator-safe copy and clients must not branch on `detail` text.
+   Websocket state carries the same refusals as `actionReadinessRef` into the
+   additive `actionReadinessCatalog`, without `detail` and with `capabilities`
+   left whole, and a row with no ref refuses nothing. Availability passes share
+   `actionlifecycle.ProjectActionAvailability` (REST) and
+   `AttachActionRefusals` (broadcast). A pass memoizes agent lookups through
+   `AvailabilityBatcher`; planning and dispatch always read live.
    Action approval decisions are API-owned as a separate non-execution
    contract: `POST /api/actions/{id}/decision` may only record an
    `approved` or `rejected` decision against a persisted `pending_approval`

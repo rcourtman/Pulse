@@ -1840,6 +1840,9 @@ func (r *Router) configureMonitorDependenciesLocked(m *monitoring.Monitor) {
 	}
 
 	r.installConnectionAlertLister(m)
+	if r.resourceHandlers != nil {
+		m.SetBroadcastActionAvailability(r.resourceHandlers.AttachBroadcastActionRefusals)
+	}
 
 	// Apply saved notification policy before the first publication, which can
 	// evaluate alerts. The combined boundary avoids one refresh per source.

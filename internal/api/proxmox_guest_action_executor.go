@@ -274,8 +274,12 @@ func (e proxmoxGuestActionExecutor) connectedProxmoxNodeActionRunnerID(ctx conte
 	if !ok {
 		return "", fmt.Errorf("typed Proxmox lifecycle execution is unavailable")
 	}
-	if agentID, connected := runners.GetActionRunnerForHostForOrganization(GetOrgID(ctx), resource.Proxmox.NodeName); connected && strings.TrimSpace(agentID) != "" {
-		return agentID, nil
+	runner := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupActionRunner, first: resource.Proxmox.NodeName}, func() agentLookupResult {
+		agentID, connected := runners.GetActionRunnerForHostForOrganization(GetOrgID(ctx), resource.Proxmox.NodeName)
+		return agentLookupResult{agentID: agentID, ok: connected}
+	})
+	if runner.ok && strings.TrimSpace(runner.agentID) != "" {
+		return runner.agentID, nil
 	}
 	return "", fmt.Errorf("a typed action runner is not connected on the Proxmox node")
 }
