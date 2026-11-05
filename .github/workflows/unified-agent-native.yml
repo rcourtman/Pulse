@@ -77,6 +77,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  installed-profile-systemd:
+    name: Signed installer and saved-CA profile recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # This is an ordinary current-source installer regression. The binaries
+      # have distinct versions and clean VCS bindings; the harness signs them
+      # with a disposable fixture key, never a project signing credential.
+      # Nothing is uploaded as a release or installed on an existing host.
+      - name: Build exact-source installed profile inputs
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --exit-code HEAD
+          inputs="$(mktemp -d "$RUNNER_TEMP/pulse-native-profile-inputs.XXXXXX")"
+          for version in 1 2; do
+            CGO_ENABLED=0 go build -trimpath -buildvcs=true \
+              -ldflags="-s -w -X main.Version=6.0.0-native-profile.${version}" \
+              -o "$inputs/collector-v${version}" ./cmd/pulse-agent
+          done
+          CGO_ENABLED=0 go build -trimpath -buildvcs=true -o "$inputs/helper" ./cmd/pulse-agent-helper
+          CGO_ENABLED=0 go build -trimpath -buildvcs=true -o "$inputs/runner" ./cmd/pulse-agent-runner
+          CGO_ENABLED=0 go test -c -o "$inputs/installtests.test" ./scripts/installtests
+          printf 'PULSE_NATIVE_PROFILE_INPUTS=%s\n' "$inputs" >> "$GITHUB_ENV"
+
+      - name: Exercise signed TLS installed profile forward and reverse
+        working-directory: scripts/installtests
+        timeout-minutes: 12
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
+            GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted GITHUB_REPOSITORY=rcourtman/Pulse \
+            EXPECTED_SOURCE_SHA="$EXPECTED_SOURCE_SHA" RUNNER_TEMP="$RUNNER_TEMP" \
+            PULSE_NATIVE_PROFILE_INPUTS="$PULSE_NATIVE_PROFILE_INPUTS" PULSE_NATIVE_INSTALLED_PROFILE=1 \
+            "$PULSE_NATIVE_PROFILE_INPUTS/installtests.test" \
+              -test.run '^TestAgentInstalledProfileSystemd$' -test.count=1 -test.timeout=11m -test.v
+
+      - name: Retain native installed profile observations
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-installed-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-installed-profile.json
+          if-no-files-found: warn
+          retention-days: 7
+
   native-agent:
     name: ${{ matrix.name }}
     strategy:
