@@ -6,6 +6,7 @@ import type { Resource } from '@/types/resource';
 import {
   dockerContainerLifecycleCapability,
   getDockerContainerLifecycleDisabledReason,
+  getDockerContainerLifecycleDisabledReasons,
   isDockerContainerLifecycleResource,
 } from '../dockerContainerLifecycleActions';
 
@@ -59,6 +60,21 @@ describe('dockerContainerLifecycleActions', () => {
     expect(getDockerContainerLifecycleDisabledReason(running, 'start')).toBe(
       'Container is already running.',
     );
+  });
+
+  it('lists each distinct disabled reason once, in action order', () => {
+    const refused = { available: false, reason: 'Docker / Podman command agent is not connected.' };
+
+    expect(
+      getDockerContainerLifecycleDisabledReasons(
+        resource({
+          actionReadiness: [
+            { name: 'stop', ...refused },
+            { name: 'restart', ...refused },
+          ],
+        }),
+      ),
+    ).toEqual(['Container is already running.', refused.reason]);
   });
 
   it('only identifies Docker and Podman app containers as lifecycle resources', () => {

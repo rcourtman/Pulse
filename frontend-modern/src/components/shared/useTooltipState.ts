@@ -38,6 +38,7 @@ interface TooltipInstance {
 }
 
 let tooltipInstance: TooltipInstance | null = null;
+let endPressedTooltip: (() => void) | null = null;
 
 function useTooltipLayoutState(options: TooltipLayoutStateOptions): {
   maxWidth: Accessor<number>;
@@ -215,12 +216,41 @@ export function createTooltipSystemState() {
 
 export function showTooltip(content: string, x: number, y: number, options?: TooltipOptions) {
   if (!supportsHoverTooltips()) {
-    tooltipInstance?.hide();
+    if (!endPressedTooltip) tooltipInstance?.hide();
     return;
   }
+  endPressedTooltip?.();
   tooltipInstance?.show(content, x, y, options);
 }
 
+/**
+ * For a press that asks why, such as a tap on a locked control. Hover UI stays
+ * off on touch screens, but this was asked for, so it shows on every device.
+ * A touch screen has no real mouse-leave to end it, and the synthesized one
+ * arrives as soon as the tooltip mounts, so there the next press or scroll does.
+ */
+export function showPressedTooltip(content: string, target: Element) {
+  endPressedTooltip?.();
+  const rect = target.getBoundingClientRect();
+  tooltipInstance?.show(content, rect.left + rect.width / 2, rect.top, {
+    align: 'center',
+    direction: 'up',
+  });
+  const dismiss = () => {
+    endPressedTooltip?.();
+    tooltipInstance?.hide();
+  };
+  document.addEventListener('pointerdown', dismiss, true);
+  window.addEventListener('scroll', dismiss, true);
+  endPressedTooltip = () => {
+    document.removeEventListener('pointerdown', dismiss, true);
+    window.removeEventListener('scroll', dismiss, true);
+    endPressedTooltip = null;
+  };
+}
+
 export function hideTooltip() {
+  if (endPressedTooltip && !supportsHoverTooltips()) return;
+  endPressedTooltip?.();
   tooltipInstance?.hide();
 }

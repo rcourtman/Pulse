@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "1846618c6aeb2ce5d18551ee6424863d1c4c85c8",
+  "verified_at": "2026-11-04T23:00:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+    "frontend-modern/src/components/shared/Tooltip.tsx",
+    "frontend-modern/src/components/shared/useTooltipState.ts",
+    "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx",
+    "frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "08a4b76720488e6ba10167652b858822acb8b09b78c402781d43f2326af3cc79",
+    "frontend-modern/src/components/shared/Tooltip.tsx": "c907c91f6fd867c3b9120d84a31bb211f3d3f6985117ffbac8c95f09cdf8fbf8",
+    "frontend-modern/src/components/shared/useTooltipState.ts": "9151902fa61a1f8c6a1c8bb3aa0d4e68f2178f9496555a27217162011a45d0a3",
+    "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx": "c71945abf741c2b001c751ea6ca5abcab36340fc228d15b1a2165474b3dc3cc2",
+    "frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts": "aeebd51669a33e2779e919bd58b7ab7ce909c70f26878a534a8cff7189475ee5"
+  },
+  "routes": [
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1800,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 740,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack: Vite from this change against a mock backend, driven by headless Chromium with real touch emulation",
+    "Phone 390: no row menu, so the container drawer is the only route to the actions; rows stay 32px and the page has no horizontal overflow",
+    "Tablet 740 and 768: row menu lists Start, Stop and Restart disabled with each distinct reason once below them, in dark and light themes; rows stay 33px",
+    "Row near the bottom of the screen: the taller menu opens upward, stays on screen and leaves its row and trigger visible",
+    "Wide layout 1800 on touch and with a mouse: inline icons stay in the row, rows stay 37px as before",
+    "Update column: the locked Update badge explains itself on a tap at 390, 740 and 768",
+    "No page errors in any context"
+  ],
+  "interactions": [
+    "Tapped greyed Restart, Start and Stop in the drawer at 390: each shows its own reason, inside the viewport, and no review dialog opens",
+    "Watched the Restart reason for 6 seconds on the live page: it stays up",
+    "Tapped elsewhere and scrolled: the reason ends, and the drawer stays open",
+    "Tapped the locked Update badge in a row and read the explanation; the drawer stays open",
+    "Tapped the row menu at 740 and 768, read the reasons, then tapped outside to close it",
+    "Tapped an available Stop with a stand-in connected agent at 740: it still plans the action",
+    "At 1800 with a mouse, clicked a greyed icon to see the reason, and moving the mouse away ends it"
+  ]
+}

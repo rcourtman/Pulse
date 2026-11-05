@@ -11448,3 +11448,12 @@ and button label from `SELF_HOSTED_PRO_BILLING_PRESENTATION`
 of the billing shell copy. `ProLicensePanel.tsx` renders it with the shared
 `ButtonLink` outline action, which supplies `noopener noreferrer` for the new
 tab; no local link styling or copy is drafted in the panel.
+
+### A tooltip the user pressed for also works on touch screens
+
+`showTooltip` stays hover-only. A tap that asks why a control is locked calls
+`showPressedTooltip` in `frontend-modern/src/components/shared/useTooltipState.ts`,
+which shows on every device. On a touch screen it ignores hover calls, including
+the mouse-leave the browser synthesizes once the tooltip mounts, and ends on the
+next press or scroll. `ContainerUpdateBadge.tsx` uses it for a locked or settled
+update. A disabled control's reason must not rest on `title` or hover alone.

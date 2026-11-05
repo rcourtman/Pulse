@@ -3,7 +3,7 @@ import { Portal } from 'solid-js/web';
 import { createTooltipSystemState, useTooltipState } from './useTooltipState';
 import type { TooltipOptions } from './tooltipModel';
 
-export { hideTooltip, showTooltip } from './useTooltipState';
+export { hideTooltip, showPressedTooltip, showTooltip } from './useTooltipState';
 export type { TooltipOptions } from './tooltipModel';
 
 interface TooltipProps extends TooltipOptions {

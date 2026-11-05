@@ -4823,7 +4823,9 @@ Docker / Podman container lifecycle controls in
 they may enable start/stop/restart only from backend-advertised resource
 capabilities and must use `sourceStatus`, `docker.agentId`, `docker.runtime`,
 `docker.security`, and backend-owned `actionReadiness` only for disabled-state
-explanation, never as a feature-local execution bypass. The same controls may render in
+explanation, never as a feature-local execution bypass. That explanation stays
+readable without hover: the row menu lists each distinct reason, and an
+unavailable icon stays pressable (`aria-disabled`) so a tap shows its reason. The same controls may render in
 `DockerContainersTable.tsx` and the canonical `ResourceDetailDrawer.tsx` header
 only for Docker-source app containers backed by Docker or Podman runtime
 metadata; other app-container sources such as TrueNAS must not inherit Docker
