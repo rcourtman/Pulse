@@ -47,10 +47,10 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                     fieldBaseClass="contents"
                     value={role}
                     onChange={(event) => {
-                      void props.state.updateRole(
-                        member,
-                        event.currentTarget.value as OrganizationRole,
-                      );
+                      const nextRole = event.currentTarget.value as OrganizationRole;
+                      // This selector reports saved access, not an unconfirmed choice.
+                      event.currentTarget.value = role;
+                      void props.state.updateRole(member, nextRole);
                     }}
                     disabled={
                       props.state.saving() ||
@@ -62,10 +62,21 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                       each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter(
                         (option) =>
                           option.value !== 'owner' ||
+                          role === 'owner' ||
                           props.currentUser === currentOrg().ownerUserId,
                       )}
                     >
-                      {(option) => <option value={option.value}>{option.label}</option>}
+                      {(option) => (
+                        <option
+                          value={option.value}
+                          disabled={
+                            option.value === 'owner' &&
+                            props.currentUser !== currentOrg().ownerUserId
+                          }
+                        >
+                          {option.label}
+                        </option>
+                      )}
                     </For>
                   </FormSelect>
                 </Show>

@@ -15,6 +15,38 @@
 
 ## Purpose
 
+### Ownership changes require current, deliberate confirmation
+
+Both existing ownership paths (the member-role selector and Invite Member form)
+open the same confirmation before sending any change. It names the organization
+and ID, accepted existing member and current owner, and explains that the old
+owner becomes an Admin. Cancel, Escape and backdrop dismissal send nothing;
+the row selector continues to display its saved role while review is pending.
+No additional role choices, membership or server authority are granted.
+
+The confirmation is bound to one exact intent, read generation, organization,
+principal and accepted member. Refresh, organization/principal/presentation or
+entitlement withdrawal and disposal discard it; stale callbacks cannot confirm
+or cancel a newer intent. The form path also rechecks its original draft. A
+confirmed transfer uses the existing session/CSRF/expected-organization transport
+with cancellation and no automatic retries. Only a member result naming the
+confirmed target with the Owner role is accepted as a confirmed write. A failed,
+unreadable, malformed or mismatched response requires the
+existing explicit saved-access read, never a repeated write. The accepted saved
+Owner remains visible in the disabled selector to non-owner administrators;
+Owner is not offered for other members or new invitations from those readers.
+An already-entered Owner invitation draft remains visible but disabled, labelled
+**Owner (current owner only)**, after a saved-access read establishes ownership
+was transferred. Submitting that stale draft is disabled, not silently changed
+to a lesser role or replayed.
+
+`OrganizationAccessPanel.test.tsx` and the real-client
+`OrganizationOwnershipTransfer.client.test.tsx` cover both entry paths,
+confirmation, truthful saved-role readback, context withdrawal and uncertain
+committed writes. Comparable desktop/narrow browser fixtures exercise the actual
+panel, API and client. These establish frontend safeguards, not original-account,
+installed service or server-authorization acceptance.
+
 ### Audit events and signature checks withdraw with the reader
 
 The existing Settings Audit Log passes its current principal, explicit audit

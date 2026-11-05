@@ -186,6 +186,40 @@ describe('OrganizationAccessPanel', () => {
     expect(screen.queryByLabelText('Loading organization access')).not.toBeInTheDocument();
   });
 
+  it('reviews an ownership change without displaying it as saved, and can cancel', async () => {
+    renderPanel();
+    const role = await screen.findByRole('combobox', { name: 'Role for user-2' });
+    fireEvent.change(role, { target: { value: 'owner' } });
+    expect(
+      screen.getByRole('dialog', { name: 'Transfer organization ownership' }),
+    ).toHaveTextContent('user-2');
+    expect(role).toHaveValue('viewer');
+    expectNoWrites();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(role).toHaveValue('viewer');
+    expectNoWrites();
+  });
+
+  it('displays the saved Owner to a non-owner admin without offering another ownership grant', async () => {
+    orgGetMock.mockResolvedValue({
+      ...baseOrg,
+      members: baseMembers.map((member) => ({
+        ...member,
+        role: member.userId === 'user-2' ? 'admin' : 'owner',
+      })),
+    });
+    render(() => <OrganizationAccessPanel currentUser="user-2" />);
+    const ownerRole = await screen.findByRole('combobox', { name: 'Role for user-1' });
+    expect(ownerRole).toHaveValue('owner');
+    expect(ownerRole).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Role for user-2' })).not.toHaveTextContent(
+      'Owner',
+    );
+    expect(screen.getByRole('combobox', { name: 'Invite role' })).not.toHaveTextContent('Owner');
+    expectNoWrites();
+  });
+
   it.each(['role', 'remove'] as const)(
     'admits the real datagrid proxy for a current %s change',
     async (operation) => {
