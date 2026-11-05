@@ -852,7 +852,9 @@ class ApiClient {
     try {
       return JSON.parse(text) as T;
     } catch (_err) {
-      logger.error('Failed to parse JSON response', text);
+      // Successful responses can contain private configuration or tokens.
+      // Neither the body nor a parser error (which can quote it) is diagnostic-safe.
+      logger.error('Failed to parse JSON response');
       throw new Error('Invalid JSON response from server');
     }
   }
