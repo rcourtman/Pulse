@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Alert history replay preserves its storage boundary (5 November 2026)
+
+The alert owner's independent recovery journal retains unsettled lifecycle and
+diagnostic facts when `events.db` rejects writes, with original event times
+and transaction-bound replay cursors. It shares the filesystem and does not
+claim to survive its destruction or a device that violates sync semantics.
+Unknown or unjournalled gaps remain explicit across reopen. Scoped history
+acknowledgement accepts missing facts rather than declaring data recovered;
+it never mutates backup, restore or workload state. Source driver-fault and
+process-kill tests are separate from physical power-cut and installed recovery
+qualification. Partial active checkpoints cannot erase the complete
+SQLite projection when event retention has removed old firing rows. A separate
+full-checkpoint declaration preserves that authority across replay and legacy
+migration; partial schema-2 markers are not accepted as complete by schema-1
+readers. An unreadable baseline remains unavailable. Once readable, a first
+partial baseline recovers by unioning positive projection and fallback facts,
+folded at their own cursors; one activation alone cannot attest completeness.
+
 ### A namespace named after a connection settles a shared node name (4 November 2026)
 
 `NamespaceLocationScore` ranks exact node, exact connection, node suffix, then

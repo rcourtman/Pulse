@@ -679,6 +679,7 @@ func (h *AlertHandlers) GetAlertEvents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to query alert events", http.StatusInternalServerError)
 		return
 	}
+	writeHistoryCompleteness(w, manager)
 	if events == nil {
 		events = []eventlog.Event{}
 	}
@@ -1651,6 +1652,16 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.GetAlertEvents(w, r)
+	case path == "history/durability" && r.Method == http.MethodGet:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetHistoryDurability(w, r)
+	case path == "history/durability/acknowledgement" && r.Method == http.MethodPost:
+		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.AcknowledgeHistoryGaps(w, r)
 	case path == "history" && r.Method == http.MethodGet:
 		if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 			return

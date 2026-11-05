@@ -21,6 +21,20 @@
 
 ## Purpose
 
+### Alert history completeness has a scoped disposition (5 November 2026)
+
+`internal/api/alerting/history_durability.go` exposes the tenant's canonical
+journal completeness through monitoring-read `GET /api/alerts/history/durability`.
+It reports pending events, persistent exact/unknown gaps and the acknowledgement
+revision separately from history rows, while hiding filesystem error paths.
+Monitoring-write `POST /api/alerts/history/durability/acknowledgement` requires
+an exact inspected revision and a bounded reason. Stale revisions, current I/O
+errors and pending obligations refuse disposition. This accepts missing facts;
+it never reconstructs events or deletes retained unsettled facts. Both routes
+resolve the current tenant without default fallback and retain the existing
+API scope rules. Transport, tenant and scope regressions live alongside the
+handlers; no provider-delivery or filesystem-recovery claim is introduced.
+
 ### Requested metric history retains its admitted reader
 
 The existing `/api/metrics-store/history` chart read and canonical agent

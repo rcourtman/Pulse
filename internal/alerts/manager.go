@@ -32,15 +32,18 @@ import (
 //
 // This ordering prevents deadlock scenarios where different goroutines acquire locks in different orders.
 type Manager struct {
-	mu               sync.RWMutex
-	saveMu           sync.Mutex
-	recoveryMirrorMu sync.Mutex
-	activeRecoveryMu sync.RWMutex
-	callbacks        callbackBus
-	alertsDir        string
-	config           AlertConfig
-	activeAlerts     map[string]*Alert
-	activeAlertAlias map[string]string
+	// Protected by recoveryMirrorMu. A failed bootstrap must not claim that an
+	// older live restore has incorporated a newer journal admission prefix.
+	activeRecoveryJournalFloor *eventlog.JournalBoundary
+	mu                         sync.RWMutex
+	saveMu                     sync.Mutex
+	recoveryMirrorMu           sync.Mutex
+	activeRecoveryMu           sync.RWMutex
+	callbacks                  callbackBus
+	alertsDir                  string
+	config                     AlertConfig
+	activeAlerts               map[string]*Alert
+	activeAlertAlias           map[string]string
 	// activeRecoveryState is a lock-independent projection of activeAlerts.
 	// Lifecycle emission can run while m.mu is held, so durable-store failure
 	// recovery must never reacquire m.mu to produce the JSON recovery mirror.

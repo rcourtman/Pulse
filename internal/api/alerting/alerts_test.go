@@ -1513,3 +1513,21 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		assert.Equal(t, 500, w.Code)
 	})
 }
+
+func TestAlertHistoryDurabilityRoutesRefuseUnavailableAuthority(t *testing.T) {
+	// Managers without the durable-history capability must not manufacture a
+	// healthy empty account or acknowledge missing facts.
+	monitor := new(MockAlertMonitor)
+	monitor.On("GetAlertManager").Return(new(MockAlertManager))
+	h := NewAlertHandlers(nil, monitor, nil)
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/alerts/history/durability"},
+		{http.MethodPost, "/api/alerts/history/durability/acknowledgement"},
+	} {
+		rec := httptest.NewRecorder()
+		h.HandleAlerts(rec, httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{"revision":1,"reason":"accepted"}`)))
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("unavailable history authority admitted: %s %d", tc.path, rec.Code)
+		}
+	}
+}

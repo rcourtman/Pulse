@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"strconv"
 	"strings"
 
@@ -176,6 +177,7 @@ func (m *Manager) migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, 
 	}
 
 	oldTrackingKey := canonicalTrackingKeyOrFallback(matchedAlert, matchedStorageKey)
+	previous := matchedAlert.Clone()
 	delete(m.activeAlerts, matchedStorageKey)
 	m.unregisterActiveAlertAliasNoLock(matchedStorageKey, matchedAlert)
 	m.removeActiveRecoveryAlert(matchedAlert, matchedStorageKey)
@@ -193,9 +195,11 @@ func (m *Manager) migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, 
 	applyCanonicalIdentity(matchedAlert, specID, kind)
 
 	if !m.setActiveAlertNoLock(storageKey, matchedAlert) {
+		m.recordAlertEvent(eventlog.TypeActiveRetired, previous, previous.ID, "identity-move-suppressed", "Previous active identity retired by suppressed guest migration.", nil)
 		return nil
 	}
 	m.moveAlertTrackingStateNoLock(oldTrackingKey, storageKey, matchedAlert)
+	m.recordAlertEvent(eventlog.TypeActiveMoved, matchedAlert, storageKey, "guest-node-migration", "Active alert identity moved with its guest; occurrence preserved.", map[string]string{"previousAlertId": effectiveAlertID(previous, matchedStorageKey)})
 
 	if matchCount > 1 {
 		log.Warn().
