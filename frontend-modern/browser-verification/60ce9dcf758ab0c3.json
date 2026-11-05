@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "e1ee62e5a84164fb71a69d338e0f09c712c89440",
+  "verified_at": "2026-11-05T15:44:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "9175d6726b3cdb899aa731fc84fa072d328c5a246cc1282e6fde702dea9ce06b"
+  },
+  "routes": [
+    "/proxmox/backups",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock stack built from this change, with /api/backups/jobs altered in the browser so a day six days back holds two failed guests",
+    "Chosen bar outline computes to rgb(59, 130, 246) at 2px under the pointer at 1440 and after a tap at 390",
+    "Older failed day: hover and the chosen line name both guests at 1440 and 390",
+    "View restore points no longer leaves a separator at the end of the wrapped line",
+    "No page errors"
+  ],
+  "interactions": [
+    "Hovered and clicked the older failed day at 1440, then scrolled back to the card",
+    "Tapped the older failed day at 390: stayed on the card with the names and link in view"
+  ]
+}

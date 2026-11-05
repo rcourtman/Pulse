@@ -222,12 +222,12 @@ export const ProxmoxBackupJobsCard: Component<{
                 >
                   <button
                     type="button"
-                    class={`flex h-full w-full cursor-pointer flex-col-reverse rounded-xs hover:outline-1 hover:outline-border focus-visible:outline-2 focus-visible:outline-blue-500 ${
+                    class={`flex h-full w-full cursor-pointer flex-col-reverse rounded-xs focus-visible:outline-2 focus-visible:outline-blue-500 ${
                       chosen()
                         ? 'outline-2 outline-offset-1 outline-blue-500'
-                        : chosenDay()
-                          ? 'opacity-40 hover:opacity-100'
-                          : ''
+                        : `hover:outline-1 hover:outline-border ${
+                            chosenDay() ? 'opacity-40 hover:opacity-100' : ''
+                          }`
                     }`}
                     aria-pressed={chosen()}
                     onClick={() =>
@@ -292,11 +292,10 @@ export const ProxmoxBackupJobsCard: Component<{
                   >
                     and {chosenFailedNames().length - shownFailedNames().length} more
                   </button>
-                </Show>
-                {' · '}
+                </Show>{' '}
                 <button
                   type="button"
-                  class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                  class="ml-1 whitespace-nowrap font-medium text-blue-600 hover:underline dark:text-blue-300"
                   onClick={() => props.onRevealRestorePoints?.()}
                 >
                   View restore points

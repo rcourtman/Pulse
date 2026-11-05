@@ -622,7 +622,7 @@ Each bar in `ProxmoxBackupJobsCard` is a native button with `aria-pressed`, insi
 the same list item that carries its observed state. Hover and focus show the day
 through `TooltipPortal`, anchored on the bar's top rather than the column's, and a
 hover outlines the column instead of filling it, so an empty day never looks like a
-tall bar. `TooltipPortal` is hover-only, so the chosen day also says who failed in a
+tall bar, and it skips the chosen bar so its blue outline holds under the pointer. `TooltipPortal` is hover-only, so the chosen day also says who failed in a
 line under the bars, where a tap can see it, opening past eight names on request. `ProxmoxBackupsTable` now takes
 `summaryAside` as a function, so the table keeps owning the `day` filter and the
 card only reports a choice. Backup jobs is still the page's one daily bar chart.
