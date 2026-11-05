@@ -92,17 +92,26 @@ func apiTokenOwnerUserIDForRequest(cfg *config.Config, req *http.Request) string
 }
 
 func toAPITokenDTO(record config.APITokenRecord) apiTokenDTO {
-	return apiTokenDTO{
+	dto := apiTokenDTO{
 		ID:          record.ID,
 		Name:        record.Name,
 		Prefix:      record.Prefix,
 		Suffix:      record.Suffix,
 		CreatedAt:   record.CreatedAt,
-		LastUsedAt:  record.LastUsedAt,
-		ExpiresAt:   record.ExpiresAt,
 		Scopes:      append([]string{}, record.Scopes...),
 		OwnerUserID: apiTokenOwnerUserID(record),
 	}
+	// Read handlers release config.Mu before encoding or writing a response.
+	// Keep their snapshots independent of in-place live timestamp edits too.
+	if record.LastUsedAt != nil {
+		used := *record.LastUsedAt
+		dto.LastUsedAt = &used
+	}
+	if record.ExpiresAt != nil {
+		expires := *record.ExpiresAt
+		dto.ExpiresAt = &expires
+	}
+	return dto
 }
 
 func normalizeRequestedScopes(raw *[]string) ([]string, error) {
@@ -303,7 +312,6 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 	}
 
 	config.Mu.RLock()
-	defer config.Mu.RUnlock()
 
 	callerToken := getAPITokenRecordFromRequest(req)
 	tokens := make([]apiTokenDTO, 0, len(r.config.APITokens))
@@ -313,7 +321,9 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 		}
 		tokens = append(tokens, toAPITokenDTO(record))
 	}
+	config.Mu.RUnlock()
 
+	// A slow reader must not block authentication or configuration writers.
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"tokens": tokens,
@@ -334,22 +344,28 @@ func (r *Router) handleGetAPIToken(w http.ResponseWriter, req *http.Request) {
 	}
 
 	config.Mu.RLock()
-	defer config.Mu.RUnlock()
 
 	callerToken := getAPITokenRecordFromRequest(req)
+	var token *apiTokenDTO
 	for idx := range r.config.APITokens {
 		record := r.config.APITokens[idx]
 		if record.ID != tokenID || !callerTokenMayManage(callerToken, &r.config.APITokens[idx]) {
 			continue
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"record": toAPITokenDTO(record),
-		})
+		dto := toAPITokenDTO(record)
+		token = &dto
+		break
+	}
+	config.Mu.RUnlock()
+
+	if token == nil {
+		http.Error(w, "Token not found", http.StatusNotFound)
 		return
 	}
-
-	http.Error(w, "Token not found", http.StatusNotFound)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"record": token,
+	})
 }
 
 type createTokenRequest struct {
