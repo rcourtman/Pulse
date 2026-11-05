@@ -97,7 +97,19 @@ func TestPVEBackupLifecycleSingleFlight(t *testing.T) {
 				require.Equal(t, int32(1), got, "cadence must not stack scans")
 				completed := m.lastPVEBackupPoll["site-a"]
 				require.Equal(t, time.Now(), completed, "cadence starts at accepted completion")
-				time.Sleep(interval + time.Second)
+				cadence := interval
+				if cadence == 0 {
+					cycles := m.config.BackupPollingCycles
+					if cycles <= 0 {
+						cycles = 10
+					}
+					cadence = time.Duration(cycles) * m.effectivePVEPollingInterval()
+				}
+				time.Sleep(cadence - time.Second)
+				scheduleBackupLifecycle(m, c)
+				synctest.Wait()
+				require.Equal(t, int32(1), tasks.Load(), "cycles count from the accepted completion")
+				time.Sleep(2 * time.Second)
 				scheduleBackupLifecycle(m, c)
 				synctest.Wait()
 				require.Equal(t, int32(2), tasks.Load(), "ordinary next eligible cycle recovers")
