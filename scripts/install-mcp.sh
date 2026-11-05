@@ -49,6 +49,16 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || err "missing required command: $1"
 }
 
+# Use the same verified HTTPS transport for the binary and both trust files.
+# A stalled peer must fail before publication, not hang an adapter replacement
+# indefinitely. Keep transient retries, but bound both each transfer and the
+# retry window. Ignore curlrc so it cannot disable TLS or these limits.
+download_asset() {
+    curl --disable -fsSL --connect-timeout 5 --max-time 60 \
+        --retry 3 --retry-max-time 120 \
+        --proto '=https' --proto-redir '=https' "$1" -o "$2"
+}
+
 cleanup() {
     local path
     for path in "${tmp}" "${checksums_tmp}" "${signature_tmp}" "${allowed_signers}"; do
@@ -158,7 +168,7 @@ main() {
     tmp="$(mktemp -t pulse-mcp.XXXXXX)"
     trap cleanup EXIT
 
-    if ! curl -fsSL --retry 3 "${url}" -o "${tmp}"; then
+    if ! download_asset "${url}" "${tmp}"; then
         err "download failed: ${url}
 If a release exists for this version, the binary may not yet be published for ${platform}.
 Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mcp@latest"
@@ -182,10 +192,10 @@ Build from source: go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-mc
     signature_tmp="$(mktemp -t pulse-mcp-signature.XXXXXX)"
     allowed_signers="$(mktemp -t pulse-mcp-signers.XXXXXX)"
 
-    if ! curl -fsSL --retry 3 "${checksums_url}" -o "${checksums_tmp}"; then
+    if ! download_asset "${checksums_url}" "${checksums_tmp}"; then
         err "could not fetch checksums.txt; refusing unverified install"
     fi
-    if ! curl -fsSL --retry 3 "${signature_url}" -o "${signature_tmp}"; then
+    if ! download_asset "${signature_url}" "${signature_tmp}"; then
         err "could not fetch checksums.txt.sshsig; refusing unverified install"
     fi
 
