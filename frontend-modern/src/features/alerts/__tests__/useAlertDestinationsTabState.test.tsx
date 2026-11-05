@@ -132,7 +132,7 @@ describe('useAlertDestinationsTabState', () => {
           vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
           vi.mocked(NotificationsAPI.getDeliveryLog).mockResolvedValue({ entries: [] } as never);
           vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
-            queue: { status: 'degraded', attentionRequired: 2 },
+            queue: { status: 'degraded', attentionRequired: 2, failed: 1, deadLetter: 1 },
           } as never);
           const mountTab = () => {
             const [appriseConfig, setAppriseConfig] = createSignal(buildAppriseConfig());

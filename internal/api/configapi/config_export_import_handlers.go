@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rs/zerolog/log"
 )
 
@@ -191,6 +192,10 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 	// not turn a partial live apply into a successful import acknowledgement.
 	// Only fixed component names may reach the response or audit detail.
 	var reloadFailures []string
+	// Apply the normal non-notification reloads even while delivery is held.
+	// Otherwise a later edit can save stale live state over the imported archive.
+	// A full owner reconstruction may already have cleared the original hold.
+	var notificationHoldErr error
 	if monitor := h.getMonitor(r.Context()); monitor != nil {
 		// Reload alert configuration.
 		if alertConfig, err := h.getPersistence(r.Context()).LoadAlertConfig(); err == nil {
@@ -207,48 +212,60 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		}
 
 		notificationMgr := monitor.GetNotificationManager()
-		// Reload webhook configuration.
-		if webhooks, err := h.getPersistence(r.Context()).LoadWebhooks(); err == nil {
-			if notificationMgr == nil {
-				reloadFailures = append(reloadFailures, "webhook settings")
-				log.Warn().Msg("Skipped webhook reload after import because notification manager is unavailable")
+		if notificationMgr != nil && notificationMgr.ConfigurationError() != nil {
+			notificationHoldErr = notificationMgr.ConfigurationError()
+		} else {
+			// Reload webhook configuration.
+			if webhooks, err := h.getPersistence(r.Context()).LoadWebhooks(); err == nil {
+				if notificationMgr == nil {
+					reloadFailures = append(reloadFailures, "webhook settings")
+					log.Warn().Msg("Skipped webhook reload after import because notification manager is unavailable")
+				} else {
+					if err := notificationMgr.ReplaceWebhooks(webhooks); err != nil {
+						reloadFailures = append(reloadFailures, "webhook settings")
+						log.Warn().Err(err).Msg("Failed to publish restored webhook inventory")
+					} else {
+						log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
+					}
+
+				}
 			} else {
-				// Clear existing webhooks and add new ones.
-				webhooksApplied := true
-				for _, webhook := range notificationMgr.GetWebhooks() {
-					if err := notificationMgr.DeleteWebhook(webhook.ID); err != nil {
-						webhooksApplied = false
-						log.Warn().Err(err).Str("webhook", webhook.ID).Msg("Failed to delete existing webhook during reload")
+				reloadFailures = append(reloadFailures, "webhook settings")
+				log.Warn().Err(err).Msg("Failed to reload webhook configuration after import")
+			}
+
+			// Reload email configuration.
+			if emailConfig, err := h.getPersistence(r.Context()).LoadEmailConfig(); err == nil {
+				if notificationMgr == nil {
+					reloadFailures = append(reloadFailures, "email settings")
+					log.Warn().Msg("Skipped email reload after import because notification manager is unavailable")
+				} else {
+					if err := notificationMgr.SetEmailConfig(*emailConfig); err != nil {
+						reloadFailures = append(reloadFailures, "email settings")
+						log.Warn().Err(err).Msg("Failed to publish email configuration after import")
+					} else {
+						log.Info().Msg("Reloaded email configuration after import")
 					}
 				}
-				// Add imported webhooks.
-				for _, webhook := range webhooks {
-					notificationMgr.AddWebhook(webhook)
-				}
-				if webhooksApplied {
-					log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
-				} else {
-					reloadFailures = append(reloadFailures, "webhook settings")
-				}
+			} else {
+				reloadFailures = append(reloadFailures, "email settings")
+				log.Warn().Err(err).Msg("Failed to reload email configuration after import")
 			}
-		} else {
-			reloadFailures = append(reloadFailures, "webhook settings")
-			log.Warn().Err(err).Msg("Failed to reload webhook configuration after import")
+			// Apprise is part of the same persisted import, so its live recipient
+			// generation must be restored before acknowledging the reload.
+			if appriseConfig, err := h.getPersistence(r.Context()).LoadAppriseConfig(); err == nil {
+				if notificationMgr == nil {
+					reloadFailures = append(reloadFailures, "Apprise settings")
+				} else if err := notificationMgr.SetAppriseConfig(*appriseConfig); err != nil {
+					reloadFailures = append(reloadFailures, "Apprise settings")
+					log.Warn().Err(err).Msg("Failed to publish Apprise configuration after import")
+				}
+			} else {
+				reloadFailures = append(reloadFailures, "Apprise settings")
+				log.Warn().Err(err).Msg("Failed to reload Apprise configuration after import")
+			}
 		}
 
-		// Reload email configuration.
-		if emailConfig, err := h.getPersistence(r.Context()).LoadEmailConfig(); err == nil {
-			if notificationMgr == nil {
-				reloadFailures = append(reloadFailures, "email settings")
-				log.Warn().Msg("Skipped email reload after import because notification manager is unavailable")
-			} else {
-				notificationMgr.SetEmailConfig(*emailConfig)
-				log.Info().Msg("Reloaded email configuration after import")
-			}
-		} else {
-			reloadFailures = append(reloadFailures, "email settings")
-			log.Warn().Err(err).Msg("Failed to reload email configuration after import")
-		}
 	}
 
 	// Reload guest metadata from disk.
@@ -259,6 +276,19 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		} else {
 			log.Info().Msg("Reloaded guest metadata after import")
 		}
+	}
+
+	if notificationHoldErr != nil {
+		deps.AuditEvent(orgID, "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false, "Import saved; restart required to reconstruct notification authority")
+		message := "Configuration saved. Restart Pulse to apply the restored notification settings. Do not repeat the import."
+		if notifications.ConfigurationHoldReason(notificationHoldErr) == notifications.NotificationReasonStorageBootstrapUnavailable {
+			message = "Configuration saved. Repair notification storage, then restart Pulse to apply the restored notification settings. Do not repeat the import."
+		}
+		if len(reloadFailures) != 0 {
+			message += " Live reload also failed for: " + strings.Join(reloadFailures, ", ") + "."
+		}
+		http.Error(w, message, http.StatusInternalServerError)
+		return
 	}
 
 	if len(reloadFailures) != 0 {

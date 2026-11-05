@@ -167,6 +167,9 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	if err := json.Unmarshal(decrypted, &exportData); err != nil {
 		return fmt.Errorf("failed to unmarshal import data: %w", err)
 	}
+	if err := notifications.ValidateWebhookInventory(exportData.Webhooks); err != nil {
+		return fmt.Errorf("invalid imported webhook inventory: %w", err)
+	}
 
 	// Check version compatibility (warn but don't fail)
 	switch exportData.Version {

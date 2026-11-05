@@ -36,6 +36,26 @@ func TestImportConfigRejectsIncompleteArchiveWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestImportConfigRejectsAmbiguousWebhookIDsBeforeMutation(t *testing.T) {
+	for _, duplicate := range []string{"ops", " ops "} {
+		t.Run(duplicate, func(t *testing.T) {
+			cp := seedImportValidationState(t)
+			before := importValidationFiles(t, cp.GetConfigDir())
+			data := map[string]any{"version": "4.4", "nodes": map[string]any{}, "alerts": map[string]any{}, "email": map[string]any{}, "system": map[string]any{}, "webhooks": []notifications.WebhookConfig{{ID: "ops", URL: "https://first.invalid"}, {ID: duplicate, URL: "https://second.invalid"}}}
+			encoded, err := json.Marshal(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cp.ImportConfig(encryptImportValidationData(t, encoded), "synthetic-import-validation-passphrase"); err == nil {
+				t.Fatal("duplicate webhook identity was durably imported")
+			}
+			if !reflect.DeepEqual(before, importValidationFiles(t, cp.GetConfigDir())) {
+				t.Fatal("rejected inventory changed the persisted restart input")
+			}
+		})
+	}
+}
+
 func incompleteImportValidationData(t *testing.T, name string) []byte {
 	t.Helper()
 	switch name {

@@ -111,6 +111,8 @@ export const ALERT_WEBHOOK_URL_HELP_QUERY = '{{urlquery ...}}';
 export const ALERT_WEBHOOK_MENTION_HELP_LABEL = 'Optional — tag users or groups';
 export const ALERT_WEBHOOK_MENTION_FALLBACK_PLACEHOLDER = '@everyone';
 export const ALERT_WEBHOOK_PAYLOAD_HELP_LABEL = 'Optional — leave empty to use default';
+export const ALERT_WEBHOOK_RECEIVER_CHANGE_HELP =
+  'Changing the URL, headers, custom fields, HTTP method, service or payload template starts a new destination for active incidents. It receives recovery messages only for alerts delivered after the change.';
 export const ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER = `{
   "event": "{{.Event}}",
   "message_key": "{{.MessageKey}}",

@@ -33,6 +33,8 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
     props.unavailable || props.health?.status === 'unavailable' ? 'unavailable' : 'degraded';
   const failed = () => props.health?.failed ?? 0;
   const deadLetter = () => props.health?.deadLetter ?? 0;
+  const knownTerminalFailures = () =>
+    (!props.unavailable || props.health?.status === 'unavailable') && failed() + deadLetter() > 0;
   const completedRetentionDays = () => props.health?.completedRetentionDays ?? 7;
   const deadLetterRetentionDays = () => props.health?.deadLetterRetentionDays ?? 30;
   const description = () => {
@@ -44,6 +46,16 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
       deadLetterRetentionDays: deadLetterRetentionDays(),
       failureClasses7d: props.health?.failureClasses7d,
       failureClassesAvailable: props.health?.failureClassesAvailable ?? false,
+      storageUnsettled: props.health?.reasonCodes?.includes('notification_storage_unsettled'),
+      configurationUnavailable: props.health?.reasonCodes?.includes(
+        'notification_configuration_unavailable',
+      ),
+      storageBootstrapUnavailable: props.health?.reasonCodes?.includes(
+        'notification_storage_bootstrap_unavailable',
+      ),
+      occurrenceUnavailable: props.health?.reasonCodes?.includes(
+        'occurrence_lifecycle_unavailable',
+      ),
     };
     return props.detailLevel === 'summary'
       ? getAlertDestinationsDeliveryHealthSummary(input)
@@ -71,7 +83,7 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
               {getAlertDestinationsDeliveryReviewLabel()}
             </ButtonLink>
           ) : null}
-          {props.onRetryFailures ? (
+          {props.onRetryFailures && knownTerminalFailures() ? (
             <Button
               variant="secondary"
               size="sm"
@@ -82,7 +94,7 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
               {getAlertDestinationsDeliveryRetryLabel()}
             </Button>
           ) : null}
-          {props.onDismissFailures ? (
+          {props.onDismissFailures && knownTerminalFailures() ? (
             <Button
               variant="danger"
               size="sm"

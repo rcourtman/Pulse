@@ -110,7 +110,8 @@ export function useNotificationDeliveryHealth(options?: {
 
   const retryTerminalFailures = async () => {
     if (!isCurrentReader()) return;
-    const count = deliveryHealth()?.queue.attentionRequired ?? 0;
+    const queue = deliveryHealth()?.queue;
+    const count = (queue?.failed ?? 0) + (queue?.deadLetter ?? 0);
     if (count <= 0 || !confirm(getAlertDestinationsDeliveryRetryConfirmation(count))) {
       return;
     }
@@ -137,7 +138,8 @@ export function useNotificationDeliveryHealth(options?: {
 
   const dismissTerminalFailures = async () => {
     if (!isCurrentReader()) return;
-    const count = deliveryHealth()?.queue.attentionRequired ?? 0;
+    const queue = deliveryHealth()?.queue;
+    const count = (queue?.failed ?? 0) + (queue?.deadLetter ?? 0);
     if (count <= 0 || !confirm(getAlertDestinationsDeliveryDismissConfirmation(count))) {
       return;
     }

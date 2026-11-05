@@ -1,0 +1,43 @@
+{
+  "inputs": {
+    "id": " ops ",
+    "name": "",
+    "url": " https://hooks.example.test/notify ",
+    "method": "",
+    "headers": null,
+    "enabled": true,
+    "service": "generic",
+    "template": ""
+  },
+  "queue": {
+    "alerts": "[{\"id\":\"main-golden\",\"type\":\"\",\"level\":\"critical\",\"resourceId\":\"\",\"resourceName\":\"\",\"node\":\"\",\"instance\":\"\",\"message\":\"\",\"value\":0,\"threshold\":0,\"startTime\":\"2026-11-05T11:00:00.000000123Z\",\"lastSeen\":\"0001-01-01T00:00:00Z\",\"acknowledged\":false}]",
+    "config": "{\"id\":\"ops\",\"name\":\"\",\"url\":\"https://hooks.example.test/notify\",\"method\":\"\",\"headers\":{\"X-Account\":\"ops\"},\"enabled\":true,\"service\":\"generic\",\"template\":\"\",\"minimumSeverity\":\"all\"}",
+    "created_at": 1793880000,
+    "id": "main-golden-row",
+    "method": "",
+    "status": "pending",
+    "type": "webhook"
+  },
+  "queue_schema": "CREATE TABLE notification_queue (\n\t\tid TEXT PRIMARY KEY,\n\t\ttype TEXT NOT NULL,\n\t\tmethod TEXT,\n\t\t\tstatus TEXT NOT NULL,\n\t\t\talerts TEXT NOT NULL,\n\t\t\toperational_links TEXT NOT NULL DEFAULT '[]',\n\t\t\tconfig TEXT NOT NULL,\n\t\tattempts INTEGER NOT NULL DEFAULT 0,\n\t\tmax_attempts INTEGER NOT NULL DEFAULT 3,\n\t\tlast_attempt INTEGER,\n\t\tlast_error TEXT,\n\t\tcreated_at INTEGER NOT NULL,\n\t\tnext_retry_at INTEGER,\n\t\tcompleted_at INTEGER,\n\t\tpayload_bytes INTEGER\n\t)",
+  "receipt": {
+    "alert_id": "main-golden",
+    "alert_start_nanos": 1793876400000000123,
+    "delivered_at": 1793880000,
+    "delivered_nanos": 1793880000000000456,
+    "destination_key": "webhook:2ce734b77b65620d03d81b7bfe881c6a",
+    "highest_severity": 0,
+    "resolved_at": 0
+  },
+  "receipt_schema": "CREATE TABLE notification_delivery_receipts (\n\t\talert_id TEXT NOT NULL,\n\t\talert_start_nanos INTEGER NOT NULL,\n\t\tdestination_key TEXT NOT NULL,\n\t\tdelivered_at INTEGER NOT NULL, highest_severity INTEGER NOT NULL DEFAULT 0, delivered_nanos INTEGER NOT NULL DEFAULT 0, resolved_at INTEGER NOT NULL DEFAULT 0,\n\t\tPRIMARY KEY (alert_id, alert_start_nanos, destination_key)\n\t)",
+  "resolution_input": "2026-11-05T14:00:00.000001245Z",
+  "resolved_receipt": {
+    "alert_id": "main-golden-resolved",
+    "alert_start_nanos": 1793880000000000123,
+    "delivered_at": 1793883600,
+    "delivered_nanos": 1793883600000000456,
+    "destination_key": "webhook:2ce734b77b65620d03d81b7bfe881c6a",
+    "highest_severity": 0,
+    "resolved_at": 1793887200
+  },
+  "source": "cf9354876e0482a8edc8386557e17e06a99c3aec"
+}

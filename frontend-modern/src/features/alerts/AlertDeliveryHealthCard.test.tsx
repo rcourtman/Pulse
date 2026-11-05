@@ -105,6 +105,38 @@ describe('AlertDeliveryHealthCard', () => {
     expect(screen.getByRole('button', { name: 'Refresh delivery status' })).toBeDisabled();
   });
 
+  it.each([0, 3])('keeps storage settlement separate from %s known terminal failures', (failed) => {
+    render(() => (
+      <AlertDeliveryHealthCard
+        health={{
+          ...degradedHealth,
+          status: 'unavailable',
+          failed,
+          deadLetter: 0,
+          reasonCodes: ['notification_storage_unsettled'],
+        }}
+        unavailable
+        refreshing={false}
+        onRefresh={vi.fn()}
+        onRetryFailures={vi.fn()}
+        onDismissFailures={vi.fn()}
+      />
+    ));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'waiting to save notification delivery records',
+    );
+    expect(screen.getByRole('alert')).not.toHaveTextContent(
+      'send a test before relying on delivery',
+    );
+    if (failed > 0) {
+      expect(screen.getByRole('button', { name: 'Retry retained deliveries' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Dismiss retained failures' })).toBeEnabled();
+    } else {
+      expect(screen.queryByRole('button', { name: 'Retry retained deliveries' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Dismiss retained failures' })).toBeNull();
+    }
+  });
+
   it('allows unavailable summary health to be rechecked without a queue mutation', () => {
     const onRefresh = vi.fn();
     render(() => (
@@ -133,6 +165,8 @@ describe('AlertDeliveryHealthCard', () => {
         unavailable={unavailable()}
         refreshing={false}
         onRefresh={vi.fn()}
+        onRetryFailures={vi.fn()}
+        onDismissFailures={vi.fn()}
       />
     ));
 
@@ -143,9 +177,18 @@ describe('AlertDeliveryHealthCard', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('send a test before relying on delivery');
     expect(screen.getByRole('alert')).not.toHaveTextContent('classified as authentication (2)');
+    expect(
+      screen.queryByRole('button', { name: 'Retry retained deliveries' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Dismiss retained failures' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh delivery status' })).toBeEnabled();
     setUnavailable(false);
     expect(screen.getByRole('alert')).toHaveTextContent('Notification delivery needs attention');
     expect(screen.getByRole('alert')).toHaveTextContent('classified as authentication (2)');
+    expect(screen.getByRole('button', { name: 'Retry retained deliveries' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Dismiss retained failures' })).toBeEnabled();
     expect(screen.getByRole('alert')).not.toHaveTextContent(
       'Notification delivery status is unavailable',
     );

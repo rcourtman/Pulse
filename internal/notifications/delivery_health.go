@@ -20,9 +20,12 @@ const (
 )
 
 const (
-	reasonRetainedFailedDeliveries     = "retained_failed_deliveries"
-	reasonRetainedDeadLetterDeliveries = "retained_dead_letter_deliveries"
-	reasonQueueStatsUnavailable        = "queue_stats_unavailable"
+	NotificationReasonConfigurationUnavailable    = "notification_configuration_unavailable"
+	NotificationReasonStorageBootstrapUnavailable = "notification_storage_bootstrap_unavailable"
+	NotificationReasonOccurrenceUnavailable       = "occurrence_lifecycle_unavailable"
+	reasonRetainedFailedDeliveries                = "retained_failed_deliveries"
+	reasonRetainedDeadLetterDeliveries            = "retained_dead_letter_deliveries"
+	reasonQueueStatsUnavailable                   = "queue_stats_unavailable"
 )
 
 // DeliveryHealth is a content-free view of delivery outcomes. It carries no
@@ -37,12 +40,14 @@ type DeliveryHealth struct {
 }
 
 // ClassifyQueueHealth turns raw queue counts into the delivery verdict.
-// Recoverable retry attempts deliberately do not count: only outcomes that
-// have reached a terminal failed or dead-letter state mean something was not
-// delivered.
+// Recoverable provider retries deliberately do not count as delivery failure.
+// An unsettled local storage obligation instead makes authority unavailable
+// until settlement succeeds, without inventing a provider rejection.
 func ClassifyQueueHealth(stats map[string]int) DeliveryHealth {
 	failed := stats[string(QueueStatusFailed)]
 	deadLetter := stats[string(QueueStatusDLQ)]
+	unsettled := stats["settlement_pending"]
+	occurrencePending := stats["occurrence_pending"]
 
 	reasonCodes := make([]string, 0, 2)
 	if failed > 0 {
@@ -51,8 +56,14 @@ func ClassifyQueueHealth(stats map[string]int) DeliveryHealth {
 	if deadLetter > 0 {
 		reasonCodes = append(reasonCodes, reasonRetainedDeadLetterDeliveries)
 	}
+	if unsettled > 0 {
+		reasonCodes = append(reasonCodes, "notification_storage_unsettled")
+	}
 
-	attentionRequired := failed + deadLetter
+	if occurrencePending > 0 {
+		reasonCodes = append(reasonCodes, NotificationReasonOccurrenceUnavailable)
+	}
+	attentionRequired := failed + deadLetter + unsettled + occurrencePending
 	health := DeliveryHealth{
 		Healthy:           attentionRequired == 0,
 		AttentionRequired: attentionRequired,
@@ -60,7 +71,9 @@ func ClassifyQueueHealth(stats map[string]int) DeliveryHealth {
 		Failed:            failed,
 		DeadLetter:        deadLetter,
 	}
-	if health.Healthy {
+	if unsettled > 0 || occurrencePending > 0 {
+		health.Status = DeliveryUnavailable
+	} else if health.Healthy {
 		health.Status = DeliveryHealthy
 	} else {
 		health.Status = DeliveryDegraded
@@ -83,6 +96,11 @@ func UnavailableDeliveryHealth() DeliveryHealth {
 func (n *NotificationManager) DeliveryHealth() DeliveryHealth {
 	if n == nil {
 		return UnavailableDeliveryHealth()
+	}
+	if n.ConfigurationError() != nil {
+		health := UnavailableDeliveryHealth()
+		health.ReasonCodes = []string{ConfigurationHoldReason(n.ConfigurationError())}
+		return health
 	}
 	stats, err := n.GetQueueStats()
 	if err != nil || stats == nil {

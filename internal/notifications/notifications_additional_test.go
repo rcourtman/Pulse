@@ -650,7 +650,7 @@ func TestSendResolvedNotificationsDirectDispatchesEnabledTargets(t *testing.T) {
 		},
 	}
 
-	manager.sendResolvedNotificationsDirect(
+	sendFixtureResolvedNotificationsDirect(manager,
 		EmailConfig{
 			Enabled:  true,
 			From:     "new@example.com",
@@ -694,7 +694,7 @@ func TestSendResolvedNotificationsDirectNoopForEmptyAlerts(t *testing.T) {
 	manager := NewNotificationManager("")
 	defer manager.Stop()
 
-	manager.sendResolvedNotificationsDirect(
+	sendFixtureResolvedNotificationsDirect(manager,
 		EmailConfig{Enabled: true},
 		[]WebhookConfig{{Enabled: true}},
 		AppriseConfig{Enabled: true},

@@ -25,6 +25,44 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func TestNotificationHealthPendingStorageRemainsUnavailable(t *testing.T) {
+	monitor := new(MockNotificationMonitor)
+	manager := new(MockNotificationManager)
+	persistence := new(MockNotificationConfigPersistence)
+	monitor.On("GetNotificationManager").Return(manager)
+	monitor.On("GetConfigPersistence").Return(persistence)
+	manager.On("GetQueueStats").Return(map[string]int{"pending": 1, "settlement_pending": 1}, nil).Once()
+	manager.On("GetTelemetryStats", mock.Anything).Return(notifications.TelemetryStats{}, nil).Once()
+	manager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
+	manager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+	persistence.On("IsEncryptionEnabled").Return(true).Once()
+	w := httptest.NewRecorder()
+	NewNotificationHandlers(nil, monitor).GetNotificationHealth(w, httptest.NewRequest(http.MethodGet, "/api/notifications/health", nil))
+	var payload struct {
+		OverallHealthy bool `json:"overall_healthy"`
+		Queue          struct {
+			Status    string   `json:"status"`
+			Healthy   bool     `json:"healthy"`
+			Pending   int      `json:"settlement_pending"`
+			Attention int      `json:"attention_required"`
+			Failed    int      `json:"failed"`
+			DLQ       int      `json:"dlq"`
+			Reasons   []string `json:"reason_codes"`
+		} `json:"queue"`
+	}
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &payload))
+	assert.False(t, payload.OverallHealthy)
+	assert.False(t, payload.Queue.Healthy)
+	assert.Equal(t, "unavailable", payload.Queue.Status)
+	assert.Equal(t, 1, payload.Queue.Pending)
+	assert.Equal(t, 1, payload.Queue.Attention)
+	assert.Zero(t, payload.Queue.Failed)
+	assert.Zero(t, payload.Queue.DLQ)
+	assert.Equal(t, []string{"notification_storage_unsettled"}, payload.Queue.Reasons)
+	manager.AssertExpectations(t)
+}
+
 // Configuration responses intentionally let an authorised editor round-trip
 // targets; routine logs must not duplicate their credentials or config keys.
 func TestAppriseConfigurationLogsWithholdSecrets(t *testing.T) {
@@ -254,15 +292,22 @@ func (m *MockNotificationMonitor) GetConfigPersistence() NotificationConfigPersi
 
 type MockNotificationManager struct {
 	mock.Mock
+	configurationError error
 }
+
+func (m *MockNotificationManager) ConfigurationError() error { return m.configurationError }
 
 func (m *MockNotificationManager) GetEmailConfig() notifications.EmailConfig {
 	args := m.Called()
 	return args.Get(0).(notifications.EmailConfig)
 }
 
-func (m *MockNotificationManager) SetEmailConfig(cfg notifications.EmailConfig) {
-	m.Called(cfg)
+func (m *MockNotificationManager) SetEmailConfig(cfg notifications.EmailConfig) error {
+	args := m.Called(cfg)
+	if len(args) > 0 {
+		return args.Error(0)
+	}
+	return nil
 }
 
 func (m *MockNotificationManager) GetAppriseConfig() notifications.AppriseConfig {
@@ -270,8 +315,12 @@ func (m *MockNotificationManager) GetAppriseConfig() notifications.AppriseConfig
 	return args.Get(0).(notifications.AppriseConfig)
 }
 
-func (m *MockNotificationManager) SetAppriseConfig(cfg notifications.AppriseConfig) {
-	m.Called(cfg)
+func (m *MockNotificationManager) SetAppriseConfig(cfg notifications.AppriseConfig) error {
+	args := m.Called(cfg)
+	if len(args) > 0 {
+		return args.Error(0)
+	}
+	return nil
 }
 
 func (m *MockNotificationManager) GetWebhooks() []notifications.WebhookConfig {
@@ -1168,6 +1217,18 @@ func TestNotificationConfigPersistenceFailureDoesNotPublishRuntimeState(t *testi
 		persistence.AssertExpectations(t)
 	})
 
+	t.Run("webhook create duplicate identity", func(t *testing.T) {
+		h, manager, persistence := newHandlers()
+		manager.On("ValidateWebhookURL", "https://example.com/new").Return(nil).Once()
+		manager.On("GetWebhooks").Return([]notifications.WebhookConfig{{ID: "existing"}}).Once()
+		req := httptest.NewRequest(http.MethodPost, "/api/notifications/webhooks", strings.NewReader(`{"id":"existing","url":"https://example.com/new"}`))
+		rec := httptest.NewRecorder()
+		h.CreateWebhook(rec, req)
+		assert.Equal(t, http.StatusConflict, rec.Code)
+		manager.AssertNotCalled(t, "AddWebhook", mock.Anything)
+		persistence.AssertNotCalled(t, "SaveWebhooks", mock.Anything)
+	})
+
 	t.Run("webhook update", func(t *testing.T) {
 		h, manager, persistence := newHandlers()
 		existing := notifications.WebhookConfig{ID: "wh1", Name: "old", URL: "https://example.com/hook"}
@@ -1526,6 +1587,49 @@ type webhookEditMonitor struct {
 	persistence *config.ConfigPersistence
 }
 
+func TestNotificationIncompleteInventoryFencesReadsAndWrites(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	old := []notifications.WebhookConfig{{ID: "saved", URL: "https://example.test/original", Enabled: true}}
+	assert.NoError(t, persistence.SaveWebhooks(old))
+	expected, loadErr := persistence.LoadWebhooks()
+	assert.NoError(t, loadErr)
+	manager := notifications.NewNotificationManagerWithDeferredQueue("", t.TempDir())
+	t.Cleanup(manager.Stop)
+	manager.HoldIncompleteConfiguration(errors.New("synthetic unavailable inventory"))
+	h := NewNotificationHandlers(nil, &webhookEditMonitor{manager: manager, persistence: persistence})
+	for _, tc := range []struct {
+		name, method, path, body string
+		handler                  http.HandlerFunc
+	}{
+		{"email read", "GET", "/api/notifications/email", "", h.GetEmailConfig},
+		{"email write", "PUT", "/api/notifications/email", `{}`, h.UpdateEmailConfig},
+		{"Apprise read", "GET", "/api/notifications/apprise", "", h.GetAppriseConfig},
+		{"Apprise write", "PUT", "/api/notifications/apprise", `{}`, h.UpdateAppriseConfig},
+		{"webhook read", "GET", "/api/notifications/webhooks", "", h.GetWebhooks},
+		{"webhook create", "POST", "/api/notifications/webhooks", `{"url":"https://example.test/new"}`, h.CreateWebhook},
+		{"webhook edit", "PUT", "/api/notifications/webhooks/saved", `{"url":"https://example.test/new"}`, h.UpdateWebhook},
+		{"webhook remove", "DELETE", "/api/notifications/webhooks/saved", "", h.DeleteWebhook},
+		{"provider test", "POST", "/api/notifications/test", `{"method":"email"}`, h.TestNotification},
+		{"webhook test", "POST", "/api/notifications/test-webhook", `{"url":"https://example.test/new"}`, h.TestWebhook},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			tc.handler(w, httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body)))
+			assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+			assert.NotContains(t, w.Body.String(), "synthetic")
+		})
+	}
+	stored, err := persistence.LoadWebhooks()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, stored, "partial live inventory overwrote saved destinations")
+	w := httptest.NewRecorder()
+	h.GetNotificationHealth(w, httptest.NewRequest(http.MethodGet, "/api/notifications/health", nil))
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"status":"unavailable"`)
+	assert.NotContains(t, w.Body.String(), `"total"`)
+	assert.Contains(t, w.Body.String(), notifications.NotificationReasonConfigurationUnavailable)
+}
+
 func (m *webhookEditMonitor) GetNotificationManager() NotificationManager { return m.manager }
 func (m *webhookEditMonitor) GetConfigPersistence() NotificationConfigPersistence {
 	return m.persistence
@@ -1593,7 +1697,11 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 					}
 					m.AddWebhook(loaded[0])
 					m.SetNotifyOnResolve(true)
-					m.SetGroupingConfig(true, 1, true, false)
+					window := 1
+					if mode == "disable-pending-group" {
+						window = 600
+					}
+					m.SetGroupingConfig(true, window, true, false)
 					t.Cleanup(m.Stop)
 					return m
 				}
@@ -1659,15 +1767,28 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 				for _, a := range batch {
 					m.SendAlert(a)
 				}
-				wantFiring := 1
 				if mode == "disable-pending-group" {
 					m.SetGroupingConfig(false, 600, true, false)
-					wantFiring = 2
 				}
-				wait(func() bool { stats, err := m.GetQueueStats(); return err == nil && stats["pending"] == wantFiring })
-				pending, err := m.GetQueue().GetPending(10)
-				if err != nil || len(pending) != wantFiring {
-					t.Fatal("ordinary grouping/disable policy produced the wrong number of jobs")
+				var pending []*notifications.QueuedNotification
+				wait(func() bool {
+					rows, err := m.GetQueue().GetPending(10)
+					if err != nil {
+						return false
+					}
+					members := 0
+					for _, row := range rows {
+						members += len(row.Alerts)
+					}
+					if members != len(batch) {
+						return false
+					}
+					pending = rows
+					return true
+				})
+				wantFiring := len(pending)
+				if wantFiring < 1 || wantFiring > len(batch) || (mode == "disable-pending-group" && wantFiring != 2) {
+					t.Fatalf("wrong complete firing row set: %+v", pending)
 				}
 				for _, row := range pending {
 					var queued notifications.WebhookConfig
@@ -1689,8 +1810,20 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 				for _, a := range batch {
 					m.SendResolvedAlert(&alerts.ResolvedAlert{Alert: a, ResolvedTime: time.Now()})
 				}
+				// These are sequential callback admissions, not an atomic batch.
+				// If a real one-second window expires between them, two recovery
+				// rows are valid. Bind assertions to the retained row set before
+				// activation rather than a transient sent/audit count of two.
+				recoveryStats, err := m.GetQueueStats()
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantRecovery := recoveryStats["pending"]
+				if wantRecovery < 1 || wantRecovery > len(batch) {
+					t.Fatalf("wrong admitted recovery rows: %v", recoveryStats)
+				}
 				m.StartQueueProcessing()
-				wantTotal := wantFiring * 2
+				wantTotal := wantFiring + wantRecovery
 				wait(func() bool { stats, err := m.GetQueueStats(); return err == nil && stats["sent"] == wantTotal })
 				wait(func() bool {
 					entries, err := m.GetDeliveryLog(time.Now().Add(-time.Hour), 20)
@@ -1700,9 +1833,27 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				memberships := map[string]map[string]int{"webhook": {}, "webhook_resolved": {}}
 				for _, e := range entries {
-					if !e.Success || e.Outcome != notifications.DeliveryOutcomeSent || e.Attempts != 1 || e.AlertCount != 3-wantFiring {
-						t.Fatal("delivery audit lost exact attempt or group membership")
+					if !e.Success || e.Outcome != notifications.DeliveryOutcomeSent || e.Attempts != 1 || e.AlertCount != len(e.AlertIDs) {
+						t.Fatalf("delivery audit lost exact attempt or group membership: %+v", e)
+					}
+					ids, ok := memberships[e.Type]
+					if !ok {
+						t.Fatalf("unexpected delivery event: %+v", e)
+					}
+					for _, id := range e.AlertIDs {
+						ids[id]++
+					}
+				}
+				for phase, ids := range memberships {
+					if len(ids) != len(batch) {
+						t.Fatalf("%s lost grouped occurrences: %v", phase, ids)
+					}
+					for _, a := range batch {
+						if ids[a.ID] != 1 {
+							t.Fatalf("%s lost or duplicated %s: %v", phase, a.ID, ids)
+						}
 					}
 				}
 				m.Stop()
@@ -1712,9 +1863,9 @@ func TestWebhookMaskedEditPersistsAndDelivers(t *testing.T) {
 				if len(got) != wantTotal {
 					t.Fatalf("received %d payloads, want %d", len(got), wantTotal)
 				}
-				for phase := 0; phase < 2; phase++ {
+				for phase, phaseRows := range [][]delivery{got[:wantFiring], got[wantFiring : wantFiring+wantRecovery]} {
 					combined := ""
-					for _, d := range got[phase*wantFiring : (phase+1)*wantFiring] {
+					for _, d := range phaseRows {
 						if d.header.Get("Authorization") != "synthetic-auth" || d.header.Get("X-Route") != "new" || d.header.Get("X-Remove") != "" {
 							t.Fatal("delivery lost an explicit edit or masked credential")
 						}
@@ -2064,4 +2215,51 @@ func TestWebhookSavedFormTestMatchesEncryptedEdit(t *testing.T) {
 	}
 	// The existing ordinary-delivery integration separately covers restart,
 	// grouped/un-grouped firing and resolution using the saved destination.
+}
+
+func TestDestinationPublicationFailureRestoresDurableConfiguration(t *testing.T) {
+	t.Run("email", func(t *testing.T) {
+		old := notifications.EmailConfig{Enabled: true, SMTPHost: "smtp.local", SMTPPort: 587, From: "pulse@example.test", To: []string{"old@example.test"}, RateLimit: 60}
+		next := old
+		next.To = []string{"new@example.test"}
+		persistence := config.NewConfigPersistence(t.TempDir())
+		assert.NoError(t, persistence.SaveEmailConfig(old))
+		manager := new(MockNotificationManager)
+		manager.On("GetEmailConfig").Return(old).Once()
+		manager.On("SetEmailConfig", mock.Anything).Return(errors.New("synthetic destination retirement failure")).Once()
+		monitor := new(MockNotificationMonitor)
+		monitor.On("GetNotificationManager").Return(manager)
+		monitor.On("GetConfigPersistence").Return(persistence)
+		body, _ := json.Marshal(next)
+		w := httptest.NewRecorder()
+		NewNotificationHandlers(nil, monitor).UpdateEmailConfig(w, httptest.NewRequest(http.MethodPost, "/api/notifications/email", bytes.NewReader(body)))
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		stored, err := persistence.LoadEmailConfig()
+		assert.NoError(t, err)
+		assert.Equal(t, old, *stored)
+		assert.NotContains(t, w.Body.String(), "synthetic")
+		manager.AssertExpectations(t)
+	})
+	t.Run("apprise", func(t *testing.T) {
+		old := notifications.NormalizeAppriseConfig(notifications.AppriseConfig{Enabled: true, Mode: notifications.AppriseModeHTTP, ServerURL: "http://127.0.0.1:9", Targets: []string{"old"}, APIKey: "synthetic-key"})
+		next := old
+		next.Targets = []string{"new"}
+		persistence := config.NewConfigPersistence(t.TempDir())
+		assert.NoError(t, persistence.SaveAppriseConfig(old))
+		manager := new(MockNotificationManager)
+		manager.On("GetAppriseConfig").Return(old).Once()
+		manager.On("SetAppriseConfig", mock.Anything).Return(errors.New("synthetic destination retirement failure")).Once()
+		monitor := new(MockNotificationMonitor)
+		monitor.On("GetNotificationManager").Return(manager)
+		monitor.On("GetConfigPersistence").Return(persistence)
+		body, _ := json.Marshal(next)
+		w := httptest.NewRecorder()
+		NewNotificationHandlers(nil, monitor).UpdateAppriseConfig(w, httptest.NewRequest(http.MethodPost, "/api/notifications/apprise", bytes.NewReader(body)))
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		stored, err := persistence.LoadAppriseConfig()
+		assert.NoError(t, err)
+		assert.Equal(t, old, *stored)
+		assert.NotContains(t, w.Body.String(), "synthetic")
+		manager.AssertExpectations(t)
+	})
 }

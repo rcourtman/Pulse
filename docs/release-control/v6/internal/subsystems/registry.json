@@ -2896,6 +2896,7 @@
         "internal/agentidentity/identity.go",
         "internal/agentidentity/version-pattern.txt",
         "internal/api/configapi/setup_script_render.go",
+        "internal/config/export.go",
         "internal/config/persistence_metadata_accessors.go",
         "internal/config/report_schedules.go",
         "internal/websocket/hub.go",
@@ -3828,6 +3829,19 @@
             "test_prefixes": [],
             "exact_files": [
               "pkg/aicontracts/contracts_test.go"
+            ]
+          },
+          {
+            "id": "configuration-import-publication",
+            "label": "configuration archive validation before durable publication proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/config/export.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/config/export_import_validation_test.go"
             ]
           }
         ],

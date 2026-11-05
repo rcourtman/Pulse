@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,8 +14,32 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 )
+
+// Bootstrap controls model a currently active alerts-owned occurrence, so seed
+// its durable owner inventory alongside queued work. Fresh unstamped firings
+// from independent producers remain admissible without such an owner record.
+func seedNotificationBootstrapActive(t *testing.T, dir string, active ...*alerts.Alert) {
+	t.Helper()
+	// Mock mode intentionally skips persisted real alerts. Restoration controls
+	// must opt into the real owner instead of inheriting another test's mode.
+	previousMock := mock.IsMockEnabled()
+	mustSetMockEnabled(t, false)
+	t.Cleanup(func() { mustSetMockEnabled(t, previousMock) })
+	raw, err := json.Marshal(active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "alerts")
+	if err := os.MkdirAll(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "active-alerts.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // A due persisted row must receive current saved quiet-hours policy BEFORE the
 // autonomous queue is activated, on initial construction and reconstruction.
@@ -47,6 +70,9 @@ func TestNewRevalidatesPersistedQuietHoursBeforeDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	started := time.Now().Add(-time.Hour)
+	active := []*alerts.Alert{{ID: "saved-quiet-first", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: started}, {ID: "saved-quiet-second", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: started}}
+	seedNotificationBootstrapActive(t, dir, active...)
 	for startup := 0; startup < 2; startup++ {
 		seed, err := notifications.NewNotificationQueue(dir)
 		if err != nil {
@@ -58,7 +84,7 @@ func TestNewRevalidatesPersistedQuietHoursBeforeDelivery(t *testing.T) {
 			id = "saved-quiet-second"
 		}
 		if err := seed.Enqueue(&notifications.QueuedNotification{ID: id, Type: "webhook", Config: configJSON,
-			Alerts:      []*alerts.Alert{{ID: id, Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: due}},
+			Alerts:      []*alerts.Alert{active[startup]},
 			NextRetryAt: &due}); err != nil {
 			t.Fatal(err)
 		}
@@ -292,7 +318,9 @@ func TestNewRestoresSharedWebhookPolicyBeforeQueueActivation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := seed.Enqueue(&notifications.QueuedNotification{ID: "accepted-before-restart", Type: "webhook", Config: configJSON, Alerts: []*alerts.Alert{{ID: "accepted-policy", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)}}}); err != nil {
+			occurrence := &alerts.Alert{ID: "accepted-policy", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)}
+			seedNotificationBootstrapActive(t, dir, occurrence)
+			if err := seed.Enqueue(&notifications.QueuedNotification{ID: "accepted-before-restart", Type: "webhook", Config: configJSON, Alerts: []*alerts.Alert{occurrence}}); err != nil {
 				t.Fatal(err)
 			}
 			if err := seed.Stop(); err != nil {
@@ -352,7 +380,7 @@ func TestNewRestoresSharedWebhookPolicyBeforeQueueActivation(t *testing.T) {
 	}
 }
 
-func TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation(t *testing.T) {
+func TestNewHoldsUnreadableNotificationPolicyWithoutStoppingMonitoring(t *testing.T) {
 	for _, bad := range []string{"invalid-json", "invalid-cidr"} {
 		t.Run(bad, func(t *testing.T) {
 			dir := t.TempDir()
@@ -370,15 +398,31 @@ func TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation(t *testing.T)
 				}
 			}
 			m, err := New(&config.Config{DataPath: dir})
-			if m != nil {
-				m.Stop()
-				t.Fatal("monitor admitted runtime before notification policy was readable")
+			if err != nil || m == nil {
+				t.Fatalf("notification policy failure stopped monitoring: %v", err)
 			}
-			if err == nil || !strings.Contains(err.Error(), "notification") {
-				t.Fatalf("missing notification policy error: %v", err)
+			defer m.Stop()
+			n := m.GetNotificationManager()
+			if n.ConfigurationError() == nil || n.DeliveryHealth().Status != notifications.DeliveryUnavailable {
+				t.Fatal("unreadable policy did not hold delivery")
 			}
-			if _, err := os.Stat(filepath.Join(dir, "notification_queue.db")); !os.IsNotExist(err) {
-				t.Fatalf("policy failure created queue storage: %v", err)
+			if err := n.StartQueueProcessing(); err == nil {
+				t.Fatal("held policy activated queue")
+			}
+			m.alertManager.UpdateConfig(alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive, TimeThresholds: map[string]int{"storage": 0}, StorageDefault: alerts.HysteresisThreshold{Trigger: 80, Clear: 70}})
+			continuityObserveProofStorage(m, 95)
+			detected := false
+			for _, a := range m.alertManager.GetActiveAlerts() {
+				if a.Type == "usage" {
+					detected = true
+				}
+			}
+			if !detected {
+				t.Fatal("unreadable notification policy disabled detection")
+			}
+			stats, err := n.GetQueue().GetQueueStats()
+			if err != nil || stats["pending"]+stats["sending"]+stats["sent"] != 0 {
+				t.Fatalf("held policy admitted delivery: %v %v", stats, err)
 			}
 		})
 	}
@@ -392,6 +436,7 @@ func TestMonitorReloadKeepsBufferedWarning(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", dir)
 	persistence := config.NewConfigPersistence(dir)
 	saved := alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive,
+		GuestDefaults: alerts.ThresholdConfig{CPU: &alerts.HysteresisThreshold{Trigger: 80, Clear: 70}},
 		Schedule: alerts.ScheduleConfig{InitialNotify: "webhook", NotifyOnResolve: true,
 			Grouping: alerts.GroupingConfig{Enabled: true, Window: 600, ByNode: true, ByGuest: true}}}
 	if err := persistence.SaveAlertConfig(saved); err != nil {
@@ -400,11 +445,23 @@ func TestMonitorReloadKeepsBufferedWarning(t *testing.T) {
 	if err := persistence.SaveWebhooks([]notifications.WebhookConfig{{ID: "reload-ops", Name: "Reload ops", URL: "https://example.invalid/not-contacted", Service: "generic", Enabled: true}}); err != nil {
 		t.Fatal(err)
 	}
+	// The bootstrap applies the saved policy and re-evaluates restored alerts.
+	// Supply an observation that still breaches that policy, rather than a zero
+	// reading with a disabled threshold which the real owner correctly resolves.
+	occurrence := &alerts.Alert{ID: "reload-warning", ResourceID: "reload-vm", ResourceName: "Reload VM", Type: "cpu", Level: alerts.AlertLevelWarning, Value: 95, Threshold: 80, Metadata: map[string]interface{}{"resourceType": "vm"}, StartTime: time.Now().UTC()}
+	seedNotificationBootstrapActive(t, dir, occurrence)
 	m, err := New(&config.Config{DataPath: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.GetNotificationManager().SendAlert(&alerts.Alert{ID: "reload-warning", ResourceID: "reload-host", ResourceName: "Reload host", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: time.Now().UTC()})
+	active := m.alertManager.GetActiveAlerts()
+	if len(active) != 1 {
+		m.Stop()
+		t.Fatalf("expected restored warning owner, got %+v", active)
+	}
+	// The restored public ID is canonical; do not submit the pre-migration
+	// recovery-file alias as a distinct, currently absent occurrence.
+	m.GetNotificationManager().SendAlert(active[0].Clone())
 	m.Stop()
 	m, err = New(&config.Config{DataPath: dir})
 	if err != nil {

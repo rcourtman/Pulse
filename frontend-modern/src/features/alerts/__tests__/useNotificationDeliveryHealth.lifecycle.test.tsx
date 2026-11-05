@@ -19,7 +19,9 @@ vi.mock('@/stores/notifications', () => ({
 }));
 vi.mock('@/utils/logger', () => ({ logger: { error: vi.fn() } }));
 
-const health = { queue: { status: 'degraded', attentionRequired: 2 } } as NotificationHealth;
+const health = {
+  queue: { status: 'degraded', attentionRequired: 2, failed: 1, deadLetter: 1 },
+} as NotificationHealth;
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;

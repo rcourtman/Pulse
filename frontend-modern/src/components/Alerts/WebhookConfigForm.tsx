@@ -22,6 +22,7 @@ import {
   ALERT_WEBHOOK_PAYLOAD_HELP_LABEL,
   ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER,
   ALERT_WEBHOOK_PAYLOAD_VARIABLES,
+  ALERT_WEBHOOK_RECEIVER_CHANGE_HELP,
   ALERT_WEBHOOK_URL_HELP_PATH,
   ALERT_WEBHOOK_URL_HELP_QUERY,
   ALERT_WEBHOOK_URL_HELP_TEMPLATE_VARIABLE,
@@ -85,6 +86,9 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
       aria-busy={props.saving()}
     >
       <legend class="sr-only">Webhook configuration</legend>
+      <Show when={props.editingId()}>
+        <p class={formHelpText}>{ALERT_WEBHOOK_RECEIVER_CHANGE_HELP}</p>
+      </Show>
       <div>
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-medium text-base-content">Service Type</span>
