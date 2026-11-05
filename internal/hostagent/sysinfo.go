@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -181,7 +182,16 @@ func (c *defaultCollector) WriteFile(filename string, data []byte, perm os.FileM
 // its predecessor or writing through an existing destination link. Other system
 // files retain WriteFile's existing semantics.
 func (c *defaultCollector) WritePrivateStateFile(filename string, data []byte) error {
-	return securityutil.WriteSecureStorageFile(filename, data, 0700, 0600)
+	// The caller has created the configured state directory. It may be a link
+	// to relocated storage, which agent persistence has always supported. Resolve
+	// only its directory: resolving filename itself would follow a destination
+	// link and publish the credential over an unrelated file instead of replacing
+	// the link. Keep the shared storage helper's stricter directory policy intact.
+	dir, err := filepath.EvalSymlinks(filepath.Dir(filename))
+	if err != nil {
+		return err
+	}
+	return securityutil.WriteSecureStorageFile(filepath.Join(dir, filepath.Base(filename)), data, 0700, 0600)
 }
 
 func writePrivateAgentState(collector SystemCollector, filename string, data []byte) error {
