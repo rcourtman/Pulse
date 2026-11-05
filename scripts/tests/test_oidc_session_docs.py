@@ -99,13 +99,14 @@ def assert_refresh_source(case, auth, store):
         "session.OIDCRefreshToken = result.RefreshToken",
         "session.OIDCAccessTokenExp = result.Expiry",
         "session.ExpiresAt = now.Add(session.OriginalDuration)",
-        "s.saveUnsafe()", "return true",
+        "s.mu.Unlock()\n\ts.save()", "return true",
     ):
         case.assertIn(expected, completion)
     invalidation, success = completion.split("if result == nil {", 1)[1].split("} else {", 1)
     case.assertIn("delete(s.sessions, key)", invalidation)
     case.assertIn("session.OIDCRefreshToken = result.RefreshToken", success)
-    case.assertLess(completion.index("s.saveUnsafe()"), completion.index("return true"))
+    case.assertNotIn("defer s.mu.Unlock()", completion)
+    case.assertLess(completion.index("s.save()"), completion.index("return true"))
 
 
 class OIDCSessionDocsTest(unittest.TestCase):
@@ -232,7 +233,8 @@ class OIDCSessionDocsTest(unittest.TestCase):
              "if result == nil {\n\t\t// Invalidation accidentally omitted"),
             ("store", "session.OIDCRefreshToken = result.RefreshToken",
              "// Rotated refresh token accidentally omitted"),
-            ("store", "s.saveUnsafe()\n\treturn true\n}", "return true\n}"),
+            ("store", "s.mu.Unlock()\n\ts.save()\n\treturn true\n}", "s.mu.Unlock()\n\treturn true\n}"),
+            ("store", "s.mu.Unlock()\n\ts.save()\n\treturn true\n}", "s.save()\n\ts.mu.Unlock()\n\treturn true\n}"),
         )
         for source, before, after in mutations:
             with self.subTest(source=source, regression=before):

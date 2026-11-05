@@ -153,8 +153,8 @@ func TestOIDCRefreshOwnershipBeforeStart(t *testing.T) {
 				current.mu.Lock()
 				copy := *f.initial
 				current.sessions[sessionHash(f.token)] = &copy
-				current.saveUnsafe()
 				current.mu.Unlock()
+				current.save()
 			case "nil-snapshot":
 				// Invalid input must not start work or panic.
 				f.initial = nil
@@ -188,8 +188,8 @@ func TestOIDCRefreshOwnershipDuringRequest(t *testing.T) {
 				case "expired":
 					current.mu.Lock()
 					current.sessions[sessionHash(f.token)].ExpiresAt = time.Now().Add(-time.Minute)
-					current.saveUnsafe()
 					current.mu.Unlock()
+					current.save()
 				case "replaced":
 					current.CreateSession(f.token, time.Hour, "replacement-agent", "127.0.0.1", "replacement-principal")
 				case "tokens-updated":

@@ -446,13 +446,13 @@ func (s *SessionStore) endOIDCRefresh(token string, attempt *oidcSessionRefresh)
 // never delete a replacement or a newer independently refreshed credential.
 func (s *SessionStore) completeOIDCRefresh(token string, attempt *oidcSessionRefresh, result *OIDCRefreshResult) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	key := sessionHash(token)
 	session := s.sessions[key]
 	now := time.Now()
 	if s.oidcRefreshes[key] != attempt || session != attempt.session ||
 		!sameOIDCRefreshSource(session, &attempt.snapshot) || !now.Before(session.ExpiresAt) {
+		s.mu.Unlock()
 		return false
 	}
 	if result == nil {
@@ -466,7 +466,11 @@ func (s *SessionStore) completeOIDCRefresh(token string, attempt *oidcSessionRef
 			session.ExpiresAt = now.Add(session.OriginalDuration)
 		}
 	}
-	s.saveUnsafe()
+	// Keep persistence outside the authentication mutex. save selects its
+	// snapshot after acquiring persistMu, so a logout queued during this write
+	// cannot later be overwritten by an older refresh snapshot.
+	s.mu.Unlock()
+	s.save()
 	return true
 }
 
