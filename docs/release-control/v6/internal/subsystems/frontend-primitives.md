@@ -6961,6 +6961,8 @@ Alert threshold tables do the same through the row's `qualifier` field, and thei
 phone cards put it on its own line under the name. `getAlertResourceLabel` carries
 it into the row's controls and dialogs, and `getAlertResourceName` stays the bare
 name for the cell.
+That name stays whole, as on the Docker page, and only a single-word FQDN loses
+its domain in these rows.
 Shared-template drift enforcement is registry-backed:
 `frontend-modern/scripts/shared-template-registry.json` is the canonical list of
 standardized repeated affordances, required consumers, and forbidden local

@@ -62,6 +62,11 @@ describe('thresholdsResourceModel branch coverage', () => {
       expect(getFriendlyNodeName('titan (titan)')).toBe('titan');
     });
 
+    it('keeps a Proxmox node name in the pve1 (cluster) form', () => {
+      expect(getFriendlyNodeName('pve1 (cluster)', 'cluster')).toBe('pve1');
+      expect(getFriendlyNodeName('cluster (pve1)', 'cluster')).toBe('pve1');
+    });
+
     it('strips a cluster-name token from a multi-word name when clusterName is supplied', () => {
       expect(getFriendlyNodeName('node1 prod-cluster', 'prod-cluster')).toBe('node1');
     });

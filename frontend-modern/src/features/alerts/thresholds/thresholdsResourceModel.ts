@@ -160,6 +160,15 @@ export const getFriendlyNodeName = (value: string, clusterName?: string): string
 export const getFriendlyAlertNodeName = (value: string, clusterName?: string): string =>
   getFriendlyNodeName(value, clusterName);
 
+// A Docker host's name is the one its owner reads on the Docker page, so it stays
+// whole. Only a hostname gives up its domain, and an address has none to give up.
+const HOSTNAME_WITH_DOMAIN = /^([^\s.]+)\.\S*[a-z]\S*$/i;
+
+export const getFriendlyDockerHostName = (rawName: string): string => {
+  const name = rawName.trim();
+  return name.match(HOSTNAME_WITH_DOMAIN)?.[1] ?? name;
+};
+
 export interface ThresholdsDockerHostLabel {
   /** The host's full name. */
   rawName: string;
@@ -180,7 +189,7 @@ export const buildThresholdsDockerHostLabels = (
   const rawNamesByFriendlyName = new Map<string, Set<string>>();
   for (const host of hosts) {
     const rawName = getAlertResourceDisplayLabel(host);
-    const friendlyName = getFriendlyAlertNodeName(rawName);
+    const friendlyName = getFriendlyDockerHostName(rawName);
     const rawNames = rawNamesByFriendlyName.get(friendlyName) ?? new Set<string>();
     rawNames.add(rawName);
     rawNamesByFriendlyName.set(friendlyName, rawNames);
@@ -188,9 +197,8 @@ export const buildThresholdsDockerHostLabels = (
 
   return (host) => {
     const rawName = getAlertResourceDisplayLabel(host);
-    const friendlyName = getFriendlyAlertNodeName(rawName);
-    const name =
-      (rawNamesByFriendlyName.get(friendlyName)?.size ?? 0) > 1 ? rawName : friendlyName || rawName;
+    const friendlyName = getFriendlyDockerHostName(rawName);
+    const name = (rawNamesByFriendlyName.get(friendlyName)?.size ?? 0) > 1 ? rawName : friendlyName;
     const qualifier = getDockerHostRowName(host, identities).qualifier ?? undefined;
     return {
       rawName,

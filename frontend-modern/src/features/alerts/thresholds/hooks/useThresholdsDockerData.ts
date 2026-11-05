@@ -12,11 +12,13 @@ import {
   dockerContainerOverrideIdCandidates,
   dockerHostOverrideIdCandidates,
   findOverrideByCandidates,
-  getFriendlyNodeName,
+  getFriendlyDockerHostName,
   hasThresholdDiff,
   matchesThresholdResourceSearch,
   platformData,
 } from '../thresholdsResourceModel';
+
+const UNASSIGNED_CONTAINERS = 'Unassigned Containers';
 
 export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
   const { props, editingId, searchTerm } = inputs;
@@ -67,7 +69,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
       .filter((override) => override.type === 'dockerHost' && !seen.has(override.id))
       .forEach((override) => {
         const originalName = override.name || override.id;
-        const friendlyName = getFriendlyNodeName(originalName);
+        const friendlyName = getFriendlyDockerHostName(originalName);
         hosts.push({
           id: override.id,
           name: friendlyName,
@@ -128,10 +130,12 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
         const resourceIdCandidates = dockerContainerOverrideIdCandidates(host, container);
         const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
         // The row keys on the stable name-based candidate so it survives
-        // container recreates; every candidate is marked seen so an override
-        // still stored under a legacy ID key doesn't also surface as an
-        // "Unassigned Containers" duplicate.
+        // container recreates. Every candidate is marked seen, even for a row
+        // the search hides: its override belongs to a live container, whichever
+        // ID it is stored under, and must not surface as Unassigned Containers.
         const resourceId = resourceIdCandidates[0] || `docker:${dockerHostIdForActions}/${shortId}`;
+        resourceIdCandidates.forEach((candidate) => seen.add(candidate));
+        seen.add(resourceId);
         const overrideSeverity = override?.poweredOffSeverity;
         const hasCustomThresholds = hasThresholdDiff(
           override,
@@ -177,8 +181,6 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
           groups[groupKey] = [];
         }
         groups[groupKey].push(resource);
-        resourceIdCandidates.forEach((candidate) => seen.add(candidate));
-        seen.add(resourceId);
       });
     });
 
@@ -186,11 +188,17 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
       .filter((override) => override.type === 'dockerContainer' && !seen.has(override.id))
       .forEach((override) => {
         const fallbackName = override.name || override.id.split('/').pop() || override.id;
-        const group = 'Unassigned Containers';
-        if (!groups[group]) {
-          groups[group] = [];
+        // Like a live row, it matches by its own name or its group's.
+        const matchesSearch =
+          !search ||
+          fallbackName.toLowerCase().includes(search) ||
+          UNASSIGNED_CONTAINERS.toLowerCase().includes(search);
+        if (!matchesSearch) return;
+
+        if (!groups[UNASSIGNED_CONTAINERS]) {
+          groups[UNASSIGNED_CONTAINERS] = [];
         }
-        groups[group].push({
+        groups[UNASSIGNED_CONTAINERS].push({
           id: override.id,
           name: fallbackName,
           type: 'dockerContainer',
@@ -209,17 +217,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
       groups[group].sort((a, b) => a.name.localeCompare(b.name));
     });
 
-    if (!search) {
-      return groups;
-    }
-
-    const filteredGroups: Record<string, TableResource[]> = {};
-    Object.entries(groups).forEach(([group, resources]) => {
-      if (resources.length > 0) {
-        filteredGroups[group] = resources;
-      }
-    });
-    return filteredGroups;
+    return groups;
   }, {});
 
   const dockerContainersFlat = createMemo<TableResource[]>(() =>
@@ -245,8 +243,8 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
       };
     });
 
-    meta['Unassigned Containers'] = {
-      displayName: 'Unassigned Containers',
+    meta[UNASSIGNED_CONTAINERS] = {
+      displayName: UNASSIGNED_CONTAINERS,
       status: 'unknown',
     };
 

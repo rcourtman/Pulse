@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "cfdce165b98e352ffde2ec780e1beff54937a473",
+  "verified_at": "2026-11-05T13:34:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts": "49bc833b0745b015fc52b5ebd82941a5c80fd2e3ec8520b813b1f6e9026dfe0d",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts": "fc0695d722f6a5ec43059e2a4a2216d054a88e8f51b7651d5a3ff7211da28c77"
+  },
+  "routes": [
+    "/alerts/thresholds/docker on a private mock stack, with overrides saved for one live container (loki on App Platform 01) and three removed containers",
+    "/docker on the same stack, to compare host names",
+    "/alerts/thresholds/proxmox on the same stack, as the control for the unchanged node rule"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1300
+    },
+    {
+      "width": 900,
+      "height": 1300
+    },
+    {
+      "width": 390,
+      "height": 1344
+    }
+  ],
+  "states": [
+    "Before: Container Runtimes read App, Data, Edge, 2, Field and Ops, and Containers had groups headed APP and 2",
+    "Before: every search, even zzz-nothing, listed the live loki override and all three leftovers under Unassigned Containers",
+    "Container Runtimes reads App Platform 01, Data Services 01, Edge Apps 01, Edge Apps 01 (2), Field Office Edge 01 and Ops Services 01, the names on the Docker page, and single-word hosts read as before",
+    "Containers groups are headed by the same full names",
+    "Searching nginx lists its live containers under their hosts, and only also-nginx-gone and removed-nginx-old under Unassigned Containers",
+    "Searching loki lists it under APP PLATFORM 01 with its saved Disabled state, and Unassigned Containers does not appear",
+    "Searching zzz-nothing shows no groups at all",
+    "Desktop and 900px rows stay 33px with nothing clipped and no horizontal page scroll; phone cards show the full names with no horizontal page scroll",
+    "Proxmox control: rows read as they did before this change, including the mock nodes' first-word West"
+  ],
+  "interactions": [
+    "Searched nginx, other-old, unassigned, loki, platform 01 and zzz-nothing at all three widths, scrolling every section",
+    "Searched removed-other, reverted that leftover to defaults and saved: only its key was removed and the other three stayed",
+    "Opened Configure alert delay for App Platform 01: the policy panel's Resource picker lists the full host names",
+    "Expanded both sections at all three widths and read the group headers and row names"
+  ]
+}

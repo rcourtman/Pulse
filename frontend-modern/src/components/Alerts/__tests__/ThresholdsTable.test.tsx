@@ -8,6 +8,7 @@ import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } fro
 import type { Agent, Alert } from '@/types/api';
 
 const [getPathname, setPathname] = createSignal('/alerts/thresholds/docker');
+const [getSearch, setSearch] = createSignal('');
 const mockNavigate = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
@@ -15,6 +16,9 @@ vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
     get pathname() {
       return getPathname();
+    },
+    get search() {
+      return getSearch();
     },
   }),
 }));
@@ -94,6 +98,7 @@ afterEach(() => {
 
 beforeEach(() => {
   setPathname('/alerts/thresholds/docker');
+  setSearch('');
   vi.clearAllMocks();
 });
 
@@ -1103,6 +1108,74 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     expect(
       screen.queryByTestId('resource-row-docker:resource:docker:parent1/container-hash-1'),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps a Docker host name whole, and a search keeps a live override off Unassigned', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const dockerHost = {
+      id: 'resource:docker:app',
+      type: 'docker-host',
+      name: 'app-platform-01',
+      displayName: 'App Platform 01',
+      platformId: 'docker-platform-app',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen: 789,
+      platformData: { docker: { hostSourceId: 'app-source' } },
+    } as any;
+    const container = (name: string) =>
+      ({
+        id: `container-${name}`,
+        parentId: 'resource:docker:app',
+        type: 'app-container',
+        name: `/${name}`,
+        displayName: name,
+        platformId: 'docker-platform-app',
+        platformType: 'docker',
+        sourceType: 'agent',
+        status: 'running',
+        lastSeen: 789,
+      }) as any;
+    const saved = (id: string, name: string) => ({
+      id,
+      name,
+      type: 'dockerContainer' as const,
+      disabled: true,
+      thresholds: {},
+    });
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        containerRuntimes={[dockerHost]}
+        dockerHosts={[dockerHost]}
+        allResources={[container('nginx'), container('web')]}
+        overrides={() => [
+          saved('docker:app-source/web', 'web'),
+          saved('docker:gone/removed-nginx', 'removed-nginx'),
+          saved('docker:gone/removed-redis', 'removed-redis'),
+        ]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-row-docker:app-source/web')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('resource-name-app-source')).toHaveTextContent('App Platform 01');
+    expect(screen.getByTestId('resource-node-docker:app-source/web')).toHaveTextContent(
+      'App Platform 01',
+    );
+
+    // The search is route-owned (?q=).
+    setSearch('?q=nginx');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('resource-row-docker:app-source/web')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('resource-row-docker:app-source/nginx')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-row-docker:gone/removed-nginx')).toBeInTheDocument();
+    expect(screen.queryByTestId('resource-row-docker:gone/removed-redis')).not.toBeInTheDocument();
   });
 
   it('offers only runtime connectivity, with honest scope and independent container/machine drafts', async () => {
