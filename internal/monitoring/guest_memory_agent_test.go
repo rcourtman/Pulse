@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -403,5 +404,123 @@ func TestResolveGuestStatusMemoryPrefersGuestAgentMeminfoForSaturatedStatus(t *t
 	}
 	if client.rrdCalls != 0 {
 		t.Fatalf("expected saturated guest-agent memory path to skip RRD, got %d RRD calls", client.rrdCalls)
+	}
+}
+
+func TestResolveGuestStatusMemoryLinkedAgentBeforeFileRead(t *testing.T) {
+	t.Parallel()
+
+	const giB = uint64(1024 * 1024 * 1024)
+	const guestID = "pve-a:node1:100"
+	agent := func(total, used uint64, state string) map[string]models.Host {
+		return map[string]models.Host{guestID: {Memory: models.Memory{
+			Total:       int64(total),
+			Used:        int64(used),
+			Free:        int64(total - used),
+			Usage:       float64(used) / float64(total) * 100,
+			Observation: models.MemoryObservation{State: state, Source: "agent"},
+		}}}
+	}
+	running := func() *proxmox.VMStatus {
+		return &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}, MaxMem: 8 * giB}
+	}
+
+	tests := []struct {
+		name       string
+		status     *proxmox.VMStatus
+		hosts      map[string]models.Host
+		readErr    error
+		wantSource string
+		wantUsed   uint64
+		wantTotal  uint64
+		wantReads  int
+	}{
+		{
+			name:       "current agent sends no file-read",
+			status:     running(),
+			hosts:      agent(6*giB, 2*giB, "current"),
+			wantSource: "agent",
+			wantUsed:   2 * giB,
+			wantTotal:  6 * giB,
+		},
+		{
+			name: "current agent answers a saturated status without a file-read",
+			status: &proxmox.VMStatus{
+				Agent:  proxmox.VMAgentField{Value: 1},
+				MaxMem: 8 * giB,
+				Mem:    8 * giB,
+			},
+			hosts:      agent(6*giB, 2*giB, "current"),
+			wantSource: "agent",
+			wantUsed:   2 * giB,
+			wantTotal:  6 * giB,
+		},
+		{
+			name: "current agent outranks a used-only status gap",
+			status: &proxmox.VMStatus{
+				Agent:   proxmox.VMAgentField{Value: 1},
+				MaxMem:  8 * giB,
+				MemInfo: &proxmox.VMMemInfo{Total: 8 * giB, Used: 7 * giB},
+			},
+			hosts:      agent(6*giB, 2*giB, "current"),
+			wantSource: "agent",
+			wantUsed:   2 * giB,
+			wantTotal:  6 * giB,
+		},
+		{
+			name:       "last-known agent ranks below the file-read",
+			status:     running(),
+			hosts:      agent(6*giB, 2*giB, "last-known"),
+			wantSource: "guest-agent-meminfo",
+			wantUsed:   3 * giB,
+			wantTotal:  8 * giB,
+			wantReads:  1,
+		},
+		{
+			name:       "last-known agent still answers when the file-read fails",
+			status:     running(),
+			hosts:      agent(6*giB, 2*giB, "last-known"),
+			readErr:    errors.New("file-read refused"),
+			wantSource: "agent",
+			wantUsed:   2 * giB,
+			wantTotal:  6 * giB,
+			wantReads:  1,
+		},
+		{
+			name:       "agent larger than the VM falls back to the file-read",
+			status:     running(),
+			hosts:      agent(16*giB, 2*giB, "current"),
+			wantSource: "guest-agent-meminfo",
+			wantUsed:   3 * giB,
+			wantTotal:  8 * giB,
+			wantReads:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			mon := &Monitor{vmAgentMemCache: make(map[string]agentMemCacheEntry)}
+			client := &guestMemoryAgentTestClient{
+				stubPVEClient: &stubPVEClient{},
+				memAvailable:  5 * giB,
+				memErr:        tt.readErr,
+			}
+			total, used, source, deferred := mon.resolveGuestStatusMemory(
+				context.Background(), client, "pve-a", "vm-100", "node1", 100,
+				guestID, tt.status, tt.hosts, 8*giB, "", &VMMemoryRaw{},
+			)
+			if source != tt.wantSource || used != tt.wantUsed || total != tt.wantTotal {
+				t.Fatalf("source=%q used=%d total=%d, want source=%q used=%d total=%d",
+					source, used, total, tt.wantSource, tt.wantUsed, tt.wantTotal)
+			}
+			if deferred {
+				t.Fatal("no read was deferred")
+			}
+			if client.memCalls != tt.wantReads {
+				t.Fatalf("file-read calls = %d, want %d", client.memCalls, tt.wantReads)
+			}
+		})
 	}
 }
