@@ -284,6 +284,9 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     }
     await mutateRole(
       {
+        // This form edits only the fields below. Keep saved inheritance,
+        // priority and other role metadata instead of resetting it on PUT.
+        ...existing,
         id,
         name,
         description: formDescription(),
