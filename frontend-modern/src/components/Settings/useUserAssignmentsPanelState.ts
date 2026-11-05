@@ -197,7 +197,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   });
 
   const filteredAssignments = createMemo(() => {
-    const query = searchQuery().toLowerCase();
+    const query = searchQuery().trim().toLowerCase();
     if (!query) return assignments();
     return assignments().filter((assignment) =>
       [
@@ -352,6 +352,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
 
   return {
     actionError,
+    assignmentCount: () => assignments().length,
     successNotice,
     accessAllowed,
     canEdit,
