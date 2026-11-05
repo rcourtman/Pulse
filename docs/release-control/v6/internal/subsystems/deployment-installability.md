@@ -2015,7 +2015,11 @@ closure the change reaches, recorded as `selection=` and `packages=` in the
 metadata. Module files, unclean or non-Git trees and an unreadable package
 graph select every package; unpaired branch runs select every package.
 An empty selection leaves nothing to compare and is not a passed comparison of
-skipped packages. The paired step's wall-clock budget sits below its timeout so
+skipped packages. The comparison step ends successfully on that declaration
+alone: an affected selection, an empty package list and two empty timing files.
+Every other empty comparison stays refused, and
+`scripts/tests/test_benchmark_workflow_contract.py` runs the step's real command
+on both. The paired step's wall-clock budget sits below its timeout so
 an outgrown suite stops with each package's mean cost per sample, not a bare
 timeout; `TestPairedBenchmarksStopInsideTheirBudget` checks that ordering and
 the selection and budget cases run in `scripts/tests/test-ci-benchmarks.sh`.

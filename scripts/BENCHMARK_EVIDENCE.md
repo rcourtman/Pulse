@@ -47,7 +47,10 @@ package whose closure holds its directory or a parent of it, which covers
 embeds and testdata. Module or workspace files, trees that are not both clean
 Git roots, or an unreadable package graph select every package. Metadata `selection=` names the rule applied and
 `packages=` the packages sampled; an empty list leaves empty timing files and
-nothing to compare. A benchmark reading files outside that closure at run time
+nothing to compare. CI's comparison step passes on that declaration alone,
+`selection=affected` with an empty `packages=` and both timing files empty, and
+says nothing about the skipped packages. Every other empty comparison is
+refused. A benchmark reading files outside that closure at run time
 escapes selection. Unpaired runs select every package before sharding.
 
 CI now partitions that inventory across three isolated hosted jobs using
