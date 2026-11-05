@@ -25,6 +25,7 @@ import {
   alertResourceSupportsMetric,
   buildAlertResourceEditPayload,
   getAlertResourceLabel,
+  getAlertResourceName,
   getAlertResourceInitialEditMetric,
   getAlertResourceMetricDisplayValue,
   getAlertResourceRelaxedTriggerSummary,
@@ -358,9 +359,16 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                   </Show>
 
                   <div class="min-w-0 truncate">
-                    <div class="font-medium text-sm truncate">
-                      {getAlertResourceLabel(resource)}
-                    </div>
+                    <div class="font-medium text-sm truncate">{getAlertResourceName(resource)}</div>
+                    <Show when={resource.qualifier}>
+                      <div
+                        class="text-xs text-muted truncate"
+                        title={resource.qualifier}
+                        data-docker-host-qualifier
+                      >
+                        {resource.qualifier}
+                      </div>
+                    </Show>
                     <Show when={resource.type === 'agent' && resource.clusterName}>
                       <span class="block text-xs text-muted whitespace-normal break-words">
                         {resource.clusterName}

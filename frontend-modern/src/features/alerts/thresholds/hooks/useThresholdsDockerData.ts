@@ -7,11 +7,11 @@ import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
 import {
+  buildThresholdsDockerHostLabels,
   createOverridesMap,
   dockerContainerOverrideIdCandidates,
   dockerHostOverrideIdCandidates,
   findOverrideByCandidates,
-  getFriendlyAlertNodeName,
   getFriendlyNodeName,
   hasThresholdDiff,
   matchesThresholdResourceSearch,
@@ -20,6 +20,10 @@ import {
 
 export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
   const { props, editingId, searchTerm } = inputs;
+
+  const dockerHostLabels = createMemo(() =>
+    buildThresholdsDockerHostLabels(props.containerRuntimes ?? []),
+  );
 
   const dockerHostsWithOverrides = createMemo<TableResource[]>((prev = []) => {
     if (editingId()) {
@@ -32,8 +36,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
 
     const hosts: TableResource[] = (props.containerRuntimes ?? []).map((host) => {
       const idCandidates = dockerHostOverrideIdCandidates(host);
-      const originalName = getAlertResourceDisplayLabel(host);
-      const friendlyName = getFriendlyAlertNodeName(originalName);
+      const label = dockerHostLabels()(host);
       const override = findOverrideByCandidates(overridesMap, idCandidates);
       const resourceId = override?.id || idCandidates[0] || host.id;
       const disableConnectivity = override?.disableConnectivity || false;
@@ -42,9 +45,10 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
 
       return {
         id: resourceId,
-        name: friendlyName,
-        displayName: friendlyName,
-        rawName: originalName,
+        name: label.name,
+        displayName: label.name,
+        rawName: label.rawName,
+        qualifier: label.qualifier,
         type: 'dockerHost' as const,
         resourceType: 'Container Runtime',
         node: getPreferredResourceHostname(host),
@@ -114,10 +118,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
     (props.containerRuntimes ?? []).forEach((host) => {
       const dockerHostIds = dockerHostOverrideIdCandidates(host);
       const dockerHostIdForActions = dockerHostIds[0] || host.id;
-      const hostLabel = getAlertResourceDisplayLabel(host);
-      const friendlyHostName = getFriendlyAlertNodeName(hostLabel);
-      const hostLabelLower = hostLabel.toLowerCase();
-      const friendlyHostNameLower = friendlyHostName.toLowerCase();
+      const hostLabel = dockerHostLabels()(host);
       const hostHostname = getPreferredResourceHostname(host);
       const containers = dockerContainersByHostId().get(host.id) ?? [];
 
@@ -147,12 +148,11 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
         const matchesSearch =
           !search ||
           containerName.toLowerCase().includes(search) ||
-          hostLabelLower.includes(search) ||
-          friendlyHostNameLower.includes(search) ||
+          hostLabel.searchText.includes(search) ||
           image.toLowerCase().includes(search);
         if (!matchesSearch) return;
 
-        const groupKey = friendlyHostName || hostLabel;
+        const groupKey = hostLabel.groupKey;
         const resource: TableResource = {
           id: resourceId,
           name: containerName,
@@ -236,20 +236,13 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.containerRuntimes ?? []).forEach((host) => {
-      const originalName = getAlertResourceDisplayLabel(host);
-      const friendlyName = getFriendlyAlertNodeName(originalName);
-      const headerMeta: GroupHeaderMeta = {
-        displayName: friendlyName,
-        rawName: originalName,
+      const label = dockerHostLabels()(host);
+      meta[label.groupKey] = {
+        displayName: label.name,
+        rawName: label.rawName,
+        qualifier: label.qualifier,
         status: host.status,
       };
-
-      const hostname = getPreferredResourceHostname(host);
-      [friendlyName, originalName, hostname, host.id]
-        .filter((key: string | undefined): key is string => Boolean(key && key.trim()))
-        .forEach((key: string) => {
-          meta[key.trim()] = headerMeta;
-        });
     });
 
     meta['Unassigned Containers'] = {

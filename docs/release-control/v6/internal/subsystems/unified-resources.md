@@ -9840,4 +9840,7 @@ owns the page's host scope, group key and label: a unique hostname stays the URL
 value and the words, and hosts sharing one key on `docker.hostSourceId` and carry
 a short qualifier. Row scope, grouped status, the host filter and container
 override lookups therefore never let one host speak for another, and a bare
-hostname in `?host=` still selects every host with it.
+hostname in `?host=` still selects every host with it. Alert Thresholds reuses the
+same qualifier through `buildThresholdsDockerHostLabels`, so the module holds no
+import of the Docker table code. `dockerHostName` lives here and the table module
+re-exports it.

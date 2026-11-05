@@ -7,6 +7,7 @@ import {
   getAlertResourceColumnKind,
   getAlertResourceEnabledDefault,
   getAlertResourceLabel,
+  getAlertResourceName,
   getAlertResourceMetricBounds,
   getAlertResourceMetricDelayOverride,
   getAlertResourceMetricDisplayValue,
@@ -595,6 +596,12 @@ describe('alertResourceSupportsMetric', () => {
 });
 
 describe('getAlertResourceLabel', () => {
+  it('adds the qualifier, which getAlertResourceName leaves for the cell beside it', () => {
+    const resource = makeResource({ displayName: 'dock', qualifier: 'lab' });
+    expect(getAlertResourceLabel(resource)).toBe('dock (lab)');
+    expect(getAlertResourceName(resource)).toBe('dock');
+  });
+
   it('returns the displayName when present', () => {
     const resource = makeResource({ displayName: 'Prod Web Server' });
     expect(getAlertResourceLabel(resource)).toBe('Prod Web Server');

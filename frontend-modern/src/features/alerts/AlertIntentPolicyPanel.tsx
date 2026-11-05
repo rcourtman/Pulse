@@ -19,6 +19,8 @@ import {
 } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
 import type { Resource } from '@/types/resource';
+import { buildDockerHostIdentities } from '@/features/docker/dockerHostIdentity';
+import { hasDockerRuntimeHostEvidence } from '@/utils/agentResources';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 
 const SIGNALS: ReadonlyArray<{ value: AlertIntentSignal; label: string }> = [
@@ -105,11 +107,20 @@ export function AlertIntentPolicyPanel(props: {
   // is not itself a listed resource. It joins the options under the row's own
   // label rather than the selection falling back to an unrelated resource.
   const [targetOption, setTargetOption] = createSignal<AlertIntentResourceOption | null>(null);
+  const dockerHostIdentities = createMemo(() =>
+    buildDockerHostIdentities(props.resources.filter(hasDockerRuntimeHostEvidence)),
+  );
   const resourceOptions = createMemo<AlertIntentResourceOption[]>(() => {
-    const listed = sortedResources().map((resource) => ({
-      id: resource.id,
-      label: `${getPreferredInfrastructureDisplayName(resource)} · ${resource.type}`,
-    }));
+    const listed = sortedResources().map((resource) => {
+      const qualifier = hasDockerRuntimeHostEvidence(resource)
+        ? dockerHostIdentities().qualifierFor(resource)
+        : null;
+      const name = getPreferredInfrastructureDisplayName(resource);
+      return {
+        id: resource.id,
+        label: `${qualifier ? `${name} (${qualifier})` : name} · ${resource.type}`,
+      };
+    });
     const target = targetOption();
     return target && !listed.some((option) => option.id === target.id)
       ? [target, ...listed]

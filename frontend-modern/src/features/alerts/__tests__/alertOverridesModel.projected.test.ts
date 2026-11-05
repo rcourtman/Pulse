@@ -248,6 +248,32 @@ describe('dockerHostOverrideIdCandidates', () => {
     expect(dockerHostOverrideIdCandidates(makeResource({ id: 'dh-1' }))).toEqual(['dh-1']);
   });
 
+  it('leaves out the agent ID once the host has the source ID the evaluator reads', () => {
+    // A machine with no machine ID reports its hostname as agent ID, which can
+    // be the source ID of the other host with that hostname.
+    expect(
+      dockerHostOverrideIdCandidates(
+        makeResource({
+          id: 'agent-b',
+          discoveryTarget: { resourceType: 'agent', agentId: 'alpine', resourceId: 'alpine' },
+          platformData: { docker: { hostSourceId: 'alpine::token-b' } },
+        }),
+      ),
+    ).toEqual(['alpine::token-b', 'agent-b']);
+  });
+
+  it('reads the source ID from the Docker facet, which the host qualifier also reads', () => {
+    expect(
+      dockerHostOverrideIdCandidates(
+        makeResource({
+          id: 'agent-b',
+          discoveryTarget: { resourceType: 'agent', agentId: 'alpine', resourceId: 'alpine' },
+          docker: { hostSourceId: 'alpine::token-b' },
+        }),
+      ),
+    ).toEqual(['alpine::token-b', 'agent-b']);
+  });
+
   it('includes platformData.docker.hostSourceId when present', () => {
     expect(
       dockerHostOverrideIdCandidates(
@@ -1121,6 +1147,24 @@ describe('buildProjectedOverrides — Docker key fallback', () => {
         name: 'c-123',
         node: 'unknown-host',
         disabled: true,
+      }),
+    ]);
+  });
+
+  it.each([
+    ['docker:proxmox-lxc-docker:gone:pve9:999/nginx', 'proxmox-lxc-docker:gone:pve9:999'],
+    ['docker:alpine::token-gone/nginx', 'alpine::token-gone'],
+  ])('keeps a host ID with colons whole in %s', (key, hostId) => {
+    const result = projectOverrides({
+      rawConfig: { [key]: { disabled: true } as RawOverrideConfig },
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: key,
+        type: 'dockerContainer',
+        name: 'nginx',
+        node: hostId,
       }),
     ]);
   });

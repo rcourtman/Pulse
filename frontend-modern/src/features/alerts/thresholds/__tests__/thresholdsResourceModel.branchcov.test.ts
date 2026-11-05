@@ -205,7 +205,6 @@ describe('thresholdsResourceModel branch coverage', () => {
         'container-123',
         'docker-platform',
         'host-platform',
-        'agent-7',
         'runtime-1',
       ]);
     });

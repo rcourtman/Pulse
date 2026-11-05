@@ -74,8 +74,7 @@ export const dockerLabelsSummary = (labels: Record<string, string> | undefined):
     .join(', ');
 };
 
-export const dockerHostName = (resource: Resource): string =>
-  dockerTextValue(resource.docker?.hostname);
+export { dockerHostName } from './dockerHostIdentity';
 
 export const dockerResourceName = (resource: Resource): string =>
   asTrimmedString(resource.name) || asTrimmedString(resource.displayName) || resource.id;

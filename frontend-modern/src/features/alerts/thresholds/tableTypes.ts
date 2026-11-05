@@ -16,6 +16,8 @@ export interface Resource {
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
   rawName?: string;
+  /** Tells this row from others with its name: shown beside the name, part of its label. */
+  qualifier?: string;
   node?: string;
   instance?: string;
   host?: string;
@@ -57,6 +59,7 @@ export interface GroupHeaderMeta {
   type?: 'agent' | 'node' | 'default';
   displayName?: string;
   rawName?: string;
+  qualifier?: string;
   host?: string;
   status?: string;
   clusterName?: string;

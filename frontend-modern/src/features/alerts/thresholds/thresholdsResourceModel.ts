@@ -2,11 +2,12 @@ import { unwrap } from 'solid-js/store';
 import { getPreferredResourceHostname } from '@/utils/resourceIdentity';
 
 import type { Resource } from '@/types/resource';
-import {
-  getAgentDiscoveryResourceId,
-  isAppContainerDiscoveryResourceType,
-} from '@/utils/discoveryTarget';
+import { getAgentDiscoveryResourceId } from '@/utils/discoveryTarget';
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
+import {
+  buildDockerHostIdentities,
+  getDockerHostRowName,
+} from '@/features/docker/dockerHostIdentity';
 
 import type { Alert } from '@/types/api';
 import type { GroupHeaderMeta, Resource as TableResource } from './tableTypes';
@@ -42,14 +43,21 @@ export const uniqueIds = (...values: unknown[]): string[] => {
 // A row matches the resource search by the name it shows or the full name it
 // stands for: host rows shorten `titan.example.com` to `titan`, and a link
 // that searches for the full name must still find the row.
+// A qualified name as it reads on the row, and as it reads in the row's controls.
+const qualifiedNames = (name?: string, qualifier?: string): string[] =>
+  name && qualifier ? [`${name} ${qualifier}`, `${name} (${qualifier})`] : [];
+
 export const matchesThresholdResourceSearch = (
-  resource: { name?: string; displayName?: string; rawName?: string },
+  resource: { name?: string; displayName?: string; rawName?: string; qualifier?: string },
   search: string,
 ): boolean => {
   if (!search) return true;
-  return [resource.name, resource.displayName, resource.rawName].some((value) =>
-    value?.toLowerCase().includes(search),
-  );
+  return [
+    resource.name,
+    resource.displayName,
+    resource.rawName,
+    ...qualifiedNames(resource.name, resource.qualifier),
+  ].some((value) => value?.toLowerCase().includes(search));
 };
 
 export const createOverridesMap = (overrides: Override[] | undefined) =>
@@ -87,24 +95,12 @@ export function hostOverrideIdCandidates(resource: Resource): string[] {
 export const hostActionId = (resource: Resource): string =>
   hostOverrideIdCandidates(resource)[0] || resource.id;
 
-export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
-  const data = platformData(resource);
-  const docker = readRecord(data?.docker);
-  const discoveryTarget = resource.discoveryTarget;
-  return uniqueIds(
-    isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
-      ? discoveryTarget?.resourceId
-      : undefined,
-    docker?.hostSourceId,
-    data?.hostSourceId,
-    discoveryTarget?.agentId,
-    resource.id,
-  );
-};
-
 // Single implementation shared with the overrides projection so the lookup
 // chain (stable name key first, legacy ID forms trailing) cannot drift.
-export { dockerContainerOverrideIdCandidates } from '../alertOverridesModel';
+export {
+  dockerContainerOverrideIdCandidates,
+  dockerHostOverrideIdCandidates,
+} from '../alertOverridesModel';
 
 export const findOverrideByCandidates = (
   overridesMap: Map<string, Override>,
@@ -163,6 +159,48 @@ export const getFriendlyNodeName = (value: string, clusterName?: string): string
 
 export const getFriendlyAlertNodeName = (value: string, clusterName?: string): string =>
   getFriendlyNodeName(value, clusterName);
+
+export interface ThresholdsDockerHostLabel {
+  /** The host's full name. */
+  rawName: string;
+  /** Its name on this page: shortened, unless that makes it read like another host's. */
+  name: string;
+  /** What tells it from hosts with its hostname, from the Docker page's rule. */
+  qualifier?: string;
+  /** Its Containers group, named so each host keeps its own. */
+  groupKey: string;
+  /** Lowercased text a search for this host matches on its containers. */
+  searchText: string;
+}
+
+export const buildThresholdsDockerHostLabels = (
+  hosts: readonly Resource[],
+): ((host: Resource) => ThresholdsDockerHostLabel) => {
+  const identities = buildDockerHostIdentities(hosts);
+  const rawNamesByFriendlyName = new Map<string, Set<string>>();
+  for (const host of hosts) {
+    const rawName = getAlertResourceDisplayLabel(host);
+    const friendlyName = getFriendlyAlertNodeName(rawName);
+    const rawNames = rawNamesByFriendlyName.get(friendlyName) ?? new Set<string>();
+    rawNames.add(rawName);
+    rawNamesByFriendlyName.set(friendlyName, rawNames);
+  }
+
+  return (host) => {
+    const rawName = getAlertResourceDisplayLabel(host);
+    const friendlyName = getFriendlyAlertNodeName(rawName);
+    const name =
+      (rawNamesByFriendlyName.get(friendlyName)?.size ?? 0) > 1 ? rawName : friendlyName || rawName;
+    const qualifier = getDockerHostRowName(host, identities).qualifier ?? undefined;
+    return {
+      rawName,
+      name,
+      qualifier,
+      groupKey: qualifier ? `${name} (${qualifier})` : name,
+      searchText: [rawName, name, ...qualifiedNames(name, qualifier)].join('\n').toLowerCase(),
+    };
+  };
+};
 
 export function buildNodeHeaderMeta(node: Resource) {
   const data = platformData(node);

@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "base_sha": "6d32995154de9ff51e34cdc1df0ec2cf7981cea5",
+  "verified_at": "2026-11-05T12:13:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceGroupHeader.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts",
+    "frontend-modern/src/features/alerts/AlertIntentPolicyPanel.tsx",
+    "frontend-modern/src/features/alerts/alertOverridesModel.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/dockerHostIdentity.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceGroupHeader.tsx": "29cbbb64a8de3b41e55504bc94bf24a23a468624e5dcbb6b395e515cf627250b",
+    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "74050ea1ef585270bea735513595af76e22039bf7acc27517970ba7b69b01b24",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "6d6a9962cd0fb327265e2292e57180984bf7a25608756378c3bd3cded7248ace",
+    "frontend-modern/src/components/Alerts/alertResourceTableModel.ts": "ff7f10e9393dd1fa492abe0cb376f37e3919e6d8e20dd5af064388d62680e2db",
+    "frontend-modern/src/features/alerts/AlertIntentPolicyPanel.tsx": "90a44275ec0ecc53cd5eac5ea8c38884ebb5e904b3b6d90b8088c37a0d50816c",
+    "frontend-modern/src/features/alerts/alertOverridesModel.ts": "b8aaafade5712b4ef7e8d95b384855e4a6cc4f668e4362d3a56d9d0171b91c5e",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts": "b447a792d51d9680cef6c40154b03ed90f6ca3877d76a2f4c1166f61dffb72e8",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts": "4f7eddce5056974c416a471498abbab04c3049862dab5f94c48ece6df0cbd93a",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts": "16d4f0c091b7ca1333731cfbb194a67c2564b85aec462351415475a17405438e",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "bad01e15274cfbec9ace794853d36c0d41748702e3d64bd7171887d54327cd28",
+    "frontend-modern/src/features/docker/dockerHostIdentity.tsx": "fa5f606b49448f945f52597846882ef11e03243eb7240b90a150b6d0f03ff93a"
+  },
+  "routes": [
+    "/alerts/thresholds/docker on a private non-mock stack: real report handlers, tokenless probed LXC collisions per connection and VMID shape, token agents with machine IDs, two token agents with no machine ID, two machines reporting both the host and Docker modules, two hosts whose FQDNs shorten alike, plus saved overrides for removed containers and hosts",
+    "/alerts/thresholds/docker on the same binary in mock mode as the negative control",
+    "/docker on the same stack, for the moved dockerHostName and the qualifier's class change"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1300
+    },
+    {
+      "width": 900,
+      "height": 1300
+    },
+    {
+      "width": 390,
+      "height": 1344
+    }
+  ],
+  "states": [
+    "Before, on origin/main: Container Runtimes listed dock twice with nothing to tell them apart, and Containers folded both hosts under one DOCK header with two identical nginx rows",
+    "Before, on origin/main: with an override saved only under alpine, both alpine rows read Custom Disabled while the evaluator raised the offline alert on the other host",
+    "Before, on origin/main: saved overrides for removed containers on probed hosts listed as Container Runtime rows named proxmox-lxc-docker",
+    "Hosts sharing a hostname read dock lab and dock site, media Home lab cluster and media Hetzner production cluster, web LXC 201 and web LXC 202, docker1, alpine and merged by primary address",
+    "Containers shows one group per host, with same-named nginx rows under dock lab and dock site, and under each merged host",
+    "An override saved under alpine reads Custom Disabled on that row only, and with both hosts silent the only live alert is on the row that reads Enabled",
+    "Saved overrides for removed containers list under Unassigned Containers, and none list as runtimes",
+    "storage.home.example and storage.office.example stay whole instead of both shortening to storage",
+    "Desktop and 900px rows are 33px with or without a qualifier, with no horizontal page scroll; only Hetzner production cluster truncates, with the full text in its title",
+    "Phone cards show the qualifier on its own line under the name, untruncated, with no horizontal page scroll",
+    "The policy panel's Resource picker lists dock (lab) and dock (site) as docker-host, and merged (192.168.1.60) and merged (10.30.0.9) as agent",
+    "The Docker page still shows its qualifiers beside each same-named host at desktop and phone width",
+    "Mock control: nine runtimes with unique hostnames show no qualifier, at all three widths"
+  ],
+  "interactions": [
+    "Toggled Offline alerts for dock (lab), saved and reloaded at all three widths: only proxmox-lxc-docker:lab:pve1:200 was stored and only that row reads Disabled",
+    "Reverted dock (lab) to defaults and saved: its key was removed and every other saved key stayed",
+    "Searched lab, dock lab and dock (lab): the matching runtime rows stayed, and others hid",
+    "Searched merged, nginx and storage: each same-named host kept its own container group",
+    "Opened Configure alert delay for dock (lab): the policy panel's Resource field reads dock (lab)",
+    "Silenced both alpine hosts through the feeder and read the live alerts",
+    "Restarted the stack with the other alpine machine reporting first and read the host IDs",
+    "Expanded both sections at all three widths and read the group headers and row names"
+  ]
+}

@@ -2,7 +2,6 @@ import { Show, createContext, useContext, type Accessor, type Component } from '
 import type { Resource } from '@/types/resource';
 import { LXC_DOCKER_HOST_PREFIX } from '@/utils/resourceBadgePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { dockerHostName } from './DockerNativeTableShared';
 
 // A hostname does not identify a Docker host: two sites can reuse one, and each
 // host still has its own row, containers and status. A unique hostname stays
@@ -20,6 +19,9 @@ export interface DockerHostIdentities {
 
 const hostSourceId = (resource: Resource): string | undefined =>
   asTrimmedString(resource.docker?.hostSourceId);
+
+export const dockerHostName = (resource: Resource): string =>
+  asTrimmedString(resource.docker?.hostname) || '—';
 
 // Most recognisable first. A probed row's ID can lag a node move, so the agent
 // ID names its guest; the node is left out for the same reason.
@@ -117,7 +119,7 @@ export const DockerHostQualifier: Component<{ value: string | null }> = (props) 
   <Show when={props.value}>
     {(value) => (
       <span
-        class="max-w-[45%] shrink-0 truncate text-[10px] font-normal text-muted"
+        class="max-w-[45%] shrink-0 truncate text-[10px] font-normal normal-case text-muted"
         title={value()}
         data-docker-host-qualifier
       >

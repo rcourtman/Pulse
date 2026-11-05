@@ -9,6 +9,7 @@ import { WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH } from '@/components/Workloads/guestRo
 import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
 import { DockerHostIdentitiesProvider, buildDockerHostIdentities } from '../dockerHostIdentity';
+import { dockerHostName } from '../DockerNativeTableShared';
 import { DockerConfigsTable } from '../DockerConfigsTable';
 import { DockerImagesTable } from '../DockerImagesTable';
 import { DockerNetworksTable } from '../DockerNetworksTable';
@@ -217,6 +218,11 @@ afterEach(() => {
 });
 
 describe('Docker native tables', () => {
+  it('names a resource by its Docker hostname, with a dash when it has none', () => {
+    expect(dockerHostName({ docker: { hostname: ' dock ' } } as unknown as Resource)).toBe('dock');
+    expect(dockerHostName({ docker: {} } as unknown as Resource)).toBe('—');
+  });
+
   it('offers bulk web-link editing keyed by the container drawer identity', async () => {
     // The trigger and panel are lazy-loaded; transform them up front so they resolve promptly.
     await import('@/components/Workloads/WorkloadWebLinksAction');
