@@ -177,7 +177,12 @@ func (r *Router) buildSecurityStatusAuthSnapshot(req *http.Request) securityStat
 	}
 
 	if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
-		if record, ok := r.config.ValidateAPIToken(token); ok {
+		// Validation updates token metadata. Share the normal auth path's
+		// exclusive writer and detached record before deriving capabilities.
+		config.Mu.RLock()
+		record, ok := validateAPITokenLocked(r.config, token)
+		config.Mu.RUnlock()
+		if ok {
 			snapshotReq := req
 			attachAPITokenRecord(snapshotReq, record)
 			tokenUsername := apiTokenAuthenticatedUser(record)

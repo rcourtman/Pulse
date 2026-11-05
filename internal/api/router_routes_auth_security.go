@@ -430,10 +430,16 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		authenticatedStatus.DetailLevel = securityStatusDetailPrivileged
 		authenticatedStatus.HasProxyAuth = hasProxyAuth
 		unprotectedExportAllowed := !r.configTransferAuthenticationConfigured() && os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
+		// The hint helper copies the primary token record. Keep that read
+		// separate from concurrent token-validation metadata writes.
+		config.Mu.RLock()
+		tokensConfigured := r.config.HasAPITokens()
+		tokenHint := r.config.PrimaryAPITokenHint()
+		config.Mu.RUnlock()
 		status := privilegedSecurityStatusResponse{
 			authenticatedSecurityStatusResponse: authenticatedStatus,
-			APITokenConfigured:                  r.config.HasAPITokens(),
-			APITokenHint:                        r.config.PrimaryAPITokenHint(),
+			APITokenConfigured:                  tokensConfigured,
+			APITokenHint:                        tokenHint,
 			ExportProtected:                     !unprotectedExportAllowed,
 			UnprotectedExportAllowed:            unprotectedExportAllowed,
 			ConfiguredButPendingRestart:         configuredButPendingRestart,

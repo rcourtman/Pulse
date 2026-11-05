@@ -361,6 +361,8 @@ func (c *Config) PrimaryAPITokenHint() string {
 }
 
 // ValidateAPIToken compares the raw token against stored hashes and updates metadata.
+// Callers must hold Mu for writing, not just reading. The returned record is
+// part of the live inventory; clone it before releasing the lock for later use.
 func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 	if rawToken == "" {
 		return nil, false
