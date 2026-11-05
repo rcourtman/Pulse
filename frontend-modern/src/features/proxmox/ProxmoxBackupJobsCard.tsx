@@ -1,5 +1,6 @@
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { supportsHoverTooltips } from '@/components/shared/hoverCapability';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
@@ -81,39 +82,34 @@ const dayTitle = (day: BackupJobsDay): string => {
   return `${date}: ${describe(day.counts)}${observed}`;
 };
 
+const failureNameList = (failures: readonly BackupJobsFailure[], outcome: string): string[] => [
+  ...new Set(
+    failures
+      .filter((failure) => failure.outcome === outcome)
+      .map((failure) => failure.workloadName),
+  ),
+];
+
 const failureNames = (failures: readonly BackupJobsFailure[], outcome: string): string => {
-  const names = [
-    ...new Set(
-      failures
-        .filter((failure) => failure.outcome === outcome)
-        .map((failure) => failure.workloadName),
-    ),
-  ];
+  const names = failureNameList(failures, outcome);
   const shown = names.slice(0, FAILED_NAMES);
   const more = names.length - shown.length;
   return more > 0 ? `${shown.join(', ')} and ${more} more` : shown.join(', ');
 };
 
-// A failed run usually leaves no restore point, so the list below can't say who
-// failed. A tap has no hover, so the chosen day says it here on every device.
-const chosenDayLine = (day: BackupJobsDay): string => {
-  const names = failureNames(day.failures, 'failed');
-  if (!names) return dayTitle(day);
-  const observed = backupJobsDayObserved(day) ? '' : ' (not fully observed)';
-  return `${getRecoveryPrettyDateLabel(day.date)}: ${day.counts.failed} failed: ${names}${observed}`;
-};
-
 export interface BackupJobsDaySelection {
   selectedDay: () => string | null;
-  // `reveal` brings the restore points into view. A failed day stays on the
-  // card, because the card is what names who failed.
+  // `reveal` brings the restore points into view. Without hover, a failed day
+  // stays on the card, because the card is what names who failed.
   onSelectDay: (date: string, options: { reveal: boolean }) => void;
+  onRevealRestorePoints: () => void;
 }
 
 export const ProxmoxBackupJobsCard: Component<{
   jobs: BackupJobsPayload;
   selectedDay?: string | null;
   onSelectDay?: BackupJobsDaySelection['onSelectDay'];
+  onRevealRestorePoints?: BackupJobsDaySelection['onRevealRestorePoints'];
 }> = (props) => {
   const last = () => props.jobs.last24h;
   const maxTotal = () => Math.max(1, ...props.jobs.days.map((day) => backupJobsTotal(day.counts)));
@@ -126,6 +122,16 @@ export const ProxmoxBackupJobsCard: Component<{
   const chosenDay = createMemo(
     () => props.jobs.days.find((day) => day.date === props.selectedDay) ?? null,
   );
+  // A failed run usually leaves no restore point, so the list can't say who
+  // failed. A tap has no hover, so the chosen day says it here on every device.
+  const chosenFailedNames = createMemo(() => {
+    const day = chosenDay();
+    return day ? failureNameList(day.failures, 'failed') : [];
+  });
+  const [namesOpenedFor, setNamesOpenedFor] = createSignal<string | null>(null);
+  const namesOpen = () => namesOpenedFor() === props.selectedDay;
+  const shownFailedNames = () =>
+    namesOpen() ? chosenFailedNames() : chosenFailedNames().slice(0, FAILED_NAMES);
   const [hover, setHover] = createSignal<{ date: string; x: number; y: number } | null>(null);
   // Read through the payload, so a poll updates an open tooltip and a day that
   // has left the window withdraws it.
@@ -226,7 +232,7 @@ export const ProxmoxBackupJobsCard: Component<{
                     aria-pressed={chosen()}
                     onClick={() =>
                       props.onSelectDay?.(day.date, {
-                        reveal: !failureNames(day.failures, 'failed'),
+                        reveal: !failureNames(day.failures, 'failed') || supportsHoverTooltips(),
                       })
                     }
                     onMouseEnter={(event) => showDay(event.currentTarget, day.date)}
@@ -273,7 +279,29 @@ export const ProxmoxBackupJobsCard: Component<{
         <Show when={chosenDay()}>
           {(day) => (
             <p class="mt-1 text-[11px] text-base-content" data-backup-jobs-chosen-day>
-              {chosenDayLine(day())}
+              <Show when={chosenFailedNames().length > 0} fallback={dayTitle(day())}>
+                {getRecoveryPrettyDateLabel(day().date)}: {day().counts.failed} failed:{' '}
+                {shownFailedNames().join(', ')}
+                <Show when={!backupJobsDayObserved(day())}> (not fully observed)</Show>
+                <Show when={chosenFailedNames().length > shownFailedNames().length}>
+                  {' '}
+                  <button
+                    type="button"
+                    class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                    onClick={() => setNamesOpenedFor(day().date)}
+                  >
+                    and {chosenFailedNames().length - shownFailedNames().length} more
+                  </button>
+                </Show>
+                {' · '}
+                <button
+                  type="button"
+                  class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                  onClick={() => props.onRevealRestorePoints?.()}
+                >
+                  View restore points
+                </button>
+              </Show>
             </p>
           )}
         </Show>
@@ -358,6 +386,7 @@ export const ProxmoxBackupJobsSection: Component<BackupJobsDaySelection> = (prop
           jobs={jobs()}
           selectedDay={props.selectedDay()}
           onSelectDay={props.onSelectDay}
+          onRevealRestorePoints={props.onRevealRestorePoints}
         />
       )}
     </Show>

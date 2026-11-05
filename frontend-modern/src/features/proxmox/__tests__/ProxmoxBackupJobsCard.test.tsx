@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProxmoxBackupJobsCard } from '../ProxmoxBackupJobsCard';
 import type { BackupJobsDay, BackupJobsPayload } from '../proxmoxBackupJobs';
 
-vi.mock('@/components/shared/hoverCapability', () => ({ supportsHoverTooltips: () => true }));
+const hoverCapable = vi.hoisted(() => ({ value: true }));
+vi.mock('@/components/shared/hoverCapability', () => ({
+  supportsHoverTooltips: () => hoverCapable.value,
+}));
 
 const counts = (success = 0, failed = 0, running = 0) => ({
   success,
@@ -188,11 +191,44 @@ describe('ProxmoxBackupJobsCard', () => {
       '2 failed: web, db',
     );
 
-    // A clean day's answer is the list; a failed day's answer is this card.
+    // Hover already named who failed, so a click can move on to the list.
     await fireEvent.click(bars[5]);
     expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-24', { reveal: true });
     await fireEvent.click(bars[2]);
-    expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: false });
+    expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: true });
+
+    // Without hover this card is the only place that says who failed.
+    hoverCapable.value = false;
+    try {
+      await fireEvent.click(bars[5]);
+      expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-24', { reveal: true });
+      await fireEvent.click(bars[2]);
+      expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: false });
+    } finally {
+      hoverCapable.value = true;
+    }
+  });
+
+  it('opens the rest of the names and offers the list from a failed day', async () => {
+    const onRevealRestorePoints = vi.fn();
+    const names = Array.from({ length: 10 }, (_, i) => failure(`guest-${i}`));
+    const { container } = render(() => (
+      <ProxmoxBackupJobsCard
+        jobs={payload({ days: days({ 2: { counts: counts(0, 10), failures: names } }) })}
+        selectedDay="2026-10-21"
+        onRevealRestorePoints={onRevealRestorePoints}
+      />
+    ));
+    const line = container.querySelector('[data-backup-jobs-chosen-day]')!;
+    expect(line).toHaveTextContent('10 failed: guest-0');
+    expect(line).not.toHaveTextContent('guest-9');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'and 2 more' }));
+    expect(line).toHaveTextContent('guest-9');
+    expect(screen.queryByRole('button', { name: /more$/ })).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'View restore points' }));
+    expect(onRevealRestorePoints).toHaveBeenCalledOnce();
   });
 
   it('leaves the bars undimmed when the chosen day is outside the 14 days', () => {

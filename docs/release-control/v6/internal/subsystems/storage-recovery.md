@@ -5299,8 +5299,10 @@ shows the day's outcomes and the guests that failed or warned, through
 sets the `day` parameter, which narrows the By date list by local creation day, and
 opening it from Coverage lands on By date as a health group opens Coverage. The
 chosen day also names who failed under the bars, because a tap has no hover and a
-failed run usually leaves no restore point for the list to show. For the same
-reason, only a day with no failures scrolls the list into view on a phone.
+failed run usually leaves no restore point for the list to show. A click brings
+the rows into view unless 320px of the list already shows. Without hover, a failed
+day stays on the card, with the rest of its names and the list a button away. The
+day explains an empty list only when no other filter could have hidden its rows.
 `/api/backups/jobs` now carries `failures` on each day, one entry per guest and
 outcome. This replaces the earlier note that a bookmark's `day` is ignored; a
 well-formed one now applies and shows as a clearable Day filter. The Count/Volume

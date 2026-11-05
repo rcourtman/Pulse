@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "b2eae41e21ffb277bcbcb515b601ff1be2543a17",
+  "verified_at": "2026-11-05T15:12:01Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "5b232c97e955dc22eb00fbbc9ecca9c7bd7fa41ef623624afe3537b2174a5fac",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "4b902d127bf1c5cd6013d5dea28ed2309b912f06cb7a7ca90c26c5cf97b891e2"
+  },
+  "routes": [
+    "/proxmox/backups",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 1920,
+      "height": 1300
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock stack built from this change, before the rebase onto main",
+    "1440x1000 after clicking a failed day: first restore point row at 292px, counter 690 of 2977",
+    "1920x1300 after clicking a clean day: no scroll, bars still at 326px and first row at 1082px",
+    "390 after tapping a failed day: stays on the card with eight names and an \"and 27 more\" control",
+    "A day with a search that hides its rows keeps the generic no-match copy, never the day copy",
+    "No page errors; no horizontal overflow at 390"
+  ],
+  "interactions": [
+    "Clicked a failed day at 1440x1000 and a clean day at 1920x1300 from Coverage",
+    "Tapped a failed day at 390, tapped and 27 more: all names showed and the control went away",
+    "Tapped View restore points at 390: the first row moved to 176px",
+    "Opened a day with a search matching nothing"
+  ]
+}
