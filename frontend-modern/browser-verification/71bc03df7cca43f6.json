@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "4effb8285eef2919865f056be26db68b9a6ed4b1",
+  "changed_paths": ["frontend-modern/src/components/NoOrganizationAccess.tsx"],
+  "content_sha256": {
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "130feb8a778a6ec17569b4615ce132729224b3eacfbddabc8f694db220929bd3"
+  },
+  "routes": ["AppBootstrapStatus failed bootstrap / no-organization access recovery"],
+  "states": [
+    "HTTP invitation read failure and malformed success are unavailable, not confirmed empty",
+    "confirmed empty administrator instruction",
+    "initial and explicit-retry read pending",
+    "two real-client invitation rows with roles and Accept/Decline controls",
+    "confirmed decline followed by failed list refresh"
+  ],
+  "interactions": [
+    "AppBootstrapStatus probes synthetic default_org_access_denied over real API client and mounts the real no-organization consumer",
+    "Explicit Retry invitations performs exactly one personal-inbox GET and restores invitation rows",
+    "Retry after confirmed decline checks saved invitations without replaying DELETE",
+    "Check again and Sign out remain enabled within both initial viewports; no horizontal overflow",
+    "Comparable before/after capture pairs inspected with native view_image; names, roles and all existing row/recovery controls remain visible"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-05T07:10:38Z",
+  "browser": {
+    "client": "1.56.1",
+    "browser": "141.0.7390.37"
+  },
+  "notes": "Light-theme synthetic HTTP fixture uses actual AppBootstrapStatus, NoOrganizationAccess, OrgsAPI and API client with application CSS; not installed account or server-authorization acceptance."
+}
