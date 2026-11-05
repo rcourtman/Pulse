@@ -88,6 +88,7 @@ type TemperatureCollector struct {
 	sshPort          int    // SSH port (default 22)
 	hostKeys         KnownHostsManager
 	missingKeyWarned atomic.Bool
+	containerSSHSeen sync.Map // Hosts already assessed by noteContainerSSHUse
 	runner           CommandRunner
 	sshFailureMu     sync.Mutex
 	sshFailures      map[string]*temperatureSSHFailure
@@ -263,26 +264,6 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 	// Extract hostname/IP from the host URL (might be https://hostname:8006)
 	host := extractHostname(nodeHost)
 
-	// SECURITY: Warn about legacy SSH collection in containers; this is not a block.
-	// Container compromise = SSH key compromise = root access to infrastructure
-	devModeAllowSSH := os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true"
-	isContainer := os.Getenv("PULSE_DOCKER") == "true" || system.InContainer()
-
-	if isContainer && devModeAllowSSH {
-		// Log when dev override is active so operators understand the security posture
-		log.Info().
-			Str("node", nodeName).
-			Msg("Temperature collection using direct SSH (dev mode override active - not for production)")
-	}
-
-	if isContainer && !devModeAllowSSH {
-		// Warn but allow if key is present (legacy behavior restoration)
-		// We don't return here, allowing the code to fall through to the SSH key check
-		log.Warn().
-			Str("node", nodeName).
-			Msg("Temperature collection using direct SSH from container. This is insecure for production deployments.")
-	}
-
 	if strings.TrimSpace(tc.sshKeyPath) == "" {
 		tc.logMissingSSHKey(nil)
 		return &models.Temperature{Available: false}, nil
@@ -386,6 +367,28 @@ func (tc *TemperatureCollector) logSkippedSSHAttempt(outcome sshFailureOutcome, 
 	event.Msg("Abandoning SSH temperature collection after the collection deadline expired")
 }
 
+// noteContainerSSHUse tells the operator that ssh is about to run from inside a
+// container. It is a warning, not a block: container compromise means SSH key
+// compromise, which means root access to the infrastructure. A host is only
+// assessed once, so the line cannot repeat on every poll cycle.
+func (tc *TemperatureCollector) noteContainerSSHUse(host string) {
+	if _, seen := tc.containerSSHSeen.LoadOrStore(host, struct{}{}); seen {
+		return
+	}
+	if os.Getenv("PULSE_DOCKER") != "true" && !system.InContainer() {
+		return
+	}
+	if os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true" {
+		log.Info().
+			Str("host", host).
+			Msg("Temperature collection using direct SSH (dev mode override active - not for production)")
+		return
+	}
+	log.Warn().
+		Str("host", host).
+		Msg("Temperature collection using direct SSH from container. This is insecure for production deployments.")
+}
+
 func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command string) (string, error) {
 	if err := tc.validateSSHKeyPath(); err != nil {
 		return "", err
@@ -431,6 +434,8 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 
 	// Add user@host and command
 	sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", tc.sshUser, host), command)
+
+	tc.noteContainerSSHUse(host)
 
 	output, err := tc.runner.Run(runCtx, "ssh", sshArgs...)
 	if err != nil {
