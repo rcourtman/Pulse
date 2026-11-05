@@ -64,6 +64,9 @@ type BackupJobsDay struct {
 	Date         string           `json:"date"`
 	HistoryState string           `json:"historyState"`
 	Counts       BackupJobsCounts `json:"counts"`
+	// One entry per guest and outcome: the card names who failed, and a guest
+	// retried five times that day is still one name.
+	Failures []BackupJobsFailure `json:"failures"`
 }
 
 const backupJobsHistoryDays = 14
@@ -156,19 +159,19 @@ func buildBackupJobsPayload(
 		Days: make([]BackupJobsDay, 0, len(days.Days)),
 	}
 	for _, failure := range last.Failures {
-		payload.Last24h.Failures = append(payload.Last24h.Failures, BackupJobsFailure{
-			WorkloadID:   failure.WorkloadID,
-			WorkloadName: failure.WorkloadName,
-			Instance:     failure.Instance,
-			At:           failure.At,
-			Outcome:      string(failure.Outcome),
-		})
+		payload.Last24h.Failures = append(payload.Last24h.Failures, backupJobsFailure(failure))
 	}
+	dayFailures := backupJobsFailuresByDay(days.Failures, location)
 	for _, day := range days.Days {
+		failures := dayFailures[day.Date]
+		if failures == nil {
+			failures = []BackupJobsFailure{}
+		}
 		payload.Days = append(payload.Days, BackupJobsDay{
 			Date:         day.Date,
 			HistoryState: day.HistoryState,
 			Counts:       backupJobsCounts(day.Counts),
+			Failures:     failures,
 		})
 	}
 	if !available {
@@ -181,6 +184,34 @@ func buildBackupJobsPayload(
 	}
 
 	return payload
+}
+
+func backupJobsFailure(failure model.BackupHealthFailure) BackupJobsFailure {
+	return BackupJobsFailure{
+		WorkloadID:   failure.WorkloadID,
+		WorkloadName: failure.WorkloadName,
+		Instance:     failure.Instance,
+		At:           failure.At,
+		Outcome:      string(failure.Outcome),
+	}
+}
+
+// backupJobsFailuresByDay groups failures under the same local days as the
+// counts. Failures arrive newest first, so each guest keeps its latest run.
+func backupJobsFailuresByDay(failures []model.BackupHealthFailure, location *time.Location) map[string][]BackupJobsFailure {
+	type seenKey struct{ date, workload, outcome string }
+	seen := make(map[seenKey]struct{}, len(failures))
+	byDay := make(map[string][]BackupJobsFailure)
+	for _, failure := range failures {
+		date := failure.At.In(location).Format("2006-01-02")
+		key := seenKey{date, failure.WorkloadID, string(failure.Outcome)}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		byDay[date] = append(byDay[date], backupJobsFailure(failure))
+	}
+	return byDay
 }
 
 // pveBackupJobWorkloads keeps Proxmox VE guests only. A VM from another

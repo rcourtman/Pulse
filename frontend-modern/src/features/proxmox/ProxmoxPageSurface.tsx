@@ -440,7 +440,7 @@ export function ProxmoxPageSurface() {
                 emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
                 workloads={model().guests}
                 servers={model().resources}
-                summaryAside={<ProxmoxBackupJobsSection />}
+                summaryAside={(days) => <ProxmoxBackupJobsSection {...days} />}
                 datastoreAlerts={(ids) =>
                   getAlertsForResource(ids, activeAlerts, alertsActivation.detectionEnabled())
                 }

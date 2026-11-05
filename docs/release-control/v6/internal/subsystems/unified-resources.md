@@ -329,6 +329,14 @@ and every row's State cell reads the resource's connection status (or, on
 phones, a job problem or fill forecast that takes its place). The rows, their keys and
 their drawers are unchanged; `BackupServerRow.continuesServer` is removed.
 
+### A chosen backup day explains its own empty list (5 November 2026)
+
+Backup jobs bars can select a day again, so `ProxmoxRecoverableTable` takes optional
+filtered empty copy. A day with no rows reads "No restore points from" that date and
+says a failed backup usually leaves none, instead of asking the reader to adjust
+filters. Without a day it keeps the wording below. Which rows match any other filter
+is unchanged.
+
 ### Backup empty states name only filters that exist (2 November 2026)
 
 With the per-day restore point chart removed from Backups By date, no control
