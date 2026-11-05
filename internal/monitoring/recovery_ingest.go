@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	recoverystore "github.com/rcourtman/pulse-go-rewrite/internal/recovery/store"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -27,6 +28,12 @@ type recoveryIngestBatch struct {
 	points       []recovery.RecoveryPoint
 	observations []recovery.ProtectionProviderObservation
 	reconcile    *recoveryReconcileScope
+	// evaluatedSubjects names the guests a complete enumeration could answer for,
+	// and unsettledSubjects those among them its unattributed backups could belong
+	// to. A partial read sets neither: it says nothing about the snapshots it did
+	// not reach. A guest that has not loaded is not evaluated and keeps its answer.
+	evaluatedSubjects []string
+	unsettledSubjects []string
 }
 
 type recoveryIngestCoalesceKey struct {
@@ -186,6 +193,7 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch reco
 		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to open recovery store for backup ingestion")
 		return
 	}
+	m.retireUnsettledBackupScopes(ctx, store, orgID)
 
 	// Collection-wide evidence is the authority for how much provider history
 	// Pulse could actually see. Persist it before any point mutation so a large
@@ -224,6 +232,35 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch reco
 			Str("instance", batch.reconcile.instance).
 			Str("idPrefix", batch.reconcile.idPrefix).
 			Msg("Failed to reconcile recovery points against source enumeration")
+	}
+	if len(batch.evaluatedSubjects) == 0 {
+		return
+	}
+	if err := store.UpdateUnsettledProtectionSubjects(ctx, batch.reconcile.instance, batch.evaluatedSubjects, batch.unsettledSubjects); err != nil {
+		log.Warn().
+			Err(err).
+			Str("org_id", orgID).
+			Str("instance", batch.reconcile.instance).
+			Msg("Failed to update guests with an unsettled backup")
+	}
+}
+
+// retireUnsettledBackupScopes forgets the unsettled guests of PBS connections that
+// have been removed, because a removed connection never polls again to replace its
+// own answer. It runs on ingest, where the store is already open.
+func (m *Monitor) retireUnsettledBackupScopes(ctx context.Context, store *recoverystore.Store, orgID string) {
+	m.mu.RLock()
+	cfg := m.config
+	m.mu.RUnlock()
+	if cfg == nil {
+		return
+	}
+	scopes := make([]string, 0, len(cfg.PBSInstances))
+	for i := range cfg.PBSInstances {
+		scopes = append(scopes, cfg.PBSInstances[i].Name)
+	}
+	if err := store.RetainUnsettledProtectionScopes(ctx, scopes); err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to retire unsettled backup scopes")
 	}
 }
 

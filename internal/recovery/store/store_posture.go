@@ -337,6 +337,211 @@ func (s *Store) UpsertProtectionProviderObservations(
 	return s.RefreshProtectionPostures(ctx, sortedStringSet(affectedKeys))
 }
 
+func (s *Store) loadUnsettledProtectionSubjects(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT scope, subject_resource_id FROM protection_unsettled_subjects`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	loaded := make(map[string]map[string]struct{})
+	for rows.Next() {
+		var scope, subjectResourceID string
+		if err := rows.Scan(&scope, &subjectResourceID); err != nil {
+			return err
+		}
+		if loaded[scope] == nil {
+			loaded[scope] = make(map[string]struct{})
+		}
+		loaded[scope][subjectResourceID] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	s.unsettledMu.Lock()
+	s.unsettledSubjects = loaded
+	s.unsettledMu.Unlock()
+	return nil
+}
+
+// UpdateUnsettledProtectionSubjects records one provider connection's answer for
+// the guests it could evaluate: those in unsettled might own one of its backups
+// without the evidence saying which. A guest outside evaluated keeps its last
+// answer, because a collection knows nothing about a guest that has not loaded.
+func (s *Store) UpdateUnsettledProtectionSubjects(
+	ctx context.Context,
+	scope string,
+	evaluated []string,
+	unsettled []string,
+) error {
+	if err := s.ensureInitialized(); err != nil {
+		return err
+	}
+	scope = strings.TrimSpace(scope)
+	s.unsettledWriteMu.Lock()
+	defer s.unsettledWriteMu.Unlock()
+
+	answered := make(map[string]struct{}, len(evaluated))
+	for _, id := range normalizeProtectionStrings(evaluated) {
+		answered[id] = struct{}{}
+	}
+	next := make(map[string]struct{}, len(unsettled))
+	for _, id := range normalizeProtectionStrings(unsettled) {
+		next[id] = struct{}{}
+	}
+	s.unsettledMu.RLock()
+	for id := range s.unsettledSubjects[scope] {
+		if _, known := answered[id]; !known {
+			next[id] = struct{}{}
+		}
+	}
+	s.unsettledMu.RUnlock()
+	return s.replaceUnsettledProtectionSubjectsLocked(ctx, scope, next)
+}
+
+func (s *Store) replaceUnsettledProtectionSubjectsLocked(
+	ctx context.Context,
+	scope string,
+	next map[string]struct{},
+) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.unsettledMu.RLock()
+	previous := s.unsettledSubjects[scope]
+	changed := make([]string, 0, len(next)+len(previous))
+	for id := range next {
+		if _, held := previous[id]; !held {
+			changed = append(changed, id)
+		}
+	}
+	for id := range previous {
+		if _, held := next[id]; !held {
+			changed = append(changed, id)
+		}
+	}
+	s.unsettledMu.RUnlock()
+	if len(changed) == 0 {
+		return nil
+	}
+	if err := s.writeUnsettledProtectionSubjects(ctx, scope, next); err != nil {
+		return err
+	}
+	s.unsettledMu.Lock()
+	if len(next) == 0 {
+		delete(s.unsettledSubjects, scope)
+	} else {
+		if s.unsettledSubjects == nil {
+			s.unsettledSubjects = make(map[string]map[string]struct{})
+		}
+		s.unsettledSubjects[scope] = next
+	}
+	s.unsettledMu.Unlock()
+
+	sort.Strings(changed)
+	subjectKeys := make([]string, 0, len(changed))
+	for start := 0; start < len(changed); start += protectionRefreshChunkSize {
+		end := start + protectionRefreshChunkSize
+		if end > len(changed) {
+			end = len(changed)
+		}
+		chunk := changed[start:end]
+		args := make([]any, len(chunk))
+		for i := range chunk {
+			args[i] = chunk[i]
+		}
+		rows, err := s.db.QueryContext(ctx, `
+			SELECT subject_key FROM protection_postures
+			WHERE subject_resource_id IN (`+strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")+`)
+		`, args...)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var key string
+			if err := rows.Scan(&key); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			subjectKeys = append(subjectKeys, key)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+	}
+	return s.RefreshProtectionPostures(ctx, subjectKeys)
+}
+
+func (s *Store) writeUnsettledProtectionSubjects(
+	ctx context.Context,
+	scope string,
+	subjects map[string]struct{},
+) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM protection_unsettled_subjects WHERE scope = ?`, scope); err != nil {
+		return err
+	}
+	nowMs := time.Now().UTC().UnixMilli()
+	for id := range subjects {
+		if _, err := tx.ExecContext(
+			ctx,
+			`INSERT INTO protection_unsettled_subjects (scope, subject_resource_id, updated_at_ms) VALUES (?, ?, ?)`,
+			scope,
+			id,
+			nowMs,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// RetainUnsettledProtectionScopes drops the answers of connections that no
+// longer exist, since nothing will collect from them again.
+func (s *Store) RetainUnsettledProtectionScopes(ctx context.Context, scopes []string) error {
+	if err := s.ensureInitialized(); err != nil {
+		return err
+	}
+	keep := make(map[string]struct{}, len(scopes))
+	for _, scope := range scopes {
+		keep[strings.TrimSpace(scope)] = struct{}{}
+	}
+	s.unsettledWriteMu.Lock()
+	defer s.unsettledWriteMu.Unlock()
+	s.unsettledMu.RLock()
+	retired := make([]string, 0, len(s.unsettledSubjects))
+	for scope := range s.unsettledSubjects {
+		if _, kept := keep[scope]; !kept {
+			retired = append(retired, scope)
+		}
+	}
+	s.unsettledMu.RUnlock()
+	for _, scope := range retired {
+		if err := s.replaceUnsettledProtectionSubjectsLocked(ctx, scope, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) qualifyUnsettledPosture(posture recovery.ProtectionPosture) recovery.ProtectionPosture {
+	s.unsettledMu.RLock()
+	defer s.unsettledMu.RUnlock()
+	for _, subjects := range s.unsettledSubjects {
+		if _, unsettled := subjects[posture.SubjectResourceID]; unsettled {
+			return posture.WithUnsettledBackup()
+		}
+	}
+	return posture
+}
+
 func (s *Store) RefreshProtectionPostures(ctx context.Context, subjectKeys []string) error {
 	if err := s.ensureInitialized(); err != nil {
 		return err
@@ -613,13 +818,13 @@ func (s *Store) writeProtectionPostures(
 			}
 			continue
 		}
-		posture := recovery.BuildProtectionPostureFromPointsAt(
+		posture := s.qualifyUnsettledPosture(recovery.BuildProtectionPostureFromPointsAt(
 			subjectResourceID,
 			points,
 			observations,
 			recovery.DefaultProtectionPosturePolicy,
 			now,
-		)
+		))
 		if err := posture.Validate(); err != nil {
 			return err
 		}
@@ -781,13 +986,13 @@ func (s *Store) listRequestedProtectionPostures(
 				now,
 			)
 		} else {
-			posture = recovery.BuildProtectionPostureFromPointsAt(
+			posture = s.qualifyUnsettledPosture(recovery.BuildProtectionPostureFromPointsAt(
 				subjectResourceID,
 				pointsByKey[subjectKey],
 				observations,
 				recovery.DefaultProtectionPosturePolicy,
 				now,
-			)
+			))
 		}
 		if state != "" && posture.State != state {
 			continue

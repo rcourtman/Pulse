@@ -2312,10 +2312,11 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
+	guestInstances := m.state.PBSBackupGuestInstances()
 	points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
 		observedBackups,
 		candidates,
-		m.state.PBSBackupGuestInstances(),
+		guestInstances,
 		protectionObservedAt,
 	)
 	if evidenceErr != nil {
@@ -2346,6 +2347,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			idPrefix: "pbs-backup:",
 			instance: instanceName,
 		}
+		batch.evaluatedSubjects = proxmoxrecoverymapper.PBSCandidateResourceIDs(candidates)
+		batch.unsettledSubjects = proxmoxrecoverymapper.UnsettledPBSGuestResourceIDs(
+			observedBackups,
+			candidates,
+			guestInstances,
+		)
 	}
 	m.enqueueRecoveryIngest(batch)
 

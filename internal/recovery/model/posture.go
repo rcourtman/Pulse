@@ -326,6 +326,21 @@ type ProtectionPosture struct {
 	EvaluatedAt           time.Time                 `json:"evaluatedAt"`
 }
 
+// WithUnsettledBackup qualifies a no-backup verdict for a guest that a backup
+// could belong to when the evidence does not settle which guest owns it. Pulse
+// has not seen this guest go without a backup, so it cannot say either way.
+func (posture ProtectionPosture) WithUnsettledBackup() ProtectionPosture {
+	if posture.State != ProtectionStateUnprotected {
+		return posture
+	}
+	qualified := posture.Clone()
+	qualified.State = ProtectionStateUnknown
+	qualified.Reason = ProtectionReasonNoHistory
+	qualified.Coverage = ProtectionCoverageUnknown
+	qualified.Explanation = "A backup with this guest's VMID exists, but Pulse cannot tell which guest it belongs to."
+	return qualified
+}
+
 func (posture ProtectionPosture) Clone() ProtectionPosture {
 	clone := posture
 	clone.LastAttemptAt = cloneTime(posture.LastAttemptAt)
