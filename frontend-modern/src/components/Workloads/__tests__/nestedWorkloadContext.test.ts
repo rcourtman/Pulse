@@ -30,6 +30,87 @@ const makeGuest = (overrides: Partial<WorkloadGuest>): WorkloadGuest =>
   }) as WorkloadGuest;
 
 describe('nested workload context', () => {
+  it('links same-named LXCs to their own Docker hosts by ID', () => {
+    const makeLxc = (id: string, instance: string) =>
+      makeGuest({
+        id,
+        vmid: 200,
+        name: 'dock',
+        node: 'pve1',
+        instance,
+        platformScopes: ['proxmox-pve'],
+      });
+    const makeContainer = (id: string, instance: string) =>
+      makeGuest({
+        id,
+        vmid: 0,
+        name: id,
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'docker',
+        platformScopes: ['proxmox-pve', 'docker'],
+        containerRuntime: 'docker',
+        dockerHostId: `proxmox-lxc-docker:${instance}:pve1:200`,
+        dockerHostName: 'dock',
+      });
+    const labLxc = makeLxc('lxc-lab', 'lab');
+    const siteLxc = makeLxc('lxc-site', 'site');
+
+    const result = buildNestedWorkloadContextByGuestId({
+      guests: [labLxc, siteLxc, makeContainer('grafana', 'lab'), makeContainer('redis', 'site')],
+      visibleGuests: [labLxc, siteLxc],
+      excludedWorkloadTypes: ['app-container'],
+      platformScope: 'proxmox-pve',
+    });
+
+    expect(result['lxc-lab']?.href).toBe(
+      `/docker/overview?host=${encodeURIComponent('proxmox-lxc-docker:lab:pve1:200')}`,
+    );
+    expect(result['lxc-site']?.href).toBe(
+      `/docker/overview?host=${encodeURIComponent('proxmox-lxc-docker:site:pve1:200')}`,
+    );
+  });
+
+  it('links by ID when a standalone Docker host shares the guest host name', () => {
+    const lxc = makeGuest({
+      id: 'lxc-lab',
+      vmid: 200,
+      name: 'dock',
+      node: 'pve1',
+      instance: 'lab',
+      platformScopes: ['proxmox-pve'],
+    });
+    const container = (id: string, dockerHostId: string, platformScopes: string[]) =>
+      makeGuest({
+        id,
+        vmid: 0,
+        name: id,
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'docker',
+        platformScopes,
+        containerRuntime: 'docker',
+        dockerHostId,
+        dockerHostName: 'dock',
+      });
+
+    const result = buildNestedWorkloadContextByGuestId({
+      guests: [
+        lxc,
+        container('grafana', 'proxmox-lxc-docker:lab:pve1:200', ['proxmox-pve', 'docker']),
+        container('traefik', 'agent-hetzner', ['docker']),
+      ],
+      visibleGuests: [lxc],
+      excludedWorkloadTypes: ['app-container'],
+      platformScope: 'proxmox-pve',
+    });
+
+    expect(result['lxc-lab']?.count).toBe(1);
+    expect(result['lxc-lab']?.href).toBe(
+      `/docker/overview?host=${encodeURIComponent('proxmox-lxc-docker:lab:pve1:200')}`,
+    );
+  });
+
   it('maps Proxmox LXC Docker app containers to the owning visible LXC', () => {
     const lxc = makeGuest({
       id: 'lxc-141',

@@ -38,6 +38,7 @@ import {
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
 import { dockerResourceName } from './DockerNativeTableShared';
+import { useDockerHostIdentities } from './dockerHostIdentity';
 
 const bucketValue = (bucket?: DockerStorageUsageMeta): JSX.Element => {
   if (!hasDockerStorageUsageBucket(bucket)) return <span class="text-muted">—</span>;
@@ -92,8 +93,11 @@ const storageSummary = (host: Resource): string => {
 };
 
 const StorageUsageDetail: Component<{ host: Resource; onClose: () => void }> = (props) => {
+  const hostIdentities = useDockerHostIdentities();
   const hostname = () =>
-    asTrimmedString(props.host.docker?.hostname) || dockerResourceName(props.host);
+    asTrimmedString(props.host.docker?.hostname)
+      ? hostIdentities().labelFor(props.host)
+      : dockerResourceName(props.host);
   return (
     <InlineDetailPanel
       testId="docker-storage-detail"

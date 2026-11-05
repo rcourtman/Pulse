@@ -40,6 +40,7 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { useDockerHostIdentities } from './dockerHostIdentity';
 import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
 import type { Resource } from '@/types/resource';
 
@@ -89,6 +90,7 @@ const buildConfigDetailSections = (
 ];
 
 export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => {
+  const hostIdentities = useDockerHostIdentities();
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -244,7 +246,7 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            {dockerHostName(resource)}
+                            {hostIdentities().labelFor(resource)}
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>

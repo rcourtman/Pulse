@@ -36,6 +36,7 @@ import {
   dockerReportedBySection,
   dockerStateTextToneClass,
 } from './DockerNativeTableShared';
+import { useDockerHostIdentities } from './dockerHostIdentity';
 import type { Resource } from '@/types/resource';
 import {
   compareDockerServices,
@@ -211,6 +212,7 @@ export const DockerServicesTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const hostIdentities = useDockerHostIdentities();
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -373,7 +375,7 @@ export const DockerServicesTable: Component<{
                     const stack = () => dockerServiceStack(service) || '—';
                     const image = () => asTrimmedString(service.docker?.image) || '—';
                     const mode = () => asTrimmedString(service.docker?.mode) || '—';
-                    const host = () => asTrimmedString(service.docker?.hostname) || '—';
+                    const host = () => hostIdentities().labelFor(service);
                     const indicator = () => mapDockerServiceStatus(service);
                     const update = () => formatServiceUpdate(service.docker?.serviceUpdate);
                     // The cell behind the dot's verdict reads in its colour: the

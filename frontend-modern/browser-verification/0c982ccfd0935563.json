@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "base_sha": "c8dbc9dfc98aa053dffbcec35a7d6cecf29ccc34",
+  "verified_at": "2026-11-05T11:04:48Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/nestedWorkloadContext.ts",
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerStorageUsageTable.tsx",
+    "frontend-modern/src/features/docker/dockerHostIdentity.tsx",
+    "frontend-modern/src/features/docker/dockerPageModel.ts",
+    "frontend-modern/src/utils/resourceBadgePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/nestedWorkloadContext.ts": "db764ccd3efb91417002298d0a23051236752e06ab4e95c9d747fd357e75cda0",
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx": "54de4b9d063d7dce8cfa47e965226263ed3ccd063840302e1f3c22bf91d970db",
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx": "00d59b3e213b06a37f5ef4cc95ee24249083eb2bd68a60a4002ad90c59746105",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "73101e29e78a4d4f9032a565ddc04c65da678214e2314c3c2ed573a79ce52915",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "8c26dc3fb3c642d2876e8b49b91282ad2ec56863473cb346c234ee4617c63369",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "5037bb10fd442d544b49ed8427273ba9616e8a3a675d719399c561ec8fafee9b",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "e10e90d803d339f31a80e1859009ec852b85592b928c4ceab48f4e8a35ab4671",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "a6e6506f9c3ba2e38e3f10a633fc0c843d78274e44aca040680d65c961fc638f",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "d7b1d8bff0769cb9de98fa4247e85eb09f42ff62b9338bbd360ed96b1eb7d77c",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx": "1640e2a8ca8a3f69afcd9ae0366f79ad4db88449c51d62a092b69392efc4328e",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "bb8d539960a87c5be0f52f7d5491ff19a1deadb448081ac13dc71d14003bbd20",
+    "frontend-modern/src/features/docker/DockerStorageUsageTable.tsx": "6c863686d5c7cedc91a4179ca87e65205d20332afc0cf67762a2f2181e879f5e",
+    "frontend-modern/src/features/docker/dockerHostIdentity.tsx": "67aada97570c28e8c28ce10cb33617d892f94365a9110264315c4b02768bdc9e",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "c1361852d350e93cd916bb7d2e82d569c4a81efa414a0a08622f2afbf0e86533",
+    "frontend-modern/src/utils/resourceBadgePresentation.ts": "9a0e213b8889887bd1058b0766366b519982fa63557bd4c9a477180d0fa050eb"
+  },
+  "routes": [
+    "/docker on a private non-mock stack: real report handler, two tokenless probed LXC collisions per connection and VMID shape, two token agents with their own tokens",
+    "/docker on the same binary in mock mode as the negative control"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before, on origin/main: one row click selected both same-named rows and listed four containers while the row said two; the grouped view folded each pair and showed a false green and a false No report",
+    "Hosts sharing a hostname across connections read dock lab and dock site; one node name and VMID on two connections read by connection; two guests on one connection read LXC 201 and LXC 202; token agents read their primary address",
+    "One of each pair silent: only that host's row and group go red with No report, and the group dot changed without a reload",
+    "Very long hostnames and connection names truncate on one line; a long hostname gives way to its qualifier, and an address stays whole at phone width",
+    "Row height stayed 33px at desktop and 32px at phone width, group rows likewise, with no horizontal page scroll",
+    "Mock control: eight hosts with unique hostnames show no qualifier, and row click still writes ?host=<hostname>",
+    "Host drawer heading and collapse label name the qualified host; Alert Thresholds checked and left unchanged"
+  ],
+  "interactions": [
+    "Clicked a same-named row: only that row marked, only its containers listed, heading names the qualified host, URL carries the host ID",
+    "Clicked the other same-named row, then the same row again to clear",
+    "Opened ?host=dock as an older link: both rows marked, both groups listed, chip and heading read dock; one click clears it",
+    "Picked Host: docker1 (192.168.1.50) from Add filter: chip, heading, row mark and group all followed",
+    "Searched a connection name: its containers listed, others hidden",
+    "Switched View to List: Host column shows hostname and qualifier on one line; switched back to Grouped",
+    "Opened and collapsed a host drawer at both widths"
+  ]
+}

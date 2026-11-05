@@ -267,6 +267,71 @@ describe('DockerPageSurface', () => {
     expect(emptyState).toHaveTextContent('Set up Docker or Podman');
   });
 
+  it('scopes one same-named host by its ID and names it in the heading', () => {
+    const sourceFor = (site: string) => `proxmox-lxc-docker:${site}:pve1:200`;
+    const makeSameNamedHost = (site: string) =>
+      makeDockerHost({
+        id: `agent:${site}`,
+        name: 'dock',
+        displayName: 'dock',
+        docker: {
+          runtime: 'docker',
+          hostname: 'dock',
+          hostSourceId: sourceFor(site),
+        } as NonNullable<Resource['docker']>,
+      });
+    mocks.searchParams = { host: sourceFor('lab') };
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [makeSameNamedHost('lab'), makeSameNamedHost('site')],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    const hostsProps = mocks.DockerHostsTable.mock.lastCall![0] as {
+      resources: Resource[];
+      containerScope?: {
+        isSelected: (host: Resource) => boolean;
+        onShow: (host: Resource) => void;
+      };
+    };
+    const lab = hostsProps.resources.find((host) => host.id === 'agent:lab')!;
+    const site = hostsProps.resources.find((host) => host.id === 'agent:site')!;
+    expect(hostsProps.containerScope?.isSelected(lab)).toBe(true);
+    expect(hostsProps.containerScope?.isSelected(site)).toBe(false);
+    expect(screen.getByRole('heading', { name: 'Containers on dock (lab)' })).toBeInTheDocument();
+
+    hostsProps.containerScope?.onShow(site);
+    expect(mocks.setSearchParams).toHaveBeenCalledWith({ host: sourceFor('site') });
+  });
+
+  it('labels a bare hostname selecting several same-named hosts by that hostname', () => {
+    const makeSameNamedHost = (site: string) =>
+      makeDockerHost({
+        id: `agent:${site}`,
+        name: 'dock',
+        displayName: 'dock',
+        docker: {
+          runtime: 'docker',
+          hostname: 'dock',
+          hostSourceId: `proxmox-lxc-docker:${site}:pve1:200`,
+        } as NonNullable<Resource['docker']>,
+      });
+    mocks.searchParams = { host: 'dock' };
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [makeSameNamedHost('lab'), makeSameNamedHost('site')],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByRole('heading', { name: 'Containers on dock' })).toBeInTheDocument();
+  });
+
   it('keeps overview focused on runtime hosts plus primary container workloads', () => {
     render(() => <DockerPageSurface />);
 

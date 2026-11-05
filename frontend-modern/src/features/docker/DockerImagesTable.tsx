@@ -28,6 +28,7 @@ import {
   dockerResourceName,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { useDockerHostIdentities } from './dockerHostIdentity';
 import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
 import {
   getDockerImageOperationalPresentation,
@@ -50,6 +51,7 @@ type DockerImageSortKey = (typeof DOCKER_IMAGE_SORT_KEYS)[number];
 export const DockerImagesTable: Component<
   DockerNativeTableProps & { relatedContainers?: Resource[] }
 > = (props) => {
+  const hostIdentities = useDockerHostIdentities();
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -232,7 +234,7 @@ export const DockerImagesTable: Component<
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-phone-hidden`}
                           >
-                            {dockerHostName(resource)}
+                            {hostIdentities().labelFor(resource)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-phone-hidden`}

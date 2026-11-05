@@ -1,4 +1,5 @@
 import { Show, createMemo, createSignal, type Component } from 'solid-js';
+import { getDockerHostRowName, useDockerHostIdentities } from './dockerHostIdentity';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 
 import type { HistoryTimeRange } from '@/api/charts';
@@ -38,7 +39,8 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
   );
 
   const headingId = () => `docker-host-drawer-heading-${props.host.id}`;
-  const displayName = createMemo(() => asTrimmedString(props.host.name) || props.host.id);
+  const hostIdentities = useDockerHostIdentities();
+  const displayName = createMemo(() => getDockerHostRowName(props.host, hostIdentities()).label);
   const historyTarget = createMemo(() => getDockerHostDrawerHistoryTarget(props.host));
   const currentMetrics = createMemo(() => getDockerHostDrawerCurrentMetrics(props.host));
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.host.status));

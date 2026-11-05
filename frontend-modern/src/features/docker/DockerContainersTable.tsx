@@ -69,6 +69,12 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
+  DockerHostQualifier,
+  dockerResourceMatchesHostScope,
+  useDockerHostIdentities,
+  type DockerHostIdentities,
+} from './dockerHostIdentity';
+import {
   DockerResourceNameCell,
   dockerHostName,
   dockerJoinValues,
@@ -118,7 +124,10 @@ type DockerContainersTableProps = DockerNativeTableProps & {
 };
 
 type DockerContainerHostGroup = {
+  scope: string;
   host: string;
+  qualifier: string | null;
+  label: string;
   hostResource?: Resource;
   rows: Resource[];
 };
@@ -169,14 +178,17 @@ const CONTAINER_WEB_LINKS_NOUN: WorkloadWebLinksNoun = { one: 'container', many:
 
 // Keyed by the identity the container drawer saves its web link under, so the
 // bulk editor and the drawer field read and write the same record.
-const toContainerWebLinkRows = (resource: Resource): WorkloadWebLinkRow[] => {
+const toContainerWebLinkRows = (
+  resource: Resource,
+  hostIdentities: DockerHostIdentities,
+): WorkloadWebLinkRow[] => {
   const target = toDiscoveryConfig(resource);
   if (target?.metadataKind !== 'guest' || !target.metadataId) return [];
   return [
     {
       metadataId: target.metadataId,
       name: dockerResourceName(resource),
-      detail: [dockerHostName(resource), dockerTextValue(resource.docker?.image)]
+      detail: [hostIdentities.labelFor(resource), dockerTextValue(resource.docker?.image)]
         .filter((part) => part && part !== '—')
         .join(' · '),
       status: asTrimmedString(resource.docker?.containerState || resource.status) ?? '',
@@ -322,13 +334,16 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   };
   const setHostFilter = (value: string) =>
     setSearchParams({ [DOCKER_QUERY_PARAMS.host]: value || null });
+  const hostIdentities = useDockerHostIdentities();
   const hostOptions = createMemo(() => {
-    const seen = new Set<string>();
+    const labels = new Map<string, string>();
     for (const resource of props.resources) {
-      const host = dockerHostName(resource);
-      if (host && host !== '—') seen.add(host);
+      const scope = hostIdentities().scopeFor(resource);
+      if (scope && scope !== '—') labels.set(scope, hostIdentities().labelFor(resource));
     }
-    return [...seen].sort((a, b) => a.localeCompare(b));
+    return [...labels]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   });
   const scopeFilters = createMemo<FilterDef[]>(() => {
     if (hostOptions().length <= 1) return [];
@@ -337,10 +352,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         id: 'host',
         label: 'Host',
         group: 'scope',
-        options: () => [
-          { value: '', label: 'All hosts' },
-          ...hostOptions().map((host) => ({ value: host, label: host })),
-        ],
+        options: () => [{ value: '', label: 'All hosts' }, ...hostOptions()],
         value: hostFilter,
         setValue: setHostFilter,
         defaultValue: '',
@@ -349,7 +361,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   });
   const applyHostScope = (rows: Resource[]) => {
     const host = hostFilter();
-    return host ? rows.filter((resource) => dockerHostName(resource) === host) : rows;
+    return host ? rows.filter((resource) => dockerResourceMatchesHostScope(resource, host)) : rows;
   };
   const scopedRows = createMemo(() => applyHostScope(tableState.filtered()));
   // The host facet narrows rows after the shared filter state, so chip counts
@@ -391,7 +403,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const sortedRows = createMemo(() =>
     sort.sortRows([...scopedRows()].sort(compareDockerContainers), (resource, key) =>
       // State sorts by the words the row shows, restart warning included.
-      key === 'state' ? stateFor(resource).label : getDockerContainerSortValue(resource, key),
+      key === 'state'
+        ? stateFor(resource).label
+        : key === 'host' && hostIdentities().qualifierFor(resource)
+          ? hostIdentities().labelFor(resource)
+          : getDockerContainerSortValue(resource, key),
     ),
   );
   // Grouped-by-host view, mirroring the workloads table: preference persists
@@ -462,16 +478,18 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     for (const hostResource of props.hosts ?? []) map.set(hostResource.id, hostResource);
     return map;
   });
-  const hostResourceByName = createMemo(() => {
+  const hostResourceByScope = createMemo(() => {
     const map = new Map<string, Resource>();
-    for (const hostResource of props.hosts ?? []) {
-      const keys = [
-        dockerHostName(hostResource),
-        asTrimmedString(hostResource.name) ?? '',
-        asTrimmedString(hostResource.displayName) ?? '',
-      ];
-      for (const key of keys) {
-        if (key && key !== '—' && !map.has(key)) map.set(key, hostResource);
+    const hosts = props.hosts ?? [];
+    // A host's own scope wins, so another host renamed to it cannot answer for it.
+    for (const hostResource of hosts) {
+      const scope = hostIdentities().scopeFor(hostResource);
+      if (scope !== '—' && !map.has(scope)) map.set(scope, hostResource);
+    }
+    for (const hostResource of hosts) {
+      for (const alias of [hostResource.name, hostResource.displayName]) {
+        const key = asTrimmedString(alias);
+        if (key && !map.has(key)) map.set(key, hostResource);
       }
     }
     return map;
@@ -479,19 +497,26 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   const groupedRows = createMemo<DockerContainerHostGroup[]>(() => {
     const groups = new Map<string, Resource[]>();
     for (const resource of displayRows()) {
-      const host = dockerHostName(resource);
-      const rows = groups.get(host);
+      const scope = hostIdentities().scopeFor(resource);
+      const rows = groups.get(scope);
       if (rows) rows.push(resource);
-      else groups.set(host, [resource]);
+      else groups.set(scope, [resource]);
     }
     return [...groups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([host, rows]) => ({ host, hostResource: hostResourceByName().get(host), rows }));
+      .map(([scope, rows]) => ({
+        scope,
+        host: dockerHostName(rows[0]),
+        qualifier: hostIdentities().qualifierFor(rows[0]),
+        label: hostIdentities().labelFor(rows[0]),
+        hostResource: hostResourceByScope().get(scope),
+        rows,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   });
   const groupedRenderItems = createMemo<DockerContainerRenderItem[]>(() => {
     const items: DockerContainerRenderItem[] = [];
     for (const group of groupedRows()) {
-      items.push({ kind: 'group', key: `group:${group.host}`, group });
+      items.push({ kind: 'group', key: `group:${group.scope}`, group });
       for (const resource of group.rows) {
         items.push({ kind: 'resource', key: `resource:${resource.id}`, resource });
       }
@@ -531,14 +556,14 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       </span>
     );
     const runtime = () => runtimeSummary(resource);
-    const host = () => dockerHostName(resource);
+    const host = () => hostIdentities().labelFor(resource);
     const running = () => isContainerRunning(resource);
     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
     // Overrides key on docker:<hostId>/<containerName> with legacy ID forms
     // as fallbacks; without the backing host resource only the docker-scope
     // defaults can apply.
     const alertResourceIds = () => {
-      const hostResource = hostResourceByName().get(host());
+      const hostResource = hostResourceByScope().get(hostIdentities().scopeFor(resource));
       if (!hostResource) return [];
       return dockerContainerOverrideIdCandidates(hostResource, resource);
     };
@@ -586,8 +611,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         case 'host':
           return (
             <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
-              <span class="block max-w-full truncate" title={host()}>
-                {host()}
+              <span class="flex min-w-0 max-w-full items-center gap-1" title={host()}>
+                <span class="min-w-0 truncate">{dockerHostName(resource)}</span>
+                <DockerHostQualifier value={hostIdentities().qualifierFor(resource)} />
               </span>
             </TableCell>
           );
@@ -761,9 +787,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   };
 
   const renderHostGroupHeader = (group: DockerContainerHostGroup): JSX.Element => {
-    const indicator = group.hostResource
-      ? getSimpleStatusIndicator(group.hostResource.status)
-      : undefined;
+    // Read live: the group row outlives the host's status changing.
+    const indicator = () =>
+      group.hostResource ? getSimpleStatusIndicator(group.hostResource.status) : undefined;
     // The host's own engine metadata is authoritative; without it, name every
     // distinct engine its containers report rather than just the first row's.
     const engine = () => {
@@ -779,10 +805,10 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     };
     const staleness = () => getResourceStaleness(group.hostResource);
     return (
-      <TableRow class={getGroupedTableRowClass()} data-docker-host-group={group.host}>
+      <TableRow class={getGroupedTableRowClass()} data-docker-host-group={group.scope}>
         <TableCell class={getGroupedTableRowCellClass()} colspan={visibleColumns().length}>
           <div class="flex min-w-0 items-center gap-2">
-            <Show when={indicator}>
+            <Show when={indicator()}>
               {(hostIndicator) => (
                 <StatusDot
                   size="sm"
@@ -793,11 +819,14 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               )}
             </Show>
             <ResourceNameWithWebInterfaceLink
-              name={group.host}
+              name={group.label}
               url={group.hostResource?.customUrl}
               class="min-w-0"
               nameClass="truncate"
-            />
+            >
+              {group.host}
+            </ResourceNameWithWebInterfaceLink>
+            <DockerHostQualifier value={group.qualifier} />
             <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
               {group.rows.length} {group.rows.length === 1 ? 'container' : 'containers'}
             </span>
@@ -883,7 +912,8 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                   source={{
                     kind: 'rows',
                     noun: CONTAINER_WEB_LINKS_NOUN,
-                    rows: () => scopedRows().flatMap(toContainerWebLinkRows),
+                    rows: () =>
+                      scopedRows().flatMap((row) => toContainerWebLinkRows(row, hostIdentities())),
                   }}
                 />
               </Suspense>
