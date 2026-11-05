@@ -1406,6 +1406,8 @@ func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName strin
 // ID and removal time. It consults the in-memory map first and the persisted
 // store second: the map resets on restart while the persisted entry keeps
 // blocking (#1581), so memory absence alone must not admit a blocked host.
+// Removing a probed guest's row covers that guest on any node, since a row can
+// outlive the node its ID names.
 func (m *Monitor) lookupRemovedDockerHost(ids []string) (string, time.Time, bool) {
 	m.mu.RLock()
 	for _, id := range ids {
@@ -1426,7 +1428,7 @@ func (m *Monitor) lookupRemovedDockerHost(ids []string) (string, time.Time, bool
 			continue
 		}
 		for _, id := range ids {
-			if strings.TrimSpace(id) == entryID {
+			if strings.TrimSpace(id) == entryID || sameProbedDockerGuest(id, entryID) {
 				return entryID, entry.RemovedAt, true
 			}
 		}

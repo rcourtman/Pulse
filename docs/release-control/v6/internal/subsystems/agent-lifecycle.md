@@ -10250,6 +10250,18 @@ already bound to its own derived identity (an established distinct host sharing
 a hostname or machine ID, #1753) is left untouched. Focused proof lives in
 `internal/monitoring/monitor_host_agents_test.go`.
 
+### Docker removal blocks follow a probed guest across nodes
+
+A Docker host found by the Proxmox LXC probe has an ID carrying the guest's
+node, and its row can keep the ID of a node the guest has left. A removal block
+holding that ID must still refuse the guest's reports from another node, or the
+removed row returns on the next poll. `lookupRemovedDockerHost` therefore treats
+two `proxmox-lxc-docker:` IDs with the same connection and VMID as one guest, so
+a guest removed before or after a live migration stays removed until the
+operator allows it back. A guest on another connection reusing the name and
+VMID is unaffected. Focused proof lives in
+`internal/monitoring/monitor_docker_test.go`.
+
 ### Agent endurance evidence cannot raise a disk's remaining life
 
 The physical-disk SMART merge treats a linked host agent's `PercentageUsed` as
