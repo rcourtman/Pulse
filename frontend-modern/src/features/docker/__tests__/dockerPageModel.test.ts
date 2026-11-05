@@ -39,19 +39,26 @@ const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'
 });
 
 describe('dockerPageModel', () => {
-
   it.each(['vm', 'system-container'] as const)(
     'keeps a linked %s runtime without adopting a same-named guest or its containers',
     (type) => {
       const host = makeResource({
-        id: 'home-guest', type, name: 'docker1', platformType: 'proxmox-pve',
+        id: 'home-guest',
+        type,
+        name: 'docker1',
+        platformType: 'proxmox-pve',
         docker: { runtime: 'docker', runtimeVersion: '27.0.0', containerCount: 1 },
       });
       const otherGuest = makeResource({
-        id: 'remote-guest', type, name: 'docker1', platformType: 'proxmox-pve',
+        id: 'remote-guest',
+        type,
+        name: 'docker1',
+        platformType: 'proxmox-pve',
       });
       const child = makeResource({
-        id: 'payments', type: 'app-container', parentId: host.id,
+        id: 'payments',
+        type: 'app-container',
+        parentId: host.id,
         docker: { runtime: 'docker', containerId: 'app-1', hostSourceId: 'home-runtime' },
       });
       const model = buildDockerPageModel([host, otherGuest, child]);
@@ -61,8 +68,6 @@ describe('dockerPageModel', () => {
       expect(host.type).toBe(type);
     },
   );
-
-
   it('buckets Docker hosts, containers, images, volumes, networks, nodes, tasks, secrets, configs, and Swarm services from canonical resources', () => {
     const model = buildDockerPageModel([
       makeResource({ id: 'docker-host-1', type: 'agent' }),

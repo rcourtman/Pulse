@@ -480,19 +480,21 @@ describe('DockerPageSurface', () => {
       'overview,images,storage,networks',
     );
   });
-
-
   it('requests linked VM/LXC runtime carriers in every lazy workflow without broadening the source', () => {
     render(() => <DockerPageSurface />);
     expect(mocks.useUnifiedResources.mock.calls).toHaveLength(5);
     for (const [options] of mocks.useUnifiedResources.mock.calls) {
       const query = new URLSearchParams((options as { query: string }).query);
-      expect(query.get('type')?.split(',')).toEqual(expect.arrayContaining(['vm', 'system-container']));
+      expect(query.get('type')?.split(',')).toEqual(
+        expect.arrayContaining(['vm', 'system-container']),
+      );
       expect(query.get('source')).toBe('docker');
     }
-    expect(mocks.useUnifiedResources.mock.calls.filter(([options]) =>
-      (options as { enabled: () => boolean }).enabled(),
-    )).toHaveLength(1);
+    expect(
+      mocks.useUnifiedResources.mock.calls.filter(([options]) =>
+        (options as { enabled: () => boolean }).enabled(),
+      ),
+    ).toHaveLength(1);
   });
 
   it('hydrates only the active Docker workflow resource family', () => {
