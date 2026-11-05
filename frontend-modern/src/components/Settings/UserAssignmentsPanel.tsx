@@ -130,21 +130,70 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             state.accessAllowed() &&
             !state.loadError() &&
             !state.unconfirmedChange() &&
+            state.assignmentCount() > 0
+          }
+        >
+          <div
+            role="status"
+            aria-label="User search results"
+            aria-live="polite"
+            aria-atomic="true"
+            class="px-3 py-3 text-sm text-muted sm:px-6"
+          >
+            <Show
+              when={state.searchQuery().trim()}
+              fallback={`${state.assignmentCount()} ${state.assignmentCount() === 1 ? 'user' : 'users'}`}
+            >
+              Showing {state.filteredAssignments().length} of {state.assignmentCount()}{' '}
+              {state.assignmentCount() === 1 ? 'user' : 'users'}
+            </Show>
+          </div>
+        </Show>
+
+        <Show
+          when={
+            !state.loading() &&
+            state.accessAllowed() &&
+            !state.loadError() &&
+            !state.unconfirmedChange() &&
             state.filteredAssignments().length === 0
           }
         >
           <div class="text-center py-12 px-6">
             <Users class="w-12 h-12 mx-auto text-slate-300 mb-4" />
-            <h4 class="text-base font-medium text-base-content mb-2">{emptyStateCopy().title}</h4>
-            <p class="text-sm text-muted max-w-md mx-auto">{emptyStateCopy().body}</p>
-            <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-muted">
-              <span class="flex items-center gap-1.5">
-                <Shield class="w-3.5 h-3.5" />
-                {emptyStateCopy().ssoHint}
-              </span>
-              <span class="hidden sm:inline">•</span>
-              <span>{emptyStateCopy().syncHint}</span>
-            </div>
+            <Show
+              when={state.assignmentCount() > 0}
+              fallback={
+                <>
+                  <h4 class="text-base font-medium text-base-content mb-2">
+                    {emptyStateCopy().title}
+                  </h4>
+                  <p class="text-sm text-muted max-w-md mx-auto">{emptyStateCopy().body}</p>
+                  <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-muted">
+                    <span class="flex items-center gap-1.5">
+                      <Shield class="w-3.5 h-3.5" />
+                      {emptyStateCopy().ssoHint}
+                    </span>
+                    <span class="hidden sm:inline">•</span>
+                    <span>{emptyStateCopy().syncHint}</span>
+                  </div>
+                </>
+              }
+            >
+              <h4 class="text-base font-medium text-base-content mb-2">No matching users</h4>
+              <p class="text-sm text-muted max-w-md mx-auto">
+                No saved users match this search. Clear it to review all user access.
+              </p>
+              <Button
+                class="mt-6"
+                onClick={() => {
+                  state.setSearchQuery('');
+                  searchInputRef?.focus();
+                }}
+              >
+                Show all users
+              </Button>
+            </Show>
           </div>
         </Show>
 

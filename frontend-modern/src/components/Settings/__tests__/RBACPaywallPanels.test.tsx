@@ -354,6 +354,133 @@ describe('RBAC paywall settings panels', () => {
     );
   });
 
+  const searchUsers = [
+    {
+      username: 'sso:oidc:fixture:alice-001',
+      displayName: 'Alice Example',
+      email: 'alice@example.invalid',
+      providerType: 'oidc',
+      providerId: 'Engineering',
+      roleIds: ['admin'],
+    },
+    { username: 'bob', displayName: 'Bob Operator', roleIds: [] },
+  ];
+
+  it('distinguishes a filtered directory from no users and clears the filter without a request', async () => {
+    getUsersMock.mockResolvedValue(searchUsers);
+    render(() => <UserAssignmentsPanel />);
+    await screen.findByRole('button', { name: 'Manage access for Alice Example' });
+    const search = screen.getByRole('textbox', { name: 'Search users...' });
+    fireEvent.input(search, { target: { value: 'absent-user' } });
+
+    expect(screen.getByRole('heading', { name: 'No matching users' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'User search results' })).toHaveTextContent(
+      'Showing 0 of 2 users',
+    );
+    expect(screen.queryByText('No users yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Configure SSO in Security settings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Users sync on first login')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Manage access for/ })).not.toBeInTheDocument();
+    const showAll = screen.getByRole('button', { name: 'Show all users' });
+    showAll.focus();
+    fireEvent.click(showAll);
+
+    expect(search).toHaveValue('');
+    expect(search).toHaveFocus();
+    expect(screen.getAllByRole('button', { name: /Manage access for/ })).toHaveLength(2);
+    expect(screen.getByRole('status', { name: 'User search results' })).toHaveTextContent(
+      /^2 users$/,
+    );
+    expect(getUsersMock).toHaveBeenCalledTimes(1);
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
+    expect(getUserPermissionsMock).not.toHaveBeenCalled();
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+    expect(deleteUserMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    '  ALICE EXAMPLE  ',
+    ' ALICE@EXAMPLE.INVALID ',
+    '  alice-001 ',
+    ' OIDC ',
+    ' Engineering ',
+  ])('searches identity metadata with a trimmed, case-insensitive query: %s', async (query) => {
+    getUsersMock.mockResolvedValue(searchUsers);
+    render(() => <UserAssignmentsPanel />);
+    await screen.findByRole('button', { name: 'Manage access for Alice Example' });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search users...' }), {
+      target: { value: query },
+    });
+    expect(screen.getAllByRole('button', { name: /Manage access for/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Manage access for Alice Example' })).toBeEnabled();
+    expect(screen.getByRole('status', { name: 'User search results' })).toHaveTextContent(
+      'Showing 1 of 2 users',
+    );
+    expect(getUsersMock).toHaveBeenCalledTimes(1);
+    expect(getRolesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a whitespace-only search unfiltered and reports a singular user correctly', async () => {
+    render(() => <UserAssignmentsPanel />);
+    await screen.findByRole('button', { name: 'Manage access for alice' });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search users...' }), {
+      target: { value: '   ' },
+    });
+    expect(screen.getByRole('button', { name: 'Manage access for alice' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'User search results' })).toHaveTextContent(
+      /^1 user$/,
+    );
+  });
+
+  it('keeps first-login guidance for an accepted empty directory, even with a query', async () => {
+    getUsersMock.mockResolvedValue([]);
+    render(() => <UserAssignmentsPanel />);
+    await screen.findByRole('heading', { name: 'No users yet' });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search users...' }), {
+      target: { value: 'alice' },
+    });
+    expect(screen.getByText('Configure SSO in Security settings')).toBeInTheDocument();
+    expect(screen.getByText('Users sync on first login')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'No matching users' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all users' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'User search results' })).not.toBeInTheDocument();
+  });
+
+  it('never presents a pending or failed directory read as a search result or empty account list', async () => {
+    const pending = deferred<typeof searchUsers>();
+    getUsersMock.mockReturnValueOnce(pending.promise);
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search users...' }), {
+      target: { value: 'alice' },
+    });
+    expect(screen.queryByRole('status', { name: 'User search results' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /No (matching )?users/ })).not.toBeInTheDocument();
+    pending.reject(new Error('synthetic unavailable'));
+    await screen.findByText('Failed to load user assignments');
+    expect(screen.queryByRole('status', { name: 'User search results' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /No (matching )?users/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all users' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search users...' })).toBeDisabled();
+  });
+
+  it('withdraws search counts and recovery actions with the current reader', async () => {
+    getUsersMock.mockResolvedValue(searchUsers);
+    const [canManage, setCanManage] = createSignal(true);
+    render(() => <UserAssignmentsPanel canManage={canManage()} />);
+    await screen.findByRole('button', { name: 'Manage access for Alice Example' });
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search users...' }), {
+      target: { value: 'absent-user' },
+    });
+    expect(screen.getByRole('status', { name: 'User search results' })).toHaveTextContent(
+      'Showing 0 of 2 users',
+    );
+    setCanManage(false);
+    await screen.findByText('User access is unavailable for this session.');
+    expect(screen.queryByRole('status', { name: 'User search results' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all users' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /No (matching )?users/ })).not.toBeInTheDocument();
+  });
+
   it('clears the previous user permissions during a new read and reports failure as unknown', async () => {
     const pending = deferred<{ action: string; resource: string }[]>();
     getUsersMock.mockResolvedValue([
