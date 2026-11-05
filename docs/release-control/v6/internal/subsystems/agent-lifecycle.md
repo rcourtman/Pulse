@@ -17,6 +17,22 @@
 
 ## Purpose
 
+### Command channel backoff restarts after a healthy session (5 November 2026)
+
+`CommandClient.Run` counted every disconnect as a failure, so each Pulse restart
+lengthened that agent's next reconnect until `reconnectMaxDelay`, however long it
+had been connected. Its actions read as not connected for that whole wait (#2681).
+
+A session that stays in the message loop for `healthySessionDuration` (one minute)
+now restarts the backoff when it ends. A shorter session still counts as a failure,
+as does any refused or failed registration and any action runner Pulse admits but
+cannot activate. Admission alone is not enough: Pulse evicts a session when another
+agent registers the same identity, so two such agents resetting on admission would
+evict each other every `reconnectDelay` forever. The minimum stays above that delay
+and past the first 30-second keepalive. The rule reads the session that just ended,
+because the client's admission state stays set for its whole life. This is agent
+code, so it reaches a machine only when that machine's agent updates.
+
 ### Alert history gap disposition does not control agents (5 November 2026)
 
 The scoped alert history durability read and acknowledgement endpoints report

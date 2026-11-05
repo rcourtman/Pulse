@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1108,5 +1110,234 @@ func TestCommandClientRegistrationAdmitsOnlyAnUnretiredClient(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("a retired client kept running after its registration was accepted")
+	}
+}
+
+// fakePulseAnswer is how the scripted Pulse below treats one connection.
+type fakePulseAnswer int
+
+const (
+	// refuseRegistration answers the registration with success=false.
+	refuseRegistration fakePulseAnswer = iota
+	// dropBeforeAnswer hangs up without answering the registration.
+	dropBeforeAnswer
+	// admitThenRestart accepts the registration, then at once goes away as Pulse
+	// does when it restarts.
+	admitThenRestart
+	// holdThenRestart is admitThenRestart after holding the session for three
+	// times the healthy duration.
+	holdThenRestart
+)
+
+// retryInRecorder keeps each retry_in the client logs: the delay an operator
+// reads in the agent log, and the value the real rig showed growing.
+type retryInRecorder struct {
+	mu     sync.Mutex
+	delays []time.Duration
+}
+
+func (r *retryInRecorder) Write(line []byte) (int, error) {
+	var entry struct {
+		RetryIn *float64 `json:"retry_in"`
+	}
+	if json.Unmarshal(line, &entry) == nil && entry.RetryIn != nil {
+		r.mu.Lock()
+		r.delays = append(r.delays, time.Duration(*entry.RetryIn*float64(time.Millisecond)))
+		r.mu.Unlock()
+	}
+	return len(line), nil
+}
+
+// reconnectDelaysFromRun runs the real reconnect loop against a Pulse that gives
+// each answer in turn, and returns the delay the client chose after each one.
+// Delays start at 1ms and double, with no jitter or cap in reach.
+func reconnectDelaysFromRun(
+	t *testing.T,
+	healthyAfter time.Duration,
+	newClient func(pulseURL string, logger zerolog.Logger) *CommandClient,
+	answers ...fakePulseAnswer,
+) []time.Duration {
+	t.Helper()
+	origDelay, origMax, origJitter, origHealthy := reconnectDelay, reconnectMaxDelay, reconnectJitterRatio, healthySessionDuration
+	origLevel := zerolog.GlobalLevel()
+	t.Cleanup(func() {
+		reconnectDelay, reconnectMaxDelay, reconnectJitterRatio, healthySessionDuration = origDelay, origMax, origJitter, origHealthy
+		zerolog.SetGlobalLevel(origLevel)
+	})
+	reconnectDelay, reconnectMaxDelay, reconnectJitterRatio, healthySessionDuration = time.Millisecond, time.Hour, 0, healthyAfter
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	sessionHold := 3 * healthyAfter
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var attempts atomic.Int32
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			http.Error(w, "persistence unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		attempt := int(attempts.Add(1)) - 1
+		if attempt >= len(answers) {
+			cancel()
+			http.Error(w, "script finished", http.StatusServiceUnavailable)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var registration wsMessage
+		if err := conn.ReadJSON(&registration); err != nil || answers[attempt] == dropBeforeAnswer {
+			return
+		}
+		admitted := answers[attempt] != refuseRegistration
+		payload, _ := json.Marshal(registeredPayload{Success: admitted})
+		if err := conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: payload}); err != nil || !admitted {
+			return
+		}
+		if answers[attempt] == holdThenRestart {
+			// A pong can only come from the client's next read, which is in the
+			// message loop, so its uptime is already running when the hold starts.
+			inMessageLoop := make(chan struct{})
+			conn.SetPongHandler(func(string) error {
+				close(inMessageLoop)
+				return nil
+			})
+			go func() {
+				for {
+					if _, _, err := conn.ReadMessage(); err != nil {
+						return
+					}
+				}
+			}()
+			_ = conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(time.Second))
+			select {
+			case <-inMessageLoop:
+			case <-ctx.Done():
+				return
+			}
+			time.Sleep(sessionHold)
+		}
+		_ = conn.WriteControl(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseGoingAway, "restarting"), time.Now().Add(time.Second))
+	}))
+	defer server.Close()
+
+	recorder := &retryInRecorder{}
+	client := newClient(strings.TrimRight(server.URL, "/"), zerolog.New(recorder))
+	if err := client.Run(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run returned %v before the script finished, after %d connections", err, attempts.Load())
+	}
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	return append([]time.Duration(nil), recorder.delays...)
+}
+
+func newBackoffTestClient(pulseURL string, logger zerolog.Logger) *CommandClient {
+	return &CommandClient{
+		pulseURL: pulseURL,
+		apiToken: "token",
+		agentID:  "agent-1",
+		hostname: "host-1",
+		platform: "linux",
+		version:  "1.2.3",
+		logger:   logger,
+		done:     make(chan struct{}),
+	}
+}
+
+func millisecondDelays(values ...int) []time.Duration {
+	delays := make([]time.Duration, len(values))
+	for i, value := range values {
+		delays[i] = time.Duration(value) * time.Millisecond
+	}
+	return delays
+}
+
+// Each Pulse restart ends a session the agent was healthily holding, so it must
+// not lengthen the next reconnect. Failed registrations still back off, including
+// ones after the first admission, which stays set for the client's whole life.
+func TestCommandClientReconnectBackoffRestartsAfterHealthySession(t *testing.T) {
+	got := reconnectDelaysFromRun(t, 10*time.Millisecond, newBackoffTestClient,
+		refuseRegistration, dropBeforeAnswer, refuseRegistration,
+		holdThenRestart, holdThenRestart, holdThenRestart,
+		refuseRegistration, dropBeforeAnswer,
+	)
+	want := millisecondDelays(
+		1, 2, 4,
+		1, 1, 1,
+		2, 4,
+	)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("reconnect delays = %v, want %v", got, want)
+	}
+}
+
+// A session that drops before it has proved healthy keeps backing off, so an
+// admit-then-drop loop such as two agents evicting each other cannot hold the
+// reconnect rate at the base delay.
+func TestCommandClientReconnectBackoffGrowsThroughShortSessions(t *testing.T) {
+	got := reconnectDelaysFromRun(t, time.Hour, newBackoffTestClient,
+		admitThenRestart, admitThenRestart, admitThenRestart, admitThenRestart, admitThenRestart,
+	)
+	if want := millisecondDelays(1, 2, 4, 8, 16); !reflect.DeepEqual(got, want) {
+		t.Fatalf("reconnect delays = %v, want %v", got, want)
+	}
+}
+
+// Pulse admits an action runner before activating it, and a runner it cannot
+// activate never reaches the message loop, however long it has been admitted.
+func TestCommandClientReconnectBackoffGrowsThroughActionRunnerActivationFailures(t *testing.T) {
+	dir := t.TempDir()
+	got := reconnectDelaysFromRun(t, 0, func(pulseURL string, logger zerolog.Logger) *CommandClient {
+		client := NewActionRunnerClient(ActionRunnerClientConfig{
+			PulseURL: pulseURL, APIToken: "runner-token", StateDir: filepath.Join(dir, "state"),
+			HealthPath: filepath.Join(dir, "health.json"), ActivationNonce: strings.Repeat("f", 32),
+			InsecureSkipVerify: true, Logger: &logger,
+		}, "agent-1", "host-1", "v1")
+		t.Cleanup(func() { _ = client.Close() })
+		return client
+	}, admitThenRestart, admitThenRestart, admitThenRestart)
+	if want := millisecondDelays(1, 2, 4); !reflect.DeepEqual(got, want) {
+		t.Fatalf("reconnect delays = %v, want %v", got, want)
+	}
+}
+
+func TestEndedHealthySessionNeedsTheFullUptime(t *testing.T) {
+	cause := errors.New("read message: unexpected EOF")
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"failed attempt with no session", cause, false},
+		{"session just under the threshold", &commandSessionEndedError{uptime: healthySessionDuration - time.Nanosecond, err: cause}, false},
+		{"session at the threshold", &commandSessionEndedError{uptime: healthySessionDuration, err: cause}, true},
+		{"wrapped session past the threshold", fmt.Errorf("session: %w", &commandSessionEndedError{uptime: time.Hour, err: cause}), true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := endedHealthySession(test.err); got != test.want {
+				t.Fatalf("endedHealthySession = %v, want %v", got, test.want)
+			}
+		})
+	}
+
+	ended := &commandSessionEndedError{uptime: time.Hour, err: cause}
+	if !errors.Is(ended, cause) || ended.Error() != cause.Error() {
+		t.Fatalf("session end did not preserve its cause: %v", ended)
+	}
+}
+
+// Two agents with one identity evict each other, and each eviction ends a session
+// about one reconnect delay old. At or below that delay every eviction would count
+// as healthy, and the pair would never back off.
+func TestHealthySessionDurationOutlastsTheBaseReconnectDelay(t *testing.T) {
+	longestBaseDelay := time.Duration(float64(reconnectDelay) * (1 + reconnectJitterRatio))
+	if healthySessionDuration <= longestBaseDelay {
+		t.Fatalf("healthySessionDuration = %v, must exceed the base reconnect delay %v", healthySessionDuration, longestBaseDelay)
 	}
 }
