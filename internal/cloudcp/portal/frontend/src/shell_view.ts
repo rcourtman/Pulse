@@ -19,6 +19,8 @@ import {
   workspaceSetupGuide,
   workspaceSetupLabel,
   workspaceSetupNextStep,
+  workspaceOutputsActionLabel,
+  workspaceOutputsTargetPath,
   workspaceSetupState,
   workspaceStatusCopy,
 } from './workspace_presentation';
@@ -581,6 +583,20 @@ function renderWorkspaceInstallHandoffForm(accountID: string, workspaceID: strin
   );
 }
 
+function renderWorkspaceOutputsHandoffForm(entry: WorkspaceSummaryEntry, accountAPIBasePath: string, buttonClassName: string): string {
+  var label = workspaceOutputsActionLabel(entry.workspace);
+  if (!accountAPIBasePath) {
+    return renderWorkspaceReportingHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, label, buttonClassName);
+  }
+  return (
+    '<form method="POST" action="' +
+    escapeAttr(workspaceHandoffActionPath(accountAPIBasePath, entry.account.id, entry.workspace.id, workspaceOutputsTargetPath(entry.workspace))) +
+    '">' +
+    '<button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + '</button>' +
+    '</form>'
+  );
+}
+
 function renderWorkspaceReportingHandoffForm(accountID: string, workspaceID: string, accountAPIBasePath: string, label = 'Open reports', buttonClassName = 'btn-secondary btn-compact'): string {
   if (!accountAPIBasePath) {
     return '<button class="' + escapeAttr(buttonClassName) + '" type="button" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(label) + '</button>';
@@ -770,19 +786,13 @@ function renderWorkspaceSummaryDecision(
     var setupEntry = setupNeeded[0];
     var setupState = workspaceSetupState(setupEntry.workspace);
     title = setupState === 'configure_outputs'
-      ? 'Configure outputs for ' + setupEntry.workspace.display_name
+      ? 'Set up alerts and reports for ' + setupEntry.workspace.display_name
       : 'Set up ' + setupEntry.workspace.display_name;
     description = workspaceSummaryContext(setupEntry, accounts.length > 1, workspaceSetupNextStep(setupEntry.workspace));
     if (!setupEntry.account.can_manage) {
       primaryAction = renderWorkspaceHandoffForm(setupEntry.account.id, setupEntry.workspace.id, accountAPIBasePath, clientLanguage ? 'Open client' : 'Open workspace', 'btn-primary btn-compact');
     } else if (setupState === 'configure_outputs') {
-      primaryAction = renderWorkspaceReportingHandoffForm(
-        setupEntry.account.id,
-        setupEntry.workspace.id,
-        accountAPIBasePath,
-        'Open reports',
-        'btn-primary btn-compact',
-      );
+      primaryAction = renderWorkspaceOutputsHandoffForm(setupEntry, accountAPIBasePath, 'btn-primary btn-compact');
     } else {
       primaryAction = renderWorkspaceInstallHandoffForm(
         setupEntry.account.id,
@@ -905,13 +915,7 @@ function renderWorkspaceSummaryInline(
 function renderWorkspaceSetupQueueAction(entry: WorkspaceSummaryEntry, accountAPIBasePath: string): string {
   var setup = workspaceSetupState(entry.workspace);
   if (setup === 'configure_outputs') {
-    return renderWorkspaceReportingHandoffForm(
-      entry.account.id,
-      entry.workspace.id,
-      accountAPIBasePath,
-      'Configure outputs',
-      'btn-primary btn-compact',
-    );
+    return renderWorkspaceOutputsHandoffForm(entry, accountAPIBasePath, 'btn-primary btn-compact');
   }
   return renderWorkspaceInstallHandoffForm(
     entry.account.id,
