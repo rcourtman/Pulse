@@ -20,7 +20,7 @@ func TestAgentUninstallKeepsTokenSelfRemovalReachable(t *testing.T) {
 		newTokenRecord(t, reportToken, []string{config.ScopeAgentReport}, nil),
 		newTokenRecord(t, unrelatedToken, []string{config.ScopeMonitoringRead}, nil),
 	)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	for _, path := range []string{"/api/agents/agent/uninstall", "/api/agents/host/uninstall"} {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))

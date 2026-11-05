@@ -100,7 +100,7 @@ func newHeldAuditReadRouter(t *testing.T) (*Router, *config.Config, *httptest.Se
 		newTokenRecord(t, logStreamToken, []string{config.ScopeAuditRead}, nil),
 		newTokenRecord(t, logStreamControl, []string{config.ScopeWildcard}, nil))
 	cfg.AuthUser = "operator"
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierEnterprise)
 	hold := &auditReadHold{entered: make(chan struct{}), release: make(chan struct{})}

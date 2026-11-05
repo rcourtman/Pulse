@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -121,8 +123,28 @@ func (p *CommandPolicy) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// DefaultPolicy returns a sensible default command policy
+// defaultPolicyTemplate compiles the default patterns once. Compiled regexps are
+// safe for concurrent use and CommandPolicy only ever replaces its compiled
+// slices, so every default policy can share them. A private copy costs about
+// 230 KiB and 1.4 ms, and each organization's AI service holds a policy.
+var defaultPolicyTemplate = sync.OnceValue(buildDefaultPolicy)
+
+// DefaultPolicy returns a sensible default command policy. The exported pattern
+// lists are the caller's own copy.
 func DefaultPolicy() *CommandPolicy {
+	template := defaultPolicyTemplate()
+	return &CommandPolicy{
+		AutoApprove:       slices.Clone(template.AutoApprove),
+		RequireApproval:   slices.Clone(template.RequireApproval),
+		Blocked:           slices.Clone(template.Blocked),
+		VerifyWindow:      template.VerifyWindow,
+		autoApproveRe:     template.autoApproveRe,
+		requireApprovalRe: template.requireApprovalRe,
+		blockedRe:         template.blockedRe,
+	}
+}
+
+func buildDefaultPolicy() *CommandPolicy {
 	p := &CommandPolicy{
 		VerifyWindow: DefaultVerifyWindow,
 		AutoApprove: []string{

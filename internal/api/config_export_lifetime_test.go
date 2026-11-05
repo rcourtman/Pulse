@@ -36,7 +36,7 @@ func newHeldConfigExportRouter(t *testing.T) (*Router, *config.Config, *httptest
 		newTokenRecord(t, logStreamControl, []string{config.ScopeWildcard}, nil))
 	cfg.AuthUser = "operator"
 	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	if err := router.persistence.SaveNodesConfig([]config.PVEInstance{{Name: "private-backup-fixture", Host: "https://pve.invalid:8006", User: "fixture@pve", TokenName: "fixture", TokenValue: "synthetic-backup-secret", VerifySSL: true}}, nil, nil); err != nil {
 		t.Fatal(err)

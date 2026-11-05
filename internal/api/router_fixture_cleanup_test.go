@@ -25,7 +25,7 @@ func TestRouterFixtureCleanupCancelsLifecycle(t *testing.T) {
 	workerDone := make(chan struct{})
 	t.Run("fixture", func(t *testing.T) {
 		cfg := &config.Config{DataPath: t.TempDir()}
-		router = NewRouter(cfg, nil, nil, nil, nil, "test")
+		router = newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 		cleanupTestRouter(t, router)
 		router.startLifecycleWorker(func() {
 			<-router.lifecycleCtx.Done()

@@ -23,7 +23,7 @@ func TestUnifiedAgentConfigUsesTokenBindingInRouter(t *testing.T) {
 	monitor := &monitoring.Monitor{}
 	setUnexportedField(t, monitor, "state", state)
 
-	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "1.0.0")
 
 	for _, path := range []string{"/api/agents/agent/host-2/config", "/api/agents/host/host-2/config"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -62,7 +62,7 @@ func TestUnifiedAgentConfigReportScopeUnboundReturnsNotFound(t *testing.T) {
 	monitor := &monitoring.Monitor{}
 	setUnexportedField(t, monitor, "state", state)
 
-	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/host-1/config", nil)
 	req.Header.Set("X-API-Token", rawToken)

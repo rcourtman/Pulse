@@ -2901,6 +2901,9 @@ func (r *Router) shutdownBackgroundWorkers() {
 		}
 		r.endpointRateLimitConfig.Stop()
 		r.tenantRateLimiter.Stop()
+		if r.configHandlers != nil {
+			r.configHandlers.Stop()
+		}
 		if r.updateManager != nil {
 			r.updateManager.Close()
 		}

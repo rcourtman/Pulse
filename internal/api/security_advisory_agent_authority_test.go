@@ -33,7 +33,7 @@ func agentAuthorityRouter(t *testing.T, withMonitor bool, tokens ...config.APITo
 		}
 		t.Cleanup(monitor.Stop)
 	}
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "test")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "test")
 	cleanupTestRouter(t, router)
 	return router, monitor
 }
@@ -183,7 +183,7 @@ func TestAgentIngestRoutesRespectProxyRolesAndLocalBootstrap(t *testing.T) {
 				cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
 				cfg.ProxyAuthAdminRole = "admin"
 			}
-			router := NewRouter(cfg, nil, nil, nil, nil, "test")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 			cleanupTestRouter(t, router)
 			for _, path := range []string{
 				"/api/agents/agent/report", "/api/agents/host/report",

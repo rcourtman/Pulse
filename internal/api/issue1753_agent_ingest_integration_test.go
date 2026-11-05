@@ -56,7 +56,7 @@ func TestIssue1753SameNameProxmoxAgentsAuthenticateAndStayDistinctEndToEnd(t *te
 		},
 	})
 
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
 	t.Cleanup(router.shutdownBackgroundWorkers)
 
 	postReport := func(rawToken, agentID, machineID, address string, at time.Time) {

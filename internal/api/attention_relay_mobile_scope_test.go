@@ -18,7 +18,7 @@ func TestAttentionRoutes_AcceptRelayMobileAccessScope(t *testing.T) {
 	rawToken := "attention-relay-mobile-scope.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []struct {
 		method string
@@ -52,7 +52,7 @@ func TestAttentionRoutes_AcceptLegacyAIExecuteScope(t *testing.T) {
 	rawToken := "attention-legacy-ai-execute.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/attention", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -67,7 +67,7 @@ func TestAttentionRoutes_RejectUnrelatedScope(t *testing.T) {
 	rawToken := "attention-unrelated-scope.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []struct {
 		method string

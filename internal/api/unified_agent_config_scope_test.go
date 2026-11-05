@@ -13,7 +13,7 @@ func TestUnifiedAgentConfigRequiresAgentConfigScope(t *testing.T) {
 	rawToken := "host-config-read-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	for _, path := range []string{"/api/agents/agent/host-1/config", "/api/agents/host/host-1/config"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)

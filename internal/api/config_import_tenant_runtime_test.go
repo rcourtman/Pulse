@@ -59,7 +59,7 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 		}
 	}
 	reloads := 0
-	router := NewRouter(cfg, monitors["default"], mtm, nil, func() error {
+	router := newTestRouter(t, cfg, monitors["default"], mtm, nil, func() error {
 		reloads++
 		return nil
 	}, "test")

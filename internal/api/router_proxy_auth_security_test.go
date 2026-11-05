@@ -20,7 +20,7 @@ func TestProxyAuthNonAdminCannotResetLockout(t *testing.T) {
 		ProxyAuthAdminRole:  "admin",
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	body, err := json.Marshal(map[string]string{"identifier": "user1"})
 	if err != nil {
@@ -59,7 +59,7 @@ func TestProxyAuthAdminCanResetLockoutWithSettingsScope(t *testing.T) {
 	}
 	cfg.SortAPITokens()
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	body, err := json.Marshal(map[string]string{"identifier": "user1"})
 	if err != nil {
@@ -91,7 +91,7 @@ func TestSecurityStatusAccessibleWithProxyAuth(t *testing.T) {
 		ProxyAuthAdminRole:  "admin",
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-Proxy-Secret", "proxy-secret")

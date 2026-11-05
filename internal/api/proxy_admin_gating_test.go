@@ -19,7 +19,7 @@ func TestProxyAuthAdminGatesAdminEndpoints(t *testing.T) {
 	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
 	cfg.ProxyAuthAdminRole = "admin"
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	cases := []struct {
 		method string

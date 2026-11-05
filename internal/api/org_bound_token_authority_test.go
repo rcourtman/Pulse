@@ -142,7 +142,7 @@ func TestOrgBoundSettingsTokenRouterMatrix(t *testing.T) {
 	}
 	mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
 	t.Cleanup(mtm.Stop)
-	router := NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, mtm, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 
 	serve := func(method, path, raw string) *httptest.ResponseRecorder {

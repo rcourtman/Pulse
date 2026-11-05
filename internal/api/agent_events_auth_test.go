@@ -108,7 +108,7 @@ func newAgentLifecycleRouter(t *testing.T, heartbeat time.Duration) (*Router, *c
 	primary := newTokenRecord(t, agentEventLifecycleToken, []string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 	control := newTokenRecord(t, agentEventControlToken, []string{config.ScopeWildcard}, nil)
 	cfg := newTestConfigWithTokens(t, primary, control)
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	router.agentEventBroadcaster.heartbeatInterval = heartbeat
 	server := httptest.NewServer(router.Handler())

@@ -40,7 +40,7 @@ func TestAdminEndpointsAllowAPITokenWhenOIDCEnabled(t *testing.T) {
 		t.Fatalf("failed to persist SSO config: %v", err)
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
 	req.Header.Set("X-API-Token", rawToken)

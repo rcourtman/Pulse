@@ -54,7 +54,7 @@ func TestSSOProviderNameHTTPRoundTrip(t *testing.T) {
 			t.Cleanup(resetPersistentAuthStoresForTests)
 			const rawToken = "sso-name-contract-token.12345678"
 			cfg := newTestConfigWithTokens(t, newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil))
-			r := NewRouter(cfg, nil, nil, nil, nil, "test")
+			r := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 			cleanupTestRouter(t, r)
 			request := func(method, path string, body any, authenticated bool) *httptest.ResponseRecorder {
 				t.Helper()

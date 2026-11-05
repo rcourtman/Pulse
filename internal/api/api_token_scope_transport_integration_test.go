@@ -16,7 +16,7 @@ func TestBearerAPITokenScopesDenyReadWriteAndExecRoutes(t *testing.T) {
 		newTokenRecord(t, "bearer-write-token-123.12345678", []string{config.ScopeSettingsRead}, nil),
 		newTokenRecord(t, "bearer-exec-token-123.12345678", []string{config.ScopeAIChat}, nil),
 	)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	server := httptest.NewServer(router.Handler())
 	t.Cleanup(server.Close)
 

@@ -49,7 +49,7 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	rawToken := "agent-substrate-e2e-test.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 
 	// --- 1. Discovery: fetch the capabilities manifest. ---
@@ -301,7 +301,7 @@ func TestAgentSubstrate_NodeProvisioningCapabilitiesRouteThroughHTTPBoundary(t *
 		t.Fatalf("new monitor: %v", err)
 	}
 	t.Cleanup(monitor.Stop)
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "1.0.0")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "1.0.0")
 	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/agent/capabilities", nil)
@@ -423,7 +423,7 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 	record := newTokenRecord(t, rawToken,
 		[]string{config.ScopeMonitoringRead, config.ScopeMonitoringWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 
 	// Pull the manifest first to confirm what we're about to
@@ -643,7 +643,7 @@ func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
 	record := newTokenRecord(t, rawToken,
 		[]string{config.ScopeMonitoringRead, config.ScopeAIExecute}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 
 	// First verify the manifest declares the three action
@@ -798,7 +798,7 @@ func TestAgentSubstrate_LiveChangeEventsReachSubscribeEventsStream(t *testing.T)
 		t.Fatalf("new monitor: %v", err)
 	}
 	t.Cleanup(monitor.Stop)
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "1.0.0")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "1.0.0")
 	cleanupTestRouter(t, router)
 	adapter := router.monitorAdapterForMonitor(monitor)
 	if adapter == nil {

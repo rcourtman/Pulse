@@ -246,7 +246,7 @@ func TestRuntimeInventorySourcesRouteAuthorizationKeepsAdminLedgerPrivate(t *tes
 		ProxyAuthRoleHeader: "X-Proxy-Roles",
 		ProxyAuthAdminRole:  "admin",
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	request := func(path, roles string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -279,7 +279,7 @@ func TestRuntimeInventorySourcesRouteRequiresAuthenticationAndMonitoringScope(t 
 		newTokenRecord(t, monitoringToken, []string{config.ScopeMonitoringRead}, nil),
 		newTokenRecord(t, settingsToken, []string{config.ScopeSettingsRead}, nil),
 	)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	request := func(rawToken string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/runtime/inventory-sources", nil)

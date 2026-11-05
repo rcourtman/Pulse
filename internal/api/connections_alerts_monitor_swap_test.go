@@ -51,7 +51,7 @@ func TestConnectionAlertsSurviveMonitorReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(startup.Stop)
-	router := NewRouter(cfg, startup, nil, nil, nil, "fixture")
+	router := newTestRouter(t, cfg, startup, nil, nil, nil, "fixture")
 	cleanupTestRouter(t, router)
 
 	// The reload sequence from pkg/server refreshRouterAfterMonitorReload.

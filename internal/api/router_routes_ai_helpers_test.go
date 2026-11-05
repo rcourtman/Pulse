@@ -56,7 +56,7 @@ func setupAIRouteRouter(t *testing.T, opts aiRouteTestOptions) (*Router, string)
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(router.shutdownBackgroundWorkers)
 	router.aiSettingsHandler.defaultConfig = cfg
 	router.aiSettingsHandler.defaultPersistence = persistence

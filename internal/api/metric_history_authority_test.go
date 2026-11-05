@@ -77,7 +77,7 @@ func newMetricAuthorityFixture(t *testing.T, entry string, scopes []string) *met
 	setUnexportedField(t, monitor, "state", models.NewState())
 	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
 	monitor.SetResourceStore(p)
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	router.monitor = monitor
 	router.resourceHandlers.SetStateProvider(p)
 	// SetResourceStore publishes an initial view synchronously. Only later

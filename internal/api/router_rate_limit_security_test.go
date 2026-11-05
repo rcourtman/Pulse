@@ -22,7 +22,7 @@ func newLoginRouter(t *testing.T) *Router {
 		DataPath:   t.TempDir(),
 		ConfigPath: t.TempDir(),
 	}
-	return NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	return newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 }
 
 func TestLoginRateLimitEnforced(t *testing.T) {

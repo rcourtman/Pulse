@@ -62,7 +62,7 @@ func TestPlatformAdminRouteAgreesWithBillingAdminCapability(t *testing.T) {
 	defer auth.SetAuthorizer(prev)
 
 	cfg := platformAdminConfig(t, "")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	manager := installTestRBACManager(t)
 	ssoOwner := "sso:owner@example.com"
 	if err := manager.UpdateUserRoles(ssoOwner, []string{auth.RoleAdmin}); err != nil {
@@ -134,7 +134,7 @@ func TestPlatformAdminRouteRefusesUnrelatedSSOUser(t *testing.T) {
 	defer auth.SetAuthorizer(prev)
 
 	cfg := platformAdminConfig(t, "admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	outsider := "sso:outsider@example.com"
 
 	if billingAdminCapability(t, router, outsider) {

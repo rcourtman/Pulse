@@ -103,7 +103,7 @@ func TestAgentRecentChangesHTTPPreservesAuthorityAndCanonicalEvidence(t *testing
 	)
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "fixture-nonempty-hash"
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	t.Cleanup(func() { _ = router.resourceHandlers.CloseStores() })
 	store, err := router.resourceHandlers.getStore("default")
 	if err != nil {

@@ -96,7 +96,7 @@ func TestContractRBACIntegrityQueryAdmission(t *testing.T) {
 	t.Cleanup(resetPersistentAuthStoresForTests)
 	rawToken := "integrity-query-contract-token.12345678"
 	cfg := newTestConfigWithTokens(t, newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil))
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierEnterprise)
 	serve := func(query, token string) *httptest.ResponseRecorder {
@@ -943,7 +943,7 @@ func TestContract_PatrolAttentionRoutesAcceptMobileRelayCapability(t *testing.T)
 	rawToken := "contract-attention-mobile.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/attention?filter=all&page=1&limit=20", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -1306,7 +1306,7 @@ func TestContract_PatrolAutonomyCommunityMonitorUpdatePayload(t *testing.T) {
 	rawToken := "patrol-autonomy-contract-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	body := `{"autonomy_level":"monitor","full_mode_unlocked":true,"investigation_budget":2,"investigation_timeout_sec":30}`
 	req := httptest.NewRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
@@ -3493,7 +3493,7 @@ func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *tes
 		t.Fatalf("set monitor mock mode: %v", err)
 	}
 
-	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "1.0.0")
 	t.Cleanup(func() {
 		router.shutdownBackgroundWorkers()
 	})
@@ -5790,7 +5790,7 @@ func TestContract_ReportingCatalogRouteAccessibleWithoutReportingFeature(t *test
 	rawToken := "reporting-catalog-contract-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/catalog", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -5809,7 +5809,7 @@ func TestContract_LocalCommercialAnalyticsRoutesAreNotRegistered(t *testing.T) {
 	rawToken := "retired-commercial-analytics-contract-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	for _, tc := range []struct {
 		method string
@@ -7134,8 +7134,8 @@ func TestContract_RouterShutdownClosesOwnedPersistentAuthStoresAfterGlobalRebind
 	resetPersistentAuthStoresForTests()
 	t.Cleanup(resetPersistentAuthStoresForTests)
 
-	routerOne := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
-	routerTwo := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
+	routerOne := newTestRouter(t, &config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
+	routerTwo := newTestRouter(t, &config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(routerTwo.shutdownBackgroundWorkers)
 
 	if routerOne.sessionStore == nil || routerOne.csrfStore == nil {
@@ -7275,7 +7275,7 @@ func TestContract_RelayMobileScopeCanReadOnboardingDeepLink(t *testing.T) {
 	rawToken := "relay-mobile-onboarding-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/onboarding/deep-link", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -7291,7 +7291,7 @@ func TestContract_OnboardingDeepLinkIgnoresQueryAuthToken(t *testing.T) {
 	rawToken := "relay-mobile-onboarding-query-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/onboarding/deep-link?auth_token="+url.QueryEscape(rawToken), nil)
 	rec := httptest.NewRecorder()
@@ -7304,7 +7304,7 @@ func TestContract_OnboardingDeepLinkIgnoresQueryAuthToken(t *testing.T) {
 
 func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Setenv("HOME", t.TempDir())
 
 	token := "fedcba9876543210fedcba9876543210"
@@ -7354,7 +7354,7 @@ func TestContract_RelayMobileScopeCannotReadApprovalDetail(t *testing.T) {
 	rawToken := "relay-mobile-approval-detail-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals/approval-1", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -9593,7 +9593,7 @@ func TestContract_DemoModeUpgradeHeadersDoNotExemptWrites(t *testing.T) {
 	hub := pulsews.NewHub(nil)
 	go hub.Run()
 	t.Cleanup(hub.Stop)
-	router := NewRouter(cfg, monitor, nil, hub, nil, "1.0.0")
+	router := newTestRouter(t, cfg, monitor, nil, hub, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 	server := newIPv4HTTPServer(t, router.Handler())
 	t.Cleanup(server.Close)
@@ -9694,7 +9694,7 @@ func TestContract_DemoModeHidesPprofFromDemoAdminSession(t *testing.T) {
 		AuthPass:   hashedPass,
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 	server := newIPv4HTTPServer(t, router.Handler())
 	t.Cleanup(server.Close)
@@ -11239,7 +11239,7 @@ func TestContract_AgentHelperDownloadIsLinuxOnlyAndSeparatelySigned(t *testing.T
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "hashed"
-	publicRouter := NewRouter(cfg, nil, nil, nil, nil, "v6.0.0")
+	publicRouter := newTestRouter(t, cfg, nil, nil, nil, nil, "v6.0.0")
 	request = httptest.NewRequest(
 		http.MethodPost,
 		"/download/pulse-agent-helper?arch=linux-amd64",
@@ -11887,7 +11887,7 @@ func TestContract_ResetFirstRunSecurityResponseJSONSnapshot(t *testing.T) {
 		t.Fatalf("writeAuthEnvFile: %v", err)
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	req := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
 	req.Header.Set("X-API-Token", "contract-reset-first-run-token-123.12345678")
 	rec := httptest.NewRecorder()
@@ -11939,7 +11939,7 @@ func TestContract_ResetFirstRunSecurityClearsEnvBackedStatus(t *testing.T) {
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "hashed-password"
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	resetReq := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
 	resetReq.Header.Set("X-API-Token", "contract-reset-first-run-token-456.12345678")
@@ -11998,7 +11998,7 @@ func TestContract_PublicSecurityStatusIncludesDemoPresentationPolicy(t *testing.
 	cfg := newTestConfigWithTokens(t)
 	cfg.DemoMode = true
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	rec := httptest.NewRecorder()
@@ -12044,7 +12044,7 @@ func TestContract_SecurityStatusPresentationPolicyHidesUpgradeByDefault(t *testi
 	cfg := newTestConfigWithTokens(t)
 	cfg.DemoMode = false
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	rec := httptest.NewRecorder()
@@ -12115,7 +12115,7 @@ func TestContract_SecurityStatusPresentationPolicyProEditionCommercialContext(t 
 		cfg := newTestConfigWithTokens(t)
 		cfg.DemoMode = demoMode
 
-		router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+		router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 		rec := httptest.NewRecorder()
@@ -12200,7 +12200,7 @@ func TestContract_SecurityStatusInfrastructureReadTracksSettingsReadScope(t *tes
 			rawToken := fmt.Sprintf("contract-infra-scope-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
 			record := newTokenRecord(t, rawToken, tc.scopes, nil)
 			cfg := newTestConfigWithTokens(t, record)
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 			req.Header.Set("X-API-Token", rawToken)
@@ -12256,7 +12256,7 @@ func TestContract_SecurityStatusSystemSettingsReadTracksSettingsReadScope(t *tes
 			rawToken := fmt.Sprintf("contract-syssettings-scope-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
 			record := newTokenRecord(t, rawToken, tc.scopes, nil)
 			cfg := newTestConfigWithTokens(t, record)
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 			req.Header.Set("X-API-Token", rawToken)
@@ -12314,7 +12314,7 @@ func TestContract_SecurityStatusPatrolRunTracksRunRouteGate(t *testing.T) {
 			rawToken := fmt.Sprintf("contract-patrolrun-scope-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
 			record := newTokenRecord(t, rawToken, tc.scopes, nil)
 			cfg := newTestConfigWithTokens(t, record)
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 			var cookie *http.Cookie
 			if tc.cookieUser != "" {
 				cookie = capabilitySessionCookie(t, tc.cookieUser)
@@ -12369,7 +12369,7 @@ func TestSecurityStatusPatrolRunRefusesOrgBoundToken(t *testing.T) {
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
 	record.OrgID = "t-client01"
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -12391,7 +12391,7 @@ func TestSecurityStatusPatrolRunRefusesOrgBoundToken(t *testing.T) {
 // capability must too, while the org's own owner is still refused.
 func TestSecurityStatusPatrolRunFollowsInstanceAdminOnOrgScopedSession(t *testing.T) {
 	cfg := platformAdminConfig(t, "admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	org := &models.Organization{
 		ID:          "t-client01",
 		DisplayName: "Client Workspace",
@@ -12464,7 +12464,7 @@ func TestContract_SecurityStatusAdminOnlySettingsCapabilitiesTrackMountRoutes(t 
 			rawToken := fmt.Sprintf("contract-admin-settings-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
 			record := newTokenRecord(t, rawToken, tc.scopes, nil)
 			cfg := newTestConfigWithTokens(t, record)
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 			req.Header.Set("X-API-Token", rawToken)
@@ -12513,7 +12513,7 @@ func TestContract_SecurityStatusPermissionedSettingsCapabilitiesIncludeRouteAuth
 	rawToken := "contract-permissioned-settings.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -12587,7 +12587,7 @@ func TestContract_SecurityStatusSplitsAuditLogCapabilityFromSettingsRead(t *test
 			rawToken := fmt.Sprintf("contract-audit-scope-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
 			record := newTokenRecord(t, rawToken, tc.scopes, nil)
 			cfg := newTestConfigWithTokens(t, record)
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 			req.Header.Set("X-API-Token", rawToken)
@@ -15636,7 +15636,7 @@ func TestContract_ResourceListUsesTenantStateProviderAtStartup(t *testing.T) {
 		DataPath:   t.TempDir(),
 		ConfigPath: t.TempDir(),
 	}
-	router := NewRouter(cfg, nil, &monitoring.MultiTenantMonitor{}, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, &monitoring.MultiTenantMonitor{}, nil, nil, "1.0.0")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?page=1&limit=100", nil)
@@ -15867,7 +15867,7 @@ func TestContract_AgentExecWebSocketRejectsUnboundToken(t *testing.T) {
 	rawToken := "contract-agent-unbound-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
@@ -15902,7 +15902,7 @@ func TestContract_AgentExecWebSocketAcceptsLegacyHostnameBinding(t *testing.T) {
 	rawToken := "contract-agent-legacy-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{"bound_hostname": "node-1"})
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
@@ -15940,7 +15940,7 @@ func TestContract_AgentExecWebSocketBindsProxmoxInstallTokenOnFirstUse(t *testin
 		"issued_via":   agentInstallIssuedViaConfig,
 	})
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
@@ -19575,7 +19575,7 @@ func TestContract_AgentCapabilitiesManifestRoutesReachRouterWithAdvertisedScope(
 	rawToken := "agent-route-contract-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	args := map[string]any{
 		"actionId":                              "act_contract",
@@ -22179,7 +22179,7 @@ func TestContract_AgentCommandConfigGateMirrorsChannelAdmission(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, tc.metadata)
 			cfg := newTestConfigWithTokens(t, record)
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 			gate := commandConfigAllowedForToken(&cfg.APITokens[0], models.Host{
 				ID:       tc.agentID,
@@ -22214,7 +22214,7 @@ func TestContract_AgentCommandSessionLookupSurvivesStaleHostTokenID(t *testing.T
 		agentExecBindingVersionKey: agentExecBindingVersion,
 	})
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
@@ -23191,7 +23191,7 @@ func TestContract_HostedDiagnosticsDockerPrepareTokenValidatesOriginBeforeMutati
 
 		monitor, state, _ := newTestMonitor(t)
 		state.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
-		router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+		router := newTestRouter(t, cfg, monitor, nil, nil, nil, "1.0.0")
 		t.Cleanup(router.shutdownBackgroundWorkers)
 		sessionToken := generateSessionToken()
 		GetSessionStore().CreateSession(sessionToken, time.Hour, "test-browser", "127.0.0.1", "admin")
@@ -23422,7 +23422,7 @@ func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
 		cfg.PublicURL = publicURL
 		cfg.PublicURLAutoDetected = autoDetected
 		cfg.AgentConnectURL = agentConnectURL
-		router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+		router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 		if !router.hostedMode || router.configHandlers == nil || !router.configHandlers.HostedMode() {
 			t.Fatal("Router hosted mode was not propagated into ConfigHandlers")
 		}
@@ -24021,7 +24021,7 @@ func TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin(t *testing.
 		t.Fatalf("save system settings: %v", err)
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cookie := capabilitySessionCookie(t, "viewer@example.com")
 
 	get := func(path string) *httptest.ResponseRecorder {
@@ -24076,7 +24076,7 @@ func TestContract_AuthorizationRefusalKeepsStatusWhileLoggingAtDebug(t *testing.
 	cfg.ProxyAuthUserHeader = "X-Remote-User"
 	cfg.ProxyAuthRoleHeader = "X-Remote-Role"
 	cfg.ProxyAuthAdminRole = "admin"
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	// Capture only the request phase — router construction emits unrelated
 	// startup warnings that have nothing to do with authorization.
@@ -24349,7 +24349,7 @@ func TestContract_NotificationDestinationWritesPublishOnlyAfterPersistence(t *te
 // configured administrator identity or granting instance settings access.
 func TestSecurityStatusCurrentUserForScopedLocalSession(t *testing.T) {
 	cfg := newCapabilityConfig(t, "instance-admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	for _, username := range []string{"", "org-owner", "instance-admin"} {
 		authenticated := username != ""
 		req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
@@ -24408,7 +24408,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 	defer authpkg.SetAuthorizer(prev)
 
 	cfg := platformAdminConfig(t, "admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	org := &models.Organization{
 		ID:          "t-client01",
@@ -24478,7 +24478,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 // RequirePermission refuses the route before any session check runs.
 func TestSecurityStatusOrgBoundReportingRespectsAuthorizer(t *testing.T) {
 	cfg := platformAdminConfig(t, "admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	router.authorizer = orgBoundDenyAllAuthorizer{}
 
 	org := &models.Organization{ID: "t-client03", DisplayName: "Client", OwnerUserID: "u_owner"}
@@ -24807,7 +24807,7 @@ func TestRouterPlatformConnectionAlertsFollowRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(monitor.Stop)
-	router := NewRouter(cfg, monitor, nil, nil, nil, "fixture")
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "fixture")
 	cleanupTestRouter(t, router)
 	manager := monitor.GetAlertManager()
 
@@ -25549,7 +25549,7 @@ func TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := NewRouter(cfg, defaultMonitor, mtm, nil, nil, "test")
+	router := newTestRouter(t, cfg, defaultMonitor, mtm, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	source := config.NewConfigPersistence(t.TempDir())
 	// A populated target deliberately refuses an empty-node replacement.
@@ -25618,7 +25618,7 @@ func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.
 		t.Fatal(err)
 	}
 	reloads := 0
-	router := NewRouter(cfg, nil, nil, nil, func() error {
+	router := newTestRouter(t, cfg, nil, nil, nil, func() error {
 		reloads++
 		// Fault after persistence has committed, before the real metadata reload.
 		path := filepath.Join(dir, "guest_metadata.json")
@@ -25710,7 +25710,7 @@ func TestContractSSOEnvironmentBoundaryConsumer(t *testing.T) {
 		return probe
 	})
 	t.Cleanup(func() { SetSSOAdminEndpointsBinder(nil) })
-	r := NewRouter(cfg, nil, nil, nil, nil, "test")
+	r := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	r.ssoConfig = fixture.currentSSOConfig().Clone()
 	if err := r.saveSSOConfig(); err != nil {
 		t.Fatal(err)
@@ -25783,7 +25783,7 @@ func TestContractSSOEnvironmentBoundaryConsumer(t *testing.T) {
 func TestContractSSOOIDCIssuerConsumer(t *testing.T) {
 	const token = "oidc-issuer-consumer-synthetic-token.12345678"
 	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
-	r := NewRouter(newTestConfigWithTokens(t, record), nil, nil, nil, nil, "test")
+	r := newTestRouter(t, newTestConfigWithTokens(t, record), nil, nil, nil, nil, "test")
 	seedRestrictedSSOProvider(t, r)
 	before, err := json.Marshal(r.currentSSOConfig())
 	if err != nil {
@@ -25935,7 +25935,7 @@ func TestContractSSOUnrepresentedSettingsSurviveSignedProviderEdit(t *testing.T)
 func TestContractSSOSAMLDiagnosticConsumer(t *testing.T) {
 	const token = "saml-diagnostic-synthetic-token.12345678"
 	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
-	r := NewRouter(newTestConfigWithTokens(t, record), nil, nil, nil, nil, "test")
+	r := newTestRouter(t, newTestConfigWithTokens(t, record), nil, nil, nil, nil, "test")
 	seedRestrictedSSOProvider(t, r)
 	before, err := json.Marshal(r.currentSSOConfig())
 	if err != nil {

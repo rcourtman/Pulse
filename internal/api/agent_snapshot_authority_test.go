@@ -75,7 +75,7 @@ func newSnapshotAuthorityFixture(t *testing.T, path string, scopes []string) *sn
 	cfg.AuthUser, cfg.AuthPass = "operator", "fixture-nonempty-hash"
 	cfg.ProxyAuthSecret, cfg.ProxyAuthUserHeader = "snapshot-proxy-fixture", "X-Remote-User"
 	InitSessionStore(cfg.DataPath)
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	t.Cleanup(router.ShutdownResourceStores)
 	now := time.Now().UTC()
 	p := &snapshotAuthorityProvider{

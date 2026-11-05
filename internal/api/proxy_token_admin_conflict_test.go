@@ -17,7 +17,7 @@ func TestProxyAuthNonAdminCannotEscalateWithToken(t *testing.T) {
 	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
 	cfg.ProxyAuthAdminRole = "admin"
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
 	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)

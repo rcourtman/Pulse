@@ -43,7 +43,7 @@ func TestReleaseNoteImageRouteAuthorization(t *testing.T) {
 			if tc.token != "" {
 				cfg = newTestConfigWithTokens(t, newTokenRecord(t, tc.token, []string{tc.scope}, nil))
 			}
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 			req := httptest.NewRequest(http.MethodGet, endpoint, nil)
 			if tc.token != "" {
 				req.Header.Set("X-API-Token", tc.token)
@@ -76,7 +76,7 @@ func TestBackupJobsRouteAuthorization(t *testing.T) {
 			if tc.token != "" {
 				cfg = newTestConfigWithTokens(t, newTokenRecord(t, tc.token, []string{tc.scope}, nil))
 			}
-			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 			req := httptest.NewRequest(http.MethodGet, endpoint, nil)
 			if tc.token != "" {
 				req.Header.Set("X-API-Token", tc.token)
@@ -838,7 +838,7 @@ func TestRegisteredTestNotificationStaysWithRequestOrganization(t *testing.T) {
 			owner, other := connect(ownerOrg), connect("org-b")
 			monitors := monitoring.NewMultiTenantMonitor(cfg, config.NewMultiTenantPersistence(cfg.DataPath), nil)
 			t.Cleanup(monitors.Stop)
-			router := NewRouter(cfg, nil, monitors, hub, nil, "1.0.0")
+			router := newTestRouter(t, cfg, nil, monitors, hub, nil, "1.0.0")
 			for _, tc := range []struct {
 				method, token string
 				status        int
@@ -921,7 +921,7 @@ func TestRegisteredTestNotificationAdmitsRequestOrganizationManagers(t *testing.
 	t.Cleanup(hub.Stop)
 	monitors := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
 	t.Cleanup(monitors.Stop)
-	router := NewRouter(cfg, nil, monitors, hub, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, monitors, hub, nil, "1.0.0")
 
 	for _, tc := range []struct {
 		user   string

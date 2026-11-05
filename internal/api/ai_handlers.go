@@ -528,7 +528,9 @@ func (h *AISettingsHandler) RemoveTenantService(orgID string) {
 	delete(h.aiServices, orgID)
 	h.aiServicesMu.Unlock()
 	if svc != nil {
-		svc.StopPatrol()
+		// A removed service is never used again, so release its resource store
+		// as well as its patrol. Nothing else closes that store.
+		svc.Stop()
 	}
 
 	h.RemoveTenantIntelligence(orgID)

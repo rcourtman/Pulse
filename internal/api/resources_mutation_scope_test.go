@@ -19,7 +19,7 @@ func TestResourceRoutesRequireWriteScopeForMutations(t *testing.T) {
 		newTokenRecord(t, readToken, []string{config.ScopeMonitoringRead}, nil),
 		newTokenRecord(t, writeToken, []string{config.ScopeMonitoringWrite}, nil),
 	)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	do := func(token, method, path, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, strings.NewReader(body))

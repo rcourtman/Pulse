@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"runtime/pprof"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
@@ -10,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -115,6 +119,41 @@ func TestAISettingsHandler_RemoveTenantService(t *testing.T) {
 	if _, ok := handler.aiServices["default"]; !ok {
 		t.Fatalf("expected default to remain")
 	}
+}
+
+func TestAISettingsHandler_RemoveTenantServiceClosesItsResourceStore(t *testing.T) {
+	handler := newTestAISettingsHandlerLite()
+	handler.aiServices["org-1"] = ai.NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	before := countGoroutinesInStack(t, "SQLiteResourceStore).startRetentionLoop")
+	if before == 0 {
+		t.Fatal("expected the tenant service to hold an open resource store")
+	}
+
+	handler.RemoveTenantService("org-1")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for countGoroutinesInStack(t, "SQLiteResourceStore).startRetentionLoop") >= before {
+		if time.Now().After(deadline) {
+			t.Fatal("removed tenant service left its resource store open")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// countGoroutinesInStack counts goroutines whose stack mentions frame.
+func countGoroutinesInStack(t *testing.T, frame string) int {
+	t.Helper()
+	var stacks strings.Builder
+	if err := pprof.Lookup("goroutine").WriteTo(&stacks, 2); err != nil {
+		t.Fatalf("read goroutine stacks: %v", err)
+	}
+	count := 0
+	for _, goroutine := range strings.Split(stacks.String(), "\n\n") {
+		if strings.Contains(goroutine, frame) {
+			count++
+		}
+	}
+	return count
 }
 
 func TestAISettingsHandler_IsAIEnabled(t *testing.T) {

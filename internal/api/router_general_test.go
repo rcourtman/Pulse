@@ -17,7 +17,7 @@ func TestRouter_HandlerWrapping(t *testing.T) {
 		DataPath:   tmpDir,
 		ConfigPath: tmpDir,
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	handler := router.Handler()
 	assert.NotNil(t, handler)
@@ -42,7 +42,7 @@ func TestRouter_GetTenantMonitor_Defaults(t *testing.T) {
 	}
 	defaultMon := &monitoring.Monitor{}
 
-	router := NewRouter(cfg, defaultMon, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, defaultMon, nil, nil, nil, "1.0.0")
 
 	// With flag disabled, should always return default monitor
 	ctx := context.Background()

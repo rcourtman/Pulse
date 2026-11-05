@@ -10,7 +10,7 @@ import (
 func TestRBACEndpointsRequireAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "rbac-auth-token-123.12345678", nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
 		"/api/admin/roles",
@@ -30,7 +30,7 @@ func TestRBACEndpointsRequireAuthInAPIMode(t *testing.T) {
 func TestReportingEndpointsRequireAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "reporting-auth-token-123.12345678", nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	cases := []struct {
 		method string

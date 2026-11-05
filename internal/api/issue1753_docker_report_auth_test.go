@@ -107,7 +107,7 @@ func TestIssue1753DockerSharedTokenTwoSitesSameShortHostname(t *testing.T) {
 		t.Fatalf("new monitor: %v", err)
 	}
 	defer monitor.Stop()
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
 
 	// Alternate reports the way two live 30s-interval agents do. Site B's
 	// very first Docker report may legitimately fold (a changed machine ID is
@@ -212,7 +212,7 @@ func TestIssue1753DockerHostRemovalKeepsUnifiedSiblingToken(t *testing.T) {
 		t.Fatalf("new monitor: %v", err)
 	}
 	defer monitor.Stop()
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
 
 	code, payload := issue1753PostReport(t, router, token,
 		issue1753Report("", "nas01", "machine-id-nas01", "10.3.0.10"))

@@ -63,7 +63,7 @@ func TestCORE13RESTReportingChartJourney(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	router := NewRouter(cfg, monitor, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "test")
 	t.Cleanup(router.ShutdownBackgroundWorkers)
 	t.Cleanup(router.ShutdownResourceStores)
 	t.Cleanup(router.ShutdownRBAC)

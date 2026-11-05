@@ -100,7 +100,7 @@ func newProtectedReadFixture(t *testing.T, scopes []string) *protectedReadFixtur
 	cfg.ProxyAuthUserHeader = "X-Remote-User"
 	monitor, state, _ := newTestMonitor(t)
 	syncTestResourceStore(t, monitor, state)
-	router := NewRouter(cfg, monitor, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	svc := router.aiSettingsHandler.GetAIService(context.Background())
 	svc.SetStateProvider(&stubStateProvider{})

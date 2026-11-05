@@ -21,7 +21,7 @@ func newProxyAuthRouter(t *testing.T) *Router {
 		ConfigPath:          t.TempDir(),
 		EnvOverrides:        make(map[string]bool),
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	if router.configHandlers != nil {
 		router.configHandlers.SetConfig(cfg)
 	}

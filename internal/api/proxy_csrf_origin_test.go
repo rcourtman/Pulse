@@ -25,7 +25,7 @@ func newProxyCSRFTestRouter(t *testing.T) *Router {
 		DataPath: dataDir, ConfigPath: dataDir,
 		ProxyAuthSecret: proxyCSRFTestSecret, ProxyAuthUserHeader: "X-Proxy-User",
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	return router
 }
@@ -152,7 +152,7 @@ func TestSessionCSRFTokenStillRequiredForSameSiteWrites(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 	cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "synthetic-admin", AuthPass: hash}
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	sessionToken := "synthetic-proxy-csrf-session"
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "192.0.2.1", "synthetic-admin")

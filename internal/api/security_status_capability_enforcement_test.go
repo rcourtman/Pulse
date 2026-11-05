@@ -66,7 +66,7 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 	defer auth.SetAuthorizer(prevAuthorizer)
 
 	cfg := newCapabilityConfig(t, "admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, "sso:outsider@example.com"))
 	for _, key := range []string{
@@ -128,7 +128,7 @@ func TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC(t *testing.T) {
 	defer auth.SetAuthorizer(prevAuthorizer)
 
 	cfg := newCapabilityConfig(t, "admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, "admin"))
 	for _, key := range []string{
@@ -176,7 +176,7 @@ func TestSettingsCapabilitiesRequireExplicitSSOAdminWhenNoLocalAdminConfigured(t
 	defer auth.SetAuthorizer(prevAuthorizer)
 
 	cfg := newCapabilityConfig(t, "")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	manager := installTestRBACManager(t)
 	const ssoAdmin = "sso:owner@example.com"
 	if err := manager.UpdateUserRoles(ssoAdmin, []string{auth.RoleAdmin}); err != nil {

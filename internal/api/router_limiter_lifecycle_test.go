@@ -58,7 +58,7 @@ func TestRouterShutdownJoinsEveryOwnedLimiter(t *testing.T) {
 		t.Run(hosted, func(t *testing.T) {
 			t.Setenv("PULSE_HOSTED_MODE", hosted)
 			for i := 0; i < 3; i++ {
-				r := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
+				r := newTestRouter(t, &config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
 				cleanupTestRouter(t, r)
 				owned := routerOwnedLimiters(r)
 				want := 13
@@ -82,9 +82,9 @@ func TestRouterShutdownPreservesOtherRouterAndGlobalBudgets(t *testing.T) {
 	isolateRateLimitFixture(t)
 	InitializeRateLimiters()
 	global := globalRateLimitConfig
-	first := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
+	first := newTestRouter(t, &config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, first)
-	second := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
+	second := newTestRouter(t, &config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, second)
 	login := getRateLimiterForEndpoint(second.endpointRateLimitConfig, "/api/login", http.MethodPost)
 	for i := 0; i < login.limit; i++ {
@@ -109,7 +109,7 @@ func TestRouterShutdownPreservesOtherRouterAndGlobalBudgets(t *testing.T) {
 }
 
 func TestRouterShutdownSealsAndJoinsConcurrentWorkerAdmission(t *testing.T) {
-	r := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
+	r := newTestRouter(t, &config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, r)
 	var started, exited atomic.Int64
 	var callers sync.WaitGroup

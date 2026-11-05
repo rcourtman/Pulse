@@ -90,7 +90,7 @@ func TestIssue1753TwoStandaloneSitesSameShortHostnameKeepReportAuth(t *testing.T
 		t.Fatalf("new monitor: %v", err)
 	}
 	defer monitor.Stop()
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
 
 	var ackIDA, ackIDB string
 	for round := 0; round < 4; round++ {
@@ -193,7 +193,7 @@ func TestIssue1753SharedInstallTokenTwoSites(t *testing.T) {
 		t.Fatalf("new monitor: %v", err)
 	}
 	defer monitor.Stop()
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "6.4.2")
 
 	var ackIDA, ackIDB string
 	for round := 0; round < 4; round++ {

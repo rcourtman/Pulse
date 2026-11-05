@@ -93,7 +93,7 @@ func TestTrueNASHistoryBatchHTTPWithdrawal(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(cfg.DataPath, "orgs", "org-batch"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	router := NewRouter(cfg, monitor, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "test")
 	t.Cleanup(router.ShutdownBackgroundWorkers)
 	t.Cleanup(router.ShutdownResourceStores)
 	t.Cleanup(router.ShutdownRBAC)

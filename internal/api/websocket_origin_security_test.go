@@ -28,7 +28,7 @@ func newWebSocketRouterWithServer(t *testing.T, allowedOrigins []string, tokenRe
 	hub.SetAllowedOrigins(allowedOrigins)
 	go hub.Run()
 
-	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, hub, nil, "1.0.0")
 	server := serverFactory(t, router.Handler())
 
 	cleanup := func() {

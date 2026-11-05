@@ -44,7 +44,7 @@ func newConfigTransferTestRouter(t *testing.T, hosted bool, sso *config.SSOConfi
 			t.Fatalf("save synthetic SSO config: %v", err)
 		}
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	return router
 }
@@ -131,7 +131,7 @@ func TestConfigTransferEnvironmentOIDCAndSSOLoadFailureFailClosed(t *testing.T) 
 			t.Fatalf("write corrupt synthetic SSO: %v", err)
 		}
 		cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir}
-		router := NewRouter(cfg, nil, nil, nil, nil, "test")
+		router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 		cleanupTestRouter(t, router)
 		if !router.ssoAuthenticationLoadFailed() {
 			t.Fatal("precondition: corrupt persisted SSO was not recorded as a load failure")
@@ -223,7 +223,7 @@ func TestConfigTransferAuthorizedInstanceModesReachHandler(t *testing.T) {
 		dataDir := t.TempDir()
 		t.Setenv("PULSE_DATA_DIR", dataDir)
 		cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "admin", AuthPass: hash}
-		router := NewRouter(cfg, nil, nil, nil, nil, "test")
+		router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 		cleanupTestRouter(t, router)
 		for _, path := range []string{"/api/config/export", "/api/config/import"} {
 			body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
@@ -270,7 +270,7 @@ func TestConfigTransferAuthorizedInstanceModesReachHandler(t *testing.T) {
 			ProxyAuthSecret: "synthetic-proxy-secret", ProxyAuthUserHeader: "X-Proxy-User",
 			ProxyAuthRoleHeader: "X-Proxy-Roles", ProxyAuthAdminRole: "admin",
 		}
-		router := NewRouter(cfg, nil, nil, nil, nil, "test")
+		router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 		cleanupTestRouter(t, router)
 		for _, path := range []string{"/api/config/export", "/api/config/import"} {
 			body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
@@ -294,7 +294,7 @@ func TestConfigTransferTokenScopesAndOrganizationBinding(t *testing.T) {
 	writeRecord := newTokenRecord(t, writeRaw, []string{config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, readRecord, writeRecord)
 	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 
 	tests := []struct {
@@ -337,7 +337,7 @@ func TestConfigTransferTokenScopesAndOrganizationBinding(t *testing.T) {
 	boundRecord.OrgID = "tenant-a"
 	boundCfg := newTestConfigWithTokens(t, boundRecord)
 	t.Setenv("PULSE_DATA_DIR", boundCfg.DataPath)
-	boundRouter := NewRouter(boundCfg, nil, nil, nil, nil, "test")
+	boundRouter := newTestRouter(t, boundCfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, boundRouter)
 	body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
 	req := httptest.NewRequest(http.MethodPost, "/api/config/export", body)
@@ -411,7 +411,7 @@ func TestConfigTransferTenantSessionsRequireManagement(t *testing.T) {
 	}
 	mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
 	t.Cleanup(mtm.Stop)
-	router := NewRouter(cfg, nil, mtm, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, mtm, nil, nil, "test")
 	cleanupTestRouter(t, router)
 
 	tests := []struct {
@@ -522,7 +522,7 @@ func TestDeniedConfigTransferDoesNotMutateOrReload(t *testing.T) {
 		AuthUser: "synthetic-admin", AuthPass: hash, PublicURL: "https://before.invalid",
 	}
 	reloadCalls := 0
-	router := NewRouter(cfg, nil, nil, nil, func() error {
+	router := newTestRouter(t, cfg, nil, nil, nil, func() error {
 		reloadCalls++
 		return nil
 	}, "test")

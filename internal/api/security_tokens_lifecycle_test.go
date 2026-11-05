@@ -208,7 +208,7 @@ func TestSecurityTokens_DeleteFailsAuthImmediately(t *testing.T) {
 	keepRecord := newTokenRecord(t, keepToken, []string{config.ScopeMonitoringRead}, nil)
 
 	cfg := newTestConfigWithTokens(t, record, keepRecord)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	// 1. Token works before deletion.
@@ -267,7 +267,7 @@ func TestSecurityTokens_ExpiredTokenRejectedAtHTTPLayer(t *testing.T) {
 	record.ExpiresAt = &past
 
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	// X-API-Token header path.
@@ -303,7 +303,7 @@ func TestSecurityTokens_ValidTokenUpdatesLastUsedAt(t *testing.T) {
 	rawToken := "lifecycle-lastused-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	// Confirm LastUsedAt is nil before first use.
@@ -364,7 +364,7 @@ func TestSecurityTokens_NonExpiredTokenAllowedThenExpiredRejected(t *testing.T) 
 	record.ExpiresAt = &future
 
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	// Token works while not expired.
@@ -397,7 +397,7 @@ func TestSecurityTokens_InvalidTokenHeaderReturns401(t *testing.T) {
 	rawToken := "lifecycle-valid-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	// Wrong X-API-Token header.
