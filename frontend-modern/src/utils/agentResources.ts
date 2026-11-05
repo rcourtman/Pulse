@@ -66,7 +66,10 @@ const DOCKER_RUNTIME_INVENTORY_COUNT_FIELDS = [
 
 export const hasDockerRuntimeHostEvidence = (resource: Resource): boolean => {
   if (resource.type === 'docker-host') return true;
-  if (resource.type !== 'agent') return false;
+  // A linked VM/LXC keeps its guest type while hosting the agent's runtime.
+  if (resource.type !== 'agent' && resource.type !== 'vm' && resource.type !== 'system-container') {
+    return false;
+  }
   const platformData = getPlatformDataRecord(resource);
   const docker = asRecord(resource.docker) ?? asRecord(platformData?.docker);
   if (!docker) return false;

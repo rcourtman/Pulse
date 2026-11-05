@@ -481,6 +481,23 @@ describe('DockerPageSurface', () => {
     );
   });
 
+  it('requests linked VM/LXC runtime carriers in every lazy workflow without broadening the source', () => {
+    render(() => <DockerPageSurface />);
+    expect(mocks.useUnifiedResources.mock.calls).toHaveLength(5);
+    for (const [options] of mocks.useUnifiedResources.mock.calls) {
+      const query = new URLSearchParams((options as { query: string }).query);
+      expect(query.get('type')?.split(',')).toEqual(
+        expect.arrayContaining(['vm', 'system-container']),
+      );
+      expect(query.get('source')).toBe('docker');
+    }
+    expect(
+      mocks.useUnifiedResources.mock.calls.filter(([options]) =>
+        (options as { enabled: () => boolean }).enabled(),
+      ),
+    ).toHaveLength(1);
+  });
+
   it('hydrates only the active Docker workflow resource family', () => {
     mocks.pathname = '/docker/storage';
     mocks.useUnifiedResources.mockReturnValue({
@@ -498,7 +515,7 @@ describe('DockerPageSurface', () => {
     expect(activeCall?.[0]).toEqual(
       expect.objectContaining({
         cacheKey: 'docker-storage',
-        query: 'type=agent,docker-host,docker-volume&source=docker',
+        query: 'type=agent,docker-host,vm,system-container,docker-volume&source=docker',
       }),
     );
   });

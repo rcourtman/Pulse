@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "eaf7ba3755cde39062491eac9acae6c8b82e04d6",
+  "verified_at": "2026-11-05T04:20:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/docker/dockerPageModel.ts",
+    "frontend-modern/src/utils/agentResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "bb66996682187be45abbff3318af589477a0680ace63836ccba1c7e5c724e015",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "034c67ac5849af26f61d0661b8711e7d58c5d9ca5af216f112407558464515e2",
+    "frontend-modern/src/utils/agentResources.ts": "53cd6ec3c0912f04a147be7d163fad2486789983ef3854785dc92f6e30a3080f"
+  },
+  "routes": [
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual QueryService responses for an unlinked runtime, VM-linked runtime, LXC-linked runtime and an independent same-named guest; before and after pairs use identical normalized payloads.",
+    "Linked runtime host remains visible with its existing guest-selected metrics and its unchanged payments container. Guests without runtime evidence do not become runtime hosts.",
+    "Unlinked case is unchanged. Browser history charts use declared empty synthetic fixtures, not persisted or appliance History proof."
+  ],
+  "interactions": [
+    "Chromium desktop/light and WebKit phone/dark: keyboard or touch host scoping, clear host scope, expand and collapse the existing runtime drawer.",
+    "Navigate actual Images, Storage and Networks consumers and retain reported inventory. No mutation requests, page errors, uncaptured resource queries or document overflow.",
+    "Open and inspect all sixteen retained comparable captures using the native image viewer; host status, memory/CPU, container metrics and controls remain readable."
+  ],
+  "notes": "Behavioral repair of existing Docker runtime membership; no new route, schema, resource type, identity rule, permission or shared primitive."
+}
