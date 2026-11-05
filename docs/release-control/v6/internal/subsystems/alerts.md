@@ -37,6 +37,18 @@ order, so after a restart a saved key can belong to the other machine.
 `useThresholdsDockerData.test.ts`, `ResourceTable.test.tsx` and
 `AlertIntentPolicyPanel.test.tsx` carry the proof.
 
+### Docker host names and searches on Alert Thresholds (5 November 2026)
+
+Docker rows no longer use the Proxmox node rule, which keeps a name's first word
+and prefers a parenthetical. `getFriendlyDockerHostName` keeps a name whole and
+drops only a single-word FQDN's domain. `getFriendlyNodeName` is unchanged.
+
+A search hid live containers before marking their override IDs as seen, so their
+overrides listed under Unassigned Containers. IDs are now marked first. Those
+rows also obey the search, by their own name or the group's. No evaluation,
+persistence or saved key changes. `useThresholdsDockerData.test.ts` and
+`ThresholdsTable.test.tsx` carry the proof.
+
 ### Node matches name a connection, not just a node (4 November 2026)
 
 Proxmox installations can reuse node names, so `getAlertsForResource` and

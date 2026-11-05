@@ -258,3 +258,112 @@ describe('useThresholdsDockerData overrides across same-named hosts', () => {
     );
   });
 });
+
+describe('useThresholdsDockerData search over saved overrides', () => {
+  const box = dockerHost('box-agent', 'box');
+  const nginx = dockerContainer(box, 'nginx');
+  const web = dockerContainer(box, 'web');
+  const removed = (hostId: string, name: string): Override => ({
+    ...containerOverride(`docker:${hostId}/${name}`),
+    name,
+  });
+  const search = (overrides: Override[], term: string) =>
+    withDockerData(
+      [box],
+      [nginx, web],
+      overrides,
+      (data) => data.dockerContainersGroupedByHost(),
+      term,
+    );
+
+  it.each([
+    ['its name', 'docker:box-agent/web'],
+    ['its runtime ID', `docker:box-agent/${web.docker?.containerId}`],
+    ['its unified ID', `docker:box-agent/${web.id}`],
+  ])('does not call a live container unassigned when a search hides it, saved by %s', (_, id) => {
+    const groups = search([containerOverride(id)], 'nginx');
+
+    expect(Object.keys(groups)).toEqual(['box']);
+    expect(groups.box.map((row) => row.name)).toEqual(['nginx']);
+
+    // The group's own name matches every row that really is unassigned, and
+    // only those. This one still belongs to its host.
+    expect(search([containerOverride(id)], 'unassigned')).toEqual({});
+  });
+
+  it('keeps that override on its own row once the search finds the container', () => {
+    const groups = search([containerOverride('docker:box-agent/web')], 'web');
+
+    expect(Object.keys(groups)).toEqual(['box']);
+    expect(groups.box).toEqual([
+      expect.objectContaining({ id: 'docker:box-agent/web', disabled: true, hasOverride: true }),
+    ]);
+  });
+
+  it.each([
+    ['', ['old-redis', 'removed-nginx']],
+    ['nginx', ['removed-nginx']],
+    ['REDIS', ['old-redis']],
+    ['unassigned', ['old-redis', 'removed-nginx']],
+  ])('lists removed containers a search of "%s" matches', (term, expected) => {
+    const groups = search(
+      [removed('box-agent', 'removed-nginx'), removed('gone', 'old-redis')],
+      term,
+    );
+
+    expect(groups['Unassigned Containers'].map((row) => row.name)).toEqual(expected);
+  });
+
+  it('drops the Unassigned group when a search matches none of its rows', () => {
+    const groups = search([removed('gone', 'old-redis')], 'nginx');
+
+    expect(Object.keys(groups)).toEqual(['box']);
+  });
+});
+
+describe('useThresholdsDockerData host names', () => {
+  it.each([
+    ['App Platform 01', 'App Platform 01'],
+    ['Edge Apps 01 (2)', 'Edge Apps 01 (2)'],
+    ['dock (lab)', 'dock (lab)'],
+    ['My host.example.com', 'My host.example.com'],
+    ['192.168.1.50', '192.168.1.50'],
+    ['docker1', 'docker1'],
+    ['titan.example.com', 'titan'],
+  ])('reads %s as %s on its row and its group', (displayName, expected) => {
+    const host = dockerHost('named-agent', 'named-host', { displayName });
+    const { rows, groups, meta } = withDockerData(
+      [host],
+      [dockerContainer(host, 'plex')],
+      [],
+      (data) => ({
+        rows: data.dockerHostsWithOverrides(),
+        groups: data.dockerContainersGroupedByHost(),
+        meta: data.dockerHostGroupMeta(),
+      }),
+    );
+
+    expect(rows[0]).toMatchObject({ name: expected, displayName: expected, rawName: displayName });
+    expect(Object.keys(groups)).toEqual([expected]);
+    expect(meta[expected]).toMatchObject({ displayName: expected, rawName: displayName });
+  });
+
+  it('keeps two hosts with a first word in common apart', () => {
+    const first = dockerHost('edge-1', 'edge-apps-01', { displayName: 'Edge Apps 01' });
+    const second = dockerHost('edge-2', 'edge-proxy-01', { displayName: 'Edge Proxy 01' });
+    const rows = withDockerData([first, second], [], [], (data) => data.dockerHostsWithOverrides());
+
+    expect(rows.map((row) => row.name)).toEqual(['Edge Apps 01', 'Edge Proxy 01']);
+  });
+
+  it.each([
+    ['App Gone 07', 'App Gone 07'],
+    ['gone.example.com', 'gone'],
+  ])('reads a removed host saved as %s as %s', (name, expected) => {
+    const rows = withDockerData([], [], [{ ...hostOverride('gone-host'), name }], (data) =>
+      data.dockerHostsWithOverrides(),
+    );
+
+    expect(rows[0]).toMatchObject({ id: 'gone-host', name: expected, rawName: name });
+  });
+});
