@@ -67,8 +67,8 @@ const isDockerPlatform = (resource: Resource): boolean =>
   resolveResourcePlatformType(resource) === 'docker';
 
 const isDockerRuntimeHost = (resource: Resource): boolean =>
-  DOCKER_HOST_TYPES.has(resource.type) &&
-  (isDockerPlatform(resource) || hasDockerRuntimeHostEvidence(resource));
+  hasDockerRuntimeHostEvidence(resource) ||
+  (DOCKER_HOST_TYPES.has(resource.type) && isDockerPlatform(resource));
 
 // `containerState` reasons that mean the container will not stay up on its
 // own. Distinct from `exited` with exit code 0, which is just a stopped

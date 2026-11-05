@@ -9822,3 +9822,14 @@ unlinking. `monitor_docker_guest_link_test.go` preserves the accepted runtime
 identity and last complete inventory through incomplete and later complete
 reports while linked. These synthetic controls are not a reproduction or
 recovery of an original estate's unexplained disappearing inventory.
+
+The existing Docker page includes VM/system-container runtime carriers in each
+lazy workflow query, retaining `source=docker`. Its model recognizes a guest
+only from actual runtime evidence, not a name or platform label; this does not
+make the guest a standalone or profile-assignable agent. The existing container,
+image, volume and network rows keep their ownership and controls. Normal-suite
+Docker page/model and agent-resource tests protect the query families, linked
+carriers and non-runtime namesakes. Comparable Chromium desktop/light and
+WebKit narrow/dark producer-fed captures cover visibility, host scoping,
+disclosure and workflow navigation. Empty fixture charts are not native or
+persisted History acceptance.

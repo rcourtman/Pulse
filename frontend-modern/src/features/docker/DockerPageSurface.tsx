@@ -62,13 +62,13 @@ import type { Resource } from '@/types/resource';
 import { buildPlatformResourceSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 
 const DOCKER_RESOURCE_QUERY_BY_TAB: Record<DockerPageTabId, string> = {
-  overview: 'type=agent,docker-host,app-container&source=docker',
-  images: 'type=agent,docker-host,app-container,docker-image&source=docker',
-  storage: 'type=agent,docker-host,docker-volume&source=docker',
+  overview: 'type=agent,docker-host,vm,system-container,app-container&source=docker',
+  images: 'type=agent,docker-host,vm,system-container,app-container,docker-image&source=docker',
+  storage: 'type=agent,docker-host,vm,system-container,docker-volume&source=docker',
   networks:
-    'type=agent,docker-host,app-container,docker-service,docker-task,docker-network&source=docker',
+    'type=agent,docker-host,vm,system-container,app-container,docker-service,docker-task,docker-network&source=docker',
   swarm:
-    'type=agent,docker-host,docker-service,docker-task,docker-swarm-node,docker-secret,docker-config&source=docker',
+    'type=agent,docker-host,vm,system-container,docker-service,docker-task,docker-swarm-node,docker-secret,docker-config&source=docker',
 };
 
 const DockerIcon = getPlatformIcon('docker');

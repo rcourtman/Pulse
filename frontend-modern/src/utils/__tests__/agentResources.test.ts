@@ -9,6 +9,7 @@ import {
   getExplicitResourceClusterName,
   getPreferredResourceClusterName,
   hasDockerWorkloadsScope,
+  hasDockerRuntimeHostEvidence,
   hasAgentFacet,
   hasPulseAgentSourceEvidence,
   isAgentFacetInfrastructureResource,
@@ -32,6 +33,27 @@ const makeResource = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('agentResources', () => {
+
+  it.each(['vm', 'system-container'] as const)(
+    'recognizes a linked %s runtime without turning it into a standalone or profile-assignable agent',
+    (type) => {
+      const guest = makeResource({
+        type, platformType: 'proxmox-pve', sources: ['proxmox', 'agent', 'docker'],
+        docker: { runtime: 'docker', containerCount: 0 },
+      });
+      expect(hasDockerRuntimeHostEvidence(guest)).toBe(true);
+      expect(isPulseAgentPlatformResource(guest)).toBe(false);
+      expect(isAgentProfileAssignableResource(guest)).toBe(false);
+      expect(hasDockerRuntimeHostEvidence({ ...guest, docker: undefined })).toBe(false);
+      expect(hasDockerRuntimeHostEvidence({ ...guest, docker: { containerCount: 0 } })).toBe(false);
+      expect(hasDockerRuntimeHostEvidence({ ...guest, type: 'app-container' })).toBe(false);
+      expect(hasDockerRuntimeHostEvidence({
+        ...guest, docker: undefined, platformData: { docker: { runtime: 'podman' } },
+      })).toBe(true);
+    },
+  );
+
+
   it('labels an unobserved startup agent without overriding a provider verdict', () => {
     const pending = { agent: { status: 'pending', lastSeen: '2026-10-24T12:00:00Z' } };
     expect(
