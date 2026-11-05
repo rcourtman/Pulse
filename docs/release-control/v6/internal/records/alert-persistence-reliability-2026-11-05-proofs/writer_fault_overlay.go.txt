@@ -1,0 +1,57 @@
+package eventlog
+
+// SCRATCH SOURCE OVERLAY (audit lab clone only, never in the product tree).
+// It exposes real SQLite fault injection on the store's own writer connection
+// and read-only counter observation, so proofs in this and other packages can
+// drive genuine driver errors through the unmodified write paths.
+
+import (
+	"context"
+	"fmt"
+)
+
+// AuditSetWriterReadOnly toggles PRAGMA query_only on the serialized writer
+// connection. While on, every write the store attempts fails inside SQLite
+// with "attempt to write a readonly database"; turning it off clears the fault.
+func (s *Store) AuditSetWriterReadOnly(on bool) error {
+	value := 0
+	if on {
+		value = 1
+	}
+	_, err := s.db.Exec(fmt.Sprintf("PRAGMA query_only = %d", value))
+	return err
+}
+
+// AuditHoldWriter takes the writer pool's only connection, so the background
+// writer blocks exactly as it would behind a slow fsync or a long transaction.
+func (s *Store) AuditHoldWriter() (release func(), err error) {
+	conn, err := s.db.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return func() { _ = conn.Close() }, nil
+}
+
+// AuditCounters reports the store's in-memory accounting.
+func (s *Store) AuditCounters() (appended, written, failed, dropped int64) {
+	return s.appended.Load(), s.written.Load(), s.failed.Load(), s.dropped.Load()
+}
+
+// AuditMetaRows returns every alert_store_meta row (the only durable place the
+// store could carry a loss record).
+func (s *Store) AuditMetaRows() (map[string]string, error) {
+	rows, err := s.readDB.Query(`SELECT key, value FROM alert_store_meta ORDER BY key`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
+}

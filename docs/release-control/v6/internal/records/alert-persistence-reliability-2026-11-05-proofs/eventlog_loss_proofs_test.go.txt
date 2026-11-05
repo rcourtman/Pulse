@@ -1,0 +1,181 @@
+package eventlog
+
+// SCRATCH PROOFS (audit lab clone). Real SQLite faults on the store's writer
+// connection; no product code is modified apart from the fault overlay.
+
+import (
+	"fmt"
+	"testing"
+	"time"
+)
+
+func auditWait(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+func auditCount(t *testing.T, s *Store, alertID string) int {
+	t.Helper()
+	events, err := s.Query(Filter{AlertID: alertID, Limit: maxQueryLimit})
+	if err != nil {
+		t.Fatalf("query %s: %v", alertID, err)
+	}
+	return len(events)
+}
+
+// P1: an accepted asynchronous batch is rolled back by a real write fault.
+// Every event in it is gone, including events unrelated to the fault's cause;
+// a later successful write does not restore them; Flush stays failed for the
+// process; and after reopen nothing durable records the loss.
+func TestAuditP1AsyncBatchLossIsGenuineAndForgottenOnReopen(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := s.AuditMetaRows()
+
+	// Fault the writer connection, then hold it so several accepted events
+	// queue up and are committed together, as under real write pressure.
+	if err := s.AuditSetWriterReadOnly(true); err != nil {
+		t.Fatal(err)
+	}
+	release, err := s.AuditHoldWriter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 40; i++ {
+		s.Append(Event{Type: TypeNotificationDispatched, AlertID: fmt.Sprintf("batch-%d", i), Reason: "ready"})
+	}
+	release()
+	// failed counts failed batch transactions, not events: wait until the
+	// queue is empty and at least one batch failed, then let the writer settle.
+	auditWait(t, "faulted batches", func() bool {
+		_, _, f, _ := s.AuditCounters()
+		return f > 0 && len(s.events) == 0
+	})
+	time.Sleep(200 * time.Millisecond)
+	if err := s.AuditSetWriterReadOnly(false); err != nil {
+		t.Fatal(err)
+	}
+	a, w, f, d := s.AuditCounters()
+	t.Logf("after fault: appended=%d written=%d failedBatches=%d dropped=%d", a, w, f, d)
+	lost := 0
+	for i := 0; i < 40; i++ {
+		if auditCount(t, s, fmt.Sprintf("batch-%d", i)) == 0 {
+			lost++
+		}
+	}
+	t.Logf("accepted events missing from the log: %d of 40 (lost in %d failed batch transaction(s))", lost, f)
+
+	// An unrelated later write succeeds.
+	s.Append(Event{Type: TypeNotificationDispatched, AlertID: "after-recovery", Reason: "ready"})
+	auditWait(t, "post-recovery write", func() bool { return auditCount(t, s, "after-recovery") == 1 })
+	for i := 0; i < 2; i++ {
+		t.Logf("Flush #%d after recovery: %v", i+1, s.Flush())
+	}
+	s.Close()
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	after, _ := reopened.AuditMetaRows()
+	t.Logf("Flush after reopen: %v", reopened.Flush())
+	t.Logf("alert_store_meta before=%v after=%v (no loss record)", before, after)
+	missing := 0
+	for i := 0; i < 40; i++ {
+		if auditCount(t, reopened, fmt.Sprintf("batch-%d", i)) == 0 {
+			missing++
+		}
+	}
+	t.Logf("after reopen the same %d accepted events are still missing, with nothing reporting it", missing)
+	if lost == 0 || missing != lost || reopened.Flush() != nil {
+		t.Fatalf("unexpected: lost=%d missing=%d", lost, missing)
+	}
+}
+
+// P2: admission drops (full buffer) lose accepted-by-call events too, but the
+// barrier never sees them: Flush succeeds and only an unread counter moves.
+func TestAuditP2BufferDropsAreInvisibleToFlush(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	release, err := s.AuditHoldWriter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const offered = appendBufferSize + 500
+	for i := 0; i < offered; i++ {
+		s.Append(Event{Type: TypeNotificationDispatched, AlertID: fmt.Sprintf("drop-%d", i), Reason: "ready"})
+	}
+	release()
+	flushErr := s.Flush()
+	a, w, f, d := s.AuditCounters()
+	present := 0
+	for i := 0; i < offered; i++ {
+		present += auditCount(t, s, fmt.Sprintf("drop-%d", i))
+	}
+	t.Logf("offered=%d appended=%d written=%d failed=%d dropped=%d present=%d Flush=%v", offered, a, w, f, d, present, flushErr)
+	if flushErr != nil || d == 0 || int64(present) != w {
+		t.Fatalf("unexpected drop accounting")
+	}
+}
+
+// P3: a synchronous durable write whose failure was returned to its caller
+// still poisons the asynchronous barrier for every later reader.
+func TestAuditP3ReportedDurableFailurePoisonsBarrier(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.AuditSetWriterReadOnly(true); err != nil {
+		t.Fatal(err)
+	}
+	durableErr := s.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "durable"})
+	importErr := s.ImportEvents([]Event{{Type: TypeHistoryCleared, AlertID: "history"}})
+	if err := s.AuditSetWriterReadOnly(false); err != nil {
+		t.Fatal(err)
+	}
+	_, _, failedAfterDurable, _ := s.AuditCounters()
+	t.Logf("AppendDurable returned to caller: %v", durableErr)
+	t.Logf("ImportEvents returned to caller: %v", importErr)
+	s.Append(Event{Type: TypeNotificationDispatched, AlertID: "diag", Reason: "ready"})
+	auditWait(t, "diagnostic write", func() bool { a, w, _, _ := s.AuditCounters(); return w == a })
+	a, w, f, _ := s.AuditCounters()
+	t.Logf("appended=%d written=%d failedCounter=%d (import failures are not counted: %v)", a, w, f, failedAfterDurable == 1)
+	t.Logf("Flush with every async event written: %v", s.Flush())
+	if durableErr == nil || importErr == nil || s.Flush() == nil {
+		t.Fatal("unexpected")
+	}
+}
+
+// P4: an Append that races Close is admitted (counted) but never written, with
+// no error to the caller and no record after reopen.
+func TestAuditP4AppendAfterCloseIsSilentlyLost(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s.Append(Event{Type: TypeNotificationDispatched, AlertID: "late", Reason: "ready"})
+	a, w, f, d := s.AuditCounters()
+	t.Logf("after Close: appended=%d written=%d failed=%d dropped=%d", a, w, f, d)
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	t.Logf("late event present after reopen: %d; reopened Flush: %v", auditCount(t, reopened, "late"), reopened.Flush())
+}

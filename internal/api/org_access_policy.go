@@ -143,6 +143,40 @@ func orgAccessRevalidator(req *http.Request) func() bool {
 	}
 }
 
+// authorizeVerifiedUserForRequestOrganization applies the organization access
+// policy to a user whose credentials were verified after TenantMiddleware
+// admitted the request. TenantMiddleware checks only the principals that the
+// auth context middleware attached; HTTP Basic credentials are verified later,
+// so TenantMiddleware admitted the request's organization without a principal.
+// This applies the same policy instance, with the same default-organization
+// bootstrap exception, to the now-verified user before that user acts in the
+// admitted organization. A request that TenantMiddleware never admitted has no
+// organization context and acts in the default organization.
+func authorizeVerifiedUserForRequestOrganization(req *http.Request, userID string) AuthorizationResult {
+	userID = strings.TrimSpace(userID)
+	if req == nil || userID == "" {
+		return AuthorizationResult{Allowed: false, Reason: "No authentication context provided"}
+	}
+	ctx := req.Context()
+	orgID, admitted := ctx.Value(OrgIDContextKey).(string)
+	orgID = strings.TrimSpace(orgID)
+	if !admitted || orgID == "" {
+		return AuthorizationResult{Allowed: true, Reason: "No organization was admitted for this request"}
+	}
+	checker, ok := ctx.Value(orgAccessCheckerContextKey{}).(contextAuthorizationChecker)
+	if !ok || checker == nil {
+		if orgID == "default" {
+			return AuthorizationResult{Allowed: true, Reason: "Default organization without an organization access policy"}
+		}
+		return AuthorizationResult{Allowed: false, Reason: "Organization access policy unavailable"}
+	}
+	result := checker.CheckAccessContext(ctx, nil, userID, orgID)
+	if !result.Allowed && orgID == "default" && orgNeutralBootstrapRequest(req) {
+		return AuthorizationResult{Allowed: true, Reason: "Organization-neutral route"}
+	}
+	return result
+}
+
 // combineAuthorization requires every non-nil check to pass.
 func combineAuthorization(checks ...func() bool) func() bool {
 	active := make([]func() bool, 0, len(checks))

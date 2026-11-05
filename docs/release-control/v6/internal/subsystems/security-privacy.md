@@ -1376,6 +1376,20 @@ the `white_label` branding entitlement.
    receive distinct bounded replacement tokens for one session, but explicit
    session deletion, password-change invalidation, and logout must invalidate
    every retained CSRF hash for that session.
+   Sessionless proxy-auth requests have no session to bind a CSRF token to,
+   so `isCrossSiteBrowserRequest` in `internal/api/router.go` is their CSRF
+   boundary. `Sec-Fetch-Site: same-site` never proves same origin: a sibling
+   subdomain or another port on the same host can be same-site. A
+   same-site write is admitted only when its `Origin`, or failing that its
+   `Referer`, exactly matches the request origin including scheme and port,
+   with the scheme taken only from TLS or a trusted proxy; an opaque `null`
+   origin or a same-site write without either header is refused.
+   `cross-site` stays refused. Same-origin and user-initiated requests,
+   requests with no browser origin metadata (non-browser clients) and
+   same-site reads keep their admission. This gate is additional to, never a
+   substitute for, the session CSRF token. `proxy_csrf_origin_test.go` covers
+   the router matrix, the trusted-forwarded-scheme comparison and the
+   unchanged session-token requirement.
    Auth and session changes that involve hosted, SSO, or commercial identity
    must also preserve `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`:
    email is contact metadata once a stable principal exists, and browser
@@ -3793,10 +3807,14 @@ API-token hashes and metadata, OIDC client secrets, and SAML private keys. The
 export/import router therefore authorizes the resolved organization before
 request-body parsing or persistence access. Hosted mode, enabled persisted or
 environment-backed SSO, and an SSO load failure all require authentication;
-none may fall through to no-auth recovery. Browser sessions need instance-admin
-or tenant-management authority, proxy identities need the configured admin
-role, and API tokens preserve organization binding plus the operation-specific
-`settings:read` or `settings:write` scope.
+none may fall through to no-auth recovery. Browser sessions and verified local
+Basic credentials need instance-admin authority on the default organization or
+`CanUserIDManage` on the resolved tenant; the configured instance
+administrator holding only tenant membership is refused under either
+credential. Basic credentials first pass the organization access policy that
+tenant admission could not apply before they were verified. Proxy identities
+need the configured admin role, and API tokens preserve organization binding
+plus the operation-specific `settings:read` or `settings:write` scope.
 
 No-auth recovery trusts only a direct loopback transport without forwarded
 identity headers. `ALLOW_UNPROTECTED_EXPORT` is an export-only exception and is

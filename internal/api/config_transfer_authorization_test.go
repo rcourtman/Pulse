@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -580,5 +581,69 @@ func TestConfigTransferFixtureOwnsRouterLifecycle(t *testing.T) {
 	case <-workerDone:
 	default:
 		t.Fatal("config-transfer helper did not join its router worker")
+	}
+}
+
+// TestConfigTransferVerifiedUsersRequireTenantManagement applies the transfer
+// management rule to the configured local administrator under both verified
+// credential types. Instance administration plus tenant membership is not
+// tenant management, so a viewer membership is refused before the handler
+// reads the archive; a tenant the administrator manages, and the default
+// organization, reach the handler.
+func TestConfigTransferVerifiedUsersRequireTenantManagement(t *testing.T) {
+	f := newBasicTenantFixture(t)
+	sessionToken := "synthetic-transfer-admin-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "198.51.100.1", basicTenantAdmin)
+
+	credentials := map[string]func(*http.Request){
+		"basic": func(req *http.Request) {
+			req.SetBasicAuth(basicTenantAdmin, basicTenantPassword)
+		},
+		"session": func(req *http.Request) {
+			req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+			req.Header.Set("X-CSRF-Token", generateCSRFToken(sessionToken))
+		},
+	}
+	tests := []struct {
+		orgID   string
+		reached bool
+	}{
+		{orgID: "", reached: true},
+		{orgID: "tenant-managed", reached: true},
+		{orgID: "tenant-viewer"},
+		{orgID: "tenant-foreign"},
+	}
+
+	request := 0
+	for credentialName, attach := range credentials {
+		for _, tc := range tests {
+			for _, path := range []string{"/api/config/export", "/api/config/import"} {
+				name := credentialName + " " + tc.orgID + " " + path
+				t.Run(name, func(t *testing.T) {
+					request++
+					body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
+					req := httptest.NewRequest(http.MethodPost, path, body)
+					req.RemoteAddr = "198.51.100." + strconv.Itoa(request) + ":1234"
+					if tc.orgID != "" {
+						req.Header.Set("X-Pulse-Org-ID", tc.orgID)
+					}
+					attach(req)
+					rec := httptest.NewRecorder()
+					f.router.Handler().ServeHTTP(rec, req)
+					if tc.reached {
+						if rec.Code != http.StatusBadRequest || body.reads == 0 {
+							t.Fatalf("status %d, reads %d: %s", rec.Code, body.reads, rec.Body.String())
+						}
+						return
+					}
+					if rec.Code != http.StatusForbidden || body.reads != 0 {
+						t.Fatalf("status %d, reads %d: %s", rec.Code, body.reads, rec.Body.String())
+					}
+				})
+			}
+		}
+	}
+	if len(f.cfg.APITokens) != 0 {
+		t.Fatalf("transfer matrix created tokens: %+v", f.cfg.APITokens)
 	}
 }

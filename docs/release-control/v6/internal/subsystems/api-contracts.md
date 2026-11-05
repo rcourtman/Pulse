@@ -153,7 +153,21 @@ The guard exposes deadline setters, not an unguarded response-writer escape:
 Assistant handlers still clear the initial server deadlines and bound each
 write. The outer API error/status wrapper forwards these same two controls
 without exposing its raw writer; native short-server-deadline regressions run
-all three actual routes past that initial deadline. Closure joins active transport writes and rejects queued/late callbacks.
+all three actual routes past that initial deadline. Closure rejects queued and
+late callbacks, expires an in-flight transport write through the forwarded
+write deadline, then joins it before returning the HTTP writer. Transport
+writes, header commits and flushes share one lock; authority state uses another
+that is never held across transport I/O. Cancellation, withdrawal and deadline
+control can therefore interrupt a write blocked on a stalled peer. Every
+guarded read watches request-context cancellation, including credentials with
+no periodic revalidator. API-token and session authority retain their existing
+15-second recheck. Failed and panicking transport operations clear the admitted
+I/O state and close the read. Admission, media pinning, per-operation authority
+checks, closed-pipe refusals and the absence of `Unwrap`/`ReaderFrom` remain.
+`token_stream_shutdown_test.go` exercises the full production update-stream
+chain on stalled native TCP connections, including blocked preambles, token
+withdrawal, cancellation with the peer still connected, and disconnect. It
+also covers credentials without a periodic revalidator and transport panics.
 Legacy execute and investigation keep their independent background execution
 and original 15/5-minute bounds; denying their read is not cancelling their work,
 and HTTP completion can therefore wait for that work. Chat keeps its existing
@@ -11813,6 +11827,22 @@ This is required for qualification clients and local operators to read,
 approve, reject, and execute governed actions without weakening the same
 capability checks for sessions, proxy users, or API tokens.
 
+Basic credentials are verified after `TenantMiddleware` has admitted the
+request organization, so that admission saw no principal. Immediately after
+the password verifies, and before the principal is attached or a Basic session
+is issued, `checkAuth` applies the organization access policy that
+`TenantMiddleware` placed in the request context to the verified username
+(`authorizeVerifiedUserForRequestOrganization` in
+`internal/api/org_access_policy.go`), including the same organization-neutral
+default exception. A refused organization answers `403 access_denied`, issues
+no session, mints nothing and records no failed login; wrong passwords keep
+their existing failure, rate-limit and lockout handling. A named organization
+with no policy in the request context fails closed. The configured local
+administrator therefore reaches a tenant organization over Basic only as a
+member, exactly as with a session. `basic_tenant_authorization_test.go`
+covers default and member positives and foreign-tenant reads, live state and
+token minting.
+
 ### Unified Agent observer report boundary
 
 Existing host, Docker, and Kubernetes report endpoints accept observer reports
@@ -12626,9 +12656,16 @@ public exceptions only so deliberate no-auth recovery can be evaluated. Before
 either handler reads a body or resolves persistence, the shared transfer guard
 classifies password, proxy, API-token, persisted or environment-backed SSO,
 hosted, and SSO-load-failure state. Any configured or uncertain authentication
-state requires a real credential. Sessions require instance-admin authority on
-the default organization or `CanUserIDManage` on the resolved tenant; tenant
-membership alone is insufficient. API tokens retain tenant-middleware
+state requires a real credential. Verified users, whether presented as a
+session or as local Basic credentials, require instance-admin authority on
+the default organization or `CanUserIDManage` on the resolved tenant through
+the transfer-specific `configTransferUserManagesOrganization`; tenant
+membership alone is insufficient, and so is instance administration combined
+with tenant membership. That helper is deliberately narrower than
+`ensureOrgAdminSession`, which admits instance administrators on org-scoped
+settings routes and is not a transfer rule. Basic credentials, verified after
+tenant admission, first pass the same organization access policy as every
+other principal. API tokens retain tenant-middleware
 organization binding and require `settings:read` for export or `settings:write`
 for import, including legacy unbound-token compatibility on the default
 organization only.
@@ -12640,7 +12677,10 @@ authenticated or hosted mode. Denials precede archive decoding, export reads,
 import transactions, live-config replacement, and runtime reload. The public
 and privileged security-status projections use the same classification, and
 the canonical and shipped API references describe the same scope and tenant
-rules. `config_transfer_authorization_test.go`, the contract ratchet in
+rules. `config_transfer_authorization_test.go` (including
+`TestConfigTransferVerifiedUsersRequireTenantManagement` for the configured
+administrator as a tenant viewer, a foreign tenant, a managed tenant and the
+default organization under both credential types), the contract ratchet in
 `contract_test.go`, and the shipped-doc assertions in `docsLinks.test.ts` pin
 the boundary and its published shape.
 

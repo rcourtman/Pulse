@@ -77,14 +77,20 @@ func (m *Manager) AlertEvents(filter eventlog.Filter) ([]eventlog.Event, error) 
 }
 
 // ReplayLifecycleEvents visits durable lifecycle transitions and migrated
-// history snapshots with ids above afterID, oldest occurrence first. It is the
-// projection-repair seam for consumers such as incident and resource
-// timelines: delivery callbacks are deliberately not involved. Migrated
-// snapshots carry a final occurrence state rather than a transition; consumers
-// must expand only the facts present in that snapshot. afterID is the
+// history snapshots with ids above afterID, in ascending durable-ID (commit)
+// order. It is the projection-repair seam for consumers such as incident and
+// resource timelines: delivery callbacks are deliberately not involved.
+// Migrated snapshots carry a final occurrence state rather than a transition;
+// consumers must expand only the facts present in that snapshot. afterID is the
 // consumer's projection watermark (zero replays the full log); the visitor
 // receives each event's durable id so it can advance that watermark once the
-// event's projections are applied.
+// event's projections are applied. ID order makes that watermark a
+// contiguous-prefix cursor: occurrence timestamps (notably imported history)
+// need not follow commit order, so a time-ordered pass interrupted after a
+// checkpoint could leave lower, unvisited ids below the stored watermark. Each
+// pass stops at the committed high-water id captured when it starts, and a
+// visitor error ends the pass and is returned. Chronological history reads
+// keep using the time-ordered walk.
 func (m *Manager) ReplayLifecycleEvents(afterID int64, visit func(eventID int64, event LifecycleEvent) error) error {
 	if m == nil || visit == nil {
 		return nil
@@ -93,7 +99,7 @@ func (m *Manager) ReplayLifecycleEvents(afterID int64, visit func(eventID int64,
 	if store == nil {
 		return nil
 	}
-	return store.WalkOldest(eventlog.Filter{AfterID: afterID, Types: []string{
+	return store.WalkByID(eventlog.Filter{AfterID: afterID, Types: []string{
 		eventlog.TypeFired,
 		eventlog.TypeRefired,
 		eventlog.TypeResolved,
@@ -124,24 +130,46 @@ func (m *Manager) ReplayLifecycleEvents(afterID int64, visit func(eventID int64,
 	})
 }
 
-// LifecycleProjectionWatermark returns the durable replay watermark for a
-// named projection consumer, or zero when no event log is enabled.
+// lifecycleIDOrderWatermarkNamespace versions lifecycle replay cursors for the
+// durable-ID ordered walk. Releases that replayed in occurrence-time order
+// stored their cursor under the bare consumer name, and an interrupted pass
+// there could persist an ID above retained events it never projected. That
+// legacy cursor is not a contiguous ID prefix, so it is never read: the first
+// pass after upgrade starts this namespace at zero and replays the retained
+// log once. Projections key their canonical writes by event identity, so the
+// facts already applied are rewritten, not duplicated. The legacy key is left
+// untouched and unused. Change the version only together with a change to the
+// replay order or cursor meaning.
+const lifecycleIDOrderWatermarkNamespace = "lifecycle-id-order-v1:"
+
+// lifecycleWatermarkName maps a consumer to its ID-ordered cursor. An empty
+// consumer stays empty, so the event log's name validation still applies.
+func lifecycleWatermarkName(name string) string {
+	if name == "" {
+		return ""
+	}
+	return lifecycleIDOrderWatermarkNamespace + name
+}
+
+// LifecycleProjectionWatermark returns the durable ID-ordered replay
+// watermark for a named projection consumer, or zero when no event log is
+// enabled or the consumer has no cursor in the current namespace.
 func (m *Manager) LifecycleProjectionWatermark(name string) int64 {
 	if m == nil {
 		return 0
 	}
-	return m.eventLogStore().ProjectionWatermark(name)
+	return m.eventLogStore().ProjectionWatermark(lifecycleWatermarkName(name))
 }
 
-// StoreLifecycleProjectionWatermark durably advances (or resets) the replay
-// watermark for a named projection consumer. Failures are logged, not fatal:
-// a stale watermark only means the next replay revisits already-idempotent
-// projections.
+// StoreLifecycleProjectionWatermark durably advances (or resets) the
+// ID-ordered replay watermark for a named projection consumer. Failures are
+// logged, not fatal: a stale watermark only means the next replay revisits
+// already-idempotent projections.
 func (m *Manager) StoreLifecycleProjectionWatermark(name string, eventID int64) {
 	if m == nil {
 		return
 	}
-	if err := m.eventLogStore().SetProjectionWatermark(name, eventID); err != nil {
+	if err := m.eventLogStore().SetProjectionWatermark(lifecycleWatermarkName(name), eventID); err != nil {
 		log.Warn().Err(err).
 			Str("consumer", name).
 			Int64("eventID", eventID).
