@@ -124,6 +124,21 @@ jobs:
           CGO_ENABLED=0 go test -c -o "$inputs/installtests.test" ./scripts/installtests
           printf 'PULSE_NATIVE_PROFILE_INPUTS=%s\n' "$inputs" >> "$GITHUB_ENV"
 
+      # Hosted images need not provide production-safe permissions on their
+      # shared tool directory. Construct the installer's required root-owned,
+      # non-writable parent on this disposable VM, not a trust-check exception.
+      # Keep both observations: an exit during migration is not its diagnosis.
+      - name: Prepare protected native installation directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -d /usr/local/bin && test ! -L /usr/local/bin
+          stat -c 'native-install-parent before uid=%u gid=%g mode=%a' /usr/local/bin
+          sudo install -d -o root -g root -m 0755 /usr/local/bin
+          stat -c 'native-install-parent after uid=%u gid=%g mode=%a' /usr/local/bin
+          test "$(stat -c '%u:%g:%a' /usr/local/bin)" = 0:0:755
+
       - name: Exercise signed TLS installed profile forward and reverse
         working-directory: scripts/installtests
         timeout-minutes: 12
