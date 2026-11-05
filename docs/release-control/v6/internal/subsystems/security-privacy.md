@@ -3845,10 +3845,10 @@ audited.
 
 ### Basic credentials a proxy attaches do not admit other origins
 
-A reverse proxy that adds Basic credentials to every request, or a browser resending
-cached ones, attaches them to a form another site's page submits. No session cookie
-arrives, so `CheckCSRF` has nothing to judge and the proxy's credentials would admit
-the write. `isCrossSiteBasicAuthWrite` in `internal/api/router.go` refuses any write
+A reverse proxy that adds Basic credentials to every request attaches them to a form
+another site's page submits, unless its own `SameSite=Lax` sign-in cookie stops the
+request first. No session cookie arrives, so `CheckCSRF` has nothing to judge and the
+proxy's credentials would admit the write. `isCrossSiteBasicAuthWrite` in `internal/api/router.go` refuses any write
 carrying Basic credentials that `isCrossSiteBrowserRequest` calls cross-site, before
 the handler or a route-local Basic check runs. An exact origin on the operator's CORS
 list stays admitted, because that list is what grants credentialed browser access;
