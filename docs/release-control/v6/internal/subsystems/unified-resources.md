@@ -334,8 +334,8 @@ their drawers are unchanged; `BackupServerRow.continuesServer` is removed.
 Backup jobs bars can select a day again, so `ProxmoxRecoverableTable` takes optional
 filtered empty copy. A day with no rows reads "No restore points from" that date and
 says a failed backup usually leaves none, instead of asking the reader to adjust
-filters. Without a day it keeps the wording below. Which rows match any other filter
-is unchanged.
+filters. With another filter active, or no day, it keeps the wording below, because
+that filter may be what hid the rows. Which rows match any other filter is unchanged.
 
 ### Backup empty states name only filters that exist (2 November 2026)
 

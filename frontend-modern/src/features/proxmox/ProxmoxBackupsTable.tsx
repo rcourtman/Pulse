@@ -568,11 +568,12 @@ export const ProxmoxBackupsTable: Component<{
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     backupServers.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
   };
-  const revealRestorePoints = (): void => {
+  // `visiblePx` is how much of the list must already show to stay put.
+  const revealRestorePoints = (visiblePx = 96): void => {
     queueMicrotask(() => {
       const target = restorePoints;
       if (!target?.isConnected || typeof target.scrollIntoView !== 'function') return;
-      if (target.getBoundingClientRect().top < window.innerHeight - 96) return;
+      if (target.getBoundingClientRect().top < window.innerHeight - visiblePx) return;
       const reduceMotion =
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -610,9 +611,12 @@ export const ProxmoxBackupsTable: Component<{
   };
   const setSelectedDateKey = (value: string | null): void =>
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.day]: value }, { replace: true });
+  // Tabs and filters alone take about 180px, so a click must leave rows showing
+  // for it to read as "the table below changed".
+  const DAY_REVEAL_VISIBLE_PX = 320;
   const selectBackupDay = (date: string, options: { reveal: boolean }): void => {
     const next = selectedDateKey() === date ? null : date;
-    if (next && options.reveal) revealRestorePoints();
+    if (next && options.reveal) revealRestorePoints(DAY_REVEAL_VISIBLE_PX);
     if (routeView() === 'date') {
       setSelectedDateKey(next);
       return;
@@ -762,6 +766,15 @@ export const ProxmoxBackupsTable: Component<{
     }
     return filters;
   };
+  // Another filter may be what hid the day's rows, so only then can the empty
+  // list speak for the day.
+  const onlyDayFiltered = (): boolean =>
+    Boolean(selectedDateKey()) &&
+    !search().trim() &&
+    !nodeFilter() &&
+    !locationFilter() &&
+    !typeFilter() &&
+    recoverableFilter() === 'all';
   const hasActiveBackupsFilters = (): boolean =>
     Boolean(
       search().trim() ||
@@ -926,6 +939,7 @@ export const ProxmoxBackupsTable: Component<{
               {props.summaryAside?.({
                 selectedDay: selectedDateKey,
                 onSelectDay: selectBackupDay,
+                onRevealRestorePoints: () => revealRestorePoints(DAY_REVEAL_VISIBLE_PX),
               })}
             </div>
 
@@ -1034,12 +1048,12 @@ export const ProxmoxBackupsTable: Component<{
               hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
               emptyIcon={props.emptyIcon}
               filteredEmptyTitle={
-                selectedDateKey()
+                onlyDayFiltered()
                   ? `No restore points from ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
                   : undefined
               }
               filteredEmptyDescription={
-                selectedDateKey()
+                onlyDayFiltered()
                   ? 'A failed backup usually leaves none, and retention prunes older ones.'
                   : undefined
               }

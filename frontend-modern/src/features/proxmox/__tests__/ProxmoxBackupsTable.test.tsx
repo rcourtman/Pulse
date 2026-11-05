@@ -916,6 +916,15 @@ describe('ProxmoxBackupsTable', () => {
       await screen.findAllByText('pbs-docker');
     });
 
+    it('does not blame the day when another filter hid its rows', async () => {
+      mockBackupAPIs();
+      window.history.replaceState({}, '', '/proxmox/backups/date?day=2026-05-25&q=no-such-guest');
+      renderWithDays();
+
+      await screen.findByText('No recoverable artifacts match current filters');
+      expect(screen.queryByText(/^No restore points from/)).not.toBeInTheDocument();
+    });
+
     it('ignores a malformed day', async () => {
       mockBackupAPIs();
       window.history.replaceState({}, '', '/proxmox/backups/date?day=yesterday');
