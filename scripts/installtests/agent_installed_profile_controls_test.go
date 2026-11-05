@@ -3,8 +3,10 @@
 package installtests
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"io"
 	"net/http"
@@ -14,11 +16,134 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"gopkg.in/yaml.v3"
 )
+
+func TestAgentInstalledProfileStagingKeepsUpdateAdvertisement(t *testing.T) {
+	const originalVersion = "6.0.0-native-profile.1"
+	fixture := newSecureRuntimeLabFixture([]byte("original"), "", []byte("helper"), []byte("runner"), originalVersion)
+	t.Cleanup(fixture.actionServer.Shutdown)
+	downloads := &nativeProfileDownloads{signatures: make(map[string]string)}
+	downloads.stageCollector(fixture, []byte("replacement"), "replacement-signature")
+	handler := downloads.wrap(fixture)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/download/pulse-agent", nil))
+	if response.Code != http.StatusOK || response.Body.String() != "replacement" ||
+		response.Header().Get("X-Checksum-Sha256") != secureRuntimeHash([]byte("replacement")) ||
+		response.Header().Get("X-Signature-SSHSIG") != "replacement-signature" {
+		t.Fatal("installer did not receive the selected replacement and its trust metadata")
+	}
+	for _, path := range []string{"/api/version", "/api/agent/version"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		var body struct{ Version string }
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || response.Code != http.StatusOK || body.Version != originalVersion {
+			t.Fatalf("staging changed the update advertisement at %s: %s", path, response.Body)
+		}
+	}
+	// Report acknowledgements can nudge the updater before its five-second
+	// startup check, so controlling only /api/agent/version is insufficient.
+	request := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", strings.NewReader(`{"agent":{"id":"`+secureRuntimeLabAgentID+`","hostname":"`+secureRuntimeLabHostname+`","version":"`+originalVersion+`"}}`))
+	request.Header.Set("X-API-Token", secureRuntimeLabToken)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	var acknowledgement struct{ ServerVersion string }
+	if err := json.Unmarshal(response.Body.Bytes(), &acknowledgement); err != nil || response.Code != http.StatusOK || acknowledgement.ServerVersion != originalVersion {
+		t.Fatalf("staging nudged a restored collector to update: %s", response.Body)
+	}
+}
+
+func TestAgentInstalledProfileUpdateAdvertisementControlsRealUpdater(t *testing.T) {
+	for _, tc := range []struct {
+		name, current, advertised string
+		attempt                   bool
+	}{
+		{"original-advertisement-races-recovery", "6.0.0-native-profile.1", "6.0.0-native-profile.2", true},
+		{"restored-predecessor-stays-original", "6.0.0-native-profile.1", "6.0.0-native-profile.1", false},
+		{"explicit-replacement-is-not-downgraded", "6.0.0-native-profile.2", "6.0.0-native-profile.1", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := newSecureRuntimeLabFixture([]byte("original"), "", []byte("helper"), []byte("runner"), tc.advertised)
+			t.Cleanup(fixture.actionServer.Shutdown)
+			downloads := &nativeProfileDownloads{signatures: make(map[string]string)}
+			downloads.stageCollector(fixture, []byte("replacement"), "replacement-signature")
+			var attempts atomic.Int32
+			handler := downloads.wrap(fixture)
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/download/pulse-agent" {
+					// Observe the actual updater's request but never let this
+					// non-native control replace or execute the test process.
+					attempts.Add(1)
+					http.Error(w, "control stops before artifact transfer", http.StatusForbidden)
+					return
+				}
+				handler.ServeHTTP(w, r)
+			}))
+			t.Cleanup(server.Close)
+			ca := filepath.Join(t.TempDir(), "ca.pem")
+			if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			updater := agentupdate.New(agentupdate.Config{PulseURL: server.URL, APIToken: secureRuntimeLabToken,
+				AgentName: "pulse-agent", CurrentVersion: tc.current, CACertPath: ca})
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			updater.CheckAndUpdate(ctx)
+			status := updater.Snapshot()
+			if ctx.Err() != nil || !status.AutoUpdate || status.LastCheckedAt == nil || status.LastSuccessAt != nil ||
+				(status.LastAttemptAt != nil) != tc.attempt || (attempts.Load() > 0) != tc.attempt {
+				t.Fatalf("update decision: attempts=%d status=%+v deadline=%v", attempts.Load(), status, ctx.Err())
+			}
+			if tc.attempt {
+				if status.State != agentupdate.UpdateStateError || !strings.Contains(status.LastError, "403") {
+					t.Fatalf("negative control did not stop at the download refusal: %+v", status)
+				}
+			} else if status.State != agentupdate.UpdateStateIdle || status.LastError != "" {
+				t.Fatalf("controlled advertisement failed instead of retaining the executable: %+v", status)
+			}
+			t.Logf("current=%s advertised=%s automatic_download_requests=%d attempted=%t", tc.current, tc.advertised, attempts.Load(), status.LastAttemptAt != nil)
+		})
+	}
+}
+
+func TestAgentInstalledProfileRecoveryBinaryIsBoundToOwnedTransaction(t *testing.T) {
+	root := t.TempDir()
+	transaction := filepath.Join(root, "transaction-fixture")
+	if err := os.Mkdir(transaction, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pointer := []byte("TRANSACTION_DIR=" + transaction + "\n")
+	path, err := nativeProfileRecoveryPath(root, pointer)
+	if err != nil || path != filepath.Join(transaction, "collector-binary") {
+		t.Fatalf("owned transaction was not selected: %s %v", path, err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "current.env"), pointer, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("predecessor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	before := nativeProfileRecoveryBinary(t, root)
+	if !before.Present || before.Hash != secureRuntimeHash([]byte("predecessor")) || before.Mode != 0o755 {
+		t.Fatal("saved recovery identity did not bind bytes and metadata")
+	}
+	if err := os.WriteFile(path, []byte("replacement"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if before == nativeProfileRecoveryBinary(t, root) {
+		t.Fatal("saved recovery comparison accepted replaced collector bytes")
+	}
+	for _, data := range []string{"", "TRANSACTION_DIR=/elsewhere/transaction-other\n", "TRANSACTION_DIR=" + root + "/transaction-fixture/../transaction-other\n", "TRANSACTION_DIR=" + transaction + "\nTRANSACTION_DIR=" + transaction + "\n", "TRANSACTION_DIR=" + root + "/unexpected\n"} {
+		if _, err := nativeProfileRecoveryPath(root, []byte(data)); err == nil {
+			t.Fatal("accepted an absent, ambiguous or escaping recovery pointer")
+		}
+	}
+}
 
 func TestAgentInstalledProfileAdmission(t *testing.T) {
 	env := map[string]string{"PULSE_NATIVE_INSTALLED_PROFILE": "1", "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "GITHUB_REPOSITORY": "rcourtman/Pulse", "EXPECTED_SOURCE_SHA": strings.Repeat("a", 40)}
