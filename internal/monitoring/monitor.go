@@ -1366,7 +1366,6 @@ type Monitor struct {
 	configPersist              *config.ConfigPersistence
 	discoveryService           *discovery.Service                         // Background discovery service
 	activePollCount            int32                                      // Number of active polling operations
-	pollCounter                int64                                      // Counter for polling cycles
 	authFailures               map[string]int                             // Track consecutive auth failures per node
 	lastAuthAttempt            map[string]time.Time                       // Track last auth attempt time
 	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
@@ -1615,12 +1614,15 @@ func (m *Monitor) shouldRunBackupPoll(last time.Time, now time.Time) (bool, stri
 		backupCycles = 10
 	}
 
-	if m.pollCounter%int64(backupCycles) == 0 || m.pollCounter == 1 {
+	// Each connection polls on its own adaptive schedule, so it can go a long
+	// time without running on a cycle that happens to be a multiple of
+	// backupCycles. Measure the cycles from its own last backup poll instead.
+	period := time.Duration(backupCycles) * m.effectivePVEPollingInterval()
+	if last.IsZero() || now.Sub(last) >= period {
 		return true, "", now
 	}
-
-	remaining := int64(backupCycles) - (m.pollCounter % int64(backupCycles))
-	return false, fmt.Sprintf("next run in %d polling cycles", remaining), last
+	next := last.Add(period)
+	return false, fmt.Sprintf("next run scheduled for %s", next.Format(time.RFC3339)), last
 }
 
 const (
@@ -2603,11 +2605,6 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 
 	// Sync alert state so broadcasts include the latest acknowledgement data
 	m.syncAlertsToState()
-
-	// Increment poll counter
-	m.mu.Lock()
-	m.pollCounter++
-	m.mu.Unlock()
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
 		log.Debug().Dur("duration", time.Since(startTime)).Msg("polling cycle completed")
