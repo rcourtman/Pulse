@@ -42,6 +42,14 @@ import {
 } from '@/utils/organizationSettingsPresentation';
 import { canManageOrg, normalizeRole } from '@/utils/orgUtils';
 
+interface OwnershipTransfer {
+  organization: Organization;
+  member: OrganizationMember;
+  owner: string;
+  generation: number;
+  inviteDraft?: string;
+}
+
 interface OrganizationAccessPanelProps {
   currentUser?: string;
 }
@@ -61,6 +69,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
   const [myInvitations, setMyInvitations] = createSignal<UserOrganizationInvitation[]>([]);
   const [inviteUserID, setInviteUserID] = createSignal('');
   const [inviteRole, setInviteRole] = createSignal<OrganizationRole>('viewer');
+  const [ownershipTransfer, setOwnershipTransfer] = createSignal<OwnershipTransfer | null>(null);
 
   const activeOrgId = () => normalizeOrgScope(getOrgID());
   const [selectedOrgID, setSelectedOrgID] = createSignal(activeOrgId());
@@ -85,7 +94,11 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
       canManageMembers(org(), props.currentUser),
   );
   const canChangeAccess = () =>
-    hasCurrentAccess() && !!props.currentUser && !presentationPolicyIsReadOnly() && !saving();
+    hasCurrentAccess() &&
+    !!props.currentUser &&
+    !presentationPolicyIsReadOnly() &&
+    !saving() &&
+    !ownershipTransfer();
 
   // PulseDataGrid wraps the accepted row in a Solid store proxy. Compare its
   // underlying object, not the proxy, without admitting an older read's row.
@@ -100,6 +113,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
 
   const invalidateRequests = () => {
     generation += 1;
+    setOwnershipTransfer(null);
     readController?.abort();
     readController = undefined;
     mutationController?.abort();
@@ -221,6 +235,75 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     }
   };
 
+  const requestOwnershipTransfer = (member: OrganizationMember, inviteDraft?: string) => {
+    if (!canChangeAccess() || !canManageCurrentOrg() || !isCurrentMember(member)) return;
+    const organization = org()!;
+    if (
+      organization.id === DEFAULT_ORG_SCOPE ||
+      props.currentUser !== organization.ownerUserId ||
+      member.userId === organization.ownerUserId
+    )
+      return;
+    setOwnershipTransfer({
+      organization,
+      member: unwrap(member),
+      owner: props.currentUser!,
+      generation,
+      inviteDraft,
+    });
+  };
+
+  const cancelOwnershipTransfer = (transfer: OwnershipTransfer) => {
+    if (ownershipTransfer() === transfer) setOwnershipTransfer(null);
+  };
+
+  const confirmOwnershipTransfer = async (transfer: OwnershipTransfer) => {
+    // The dialog confirms one exact intent, never a newer dialog or read.
+    if (ownershipTransfer() !== transfer) return;
+    setOwnershipTransfer(null);
+    if (
+      transfer.generation !== generation ||
+      !canChangeAccess() ||
+      !canManageCurrentOrg() ||
+      org() !== transfer.organization ||
+      props.currentUser !== transfer.owner ||
+      org()?.ownerUserId !== transfer.owner ||
+      !isCurrentMember(transfer.member) ||
+      (transfer.inviteDraft !== undefined &&
+        (inviteUserID() !== transfer.inviteDraft || inviteRole() !== 'owner'))
+    )
+      return;
+    await changeAccess(
+      async (options) => {
+        const result = await OrgsAPI.updateMemberRole(
+          transfer.organization.id,
+          { userId: transfer.member.userId, role: 'owner' },
+          options,
+        );
+        if (
+          result?.kind !== 'member' ||
+          result.member?.userId !== transfer.member.userId ||
+          result.member.role !== 'owner'
+        ) {
+          throw new Error(ORGANIZATION_ACCESS_UNCONFIRMED_CHANGE_MESSAGE);
+        }
+        return result;
+      },
+      () => getOrganizationAccessRoleUpdatedMessage(transfer.member.userId, 'owner'),
+      getOrganizationMemberRoleUpdateErrorMessage,
+      () => {
+        if (
+          transfer.inviteDraft !== undefined &&
+          inviteUserID() === transfer.inviteDraft &&
+          inviteRole() === 'owner'
+        ) {
+          setInviteUserID('');
+          setInviteRole('viewer');
+        }
+      },
+    );
+  };
+
   const updateRole = async (member: OrganizationMember, role: OrganizationRole) => {
     if (!canChangeAccess() || !canManageCurrentOrg() || !isCurrentMember(member)) return;
     const currentOrg = org()!;
@@ -230,6 +313,10 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
       (role === 'owner' && props.currentUser !== currentOrg.ownerUserId)
     ) {
       notificationStore.error(getOrganizationOwnerRoleLockedMessage());
+      return;
+    }
+    if (role === 'owner') {
+      requestOwnershipTransfer(member);
       return;
     }
     await changeAccess(
@@ -252,10 +339,13 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     }
     if (role === 'owner') {
       if (props.currentUser !== currentOrg.ownerUserId) return;
-      if (!members().some((member) => member.userId === userId)) {
+      const member = members().find((member) => member.userId === userId);
+      if (!member) {
         notificationStore.error(getOrganizationAccessOwnerTransferMemberRequiredMessage());
         return;
       }
+      requestOwnershipTransfer(member, draft);
+      return;
     }
     await changeAccess(
       (options) => OrgsAPI.inviteMember(currentOrg.id, { userId, role }, options),
@@ -349,6 +439,9 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
 
   return {
     acceptInvitation,
+    cancelOwnershipTransfer,
+    confirmOwnershipTransfer,
+    ownershipTransfer,
     canManageCurrentOrg,
     canChangeAccess,
     declineInvitation,

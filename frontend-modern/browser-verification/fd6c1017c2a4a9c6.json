@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "8f76e2fa312605447f27f44f70d8c9d1b80ec615",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "67df45b5ebba3be8199eef0d1ac2ef301146ab3ebf5b3c0da85110c5679970be",
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx": "3c885add4758f158f66a466846b01e4afc0e5878657a831de1609f8cbdd9eb1e",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "d46a9d80562f64c1c761293bb6e1d98f3e7d55524d94f8178fb0cf41018be241",
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "25f9e1b1212d12c267aedabf22762d904aa46c38958e9069e35f1fda33c7e80f"
+  },
+  "routes": [
+    "Settings / Organization Access (actual consuming panel, state, OrgsAPI and API client over safe HTTP fixtures)"
+  ],
+  "states": [
+    "existing owner and former-owner administrator views",
+    "member-row and Invite Member ownership choices with explicit confirmation",
+    "saved Owner readback after confirmed transfer",
+    "unconfirmed row/form ownership writes and explicit saved-access reload",
+    "retained Owner form draft after authority changes",
+    "read-only withdrawal of pending confirmation"
+  ],
+  "interactions": [
+    "Both existing entry paths send no ownership write before deliberate Transfer ownership; target, organization/ID and Admin demotion are visible",
+    "Cancel initial focus; Escape dismisses without writes or changing the saved row role; both confirmation controls fit the initial phone viewport",
+    "Each confirmed transfer sends one session/CSRF/organization-bound POST and reads saved roles",
+    "Explicit Reload access after lost-response fixtures performs reads without repeating the POST",
+    "Former-owner saved selector shows Owner disabled without new grants; an existing Owner draft explains current-owner-only and disables Invite",
+    "All 38 retained before/after captures opened using native view_image; stable page names, roles, dates and controls retained at each viewport"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-05T08:18:28Z",
+  "browser": {
+    "client": "1.56.1",
+    "browser": "141.0.7390.37"
+  },
+  "notes": "18 matched before/after pairs plus 2 cancellation captures, light theme, identical synthetic records/viewport/theme, CSS animations disabled. Before is exact base module. New confirmation captures compare the same ownership-choice action; old source had already applied it. Synthetic client proof is not original account, server authorization, installed or release acceptance."
+}

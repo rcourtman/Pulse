@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import { Button } from '@/components/shared/Button';
+import { Dialog } from '@/components/shared/Dialog';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { isMultiTenantEnabled } from '@/stores/license';
@@ -75,6 +76,40 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
             </Show>
           </Show>
         </SettingsPanel>
+        <Show keyed when={state.ownershipTransfer()}>
+          {(transfer) => (
+            <Dialog
+              isOpen={true}
+              ariaLabel="Transfer organization ownership"
+              onClose={() => state.cancelOwnershipTransfer(transfer)}
+              panelClass="max-w-lg"
+            >
+              <Card padding="lg" class="min-h-0 overflow-y-auto space-y-4">
+                <h3 class="text-lg font-semibold text-base-content">
+                  Transfer organization ownership?
+                </h3>
+                <p class="text-sm text-base-content break-words">
+                  Make <strong>{transfer.member.userId}</strong> the Owner of{' '}
+                  <strong>{transfer.organization.displayName || transfer.organization.id}</strong> (
+                  {transfer.organization.id})?
+                </p>
+                <p class="text-sm text-muted break-words">
+                  {transfer.owner} will become an Admin. Only {transfer.member.userId} will be able
+                  to transfer ownership again.
+                </p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button onClick={() => state.cancelOwnershipTransfer(transfer)}>Cancel</Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => void state.confirmOwnershipTransfer(transfer)}
+                  >
+                    Transfer ownership
+                  </Button>
+                </div>
+              </Card>
+            </Dialog>
+          )}
+        </Show>
       </div>
     </Show>
   );

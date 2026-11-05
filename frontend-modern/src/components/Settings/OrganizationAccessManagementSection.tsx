@@ -50,10 +50,23 @@ export const OrganizationAccessManagementSection: Component<
                   each={ORGANIZATION_MEMBER_ROLE_OPTIONS.filter((option) =>
                     isDefaultOrg(currentOrg())
                       ? option.value === 'viewer'
-                      : option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser,
+                      : option.value !== 'owner' ||
+                        currentOrg().ownerUserId === props.currentUser ||
+                        props.state.inviteRole() === 'owner',
                   )}
                 >
-                  {(option) => <option value={option.value}>{option.label}</option>}
+                  {(option) => (
+                    <option
+                      value={option.value}
+                      disabled={
+                        option.value === 'owner' && currentOrg().ownerUserId !== props.currentUser
+                      }
+                    >
+                      {option.value === 'owner' && currentOrg().ownerUserId !== props.currentUser
+                        ? 'Owner (current owner only)'
+                        : option.label}
+                    </option>
+                  )}
                 </For>
               </FormSelect>
               <Button
@@ -61,7 +74,11 @@ export const OrganizationAccessManagementSection: Component<
                 size="settingsAction"
                 class="w-full sm:w-auto"
                 onClick={props.state.inviteMember}
-                disabled={props.state.saving()}
+                disabled={
+                  props.state.saving() ||
+                  (props.state.inviteRole() === 'owner' &&
+                    currentOrg().ownerUserId !== props.currentUser)
+                }
               >
                 {props.state.saving() ? 'Saving...' : isDefaultOrg(currentOrg()) ? 'Add' : 'Invite'}
               </Button>
