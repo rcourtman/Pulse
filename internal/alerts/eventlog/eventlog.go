@@ -914,9 +914,104 @@ func (s *Store) WalkOldest(filter Filter, visit func(Event) error) error {
 	}
 }
 
+// WalkByID visits every matching event in ascending durable-ID order. It is
+// the projection-repair seam. The serialized writer assigns and commits IDs in
+// order, so a consumer that persists the highest ID it has applied holds a
+// contiguous-prefix cursor. A chronological walk cannot provide that cursor:
+// occurred_at need not follow commit order (imported history, clock steps), so
+// an interrupted time-ordered pass could record an ID above events it never
+// visited and a later pass from that cursor would skip them.
+//
+// The walk captures the committed high-water ID once, inclusively, and never
+// reads beyond it (or beyond a lower filter.ThroughID), so appends committed
+// during the walk are left for the next pass instead of extending this one. It
+// reads bounded ID-keyset pages, closes each page's reader before visiting its
+// events, and stops at the first visitor error, returning it unchanged.
+// AlertID, Types, Since, Until, AfterID and ThroughID filter as they do for
+// WalkOldest, and a positive Limit caps the total visits. Events carry their
+// stored timestamps; WalkOldest remains the chronological history walk.
+func (s *Store) WalkByID(filter Filter, visit func(Event) error) error {
+	if s == nil {
+		return nil
+	}
+	if visit == nil {
+		return fmt.Errorf("event visitor is required")
+	}
+
+	var highWater int64
+	if err := s.readDB.QueryRow(`SELECT COALESCE(MAX(id), 0) FROM alert_events`).Scan(&highWater); err != nil {
+		return fmt.Errorf("read alert event high-water mark: %w", err)
+	}
+	if filter.ThroughID > 0 && filter.ThroughID < highWater {
+		highWater = filter.ThroughID
+	}
+	cursor := filter.AfterID
+	if cursor < 0 {
+		cursor = 0
+	}
+
+	visited := 0
+	for cursor < highWater {
+		pageLimit := maxQueryLimit
+		if filter.Limit > 0 {
+			remaining := filter.Limit - visited
+			if remaining <= 0 {
+				return nil
+			}
+			if remaining < pageLimit {
+				pageLimit = remaining
+			}
+		}
+
+		query, args := idPageQuery(filter, cursor, highWater, pageLimit)
+		rows, err := s.readDB.Query(query, args...)
+		if err != nil {
+			return fmt.Errorf("walk alert event log by id: %w", err)
+		}
+		page, scanErr := scanEventRows(rows, pageLimit)
+		closeErr := rows.Close()
+		if scanErr != nil {
+			return scanErr
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close alert event id page: %w", closeErr)
+		}
+
+		for _, event := range page {
+			if err := visit(event); err != nil {
+				return err
+			}
+			visited++
+		}
+		if len(page) < pageLimit {
+			return nil
+		}
+		cursor = page[len(page)-1].ID
+	}
+	return nil
+}
+
+// idPageQuery reads one bounded page in primary-key order between an
+// exclusive cursor and an inclusive high-water ID. NOT INDEXED keeps SQLite on
+// the INTEGER PRIMARY KEY range, which is already in ID order, so a page stops
+// after pageLimit matches instead of sorting the remaining log.
+func idPageQuery(filter Filter, afterID, throughID int64, pageLimit int) (string, []any) {
+	bounded := filter
+	bounded.AfterID = afterID
+	bounded.ThroughID = throughID
+	where, args := eventFilterWhere(bounded)
+	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events NOT INDEXED"
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY id ASC LIMIT ?"
+	return query, append(args, pageLimit)
+}
+
 // historyPageQuery selects bounded IDs before reading wide event payloads.
-// A replay watermark must seek by durable ID, not scan the time index from the
-// beginning on every catch-up. Alert-specific reads use their chronological
+// ID-bounded history catch-up seeks the primary key before ordering its
+// candidates by occurrence time. That ID bound is not a resumable projection
+// cursor; WalkByID owns that seam. Alert-specific reads use their chronological
 // index. Full-history walks seek by event time between pages.
 func historyPageQuery(filter Filter, cursorOccurredAt string, cursorID int64, pageLimit int) (string, []any) {
 	where, args := eventFilterWhere(filter)

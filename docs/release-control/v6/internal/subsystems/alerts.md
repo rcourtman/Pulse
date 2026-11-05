@@ -1203,11 +1203,44 @@ cache from `pdb.PageCachePragma` in `pkg/db/pagecache.go` instead of a private
 16 MB `cache_size`, because each connection holds its own cache. The modernc driver holds that cache outside the Go heap at about twice its size, where neither the garbage collector nor `GOMEMLIMIT` reaches it (#1803).
 `TestEventLogConnectionsUseSharedPageCacheBound` pins all three.
 
-Chronological replay selects bounded event IDs in time-index order before
-loading snapshots and details. Pages preserve occurrence-time and ID ordering,
-type filters, durable-ID watermarks and caller limits without sorting all
-retained payloads for every page. A full history read remains complete, and
-history reconstruction must not truncate silently at the public query limit.
+Chronological history walks (`WalkOldest`) select bounded event IDs in
+time-index order before loading snapshots and details. Pages preserve
+occurrence-time and ID ordering, type filters, optional exclusive and inclusive
+ID bounds and caller limits without sorting all retained payloads for every
+page. A full history read remains complete, and history reconstruction must not
+truncate silently at the public query limit. History reads and the history fold
+use this walk; the alert event API keeps its newest-first query. An ID bound on
+a chronological walk only limits which committed events are read. It is not a
+resumable projection cursor, because occurrence time does not follow commit
+order, and the history fold rebuilds instead of trusting it when a new event
+sorts before its folded chronology.
+
+Lifecycle projection replay is a separate seam with its own ordering contract.
+`ReplayLifecycleEvents` walks durable lifecycle and imported-history facts in
+ascending event-ID order through `Store.WalkByID`. A replay consumer's
+watermark is the highest ID it has applied, and ID order makes that watermark a
+contiguous prefix of the log even when occurrence times are out of order, as
+they are for legacy imports, which write long-running occurrences first with
+late final times, and after clock steps. The ID walk reads bounded primary-key
+keyset pages without sorting the remaining log, applies the same filters and
+caller limits, stops at the committed high-water ID captured when the pass
+starts, closes each page reader before invoking the visitor and returns the
+first visitor error. Event timestamps remain the stored, immutable occurrence
+times.
+
+Lifecycle replay watermarks are versioned. `LifecycleProjectionWatermark` and
+`StoreLifecycleProjectionWatermark` read and write a consumer's cursor under
+the internal `lifecycle-id-order-v1:` namespace and never fall back to the bare
+consumer key. Earlier releases replayed in occurrence-time order and stored
+that bare key, which an interrupted pass could leave above unprojected lower
+IDs. After upgrade the namespaced cursor therefore starts at zero, and the first
+pass replays the retained log once. Canonical changes carry identities derived
+from the alert ID, resource ID, change kind and event time, so facts that were
+already applied are rewritten rather than duplicated, and replay does not
+invoke delivery callbacks. The legacy key is left in place and is not read. An
+empty consumer name maps to an empty name, so the event log's validation still
+rejects it. The generic `ProjectionWatermark` and `SetProjectionWatermark`
+store methods keep their unversioned keys for other consumers.
 
 Normal history polling shares one manager-owned chronological fold and advances
 it only through newly committed event IDs. Its inclusive replay boundary keeps
@@ -1432,10 +1465,15 @@ timeline says the alert moved instead of "Alert resolved: <breach message>".
    JSON-history model, and migration changes must retain a retryable source or
    backup until every legacy entry is durably imported. The event log also
    owns per-consumer projection watermarks in `alert_store_meta`
-   (`projection_watermark:<consumer>`): replay consumers pass their watermark
-   as the walk's `AfterID` cursor so boot-time repair visits only the
-   un-projected tail, and lowering a watermark (including to zero) is the
-   supported way to force a full replay after a projection store rebuild.
+   (`projection_watermark:<consumer>`). Lifecycle replay consumers read and
+   store their cursor through `LifecycleProjectionWatermark` and
+   `StoreLifecycleProjectionWatermark`, which version it under the ID-order
+   namespace, and pass it as the `AfterID` of `ReplayLifecycleEvents` so
+   boot-time repair visits only the un-projected tail. Lowering that watermark
+   (including to zero) is the supported way to force a full replay after a
+   projection store rebuild. Projection repair must not use the chronological
+   history walk, and a change to replay order or cursor meaning must bump the
+   lifecycle watermark namespace version.
 5. Add or change locked alert-investigation commercial handoff behavior through
    `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` while
    preserving the shared upgrade-navigation contract; the alert surface may
