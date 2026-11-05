@@ -11,6 +11,7 @@ import {
   workspaceGuidanceCopy,
   workspaceHealthLabel,
   workspaceIdentityCopy,
+  workspaceOutputsTargetPath,
   workspaceSetupGuide,
   workspaceSetupLabel,
   workspaceSetupSteps,
@@ -213,7 +214,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   if (guide.primaryAction === 'install') {
     primaryTargetPath = WORKSPACE_INSTALL_TARGET_PATH;
   } else if (guide.primaryAction === 'outputs') {
-    primaryTargetPath = WORKSPACE_REPORTING_TARGET_PATH;
+    primaryTargetPath = workspaceOutputsTargetPath(workspace);
   }
   if (guidePrimaryButton) guidePrimaryButton.textContent = guide.primaryLabel;
   setWorkspaceHandoffForm(guidePrimaryForm, guidePrimaryButton, accountAPIBasePath, account.id, workspace, primaryTargetPath, entry.manageWorkspace.pending);
@@ -289,10 +290,12 @@ function accessJobTitle(job: PortalAccessJob): string {
   }
 }
 
-function accessJobCopy(job: PortalAccessJob): string {
+function accessJobCopy(job: PortalAccessJob, clientLanguage = false): string {
   switch (job) {
     case 'invite':
-      return 'Add one person with the minimum role they need on this account.';
+      return clientLanguage
+        ? 'Add one of your staff with the minimum role they need. Everyone here can see every client.'
+        : 'Add one person with the minimum role they need on this account.';
     case 'change_role':
       return 'Use the roster to change one person at a time and keep each person on the smallest role they need.';
     case 'remove':
@@ -511,7 +514,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   if (detail) detail.hidden = !activeJob;
   if (taskPanel) taskPanel.hidden = !activeJob;
   if (taskTitle) taskTitle.textContent = accessJobTitle(activeJob);
-  if (taskCopy) taskCopy.textContent = accessJobCopy(activeJob);
+  if (taskCopy) taskCopy.textContent = accessJobCopy(activeJob, clientLanguage);
   taskButtons.invite?.classList.toggle('is-active', activeJob === 'invite');
   taskButtons.change_role?.classList.toggle('is-active', activeJob === 'change_role');
   taskButtons.remove?.classList.toggle('is-active', activeJob === 'remove');

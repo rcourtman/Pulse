@@ -229,7 +229,7 @@ export function workspaceSetupGuide(workspace: PortalWorkspaceSummary): Workspac
   if (setup === 'ready') {
     return {
       title: 'Ready',
-      description: 'Agents, alert routing, and reports are in place for this client workspace.',
+      description: 'Agents, alert routing and reports are set up. Send a test alert and generate a report to check they arrive.',
       primaryAction: 'open',
       primaryLabel: 'Open workspace',
       diagnostics: workspaceSetupDiagnostics(workspace),
@@ -260,7 +260,7 @@ export function workspaceSetupGuide(workspace: PortalWorkspaceSummary): Workspac
       title: needsAlerts && needsReports ? 'Configure alerts and reports' : needsAlerts ? 'Configure alert routes' : 'Schedule reports',
       description: 'Finish the output side before this workspace leaves onboarding.',
       primaryAction: 'outputs',
-      primaryLabel: needsReports && !needsAlerts ? 'Open reports' : 'Configure outputs',
+      primaryLabel: workspaceOutputsActionLabel(workspace),
       diagnostics: workspaceSetupDiagnostics(workspace),
     };
   }
@@ -313,11 +313,26 @@ export function workspaceSetupSteps(workspace: PortalWorkspaceSummary): Workspac
     {
       id: 'access',
       title: 'Review access',
-      detail: 'Provider staff and client users are handled from Access.',
+      detail: 'Anyone added to Access can see every client, so add your own staff only.',
       tone: 'available',
       label: 'Available',
     },
   ];
+}
+
+const WORKSPACE_ALERTS_TARGET_PATH = '/alerts/notifications';
+const WORKSPACE_REPORTS_TARGET_PATH = '/settings/support/reporting';
+
+function workspaceNeedsAlertRoutes(workspace: PortalWorkspaceSummary): boolean {
+  return zeroCount(workspace.alert_route_count);
+}
+
+export function workspaceOutputsTargetPath(workspace: PortalWorkspaceSummary): string {
+  return workspaceNeedsAlertRoutes(workspace) ? WORKSPACE_ALERTS_TARGET_PATH : WORKSPACE_REPORTS_TARGET_PATH;
+}
+
+export function workspaceOutputsActionLabel(workspace: PortalWorkspaceSummary): string {
+  return workspaceNeedsAlertRoutes(workspace) ? 'Set up alerts' : 'Open reports';
 }
 
 export function workspaceGuidanceCopy(workspace: PortalWorkspaceSummary): string {

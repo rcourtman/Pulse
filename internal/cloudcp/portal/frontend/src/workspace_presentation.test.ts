@@ -7,6 +7,7 @@ import {
   workspaceIdentityCopy,
   workspaceRowNote,
   workspaceSetupDiagnostics,
+  workspaceOutputsTargetPath,
   workspaceSetupGuide,
   workspaceSetupLabel,
   workspaceSetupNextStep,
@@ -97,6 +98,30 @@ describe('workspace presentation', function() {
     expect(workspaceSetupGuide(outputs).primaryAction).toBe('outputs');
     expect(workspaceSetupDiagnostics(outputs)).toContain('Alert route configuration exists, but no route is enabled.');
     expect(workspaceSetupDiagnostics(outputs)).toContain('Report schedule exists, but no schedule is enabled.');
+  });
+
+  it('sends the outputs step to whichever output is still missing', function() {
+    var needsAlerts = createWorkspace({ agent_count: 1, alert_route_count: 0, report_schedule_count: 1 });
+    expect(workspaceSetupGuide(needsAlerts).title).toBe('Configure alert routes');
+    expect(workspaceSetupGuide(needsAlerts).primaryLabel).toBe('Set up alerts');
+    expect(workspaceOutputsTargetPath(needsAlerts)).toBe('/alerts/notifications');
+
+    var needsBoth = createWorkspace({ agent_count: 1, alert_route_count: 0, report_schedule_count: 0 });
+    expect(workspaceSetupGuide(needsBoth).primaryLabel).toBe('Set up alerts');
+    expect(workspaceOutputsTargetPath(needsBoth)).toBe('/alerts/notifications');
+
+    var needsReports = createWorkspace({ agent_count: 1, alert_route_count: 1, report_schedule_count: 0 });
+    expect(workspaceSetupGuide(needsReports).title).toBe('Schedule reports');
+    expect(workspaceSetupGuide(needsReports).primaryLabel).toBe('Open reports');
+    expect(workspaceOutputsTargetPath(needsReports)).toBe('/settings/support/reporting');
+  });
+
+  it('does not offer the account roster as client access', function() {
+    var access = workspaceSetupSteps(createWorkspace({ agent_count: 1 })).find(function(step) {
+      return step.id === 'access';
+    });
+    expect(access?.detail).toContain('every client');
+    expect(access?.detail).not.toContain('client users');
   });
 
   it('builds a guided setup step model from the same readiness rules', function() {
