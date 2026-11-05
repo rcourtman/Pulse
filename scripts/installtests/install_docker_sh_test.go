@@ -599,17 +599,10 @@ func runInstallDockerScriptResult(t *testing.T, workDir string, envVars ...strin
 		t.Fatalf("read install-docker.sh: %v", err)
 	}
 
-	script := string(content)
-	// Only the two fixed host-admission checks are replaced. The generator,
-	// path admission, writes and messages execute unchanged in a private fixture.
-	if strings.Count(script, rootCheckBlock) != 1 || strings.Count(script, containerCheckBlock) != 1 {
-		t.Fatal("installer host-admission boundaries changed; update the explicit test fixture")
-	}
-	script = strings.Replace(script, rootCheckBlock, ":", 1)
-	script = strings.Replace(script, containerCheckBlock, ":", 1)
-
+	// Execute the exact shipped script, including its admission checks. The old
+	// fixture removed root/container checks and concealed unnecessary privileges.
 	tmpScript := filepath.Join(workDir, "install-docker.sh")
-	if err := os.WriteFile(tmpScript, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(tmpScript, content, 0o755); err != nil {
 		t.Fatalf("write temp install-docker.sh: %v", err)
 	}
 
@@ -617,21 +610,43 @@ func runInstallDockerScriptResult(t *testing.T, workDir string, envVars ...strin
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatalf("mkdir bin: %v", err)
 	}
-	writeTestStub(t, filepath.Join(binDir, "docker"), `#!/bin/sh
-printf '%s\n' "$*" >> docker-calls
-if [ "$*" != 'compose version' ]; then exit 91; fi
-if [ "${TEST_RACE_COMPOSE:-}" = true ]; then
-    printf '%s\n' 'racing owner configuration' > docker-compose.yml
-fi
-exit 0
-`)
+	// A minimal PATH proves that generation does not need Docker to be
+	// installed. A failing Docker double separately catches any daemon/CLI call.
+	for _, name := range []string{"dirname", "tr", "cat", "awk"} {
+		realPath, err := exec.LookPath(name)
+		if err != nil {
+			t.Fatalf("find fixture utility %s: %v", name, err)
+		}
+		if err := os.Symlink(realPath, filepath.Join(binDir, name)); err != nil && !os.IsExist(err) {
+			t.Fatal(err)
+		}
+	}
+	withoutDocker := false
+	for _, env := range envVars {
+		withoutDocker = withoutDocker || env == "TEST_WITHOUT_DOCKER=true"
+	}
+	if !withoutDocker {
+		writeTestStub(t, filepath.Join(binDir, "docker"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> docker-calls\nexit 91\n")
+	}
 	writeTestStub(t, filepath.Join(binDir, "timedatectl"), "#!/bin/sh\necho Europe/London\n")
 	writeTestStub(t, filepath.Join(binDir, "hostname"), "#!/bin/sh\nif [ \"$1\" = \"-I\" ]; then echo 192.0.2.10; else echo pulse-host; fi\n")
 
+	// Model a competing owner after admission but before the first output
+	// redirection. A private Bash DEBUG trap supplies the scheduling barrier;
+	// no production source is rewritten and no Docker probe is needed.
+	raceHook := filepath.Join(workDir, "race-hook.sh")
+	writeTestStub(t, raceHook, `if [[ "${TEST_RACE_COMPOSE:-}" == true ]]; then
+    trap 'if [[ "$BASH_COMMAND" == "cat > "* && ! -e .race-fired ]]; then
+        : > .race-fired
+        printf "%s\n" "racing owner configuration" > docker-compose.yml
+    fi' DEBUG
+fi
+`)
 	cmd := exec.Command("bash", tmpScript)
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), append([]string{
-		"PATH=" + binDir + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"PATH=" + binDir,
+		"BASH_ENV=" + raceHook,
 	}, envVars...)...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -643,24 +658,6 @@ func writeTestStub(t *testing.T, path, content string) {
 		t.Fatalf("write stub %s: %v", path, err)
 	}
 }
-
-const rootCheckBlock = `# Check if running as root (early check for better error messages)
-if [ "$EUID" -ne 0 ]; then
-    echo "❌ ERROR: This script must be run as root"
-    echo ""
-    echo "Please run: sudo $0"
-    exit 1
-fi
-`
-
-const containerCheckBlock = `# Detect if running in a container
-if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
-    echo "❌ ERROR: This script must run on the Docker host, not inside a container"
-    echo ""
-    echo "Please run this script on your Docker host machine."
-    exit 1
-fi
-`
 
 func assertDockerSetupBytes(t *testing.T, path, want string, mode os.FileMode) {
 	t.Helper()
@@ -693,9 +690,6 @@ func TestInstallDockerScriptKeepsExistingDeployment(t *testing.T) {
 	}
 	before, err := os.Stat(compose)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(filepath.Join(workDir, "docker-calls")); err != nil {
 		t.Fatal(err)
 	}
 	out, resultErr := runInstallDockerScriptResult(t, workDir)
@@ -856,8 +850,48 @@ func TestInstallDockerScriptReportsPreparationNotInstallation(t *testing.T) {
 			t.Fatalf("new %s output is not private", output)
 		}
 	}
-	calls, err := os.ReadFile(filepath.Join(workDir, "docker-calls"))
-	if err != nil || string(calls) != "compose version\n" {
-		t.Fatal("generator called a Docker operation other than compose version")
+	if _, err := os.Stat(filepath.Join(workDir, "docker-calls")); !os.IsNotExist(err) {
+		t.Fatal("configuration generation called Docker")
+	}
+}
+
+func TestInstallDockerScriptPreparesWithoutPrivilegesOrDocker(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("unprivileged acceptance requires an ordinary user")
+	}
+	for _, mode := range []string{"missing", "refuses-access"} {
+		t.Run(mode, func(t *testing.T) {
+			workDir := t.TempDir()
+			out, err := runInstallDockerScriptResult(t, workDir,
+				fmt.Sprintf("TEST_WITHOUT_DOCKER=%t", mode == "missing"),
+				"PULSE_IMAGE=example/pulse:operator-pin", "PULSE_PORT=8765")
+			if err != nil {
+				t.Fatalf("ordinary-user preparation failed: %v\n%s", err, out)
+			}
+			if !strings.Contains(out, "without sudo") || !strings.Contains(out, "On the deployment host, install Docker with Compose") {
+				t.Fatal("preparation did not distinguish local privileges from deployment prerequisites")
+			}
+			assertDockerSetupBytes(t, filepath.Join(workDir, ".env"),
+				"PULSE_IMAGE=example/pulse:operator-pin\nPULSE_PORT=8765\nTZ=Europe/London\n", 0o600)
+			compose, err := os.ReadFile(filepath.Join(workDir, "docker-compose.yml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config struct {
+				Services map[string]struct {
+					User    string   `yaml:"user"`
+					Volumes []string `yaml:"volumes"`
+				} `yaml:"services"`
+			}
+			if err := yaml.Unmarshal(compose, &config); err != nil {
+				t.Fatalf("generated Compose is not valid YAML: %v", err)
+			}
+			if service := config.Services["pulse"]; service.User != "1000:1000" || len(service.Volumes) != 1 || service.Volumes[0] != "pulse-data:/data" {
+				t.Fatal("unprivileged preparation changed runtime identity or data volume")
+			}
+			if _, err := os.Stat(filepath.Join(workDir, "docker-calls")); !os.IsNotExist(err) {
+				t.Fatal("configuration preparation required Docker access")
+			}
+		})
 	}
 }
