@@ -686,9 +686,10 @@ func defaultAppriseExec(ctx context.Context, args []string) ([]byte, error) {
 }
 
 type notificationRecord struct {
-	lastSent   time.Time
-	alertStart time.Time
-	level      alerts.AlertLevel // Highest delivered severity for this occurrence.
+	lastSent         time.Time
+	alertStart       time.Time
+	level            alerts.AlertLevel // Highest delivered severity for this occurrence.
+	destinationScope string            // Config identity used by the durable cache read.
 }
 
 // Alert represents an alert (interface to avoid circular dependency)
@@ -1003,7 +1004,9 @@ func (n *NotificationManager) GetPublicURL() string {
 func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.mu.Lock()
 	config = normalizeEmailConfig(copyEmailConfig(config))
+	previousDestinations := n.receiptDestinationKeysLocked()
 	n.emailConfig = config
+	n.updateReceiptDestinationsLocked(previousDestinations)
 
 	// Recreate email manager with new config to preserve rate limiting state
 	rateLimit := effectiveEmailRateLimit(config.RateLimit)
@@ -1035,7 +1038,9 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 // SetAppriseConfig updates Apprise configuration.
 func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) {
 	n.mu.Lock()
+	previousDestinations := n.receiptDestinationKeysLocked()
 	n.appriseConfig = NormalizeAppriseConfig(config)
+	n.updateReceiptDestinationsLocked(previousDestinations)
 	var queue *NotificationQueue
 	if !n.appriseConfig.Enabled && n.queue != nil && n.lifecycle.join() {
 		queue = n.queue
@@ -1199,7 +1204,9 @@ func (n *NotificationManager) SetGroupingOptions(byNode, byGuest bool) {
 func (n *NotificationManager) AddWebhook(webhook WebhookConfig) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	previousDestinations := n.receiptDestinationKeysLocked()
 	n.webhooks = append(n.webhooks, copyWebhookConfig(NormalizeWebhookConfig(webhook)))
+	n.updateReceiptDestinationsLocked(previousDestinations)
 }
 
 // UpdateWebhook updates an existing webhook
@@ -1209,7 +1216,9 @@ func (n *NotificationManager) UpdateWebhook(webhookID string, webhook WebhookCon
 
 	for i, w := range n.webhooks {
 		if w.ID == webhookID {
+			previousDestinations := n.receiptDestinationKeysLocked()
 			n.webhooks[i] = copyWebhookConfig(NormalizeWebhookConfig(webhook))
+			n.updateReceiptDestinationsLocked(previousDestinations)
 			return nil
 		}
 	}
@@ -1223,7 +1232,9 @@ func (n *NotificationManager) DeleteWebhook(webhookID string) error {
 
 	for i, w := range n.webhooks {
 		if w.ID == webhookID {
+			previousDestinations := n.receiptDestinationKeysLocked()
 			n.webhooks = append(n.webhooks[:i], n.webhooks[i+1:]...)
+			n.updateReceiptDestinationsLocked(previousDestinations)
 			return nil
 		}
 	}
@@ -1373,6 +1384,22 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	// new information, not a repeat. Scheduled escalation retains its explicit
 	// bypass because its cadence is owned by the alert schedule.
 	record, exists := n.lastNotified[alert.ID]
+	destinations := n.receiptDestinationKeysLocked()
+	scope := receiptDestinationScope(destinations)
+	if exists && record.destinationScope != "" && record.destinationScope != scope {
+		exists = false
+	}
+	if (!exists || !record.alertStart.Equal(alert.StartTime)) && n.queue != nil {
+		var err error
+		record, exists, err = n.queue.deliveryCooldown(alert.ID, alert.StartTime, destinations)
+		if err != nil {
+			// Unknown evidence must not silence a wanted firing.
+			log.Error().Err(err).Str("alertID", alert.ID).Msg("Could not restore notification cooldown")
+		} else if exists {
+			record.destinationScope = scope
+			n.lastNotified[alert.ID] = record
+		}
+	}
 	severityIncreased := notificationSeverityRank(record.level) > 0 && notificationSeverityRank(alert.Level) > notificationSeverityRank(record.level)
 	if !options.bypassCooldown && !severityIncreased && exists && record.alertStart.Equal(alert.StartTime) && (n.cooldown <= 0 || time.Since(record.lastSent) < n.cooldown) {
 		elapsed := time.Since(record.lastSent)
@@ -1521,9 +1548,10 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 			}
 		}
 		n.lastNotified[alert.ID] = notificationRecord{
-			level:      level,
-			lastSent:   lastSent,
-			alertStart: alert.StartTime,
+			level:            level,
+			lastSent:         lastSent,
+			alertStart:       alert.StartTime,
+			destinationScope: receiptDestinationScope(n.receiptDestinationKeysLocked()),
 		}
 	}
 	n.mu.Unlock()
@@ -1637,7 +1665,7 @@ func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJ
 			if job.Event == eventResolved {
 				err = queue.DeleteDeliveryReceipt(alert.ID, alert.StartTime, destinationKey)
 			} else {
-				err = queue.RecordDeliveryReceipt(alert.ID, alert.StartTime, destinationKey, deliveredAt)
+				err = queue.recordDeliveryReceipt(alert.ID, alert.StartTime, destinationKey, deliveredAt, alert.Level)
 			}
 			if err != nil {
 				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Failed to update notification delivery receipt")
@@ -1790,6 +1818,13 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 		return
 	}
 	defer n.lifecycle.release()
+	if queue != nil {
+		for _, alert := range alertList {
+			if err := queue.resolveDeliveryReceipts(alert.ID, &alert.StartTime, time.Now()); err != nil {
+				log.Error().Err(err).Msg("Could not retain notification resolution; receipts remain unsettled")
+			}
+		}
+	}
 	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertList, eventResolved, resolvedTimeFromAlerts(alertList))
 	// Filter each destination independently at dispatch, not merely when the
 	// alert enters the window. Never announce a recovery for an undelivered firing.
@@ -1882,6 +1917,8 @@ func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool
 		}
 		if err != nil {
 			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
+		} else if err := queue.resolveDeliveryReceipts(alertID, start, time.Now()); err != nil {
+			log.Error().Err(err).Str("alertID", alertID).Msg("failed to retain notification resolution; receipts remain unsettled")
 		}
 	}
 

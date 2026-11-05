@@ -481,32 +481,16 @@ func (nq *NotificationQueue) initSchema() error {
 	); err != nil {
 		return err
 	}
-	return nq.ensureTextColumn(
-		"notification_audit",
-		notificationAuditDestinationColumn,
-	)
+	if err := nq.ensureTextColumn("notification_audit", notificationAuditDestinationColumn); err != nil {
+		return err
+	}
+	return nq.migrateDeliveryReceiptContinuity()
 }
 
+// RecordDeliveryReceipt retains the legacy receipt API. Without a delivered
+// severity it proves recovery eligibility, not a restart cooldown.
 func (nq *NotificationQueue) RecordDeliveryReceipt(alertID string, alertStart time.Time, destinationKey string, deliveredAt time.Time) error {
-	if nq == nil || strings.TrimSpace(alertID) == "" || strings.TrimSpace(destinationKey) == "" || alertStart.IsZero() {
-		return fmt.Errorf("alert occurrence and destination are required for a delivery receipt")
-	}
-	if deliveredAt.IsZero() {
-		deliveredAt = time.Now()
-	}
-	nq.mu.Lock()
-	defer nq.mu.Unlock()
-	_, err := nq.db.Exec(`
-		INSERT INTO notification_delivery_receipts
-			(alert_id, alert_start_nanos, destination_key, delivered_at)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(alert_id, alert_start_nanos, destination_key)
-		DO UPDATE SET delivered_at = excluded.delivered_at
-	`, alertID, alertStart.UnixNano(), destinationKey, deliveredAt.Unix())
-	if err != nil {
-		return fmt.Errorf("record notification delivery receipt: %w", err)
-	}
-	return nil
+	return nq.recordDeliveryReceipt(alertID, alertStart, destinationKey, deliveredAt, "")
 }
 
 func (nq *NotificationQueue) HasDeliveryReceipt(alertID string, alertStart time.Time, destinationKey string) (bool, error) {
@@ -2016,25 +2000,10 @@ func (nq *NotificationQueue) performCleanup() {
 	// Keep completed/failed for 7 days, DLQ for 30 days
 	completedCutoff := time.Now().Add(-7 * 24 * time.Hour).Unix()
 	dlqCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
-	receiptCutoff := dlqCutoff
-
-	// Receipts are only needed to correlate a later recovery with a firing
-	// occurrence. Bound their lifetime so installations with recovery delivery
-	// disabled do not grow this side table indefinitely.
-	if result, err := nq.db.Exec(`DELETE FROM notification_delivery_receipts WHERE delivered_at < ?`, receiptCutoff); err != nil {
-		log.Error().
-			Err(err).
-			Str("component", "notification_queue").
-			Str("action", "cleanup_delivery_receipts").
-			Int64("receiptCutoff", receiptCutoff).
-			Msg("Failed to cleanup old notification delivery receipts")
-	} else if rows, _ := result.RowsAffected(); rows > 0 {
-		log.Debug().
-			Str("component", "notification_queue").
-			Str("action", "cleanup_delivery_receipts").
-			Int64("count", rows).
-			Int64("receiptCutoff", receiptCutoff).
-			Msg("Cleaned up old notification delivery receipts")
+	// Firing age alone cannot settle an owed recovery. Only positive
+	// resolution or explicit destination retirement starts its grace period.
+	if err := nq.cleanupDeliveryReceiptsNoLock(dlqCutoff); err != nil {
+		log.Error().Err(err).Msg("Failed to cleanup settled notification receipts; obligations retained")
 	}
 
 	// Delete audit records for notifications about to be cleaned up (FK constraint)
