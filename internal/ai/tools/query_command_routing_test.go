@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,10 @@ func routingFixtureHost(id, hostname, displayName string) models.Host {
 
 func routingFixtureDocker(id, hostname, displayName string) models.DockerHost {
 	return models.DockerHost{ID: id, AgentID: id, Hostname: hostname, DisplayName: displayName, MachineID: "machine-" + id, Status: "online", LastSeen: time.Now()}
+}
+
+func routingFixtureNIC(name string, addresses ...string) []models.HostNetworkInterface {
+	return []models.HostNetworkInterface{{Name: name, Addresses: addresses}}
 }
 
 // routingFixtureDockerOfAgent is a Docker host with no agent record merged into
@@ -80,6 +85,12 @@ func TestQueryHostFlagsFollowCommandRouting(t *testing.T) {
 			Containers:  []models.Container{{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: "dock", Type: "lxc", Status: "running"}},
 			DockerHosts: []models.DockerHost{routingFixtureDocker("dock-a", "dock", "")},
 		}
+	}
+	dockerSharingContainerAddress := func() models.StateSnapshot {
+		snapshot := dockerInContainer()
+		snapshot.Containers[0].IPAddresses = []string{"10.0.0.5"}
+		snapshot.DockerHosts[0].NetworkInterfaces = routingFixtureNIC("eth0", "10.0.0.5/24")
+		return snapshot
 	}
 	for _, tc := range []struct {
 		name     string
@@ -148,25 +159,31 @@ func TestQueryHostFlagsFollowCommandRouting(t *testing.T) {
 			docker:   map[string]string{"dh-a": "agent-a"},
 		},
 		{
-			name:     "a Docker host in a container, with only the agent inside it connected",
+			name:     "a Docker host named like a container, with only its own agent connected",
 			snapshot: dockerInContainer(),
 			agents:   []agentexec.ConnectedAgent{{AgentID: "dock-a", Hostname: "dock"}},
 			docker:   map[string]string{"dock-a": "dock-a"},
 		},
 		{
-			name:     "a Docker host in a container, with only another machine of its name connected",
+			name:     "a Docker host named like a container, with only another machine of its name connected",
 			snapshot: dockerInContainer(),
 			agents:   []agentexec.ConnectedAgent{{AgentID: "other", Hostname: "dock"}},
 			docker:   map[string]string{"dock-a": ""},
 		},
 		{
-			name:     "a Docker host in a container, with its node's agent and its own connected",
+			name:     "a Docker host named like a container, with its node's agent and its own connected",
 			snapshot: dockerInContainer(),
 			agents:   []agentexec.ConnectedAgent{{AgentID: "dock-a", Hostname: "dock"}, {AgentID: "node-agent", Hostname: "pve1"}},
-			docker:   map[string]string{"dock-a": "node-agent"},
+			docker:   map[string]string{"dock-a": "dock-a"},
 		},
 		{
-			name: "a host and Docker host in a VM, with only the agent inside it connected",
+			name:     "a Docker host sharing a container's address, with its node's agent and its own connected",
+			snapshot: dockerSharingContainerAddress(),
+			agents:   []agentexec.ConnectedAgent{{AgentID: "dock-a", Hostname: "dock"}, {AgentID: "node-agent", Hostname: "pve1"}},
+			docker:   map[string]string{"dock-a": "dock-a"},
+		},
+		{
+			name: "a host and Docker host named like a VM, with only their own agent connected",
 			snapshot: models.StateSnapshot{
 				Nodes:       []models.Node{{ID: "lab-pve1", Instance: "lab", Name: "pve1", Status: "online"}},
 				VMs:         []models.VM{{ID: "lab:pve1:100", Instance: "lab", Node: "pve1", VMID: 100, Name: "dock", Type: "qemu", Status: "running"}},
@@ -178,8 +195,14 @@ func TestQueryHostFlagsFollowCommandRouting(t *testing.T) {
 			docker: map[string]string{"dock-a": "dock-a"},
 		},
 		{
-			name:     "a Docker host in a container, with only its node's agent connected",
+			name:     "a Docker host named like a container, with only its node's agent connected",
 			snapshot: dockerInContainer(),
+			agents:   []agentexec.ConnectedAgent{{AgentID: "node-agent", Hostname: "pve1"}},
+			docker:   map[string]string{"dock-a": ""},
+		},
+		{
+			name:     "a Docker host sharing a container's address, with only its node's agent connected",
+			snapshot: dockerSharingContainerAddress(),
 			agents:   []agentexec.ConnectedAgent{{AgentID: "node-agent", Hostname: "pve1"}},
 			docker:   map[string]string{"dock-a": "node-agent"},
 		},
@@ -601,22 +624,80 @@ func TestQueryGuestOwnFlagFollowsAnAgentFoldedIntoIt(t *testing.T) {
 
 // A Docker host's own agent, or an agent folded into a guest, takes a command when
 // the guest's node has no connected agent. That agent is on the same machine as the
-// target, so the command runs where it would have. A connected node agent keeps the
-// command, and no name can select the agent inside: automatic links come from names,
-// so they do not count, and a Docker host placed in a guest by its name does not
-// inherit an agent folded into that guest.
+// target, so the command runs where it would have. A connected node agent keeps a
+// folded guest's command, and no name can select the agent inside: automatic links
+// come from names, so they do not count, and a Docker host placed in a guest by its
+// name and an address does not inherit an agent folded into that guest.
+//
+// A Docker host's own agent goes before the node unless an identity puts the host in
+// the guest. A matching name alone does not put it there at all: it can be another
+// machine, so no command enters that guest, whichever agents are connected.
 func TestCommandsReachAnAgentInsideAGuestOnlyByIdentity(t *testing.T) {
 	node := models.Node{ID: "lab-pve1", Instance: "lab", Name: "pve1", Status: "online"}
 	lxc := func(name string) models.Container {
-		return models.Container{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: name, Type: "lxc", Status: "running"}
+		return models.Container{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: name, Type: "lxc", Status: "running", IPAddresses: []string{"10.0.0.5"}}
 	}
 	vm := func(name string) models.VM {
-		return models.VM{ID: "lab:pve1:100", Instance: "lab", Node: "pve1", VMID: 100, Name: name, Type: "qemu", Status: "running"}
+		return models.VM{ID: "lab:pve1:100", Instance: "lab", Node: "pve1", VMID: 100, Name: name, Type: "qemu", Status: "running", IPAddresses: []string{"10.0.0.5"}}
 	}
+	// These hosts report the address their same-named guest has, so they show the
+	// same machine. The elsewhere fixtures report another.
 	dockerWithContainer := func(id string) models.DockerHost {
 		host := routingFixtureDocker(id, "dock", "")
 		host.Containers = []models.DockerContainer{{ID: "app-1", Name: "app", State: "running"}}
+		host.NetworkInterfaces = routingFixtureNIC("eth0", "10.0.0.5/24")
 		return host
+	}
+	dockerElsewhere := dockerWithContainer("dock-a")
+	dockerElsewhere.NetworkInterfaces = routingFixtureNIC("eth0", "192.168.7.9/24")
+	elsewhere := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock")}, Hosts: []models.Host{routingFixtureHost("dock-a", "dock", "")}, DockerHosts: []models.DockerHost{dockerElsewhere}}
+	elsewhereFromVM := models.StateSnapshot{Nodes: []models.Node{node}, VMs: []models.VM{vm("dock")}, Hosts: []models.Host{routingFixtureHost("dock-a", "dock", "")}, DockerHosts: []models.DockerHost{dockerElsewhere}}
+	unknownGuest := lxc("dock")
+	unknownGuest.IPAddresses = nil
+	unknownAddresses := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{unknownGuest}, DockerHosts: []models.DockerHost{dockerWithContainer("dock-a")}}
+	bridgeOnly := dockerWithContainer("dock-a")
+	bridgeOnly.NetworkInterfaces = routingFixtureNIC("docker0", "10.0.0.5/16")
+	onlyABridgeShared := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock")}, DockerHosts: []models.DockerHost{bridgeOnly}}
+	linkLocalGuest := lxc("dock")
+	linkLocalGuest.IPAddresses = []string{"fe80::1"}
+	linkLocalDocker := dockerWithContainer("dock-a")
+	linkLocalDocker.NetworkInterfaces = routingFixtureNIC("eth0", "fe80::1/64")
+	onlyLinkLocalShared := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{linkLocalGuest}, DockerHosts: []models.DockerHost{linkLocalDocker}}
+	guestListsInterfaces := lxc("dock")
+	guestListsInterfaces.IPAddresses = nil
+	guestListsInterfaces.NetworkInterfaces = []models.GuestNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5"}}}
+	sharedOnGuestInterface := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{guestListsInterfaces}, DockerHosts: []models.DockerHost{dockerWithContainer("dock-a")}}
+	guestBridge := guestListsInterfaces
+	guestBridge.NetworkInterfaces = []models.GuestNetworkInterface{{Name: "docker0", Addresses: []string{"10.0.0.5"}}}
+	guestBridge.IPAddresses = []string{"10.0.0.5"}
+	sharedOnGuestBridge := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{guestBridge}, DockerHosts: []models.DockerHost{dockerWithContainer("dock-a")}}
+	moduleWithNoInterfaces := dockerWithContainer("dock-a")
+	moduleWithNoInterfaces.NetworkInterfaces = nil
+	recordWithAddress := routingFixtureHost("dock-a", "dock", "")
+	recordWithAddress.NetworkInterfaces = routingFixtureNIC("eth0", "10.0.0.5/24")
+	sharedOnAgentRecord := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock")}, Hosts: []models.Host{recordWithAddress}, DockerHosts: []models.DockerHost{moduleWithNoInterfaces}}
+	recordLinkedByName := routingFixtureHost("dock-a", "dock", "")
+	recordLinkedByName.LinkedContainerID = "lab:pve1:200"
+	linkedByNameElsewhere := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock")}, Hosts: []models.Host{recordLinkedByName}, DockerHosts: []models.DockerHost{dockerElsewhere}}
+	sharedAddressLinked := func(link func(*models.Host)) models.StateSnapshot {
+		record := routingFixtureHost("dock-a", "dock", "")
+		link(&record)
+		return models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock")}, Hosts: []models.Host{record}, DockerHosts: []models.DockerHost{dockerWithContainer("dock-a")}}
+	}
+	// One guest seen through two connections, which an operator's link merges.
+	mergedGuest := func(fill func(*models.StateSnapshot)) models.StateSnapshot {
+		second := lxc("dock")
+		second.ID, second.Instance = "site:pve1:200", "site"
+		snapshot := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock"), second}}
+		fill(&snapshot)
+		return snapshot
+	}
+	linkedToAKnownGuest := sharedAddressLinked(func(host *models.Host) { host.LinkedContainerID = "lab:pve1:201" })
+	linkedToAKnownGuest.Containers = append(linkedToAKnownGuest.Containers, models.Container{ID: "lab:pve1:201", Instance: "lab", Node: "pve1", VMID: 201, Name: "web", Type: "lxc", Status: "running"})
+	sharedAddressLinkedVM := func(link func(*models.Host)) models.StateSnapshot {
+		snapshot := sharedAddressLinked(link)
+		snapshot.Containers, snapshot.VMs = nil, []models.VM{vm("dock")}
+		return snapshot
 	}
 	inLXC := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock")}, Hosts: []models.Host{routingFixtureHost("dock-a", "dock", "")}, DockerHosts: []models.DockerHost{dockerWithContainer("dock-a")}}
 	inVM := models.StateSnapshot{Nodes: []models.Node{node}, VMs: []models.VM{vm("dock")}, Hosts: []models.Host{routingFixtureHost("dock-a", "dock", "")}, DockerHosts: []models.DockerHost{dockerWithContainer("dock-a")}}
@@ -627,6 +708,9 @@ func TestCommandsReachAnAgentInsideAGuestOnlyByIdentity(t *testing.T) {
 	foldedLXC := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("web")}, Hosts: []models.Host{foldHost}}
 	foldedVM := models.StateSnapshot{Nodes: []models.Node{node}, VMs: []models.VM{vm("web")}, Hosts: []models.Host{foldHost}}
 	foldedDocker := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("web")}, DockerHosts: []models.DockerHost{routingFixtureDocker("inside", "inner-host", "")}}
+	sharingInside := routingFixtureDocker("inside", "inner-host", "")
+	sharingInside.NetworkInterfaces = routingFixtureNIC("eth0", "10.0.0.5/24")
+	foldedDockerSharingAddress := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("web")}, DockerHosts: []models.DockerHost{sharingInside}}
 	linkedHost := routingFixtureHost("linked", "web", "")
 	linkedHost.LinkedContainerID = "lab:pve1:200"
 	autoLinked := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("web")}, Hosts: []models.Host{linkedHost}}
@@ -636,9 +720,11 @@ func TestCommandsReachAnAgentInsideAGuestOnlyByIdentity(t *testing.T) {
 	merged := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("dock")}, Hosts: []models.Host{mergedHost}, DockerHosts: []models.DockerHost{mergedDocker}}
 	namedAfterHostname := routingFixtureDocker("web", "web", "")
 	namedAfterHostname.AgentID = "inside"
+	namedAfterHostname.NetworkInterfaces = routingFixtureNIC("eth0", "10.0.0.5/24")
 	sourceIsHostname := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("web")}, DockerHosts: []models.DockerHost{namedAfterHostname}}
 	noIdentity := routingFixtureDocker("legacy", "web", "")
 	noIdentity.AgentID = ""
+	noIdentity.NetworkInterfaces = routingFixtureNIC("eth0", "10.0.0.5/24")
 	sharedName := models.StateSnapshot{Nodes: []models.Node{node}, Containers: []models.Container{lxc("web")}, Hosts: []models.Host{foldHost}, DockerHosts: []models.DockerHost{noIdentity}}
 
 	docker := func(t *testing.T, r *unifiedresources.ResourceRegistry) string {
@@ -676,6 +762,10 @@ func TestCommandsReachAnAgentInsideAGuestOnlyByIdentity(t *testing.T) {
 	nowhere := func(kind string) CommandRoutingResult {
 		return CommandRoutingResult{TargetType: "container", TargetID: "200", Transport: "pct_exec", ResolvedKind: kind, ResolvedNode: "pve1"}
 	}
+	// A host a name does not place in a guest has no node to name.
+	standalone := func(agent, hostname, kind string) CommandRoutingResult {
+		return CommandRoutingResult{AgentID: agent, AgentHostname: hostname, TargetType: "agent", Transport: "direct", ResolvedKind: kind}
+	}
 	vmThroughNode := CommandRoutingResult{AgentID: "node-agent", AgentHostname: "pve1", TargetType: "vm", TargetID: "100", Transport: "qm_guest_exec", ResolvedKind: "docker-host", ResolvedNode: "pve1"}
 	own := agentexec.ConnectedAgent{AgentID: "dock-a", Hostname: "dock"}
 	namesake := agentexec.ConnectedAgent{AgentID: "other", Hostname: "dock"}
@@ -701,10 +791,47 @@ func TestCommandsReachAnAgentInsideAGuestOnlyByIdentity(t *testing.T) {
 		{name: "an agent record speaks over the Docker report", snapshot: merged, target: docker, agents: []agentexec.ConnectedAgent{{AgentID: "host-record", Hostname: "dock"}}, want: direct("host-record", "dock", "docker-host")},
 		{name: "an agent record speaks for a container on the host", snapshot: merged, target: app, agents: []agentexec.ConnectedAgent{{AgentID: "host-record", Hostname: "dock"}}, want: direct("host-record", "dock", "app-container")},
 
-		{name: "a connected node agent keeps the LXC path", snapshot: inLXC, target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: throughNode("docker-host")},
-		{name: "a connected node agent keeps the VM path", snapshot: inVM, target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: vmThroughNode},
-		{name: "a connected node agent keeps a container's path", snapshot: inLXC, target: app, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: throughNode("app-container")},
-		{name: "the node agent alone still works", snapshot: inLXC, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+		{name: "its own agent goes before a connected node agent in an LXC", snapshot: inLXC, target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: direct("dock-a", "dock", "docker-host")},
+		{name: "its own agent goes before a connected node agent in a VM", snapshot: inVM, target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: direct("dock-a", "dock", "docker-host")},
+		{name: "its own agent goes before a connected node agent for a container", snapshot: inLXC, target: app, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: direct("dock-a", "dock", "app-container")},
+		{name: "the node agent alone reaches a host that shares its guest's address", snapshot: inLXC, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+		{name: "the node agent alone reaches that host in a VM", snapshot: inVM, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: vmThroughNode},
+		{name: "the node agent alone reaches a container on that host", snapshot: inLXC, target: app, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("app-container")},
+		{name: "an address on the guest's interface list shows the same machine", snapshot: sharedOnGuestInterface, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+		{name: "an address only the agent record reports shows the same machine", snapshot: sharedOnAgentRecord, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+
+		{name: "another machine with its name runs on its own agent, not in the LXC", snapshot: elsewhere, target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: standalone("dock-a", "dock", "docker-host")},
+		{name: "another machine with its name runs on its own agent, not in the VM", snapshot: elsewhereFromVM, target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: standalone("dock-a", "dock", "docker-host")},
+		{name: "a container on another machine with its name runs on that machine", snapshot: elsewhere, target: app, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: standalone("dock-a", "dock", "app-container")},
+		{name: "the node cannot reach another machine with its name", snapshot: elsewhere, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "the node cannot reach a container on another machine with its name", snapshot: elsewhere, target: app, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "app-container")},
+		{name: "the node cannot reach another machine named like its VM", snapshot: elsewhereFromVM, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a namesake cannot stand in for another machine's agent", snapshot: elsewhere, target: docker, agents: []agentexec.ConnectedAgent{namesake}, want: standalone("", "", "docker-host")},
+		{name: "a link formed from the name shows nothing", snapshot: linkedByNameElsewhere, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link to another guest contradicts a shared address", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedContainerID = "site:pve9:200" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link to another VMID contradicts a shared address", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedContainerID = "lab:pve1:201" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link to another VM contradicts a shared address", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedVMID = "lab:pve1:101" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link to another guest Pulse knows contradicts a shared address", snapshot: linkedToAKnownGuest, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link to a node contradicts a shared address", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedNodeID = "lab-pve1" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link that names nothing readable contradicts a shared address", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedContainerID = "unreadable" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link elsewhere leaves the host its own agent", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedContainerID = "site:pve9:200" }), target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: standalone("dock-a", "dock", "docker-host")},
+		{name: "a link to this guest leaves the shared address standing", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedContainerID = "lab:pve1:200" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+		{name: "a link to this guest from before it moved node leaves the address standing", snapshot: sharedAddressLinked(func(host *models.Host) { host.LinkedContainerID = "lab:pve9:200" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+		{name: "a link to this VM leaves the shared address standing", snapshot: sharedAddressLinkedVM(func(host *models.Host) { host.LinkedVMID = "lab:pve1:100" }), target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: vmThroughNode},
+		{name: "a link through a merged connection leaves the shared address standing", snapshot: mergedGuest(func(snapshot *models.StateSnapshot) {
+			record := routingFixtureHost("dock-a", "dock", "")
+			record.LinkedContainerID = "site:pve1:200"
+			snapshot.Hosts = []models.Host{record}
+			snapshot.DockerHosts = []models.DockerHost{dockerWithContainer("dock-a")}
+		}), fold: foldGuestsTogether, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+		{name: "a probe through a merged connection finds its guest", snapshot: mergedGuest(func(snapshot *models.StateSnapshot) {
+			snapshot.DockerHosts = []models.DockerHost{routingFixtureDocker("proxmox-lxc-docker:site:pve1:200", "dock", "")}
+		}), fold: foldGuestsTogether, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: throughNode("docker-host")},
+		{name: "a guest with no known address shows nothing to the node", snapshot: unknownAddresses, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a guest with no known address leaves the host its own agent", snapshot: unknownAddresses, target: docker, agents: []agentexec.ConnectedAgent{own, nodeAgent}, want: standalone("dock-a", "dock", "docker-host")},
+		{name: "a Docker bridge address shows nothing", snapshot: onlyABridgeShared, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a bridge on the guest's interface list shows nothing", snapshot: sharedOnGuestBridge, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
+		{name: "a link-local address shows nothing", snapshot: onlyLinkLocalShared, target: docker, agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "docker-host")},
 
 		{name: "nothing connected goes nowhere", snapshot: inLXC, target: docker, agents: nil, want: nowhere("docker-host")},
 		{name: "a namesake cannot stand in for the Docker host's agent", snapshot: inLXC, target: docker, agents: []agentexec.ConnectedAgent{namesake}, want: nowhere("docker-host")},
@@ -729,7 +856,15 @@ func TestCommandsReachAnAgentInsideAGuestOnlyByIdentity(t *testing.T) {
 				ID: "parentless", Type: unifiedresources.ResourceTypeAppContainer, Name: "orphan", Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
 				Docker: &unifiedresources.DockerData{AgentID: "another-reporter", Hostname: "web", ContainerID: "orphan-1"},
 			}},
-			target: literal("parentless"), agents: []agentexec.ConnectedAgent{folded}, want: nowhere("app-container"),
+			target: literal("parentless"), agents: []agentexec.ConnectedAgent{folded}, want: standalone("", "", "app-container"),
+		},
+		{
+			name: "a container with no parent cannot borrow a folded report's address through its hostname", snapshot: foldedDockerSharingAddress, fold: foldDockerInto("inside"),
+			extra: []unifiedresources.Resource{{
+				ID: "parentless", Type: unifiedresources.ResourceTypeAppContainer, Name: "orphan", Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+				Docker: &unifiedresources.DockerData{AgentID: "another-reporter", Hostname: "web", ContainerID: "orphan-1"},
+			}},
+			target: literal("parentless"), agents: []agentexec.ConnectedAgent{nodeAgent}, want: standalone("", "", "app-container"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -753,6 +888,147 @@ func TestCommandsReachAnAgentInsideAGuestOnlyByIdentity(t *testing.T) {
 	}
 }
 
+// A host Pulse found by probing a guest through its node names that guest in its ID,
+// so the ID places it. Its name says nothing either way: installations reuse guest
+// names, and its hostname comes from inside the guest.
+func TestDockerHostProbedThroughAGuestFollowsItsIDNotItsName(t *testing.T) {
+	node := func(instance, name string) models.Node {
+		return models.Node{ID: instance + "-" + name, Instance: instance, Name: name, Status: "online"}
+	}
+	lxc := func(instance, nodeName string, vmid int, name string) models.Container {
+		return models.Container{ID: fmt.Sprintf("%s:%s:%d", instance, nodeName, vmid), Instance: instance, Node: nodeName, VMID: vmid, Name: name, Type: "lxc", Status: "running"}
+	}
+	probedHost := func(guestID, hostname string) models.DockerHost {
+		id := "proxmox-lxc-docker:" + guestID
+		return routingFixtureDockerOfAgent(id, id, hostname)
+	}
+	// An address shared with a guest of its name must not stand in for what the ID says.
+	withAddress := func(guest models.Container) models.Container {
+		guest.IPAddresses = []string{"10.0.0.5"}
+		return guest
+	}
+	withNIC := func(host models.DockerHost) models.DockerHost {
+		host.NetworkInterfaces = routingFixtureNIC("eth0", "10.0.0.5/24")
+		return host
+	}
+	labAgent := agentexec.ConnectedAgent{AgentID: "lab-agent", Hostname: "pve1"}
+	siteAgent := agentexec.ConnectedAgent{AgentID: "site-agent", Hostname: "pve2"}
+	throughNode := func(agent, hostname, node string, vmid int) CommandRoutingResult {
+		return CommandRoutingResult{AgentID: agent, AgentHostname: hostname, TargetType: "container", TargetID: fmt.Sprintf("%d", vmid), Transport: "pct_exec", ResolvedKind: "docker-host", ResolvedNode: node}
+	}
+	nowhere := CommandRoutingResult{TargetType: "agent", Transport: "direct", ResolvedKind: "docker-host"}
+
+	for _, tc := range []struct {
+		name     string
+		snapshot models.StateSnapshot
+		sourceID string
+		want     CommandRoutingResult
+	}{
+		{
+			name: "two connections reuse a guest's name, and each host keeps its own guest",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1"), node("site", "pve2")},
+				Containers:  []models.Container{lxc("lab", "pve1", 200, "dock"), lxc("site", "pve2", 300, "dock")},
+				DockerHosts: []models.DockerHost{probedHost("lab:pve1:200", "dock"), probedHost("site:pve2:300", "dock")},
+			},
+			sourceID: "proxmox-lxc-docker:site:pve2:300",
+			want:     throughNode("site-agent", "pve2", "pve2", 300),
+		},
+		{
+			name: "another guest has the hostname reported from inside this one",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1")},
+				Containers:  []models.Container{lxc("lab", "pve1", 200, "dock"), lxc("lab", "pve1", 201, "web")},
+				DockerHosts: []models.DockerHost{probedHost("lab:pve1:201", "dock")},
+			},
+			sourceID: "proxmox-lxc-docker:lab:pve1:201",
+			want:     throughNode("lab-agent", "pve1", "pve1", 201),
+		},
+		{
+			name: "the hostname inside the guest is not the guest's name",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1")},
+				Containers:  []models.Container{lxc("lab", "pve1", 201, "web")},
+				DockerHosts: []models.DockerHost{probedHost("lab:pve1:201", "ubuntu")},
+			},
+			sourceID: "proxmox-lxc-docker:lab:pve1:201",
+			want:     throughNode("lab-agent", "pve1", "pve1", 201),
+		},
+		{
+			name: "the guest has moved to another node",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1"), node("lab", "pve2")},
+				Containers:  []models.Container{lxc("lab", "pve2", 201, "web")},
+				DockerHosts: []models.DockerHost{probedHost("lab:pve1:201", "web")},
+			},
+			sourceID: "proxmox-lxc-docker:lab:pve1:201",
+			want:     throughNode("site-agent", "pve2", "pve2", 201),
+		},
+		{
+			name: "its guest has gone, and a guest with its name does not take it",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1")},
+				Containers:  []models.Container{withAddress(lxc("lab", "pve1", 200, "dock"))},
+				DockerHosts: []models.DockerHost{withNIC(probedHost("lab:pve1:999", "dock"))},
+			},
+			sourceID: "proxmox-lxc-docker:lab:pve1:999",
+			want:     nowhere,
+		},
+		{
+			// A probe report can match an existing row by hostname, so the row's ID
+			// can name another guest than the report behind its inventory.
+			name: "the agent ID behind its inventory beats a row ID naming another guest",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1"), node("site", "pve2")},
+				Containers:  []models.Container{lxc("lab", "pve1", 200, "dock"), lxc("site", "pve2", 300, "dock")},
+				DockerHosts: []models.DockerHost{routingFixtureDockerOfAgent("proxmox-lxc-docker:lab:pve1:200", "proxmox-lxc-docker:site:pve2:300", "dock")},
+			},
+			sourceID: "proxmox-lxc-docker:lab:pve1:200",
+			want:     throughNode("site-agent", "pve2", "pve2", 300),
+		},
+		{
+			name: "its VMID now belongs to a VM",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1")},
+				VMs:         []models.VM{{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: "dock", Type: "qemu", Status: "running"}},
+				DockerHosts: []models.DockerHost{probedHost("lab:pve1:200", "dock")},
+			},
+			sourceID: "proxmox-lxc-docker:lab:pve1:200",
+			want:     nowhere,
+		},
+		{
+			name: "the same VMID on another connection is not its guest",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1"), node("site", "pve2")},
+				Containers:  []models.Container{lxc("site", "pve2", 200, "dock")},
+				DockerHosts: []models.DockerHost{probedHost("lab:pve1:200", "dock")},
+			},
+			sourceID: "proxmox-lxc-docker:lab:pve1:200",
+			want:     nowhere,
+		},
+		{
+			name: "an ID that names no guest does not fall back to the name",
+			snapshot: models.StateSnapshot{
+				Nodes:       []models.Node{node("lab", "pve1")},
+				Containers:  []models.Container{withAddress(lxc("lab", "pve1", 200, "dock"))},
+				DockerHosts: []models.DockerHost{withNIC(probedHost("lxc:200", "dock"))},
+			},
+			sourceID: "proxmox-lxc-docker:lxc:200",
+			want:     nowhere,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := sameNameRegistry(tc.snapshot)
+			id := routingFixtureDockerResourceID(t, registry, tc.sourceID)
+			for name, rs := range map[string]unifiedresources.ReadState{"registry": registry, "adapter": unifiedresources.NewMonitorAdapter(registry)} {
+				if got := routeCommandTarget(rs, []agentexec.ConnectedAgent{labAgent, siteAgent}, id); got != tc.want {
+					t.Fatalf("%s through the %s routed to %+v, want %+v", tc.sourceID, name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 // foldInto is the manual link an operator makes between an agent and its guest.
 func foldInto(agentID string) func(*unifiedresources.ResourceRegistry) unifiedresources.ResourceLink {
 	return func(registry *unifiedresources.ResourceRegistry) unifiedresources.ResourceLink {
@@ -764,6 +1040,19 @@ func foldInto(agentID string) func(*unifiedresources.ResourceRegistry) unifiedre
 		}
 		return unifiedresources.ResourceLink{}
 	}
+}
+
+// foldGuestsTogether merges the two views of one guest under the first connection.
+func foldGuestsTogether(registry *unifiedresources.ResourceRegistry) unifiedresources.ResourceLink {
+	var primary, second string
+	for _, container := range registry.Containers() {
+		if container.Instance() == "lab" {
+			primary = container.ID()
+		} else {
+			second = container.ID()
+		}
+	}
+	return unifiedresources.ResourceLink{ResourceA: primary, ResourceB: second, PrimaryID: primary}
 }
 
 func foldDockerInto(sourceID string) func(*unifiedresources.ResourceRegistry) unifiedresources.ResourceLink {
@@ -786,27 +1075,36 @@ func routingFixtureOnlyGuestID(registry *unifiedresources.ResourceRegistry) stri
 }
 
 // The route's answer reaches a real read: the command runs on the agent itself, not
-// wrapped for a guest through a node that is not there.
+// wrapped for a guest through its node. With the node's agent connected as well, a
+// Docker host on another machine is read there, not in the guest with its name.
 func TestReadOnADockerHostInAGuestRunsOnItsOwnAgent(t *testing.T) {
-	registry := sameNameRegistry(models.StateSnapshot{
-		Nodes:       []models.Node{{ID: "lab-pve1", Instance: "lab", Name: "pve1", Status: "online"}},
-		Containers:  []models.Container{{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: "dock", Type: "lxc", Status: "running"}},
-		Hosts:       []models.Host{routingFixtureHost("dock-a", "dock", "")},
-		DockerHosts: []models.DockerHost{routingFixtureDocker("dock-a", "dock", "")},
-	})
-	server := &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "dock-a", Hostname: "dock"}}}
-	server.On("GetConnectedAgents").Return(server.agents)
-	server.On("ExecuteCommand", mock.Anything, "dock-a", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-		return payload.TargetType == "agent" && payload.TargetID == "" && strings.Contains(payload.Command, "docker logs")
-	})).Return(&agentexec.CommandResultPayload{ExitCode: 0, Stdout: "reached the agent inside"}, nil)
-	executor := NewPulseToolExecutor(ExecutorConfig{ReadState: registry, AgentServer: server, ControlLevel: ControlLevelReadOnly})
-	result, err := executor.ExecuteTool(context.Background(), "pulse_read", map[string]interface{}{
-		"action": "logs", "source": "docker", "container": "app", "since": "30m", "target_host": registry.DockerHosts()[0].ID(),
-	})
-	if err != nil || result.IsError || len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, "reached the agent inside") {
-		t.Fatalf("the read did not reach the agent inside the guest: %+v %v", result, err)
+	own := agentexec.ConnectedAgent{AgentID: "dock-a", Hostname: "dock"}
+	for name, agents := range map[string][]agentexec.ConnectedAgent{
+		"its own agent connected":        {own},
+		"its node's agent connected too": {own, {AgentID: "node-agent", Hostname: "pve1"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			registry := sameNameRegistry(models.StateSnapshot{
+				Nodes:       []models.Node{{ID: "lab-pve1", Instance: "lab", Name: "pve1", Status: "online"}},
+				Containers:  []models.Container{{ID: "lab:pve1:200", Instance: "lab", Node: "pve1", VMID: 200, Name: "dock", Type: "lxc", Status: "running"}},
+				Hosts:       []models.Host{routingFixtureHost("dock-a", "dock", "")},
+				DockerHosts: []models.DockerHost{routingFixtureDocker("dock-a", "dock", "")},
+			})
+			server := &mockAgentServer{agents: agents}
+			server.On("GetConnectedAgents").Return(server.agents)
+			server.On("ExecuteCommand", mock.Anything, "dock-a", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+				return payload.TargetType == "agent" && payload.TargetID == "" && strings.Contains(payload.Command, "docker logs")
+			})).Return(&agentexec.CommandResultPayload{ExitCode: 0, Stdout: "reached the Docker host's agent"}, nil)
+			executor := NewPulseToolExecutor(ExecutorConfig{ReadState: registry, AgentServer: server, ControlLevel: ControlLevelReadOnly})
+			result, err := executor.ExecuteTool(context.Background(), "pulse_read", map[string]interface{}{
+				"action": "logs", "source": "docker", "container": "app", "since": "30m", "target_host": registry.DockerHosts()[0].ID(),
+			})
+			if err != nil || result.IsError || len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, "reached the Docker host's agent") {
+				t.Fatalf("the read did not reach the Docker host's own agent: %+v %v", result, err)
+			}
+			server.AssertExpectations(t)
+		})
 	}
-	server.AssertExpectations(t)
 }
 
 // An identity hostname can name the machine a guest runs on, and clones can share

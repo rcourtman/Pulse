@@ -613,9 +613,12 @@ search answer a node's flag, and a guest's `node_command_agent_connected`, throu
 that lookup, and add `id` and `instance` only to node rows whose shown name repeats.
 A system or Docker host row's flag, and the topology Docker host flag and count,
 ask `routeCommandTarget` about the row's ID, so they report where a command would
-go: a Docker host in a guest goes through the guest's node, or to its own agent
-while the node has no connected agent. That direct route needs identity: a
-connected agent with a matching name cannot take it. A topology Docker host row
+go. A Docker host an identity puts in a guest goes through the guest's node, or to
+its own agent while the node has no connected agent. A matching name alone does not
+put it in the guest, so a command never enters that guest. With a shared address as
+well, its own agent goes first and the node takes the command while that agent is
+away. The direct route needs identity: a connected agent with a matching name cannot
+take it. A topology Docker host row
 carries `id` only when another Docker host, a guest or a node has its hostname, so
 every row shows a reference that reaches what its flag reports. A command for a guest
 row goes through its node. It reaches an agent inside the guest only when that agent
@@ -629,6 +632,7 @@ agent with its name when no node and no other guest has that name.
 `TestQueryCommandFlagsFollowTheNodeNotItsName`,
 `TestQueryHostFlagsFollowCommandRouting`,
 `TestCommandsReachAnAgentInsideAGuestOnlyByIdentity`,
+`TestDockerHostProbedThroughAGuestFollowsItsIDNotItsName`,
 `TestQueryGuestOwnFlagFollowsItsAgentNotItsName` and
 `TestAssistantInventoryDoesNotInventCommandConnectionObservations` cover these
 projection and continuity boundaries. Existing persisted tool records are not

@@ -90,10 +90,11 @@ func TestResolveResource_Container(t *testing.T) {
 func TestResolveResource_DockerContainer(t *testing.T) {
 	rr := NewRegistry(nil)
 	rr.IngestSnapshot(models.StateSnapshot{
-		Containers: []models.Container{{ID: "lxc-1", Name: "dock1", VMID: 100, Node: "node1", Type: "lxc"}},
+		Containers: []models.Container{{ID: "lxc-1", Name: "dock1", VMID: 100, Node: "node1", Type: "lxc", IPAddresses: []string{"10.0.0.5"}}},
 		DockerHosts: []models.DockerHost{{
-			ID:       "dock1",
-			Hostname: "dock1",
+			ID:                "dock1",
+			Hostname:          "dock1",
+			NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24"}}},
 			Containers: []models.DockerContainer{{
 				ID:    "cid1",
 				Name:  "homepage",
@@ -125,10 +126,11 @@ func TestResolveResource_DockerContainerTargetHostRewrite(t *testing.T) {
 	// Use Docker host ID matching (not hostname) to verify the rewrite path.
 	rr := NewRegistry(nil)
 	rr.IngestSnapshot(models.StateSnapshot{
-		Containers: []models.Container{{ID: "lxc-1", Name: "docker-host-lxc", VMID: 100, Node: "node1", Type: "lxc"}},
+		Containers: []models.Container{{ID: "lxc-1", Name: "docker-host-lxc", VMID: 100, Node: "node1", Type: "lxc", IPAddresses: []string{"10.0.0.5"}}},
 		DockerHosts: []models.DockerHost{{
-			ID:       "docker-host-lxc",
-			Hostname: "docker-host-lxc",
+			ID:                "docker-host-lxc",
+			Hostname:          "docker-host-lxc",
+			NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.5/24"}}},
 			Containers: []models.DockerContainer{{
 				ID:    "cid1",
 				Name:  "myapp",
@@ -152,6 +154,52 @@ func TestResolveResource_DockerContainerTargetHostRewrite(t *testing.T) {
 	if !locHost.Found || locHost.ResourceType != "docker-host" || locHost.DockerHostType != "system-container" || locHost.DockerHostVMID != 100 {
 		t.Fatalf("expected the registered Docker host source reference to keep its current guest parent, got %+v", locHost)
 	}
+}
+
+// A name does not put a Docker host in a guest, so neither its location nor anything
+// read from it, such as the Assistant's context, can claim that guest as its machine.
+func TestResolveResource_DockerHostNamedLikeAGuest(t *testing.T) {
+	snapshot := func(address string) models.StateSnapshot {
+		return models.StateSnapshot{
+			Containers: []models.Container{{ID: "lab:pve1:200", Instance: "lab", Name: "dock", VMID: 200, Node: "pve1", Type: "lxc", IPAddresses: []string{"10.0.0.5"}}},
+			DockerHosts: []models.DockerHost{{
+				ID: "dh-1", AgentID: "agent-1", Hostname: "dock", MachineID: "machine-1",
+				NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", Addresses: []string{address}}},
+				Containers:        []models.DockerContainer{{ID: "ctr-1", Name: "web", State: "running"}},
+			}},
+		}
+	}
+	location := func(t *testing.T, s models.StateSnapshot, name string) models.ResourceLocation {
+		t.Helper()
+		rr := NewRegistry(nil)
+		rr.IngestSnapshot(s)
+		id := ""
+		for _, host := range rr.DockerHosts() {
+			id = host.ID()
+		}
+		if name == "" {
+			return ResolveResourceReferenceContext(rr, id).Location
+		}
+		return ResolveResource(rr, name)
+	}
+
+	t.Run("no shared address", func(t *testing.T) {
+		for _, loc := range []models.ResourceLocation{location(t, snapshot("192.168.7.9/24"), ""), location(t, snapshot("192.168.7.9/24"), "web")} {
+			if loc.DockerHostType != "standalone" || loc.DockerHostVMID != 0 || loc.Node != "" || loc.NodeResourceID != "" ||
+				loc.AgentID != "agent-1" || loc.TargetHost != "dock" || loc.GuestAgentID != "" || loc.DockerHostInferred {
+				t.Fatalf("a guest with its name should not be its location: %+v", loc)
+			}
+		}
+	})
+
+	t.Run("a shared address", func(t *testing.T) {
+		for _, loc := range []models.ResourceLocation{location(t, snapshot("10.0.0.5/24"), ""), location(t, snapshot("10.0.0.5/24"), "web")} {
+			if loc.DockerHostType != "system-container" || loc.DockerHostVMID != 200 || loc.Node != "pve1" ||
+				loc.GuestAgentID != "agent-1" || !loc.DockerHostInferred {
+				t.Fatalf("a guest sharing its name and an address should be its location: %+v", loc)
+			}
+		}
+	})
 }
 
 func TestResolveResource_DockerHost(t *testing.T) {

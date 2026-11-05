@@ -7201,15 +7201,27 @@ routing. `internal/unifiedresources/resolve.go`,
 containers while preserving adapter-specific routing. Reusing shared
 `DockerData` for workload metadata must not misclassify a TrueNAS app as a
 Docker-routed control target.
-A location in a guest also carries `GuestAgentID`, an agent known by identity to
-run there: a Docker host's own agent, or an agent folded into the guest by machine
-identity or a manual link. Routing uses it only while the guest's node has no
-connected agent. A name that places a Docker host in a guest cannot make an agent
-folded into that guest its own, a reference that is only a hostname does not set
-it, and neither does an automatic guest link, because that link can come from a
-hostname. Clones sharing a machine ID merge into one resource before this runs, so
-it cannot tell them apart, as no direct route can.
-`TestCommandsReachAnAgentInsideAGuestOnlyByIdentity` pins this.
+A guest backs a Docker host's location only when something beyond a matching name
+says so: a manual or machine-identity fold, the guest a `proxmox-lxc-docker:` agent
+ID names (never a name, for those hosts), or an address the host's machine and its
+same-named guest share. Otherwise the host is `standalone`, because the guest can
+be another machine with that name, so Assistant context cannot claim that guest and
+no command can enter it. Interfaces that repeat on every machine do not count. An
+automatic guest link to that guest adds nothing, because it can come from the same
+name, but a link to a node or another guest refuses the placement. A shared address
+only corroborates the name, since sites reuse ranges, so `DockerHostInferred` marks
+that placement and the host's own agent goes first.
+A location in a guest also carries `GuestAgentID`, an agent that can take the
+command directly: a Docker host's own agent, or an agent folded into the guest by
+machine identity or a manual link. Routing uses it while the guest's node has no
+connected agent, and before the node for an inferred placement. A name that places
+a Docker host in a guest cannot make an agent folded into that guest its own, a
+reference that is only a hostname does not set it, and neither does an automatic
+guest link, because that link can come from a hostname. Clones sharing a machine ID merge into
+one resource before this runs, so it cannot tell them apart, as no direct route can.
+`TestCommandsReachAnAgentInsideAGuestOnlyByIdentity`,
+`TestDockerHostProbedThroughAGuestFollowsItsIDNotItsName` and
+`TestResolveResource_DockerHostNamedLikeAGuest` pin this.
 That same contract applies to the frontend workload state boundary:
 `frontend-modern/src/hooks/useWorkloads.ts`,
 `frontend-modern/src/utils/workloads.ts`,
