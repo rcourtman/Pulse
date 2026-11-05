@@ -3902,6 +3902,13 @@ downstream surfaces can warn, and it must clear on its own once only one
 machine keeps reporting for the window. Monitoring must not auto-split the
 collapsed identity: the machine ID is the identity key, and the remedy
 (regenerating the clone's machine-id) belongs to the operator.
+A report from the Proxmox LXC probe has no token or machine ID, and its hostname
+only says what the guest calls itself, so hostname must never identify it: two
+guests sharing a name would alternately overwrite one row (#2681). Its
+`proxmox-lxc-docker:` agent ID names the guest and alone finds its row, through a
+guest rename as well. A live migration keeps the row and any removal block,
+because a connection and VMID identify one guest whichever node the ID carries.
+No other report may fold into a probed guest's row by hostname.
 Host-agent identity collapse follows the same doctrine. Host report ingest
 keys agent identity on the machine-derived agent ID, so template deployments
 that still share `/etc/machine-id` fold two physical machines into one
