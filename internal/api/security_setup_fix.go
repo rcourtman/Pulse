@@ -951,8 +951,13 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 		return
 	}
 
-	// Check if API token auth is enabled
-	if !r.config.HasAPITokens() {
+	// Validation normalizes metadata and records usage, so inventory presence
+	// and validation share the exclusive writer. Never hold it while replying.
+	config.Mu.Lock()
+	tokensConfigured := r.config.HasAPITokens()
+	_, isValid := r.config.ValidateAPIToken(validateRequest.Token)
+	config.Mu.Unlock()
+	if !tokensConfigured {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"valid":   false,
@@ -960,11 +965,6 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 		})
 		return
 	}
-
-	// Validate the token (compare hash)
-	config.Mu.RLock()
-	_, isValid := r.config.ValidateAPIToken(validateRequest.Token)
-	config.Mu.RUnlock()
 
 	// Log validation attempt without logging the token itself
 	if isValid {
