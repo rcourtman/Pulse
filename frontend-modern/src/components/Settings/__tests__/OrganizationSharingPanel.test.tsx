@@ -5,7 +5,6 @@ import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolic
 import type { Resource } from '@/types/resource';
 import { useOrganizationSharingPanelState } from '../useOrganizationSharingPanelState';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
-import organizationSharingStateSource from '../useOrganizationSharingPanelState.ts?raw';
 
 let mockResources: Resource[] = [];
 let readResources = () => mockResources;
@@ -417,10 +416,60 @@ describe('OrganizationSharingPanel', () => {
     });
   });
 
-  it('normalizes org scope through the shared helper', () => {
-    expect(organizationSharingStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationSharingStateSource).not.toContain("getOrgID() || 'default'");
-  });
+  it.each([
+    { raw: undefined, scope: 'default' },
+    { raw: null, scope: 'default' },
+    { raw: '', scope: 'default' },
+    { raw: ' \t ', scope: 'default' },
+    { raw: 'default', scope: 'default' },
+    { raw: ' org-a \t', scope: 'org-a' },
+    { raw: 'org-a', scope: 'org-a' },
+  ])(
+    'binds sharing reads and a new request to normalized scope $scope from "$raw"',
+    async ({ raw, scope }) => {
+      getOrgIDMock.mockReturnValue(raw);
+      const selectedOrg = { ...baseOrg, id: scope };
+      orgGetMock.mockResolvedValue(selectedOrg);
+      listOrgsMock.mockResolvedValue([selectedOrg, targetOrg]);
+      renderPanel();
+
+      const target = await screen.findByRole('combobox', { name: 'Target Organization' });
+      expect(Array.from((target as HTMLSelectElement).options, (option) => option.value)).toEqual([
+        '',
+        targetOrg.id,
+      ]);
+      const binding = {
+        expectedOrgID: scope,
+        retry: false,
+        signal: expect.any(AbortSignal),
+      };
+      for (const read of [orgGetMock, listMembersMock, listSharesMock, listIncomingSharesMock]) {
+        expect(read).toHaveBeenCalledExactlyOnceWith(scope, binding);
+      }
+      expect(listOrgsMock).toHaveBeenCalledExactlyOnceWith(binding);
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Quick Pick Resource' }), {
+        target: { value: 'vm::vm-100' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Create Share' }));
+      await waitFor(() =>
+        expect(createShareMock).toHaveBeenCalledExactlyOnceWith(
+          scope,
+          {
+            targetOrgId: targetOrg.id,
+            resourceType: 'vm',
+            resourceId: 'vm-100',
+            resourceName: 'Alpha VM',
+            accessRole: 'viewer',
+          },
+          binding,
+        ),
+      );
+      await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
+      await screen.findByRole('combobox', { name: 'Target Organization' });
+      expect(loggerErrorMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('selected sharing snapshot', () => {
