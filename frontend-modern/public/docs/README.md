@@ -32,6 +32,10 @@ them locally and keep credentials and private details out.
   differences between supported deployment paths.
 - [Troubleshooting](TROUBLESHOOTING.md) and [FAQ](FAQ.md) — common failures,
   diagnostics, and operator questions.
+  Go straight to [Saved settings access](TROUBLESHOOTING.md#signed-in-but-saved-infrastructure-settings-are-unavailable),
+  [Backup and guest safety](VM_DISK_MONITORING.md#backup-safety),
+  [Missing TrueNAS readings](TRUENAS.md#stale-truenas-data), or
+  [Missing alert notifications](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
 
 Localized getting started guides: [Deutsch](i18n/de/README.md) ·
 [Español](i18n/es/README.md) · [Français](i18n/fr/README.md)
