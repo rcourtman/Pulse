@@ -159,6 +159,38 @@ class AdminDocsTest(unittest.TestCase):
             with self.subTest(boundary=boundary):
                 self.assertIn(boundary, readable)
 
+    def test_rbac_unconfirmed_change_guidance_uses_existing_read_controls(self):
+        guide = (DOCS / "RBAC.md").read_text()
+        section = guide.split("### A role or user change could not be confirmed\n", 1)[1].split("\n---", 1)[0]
+        readable = " ".join(section.replace("**", "").split())
+        frontend = ROOT / "frontend-modern/src/components/Settings"
+        for label, panel, reader in (
+            ("Check saved roles", "RolesPanel.tsx", "state.loadRoles()"),
+            ("Check saved access", "UserAssignmentsPanel.tsx", "state.loadData()"),
+        ):
+            with self.subTest(label=label):
+                self.assertIn(label, readable)
+                source = (frontend / panel).read_text()
+                self.assertIn(f"'{label}'", source)
+                self.assertIn(f"actionOnClick={{() => void {reader}}}", source)
+        for boundary in (
+            "after Pulse has saved a role or removed access",
+            "Do not repeat the Save or Delete",
+            "working administrator session open",
+            "identity and complete role list",
+            "do not repeat the change",
+            "access remains unknown, not empty or unchanged",
+            "Do not grant broader roles, widen a token or disable authentication",
+            "not that the intended user's access works",
+            "#automatic-role-assignment-via-oidc",
+            "does not disable the upstream identity-provider account",
+            "tokens, cookies and full responses private",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, readable)
+        self.assertIn("#a-role-or-user-change-could-not-be-confirmed", guide)
+        self.assertNotIn("```", section, "recovery must not introduce a mutation recipe")
+
     def test_all_recipes_send_exact_methods_paths_and_bodies_with_each_header(self):
         with recording_server() as (port, requests):
             for name, operations in EXPECTED.items():
