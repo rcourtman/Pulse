@@ -149,10 +149,10 @@ describe('ownership transfer through the real organization client', () => {
         headers: { 'X-Pulse-Org-ID': 'estate/east', 'X-CSRF-Token': 'synthetic-csrf' },
       });
       expect(init.headers['X-API-Token']).toBeUndefined();
-      await waitFor(() =>
-        expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toBeDisabled(),
-      );
-      expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toHaveValue('owner');
+      await waitFor(() => {
+        expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toHaveValue('owner');
+        expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toBeDisabled();
+      });
       expect(screen.getByRole('combobox', { name: 'Role for owner-a' })).toHaveValue('admin');
       expect(
         within(screen.getByRole('combobox', { name: 'Invite role' })).queryByRole('option', {
