@@ -442,6 +442,10 @@ func (f *pbsNamespacePollFixture) wait(t *testing.T) {
 
 func (f *pbsNamespacePollFixture) poll(t *testing.T, instance string) {
 	t.Helper()
+	// Every fixture poll stands for one whose backup cycles have elapsed.
+	f.m.mu.Lock()
+	delete(f.m.lastPBSBackupPoll, instance)
+	f.m.mu.Unlock()
 	f.m.pollPBSInstance(context.Background(), instance, f.client)
 	f.wait(t)
 }

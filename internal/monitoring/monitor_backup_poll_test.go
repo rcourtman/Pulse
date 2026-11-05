@@ -109,99 +109,63 @@ func TestShouldRunBackupPoll(t *testing.T) {
 			wantReturnLast: false,
 		},
 		{
-			name: "cycle-based: pollCounter=1 returns true",
+			name: "cycle-based: first poll runs",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:   true,
-					BackupPollingCycles:   10,
-					BackupPollingInterval: 0,
+					EnableBackupPolling: true,
+					BackupPollingCycles: 10,
+					PVEPollingInterval:  10 * time.Second,
 				},
-				pollCounter: 1,
 			},
-			last:           last,
+			last:           time.Time{},
 			now:            now,
 			wantRun:        true,
 			wantReasonSub:  "",
 			wantReturnLast: false,
 		},
 		{
-			name: "cycle-based: pollCounter divisible by cycles returns true",
+			name: "cycle-based: runs once the cycles have elapsed",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:   true,
-					BackupPollingCycles:   5,
-					BackupPollingInterval: 0,
+					EnableBackupPolling: true,
+					BackupPollingCycles: 5,
+					PVEPollingInterval:  10 * time.Second,
 				},
-				pollCounter: 15, // 15 % 5 == 0
 			},
-			last:           last,
+			last:           now.Add(-50 * time.Second),
 			now:            now,
 			wantRun:        true,
 			wantReasonSub:  "",
 			wantReturnLast: false,
 		},
 		{
-			name: "cycle-based: pollCounter not divisible returns false",
+			name: "cycle-based: waits until the cycles have elapsed",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:   true,
-					BackupPollingCycles:   5,
-					BackupPollingInterval: 0,
+					EnableBackupPolling: true,
+					BackupPollingCycles: 5,
+					PVEPollingInterval:  10 * time.Second,
 				},
-				pollCounter: 7, // 7 % 5 == 2, remaining = 3
 			},
-			last:           last,
+			last:           now.Add(-49 * time.Second),
 			now:            now,
 			wantRun:        false,
-			wantReasonSub:  "next run in 3 polling cycles",
+			wantReasonSub:  "next run scheduled for",
 			wantReturnLast: true,
 		},
 		{
-			name: "default cycles (10) when BackupPollingCycles is 0",
+			name: "cycle-based: zero cycles defaults to 10",
 			monitor: &Monitor{
 				config: &config.Config{
-					EnableBackupPolling:   true,
-					BackupPollingCycles:   0, // should default to 10
-					BackupPollingInterval: 0,
+					EnableBackupPolling: true,
+					BackupPollingCycles: 0,
+					PVEPollingInterval:  10 * time.Second,
 				},
-				pollCounter: 10, // 10 % 10 == 0
 			},
-			last:           last,
-			now:            now,
-			wantRun:        true,
-			wantReasonSub:  "",
-			wantReturnLast: false,
-		},
-		{
-			name: "default cycles (10) when BackupPollingCycles is negative",
-			monitor: &Monitor{
-				config: &config.Config{
-					EnableBackupPolling:   true,
-					BackupPollingCycles:   -5, // should default to 10
-					BackupPollingInterval: 0,
-				},
-				pollCounter: 20, // 20 % 10 == 0
-			},
-			last:           last,
-			now:            now,
-			wantRun:        true,
-			wantReasonSub:  "",
-			wantReturnLast: false,
-		},
-		{
-			name: "default cycles (10) not divisible returns false with correct remaining",
-			monitor: &Monitor{
-				config: &config.Config{
-					EnableBackupPolling:   true,
-					BackupPollingCycles:   0, // defaults to 10
-					BackupPollingInterval: 0,
-				},
-				pollCounter: 3, // 3 % 10 == 3, remaining = 7
-			},
-			last:           last,
+			last:           now.Add(-99 * time.Second),
 			now:            now,
 			wantRun:        false,
-			wantReasonSub:  "next run in 7 polling cycles",
+			wantReasonSub:  "next run scheduled for",
 			wantReturnLast: true,
 		},
 	}
@@ -232,5 +196,36 @@ func TestShouldRunBackupPoll(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A connection polls on its own schedule rather than on every cycle of the
+// shared ticker. PBS on a real install polled every 60 seconds against a
+// 10-second ticker, so a shared cycle count reached a multiple of 10 on one of
+// its polls only once in over 30 minutes (#2681).
+func TestBackupPollCadenceFollowsElapsedCyclesOnAnAdaptiveSchedule(t *testing.T) {
+	monitor := &Monitor{config: &config.Config{
+		EnableBackupPolling: true,
+		BackupPollingCycles: 10,
+		PVEPollingInterval:  10 * time.Second,
+	}}
+	start := time.Date(2026, 11, 5, 16, 0, 0, 0, time.UTC)
+	var last time.Time
+	var runs []time.Duration
+	for elapsed := time.Duration(0); elapsed <= 30*time.Minute; elapsed += 61 * time.Second {
+		now := start.Add(elapsed)
+		run, _, newLast := monitor.shouldRunBackupPoll(last, now)
+		if run {
+			runs = append(runs, elapsed)
+		}
+		last = newLast
+	}
+	if len(runs) != 15 {
+		t.Fatalf("backup polls in 30 minutes = %d (%v), want 15, one per elapsed 10 cycles", len(runs), runs)
+	}
+	for i := 1; i < len(runs); i++ {
+		if gap := runs[i] - runs[i-1]; gap != 122*time.Second {
+			t.Fatalf("gap between backup polls %d and %d = %s, want 122s", i-1, i, gap)
+		}
 	}
 }
