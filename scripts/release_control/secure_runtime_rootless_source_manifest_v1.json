@@ -18,8 +18,7 @@
     "scripts/release_control/secure_runtime_rootless_source_manifest_v1.json",
     "scripts/run-secure-runtime-rootless-qualification.sh",
     "internal/agentidentity/version-pattern.txt",
-    "cmd/verify-agent-release/main.go",
-    "cmd/verify-agent-release/main_test.go"
+    "cmd/verify-agent-release/main.go"
   ],
   "recursive_roots": [
     "cmd/pulse-agent",

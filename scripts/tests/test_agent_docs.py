@@ -75,16 +75,20 @@ class AgentDocsTest(unittest.TestCase):
         self.assertNotRegex(windows, r"(?i)\biex\b|\birm\b|Invoke-Expression|http://|\$env:PULSE_TOKEN\s*=")
 
     def test_changed_unix_recipes_parse(self):
-        count = 0
+        parsed_recipes = []
         for name in NAMES:
             for block in blocks(name):
                 if any(word in block for word in ("agent-install.sh", "agent-token", "sensor-proxy-uninstall.sh")):
                     with self.subTest(name=name, command=block):
                         subprocess.run(["bash", "-n", "-c", block], check=True, capture_output=True)
-                    count += 1
-        # Include runner-only removal and both saved-state helper maintenance
-        # commands (preflight, then update), as well as setup/cleanup recipes.
-        self.assertEqual(count, 19)
+                    parsed_recipes.append(block.strip())
+        # Include runner-only removal, saved-state helper maintenance, and
+        # ARMv6 repair (preflight, then update), as well as setup/cleanup.
+        self.assertEqual(len(parsed_recipes), 21)
+        recovery = 'sudo bash "$HOME/.config/pulse/agent-install.sh" --update --state-dir /var/lib/pulse-agent'
+        self.assertIn(recovery + " --preflight-only", parsed_recipes)
+        self.assertIn(recovery, parsed_recipes)
+        self.assertLess(parsed_recipes.index(recovery + " --preflight-only"), parsed_recipes.index(recovery))
 
     def test_private_file_preparation_preserves_existing_token(self):
         command = recipe(NAMES[0], 'credential_file="$config_dir/agent-token"')

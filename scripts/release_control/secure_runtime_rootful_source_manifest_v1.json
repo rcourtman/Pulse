@@ -96,8 +96,7 @@
     "internal/agentidentity/version-pattern.txt",
     "scripts/installtests/agent_armv6_repair_test.go",
     "scripts/installtests/build_agents_test.go",
-    "cmd/verify-agent-release/main.go",
-    "cmd/verify-agent-release/main_test.go"
+    "cmd/verify-agent-release/main.go"
   ],
   "recursive_roots": [
     "cmd/pulse-agent",

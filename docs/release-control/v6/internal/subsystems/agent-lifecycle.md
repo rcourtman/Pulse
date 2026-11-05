@@ -3400,6 +3400,14 @@ instead of lifecycle-local centered icon/text shells.
 
 ### Exact executable identity and ARM target selection
 
+The standalone proof requires actual PASS events for its native target and
+production-source controls. It checks the v7 production-source boundary and the
+verifier/identity inputs across all four manifests, excluding verifier unit
+tests from production provider inputs. Copied recovery recipes retain preflight
+before update. Docker-agent target assertions run as ARMv6 on ARM1176 and
+Cortex-A7 and as ARMv7 on Cortex-A7; this is emulation. Installed-fleet and
+physical-device qualification remain in the open residual scope.
+
 Recorded linker metadata, when it contains a release marker, must corroborate
 the canonical stamp symbol. This catches mistaken build flags while preserving
 legitimate repeated stamps; it does not authenticate source or replace runtime

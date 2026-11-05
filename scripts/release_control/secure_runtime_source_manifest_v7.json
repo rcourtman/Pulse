@@ -51,8 +51,7 @@
     "scripts/validate-release.sh",
     "scripts/verify-github-release-integrity.sh",
     "internal/agentidentity/version-pattern.txt",
-    "cmd/verify-agent-release/main.go",
-    "cmd/verify-agent-release/main_test.go"
+    "cmd/verify-agent-release/main.go"
   ],
   "recursive_roots": [
     "cmd/pulse-agent",

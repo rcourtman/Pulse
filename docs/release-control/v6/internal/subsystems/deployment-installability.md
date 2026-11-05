@@ -3183,7 +3183,12 @@ checks every published agent target with `cmd/verify-agent-release/` and the
 shared identity authority before archive, checksum and release-signature assembly.
 The Windows signing producer checks the flag recipe exit status and nonempty
 output before compiling. Canonical agent builders consume the release flag recipe
-verbatim, including its stamp-assignment spelling. These gates validate artifacts without publishing them.
+verbatim, including its stamp-assignment spelling. These gates validate artifacts without publishing them. The sealed production
+inventories include the verifier's main source; its ordinary unit tests remain
+source-CI inputs and are excluded from production provider seals. The standalone
+proof checks the general v7 production-source boundary and the verifier/identity
+inputs in all four manifests, copied recovery recipe syntax and order, and the
+Docker-agent compiler target on the host and emulated ARMv6/ARMv7.
 
 `internal/agentidentity/identity.go` is the common authority for the canonical
 main package, supported GOOS/GOARCH/GOARM targets and bounded release stamp.

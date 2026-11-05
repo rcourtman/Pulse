@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Full source proof only. Requires a Linux amd64 build worker, Go, Python,
-# Git and QEMU's ARM user emulator. It never installs or publishes artifacts.
+# Git, OpenSSL, ssh-keygen and QEMU's ARM user emulator. It never installs or publishes artifacts.
 set -euo pipefail
 umask 077
 # Cross-repository Git operations must not inherit another checkout's index or
@@ -20,6 +20,9 @@ case "$(uname -s):$(uname -m)" in Linux:x86_64|Linux:amd64) ;; *) echo 'This pro
 qemu=$(command -v "$qemu") || { echo 'QEMU ARM is required; supply --qemu-arm or PULSE_TEST_QEMU_ARM.' >&2; exit 2; }
 qemu="$(cd "$(dirname "$qemu")" && pwd)/$(basename "$qemu")"
 test -x "$qemu"
+for dependency in go python3 git openssl ssh-keygen; do
+ command -v "$dependency" >/dev/null || { echo "Missing required proof tool: $dependency" >&2; exit 2; }
+done
 root=$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)
 cd "$root"
 git diff --quiet || { echo 'Stage source changes before proving the exact Git tree.' >&2; exit 2; }
@@ -71,7 +74,13 @@ fi
 export PULSE_AGENT_RELEASE_TEST_DIR="$output/canonical"
 go test -p 1 -parallel 1 ./cmd/verify-agent-release ./internal/agentidentity/... ./internal/agentupdate ./internal/updates ./cmd/pulse-agent -count=1 -timeout=15m
 go test -p 1 -parallel 1 ./internal/api -run 'Test(ProxyRejectsInvalidReleaseVersion|UnifiedAgent|DownloadUnifiedAgent|ValidateUnifiedAgent|ExpectedAgentBinaryVersion|CanonicalAgentDownload|MockModeToggleEndpoint)' -count=1 -timeout=10m
-go test -p 1 -parallel 1 ./scripts/installtests -run 'TestAgentBuildRecipe|TestReleaseLdflags|TestUniversalAgentWrapper|TestNativeLifecycleCollectors|TestAgentInstallerARMv6SavedStateRepairPreflight|TestAgentInstallerSavedStateRepairVerifiedReplacement|TestPulseAgentStateDirLifecycleIntegration' -count=1 -timeout=10m
+go test -p 1 -parallel 1 ./scripts/installtests -run 'TestSecureRuntimeSourceManifestCoversTransitiveProviders|TestAgentBuildRecipe|TestReleaseLdflags|TestUniversalAgentWrapper|TestNativeLifecycleCollectors|TestAgentInstallerARMv6SavedStateRepairPreflight|TestAgentInstallerSavedStateRepairVerifiedReplacement|TestPulseAgentStateDirLifecycleIntegration' -v -count=1 -timeout=10m | tee "$output/installer-controls.log"
+grep -q -- '--- PASS: TestSecureRuntimeSourceManifestCoversTransitiveProviders' "$output/installer-controls.log"
+grep -q -- '--- PASS: TestReleaseLdflagsVersionGrammarIsSealed' "$output/installer-controls.log"
+# These focused controls open no Docker socket or TLS listener.
+go test ./internal/dockeragent -run '^TestDetermineSelfUpdateArch' -count=1 -v | tee "$output/dockeragent-native-target.log"
+grep -q -- '--- PASS: TestDetermineSelfUpdateArch ' "$output/dockeragent-native-target.log"
+(cd scripts/tests && python3 -m unittest test_agent_docs.AgentDocsTest.test_changed_unix_recipes_parse)
 # A passing top-level event is required; opt-in test skips cannot satisfy this
 # driver even if their Go process exits successfully.
 go test ./internal/agentidentity -run '^TestCanonicalReleaseExecutables$' -v -count=1 | tee "$output/canonical-executables.log"
@@ -85,6 +94,16 @@ for cpu in arm1176 cortex-a7; do
   PULSE_TEST_QEMU_ARM="$qemu" PULSE_TEST_ARM_CPU="$cpu" PULSE_TEST_ARM_ASSETS="$output/arm" \
     "$qemu" -cpu "$cpu" "$output/arm/update-tests" -test.run '^TestARMv6ExecutableUpdateUnderEmulation$' -test.v -test.timeout=3m | tee "$output/arm-$cpu.log"
   grep -q -- '--- PASS: TestARMv6ExecutableUpdateUnderEmulation' "$output/arm-$cpu.log"
+done
+# Exercise the native assertion's GOARM branch, not only amd64 host facts.
+for arm_level in 6 7; do
+ CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM="$arm_level" go test -c -o "$output/arm/dockeragent-tests-armv$arm_level" ./internal/dockeragent
+ cpus=(cortex-a7)
+ if [[ "$arm_level" == 6 ]]; then cpus=(arm1176 cortex-a7); fi
+ for cpu in "${cpus[@]}"; do
+  "$qemu" -cpu "$cpu" "$output/arm/dockeragent-tests-armv$arm_level" -test.run '^TestDetermineSelfUpdateArch$' -test.v -test.timeout=2m | tee "$output/dockeragent-armv$arm_level-$cpu.log"
+  grep -q -- '--- PASS: TestDetermineSelfUpdateArch ' "$output/dockeragent-armv$arm_level-$cpu.log"
+ done
 done
 python3 scripts/release_control/secure_runtime_attestation_v6_test.py
 python3 scripts/release_control/secure_runtime_attestation_v7_test.py

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -118,19 +119,24 @@ func TestReleaseLdflagsVersionGrammarIsSealed(t *testing.T) {
 			t.Fatal(err)
 		}
 		var manifest struct {
-			ExactPaths []string `json:"exact_paths"`
+			ExactPaths      []string `json:"exact_paths"`
+			RecursiveRoots  []string `json:"recursive_roots"`
+			IncludeSuffixes []string `json:"include_suffixes"`
+			ExcludeSuffixes []string `json:"exclude_suffixes"`
 		}
 		if err := json.Unmarshal(data, &manifest); err != nil {
 			t.Fatal(err)
 		}
-		found := false
-		for _, path := range manifest.ExactPaths {
-			if path == "internal/agentidentity/version-pattern.txt" {
-				found = true
+		for _, required := range []string{"internal/agentidentity/version-pattern.txt", "cmd/verify-agent-release/main.go"} {
+			if !slices.Contains(manifest.ExactPaths, required) {
+				t.Fatalf("%s omits required identity input %s", name, required)
 			}
 		}
-		if !found {
-			t.Fatalf("%s does not seal the shared embedded version grammar", name)
+		if !slices.Contains(manifest.RecursiveRoots, "internal/agentidentity") || !slices.Contains(manifest.IncludeSuffixes, ".go") {
+			t.Fatalf("%s does not seal the identity Go sources", name)
+		}
+		if slices.Contains(manifest.ExactPaths, "cmd/verify-agent-release/main_test.go") || !slices.Contains(manifest.ExcludeSuffixes, "_test.go") {
+			t.Fatalf("%s includes verifier unit tests in production provider sources", name)
 		}
 	}
 }

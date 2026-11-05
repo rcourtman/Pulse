@@ -13,6 +13,8 @@ import (
 	"math/big"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -1302,24 +1304,36 @@ func TestRandomDurationRandError(t *testing.T) {
 }
 
 func TestDetermineSelfUpdateArch(t *testing.T) {
-	// This test validates the function returns a valid result
-	// The actual result depends on the runtime environment
-	got := determineSelfUpdateArch()
-
-	// Should be one of the known values or empty (if architecture unknown)
-	validArches := map[string]bool{
-		"":            true,
-		"linux-amd64": true,
-		"linux-arm64": true,
-		"linux-armv7": true,
+	// This native control checks compiler facts independently of the shared
+	// authority. The package's injected-target tests cover refusal/failures.
+	expected := runtime.GOOS + "-" + runtime.GOARCH
+	if runtime.GOARCH == "arm" {
+		info, ok := debug.ReadBuildInfo()
+		if !ok {
+			t.Fatal("missing native compiler metadata")
+		}
+		level := ""
+		for _, setting := range info.Settings {
+			if setting.Key == "GOARM" {
+				level = strings.SplitN(setting.Value, ",", 2)[0]
+			}
+		}
+		if level == "" {
+			t.Fatal("missing native GOARM compiler setting")
+		}
+		expected = runtime.GOOS + "-armv" + level
 	}
-
-	if !validArches[got] {
-		t.Errorf("determineSelfUpdateArch() = %q, want one of %v", got, validArches)
+	published := map[string]bool{
+		"linux-amd64": true, "linux-arm64": true, "linux-armv6": true, "linux-armv7": true, "linux-386": true,
+		"windows-amd64": true, "windows-arm64": true, "windows-386": true,
+		"darwin-amd64": true, "darwin-arm64": true, "freebsd-amd64": true, "freebsd-arm64": true,
 	}
-
-	// On most test environments, we should get a non-empty result
-	// But we can't assert this as it depends on the machine
+	if !published[expected] {
+		expected = ""
+	}
+	if got := determineSelfUpdateArch(); got != expected {
+		t.Fatalf("determineSelfUpdateArch() = %q, expected native compiler target %q", got, expected)
+	}
 }
 
 func TestDetectHostRemovedError(t *testing.T) {
