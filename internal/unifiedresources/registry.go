@@ -7073,6 +7073,12 @@ func (rr *ResourceRegistry) rebuildViews() {
 	for _, r := range rr.resources {
 		viewResource := cloneMaterializedResourcePtr(r)
 		viewResource.MetricsTarget = rr.metricsTargetFromSourceTargets(r, sourceTargetsIndex[r.ID])
+		// Linking an agent into a guest preserves its runtime facet. The guest
+		// keeps its semantic type, but is still the host of that runtime.
+		if r.Docker != nil && (r.Type == ResourceTypeAgent || r.Type == ResourceTypeVM || r.Type == ResourceTypeSystemContainer) {
+			v := NewDockerHostView(viewResource)
+			rr.cachedDocker = append(rr.cachedDocker, &v)
+		}
 		switch r.Type {
 		case ResourceTypeVM:
 			v := NewVMView(viewResource)
@@ -7099,10 +7105,6 @@ func (rr *ResourceRegistry) rebuildViews() {
 			if r.Agent != nil || r.VMware != nil {
 				v := NewHostView(viewResource)
 				rr.cachedHosts = append(rr.cachedHosts, &v)
-			}
-			if r.Docker != nil {
-				v := NewDockerHostView(viewResource)
-				rr.cachedDocker = append(rr.cachedDocker, &v)
 			}
 		case ResourceTypeStorage:
 			v := NewStoragePoolView(viewResource)

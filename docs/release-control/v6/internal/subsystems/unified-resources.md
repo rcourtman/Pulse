@@ -9803,3 +9803,22 @@ literal date evidence and the browser-reproduced focus repair. The 15% threshold
 all other per-chunk baselines, total JS/CSS and preload/SRI checks stay unchanged.
 This is a narrowly declared intentional UI/accessibility cost, not suppression
 of the retained failed budget runs or permission to omit browser verification.
+
+### A guest-linked agent keeps its Docker runtime read view
+
+An explicit agent/guest link preserves the guest's VM or system-container type
+and canonical ID. When that row carries the reporting machine's Docker facet,
+`DockerHosts()` still exposes it as a runtime host, using its original Docker
+source and agent IDs. Its application containers keep their own IDs and point
+to the linked guest. A same-named guest on another connection supplies neither
+that facet nor its runtime inventory. Unlinking returns the runtime view to its
+original machine row; it does not remove or re-enrol the reporting machine.
+This changes no link precedence, metric authority, action permission or source
+selection, and does not synthesize a Docker host from a guest without a facet.
+
+Normal-suite `docker_guest_views_test.go` exercises VM and LXC links in both
+directions, repeated snapshot and API-seed rebuilds, namesake additions and
+unlinking. `monitor_docker_guest_link_test.go` preserves the accepted runtime
+identity and last complete inventory through incomplete and later complete
+reports while linked. These synthetic controls are not a reproduction or
+recovery of an original estate's unexplained disappearing inventory.
