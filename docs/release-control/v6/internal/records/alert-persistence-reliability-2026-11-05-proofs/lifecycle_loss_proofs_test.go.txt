@@ -1,0 +1,171 @@
+package alerts
+
+// SCRATCH PROOF (audit lab clone). Real alert producers on the production
+// durable store (WithDurableAlertStore), with a real SQLite fault injected on
+// the store's writer connection through the scratch overlay.
+
+import (
+	"os"
+	"path/filepath"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+)
+
+func auditLifecycleManager(t *testing.T, dataDir string, delivered *atomic.Int64) *Manager {
+	t.Helper()
+	m := NewManagerWithDataDir(dataDir, WithDurableAlertStore())
+	cfg := m.GetConfig()
+	cfg.Enabled, cfg.ActivationState = true, ActivationActive
+	m.UpdateConfig(cfg)
+	m.SetAlertCallback(func(*Alert) { delivered.Add(1) })
+	return m
+}
+
+func auditEventTypes(t *testing.T, m *Manager, alertID string) ([]string, error) {
+	t.Helper()
+	store := m.eventLogStore()
+	events, err := store.Query(eventlog.Filter{AlertID: alertID, Limit: 100}) // read without the Flush barrier
+	if err != nil {
+		return nil, err
+	}
+	types := make([]string, 0, len(events))
+	for i := len(events) - 1; i >= 0; i-- {
+		types = append(types, events[i].Type)
+	}
+	return types, nil
+}
+
+func auditHistoryRows(m *Manager, alertID string) int {
+	rows := 0
+	for _, entry := range m.GetAlertHistory(0) {
+		if entry.ID == alertID {
+			rows++
+		}
+	}
+	return rows
+}
+
+func auditJSONHistoryFiles(dataDir string) []string {
+	matches, _ := filepath.Glob(filepath.Join(dataDir, "alerts", "alert-history*"))
+	for i := range matches {
+		matches[i] = filepath.Base(matches[i])
+	}
+	return matches
+}
+
+func TestAuditP5LostLifecycleFactIsDegradedInProcessButForgottenOnRestart(t *testing.T) {
+	dataDir := t.TempDir()
+	var delivered atomic.Int64
+	m := auditLifecycleManager(t, dataDir, &delivered)
+	store := m.eventLogStore()
+	if store == nil {
+		t.Fatal("durable store not enabled")
+	}
+	alertID := SystemAlertID("audit-flush")
+	t.Logf("boot 1: eventHistoryAuthoritative=%v activeStateAuthoritative=%v jsonHistory=%v",
+		m.eventHistoryAuthoritative.Load(), m.activeStateAuthoritative.Load(), auditJSONHistoryFiles(dataDir))
+
+	// Real producer under a real write fault: the fired lifecycle event goes
+	// through AppendDurable, its notification decision through Append.
+	if err := store.AuditSetWriterReadOnly(true); err != nil {
+		t.Fatal(err)
+	}
+	if !m.RaiseSystemAlert(SystemAlertInput{Type: "audit-flush", Level: AlertLevelCritical, Message: "synthetic"}) {
+		t.Fatal("system alert not raised")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, _, failed, _ := store.AuditCounters()
+		if failed >= 2 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := store.AuditSetWriterReadOnly(false); err != nil {
+		t.Fatal(err)
+	}
+	a, w, f, d := store.AuditCounters()
+	_, markerErr := os.Stat(filepath.Join(dataDir, "alerts", activeStateDegradedMarker))
+	t.Logf("fault: appended=%d written=%d failed=%d dropped=%d delivered=%d", a, w, f, d, delivered.Load())
+	t.Logf("in-process degradation: eventHistoryAuthoritative=%v activeStateAuthoritative=%v degradedMarker=%v",
+		m.eventHistoryAuthoritative.Load(), m.activeStateAuthoritative.Load(), markerErr == nil)
+	snap := m.AlertQualityTelemetrySnapshot(time.Now())
+	t.Logf("telemetry: EventHistoryHealthyTenants=%d ActiveStateDegradedTenants=%d", snap.EventHistoryHealthyTenants, snap.ActiveStateDegradedTenants)
+
+	// The fault clears; the next lifecycle transition commits.
+	if !m.ClearSystemAlert("audit-flush") {
+		t.Fatal("system alert not cleared")
+	}
+	types, _ := auditEventTypes(t, m, alertID)
+	_, apiErr := m.AlertEvents(eventlog.Filter{AlertID: alertID})
+	t.Logf("after recovery: stored event types=%v; AlertEvents(API) error=%v; history rows=%d (JSON fallback)", types, apiErr, auditHistoryRows(m, alertID))
+	m.Stop()
+	t.Logf("after stop: jsonHistory=%v", auditJSONHistoryFiles(dataDir))
+
+	// Restart on the same data directory.
+	m2 := auditLifecycleManager(t, dataDir, &delivered)
+	types2, _ := auditEventTypes(t, m2, alertID)
+	_, apiErr2 := m2.AlertEvents(eventlog.Filter{AlertID: alertID})
+	snap2 := m2.AlertQualityTelemetrySnapshot(time.Now())
+	meta, _ := m2.eventLogStore().AuditMetaRows()
+	_, markerErr2 := os.Stat(filepath.Join(dataDir, "alerts", activeStateDegradedMarker))
+	t.Logf("boot 2: eventHistoryAuthoritative=%v stored event types=%v AlertEvents error=%v history rows=%d",
+		m2.eventHistoryAuthoritative.Load(), types2, apiErr2, auditHistoryRows(m2, alertID))
+	t.Logf("boot 2: telemetry EventHistoryHealthyTenants=%d; degradedMarker=%v; jsonHistory=%v; meta=%v",
+		snap2.EventHistoryHealthyTenants, markerErr2 == nil, auditJSONHistoryFiles(dataDir), meta)
+	m2.Stop()
+
+	m3 := auditLifecycleManager(t, dataDir, &delivered)
+	defer m3.Stop()
+	types3, _ := auditEventTypes(t, m3, alertID)
+	_, apiErr3 := m3.AlertEvents(eventlog.Filter{AlertID: alertID})
+	t.Logf("boot 3: eventHistoryAuthoritative=%v stored event types=%v AlertEvents error=%v history rows=%d jsonHistory=%v",
+		m3.eventHistoryAuthoritative.Load(), types3, apiErr3, auditHistoryRows(m3, alertID), auditJSONHistoryFiles(dataDir))
+}
+
+// P6: the JSON history backstop exists only in a process whose history manager
+// was not retired by its own startup import. In the process that performs the
+// import (here boot 2), a whole occurrence lost to a write fault leaves no
+// durable trace, and every later boot reports a healthy, complete log.
+func TestAuditP6WholeOccurrenceLostInRetiredProcessIsInvisibleAfterRestart(t *testing.T) {
+	dataDir := t.TempDir()
+	var delivered atomic.Int64
+
+	// Boot 1 writes the JSON history file on stop (steady state of a fresh
+	// install); boot 2 imports and retires it.
+	m1 := auditLifecycleManager(t, dataDir, &delivered)
+	m1.RaiseSystemAlert(SystemAlertInput{Type: "audit-seed", Level: AlertLevelWarning, Message: "seed"})
+	m1.ClearSystemAlert("audit-seed")
+	m1.Stop()
+	m2 := auditLifecycleManager(t, dataDir, &delivered)
+	t.Logf("boot 2 (import process): jsonHistory=%v historyRetired=%v", auditJSONHistoryFiles(dataDir), m2.historyManager.storageRetired)
+
+	store := m2.eventLogStore()
+	alertID := SystemAlertID("audit-lost")
+	if err := store.AuditSetWriterReadOnly(true); err != nil {
+		t.Fatal(err)
+	}
+	m2.RaiseSystemAlert(SystemAlertInput{Type: "audit-lost", Level: AlertLevelCritical, Message: "lost occurrence"})
+	m2.ClearSystemAlert("audit-lost")
+	if err := store.AuditSetWriterReadOnly(false); err != nil {
+		t.Fatal(err)
+	}
+	a, w, f, d := store.AuditCounters()
+	t.Logf("boot 2 fault: appended=%d written=%d failed=%d dropped=%d delivered=%d; history rows in-process=%d",
+		a, w, f, d, delivered.Load(), auditHistoryRows(m2, alertID))
+	m2.Stop()
+	t.Logf("after boot 2 stop: jsonHistory=%v", auditJSONHistoryFiles(dataDir))
+
+	for boot := 3; boot <= 4; boot++ {
+		m := auditLifecycleManager(t, dataDir, &delivered)
+		types, _ := auditEventTypes(t, m, alertID)
+		_, apiErr := m.AlertEvents(eventlog.Filter{AlertID: alertID})
+		snap := m.AlertQualityTelemetrySnapshot(time.Now())
+		t.Logf("boot %d: eventHistoryAuthoritative=%v stored types for lost occurrence=%v history rows=%d AlertEvents error=%v EventHistoryHealthyTenants=%d jsonHistory=%v",
+			boot, m.eventHistoryAuthoritative.Load(), types, auditHistoryRows(m, alertID), apiErr, snap.EventHistoryHealthyTenants, auditJSONHistoryFiles(dataDir))
+		m.Stop()
+	}
+}

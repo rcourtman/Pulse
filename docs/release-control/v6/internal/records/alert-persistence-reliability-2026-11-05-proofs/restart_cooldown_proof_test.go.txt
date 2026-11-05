@@ -1,0 +1,312 @@
+package monitoring
+
+// Scratch proof (overlay only; not a runtime change).
+//
+// Finding 1: a delivered, unacknowledged critical firing is delivered again
+// for the SAME occurrence after a graceful manager restart, inside the
+// configured cooldown, although its per-destination firing receipt is
+// durable. Desired invariant (asserted here, so these tests FAIL on current
+// source): a restart inside cooldown repeats nothing for an occurrence whose
+// firing every target destination already received; the occurrence's later
+// recovery and a genuinely new occurrence still deliver.
+//
+// TestRestartWithinCooldownRepeatsDeliveredCriticalFiring: in-process
+// graceful reopen (Stop both managers, construct new managers on the same
+// data directories).
+// TestNativeSubprocessRestartRepeatsDeliveredCriticalFiring: the same
+// scenario across two separate OS processes (this test binary re-executed),
+// each doing a graceful Stop before exit; the parent owns the loopback HTTP
+// receiver. Neither is a signal/crash, installed-service or provider proof.
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+
+	_ "modernc.org/sqlite"
+)
+
+const (
+	proofCooldownMinutes = 30
+	proofRestoredWait    = 15 * time.Second // restored criticals re-dispatch after 10s
+)
+
+type proofReceipt struct {
+	Event      string         `json:"event"`
+	Identifier string         `json:"alertIdentifier"`
+	Alerts     []alerts.Alert `json:"alerts"`
+}
+
+type proofReceiver struct {
+	server *httptest.Server
+	mu     sync.Mutex
+	got    []proofReceipt
+}
+
+func newProofReceiver(t *testing.T) *proofReceiver {
+	r := &proofReceiver{}
+	r.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer req.Body.Close()
+		var got proofReceipt
+		if err := json.NewDecoder(req.Body).Decode(&got); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r.mu.Lock()
+		r.got = append(r.got, got)
+		r.mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(r.server.Close)
+	return r
+}
+
+func (r *proofReceiver) snapshot() []proofReceipt {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]proofReceipt(nil), r.got...)
+}
+
+func (r *proofReceiver) count(event, alertID string, start time.Time) int {
+	n := 0
+	for _, got := range r.snapshot() {
+		if got.Event != event {
+			continue
+		}
+		for _, a := range got.Alerts {
+			if a.ID == alertID && a.StartTime.Equal(start) {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func (r *proofReceiver) waitFor(t *testing.T, event, alertID string, start time.Time, want int, within time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for time.Now().Before(deadline) {
+		if r.count(event, alertID, start) >= want {
+			return true
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return r.count(event, alertID, start) >= want
+}
+
+func startProofMonitor(t *testing.T, alertDir, notificationDir, receiverURL string) *Monitor {
+	t.Helper()
+	a := alerts.NewManagerWithDataDir(alertDir)
+	n := notifications.NewNotificationManagerWithDataDir("http://pulse.example", notificationDir)
+	if err := n.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatal(err)
+	}
+	n.AddWebhook(notifications.WebhookConfig{ID: "restart-proof", URL: receiverURL, Enabled: true, Service: "generic"})
+	n.SetNotifyOnResolve(true)
+	n.SetGroupingWindow(0)
+	n.SetCooldown(proofCooldownMinutes)
+	a.UpdateConfig(alerts.AlertConfig{Enabled: true, ActivationState: alerts.ActivationActive,
+		TimeThresholds: map[string]int{"storage": 0},
+		StorageDefault: alerts.HysteresisThreshold{Trigger: 80, Clear: 70}})
+	m := &Monitor{alertManager: a, notificationMgr: n}
+	a.SetAlertCallback(m.handleAlertFired)
+	a.SetResolvedCallback(m.handleAlertResolved)
+	return m
+}
+
+func stopProofMonitor(m *Monitor) { m.alertManager.Stop(); m.notificationMgr.Stop() }
+
+func observeProofStorage(m *Monitor, usage float64) {
+	s := models.Storage{ID: "pbs-primary-backups", Name: "backups", Instance: "pbs-primary", Type: "pbs", Status: "online",
+		Total: 1000, Used: int64(usage * 10), Free: 1000 - int64(usage*10), Usage: usage}
+	for range 5 {
+		m.alertManager.CheckStorage(s)
+	}
+}
+
+func drainProofQueue(t *testing.T, m *Monitor) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		stats, err := m.notificationMgr.GetQueueStats()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stats["pending"]+stats["sending"] == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("queue did not drain: %v", stats)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// durableFiringReceipts reads the persisted receipt rows for one occurrence
+// through an independent read-only SQLite handle.
+func durableFiringReceipts(t *testing.T, notificationDir, alertID string, start time.Time) int {
+	t.Helper()
+	var dbPath string
+	_ = filepath.WalkDir(notificationDir, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && d.Name() == "notification_queue.db" {
+			dbPath = path
+		}
+		return nil
+	})
+	if dbPath == "" {
+		t.Fatal("notification queue database not found")
+	}
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM notification_delivery_receipts WHERE alert_id = ? AND alert_start_nanos = ?`,
+		alertID, start.UnixNano()).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func firstCriticalFiring(t *testing.T, r *proofReceiver) alerts.Alert {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, got := range r.snapshot() {
+			if got.Event == "" && len(got.Alerts) == 1 && got.Alerts[0].Level == alerts.AlertLevelCritical {
+				return got.Alerts[0]
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("no critical firing received: %+v", r.snapshot())
+	return alerts.Alert{}
+}
+
+func TestRestartWithinCooldownRepeatsDeliveredCriticalFiring(t *testing.T) {
+	receiver := newProofReceiver(t)
+	alertDir, notificationDir := t.TempDir(), t.TempDir()
+
+	m := startProofMonitor(t, alertDir, notificationDir, receiver.server.URL)
+	observeProofStorage(m, 95) // trigger 80 -> critical at 90
+	original := firstCriticalFiring(t, receiver)
+	drainProofQueue(t, m)
+	receipts := durableFiringReceipts(t, notificationDir, original.ID, original.StartTime)
+	t.Logf("before restart: firing deliveries for occurrence = %d, durable receipts = %d",
+		receiver.count("", original.ID, original.StartTime), receipts)
+	if receipts != 1 {
+		t.Fatalf("expected one durable firing receipt before restart, got %d", receipts)
+	}
+	stopProofMonitor(m)
+	stoppedAt := time.Now()
+
+	m = startProofMonitor(t, alertDir, notificationDir, receiver.server.URL)
+	t.Cleanup(func() { stopProofMonitor(m) })
+	active := m.alertManager.GetActiveAlerts()
+	if len(active) != 1 || active[0].ID != original.ID || !active[0].StartTime.Equal(original.StartTime) || active[0].Acknowledged {
+		t.Fatalf("restart did not restore the same unacknowledged occurrence: %+v", active)
+	}
+	time.Sleep(proofRestoredWait)
+	drainProofQueue(t, m)
+	firings := receiver.count("", original.ID, original.StartTime)
+	t.Logf("after restart (%.1fs later, cooldown %dm): firing deliveries for the same occurrence = %d",
+		time.Since(stoppedAt).Seconds(), proofCooldownMinutes, firings)
+	if firings != 1 {
+		t.Errorf("FINDING: restart inside cooldown re-delivered the already-delivered firing (%d deliveries of one occurrence)", firings)
+	}
+
+	// Controls a fix must preserve: the recovery still reaches the destination
+	// that received the firing, and a genuinely new occurrence still delivers.
+	observeProofStorage(m, 10)
+	if !receiver.waitFor(t, "resolved", original.ID, original.StartTime, 1, 10*time.Second) {
+		t.Fatalf("recovery for the delivered occurrence was not delivered: %+v", receiver.snapshot())
+	}
+	drainProofQueue(t, m)
+	time.Sleep(10 * time.Millisecond) // occurrence start times must differ
+	observeProofStorage(m, 95)
+	next := m.alertManager.GetActiveAlerts()
+	if len(next) != 1 || next[0].StartTime.Equal(original.StartTime) {
+		t.Fatalf("expected a new occurrence: %+v", next)
+	}
+	if !receiver.waitFor(t, "", next[0].ID, next[0].StartTime, 1, 10*time.Second) {
+		t.Fatalf("new occurrence was not delivered: %+v", receiver.snapshot())
+	}
+}
+
+// Native subprocess form. Phases run in child processes of this test binary.
+func TestNativeSubprocessRestartRepeatsDeliveredCriticalFiring(t *testing.T) {
+	if phase := os.Getenv("PULSE_RESTART_PROOF_PHASE"); phase != "" {
+		runRestartProofPhase(t, phase)
+		return
+	}
+	receiver := newProofReceiver(t)
+	alertDir, notificationDir := t.TempDir(), t.TempDir()
+	run := func(phase string) {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestNativeSubprocessRestartRepeatsDeliveredCriticalFiring$", "-test.v", "-test.count=1")
+		cmd.Env = append(os.Environ(),
+			"PULSE_RESTART_PROOF_PHASE="+phase,
+			"PULSE_RESTART_PROOF_ALERT_DIR="+alertDir,
+			"PULSE_RESTART_PROOF_NOTIFICATION_DIR="+notificationDir,
+			"PULSE_RESTART_PROOF_RECEIVER="+receiver.server.URL,
+		)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("phase %s process failed: %v\n%s", phase, err, out)
+		}
+		t.Logf("phase %s process pid exited cleanly", phase)
+	}
+	run("first-process")
+	original := firstCriticalFiring(t, receiver)
+	t.Logf("first process: firing deliveries = %d, durable receipts = %d",
+		receiver.count("", original.ID, original.StartTime),
+		durableFiringReceipts(t, notificationDir, original.ID, original.StartTime))
+	run("second-process")
+	firings := receiver.count("", original.ID, original.StartTime)
+	t.Logf("after second process (cooldown %dm): firing deliveries for the same occurrence = %d", proofCooldownMinutes, firings)
+	if firings != 1 {
+		t.Errorf("FINDING: a new process inside cooldown re-delivered the already-delivered firing (%d deliveries of one occurrence)", firings)
+	}
+}
+
+func runRestartProofPhase(t *testing.T, phase string) {
+	alertDir := os.Getenv("PULSE_RESTART_PROOF_ALERT_DIR")
+	notificationDir := os.Getenv("PULSE_RESTART_PROOF_NOTIFICATION_DIR")
+	receiverURL := os.Getenv("PULSE_RESTART_PROOF_RECEIVER")
+	m := startProofMonitor(t, alertDir, notificationDir, receiverURL)
+	switch phase {
+	case "first-process":
+		observeProofStorage(m, 95)
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			active := m.alertManager.GetActiveAlerts()
+			if len(active) == 1 && durableFiringReceipts(t, notificationDir, active[0].ID, active[0].StartTime) == 1 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("first process did not record the firing receipt")
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	case "second-process":
+		time.Sleep(proofRestoredWait)
+	default:
+		t.Fatalf("unknown phase %q", phase)
+	}
+	drainProofQueue(t, m)
+	stopProofMonitor(m)
+	fmt.Printf("phase %s pid %d finished\n", phase, os.Getpid())
+}

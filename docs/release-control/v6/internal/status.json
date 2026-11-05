@@ -10154,6 +10154,115 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "agent-update-executable-identity-and-armv6-target",
+      "summary": "Real stripped-binary experiments show the agent download validator accepts a prerelease, a longer stable version, or an unrelated dependency version through substring matching. The normal updater can restart into the same stale binary because it does not compare the downloaded executable version with the advertised version. GOARM=6 clients request linux-armv7; QEMU arm1176 reproduces an existing self-test refusal before replacement and a repeat-download failure loop. Repair needs shared executable package, target and exact release-identity authority across build producers, server validation and all activation paths, plus explicit installer recovery for already-installed ARMv6 clients. An isolated source candidate could not be exported for independent review and was not imported or qualified. This remains a separate owned implementation and migration gap.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-11-05",
+      "lane_ids": [
+        "L1",
+        "L6",
+        "L16"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "api-contracts",
+        "deployment-installability"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-update-identity-reliability-2026-11-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentupdate/update.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/unified_agent.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_ldflags.sh",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "event-history-loss-evidence-across-restart",
+      "summary": "Real SQLite writer faults can lose accepted diagnostic events and complete lifecycle occurrences while later reopen reports healthy event history. Flush mixes handled synchronous failures with background loss, ignores buffer drops, and has no durable loss inventory. After JSON history retirement, a producer delivery callback can run for an occurrence absent from all later history. Retained isolated experiments distinguish callback admission from provider delivery and store-level append-after-close from an established production race. The alerts owner needs a durable recovery or gap account, truthful history-health reporting and explicit lifecycle retention semantics. Counter resets and later successful writes do not repair missing facts. Wire and telemetry decisions remain open.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-11-05",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "alerts",
+        "api-contracts"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/alert-persistence-reliability-2026-11-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/event_emission.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/eventlog/eventlog.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "notification-occurrence-delivery-state-continuity",
+      "summary": "Native subprocess and loopback HTTP experiments reproduce repeated firing of an already-delivered active critical occurrence after graceful restart inside cooldown. Cooldown is memory-only despite durable destination receipts. Real cleanup of a 31-day-old receipt also suppresses eventual recovery for a still-active occurrence, while a one-day control delivers it. Persisted severity and monotonic completion evidence must restore cooldown under the existing queue admission lease. Receipt retention requires explicit destination-retirement semantics because configuration rotations create historical identities. Missing lifecycle authority cannot justify age-only deletion, and pending recovery jobs retain their receipt obligations. Product policy and migration remain separate governed work.",
+      "owner": "project-owner",
+      "status": "triaged",
+      "recorded_at": "2026-11-05",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "alerts",
+        "notifications"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/alert-persistence-reliability-2026-11-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/active_persistence.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/notifications/notifications.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/notifications/queue.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
