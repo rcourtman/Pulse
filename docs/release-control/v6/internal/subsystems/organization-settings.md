@@ -15,6 +15,30 @@
 
 ## Purpose
 
+### Sharing requests require an explicitly chosen recipient
+
+A fresh Organization Sharing draft starts at **Select organization**. Neither
+directory order nor a sole peer selects a recipient on the operator's behalf.
+Choosing a discovered resource or completing manual resource fields cannot
+enable Create Share until a current destination is chosen. Direct submission
+with no destination sends nothing and reports the existing required-field error.
+The untouched initial field is not presented as an error.
+
+An explicit recipient remains selected by ID across same-reader reloads,
+directory reordering and failed-read recovery. Clearing the choice or losing
+the destination keeps it invalid until a current recipient is chosen again;
+a returning destination is not renewed consent. Organization/principal changes
+clear the recipient with the existing resource draft. Current-reader admission,
+session/CSRF binding, cancellation and disabled automatic retries are unchanged.
+
+`OrganizationSharingPanel.test.tsx` exercises zero/one/multiple peers, quick-pick
+and manual paths, untouched/cleared/removed drafts, explicit payloads and reader
+changes. Comparable desktop/narrow actual-panel browser fixtures exercise the
+state, resource discovery, OrgsAPI and HTTP client through pending-share readback.
+This is prevention of an unintended **pending request**, not a change to the
+target organization's existing acceptance requirement or server authority.
+It does not establish original-account or installed tenant recovery.
+
 ### Ownership changes require current, deliberate confirmation
 
 Both existing ownership paths (the member-role selector and Invite Member form)
