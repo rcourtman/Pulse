@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // pauseSessionDiskWrite stops the real sessions.json.tmp write, not a mock
@@ -78,6 +80,11 @@ func pauseSessionDiskWrite(t *testing.T, store *SessionStore, action func()) fun
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("session save did not reach the fixture disk write")
+	}
+	select {
+	case <-actionDone:
+		t.Error("session mutation returned before its persistence completed")
+	default:
 	}
 	return resume
 }
@@ -221,9 +228,25 @@ func TestSessionPersistenceNewerWithdrawalWinsQueuedSave(t *testing.T) {
 	}
 }
 
-func TestSessionPersistenceRealRoutesDuringDiskWrite(t *testing.T) {
-	_, cfg, server, _ := newMonitoringWebSocketRouter(t)
+// Use a real registered router with an explicit empty monitor. A nil monitor
+// would return 500 after successful authentication and cannot prove a usable
+// bootstrap. Keep the fixture timestamp stable for before/after consumers.
+func newSessionDiskRouter(t *testing.T) (*Router, *config.Config, *httptest.Server) {
+	t.Helper()
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "synthetic-session-disk-api.12345678", []string{config.ScopeWildcard}, nil))
 	cfg.AuthUser = "operator"
+	monitor, state, _ := newTestMonitor(t)
+	state.LastUpdate = time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	syncTestResourceStore(t, monitor, state)
+	router := newTestRouter(t, cfg, monitor, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	server := httptest.NewServer(router.Handler())
+	t.Cleanup(server.Close)
+	return router, cfg, server
+}
+
+func TestSessionPersistenceRealRoutesDuringDiskWrite(t *testing.T) {
+	_, _, server := newSessionDiskRouter(t)
 	store := GetSessionStore()
 	for _, raw := range []string{"slow-disk-filler", "control"} {
 		store.CreateSession(raw, time.Hour, "fixture", "127.0.0.1", "operator")
