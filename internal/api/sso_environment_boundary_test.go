@@ -262,7 +262,7 @@ func TestSSOEnvironmentBoundaryBeforeExtensionDispatch(t *testing.T) {
 		return probe
 	})
 	t.Cleanup(func() { SetSSOAdminEndpointsBinder(nil) })
-	r := NewRouter(cfg, nil, nil, nil, nil, "test")
+	r := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	r.ssoConfig = fixture.currentSSOConfig().Clone()
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
 		for _, suffix := range []string{"", "/"} {

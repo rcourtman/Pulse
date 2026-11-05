@@ -40,7 +40,7 @@ func TestSecurityTokens_RotatePreservesBindingsAndMetadata(t *testing.T) {
 	old.OrgIDs = []string{"acme", "beta"}
 
 	cfg := newTestConfigWithTokens(t, old)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	router.authorizer = &adminOnlyAuthorizer{}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/"+old.ID+"/rotate", nil)

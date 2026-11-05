@@ -31,7 +31,7 @@ func newMonitoringWebSocketRouter(t *testing.T) (*Router, *config.Config, *httpt
 	hub := pulsews.NewHub(nil)
 	go hub.Run()
 	t.Cleanup(hub.Stop)
-	router := NewRouter(cfg, nil, nil, hub, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, hub, nil, "test")
 	cleanupTestRouter(t, router)
 	server := httptest.NewServer(router.Handler())
 	t.Cleanup(server.Close)

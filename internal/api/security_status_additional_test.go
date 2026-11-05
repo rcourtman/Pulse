@@ -27,7 +27,7 @@ func TestSecurityStatusIgnoresInvalidTokenHeader(t *testing.T) {
 	rawToken := "status-valid-token-123.12345678"
 	record := newTokenRecord(t, rawToken, nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", "invalid-token")
@@ -54,7 +54,7 @@ func TestSecurityStatusIgnoresBearerTokenHeader(t *testing.T) {
 	rawToken := "status-bearer-token-123.12345678"
 	record := newTokenRecord(t, rawToken, nil, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("Authorization", "Bearer "+rawToken)
@@ -96,7 +96,7 @@ func TestSecurityStatusExposesPersistedSSOProvider(t *testing.T) {
 	if err := config.NewConfigPersistence(cfg.DataPath).SaveSSOConfig(ssoCfg); err != nil {
 		t.Fatalf("failed to persist SSO config: %v", err)
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	rec := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestSecurityStatusExposesLegacyOIDCEnvProvider(t *testing.T) {
 
 	cfg := newTestConfigWithTokens(t)
 	cfg.PublicURL = "https://pulse.example.test"
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	rec := httptest.NewRecorder()
@@ -200,7 +200,7 @@ func TestSecurityStatusExposesSSOSessionPrincipalAndDisplayName(t *testing.T) {
 	if err := config.NewConfigPersistence(cfg.DataPath).SaveSSOConfig(ssoCfg); err != nil {
 		t.Fatalf("failed to persist SSO config: %v", err)
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	sessionToken := "status-sso-display-token"
 	principal := "sso:oidc:test-oidc:stable-principal"
@@ -252,7 +252,7 @@ func TestSecurityStatusExposesSettingsCapabilitiesForScopedToken(t *testing.T) {
 	rawToken := "status-cap-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite, config.ScopeAuditRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -317,7 +317,7 @@ func TestSecurityStatusSplitsReadAndWriteSettingsCapabilities(t *testing.T) {
 	rawToken := "status-read-only-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -365,7 +365,7 @@ func TestSecurityStatusRequiresAuditReadScopeForAuditLogCapability(t *testing.T)
 	rawToken := "status-audit-split-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -406,7 +406,7 @@ func TestSecurityStatusUsesOwnerBoundTokenPrincipalForRBAC(t *testing.T) {
 		apiTokenMetadataOwnerUserID: "alice",
 	}
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -449,7 +449,7 @@ func TestSecurityStatusUsesRBACForProxyCapabilities(t *testing.T) {
 		ProxyAuthAdminRole:  "admin",
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-Proxy-Secret", "proxy-secret")
@@ -496,7 +496,7 @@ func TestSecurityStatusRestrictsSessionCapabilitiesToConfiguredAdmin(t *testing.
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "hash"
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	sessionToken := "session-capabilities-token"
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
@@ -536,7 +536,7 @@ func TestSecurityStatusIncludesDemoModeSessionCapabilities(t *testing.T) {
 	rawToken := "status-demo-capabilities-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := &config.Config{DemoMode: true, APITokens: []config.APITokenRecord{record}}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -574,7 +574,7 @@ func TestSecurityStatusIncludesAssistantAvailability(t *testing.T) {
 	rawToken := "status-assistant-capabilities-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := &config.Config{APITokens: []config.APITokenRecord{record}}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	persistence := router.aiSettingsHandler.getPersistence(context.Background())
 	if persistence == nil {

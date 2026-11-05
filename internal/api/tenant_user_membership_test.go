@@ -94,7 +94,7 @@ func TestTenantMiddlewareRejectsNonMemberSession(t *testing.T) {
 		t.Fatalf("save organization: %v", err)
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	sessionToken := "nonmember-session-token"
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "bob")
@@ -153,7 +153,7 @@ func TestTenantMiddlewareRejectsContactEmailWithoutStoredPrincipalMatch(t *testi
 		t.Fatalf("save organization: %v", err)
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	sessionToken := "contact-email-session-token"
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "owner@example.com")

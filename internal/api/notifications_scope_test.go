@@ -31,7 +31,7 @@ func TestNotificationReadEndpointsRequireSettingsReadScope(t *testing.T) {
 	rawToken := "notifications-read-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	endpoints := []string{
 		"/api/notifications/dlq",
@@ -60,7 +60,7 @@ func TestNotificationWriteEndpointsRequireSettingsWriteScope(t *testing.T) {
 	rawToken := "notifications-write-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	testCases := []struct {
 		method string

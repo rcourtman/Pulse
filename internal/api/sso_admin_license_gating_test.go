@@ -36,7 +36,7 @@ func TestSAMLAdminEndpointsAllowedWithoutPaidLicense(t *testing.T) {
 	rawToken := "sso-admin-license-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	// Test 1: POST /api/security/sso/providers with type=saml should create.
@@ -122,7 +122,7 @@ func TestOIDCAdminEndpointsAllowedWithoutProLicense(t *testing.T) {
 	rawToken := "sso-admin-oidc-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	// OIDC create should succeed with 201 Created (not 402)
@@ -159,7 +159,7 @@ func TestSAMLAdminCreateDoesNotEmitUpgradeResponse(t *testing.T) {
 	rawToken := "sso-admin-format-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	body := `{"id":"format-test","name":"format-test","type":"saml","saml":{"idpMetadataUrl":"https://idp.example.com/metadata"}}`

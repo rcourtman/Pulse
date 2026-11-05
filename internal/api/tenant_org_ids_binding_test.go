@@ -59,7 +59,7 @@ func TestTenantMiddlewareBlocksOrgIDsTokenForOtherOrg(t *testing.T) {
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 	req.Header.Set("X-Pulse-Org-ID", "org-c")

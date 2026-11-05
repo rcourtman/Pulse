@@ -23,7 +23,7 @@ func newChangePasswordRouter(t *testing.T) (*Router, *config.Config) {
 		t.Fatalf("bcrypt: %v", err)
 	}
 	cfg := &config.Config{DataPath: dir, ConfigPath: dir, AuthUser: "admin", AuthPass: string(hashed)}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 	return router, cfg
 }

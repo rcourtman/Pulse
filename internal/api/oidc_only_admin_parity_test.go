@@ -63,7 +63,7 @@ func TestSSOOnlyExplicitAdminReachesEveryAdminGuard(t *testing.T) {
 	defer auth.SetAuthorizer(prev)
 
 	cfg := adminParityConfig(t, "")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	manager := installTestRBACManager(t)
 	ssoAdmin := "sso:owner@example.com"
 	if err := manager.UpdateUserRoles(ssoAdmin, []string{auth.RoleAdmin}); err != nil {
@@ -107,7 +107,7 @@ func TestUnrelatedSSOUserStillRefusedWhenLocalAdminConfigured(t *testing.T) {
 	defer auth.SetAuthorizer(prev)
 
 	cfg := adminParityConfig(t, "admin")
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	outsider := "sso:outsider@example.com"
 
 	if sessionUserCarriesAdminPrivileges(cfg, outsider) {

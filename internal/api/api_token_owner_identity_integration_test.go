@@ -27,7 +27,7 @@ func TestOwnerBoundAPITokenInheritsBoundUserRBACPrincipal(t *testing.T) {
 	detached := newTokenRecord(t, "detached-token-123.12345678", []string{config.ScopeSettingsRead}, nil)
 
 	cfg := newTestConfigWithTokens(t, ownerBound, detached)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	server := httptest.NewServer(router.Handler())
 	t.Cleanup(server.Close)
 

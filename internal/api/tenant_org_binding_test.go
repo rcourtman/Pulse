@@ -31,7 +31,7 @@ func TestTenantMiddlewareBlocksOrgBoundTokenFromOtherOrg(t *testing.T) {
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 	req.Header.Set("X-Pulse-Org-ID", "org-b")
@@ -72,7 +72,7 @@ func TestTenantMiddlewareBlocksOrgBoundTokenFromOtherOrg_WebSocket(t *testing.T)
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	req.Header.Set("X-Pulse-Org-ID", "org-b")
@@ -110,7 +110,7 @@ func TestTenantMiddlewareBlocksOrgBoundTokenFromOtherOrg_AlertsEndpoint(t *testi
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/alerts/active", nil)
 	req.Header.Set("X-Pulse-Org-ID", "org-b")
@@ -151,7 +151,7 @@ func TestTenantMiddlewareBlocksOrgBoundTokenFromOtherOrg_AlertHistoryEndpoint(t 
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/alerts/history?limit=10", nil)
 	req.Header.Set("X-Pulse-Org-ID", "org-b")
@@ -192,7 +192,7 @@ func TestTenantMiddlewareBlocksOrgBoundTokenFromOtherOrg_ResourceDetailEndpoints
 		}
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
 		"/api/metrics-store/history?resourceType=vm&resourceId=vm-1&metric=cpu&range=1h",

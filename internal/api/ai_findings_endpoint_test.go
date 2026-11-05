@@ -410,7 +410,7 @@ func TestFindingsRouterDispatch_UnknownSubpath(t *testing.T) {
 	rawToken := "ai-findings-dispatch-test.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/findings/f-1/unknown", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -429,7 +429,7 @@ func TestFindingsRouterDispatch_RequiresRelayMobileOrAIExecuteScopeForReadEndpoi
 	rawToken := "ai-findings-scope-test.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []struct {
 		method string
@@ -469,7 +469,7 @@ func TestFindingsRouterDispatch_MutationsStillRequireAIExecuteScope(t *testing.T
 	rawToken := "ai-findings-mutation-scope-test.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	paths := []string{
 		"/api/ai/findings/f-1/reinvestigate",
@@ -494,7 +494,7 @@ func TestFindingsRouterDispatch_CommunityReinvestigateReturns402(t *testing.T) {
 	rawToken := "ai-findings-community-reinv.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/findings/f-1/reinvestigate", strings.NewReader(`{}`))
 	req.Header.Set("X-API-Token", rawToken)
@@ -510,7 +510,7 @@ func TestFindingsRouterDispatch_CommunityReapproveReturns402(t *testing.T) {
 	rawToken := "ai-findings-community-reapp.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/findings/f-1/reapprove", strings.NewReader(`{}`))
 	req.Header.Set("X-API-Token", rawToken)

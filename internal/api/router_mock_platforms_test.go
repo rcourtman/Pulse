@@ -16,7 +16,7 @@ func TestRouterMockMode_SeedsTrueNASAndVMwareSupplementalResources(t *testing.T)
 	setMockModeForTest(t, true)
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(func() {
 		router.shutdownBackgroundWorkers()
 	})
@@ -98,7 +98,7 @@ func TestRouterMockMode_RestoresPlatformFeatureFlagsAfterDisable(t *testing.T) {
 	})
 
 	cfg := &config.Config{DataPath: t.TempDir()}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(func() {
 		router.shutdownBackgroundWorkers()
 	})

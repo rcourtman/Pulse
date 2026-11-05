@@ -66,6 +66,25 @@ func TestDefaultPolicyEvaluate(t *testing.T) {
 	}
 }
 
+func TestDefaultPolicySharesCompiledPatternsOnly(t *testing.T) {
+	first := DefaultPolicy()
+	second := DefaultPolicy()
+
+	if len(first.blockedRe) == 0 || &first.blockedRe[0] != &second.blockedRe[0] {
+		t.Fatal("default policies must share one compiled pattern set")
+	}
+
+	// The exported lists stay the caller's own, and changing them neither
+	// reaches another policy nor alters what the compiled patterns decide.
+	first.Blocked[0] = "changed"
+	if second.Blocked[0] == "changed" || DefaultPolicy().Blocked[0] == "changed" {
+		t.Fatal("exported pattern lists must not be shared between default policies")
+	}
+	if got := first.Evaluate("rm -rf /"); got != PolicyBlock {
+		t.Fatalf("Evaluate(rm -rf /) = %q, want %q", got, PolicyBlock)
+	}
+}
+
 func TestPolicyHelpers(t *testing.T) {
 	p := DefaultPolicy()
 	if !p.IsBlocked("rm -rf /") {

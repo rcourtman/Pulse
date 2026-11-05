@@ -702,7 +702,7 @@ func TestActionRunnerRotationProductionRouterTLSPersistenceRestart(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "test")
+		router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "test")
 		return router, monitor, httptest.NewTLSServer(router.Handler())
 	}
 	shutdown := func(router *Router, monitor *monitoring.Monitor, server *httptest.Server) {

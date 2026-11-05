@@ -567,7 +567,7 @@ func TestNewRouterSharesCanonicalRBACManagerWithSSOAndSettings(t *testing.T) {
 	}
 
 	originalManager := auth.GetManager()
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	t.Cleanup(func() {
 		router.shutdownBackgroundWorkers()
 		router.ShutdownRBAC()

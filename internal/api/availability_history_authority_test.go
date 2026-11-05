@@ -51,7 +51,7 @@ func newAvailabilityAuthorityFixture(t *testing.T, scopes []string) *availabilit
 	)
 	cfg.AuthUser, cfg.AuthPass = "operator", "fixture-nonempty-hash"
 	InitSessionStore(cfg.DataPath)
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	t.Cleanup(router.ShutdownResourceStores)
 	monitor, _, _ := newTestMonitor(t)
 	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))

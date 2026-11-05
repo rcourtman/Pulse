@@ -30,7 +30,7 @@ func newRecoveryRouter(t *testing.T) *Router {
 		ConfigPath: dir,
 	}
 
-	return NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	return newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 }
 
 func establishLoopbackRecoverySession(t *testing.T, router *Router) *http.Cookie {

@@ -56,7 +56,7 @@ func newHistoryAuthorityFixture(t *testing.T, scopes []string) *historyAuthority
 	)
 	cfg.AuthUser, cfg.AuthPass = "operator", "fixture-nonempty-hash"
 	cfg.ProxyAuthSecret, cfg.ProxyAuthUserHeader = "history-authority-proxy-secret", "X-Remote-User"
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	t.Cleanup(router.ShutdownResourceStores)
 	provider := &historyAuthorityProvider{entered: make(chan struct{}, 2), release: make(chan struct{})}
 	router.resourceHandlers.SetStateProvider(provider)

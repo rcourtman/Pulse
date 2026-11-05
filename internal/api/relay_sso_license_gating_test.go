@@ -21,7 +21,7 @@ func TestRelayEndpointsRequireLicenseFeature(t *testing.T) {
 	rawToken := "relay-license-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	cases := []struct {
@@ -61,7 +61,7 @@ func TestRelayOnboardingEndpointsRequireLicenseFeature(t *testing.T) {
 	rawToken := "relay-onboarding-license-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	cases := []struct {
@@ -94,7 +94,7 @@ func TestRelayMobileTokenEndpointRequiresLicenseFeature(t *testing.T) {
 	rawToken := "relay-mobile-token-license-test.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite, config.ScopeRelayMobileAccess}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/relay-mobile", strings.NewReader(`{}`))
@@ -125,7 +125,7 @@ func TestRelayLicenseGatingResponseFormat(t *testing.T) {
 	rawToken := "relay-format-test-token.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/relay", nil)

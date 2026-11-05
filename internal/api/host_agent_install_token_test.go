@@ -121,7 +121,7 @@ func TestRouterSetupHandoffUsesCanonicalRuntimeConfig(t *testing.T) {
 	}
 	t.Cleanup(monitor.Stop)
 
-	router := NewRouter(runtimeConfig, monitor, nil, nil, func() error { return nil }, "1.0.0")
+	router := newTestRouter(t, runtimeConfig, monitor, nil, nil, func() error { return nil }, "1.0.0")
 	t.Cleanup(router.shutdownBackgroundWorkers)
 
 	// The first-session security setup updates the Router-owned config after

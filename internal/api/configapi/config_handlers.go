@@ -232,6 +232,9 @@ type ConfigHandlers struct {
 	recentAutoRegMutex       sync.Mutex
 	autoRegisterMutex        sync.Mutex
 	importRequests           configImportRequests
+	stopCleanup              chan struct{}
+	stopCleanupOnce          sync.Once
+	cleanupDone              chan struct{}
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
@@ -271,9 +274,11 @@ func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.Multi
 		lastClusterDetection:     make(map[string]time.Time),
 		recentAutoRegistered:     make(map[string]time.Time),
 		runtime:                  defaultRuntimeDependencies(),
+		stopCleanup:              make(chan struct{}),
+		cleanupDone:              make(chan struct{}),
 	}
 
-	// Clean up expired setup tokens periodically.
+	// Clean up expired setup tokens periodically until Stop.
 	go h.cleanupExpiredSetupTokens()
 
 	return h
@@ -478,26 +483,46 @@ func (h *ConfigHandlers) normalizePVEConfigState(ctx context.Context) {
 	config.EnsurePVEClusterNodeIdentities(cfg.PVEInstances)
 }
 
+// Stop ends the setup-token cleanup worker and waits for it to exit. The worker
+// holds the handlers, and through their callbacks whatever owns them, so they
+// stay reachable until it stops.
+func (h *ConfigHandlers) Stop() {
+	if h == nil || h.stopCleanup == nil {
+		return
+	}
+	h.stopCleanupOnce.Do(func() { close(h.stopCleanup) })
+	<-h.cleanupDone
+}
+
 // cleanupExpiredSetupTokens removes expired or used setup tokens periodically.
 func (h *ConfigHandlers) cleanupExpiredSetupTokens() {
+	defer close(h.cleanupDone)
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		h.codeMutex.Lock()
-		now := time.Now()
-		for tokenHash, tokenRecord := range h.setupTokens {
-			if now.After(tokenRecord.ExpiresAt) || tokenRecord.Used {
-				delete(h.setupTokens, tokenHash)
-				log.Debug().Bool("was_used", tokenRecord.Used).Msg("Cleaned up setup token")
-			}
+	for {
+		select {
+		case <-h.stopCleanup:
+			return
+		case <-ticker.C:
+			h.removeExpiredSetupTokens(time.Now())
 		}
-		for tokenHash, recentRecord := range h.recentSetupTokens {
-			if now.After(recentRecord.ExpiresAt) {
-				delete(h.recentSetupTokens, tokenHash)
-			}
+	}
+}
+
+func (h *ConfigHandlers) removeExpiredSetupTokens(now time.Time) {
+	h.codeMutex.Lock()
+	defer h.codeMutex.Unlock()
+	for tokenHash, tokenRecord := range h.setupTokens {
+		if now.After(tokenRecord.ExpiresAt) || tokenRecord.Used {
+			delete(h.setupTokens, tokenHash)
+			log.Debug().Bool("was_used", tokenRecord.Used).Msg("Cleaned up setup token")
 		}
-		h.codeMutex.Unlock()
+	}
+	for tokenHash, recentRecord := range h.recentSetupTokens {
+		if now.After(recentRecord.ExpiresAt) {
+			delete(h.recentSetupTokens, tokenHash)
+		}
 	}
 }
 

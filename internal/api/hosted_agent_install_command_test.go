@@ -270,7 +270,7 @@ func TestHostedTenantAgentInstallTokenCannotReportToOtherTenant(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	router := NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, mtm, nil, nil, "1.0.0")
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:      "agent-client-a",

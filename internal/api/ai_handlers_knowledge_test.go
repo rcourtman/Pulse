@@ -1295,7 +1295,7 @@ func TestKnowledgeEndpoints_RequireAuth(t *testing.T) {
 		AuthUser:   "admin",
 		AuthPass:   "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012", // bcrypt hash placeholder
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(router.shutdownBackgroundWorkers)
 
 	endpoints := []struct {
@@ -1340,7 +1340,7 @@ func TestKnowledgeEndpoints_RequireReadOrExecuteScope(t *testing.T) {
 	rawToken := "knowledge-scope-test-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(router.shutdownBackgroundWorkers)
 
 	endpoints := []struct {
@@ -1383,7 +1383,7 @@ func TestAIChatScopeCannotWriteKnowledge(t *testing.T) {
 	rawToken := "knowledge-chat-only-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(router.shutdownBackgroundWorkers)
 
 	for _, endpoint := range []string{

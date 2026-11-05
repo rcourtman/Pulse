@@ -44,7 +44,7 @@ func newHostRemovalLifecycleHTTPRuntime(
 	if err != nil {
 		t.Fatalf("monitoring.New: %v", err)
 	}
-	router := NewRouter(cfg, monitor, nil, nil, func() error { return nil }, "6.1.1")
+	router := newTestRouter(t, cfg, monitor, nil, nil, func() error { return nil }, "6.1.1")
 	return &hostRemovalLifecycleHTTPRuntime{
 		config:  cfg,
 		monitor: monitor,
@@ -732,7 +732,7 @@ func TestHostAgentRenameKeepsCommandGateAlignedWithChannelAdmission(t *testing.T
 		agentExecBindingVersionKey: agentExecBindingVersion,
 	})
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	tokenRecord := &cfg.APITokens[0]
 
 	// The same machine starts reporting its fully-qualified name.
@@ -868,7 +868,7 @@ func newHostedClientWorkspace(t *testing.T) *hostedClientWorkspace {
 	_, err = mtm.GetMonitor(hostedClientOrgID)
 	require.NoError(t, err)
 
-	return &hostedClientWorkspace{cfg: cfg, mtm: mtm, router: NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")}
+	return &hostedClientWorkspace{cfg: cfg, mtm: mtm, router: newTestRouter(t, cfg, nil, mtm, nil, nil, "1.0.0")}
 }
 
 // mintFromSettings generates an install token the way the client workspace's

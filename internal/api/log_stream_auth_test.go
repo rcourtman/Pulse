@@ -25,7 +25,7 @@ func newLogStreamRouter(t *testing.T) (*Router, *config.Config, *httptest.Server
 	cfg := newTestConfigWithTokens(t,
 		newTokenRecord(t, logStreamToken, []string{config.ScopeSettingsRead}, nil),
 		newTokenRecord(t, logStreamControl, []string{config.ScopeWildcard}, nil))
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	server := httptest.NewServer(router.Handler())
 	t.Cleanup(server.Close)

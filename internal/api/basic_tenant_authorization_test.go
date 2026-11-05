@@ -75,7 +75,7 @@ func newBasicTenantFixture(t *testing.T) *basicTenantFixture {
 	if err != nil {
 		t.Fatalf("default monitor: %v", err)
 	}
-	router := NewRouter(cfg, defaultMonitor, mtm, nil, nil, "test")
+	router := newTestRouter(t, cfg, defaultMonitor, mtm, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	return &basicTenantFixture{router: router, cfg: cfg}
 }

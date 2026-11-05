@@ -16,7 +16,7 @@ import (
 func TestSAMLRuntimeEndpointsUseCommunitySSOFeature(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir, ConfigPath: tempDir}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	cases := []struct {
@@ -51,7 +51,7 @@ func TestSAMLRuntimeEndpointsUseCommunitySSOFeature(t *testing.T) {
 func TestSAMLRuntimeNoUpgradeResponse(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{DataPath: tempDir, ConfigPath: tempDir}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/saml/test-provider/login", nil)

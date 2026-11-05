@@ -13,7 +13,7 @@ func TestAgentProfilesRequireSettingsWriteScope(t *testing.T) {
 	rawToken := "profiles-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/profiles/", nil)

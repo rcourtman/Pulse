@@ -20,7 +20,7 @@ func TestResetFirstRunSecurityRequiresDevMode(t *testing.T) {
 
 	record := newTokenRecord(t, "reset-first-run-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
 	req.Header.Set("X-API-Token", "reset-first-run-token-123.12345678")
@@ -45,7 +45,7 @@ func TestResetFirstRunSecurityClearsAuthAndReturnsBootstrapToken(t *testing.T) {
 		t.Fatalf("writeAuthEnvFile: %v", err)
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	manager, err := auth.NewFileManager(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestResetFirstRunSecurityClearsEnvBackedAuthFromStatus(t *testing.T) {
 	cfg.AuthUser = "admin"
 	cfg.AuthPass = "hashed-password"
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	resetReq := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
 	resetReq.Header.Set("X-API-Token", "reset-first-run-token-345.12345678")
@@ -170,7 +170,7 @@ func TestResetFirstRunSecurityPreservesLiveCredentialsWhenTokenPersistenceFails(
 	}
 	persistence.SetFileSystem(failingWriteFileSystem{})
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	router.persistence = persistence
 	sessionToken := "reset-first-run-session-persist-failure"
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "admin")

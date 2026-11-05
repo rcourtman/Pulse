@@ -1361,7 +1361,7 @@ func TestHandleExportAuditCSVUsesLiteralProjection(t *testing.T) {
 	setAuditLogger(t, logger)
 	token := "synthetic-csv-audit-token-123.12345678"
 	record := newTokenRecord(t, token, []string{config.ScopeAuditRead}, nil)
-	router := NewRouter(newTestConfigWithTokens(t, record), nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, newTestConfigWithTokens(t, record), nil, nil, nil, nil, "1.0.0")
 	original := append([]audit.Event(nil), logger.events...)
 	for _, verify := range []bool{false, true} {
 		for repeat := 0; repeat < 2; repeat++ {

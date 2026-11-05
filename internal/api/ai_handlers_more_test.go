@@ -519,7 +519,7 @@ func TestDemoModeSafeMethodsCannotReachRouteMutations(t *testing.T) {
 		AuthUser:   "demo",
 		AuthPass:   hashed,
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	cleanupTestRouter(t, router)
 	handler := router.Handler()
 
@@ -969,7 +969,7 @@ func TestDemoModeRouterRejectsAssistantSessionMutationsOverSafeMethods(t *testin
 		AuthPass:   hashed,
 		DemoMode:   true,
 	}
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Cleanup(router.shutdownBackgroundWorkers)
 	svc := newSessionMutationRecordingAIService()
 	setUnexportedField(t, router.aiHandler, "defaultService", svc)

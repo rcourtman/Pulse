@@ -49,7 +49,7 @@ func issueTrialEntitlementLease(t *testing.T, priv ed25519.PrivateKey, orgID, in
 func TestTrialStartRoute_RetiredFromSelfHostedRouter(t *testing.T) {
 	rawToken := "trial-start-retired-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
-	router := NewRouter(newTestConfigWithTokens(t, record), nil, nil, nil, nil, "1.0.0")
+	router := newTestRouter(t, newTestConfigWithTokens(t, record), nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/license/trial/start", nil)
 	req.Header.Set("X-API-Token", rawToken)

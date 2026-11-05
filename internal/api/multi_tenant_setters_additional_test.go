@@ -136,7 +136,7 @@ func TestNewRouterWiresTenantResourceStateProvider(t *testing.T) {
 	}
 	mtm := &monitoring.MultiTenantMonitor{}
 
-	router := NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, mtm, nil, nil, "1.0.0")
 	if router.resourceHandlers == nil {
 		t.Fatal("expected resource handlers to be initialized")
 	}
@@ -151,7 +151,7 @@ func TestNewRouterServesTenantResourceListWithMultiTenantMonitor(t *testing.T) {
 		ConfigPath: t.TempDir(),
 	}
 	mtm := &monitoring.MultiTenantMonitor{}
-	router := NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")
+	router := newTestRouter(t, cfg, nil, mtm, nil, nil, "1.0.0")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/resources?page=1&limit=100", nil)

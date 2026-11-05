@@ -68,7 +68,7 @@ func newHeldReportDownloadRouter(t *testing.T) (*Router, *config.Config, *httpte
 		newTokenRecord(t, logStreamToken, []string{config.ScopeSettingsRead}, nil),
 		newTokenRecord(t, logStreamControl, []string{config.ScopeWildcard}, nil))
 	cfg.AuthUser = "operator"
-	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierEnterprise)
 	inventory, _, _, _, _ := inventoryScheduleFixture(t)
