@@ -249,6 +249,9 @@ export function ProxmoxRecoverableTable(props: {
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  /** Replaces the generic no-match copy when a filter has a better explanation. */
+  filteredEmptyTitle?: string;
+  filteredEmptyDescription?: string;
   sortKey: Accessor<RecoverableSortKey>;
   sortDirection: Accessor<'asc' | 'desc'>;
   onSort: (key: RecoverableSortKey) => void;
@@ -443,12 +446,13 @@ export function ProxmoxRecoverableTable(props: {
           title={
             !props.hasAnyArtifacts
               ? props.emptyTitle
-              : 'No recoverable artifacts match current filters'
+              : (props.filteredEmptyTitle ?? 'No recoverable artifacts match current filters')
           }
           description={
             !props.hasAnyArtifacts
               ? props.emptyDescription
-              : 'Adjust the search or filters to see more artifacts.'
+              : (props.filteredEmptyDescription ??
+                'Adjust the search or filters to see more artifacts.')
           }
         />
       }

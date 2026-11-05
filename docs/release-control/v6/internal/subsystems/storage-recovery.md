@@ -5289,6 +5289,23 @@ are historical. `docs/RECOVERY.md` explains why Backup jobs and the list can
 disagree for a day, and `completedBackupCountsDocs.test.ts` pins that copy and
 that the table renders no activity chart.
 
+### Backup jobs bars choose a day (5 November 2026)
+
+Dropping the chart above also dropped the only way to go from a bad day to what
+happened on it, which was not its intent: the chart's counts were misleading, its
+hover and click were not. Each Backup jobs bar is now a button. Hover or focus
+shows the day's outcomes and the guests that failed or warned, through
+`TooltipPortal` rather than a `title` that touch and keyboard never reach. A click
+sets the `day` parameter, which narrows the By date list by local creation day, and
+opening it from Coverage lands on By date as a health group opens Coverage. The
+chosen day also names who failed under the bars, because a tap has no hover and a
+failed run usually leaves no restore point for the list to show. For the same
+reason, only a day with no failures scrolls the list into view on a phone.
+`/api/backups/jobs` now carries `failures` on each day, one entry per guest and
+outcome. This replaces the earlier note that a bookmark's `day` is ignored; a
+well-formed one now applies and shows as a clearable Day filter. The Count/Volume
+toggle and range picker stay gone with the chart, and the bars still show 14 days.
+
 ### Backups page orders its answers: health, servers, restore points (2 November 2026)
 
 The Backups page now reads in the order people ask: Backup health beside

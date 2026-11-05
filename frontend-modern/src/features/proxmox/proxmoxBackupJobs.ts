@@ -28,6 +28,7 @@ export interface BackupJobsDay {
   date: string;
   historyState: BackupJobsHistoryState;
   counts: BackupJobsCounts;
+  failures: BackupJobsFailure[];
 }
 
 export interface BackupJobsPayload {
@@ -83,6 +84,15 @@ const parseWindow = (
   };
 };
 
+const parseFailures = (failures: unknown): BackupJobsFailure[] =>
+  (Array.isArray(failures) ? failures : []).filter(isRecord).map((failure) => ({
+    workloadId: text(failure.workloadId),
+    workloadName: text(failure.workloadName),
+    instance: text(failure.instance),
+    at: text(failure.at),
+    outcome: text(failure.outcome),
+  }));
+
 export function parseBackupJobsPayload(body: unknown): BackupJobsPayload | null {
   const data = isRecord(body) && isRecord(body.data) ? body.data : null;
   if (!data || !Array.isArray(data.days)) return null;
@@ -92,19 +102,12 @@ export function parseBackupJobsPayload(body: unknown): BackupJobsPayload | null 
     timezone: text(data.timezone),
     last24h: {
       ...parseWindow(last.counts, last.historyState),
-      failures: (Array.isArray(last.failures) ? last.failures : [])
-        .filter(isRecord)
-        .map((failure) => ({
-          workloadId: text(failure.workloadId),
-          workloadName: text(failure.workloadName),
-          instance: text(failure.instance),
-          at: text(failure.at),
-          outcome: text(failure.outcome),
-        })),
+      failures: parseFailures(last.failures),
     },
     days: data.days.filter(isRecord).map((day) => ({
       date: text(day.date),
       ...parseWindow(day.counts, day.historyState),
+      failures: parseFailures(day.failures),
     })),
   };
 }

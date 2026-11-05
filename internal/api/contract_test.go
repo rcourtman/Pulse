@@ -26586,6 +26586,9 @@ func TestContract_BackupJobsPayloadJSONSnapshot(t *testing.T) {
 			Date:         "2026-11-02",
 			HistoryState: "not_observed",
 			Counts:       BackupJobsCounts{},
+			Failures: []BackupJobsFailure{{
+				WorkloadID: "vm-100", WorkloadName: "web", Instance: "lab", At: at, Outcome: "failed",
+			}},
 		}},
 	}}
 
@@ -26604,7 +26607,7 @@ func TestContract_BackupJobsPayloadJSONSnapshot(t *testing.T) {
 			"counts":{"success":3,"failed":1,"warning":0,"running":0,"unknown":0},
 			"failures":[{"workloadId":"vm-100","workloadName":"web","instance":"lab","at":"2026-11-02T01:30:00Z","outcome":"failed"}]
 		},
-		"days":[{"date":"2026-11-02","historyState":"not_observed","counts":{"success":0,"failed":0,"warning":0,"running":0,"unknown":0}}]
+		"days":[{"date":"2026-11-02","historyState":"not_observed","counts":{"success":0,"failed":0,"warning":0,"running":0,"unknown":0},"failures":[{"workloadId":"vm-100","workloadName":"web","instance":"lab","at":"2026-11-02T01:30:00Z","outcome":"failed"}]}]
 	}}`
 
 	assertJSONSnapshot(t, got, want)

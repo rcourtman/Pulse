@@ -175,3 +175,25 @@ func TestBackupJobsIgnoreAbandonedOlderTasks(t *testing.T) {
 	require.Zero(t, payload.Last24h.Counts.Unknown+payload.Last24h.Counts.Running)
 	require.Zero(t, payload.Days[0].Counts.Unknown+payload.Days[0].Counts.Running)
 }
+
+func TestBackupJobsDaysNameEachFailedGuestOnce(t *testing.T) {
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	from := backupJobsHistoryStart(now, time.UTC)
+	points := []recovery.RecoveryPoint{
+		backupJobsFixturePoint("retry", recovery.OutcomeFailed, now.Add(-1*time.Hour), 100),
+		backupJobsFixturePoint("first", recovery.OutcomeFailed, now.Add(-3*time.Hour), 100),
+		backupJobsFixturePoint("older", recovery.OutcomeFailed, now.Add(-10*24*time.Hour), 100),
+		backupJobsFixturePoint("clean", recovery.OutcomeSuccess, now.Add(-5*24*time.Hour), 100),
+	}
+
+	payload := buildBackupJobsPayload(backupJobsFixtureWorkloads, points, backupJobsFixtureCoverage(from.Add(-24*time.Hour), now), true, from, now, time.UTC)
+
+	require.Equal(t, 2, payload.Days[13].Counts.Failed)
+	require.Len(t, payload.Days[13].Failures, 1)
+	require.Equal(t, "web", payload.Days[13].Failures[0].WorkloadName)
+	require.Equal(t, now.Add(-1*time.Hour), payload.Days[13].Failures[0].At)
+	require.Len(t, payload.Days[3].Failures, 1)
+	// A clean day is an empty list, never JSON null.
+	require.NotNil(t, payload.Days[8].Failures)
+	require.Empty(t, payload.Days[8].Failures)
+}

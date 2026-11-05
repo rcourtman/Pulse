@@ -616,6 +616,17 @@ renders the datastore name in it, unshrinking up to the cell width, followed by
 `ResourceNameWithWebInterfaceLink` for the server in 10px muted text, which
 truncates first. The status cell renders on every row.
 
+### Backup jobs bars are day controls (5 November 2026)
+
+Each bar in `ProxmoxBackupJobsCard` is a native button with `aria-pressed`, inside
+the same list item that carries its observed state. Hover and focus show the day
+through `TooltipPortal`, anchored on the bar's top rather than the column's, and a
+hover outlines the column instead of filling it, so an empty day never looks like a
+tall bar. `TooltipPortal` is hover-only, so the chosen day also says who failed in a
+line under the bars, where a tap can see it. `ProxmoxBackupsTable` now takes
+`summaryAside` as a function, so the table keeps owning the `day` filter and the
+card only reports a choice. Backup jobs is still the page's one daily bar chart.
+
 ### Backups By date carries no activity chart (2 November 2026)
 
 The restore points no longer render `BackupActivityChart`; the component and

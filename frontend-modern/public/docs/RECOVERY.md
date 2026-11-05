@@ -64,7 +64,9 @@ answer different questions:
   current workloads, including failed runs, and ignores the list filters. A
   run's outcome is separate evidence from the restore points: a failed run
   usually leaves none, and retention prunes older points from the list, so the
-  two need not agree for any day.
+  two need not agree for any day. Hover or focus a bar for that day's outcomes
+  and the guests that failed. Click it to list that day's restore points, and
+  click it again to go back.
 - Guest **snapshots** can contribute to completed-point totals. They are not
   independent backups and do not fill Coverage's **Last backup**. If a
   completed backup's date is unavailable or in the future, the latest backup
