@@ -77,12 +77,20 @@ class MCPInstallerPublicationTest(unittest.TestCase):
         self.tool("curl", "#!/usr/bin/env python3\n" + r'''
 import os, pathlib, shutil, sys
 args = sys.argv[1:]
+assert args[0] == "--disable", "curlrc must not override verified transport"
+for flag, value in (("--connect-timeout", "5"), ("--max-time", "60"),
+                    ("--retry", "3"), ("--retry-max-time", "120"),
+                    ("--proto", "=https"), ("--proto-redir", "=https")):
+    assert args[args.index(flag) + 1] == value, (flag, args)
 urls = [arg for arg in args if arg.startswith("https://")]
 assert len(urls) == 1 and urls[0].startswith("https://github.com/rcourtman/Pulse/releases/download/v-fixture/")
 root = pathlib.Path(os.environ["FIXTURE"])
 with (root / "curl-events").open("a") as log:
     log.write(urls[0] + "\n")
 shutil.copyfile(root / "fixtures" / urls[0].rsplit("/", 1)[1], args[args.index("-o") + 1])
+if os.environ["FAULT"] == "download-" + urls[0].rsplit("/", 1)[1]:
+    pathlib.Path(args[args.index("-o") + 1]).write_bytes(b"partial download")
+    sys.exit(28)
 if os.environ["FAULT"] == "destination-changed" and urls[0].endswith("checksums.txt.sshsig"):
     destination = pathlib.Path(os.environ["PULSE_MCP_BIN_DIR"]) / "pulse-mcp"
     destination.unlink()
@@ -205,6 +213,23 @@ sys.exit(subprocess.run([os.environ["REAL_MV"], *sys.argv[1:]]).returncode)
         self.assertEqual(self.binary.read_bytes(), OLD_BINARY)
         self.assertFalse((self.root / "install-event").exists())
         self.assertFalse((self.root / "mv-event").exists())
+
+    def test_each_partial_download_fails_before_publication_and_cleans_owned_files(self):
+        for asset, diagnostic in (
+            ("pulse-mcp-linux-amd64", "download failed:"),
+            ("checksums.txt", "could not fetch checksums.txt; refusing unverified install"),
+            ("checksums.txt.sshsig", "could not fetch checksums.txt.sshsig; refusing unverified install"),
+        ):
+            with self.subTest(asset=asset):
+                self.existing_binary()
+                result = self.run_installer("download-" + asset)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertNotIn("installed:", result.stdout)
+                self.assertEqual(self.binary.read_bytes(), OLD_BINARY)
+                self.assertEqual(stat.S_IMODE(self.binary.stat().st_mode), 0o700)
+                self.assertFalse((self.root / "install-event").exists())
+                self.assertFalse((self.root / "mv-event").exists())
 
     def test_destination_changed_during_download_is_not_published_through(self):
         self.existing_binary()
