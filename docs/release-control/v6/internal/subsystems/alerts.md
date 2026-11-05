@@ -15,6 +15,28 @@
 
 ## Purpose
 
+### Same-named Docker hosts on Alert Thresholds (5 November 2026)
+
+Container Runtimes and Containers take the Docker page's qualifier from
+`features/docker/dockerHostIdentity.tsx`. Each host keeps its own Containers
+group, keyed `dock (lab)`, and the row's controls, search and the intent policy
+picker use the same words. A name stops shortening when two hosts would then read
+alike. A host with a hostname of its own reads as before.
+
+`dockerHostOverrideIdCandidates` now has one implementation and reads the agent ID
+only for a host with no source ID. The evaluator reads `Overrides[host.ID]` and
+`docker:<host.ID>/<name>`. A machine with no machine ID reports its hostname as
+agent ID, so that candidate could name the other host's key, and the row then
+claimed an override the evaluator never applied to it. A `docker:` key also keeps
+a host ID with colons whole, so a saved override for a removed container files
+under Unassigned Containers, not as a runtime row named `proxmox-lxc-docker`. No
+evaluation, persistence or saved key changes.
+
+Known limit: same-named hosts with no machine ID take their host IDs in report
+order, so after a restart a saved key can belong to the other machine.
+`useThresholdsDockerData.test.ts`, `ResourceTable.test.tsx` and
+`AlertIntentPolicyPanel.test.tsx` carry the proof.
+
 ### Node matches name a connection, not just a node (4 November 2026)
 
 Proxmox installations can reuse node names, so `getAlertsForResource` and

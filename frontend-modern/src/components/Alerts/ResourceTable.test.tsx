@@ -1807,6 +1807,29 @@ describe('ResourceTable', () => {
       expect(screen.getByText('production')).toBeInTheDocument();
     });
 
+    it.each([
+      ['desktop', false],
+      ['phone', true],
+    ])('shows a qualifier beside a group name on %s', (_viewport, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const props = makeProps({
+        resources: undefined,
+        groupedResources: {
+          'dock (lab)': [makeResource({ id: 'c-1', name: 'nginx' })],
+          'dock (site)': [makeResource({ id: 'c-2', name: 'nginx' })],
+        },
+        groupHeaderMeta: {
+          'dock (lab)': { displayName: 'dock', qualifier: 'lab' },
+          'dock (site)': { displayName: 'dock', qualifier: 'site' },
+        },
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getAllByText('dock')).toHaveLength(2);
+      expect(screen.getByText('lab')).toHaveAttribute('data-docker-host-qualifier');
+      expect(screen.getByText('site')).toHaveAttribute('data-docker-host-qualifier');
+    });
+
     it('renders group header with link when host is provided', () => {
       const props = makeProps({
         resources: undefined,
@@ -2352,6 +2375,47 @@ describe('ResourceTable', () => {
         'docker-host-1',
         'state.offline',
         'Docker Host',
+      );
+    });
+
+    it.each([
+      ['desktop', false],
+      ['phone', true],
+    ])('tells same-named rows apart in the cell and the controls on %s', (_viewport, mobile) => {
+      mockIsMobile.mockReturnValue(mobile);
+      const onConfigureResourceIntent = vi.fn();
+      const props = makeProps({
+        resources: [
+          makeResource({
+            id: 'proxmox-lxc-docker:lab:pve1:200',
+            name: 'dock',
+            displayName: 'dock',
+            qualifier: 'lab',
+            node: 'dock',
+            type: 'dockerHost',
+          }),
+          makeResource({
+            id: 'proxmox-lxc-docker:site:pve2:300',
+            name: 'dock',
+            displayName: 'dock',
+            qualifier: 'site',
+            node: 'dock',
+            type: 'dockerHost',
+          }),
+        ],
+        columns: [],
+        onConfigureResourceIntent,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getAllByText('dock')).toHaveLength(2);
+      expect(screen.getByText('lab')).toHaveAttribute('data-docker-host-qualifier');
+      fireEvent.click(screen.getByLabelText('Configure alert delay for dock (site)'));
+
+      expect(onConfigureResourceIntent).toHaveBeenCalledWith(
+        'proxmox-lxc-docker:site:pve2:300',
+        'state.offline',
+        'dock (site)',
       );
     });
 

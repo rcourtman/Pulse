@@ -6957,6 +6957,10 @@ may fork metadata transport, URL validation, or new-tab behavior into a
 Docker-local implementation.
 A Docker host sharing its hostname shows `DockerHostQualifier` beside that same
 name cell. It stays on the row's one line, and the name truncates first.
+Alert threshold tables do the same through the row's `qualifier` field, and their
+phone cards put it on its own line under the name. `getAlertResourceLabel` carries
+it into the row's controls and dialogs, and `getAlertResourceName` stays the bare
+name for the cell.
 Shared-template drift enforcement is registry-backed:
 `frontend-modern/scripts/shared-template-registry.json` is the canonical list of
 standardized repeated affordances, required consumers, and forbidden local

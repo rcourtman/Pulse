@@ -40,6 +40,19 @@ const resource: Resource = {
   lastSeen: Date.now(),
 };
 
+const dockerHost = (sourceId: string, type: Resource['type'] = 'docker-host'): Resource =>
+  ({
+    id: `agent-${sourceId}`,
+    type,
+    name: 'dock',
+    displayName: 'dock',
+    platformType: 'docker',
+    sourceType: 'agent',
+    status: 'online',
+    lastSeen: Date.now(),
+    docker: { hostname: 'dock', hostSourceId: sourceId, runtime: 'docker' },
+  }) as unknown as Resource;
+
 describe('AlertIntentPolicyPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -67,6 +80,51 @@ describe('AlertIntentPolicyPanel', () => {
   });
 
   afterEach(() => cleanup());
+
+  it('tells same-named Docker hosts apart in the resource picker', async () => {
+    render(() => (
+      <AlertIntentPolicyPanel
+        resources={[
+          dockerHost('proxmox-lxc-docker:lab:pve1:200'),
+          dockerHost('proxmox-lxc-docker:site:pve2:300'),
+          resource,
+          {
+            ...resource,
+            id: 'container-1',
+            type: 'app-container',
+            name: 'nginx',
+            displayName: 'nginx',
+            docker: { hostname: 'dock', hostSourceId: 'proxmox-lxc-docker:lab:pve1:200' },
+          } as unknown as Resource,
+        ]}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Configure policies' }));
+
+    await screen.findByRole('option', { name: 'dock (lab) · docker-host' });
+    expect(screen.getByRole('option', { name: 'dock (site) · docker-host' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'database · vm' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'nginx · app-container' })).toBeInTheDocument();
+  });
+
+  it('counts a machine agent that also runs Docker as a Docker host in the picker', async () => {
+    const withAddress = (host: Resource, address: string): Resource => ({
+      ...host,
+      identity: { ips: [address] } as Resource['identity'],
+    });
+    render(() => (
+      <AlertIntentPolicyPanel
+        resources={[
+          withAddress(dockerHost('machine-home', 'agent'), '192.168.1.50'),
+          withAddress(dockerHost('machine-work', 'agent'), '10.20.0.7'),
+        ]}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Configure policies' }));
+
+    await screen.findByRole('option', { name: 'dock (192.168.1.50) · agent' });
+    expect(screen.getByRole('option', { name: 'dock (10.20.0.7) · agent' })).toBeInTheDocument();
+  });
 
   it('selects the first canonical resource when inventory arrives after policy load', async () => {
     const [resources, setResources] = createSignal<Resource[]>([]);

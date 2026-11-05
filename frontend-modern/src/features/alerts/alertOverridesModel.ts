@@ -189,17 +189,26 @@ export const nodeOverrideIdCandidates = (
     node.host,
   );
 
+// The evaluator reads a host's overrides by its source ID alone. An agent ID is
+// no such key once the host has one: a machine with no machine ID reports its
+// hostname as agent ID, so two hosts can share it, and it can be the other
+// host's source ID. Reading it showed that host's override on this one.
 export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
   const data = platformData(resource);
   const docker = asRecord(data?.docker);
   const discoveryTarget = resource.discoveryTarget;
+  const hostSourceId =
+    asString(resource.docker?.hostSourceId) ??
+    asString(docker?.hostSourceId) ??
+    asString(data?.hostSourceId);
   return uniqueIds(
     isAppContainerDiscoveryResourceType(discoveryTarget?.resourceType)
       ? discoveryTarget?.resourceId
       : undefined,
+    resource.docker?.hostSourceId,
     docker?.hostSourceId,
     data?.hostSourceId,
-    discoveryTarget?.agentId,
+    hostSourceId ? undefined : discoveryTarget?.agentId,
     resource.id,
   );
 };
@@ -564,8 +573,8 @@ export const buildProjectedOverrides = ({
     }
 
     if (key.startsWith('docker:')) {
-      const [, rest] = key.split(':', 2);
-      const [hostId, containerId] = (rest || '').split('/', 2);
+      // A host ID can hold colons: proxmox-lxc-docker:<connection>:<node>:<vmid>.
+      const [hostId, containerId] = key.slice('docker:'.length).split('/', 2);
       if (containerId) {
         upsertProjectedOverride({
           id: key,

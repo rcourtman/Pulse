@@ -12,6 +12,7 @@ import { ThresholdSlider } from '@/components/Workloads/ThresholdSlider';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
+import { DockerHostQualifier } from '@/features/docker/dockerHostIdentity';
 import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEditMetricTitle,
@@ -25,6 +26,7 @@ import {
   alertResourceSupportsMetric,
   getAlertResourceColumnKind,
   getAlertResourceLabel,
+  getAlertResourceName,
   getAlertResourceInitialEditMetric,
   getAlertResourceIntentTargetLabel,
   getAlertResourceMetricBounds,
@@ -305,7 +307,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
               <span
                 class={`text-sm font-medium truncate flex-nowrap ${props.resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
               >
-                {resourceLabel()}
+                {getAlertResourceName(props.resource)}
               </span>
             }
           >
@@ -326,6 +328,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
               </Show>
             </div>
           </Show>
+          <DockerHostQualifier value={props.resource.qualifier ?? null} />
           <Show when={props.resource.type === 'storage' && props.resource.node}>
             <span class="rounded-sm px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-amber-100 text-amber-700 dark:bg-amber-900/25 dark:text-amber-300">
               {props.resource.node}

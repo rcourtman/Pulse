@@ -2,6 +2,7 @@ import { Show } from 'solid-js';
 
 import { GROUPED_TABLE_ROW_BADGE_CLASS } from '@/components/shared/groupedTableRowPresentation';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
+import { DockerHostQualifier } from '@/features/docker/dockerHostIdentity';
 import type { GroupHeaderMeta } from '@/features/alerts/thresholds/tableTypes';
 
 interface AlertResourceGroupHeaderProps {
@@ -13,7 +14,17 @@ export function AlertResourceGroupHeader(props: AlertResourceGroupHeaderProps) {
   const groupLabel = () => props.meta?.displayName || props.meta?.rawName || props.groupKey;
 
   return (
-    <Show when={props.meta?.type === 'agent'} fallback={<span>{groupLabel()}</span>}>
+    <Show
+      when={props.meta?.type === 'agent'}
+      fallback={
+        <Show when={props.meta?.qualifier} fallback={<span>{groupLabel()}</span>}>
+          <div class="flex min-w-0 items-center gap-1.5">
+            <span class="truncate">{groupLabel()}</span>
+            <DockerHostQualifier value={props.meta?.qualifier ?? null} />
+          </div>
+        </Show>
+      }
+    >
       <div class="flex flex-wrap items-center gap-3">
         <ResourceNameWithWebInterfaceLink
           name={groupLabel()}

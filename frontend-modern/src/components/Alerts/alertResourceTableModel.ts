@@ -61,6 +61,7 @@ export interface AlertResourceTableResourceLike {
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
   rawName?: string;
+  qualifier?: string;
   type?: string;
   thresholds?: AlertResourceThresholdMap;
   defaults?: AlertResourceThresholdMap;
@@ -354,10 +355,12 @@ export function getAlertResourceIntentTargetLabel(resource: {
   name: string;
   displayName?: string;
   node?: string;
+  qualifier?: string;
 }): string {
-  const label = resource.displayName?.trim() || resource.name;
+  const name = resource.displayName?.trim() || resource.name;
+  const label = resource.qualifier ? `${name} (${resource.qualifier})` : name;
   const node = resource.node?.trim();
-  return node && node !== label ? `${label} · ${node}` : label;
+  return node && node !== name ? `${label} · ${node}` : label;
 }
 
 export function alertResourceSupportsMetric(
@@ -440,10 +443,17 @@ export function alertResourceSupportsMetric(
   return true;
 }
 
-export function getAlertResourceLabel(resource: AlertResourceTableResourceLike): string {
+/** The row's name alone, for the name cell where any qualifier sits beside it. */
+export function getAlertResourceName(resource: AlertResourceTableResourceLike): string {
   // Operator-local /alerts table; redaction is a transmission-boundary policy
   // (docs/PRIVACY.md). Use the raw infra display name to match /infrastructure.
   return getPreferredInfrastructureDisplayName(resource as unknown as UnifiedResource);
+}
+
+/** The row in words, for controls and dialogs where nothing sits beside the name. */
+export function getAlertResourceLabel(resource: AlertResourceTableResourceLike): string {
+  const name = getAlertResourceName(resource);
+  return resource.qualifier ? `${name} (${resource.qualifier})` : name;
 }
 
 function parseAlertMetricNumber(value: unknown): number | undefined {
