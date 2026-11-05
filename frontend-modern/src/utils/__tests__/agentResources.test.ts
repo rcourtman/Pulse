@@ -57,6 +57,7 @@ describe('agentResources', () => {
       ).toBe(true);
     },
   );
+
   it('labels an unobserved startup agent without overriding a provider verdict', () => {
     const pending = { agent: { status: 'pending', lastSeen: '2026-10-24T12:00:00Z' } };
     expect(

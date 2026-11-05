@@ -68,6 +68,7 @@ describe('dockerPageModel', () => {
       expect(host.type).toBe(type);
     },
   );
+
   it('buckets Docker hosts, containers, images, volumes, networks, nodes, tasks, secrets, configs, and Swarm services from canonical resources', () => {
     const model = buildDockerPageModel([
       makeResource({ id: 'docker-host-1', type: 'agent' }),

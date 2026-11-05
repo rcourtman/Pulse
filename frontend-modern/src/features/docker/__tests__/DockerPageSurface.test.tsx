@@ -480,6 +480,7 @@ describe('DockerPageSurface', () => {
       'overview,images,storage,networks',
     );
   });
+
   it('requests linked VM/LXC runtime carriers in every lazy workflow without broadening the source', () => {
     render(() => <DockerPageSurface />);
     expect(mocks.useUnifiedResources.mock.calls).toHaveLength(5);
