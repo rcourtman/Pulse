@@ -56,6 +56,42 @@ check_portal_readiness
 printf 'READY=%s\n' "$PORTAL_CERTIFICATE_READY"
 '''
 
+# The shared limit path: Traefik logs a refused order, setup recreates it and asks
+# again. The fake answers from a queue, one answer per logs call after a recreate.
+TRIAL_HARNESS = r'''
+set -euo pipefail
+source "$SETUP_FUNCTIONS"
+log() { printf 'LOG %s\n' "$*"; }
+sleep() { :; }
+docker() {
+    [[ "$1" == compose ]] || exit 98
+    case "$2" in
+        logs) printf '%s\n' "$ACME_LOG" ;;
+        up) printf 'UP DOMAIN=%s\n' "$(env_value DOMAIN)" >> "$CALLS"
+            if [[ -n "${ISSUE_ON_DOMAIN:-}" && "$(env_value DOMAIN)" == "$ISSUE_ON_DOMAIN" ]]; then
+                cp "$ISSUED_CERTIFICATE" "$CERTIFICATE"
+            fi ;;
+        *) exit 98 ;;
+    esac
+}
+TRIAL_CERTIFICATE_ATTEMPTS=2
+FIRST_RUN_ENV_CREATED="${FIRST_RUN:-1}"
+check_portal_readiness
+printf 'READY=%s\n' "$PORTAL_CERTIFICATE_READY"
+printf 'FINAL_DOMAIN=%s\n' "$(env_value DOMAIN)"
+'''
+
+# First-run values on a host with no terminal: what reaches .env.
+FIRST_RUN_HARNESS = r'''
+set -euo pipefail
+source "$SETUP_FUNCTIONS"
+log() { :; }
+curl() { printf '%s\n' "$FAKE_PUBLIC_IP"; }
+collect_first_run_values
+ensure_env_file
+cat "$PULSE_PROVIDER_MSP_INSTALL_DIR/.env"
+'''
+
 
 class PortalReadinessTests(unittest.TestCase):
     @classmethod
@@ -194,6 +230,181 @@ printf '192.0.2.10 STREAM %s\\n' "$2"
                 self.assertIn("cannot resolve", output)
                 self.assertNotIn("Certificate:", output)
                 self.assertNotIn("No verified TLS certificate", output)
+
+    def per_client_fixture(self, domain=DOMAIN, trial=False):
+        env = self.fixture / ".env"
+        original = env.read_text()
+        self.addCleanup(env.write_text, original)
+        lines = [f"DOMAIN={domain}", "CP_PER_CLIENT_CERTIFICATES=true"]
+        if trial:
+            lines.append("PROVIDER_MSP_TRIAL_ADDRESS=true")
+        env.write_text("\n".join(lines) + "\n")
+
+    def test_per_client_certificates_need_only_the_portal_name(self):
+        self.per_client_fixture()
+        output, _ = self.report("apex-only")
+        self.assertIn("READY=1", output)
+        self.assertIn(f"Certificate: verified on this host for {DOMAIN}.", output)
+        self.assertIn("its own certificate", output)
+        self.assertNotIn("NOT READY", output)
+
+    def test_per_client_certificates_still_verify_the_certificate(self):
+        self.per_client_fixture()
+        for certificate in ("untrusted", "expired", "wrong-host", "client-only"):
+            with self.subTest(certificate=certificate):
+                output, _ = self.report(certificate)
+                self.assert_not_ready(output)
+
+    def test_wildcard_mode_still_refuses_a_name_only_certificate(self):
+        output, _ = self.report("apex-only")
+        self.assert_not_ready(output)
+
+    def test_http_challenge_failures_are_explained(self):
+        self.per_client_fixture()
+        cases = {
+            "acme: error: 400 :: urn:ietf:params:acme:error:connection :: 203.0.113.7: Fetching http://x: Timeout during connect (likely firewall problem)":
+                "could not reach port 80",
+            "urn:ietf:params:acme:error:connection :: 203.0.113.7: Connection refused": "could not reach port 80",
+            "urn:ietf:params:acme:error:unauthorized :: Invalid response from http://x": "something other than this server answered",
+            "urn:ietf:params:acme:error:dns :: DNS problem: NXDOMAIN looking up A for x": "could not look up this name",
+            "urn:ietf:params:acme:error:rateLimited :: too many failed authorizations (5) for x": "it allows 5 an hour",
+            'urn:ietf:params:acme:error:rateLimited :: too many certificates (250000) already issued for "example.org"':
+                "Let's Encrypt is rate limiting",
+        }
+        for error, explanation in cases.items():
+            with self.subTest(error=error):
+                output, _ = self.report(fault="no-certificate", acme_log=f'Unable to obtain ACME certificate error="{error}"')
+                self.assert_not_ready(output)
+                self.assertIn(explanation, output)
+
+    def trial_report(self, domain, *, issue_on="", first_run="1", acme_log=None):
+        self.per_client_fixture(domain, trial=True)
+        calls = self.fixture / "calls"
+        calls.write_text("")
+        # A certificate for each trial name, trusted by the fixture CA.
+        working = self.fixture / "trial-current.pem"
+        issued = self.fixture / "trial-issued.pem"
+        if issue_on:
+            csr = self.fixture / "trial.csr"
+            self.command("req", "-new", "-key", str(self.leaf_key), "-subj", f"/CN={issue_on}", "-out", str(csr))
+            extensions = self.fixture / "trial.ext"
+            extensions.write_text(f"basicConstraints=critical,CA:FALSE\nsubjectAltName=DNS:{issue_on}\nextendedKeyUsage=serverAuth\n")
+            self.command("x509", "-req", "-in", str(csr), "-CA", str(self.ca), "-CAkey", str(self.ca_key),
+                         "-set_serial", "99", "-days", "1", "-extfile", str(extensions), "-out", str(issued))
+        shutil.copy(self.fixture / "wrong-host.pem", working)
+        env = {
+            **os.environ,
+            "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
+            "REAL_OPENSSL": self.openssl,
+            "CERTIFICATE": str(working),
+            "ISSUED_CERTIFICATE": str(issued),
+            "ISSUE_ON_DOMAIN": issue_on,
+            "FIXTURE_CA": str(self.ca),
+            "CALLS": str(calls),
+            "SETUP_FUNCTIONS": str(self.functions),
+            "PULSE_PROVIDER_MSP_INSTALL_DIR": str(self.fixture),
+            "PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS": "0",
+            "FIRST_RUN": first_run,
+            "FAULT": "",
+            "MISSING_DNS": "",
+            "ACME_LOG": acme_log if acme_log is not None else (
+                'Unable to obtain ACME certificate error="urn:ietf:params:acme:error:rateLimited :: '
+                f'too many certificates (250000) already issued for \\"{domain.split(".", 2)[2]}\\""'),
+        }
+        result = subprocess.run(["bash", "-c", TRIAL_HARNESS], env=env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result.stdout, calls.read_text()
+
+    def test_shared_limit_retries_and_succeeds_on_the_same_service(self):
+        domain = "pulse.203-0-113-7.sslip.io"
+        output, calls = self.trial_report(domain, issue_on=domain)
+        self.assertIn("READY=1", output)
+        self.assertIn(f"FINAL_DOMAIN={domain}", output)
+        self.assertEqual(calls.count("UP "), 1)
+
+    def test_shared_limit_falls_back_to_the_other_service_on_a_first_run(self):
+        output, calls = self.trial_report("pulse.203-0-113-7.sslip.io", issue_on="pulse.203-0-113-7.nip.io")
+        self.assertIn("READY=1", output)
+        self.assertIn("FINAL_DOMAIN=pulse.203-0-113-7.nip.io", output)
+        self.assertIn("UP DOMAIN=pulse.203-0-113-7.nip.io", calls)
+
+    def test_shared_limit_never_renames_an_install_that_may_have_clients(self):
+        output, calls = self.trial_report("pulse.203-0-113-7.sslip.io", first_run="0")
+        self.assertIn("READY=0", output)
+        self.assertIn("FINAL_DOMAIN=pulse.203-0-113-7.sslip.io", output)
+        self.assertNotIn("nip.io", calls)
+        self.assertIn("Everyone using sslip.io or nip.io shares it", output)
+
+    def test_shared_limit_rerun_keeps_asking_on_its_current_service(self):
+        output, calls = self.trial_report("pulse.203-0-113-7.nip.io", issue_on="pulse.203-0-113-7.nip.io", first_run="0")
+        self.assertIn("READY=1", output)
+        self.assertIn("FINAL_DOMAIN=pulse.203-0-113-7.nip.io", output)
+        self.assertEqual(calls.count("UP "), 1)
+
+    def test_shared_limit_exhausted_on_both_services_is_reported(self):
+        output, calls = self.trial_report("pulse.203-0-113-7.sslip.io")
+        self.assertIn("READY=0", output)
+        self.assertIn("NOT READY YET:", output)
+        self.assertEqual(calls.count("UP "), 4)
+
+    def test_port_80_failure_during_retry_stops_asking(self):
+        # A blocked port is not a limit: repeating it only burns the 5 tries an hour.
+        output, calls = self.trial_report(
+            "pulse.203-0-113-7.sslip.io",
+            acme_log='Unable to obtain ACME certificate error="acme:error:connection :: Timeout during connect"',
+        )
+        self.assertIn("could not reach port 80", output)
+        self.assertNotIn("UP ", calls)
+
+    def first_run(self, **values):
+        with tempfile.TemporaryDirectory(prefix="pulse-msp-first-run-") as directory:
+            install = Path(directory)
+            (install / ".env.example").write_text(
+                "DOMAIN=msp.example.com\nACME_EMAIL=admin@example.com\nCF_DNS_API_TOKEN=\n"
+                "ACME_CHALLENGE_SETTING_1=\nACME_CHALLENGE_SETTING_2=\nPORTAL_CERTIFICATE_SANS_LABEL=\n"
+                "CP_PER_CLIENT_CERTIFICATES=false\nPROVIDER_MSP_TRIAL_ADDRESS=false\n")
+            env = {
+                **os.environ,
+                "SETUP_FUNCTIONS": str(self.functions),
+                "PULSE_PROVIDER_MSP_INSTALL_DIR": str(install),
+                "FAKE_PUBLIC_IP": "203.0.113.7",
+                **values,
+            }
+            return subprocess.run(["bash", "-c", FIRST_RUN_HARNESS], env=env, stdin=subprocess.DEVNULL,
+                                  capture_output=True, text=True, timeout=15)
+
+    def test_trial_address_needs_no_domain_or_token(self):
+        result = self.first_run(PULSE_PROVIDER_MSP_TRIAL_ADDRESS="1", PULSE_PROVIDER_MSP_ACME_EMAIL="you@pulse-test.dev")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for line in ("DOMAIN=pulse.203-0-113-7.sslip.io", "ACME_EMAIL=you@pulse-test.dev",
+                     "ACME_CHALLENGE_SETTING_1=httpchallenge=true", "ACME_CHALLENGE_SETTING_2=httpchallenge.entrypoint=web",
+                     "PORTAL_CERTIFICATE_SANS_LABEL=pulse.provider-msp.client-certificates=per-name",
+                     "CP_PER_CLIENT_CERTIFICATES=true", "PROVIDER_MSP_TRIAL_ADDRESS=true"):
+            self.assertIn(line + "\n", result.stdout)
+
+    def test_own_domain_without_a_token_is_not_labelled_a_trial(self):
+        result = self.first_run(PULSE_PROVIDER_MSP_DOMAIN="pulse.pulse-test.dev", PULSE_PROVIDER_MSP_ACME_CHALLENGE="http",
+                                PULSE_PROVIDER_MSP_ACME_EMAIL="you@pulse-test.dev")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("DOMAIN=pulse.pulse-test.dev\n", result.stdout)
+        self.assertIn("CP_PER_CLIENT_CERTIFICATES=true\n", result.stdout)
+        self.assertIn("PROVIDER_MSP_TRIAL_ADDRESS=false\n", result.stdout)
+        self.assertIn("*.pulse.pulse-test.dev", result.stdout)
+
+    def test_dns_token_keeps_dns_01_and_the_wildcard(self):
+        result = self.first_run(PULSE_PROVIDER_MSP_DOMAIN="pulse.pulse-test.dev", PULSE_PROVIDER_MSP_ACME_EMAIL="you@pulse-test.dev",
+                                PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN="a" * 40)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("ACME_CHALLENGE_SETTING_1=\n", result.stdout)
+        self.assertIn("PORTAL_CERTIFICATE_SANS_LABEL=\n", result.stdout)
+        self.assertIn("CP_PER_CLIENT_CERTIFICATES=false\n", result.stdout)
+
+    def test_trial_address_refuses_a_host_with_no_public_ip(self):
+        for address in ("192.168.0.97", "10.1.2.3", "172.16.0.1", "100.64.0.1", "127.0.0.1", "169.254.1.1", "not-an-ip", "300.1.1.1"):
+            with self.subTest(address=address):
+                result = self.first_run(PULSE_PROVIDER_MSP_TRIAL_ADDRESS="1", FAKE_PUBLIC_IP=address)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("could not find a public IPv4 address", result.stderr)
 
     def test_acme_failure_guidance_is_preserved(self):
         cases = {

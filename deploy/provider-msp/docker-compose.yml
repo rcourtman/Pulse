@@ -18,14 +18,17 @@ services:
       - --providers.docker.network=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
       - --providers.file.filename=/etc/traefik/traefik-dynamic.yml
       - --providers.file.watch=true
+      # With a DNS token these two settings are DNS-01 and one wildcard certificate
+      # covers every client. Without one, setup.sh sets ACME_CHALLENGE_SETTING_1
+      # and _2 to HTTP-01, and each client gets its own certificate over port 80.
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}
       - --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+      - --certificatesresolvers.letsencrypt.acme.${ACME_CHALLENGE_SETTING_1:-dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}}
+      - --certificatesresolvers.letsencrypt.acme.${ACME_CHALLENGE_SETTING_2:-dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53}
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}
       - --certificatesresolvers.le.acme.storage=/etc/traefik/acme/acme.json
-      - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
-      - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+      - --certificatesresolvers.le.acme.${ACME_CHALLENGE_SETTING_1:-dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}}
+      - --certificatesresolvers.le.acme.${ACME_CHALLENGE_SETTING_2:-dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53}
     ports:
       - "80:80"
       - "443:443"
@@ -84,6 +87,7 @@ services:
       - CP_PORT=8443
       - CP_ADMIN_KEY=${CP_ADMIN_KEY}
       - CP_BASE_URL=https://${DOMAIN}
+      - CP_PER_CLIENT_CERTIFICATES=${CP_PER_CLIENT_CERTIFICATES:-false}
       - CP_PULSE_IMAGE=${CP_PULSE_IMAGE}
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - CP_DOCKER_NETWORK=${PULSE_PROVIDER_MSP_DOCKER_NETWORK:-pulse-provider-msp}
@@ -122,7 +126,8 @@ services:
       - traefik.http.routers.provider-control-plane.tls=true
       - traefik.http.routers.provider-control-plane.tls.certresolver=letsencrypt
       - traefik.http.routers.provider-control-plane.tls.domains[0].main=${DOMAIN}
-      - traefik.http.routers.provider-control-plane.tls.domains[0].sans=*.${DOMAIN}
+      # HTTP-01 cannot issue a wildcard, so that mode replaces this label with an inert one.
+      - ${PORTAL_CERTIFICATE_SANS_LABEL:-traefik.http.routers.provider-control-plane.tls.domains[0].sans=*.${DOMAIN}}
       - traefik.http.services.provider-control-plane.loadbalancer.server.port=8443
 
 secrets:

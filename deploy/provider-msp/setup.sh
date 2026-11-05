@@ -22,11 +22,15 @@ PULSE_PROVIDER_MSP_LICENSE_URL="${PULSE_PROVIDER_MSP_LICENSE_URL:-https://licens
 PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE="${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE:-0}"
 PULSE_PROVIDER_MSP_EVAL_EMAIL="${PULSE_PROVIDER_MSP_EVAL_EMAIL:-}"
 PULSE_PROVIDER_MSP_SIGNUP_SOURCE="${PULSE_PROVIDER_MSP_SIGNUP_SOURCE:-provider_msp_setup}"
-# The three values only a provider can supply. Seeded into a new .env; an
-# interactive run asks for any left blank before installing anything.
+# The values only a provider can supply. Seeded into a new .env; an interactive
+# run asks for any left blank before installing anything.
 PULSE_PROVIDER_MSP_DOMAIN="${PULSE_PROVIDER_MSP_DOMAIN:-}"
 PULSE_PROVIDER_MSP_ACME_EMAIL="${PULSE_PROVIDER_MSP_ACME_EMAIL:-}"
 PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN="${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN:-}"
+# http issues one certificate per client over port 80 and needs no DNS token.
+PULSE_PROVIDER_MSP_ACME_CHALLENGE="${PULSE_PROVIDER_MSP_ACME_CHALLENGE:-}"
+# 1 builds a shared trial address from this host's public IP instead of a domain.
+PULSE_PROVIDER_MSP_TRIAL_ADDRESS="${PULSE_PROVIDER_MSP_TRIAL_ADDRESS:-0}"
 PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS="${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS:-180}"
 
 log() {
@@ -566,8 +570,59 @@ valid_first_run_value() {
     DOMAIN) [[ "${value}" =~ ${domain_re} ]] ;;
     ACME_EMAIL) [[ "${value}" =~ ${email_re} ]] ;;
     CF_DNS_API_TOKEN) [[ "${value}" =~ ${token_re} ]] ;;
+    ACME_CHALLENGE) [[ "${value}" == dns || "${value}" == http ]] ;;
     *) return 1 ;;
   esac
+}
+
+# Routable from the internet: not private, loopback, link-local, carrier-grade
+# NAT, documentation-free multicast or reserved space.
+public_ipv4() {
+  local ip="$1" a b c d
+  [[ "${ip}" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+  a="${BASH_REMATCH[1]}"; b="${BASH_REMATCH[2]}"; c="${BASH_REMATCH[3]}"; d="${BASH_REMATCH[4]}"
+  (( 10#${a} <= 255 && 10#${b} <= 255 && 10#${c} <= 255 && 10#${d} <= 255 )) || return 1
+  (( 10#${a} == 0 || 10#${a} == 10 || 10#${a} == 127 || 10#${a} >= 224 )) && return 1
+  (( 10#${a} == 100 && 10#${b} >= 64 && 10#${b} <= 127 )) && return 1
+  (( 10#${a} == 169 && 10#${b} == 254 )) && return 1
+  (( 10#${a} == 172 && 10#${b} >= 16 && 10#${b} <= 31 )) && return 1
+  (( 10#${a} == 192 && 10#${b} == 168 )) && return 1
+  return 0
+}
+
+# A cloud server's own interface often holds a private address behind 1:1 NAT,
+# so ask from outside. A wrong answer only yields a name Let's Encrypt cannot
+# reach, which the readiness report then explains.
+detect_public_ipv4() {
+  local url ip
+  have curl || return 1
+  for url in https://api.ipify.org https://checkip.amazonaws.com https://ifconfig.me/ip; do
+    ip="$(curl -4 -fsS --max-time 8 "${url}" 2>/dev/null | tr -d '[:space:]' || true)"
+    if public_ipv4 "${ip}"; then
+      printf '%s\n' "${ip}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# sslip.io and nip.io both answer any name that embeds an IP with that IP. They
+# are not on the Public Suffix List, so all their users share one Let's Encrypt
+# limit on new certificates; check_portal_readiness falls back between them.
+trial_address() {
+  printf 'pulse.%s.%s\n' "${1//./-}" "$2"
+}
+
+use_trial_address() {
+  local ip
+  if ! ip="$(detect_public_ipv4)"; then
+    die "could not find a public IPv4 address for this host. A trial address needs a
+server the internet can reach on port 80. Use a domain you control instead, or
+run setup on a host with a public IP."
+  fi
+  PULSE_PROVIDER_MSP_DOMAIN="$(trial_address "${ip}" sslip.io)"
+  PULSE_PROVIDER_MSP_ACME_CHALLENGE=http
+  PULSE_PROVIDER_MSP_TRIAL_ADDRESS=1
 }
 
 # Runs before Docker is installed, so the long unattended part of setup never
@@ -578,24 +633,37 @@ collect_first_run_values() {
   if [[ -t 0 ]]; then
     cat <<'EOF'
 
-Pulse Provider MSP needs three values. Leave any blank to edit .env yourself
-when setup pauses (for example to use a DNS provider other than Cloudflare).
+Pulse Provider MSP needs an address for its portal and clients.
+
+  Your own domain: enter it below. Use this for anything you will keep.
+  No domain: press Enter for a trial address built from this server's public IP.
+    A trial address is for evaluation only. Moving to your own domain later
+    means reinstalling every agent.
 
 EOF
+    if [[ -z "${PULSE_PROVIDER_MSP_DOMAIN}" ]] && ! truthy "${PULSE_PROVIDER_MSP_TRIAL_ADDRESS}"; then
+      read -r -p "Domain, e.g. pulse.example.com (Enter for a trial address): " PULSE_PROVIDER_MSP_DOMAIN
+    fi
     if [[ -z "${PULSE_PROVIDER_MSP_DOMAIN}" ]]; then
-      read -r -p "Domain for the portal, e.g. pulse.example.com: " PULSE_PROVIDER_MSP_DOMAIN
+      PULSE_PROVIDER_MSP_TRIAL_ADDRESS=1
     fi
     if [[ -z "${PULSE_PROVIDER_MSP_ACME_EMAIL}" ]]; then
       read -r -p "Email for certificate notices: " PULSE_PROVIDER_MSP_ACME_EMAIL
     fi
-    if [[ -z "${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN}" ]]; then
-      read -r -s -p "Cloudflare API token with Zone Read and DNS Edit (hidden): " PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN
+    if ! truthy "${PULSE_PROVIDER_MSP_TRIAL_ADDRESS}" \
+      && [[ -z "${PULSE_PROVIDER_MSP_ACME_CHALLENGE}" && -z "${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN}" ]]; then
+      read -r -s -p "Cloudflare API token with Zone Read and DNS Edit, hidden (Enter to use port 80 instead): " PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN
       echo
+      [[ -n "${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN}" ]] || PULSE_PROVIDER_MSP_ACME_CHALLENGE=http
     fi
   fi
 
+  if truthy "${PULSE_PROVIDER_MSP_TRIAL_ADDRESS}"; then
+    use_trial_address
+  fi
+
   local key var value
-  for key in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN; do
+  for key in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN ACME_CHALLENGE; do
     var="PULSE_PROVIDER_MSP_${key}"
     value="${!var}"
     if [[ -n "${value}" ]] && ! valid_first_run_value "${key}" "${value}"; then
@@ -603,7 +671,15 @@ EOF
     fi
   done
 
-  if [[ -n "${PULSE_PROVIDER_MSP_DOMAIN}" ]]; then
+  if truthy "${PULSE_PROVIDER_MSP_TRIAL_ADDRESS}"; then
+    cat <<EOF
+
+Trial address: ${PULSE_PROVIDER_MSP_DOMAIN}
+No DNS records or token needed. Inbound TCP ports 80 and 443 must be open in
+your cloud provider's firewall.
+
+EOF
+  elif [[ -n "${PULSE_PROVIDER_MSP_DOMAIN}" ]]; then
     cat <<EOF
 
 Before the certificate is issued, point two DNS records at this host's public
@@ -612,7 +688,32 @@ IP (A records; on Cloudflare, proxy status DNS only):
   *.${PULSE_PROVIDER_MSP_DOMAIN}    one address per client
 
 EOF
+    if [[ "${PULSE_PROVIDER_MSP_ACME_CHALLENGE}" == http ]]; then
+      cat <<EOF
+Each client gets its own certificate over port 80, so inbound TCP ports 80 and
+443 must stay open to the internet.
+
+EOF
+    fi
   fi
+}
+
+# HTTP-01 replaces the two DNS-01 settings on both Traefik resolvers and takes
+# the wildcard off the portal certificate. See docker-compose.yml.
+write_http_challenge_settings() {
+  local env_path="$1"
+  set_env_value ACME_CHALLENGE_SETTING_1 "httpchallenge=true" "${env_path}"
+  set_env_value ACME_CHALLENGE_SETTING_2 "httpchallenge.entrypoint=web" "${env_path}"
+  set_env_value PORTAL_CERTIFICATE_SANS_LABEL "pulse.provider-msp.client-certificates=per-name" "${env_path}"
+  set_env_value CP_PER_CLIENT_CERTIFICATES "true" "${env_path}"
+}
+
+per_client_certificates() {
+  truthy "$(env_value CP_PER_CLIENT_CERTIFICATES "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env")"
+}
+
+trial_address_install() {
+  truthy "$(env_value PROVIDER_MSP_TRIAL_ADDRESS "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env")"
 }
 
 ensure_env_file() {
@@ -626,17 +727,24 @@ ensure_env_file() {
   (umask 077 && cp -n "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env.example" "${env_path}")
   chmod 0600 "${env_path}"
 
+  FIRST_RUN_ENV_CREATED=1
   local key var missing=0
   for key in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN; do
     var="PULSE_PROVIDER_MSP_${key}"
     if [[ -n "${!var}" ]]; then
       set_env_value "${key}" "${!var}" "${env_path}"
-    else
+    elif [[ "${key}" != CF_DNS_API_TOKEN || "${PULSE_PROVIDER_MSP_ACME_CHALLENGE}" != http ]]; then
       missing=1
     fi
   done
+  if [[ "${PULSE_PROVIDER_MSP_ACME_CHALLENGE}" == http ]]; then
+    write_http_challenge_settings "${env_path}"
+  fi
+  if truthy "${PULSE_PROVIDER_MSP_TRIAL_ADDRESS}"; then
+    set_env_value PROVIDER_MSP_TRIAL_ADDRESS "true" "${env_path}"
+  fi
   if [[ "${missing}" -eq 0 ]]; then
-    log "wrote DOMAIN, ACME_EMAIL and CF_DNS_API_TOKEN to ${env_path}"
+    log "wrote the first-run values to ${env_path}"
     return 0
   fi
 
@@ -713,7 +821,9 @@ validate_env_file() {
   local dns_provider creds_path
   dns_provider="$(env_value ACME_DNS_PROVIDER "${env_path}")"
   dns_provider="${dns_provider:-cloudflare}"
-  if [[ "${dns_provider}" == "cloudflare" ]]; then
+  if per_client_certificates; then
+    log "certificates: one per client over port 80, no DNS token"
+  elif [[ "${dns_provider}" == "cloudflare" ]]; then
     if [[ -z "$(env_value CF_DNS_API_TOKEN "${env_path}")" ]]; then
       die "CF_DNS_API_TOKEN is required with the default ACME_DNS_PROVIDER=cloudflare; for another provider set ACME_DNS_PROVIDER to a Traefik dnsChallenge provider name and put its credential variables in dns-credentials.env"
     fi
@@ -868,6 +978,16 @@ explain_acme_failure() {
   case "$1" in
     *invalidContact*)
       echo "Let's Encrypt refused ACME_EMAIL. Use a real address; example.com and similar are refused." ;;
+    *"too many certificates"*sslip.io*|*"too many certificates"*nip.io*)
+      echo "Let's Encrypt's weekly limit for trial addresses is used up. Everyone using sslip.io or nip.io shares it. It refills gradually, so retry later, or use your own domain." ;;
+    *"too many failed authorizations"*|*"failed authorization"*)
+      echo "Let's Encrypt paused this name after repeated failed checks; it allows 5 an hour. Fix the cause, wait up to an hour, then retry." ;;
+    *"Timeout during connect"*|*"Connection refused"*|*"Connection reset"*|*"acme:error:connection"*)
+      echo "Let's Encrypt could not reach port 80 on this server. Open inbound TCP ports 80 and 443 in your cloud provider's firewall. Docker publishes them past ufw, so that firewall is the usual cause." ;;
+    *"Invalid response from"*|*"acme:error:unauthorized"*)
+      echo "Let's Encrypt reached port 80, but something other than this server answered. Check that the name points here and that no proxy or CDN sits in front." ;;
+    *"looking up A "*|*"looking up AAAA "*)
+      echo "Let's Encrypt could not look up this name. Check its A records point at this server." ;;
     *rateLimited*)
       echo "Let's Encrypt is rate limiting this domain. Wait for the time in the message, then retry." ;;
     *[Cc]loudflare*)
@@ -879,54 +999,120 @@ explain_acme_failure() {
   esac
 }
 
-# A running stack is not a usable one: until the wildcard certificate exists,
-# Traefik refuses TLS for the portal and every client address (sniStrict), so
-# browsers and agents see only a handshake error. Wait for it, check the two
-# DNS records, and say what to fix. Setup still finishes either way.
+# s_client normally prints the peer's certificate even when it is expired,
+# untrusted or for another host. Require verification before reading its SANs,
+# then match the whole name, not a different domain's prefix.
+portal_certificate_verified() {
+  local domain="$1" required_san="$2" certificate certificate_sans
+  certificate="$(timeout 10 openssl s_client -connect 127.0.0.1:443 -servername "${domain}" \
+    -verify_return_error -verify_hostname "${domain}" </dev/null 2>/dev/null)" \
+    && certificate_sans="$(printf '%s\n' "${certificate}" | openssl x509 -noout -ext subjectAltName 2>/dev/null)" \
+    && printf '%s\n' "${certificate_sans}" | tr ',' '\n' \
+      | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -qxF "${required_san}"
+}
+
+latest_acme_error() {
+  (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose logs --no-color "$@" traefik 2>/dev/null) \
+    | grep -F "Unable to obtain ACME certificate" | tail -n 1 \
+    | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/.*error=//' -e 's/ ACME CA=.*//' -e 's/^"//' -e 's/"$//' \
+    | cut -c1-400 || true
+}
+
+# When a shared service's weekly limit is used up, new orders succeed only as it
+# refills, and Traefik does not retry a refused order on its own. Keep asking,
+# then try the other service. Renaming is safe only on a first run, before any
+# client or agent has used the name.
+TRIAL_CERTIFICATE_ATTEMPTS="${TRIAL_CERTIFICATE_ATTEMPTS:-6}"
+TRIAL_CERTIFICATE_RETRY_SECONDS="${TRIAL_CERTIFICATE_RETRY_SECONDS:-30}"
+FIRST_RUN_ENV_CREATED=0
+retry_trial_certificate() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  local attempt started service ip_label current=sslip.io other=nip.io
+  if [[ "${domain}" == *.nip.io ]]; then
+    current=nip.io
+    other=sslip.io
+  fi
+  for service in "${current}" "${other}"; do
+    if [[ "${service}" != "${current}" ]]; then
+      [[ "${FIRST_RUN_ENV_CREATED}" -eq 1 ]] || return 0
+      ip_label="${domain#pulse.}"
+      ip_label="${ip_label%%.*}"
+      domain="pulse.${ip_label}.${service}"
+      required_san="DNS:${domain}"
+      log "trying the same trial address on ${service}: ${domain}"
+      set_env_value DOMAIN "${domain}" "${env_path}"
+    fi
+    for (( attempt = 1; attempt <= TRIAL_CERTIFICATE_ATTEMPTS; attempt++ )); do
+      started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      log "shared trial limit reached; asking again (${service}, attempt ${attempt} of ${TRIAL_CERTIFICATE_ATTEMPTS})"
+      (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose up -d --force-recreate traefik control-plane >/dev/null 2>&1) || true
+      sleep "${TRIAL_CERTIFICATE_RETRY_SECONDS}"
+      if portal_certificate_verified "${domain}" "${required_san}"; then
+        PORTAL_CERTIFICATE_READY=1
+        acme_error=""
+        return 0
+      fi
+      acme_error="$(latest_acme_error --since "${started}")"
+      [[ "${acme_error}" == *"too many certificates"* || -z "${acme_error}" ]] || return 0
+    done
+  done
+}
+
+# A running stack is not a usable one: until its certificate exists, Traefik
+# refuses TLS for that name (sniStrict), so browsers and agents see only a
+# handshake error. Wait for it, check the two DNS names, and say what to fix.
+# Setup still finishes either way.
 PORTAL_CERTIFICATE_READY=0
 PORTAL_READINESS_REPORT=""
 check_portal_readiness() {
   local env_path domain waited acme_error="" reason name missing=() missing_list
-  local certificate certificate_sans
+  local required_san certificate_scope
   env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
   domain="$(env_value DOMAIN "${env_path}")"
   [[ "${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}" =~ ^[0-9]+$ ]] \
     || die "PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS must be a whole number of seconds"
 
-  log "waiting up to ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s for the certificate for ${domain} and *.${domain}"
+  # HTTP-01 cannot issue a wildcard: clients get their own certificates later.
+  if per_client_certificates; then
+    required_san="DNS:${domain}"
+    certificate_scope="${domain}"
+  else
+    required_san="DNS:*.${domain}"
+    certificate_scope="${domain} and *.${domain}"
+  fi
+
+  log "waiting up to ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s for the certificate for ${certificate_scope}"
   for (( waited = 0; waited <= PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS; waited += 5 )); do
-    # s_client normally prints the peer's certificate even when it is expired,
-    # untrusted or for another host. Require verification before reading its
-    # SANs, then match the whole wildcard name, not a different domain's prefix.
-    if certificate="$(timeout 10 openssl s_client -connect 127.0.0.1:443 -servername "${domain}" \
-      -verify_return_error -verify_hostname "${domain}" </dev/null 2>/dev/null)" \
-      && certificate_sans="$(printf '%s\n' "${certificate}" | openssl x509 -noout -ext subjectAltName 2>/dev/null)" \
-      && printf '%s\n' "${certificate_sans}" | tr ',' '\n' \
-        | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -qxF "DNS:*.${domain}"; then
+    if portal_certificate_verified "${domain}" "${required_san}"; then
       PORTAL_CERTIFICATE_READY=1
       break
     fi
-    acme_error="$( (cd "${PULSE_PROVIDER_MSP_INSTALL_DIR}" && docker compose logs --no-color traefik 2>/dev/null) \
-      | grep -F "Unable to obtain ACME certificate" | tail -n 1 \
-      | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/.*error=//' -e 's/ ACME CA=.*//' -e 's/^"//' -e 's/"$//' \
-      | cut -c1-400 || true)"
+    acme_error="$(latest_acme_error)"
     [[ -n "${acme_error}" ]] && break
     sleep 5
   done
+
+  if [[ "${PORTAL_CERTIFICATE_READY}" -ne 1 && "${acme_error}" == *"too many certificates"* ]] && trial_address_install; then
+    retry_trial_certificate
+    certificate_scope="${domain}"
+  fi
 
   for name in "${domain}" "pulse-dns-check.${domain}"; do
     timeout 10 getent ahostsv4 "${name}" >/dev/null 2>&1 || missing+=("${name}")
   done
 
   if [[ "${PORTAL_CERTIFICATE_READY}" -eq 1 && "${#missing[@]}" -eq 0 ]]; then
-    PORTAL_READINESS_REPORT="Certificate: verified on this host for ${domain} and *.${domain}."
+    PORTAL_READINESS_REPORT="Certificate: verified on this host for ${certificate_scope}."
+    if per_client_certificates; then
+      PORTAL_READINESS_REPORT+=$'\n'"Each client gets its own certificate from Let's Encrypt when you add it."
+    fi
   else
     PORTAL_READINESS_REPORT="NOT READY YET:"
     if [[ "${PORTAL_CERTIFICATE_READY}" -ne 1 ]]; then
       if [[ -n "${acme_error}" ]]; then
         reason="$(explain_acme_failure "${acme_error}")"
       else
-        reason="No trusted, current certificate covering ${domain} and *.${domain} after ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s. Check Traefik's ACME logs and this host's clock; issuance may still be pending."
+        reason="No trusted, current certificate covering ${certificate_scope} after ${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS}s. Check Traefik's ACME logs and this host's clock; issuance may still be pending."
       fi
       PORTAL_READINESS_REPORT+=$'\n'"  - No verified TLS certificate yet; browsers and agents may refuse the connection."
       PORTAL_READINESS_REPORT+=$'\n'"    ${reason}"
@@ -935,8 +1121,13 @@ check_portal_readiness() {
     if [[ "${#missing[@]}" -ne 0 ]]; then
       # setup.sh sets IFS to newline and tab, so join the names by hand.
       missing_list="$(printf '%s, ' "${missing[@]}")"
-      PORTAL_READINESS_REPORT+=$'\n'"  - This host cannot resolve ${missing_list%, }. Browsers and agents need A records"
-      PORTAL_READINESS_REPORT+=$'\n'"    for ${domain} and *.${domain} pointing here (on Cloudflare, DNS only)."
+      if trial_address_install; then
+        PORTAL_READINESS_REPORT+=$'\n'"  - This host cannot resolve ${missing_list%, }. Its DNS resolver may block shared trial"
+        PORTAL_READINESS_REPORT+=$'\n'"    address services. Browsers and agents need to resolve them too."
+      else
+        PORTAL_READINESS_REPORT+=$'\n'"  - This host cannot resolve ${missing_list%, }. Browsers and agents need A records"
+        PORTAL_READINESS_REPORT+=$'\n'"    for ${domain} and *.${domain} pointing here (on Cloudflare, DNS only)."
+      fi
     fi
     PORTAL_READINESS_REPORT+=$'\n'"  Correct any wrong value with: sudo nano ${env_path}"
     PORTAL_READINESS_REPORT+=$'\n'"  then retry with: cd ${PULSE_PROVIDER_MSP_INSTALL_DIR} && sudo docker compose up -d --force-recreate traefik control-plane"
@@ -973,16 +1164,24 @@ run_install_proof_if_requested() {
 
 print_summary() {
   local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
-  local domain data_dir network
+  local domain data_dir network trial_note=""
   domain="$(env_value DOMAIN "${env_path}")"
   data_dir="$(provider_data_dir)"
   network="$(provider_docker_network)"
+  if trial_address_install; then
+    trial_note="TRIAL ONLY: ${domain} is a shared trial address for evaluating Pulse.
+Do not build on it. It stops working if this server's IP changes, new clients
+depend on a Let's Encrypt limit shared with everyone using these services, and
+moving to your own domain later means reinstalling every agent.
+
+"
+  fi
 
   cat <<EOF
 
 Pulse Provider MSP is running.
 
-${PORTAL_READINESS_REPORT}
+${trial_note}${PORTAL_READINESS_REPORT}
 
 Paths:
   - Deploy dir: ${PULSE_PROVIDER_MSP_INSTALL_DIR}
