@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
@@ -174,6 +175,25 @@ func (c *defaultCollector) Chmod(name string, mode os.FileMode) error {
 
 func (c *defaultCollector) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	return os.WriteFile(filename, data, perm)
+}
+
+// WritePrivateStateFile publishes a complete owner-only file without truncating
+// its predecessor or writing through an existing destination link. Other system
+// files retain WriteFile's existing semantics.
+func (c *defaultCollector) WritePrivateStateFile(filename string, data []byte) error {
+	return securityutil.WriteSecureStorageFile(filename, data, 0700, 0600)
+}
+
+func writePrivateAgentState(collector SystemCollector, filename string, data []byte) error {
+	// Keep SystemCollector source-compatible with existing injected collectors.
+	// The production collector owns secure publication; custom collectors retain
+	// control over their filesystem implementation, as they do for ordinary writes.
+	if writer, ok := collector.(interface {
+		WritePrivateStateFile(string, []byte) error
+	}); ok {
+		return writer.WritePrivateStateFile(filename, data)
+	}
+	return collector.WriteFile(filename, data, 0600)
 }
 
 func (c *defaultCollector) CommandCombinedOutput(ctx context.Context, name string, arg ...string) (string, error) {
