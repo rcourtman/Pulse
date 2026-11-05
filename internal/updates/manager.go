@@ -255,6 +255,12 @@ type Manager struct {
 	// compiled Pro binary (SetProUpdateCredentialSource, wired at startup).
 	// Nil on the community binary.
 	proCredentialSource func() (ProUpdateCredentials, bool)
+
+	// operationGeneration advances, under updateMu, each time an apply or
+	// rollback is admitted. An update check may publish statuses only while
+	// the generation it captured at start is still current, and only if no
+	// operation was in flight then (see beginUpdateCheckStatus).
+	operationGeneration uint64
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -319,18 +325,27 @@ func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 	return m.progressChan
 }
 
-// Close closes the progress channel and cleans up resources
+// Close closes the progress channel and cleans up resources.
+//
+// closed is written under lifecycleMu, the boundary publishStatus reads it
+// under, and under progressMu, which guards the channel close. Both are
+// released before Close waits for the broadcaster's loops and the heartbeat
+// loop; none of those waits depends on a client's network write. The status
+// snapshot keeps updating after Close; nothing more is delivered.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
+		m.lifecycleMu.Lock()
 		m.progressMu.Lock()
 		m.closed = true
 		close(m.progressChan)
 		m.progressMu.Unlock()
+		broadcaster := m.sseBroadcast
+		m.lifecycleMu.Unlock()
 
 		close(m.shutdownCh)
 
-		if m.sseBroadcast != nil {
-			m.sseBroadcast.Close()
+		if broadcaster != nil {
+			broadcaster.Close()
 		}
 
 		m.heartbeatWg.Wait()
@@ -344,22 +359,22 @@ func (m *Manager) GetSSEBroadcaster() *SSEBroadcaster {
 	return m.sseBroadcast
 }
 
-// AddSSEClient adds a new SSE client for update progress streaming
+// AddSSEClient adds a new SSE client for update progress streaming. The
+// connection preamble is a network write, so it runs outside lifecycleMu.
 func (m *Manager) AddSSEClient(w http.ResponseWriter, clientID string) *SSEClient {
-	m.lifecycleMu.RLock()
-	defer m.lifecycleMu.RUnlock()
-	if m.sseBroadcast == nil {
+	broadcaster := m.GetSSEBroadcaster()
+	if broadcaster == nil {
 		return nil
 	}
-	return m.sseBroadcast.AddClient(w, clientID)
+	return broadcaster.AddClient(w, clientID)
 }
 
-// RemoveSSEClient removes an SSE client
+// RemoveSSEClient removes the calling handler's SSE client and returns only
+// once the broadcaster will never write to that client's ResponseWriter
+// again. It may wait for an in-flight write, so it runs outside lifecycleMu.
 func (m *Manager) RemoveSSEClient(clientID string) {
-	m.lifecycleMu.RLock()
-	defer m.lifecycleMu.RUnlock()
-	if m.sseBroadcast != nil {
-		m.sseBroadcast.RemoveClient(clientID)
+	if broadcaster := m.GetSSEBroadcaster(); broadcaster != nil {
+		broadcaster.RemoveClient(clientID)
 	}
 }
 
@@ -391,12 +406,15 @@ type UpdateCheckOptions struct {
 
 // CheckForUpdatesWithOptions refreshes the saved-channel cache after a forced check.
 func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options UpdateCheckOptions) (*UpdateInfo, error) {
+	// Capture status eligibility before any work: a check that is running when
+	// an apply or rollback is admitted must never publish over that operation.
+	statusTicket := m.beginUpdateCheckStatus()
 	channel := options.Channel
 	// Get current version first to auto-detect channel if needed
 	currentInfo, err := GetCurrentVersion()
 	if err != nil {
 		m.recordUpdateCheck(m.resolveChannel("", nil), strings.TrimSpace(channel) == "", UpdateCheckOutcomeError, false)
-		m.updateStatus("error", 0, "Failed to get current version")
+		m.publishCheckStatus(statusTicket, "error", 0, "Failed to get current version")
 		return nil, fmt.Errorf("failed to get current version: %w", err)
 	}
 
@@ -423,7 +441,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 		m.statusMu.RUnlock()
 	}
 
-	m.updateStatus("checking", 0, "Checking for updates...")
+	m.publishCheckStatus(statusTicket, "checking", 0, "Checking for updates...")
 
 	// Skip update check for source builds
 	if currentInfo.IsSourceBuild {
@@ -439,7 +457,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			m.statusMu.Unlock()
 		}
 		m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeSkipped, false)
-		m.updateStatus("idle", 0, "Updates not available for source builds")
+		m.publishCheckStatus(statusTicket, "idle", 0, "Updates not available for source builds")
 		return info, nil
 	}
 
@@ -447,7 +465,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	currentVer, err := ParseVersion(currentInfo.Version)
 	if err != nil {
 		m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeError, false)
-		m.updateStatus("error", 0, "Invalid current version")
+		m.publishCheckStatus(statusTicket, "error", 0, "Invalid current version")
 		return nil, fmt.Errorf("failed to parse current version: %w", err)
 	}
 
@@ -458,7 +476,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 		info, proErr := m.checkProUpdates(ctx, channel, currentInfo, currentVer)
 		if proErr != nil {
 			m.recordUpdateCheck(channel, effectiveChannel, updateCheckErrorOutcome(proErr), false)
-			m.updateStatus("error", 0, "Failed to check for Pulse Pro updates", proErr)
+			m.publishCheckStatus(statusTicket, "error", 0, "Failed to check for Pulse Pro updates", proErr)
 			return nil, proErr
 		}
 		outcome := availabilityOutcome(info.Available)
@@ -480,7 +498,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			status = "available"
 			message = fmt.Sprintf("Update available: %s", info.LatestVersion)
 		}
-		m.updateStatus(status, 100, message)
+		m.publishCheckStatus(statusTicket, status, 100, message)
 		return info, nil
 	}
 
@@ -492,7 +510,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 			m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeRateLimited, false)
 
 			if options.Force {
-				m.updateStatus("error", 0, "Fresh update check unavailable", err)
+				m.publishCheckStatus(statusTicket, "error", 0, "Fresh update check unavailable", err)
 				return nil, fmt.Errorf("fresh update check unavailable: %w", err)
 			}
 			if useCache {
@@ -500,7 +518,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 				cachedInfo, hasCached := m.checkCache[channel]
 				m.statusMu.RUnlock()
 				if hasCached && cachedInfo != nil {
-					m.updateStatus("idle", 0, "Using cached update info (GitHub rate limit)")
+					m.publishCheckStatus(statusTicket, "idle", 0, "Using cached update info (GitHub rate limit)")
 					return cachedInfo, nil
 				}
 			}
@@ -513,7 +531,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 				IsPrerelease:   currentVer.IsPrerelease(),
 				Warning:        "Update check temporarily unavailable because GitHub rate limit was reached. Try again in a few minutes.",
 			}
-			m.updateStatus("idle", 0, "GitHub rate limit reached during update check")
+			m.publishCheckStatus(statusTicket, "idle", 0, "GitHub rate limit reached during update check")
 			return info, nil
 		}
 
@@ -532,12 +550,12 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 				m.cacheTime[channel] = time.Now()
 				m.statusMu.Unlock()
 			}
-			m.updateStatus("idle", 0, fmt.Sprintf("No releases available for %s channel", channel))
+			m.publishCheckStatus(statusTicket, "idle", 0, fmt.Sprintf("No releases available for %s channel", channel))
 			return info, nil
 		}
 		// For other errors, return the error
 		m.recordUpdateCheck(channel, effectiveChannel, updateCheckErrorOutcome(err), false)
-		m.updateStatus("error", 0, "Failed to check for updates", err)
+		m.publishCheckStatus(statusTicket, "error", 0, "Failed to check for updates", err)
 		return nil, err
 	}
 
@@ -545,7 +563,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	if err != nil {
 		parseErr := fmt.Errorf("failed to parse latest version: %w", err)
 		m.recordUpdateCheck(channel, effectiveChannel, UpdateCheckOutcomeMetadataError, false)
-		m.updateStatus("error", 0, "Invalid latest version", parseErr)
+		m.publishCheckStatus(statusTicket, "error", 0, "Invalid latest version", parseErr)
 		return nil, parseErr
 	}
 
@@ -602,7 +620,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 		status = "available"
 		message = fmt.Sprintf("Update available: %s", info.LatestVersion)
 	}
-	m.updateStatus(status, 100, message)
+	m.publishCheckStatus(statusTicket, status, 100, message)
 
 	return info, nil
 }
@@ -683,18 +701,10 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	}
 
 	// Ensure only one update runs at a time.
-	m.updateMu.Lock()
-	if m.updateInFlight {
-		m.updateMu.Unlock()
+	if !m.admitUpdateOperation() {
 		return fmt.Errorf("update already in progress")
 	}
-	m.updateInFlight = true
-	m.updateMu.Unlock()
-	defer func() {
-		m.updateMu.Lock()
-		m.updateInFlight = false
-		m.updateMu.Unlock()
-	}()
+	defer m.releaseUpdateOperation()
 
 	m.updateStatus("downloading", 10, "Downloading update...")
 
@@ -1951,18 +1961,10 @@ func (m *Manager) RollbackToBackup(ctx context.Context, req RollbackRequest) err
 
 	// Rollback and update share the single in-flight slot: restoring a backup
 	// while an update is replacing the same files would corrupt both.
-	m.updateMu.Lock()
-	if m.updateInFlight {
-		m.updateMu.Unlock()
+	if !m.admitUpdateOperation() {
 		return fmt.Errorf("update already in progress")
 	}
-	m.updateInFlight = true
-	m.updateMu.Unlock()
-	defer func() {
-		m.updateMu.Lock()
-		m.updateInFlight = false
-		m.updateMu.Unlock()
-	}()
+	defer m.releaseUpdateOperation()
 
 	initiatedBy := req.InitiatedBy
 	if initiatedBy == "" {
@@ -2264,9 +2266,20 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 }
 
 // updateStatus updates the current status
+//
+// Only the admitted apply or rollback calls this. Update checks publish
+// through publishCheckStatus so they can never overwrite an operation's
+// progress or terminal status.
 func (m *Manager) updateStatus(status string, progress int, message string, err ...error) {
-	m.statusMu.Lock()
-	m.status = UpdateStatus{
+	m.publishStatus(newUpdateStatus(status, progress, message, err...))
+
+	if delay := statusDelayForStage(status); delay > 0 {
+		time.Sleep(delay)
+	}
+}
+
+func newUpdateStatus(status string, progress int, message string, err ...error) UpdateStatus {
+	next := UpdateStatus{
 		Status:    status,
 		Progress:  progress,
 		Message:   message,
@@ -2274,24 +2287,32 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	}
 	// If error provided, sanitize and add to status
 	if len(err) > 0 && err[0] != nil {
-		m.status.Error = sanitizeError(err[0])
+		next.Error = sanitizeError(err[0])
 	}
-	statusCopy := m.status
+	return next
+}
+
+// publishStatus stores next as the current status and hands it to the
+// progress channel and the SSE broadcaster. Both hand-offs are non-blocking,
+// so callers may hold updateMu across it. Lock order: updateMu (check
+// publication only), then statusMu, then lifecycleMu, then progressMu, then
+// the broadcaster's own locks. Nothing that holds any of the later locks
+// acquires updateMu.
+func (m *Manager) publishStatus(next UpdateStatus) {
+	m.statusMu.Lock()
+	m.status = next
 	m.statusMu.Unlock()
 
 	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	if m.closed {
-		m.lifecycleMu.RUnlock()
-		if delay := statusDelayForStage(status); delay > 0 {
-			time.Sleep(delay)
-		}
 		return
 	}
 	// Send to progress channel (non-blocking) for WebSocket compatibility
 	m.progressMu.RLock()
 	if !m.closed {
 		select {
-		case m.progressChan <- statusCopy:
+		case m.progressChan <- next:
 		default:
 		}
 	}
@@ -2299,10 +2320,68 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 
 	// Broadcast to SSE clients
 	if m.sseBroadcast != nil {
-		m.sseBroadcast.Broadcast(statusCopy)
+		m.sseBroadcast.Broadcast(next)
 	}
-	m.lifecycleMu.RUnlock()
+}
 
+// admitUpdateOperation claims the single apply/rollback slot. Advancing the
+// operation generation in the same critical section revokes status
+// publication for every update check already running, so none of them can
+// replace this operation's progress or terminal status, including a check
+// that returns after the operation has ended.
+func (m *Manager) admitUpdateOperation() bool {
+	m.updateMu.Lock()
+	defer m.updateMu.Unlock()
+	if m.updateInFlight {
+		return false
+	}
+	m.updateInFlight = true
+	m.operationGeneration++
+	return true
+}
+
+func (m *Manager) releaseUpdateOperation() {
+	m.updateMu.Lock()
+	m.updateInFlight = false
+	m.updateMu.Unlock()
+}
+
+// updateCheckStatusTicket records whether an update check may publish
+// progress statuses. It is captured once, when the check starts.
+type updateCheckStatusTicket struct {
+	generation uint64
+	eligible   bool
+}
+
+// beginUpdateCheckStatus captures the check's status eligibility. A check
+// that starts while an apply or rollback is in flight is never eligible; a
+// check that starts while idle stays eligible only until the next admission.
+func (m *Manager) beginUpdateCheckStatus() updateCheckStatusTicket {
+	m.updateMu.Lock()
+	defer m.updateMu.Unlock()
+	return updateCheckStatusTicket{
+		generation: m.operationGeneration,
+		eligible:   !m.updateInFlight,
+	}
+}
+
+// publishCheckStatus publishes an update-check status only while the check is
+// still eligible. The eligibility test, the status write and both
+// non-blocking hand-offs happen under updateMu, so an admission either
+// completes after the whole publication (and its own statuses follow it in
+// every feed) or makes the check ineligible before anything is written.
+// Check results, the check cache and check observations are unaffected.
+func (m *Manager) publishCheckStatus(ticket updateCheckStatusTicket, status string, progress int, message string, err ...error) {
+	m.updateMu.Lock()
+	publish := ticket.eligible && ticket.generation == m.operationGeneration
+	if publish {
+		m.publishStatus(newUpdateStatus(status, progress, message, err...))
+	}
+	m.updateMu.Unlock()
+
+	if !publish {
+		return
+	}
 	if delay := statusDelayForStage(status); delay > 0 {
 		time.Sleep(delay)
 	}

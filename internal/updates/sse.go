@@ -2,6 +2,7 @@ package updates
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -11,28 +12,86 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// sseClientQueueSize bounds how many undelivered statuses a single slow
+// sseClientQueueSize bounds how many undelivered frames a single slow
 // client may hold before new ones are dropped for that client.
 const sseClientQueueSize = 64
 
-// SSEClient represents a Server-Sent Events client
+// sseClientInactivityTimeout retires clients whose writer has not completed
+// a write for this long.
+const sseClientInactivityTimeout = 5 * time.Minute
+
+// SSEClient represents a Server-Sent Events client.
+//
+// Lifecycle: AddClient registers the client under an ID no other live or
+// retired client holds, and starts its single ordered writer. Any path may
+// retire it (the owning handler, an inactivity sweep, a write failure or
+// panic, or Close): retirement closes Done and moves the client to the
+// broadcaster's retired set without waiting for anything, then expires a
+// write still in progress so a stalled peer cannot keep it alive. Only the
+// owning handler's RemoveClient waits, outside every broadcaster lock, until
+// the writer has stopped, so no write or flush can reach the ResponseWriter
+// after the handler returns.
 type SSEClient struct {
-	ID         string
-	Writer     http.ResponseWriter
-	Flusher    http.Flusher
-	Done       chan bool
+	ID      string
+	Writer  http.ResponseWriter
+	Flusher http.Flusher
+	Done    chan bool
+	// LastActive is the connection time. Later activity is tracked in
+	// lastActive so the inactivity sweep never waits on a client's writer.
 	LastActive time.Time
-	mu         sync.Mutex // protects writes to Writer and Flusher
-	// queue delivers broadcasts to this client in order through a single
-	// writer goroutine. Nil for clients not registered via AddClient.
-	queue chan UpdateStatus
+	mu         sync.Mutex // serializes writes to Writer and Flusher
+	// queue delivers statuses and heartbeats to this client in order through
+	// a single writer goroutine. Nil for clients not registered via AddClient.
+	queue chan sseFrame
+	// stopped is closed once the writer goroutine has exited for good. Nil
+	// for clients not registered via AddClient.
+	stopped    chan struct{}
+	writing    atomic.Bool  // set, under mu, before Done is checked for a write
+	lastActive atomic.Int64 // unix nanoseconds of the last completed write
+	// lifeMu orders write interruption against the owner's join: once the
+	// owner has collected the client, nothing touches its ResponseWriter.
+	lifeMu    sync.Mutex
+	collected bool
+}
+
+// interruptWrite expires a write in progress through the ResponseWriter's
+// write deadline, unless the owning handler has already collected the
+// client. Callers close Done first, so a writer that has not yet published
+// a write will see Done and skip it.
+func (c *SSEClient) interruptWrite() {
+	c.lifeMu.Lock()
+	defer c.lifeMu.Unlock()
+	if c.collected || !c.writing.Load() {
+		return
+	}
+	err := http.NewResponseController(c.Writer).SetWriteDeadline(time.Now())
+	if err != nil && !errors.Is(err, http.ErrNotSupported) {
+		log.Debug().Err(err).Str("client_id", c.ID).Msg("Could not interrupt SSE client write")
+	}
+}
+
+// sseFrame is one unit of a client's ordered stream.
+type sseFrame struct {
+	status    UpdateStatus
+	heartbeat bool
+}
+
+func (c *SSEClient) lastActivity() time.Time {
+	if ns := c.lastActive.Load(); ns != 0 {
+		return time.Unix(0, ns)
+	}
+	return c.LastActive
 }
 
 // SSEBroadcaster manages Server-Sent Events connections for update progress
 type SSEBroadcaster struct {
-	mu               sync.RWMutex
-	clients          map[string]*SSEClient
-	messageChan      chan UpdateStatus
+	mu      sync.RWMutex
+	clients map[string]*SSEClient
+	// retired holds clients whose Done is closed until their owning handler
+	// has collected them, so the owner can still find and join the writer and
+	// the ID stays reserved until that owner's RemoveClient returns.
+	retired          map[string]*SSEClient
+	messageChan      chan sseFrame // statuses and heartbeats, in emission order
 	cachedStatus     UpdateStatus
 	cachedStatusTime time.Time
 	statusMu         sync.RWMutex
@@ -46,7 +105,8 @@ type SSEBroadcaster struct {
 func NewSSEBroadcaster() *SSEBroadcaster {
 	b := &SSEBroadcaster{
 		clients:     make(map[string]*SSEClient),
-		messageChan: make(chan UpdateStatus, 100),
+		retired:     make(map[string]*SSEClient),
+		messageChan: make(chan sseFrame, 100),
 		stopCh:      make(chan struct{}),
 		cachedStatus: UpdateStatus{
 			Status:    "idle",
@@ -78,18 +138,29 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 		return nil
 	}
 
+	now := time.Now()
 	client := &SSEClient{
 		ID:         clientID,
 		Writer:     w,
 		Flusher:    flusher,
 		Done:       make(chan bool, 1),
-		LastActive: time.Now(),
-		queue:      make(chan UpdateStatus, sseClientQueueSize),
+		LastActive: now,
+		queue:      make(chan sseFrame, sseClientQueueSize),
+		stopped:    make(chan struct{}),
 	}
+	client.lastActive.Store(now.UnixNano())
 
 	b.mu.Lock()
 	if b.closed.Load() {
 		b.mu.Unlock()
+		return nil
+	}
+	if _, live := b.clients[clientID]; live || b.retired[clientID] != nil {
+		// Owners remove clients by ID, so a second client under the same ID
+		// could be removed in place of the first and leave its writer
+		// running past its handler. Refuse it; the browser reconnects.
+		b.mu.Unlock()
+		log.Warn().Str("client_id", clientID).Msg("Rejected SSE client with an ID already in use")
 		return nil
 	}
 	b.clients[clientID] = client
@@ -114,11 +185,17 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 	cachedStatus := b.cachedStatus
 	b.statusMu.RUnlock()
 
+	preamble := ": connected\n\n"
 	if data, err := json.Marshal(cachedStatus); err == nil {
-		b.writeToClient(client, ": connected\n\n"+formatSSEData(data))
+		preamble += formatSSEData(data)
 	} else {
 		log.Error().Err(err).Str("client_id", clientID).Msg("Failed to marshal initial status for SSE")
-		b.writeToClient(client, ": connected\n\n")
+	}
+	// The preamble is written on the handler's own goroutine, before the
+	// ordered writer starts. A failure retires the client; the writer then
+	// exits at once and the handler's RemoveClient returns promptly.
+	if err := b.writeToClient(client, preamble); err != nil {
+		b.retireClient(client)
 	}
 
 	go b.clientWriteLoop(client)
@@ -126,55 +203,131 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 	return client
 }
 
-// clientWriteLoop drains a client's queue so broadcasts reach it in the
-// order they were emitted. A goroutine per message (the previous design)
-// let a later stage overtake an earlier one on the wire.
+// clientWriteLoop drains a client's queue so statuses and heartbeats reach it
+// in the order they were emitted. A goroutine per message (the previous
+// design) let a later stage overtake an earlier one on the wire. It is the
+// only goroutine that writes to the client after AddClient returns.
 func (b *SSEBroadcaster) clientWriteLoop(client *SSEClient) {
+	defer b.writerStopped(client)
 	for {
 		select {
 		case <-client.Done:
 			return
-		case status := <-client.queue:
-			b.sendToClient(client, status)
+		case frame := <-client.queue:
+			if err := b.writeFrame(client, frame); err != nil {
+				b.retireClient(client)
+			}
 		}
 	}
 }
 
-// enqueueForClient hands a status to the client's ordered writer without
+// writerStopped records that the client's writer has exited, which is what
+// RemoveClient waits for. It does not release the client's ID: only the
+// owner's collection does, so a delayed owner cannot later remove a newer
+// client admitted under the same ID.
+func (b *SSEBroadcaster) writerStopped(client *SSEClient) {
+	close(client.stopped)
+}
+
+// enqueueFrame hands a frame to the client's ordered writer without
 // blocking the broadcast loop on a slow connection.
-func (b *SSEBroadcaster) enqueueForClient(client *SSEClient, status UpdateStatus) {
+func (b *SSEBroadcaster) enqueueFrame(client *SSEClient, frame sseFrame) {
 	if client.queue == nil {
-		go b.sendToClient(client, status)
+		// Clients not registered via AddClient have no ordered writer;
+		// SendHeartbeat writes their heartbeats directly.
+		if !frame.heartbeat {
+			go b.sendToClient(client, frame.status)
+		}
 		return
 	}
 	select {
 	case <-client.Done:
-	case client.queue <- status:
+	case client.queue <- frame:
 	default:
+		if frame.heartbeat {
+			return // the client already has undelivered frames
+		}
 		log.Warn().
 			Str("client_id", client.ID).
-			Str("status", status.Status).
+			Str("status", frame.status.Status).
 			Msg("SSE client queue full, dropping update status for this client")
 	}
 }
 
-// RemoveClient unregisters an SSE client
+// retireLocked closes the client's Done and moves a live client from the
+// registry to the retired set, where its ID stays reserved until the owner
+// collects it. It never waits on the client's writer, so it is safe under
+// b.mu. b.mu must be held.
+func (b *SSEBroadcaster) retireLocked(client *SSEClient) {
+	closeDone(client.Done)
+	if b.clients[client.ID] != client {
+		return
+	}
+	delete(b.clients, client.ID)
+	if client.stopped != nil {
+		b.retired[client.ID] = client
+	}
+}
+
+func (b *SSEBroadcaster) retireClient(client *SSEClient) {
+	b.mu.Lock()
+	b.retireLocked(client)
+	b.mu.Unlock()
+}
+
+// RemoveClient is the owning handler's removal of its client. It retires the
+// client if nothing else has, then waits until the client's writer has
+// stopped, so the caller may return its ResponseWriter to net/http. A write
+// still in flight is interrupted with an immediate write deadline where the
+// ResponseWriter supports one (net/http responses and Pulse's middleware
+// writers forward it); otherwise the wait lasts until that write returns.
+// The wait happens outside every broadcaster lock, and concurrent removals
+// of the same client all wait. Call it only from the handler that owns the
+// client's ResponseWriter.
 func (b *SSEBroadcaster) RemoveClient(clientID string) {
 	b.mu.Lock()
-	client, exists := b.clients[clientID]
-	if exists {
-		close(client.Done)
-		delete(b.clients, clientID)
+	client, live := b.clients[clientID]
+	if live {
+		b.retireLocked(client)
+	} else {
+		client = b.retired[clientID]
 	}
 	clientCount := len(b.clients)
 	b.mu.Unlock()
 
-	if exists {
+	if live {
 		log.Info().
 			Str("client_id", clientID).
 			Int("total_clients", clientCount).
 			Msg("SSE client disconnected")
 	}
+	if client != nil {
+		b.quiesce(client)
+	}
+}
+
+// quiesce waits until a retired client's writer has stopped for good, marks
+// the client collected so no later interruption touches its writer, and
+// only then releases its ID. The registry lock is held just for that
+// release, never while waiting on the writer.
+func (b *SSEBroadcaster) quiesce(client *SSEClient) {
+	if client.stopped == nil {
+		return
+	}
+	// Done is already closed, so a writer that has not yet published that it
+	// is writing will observe Done and skip the write. One that has may be
+	// blocked on a slow or stalled peer: expire its deadline.
+	client.interruptWrite()
+	<-client.stopped
+	client.lifeMu.Lock()
+	client.collected = true
+	client.lifeMu.Unlock()
+
+	b.mu.Lock()
+	if b.retired[client.ID] == client {
+		delete(b.retired, client.ID)
+	}
+	b.mu.Unlock()
 }
 
 // Broadcast sends an update status to all connected clients
@@ -193,7 +346,7 @@ func (b *SSEBroadcaster) Broadcast(status UpdateStatus) {
 	select {
 	case <-b.stopCh:
 		return
-	case b.messageChan <- status:
+	case b.messageChan <- sseFrame{status: status}:
 	default:
 		log.Warn().Msg("SSE message channel full, dropping message")
 	}
@@ -221,7 +374,7 @@ func (b *SSEBroadcaster) broadcastLoop() {
 		select {
 		case <-b.stopCh:
 			return
-		case status := <-b.messageChan:
+		case frame := <-b.messageChan:
 			b.mu.RLock()
 			clients := make([]*SSEClient, 0, len(b.clients))
 			for _, client := range b.clients {
@@ -232,35 +385,44 @@ func (b *SSEBroadcaster) broadcastLoop() {
 			// Each client has its own ordered writer, so a slow client
 			// neither blocks the others nor receives stages out of order.
 			for _, client := range clients {
-				b.enqueueForClient(client, status)
+				b.enqueueFrame(client, frame)
 			}
 
-			log.Debug().
-				Str("status", status.Status).
-				Int("progress", status.Progress).
-				Int("clients", len(clients)).
-				Msg("Broadcasted update status to SSE clients")
+			if !frame.heartbeat {
+				log.Debug().
+					Str("status", frame.status.Status).
+					Int("progress", frame.status.Progress).
+					Int("clients", len(clients)).
+					Msg("Broadcasted update status to SSE clients")
+			}
 		}
 	}
 }
 
 // sendToClient sends a message to a specific client
 func (b *SSEBroadcaster) sendToClient(client *SSEClient, status UpdateStatus) {
-	// Check if client is already disconnected
+	if err := b.writeFrame(client, sseFrame{status: status}); err != nil {
+		b.retireClient(client)
+	}
+}
+
+// writeFrame writes one stream frame. It returns an error only when the
+// ResponseWriter failed, in which case the caller retires the client.
+func (b *SSEBroadcaster) writeFrame(client *SSEClient, frame sseFrame) error {
 	select {
 	case <-client.Done:
-		return
+		return nil
 	default:
 	}
-
-	// Marshal status to JSON
-	data, err := json.Marshal(status)
+	if frame.heartbeat {
+		return b.writeToClient(client, ": heartbeat\n\n")
+	}
+	data, err := json.Marshal(frame.status)
 	if err != nil {
 		log.Error().Err(err).Str("client_id", client.ID).Msg("Failed to marshal status for SSE")
-		return
+		return nil
 	}
-
-	b.writeToClient(client, formatSSEData(data))
+	return b.writeToClient(client, formatSSEData(data))
 }
 
 // formatSSEData frames a JSON payload as a single SSE data event.
@@ -271,16 +433,21 @@ func formatSSEData(data []byte) string {
 // writeToClient writes a raw SSE frame and flushes it immediately. Every
 // write to a client goes through here under the client lock: the
 // ResponseWriter is not safe for concurrent use, and an unflushed frame is
-// indistinguishable from a silent stream on the browser side.
-func (b *SSEBroadcaster) writeToClient(client *SSEClient, frame string) {
-	// Acquire client lock to prevent concurrent writes
+// indistinguishable from a silent stream on the browser side. A retired
+// client is never written. It returns the write error, or an error for a
+// recovered panic; the caller retires the client without holding its lock.
+func (b *SSEBroadcaster) writeToClient(client *SSEClient, frame string) (err error) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 
-	// Double-check client is not disconnected while waiting for lock
+	// Publish the write before checking Done. Retirement closes Done before
+	// quiesce reads writing, so either this check sees Done closed and skips
+	// the write, or quiesce sees the write and can interrupt it.
+	client.writing.Store(true)
+	defer client.writing.Store(false)
 	select {
 	case <-client.Done:
-		return
+		return nil
 	default:
 	}
 
@@ -290,7 +457,7 @@ func (b *SSEBroadcaster) writeToClient(client *SSEClient, frame string) {
 				Str("client_id", client.ID).
 				Interface("panic", r).
 				Msg("Recovered from panic while sending to SSE client")
-			go b.RemoveClient(client.ID)
+			err = fmt.Errorf("panic writing to SSE client: %v", r)
 		}
 	}()
 
@@ -299,16 +466,13 @@ func (b *SSEBroadcaster) writeToClient(client *SSEClient, frame string) {
 			Err(err).
 			Str("client_id", client.ID).
 			Msg("Failed to write to SSE client, removing")
-		// Removal takes the broadcaster lock; do it off this goroutine so a
-		// concurrent cleanup pass holding that lock while waiting on this
-		// client's lock cannot deadlock.
-		go b.RemoveClient(client.ID)
-		return
+		return err
 	}
 
 	// Flush immediately
 	client.Flusher.Flush()
-	client.LastActive = time.Now()
+	client.lastActive.Store(time.Now().UnixNano())
+	return nil
 }
 
 // cleanupLoop periodically removes inactive clients
@@ -323,80 +487,94 @@ func (b *SSEBroadcaster) cleanupLoop() {
 		case <-b.stopCh:
 			return
 		case <-ticker.C:
-			now := time.Now()
-			b.mu.Lock()
-
-			idsToRemove := make([]string, 0)
-			for id, client := range b.clients {
-				// Acquire client lock to safely read LastActive (written by sendToClient/SendHeartbeat)
-				client.mu.Lock()
-				inactive := now.Sub(client.LastActive) > 5*time.Minute
-				client.mu.Unlock()
-
-				// Remove clients inactive for more than 5 minutes
-				if inactive {
-					idsToRemove = append(idsToRemove, id)
-				}
-			}
-
-			for _, id := range idsToRemove {
-				if client, exists := b.clients[id]; exists {
-					close(client.Done)
-					delete(b.clients, id)
-					log.Info().
-						Str("client_id", id).
-						Msg("Removed inactive SSE client")
-				}
-			}
-
-			b.mu.Unlock()
+			b.retireInactiveClients(time.Now())
 		}
 	}
 }
 
-// SendHeartbeat sends a heartbeat comment to all clients to keep connections alive
+// retireInactiveClients retires clients whose writer has not completed a
+// write within sseClientInactivityTimeout, and expires the write a stalled
+// client is blocked in. It reads activity atomically, so it never waits on a
+// client's writer while holding b.mu.
+func (b *SSEBroadcaster) retireInactiveClients(now time.Time) {
+	b.mu.Lock()
+	retired := make([]*SSEClient, 0)
+	for id, client := range b.clients {
+		if now.Sub(client.lastActivity()) > sseClientInactivityTimeout {
+			b.retireLocked(client)
+			retired = append(retired, client)
+			log.Info().
+				Str("client_id", id).
+				Msg("Removed inactive SSE client")
+		}
+	}
+	b.mu.Unlock()
+	for _, client := range retired {
+		client.interruptWrite()
+	}
+}
+
+// SendHeartbeat sends a heartbeat comment to every client to keep
+// connections alive. It never waits on a client's writer: the heartbeat
+// follows the same broadcast path as statuses, so it keeps emission order
+// and reaches each client through that client's ordered queue. A client
+// whose queue is full already has undelivered frames and skips it.
 func (b *SSEBroadcaster) SendHeartbeat() {
 	if b.closed.Load() {
 		return
 	}
 
 	b.mu.RLock()
-	clients := make([]*SSEClient, 0, len(b.clients))
+	legacy := make([]*SSEClient, 0)
 	for _, client := range b.clients {
-		clients = append(clients, client)
+		if client.queue == nil {
+			legacy = append(legacy, client)
+		}
 	}
 	b.mu.RUnlock()
 
-	for _, client := range clients {
+	// Clients not registered via AddClient have no ordered writer.
+	for _, client := range legacy {
 		b.sendHeartbeatToClient(client)
+	}
+
+	select {
+	case <-b.stopCh:
+	case b.messageChan <- sseFrame{heartbeat: true}:
+	default:
 	}
 }
 
-// Close closes the broadcaster and disconnects all clients
+// Close closes the broadcaster, retires all clients and expires any write
+// they are blocked in, including a connection preamble still being written
+// before the handler reached its wait. It waits for the broadcaster's own
+// loops, which never block on a client, but not for client writers: each
+// owning handler joins its writer through RemoveClient once Done wakes it.
 func (b *SSEBroadcaster) Close() {
 	b.closeOnce.Do(func() {
 		b.closed.Store(true)
 		close(b.stopCh)
 
 		b.mu.Lock()
-		for id, client := range b.clients {
-			closeDone(client.Done)
-			delete(b.clients, id)
+		retired := make([]*SSEClient, 0, len(b.clients))
+		for _, client := range b.clients {
+			b.retireLocked(client)
+			retired = append(retired, client)
 		}
 		b.mu.Unlock()
+		for _, client := range retired {
+			client.interruptWrite()
+		}
 
+		b.loopWg.Wait()
 		log.Info().Msg("SSE broadcaster closed")
 	})
 }
 
 func (b *SSEBroadcaster) sendHeartbeatToClient(c *SSEClient) {
-	select {
-	case <-c.Done:
-		return
-	default:
+	if err := b.writeFrame(c, sseFrame{heartbeat: true}); err != nil {
+		b.retireClient(c)
 	}
-
-	b.writeToClient(c, ": heartbeat\n\n")
 }
 
 func closeDone(ch chan bool) {

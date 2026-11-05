@@ -144,6 +144,18 @@ Independent authorised readers and session/proxy admission are unchanged. The
 native Assistant lifetime and persisted-delete tests in `internal/api/` cover
 this distinction without starting an agent or a command.
 
+### Guarded deployment event streams end on a stalled reader
+
+Agent-deploy preflight and job event streams share the protected-stream token
+guard. Handler return, request cancellation and token withdrawal expire an
+in-flight response write through the forwarded write deadline, then join that
+write before returning the HTTP writer. Cancellation is watched for every
+credential; token and session reads retain the existing 15-second authority
+recheck. Deployment jobs, preflights and their events retain their own lifetime.
+Ending the read does not cancel independent work or add a route, event kind or
+grant. Native full-router stalled-write tests cover the shared guard through
+the update-stream consumer; this is not installed agent qualification.
+
 ### Dashboard token lifetime is not agent-execution authority
 
 An already-open dashboard `/ws` read loses access when its admitted API token

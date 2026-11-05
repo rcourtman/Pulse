@@ -153,7 +153,21 @@ The guard exposes deadline setters, not an unguarded response-writer escape:
 Assistant handlers still clear the initial server deadlines and bound each
 write. The outer API error/status wrapper forwards these same two controls
 without exposing its raw writer; native short-server-deadline regressions run
-all three actual routes past that initial deadline. Closure joins active transport writes and rejects queued/late callbacks.
+all three actual routes past that initial deadline. Closure rejects queued and
+late callbacks, expires an in-flight transport write through the forwarded
+write deadline, then joins it before returning the HTTP writer. Transport
+writes, header commits and flushes share one lock; authority state uses another
+that is never held across transport I/O. Cancellation, withdrawal and deadline
+control can therefore interrupt a write blocked on a stalled peer. Every
+guarded read watches request-context cancellation, including credentials with
+no periodic revalidator. API-token and session authority retain their existing
+15-second recheck. Failed and panicking transport operations clear the admitted
+I/O state and close the read. Admission, media pinning, per-operation authority
+checks, closed-pipe refusals and the absence of `Unwrap`/`ReaderFrom` remain.
+`token_stream_shutdown_test.go` exercises the full production update-stream
+chain on stalled native TCP connections, including blocked preambles, token
+withdrawal, cancellation with the peer still connected, and disconnect. It
+also covers credentials without a periodic revalidator and transport panics.
 Legacy execute and investigation keep their independent background execution
 and original 15/5-minute bounds; denying their read is not cancelling their work,
 and HTTP completion can therefore wait for that work. Chat keeps its existing

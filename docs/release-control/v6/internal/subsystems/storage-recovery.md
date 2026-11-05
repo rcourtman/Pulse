@@ -81,6 +81,10 @@ wrapper. Legacy Assistant work remains background-bound;
 chat remains request-bound. Native Assistant independent-reader/lifetime and
 persisted-token-delete regressions in `internal/api/` pin this boundary using
 synthetic text, not a recovery replay or customer workload.
+Ending a guarded read on a stalled reader expires only that response's
+in-flight transport write through the forwarded write deadline. It does not
+delete evidence, clear recovery markers or cancel independent recovery or
+update work.
 
 ### Revoked monitoring sockets do not preserve recovery access
 

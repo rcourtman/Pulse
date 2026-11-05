@@ -4857,11 +4857,77 @@ with `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` so
 reverse proxies and compressing intermediaries do not hold events back, and the
 gzip middleware keeps excluding event streams. `SSEBroadcaster.AddClient` in
 `internal/updates/sse.go` writes the connection preamble and the current cached
-status and flushes them before returning, and every later broadcast reaches a
-client through that client's single ordered writer under the client lock, so
-stages arrive in emission order and no two goroutines write one
-ResponseWriter. Write failures remove the client off the writer goroutine so
-removal never waits on the broadcaster lock while holding a client lock.
+status and flushes them before returning. Every later status and heartbeat
+travels the same broadcast path and reaches a client through that client's
+single ordered writer under the client lock, so frames arrive in emission
+order and no two goroutines write one ResponseWriter. A slow client only
+fills its own bounded queue. Heartbeats and broadcasts never wait on a
+client's writer. The inactivity sweep reads activity atomically and never
+takes a client lock while holding the registry lock.
+The broadcaster owns the writer lifecycle. A client ID is admitted only
+while no live or retired client holds it, because owners remove clients by
+ID. A retired ID is released only when its owner's `RemoveClient` has
+collected the client, not when the writer exits, so a delayed owner can
+never remove a newer stream. A duplicate is refused and the browser
+reconnects under a new ID. Any
+path may retire a client: the handler, the inactivity sweep, a write failure
+or recovered panic, or `Close`. Retiring closes `Done` and moves the client
+to a retired set under the registry lock, without waiting on the client.
+`Close` and the sweep then expire a write still in flight, including a
+connection preamble that is blocked before the handler reaches its wait.
+Only the owning handler's `RemoveClient` (`Manager.RemoveSSEClient`) waits.
+It runs outside every broadcaster and manager lock. It expires a write still
+in flight with an immediate write deadline through `http.ResponseController`.
+It then returns only after the client's writer goroutine has stopped and
+marks the client collected. A per-client lifetime lock orders every
+interruption before that point, so nothing touches the ResponseWriter
+afterwards. Concurrent or repeated removals of one client all wait, so
+whatever retired a client first, no write or flush reaches its
+ResponseWriter after `HandleUpdateStream` returns. The handler needs no
+caller-side fence. On the production route the deadline passes through the
+protected-stream token guard, which forwards it without waiting behind a
+blocked write, and the middleware writers to the net/http connection. The
+guard watches every guarded read for request-context cancellation, whatever
+the credential, and on cancellation expires a write it admitted, including
+a preamble the handler itself is blocked in. A stalled peer that keeps its
+connection open therefore ends the stream promptly on shutdown, removal or
+request cancellation, and within the guard's 15-second recheck on token or
+session withdrawal.
+`SSEBroadcaster.Close` waits only for its own loops, and `Manager.Close`
+writes `closed` under `lifecycleMu` and `progressMu`. It then releases both
+before waiting for the broadcaster and heartbeat loops, so shutdown never
+waits on a stalled peer. After `Close` the status snapshot still updates
+while nothing is delivered. `internal/updates/sse_lifecycle_test.go`,
+`internal/api/update_stream_lifecycle_test.go` and
+`internal/api/token_stream_shutdown_test.go` prove this with held writes,
+blocked preambles, duplicate IDs, concurrent removal and shutdown, write
+failures and panics, heartbeats and reconnects. The last drives the full
+production router with token and proxy readers on a stalled TCP connection
+through shutdown, a blocked preamble, credential withdrawal, request-context
+cancellation with the peer still connected, and disconnect.
+An admitted apply or rollback owns the shared update status from admission
+onward. `Manager.admitUpdateOperation` in `internal/updates/manager.go` claims
+the single operation slot and advances an operation generation under
+`updateMu`. `CheckForUpdatesWithOptions` captures its status eligibility and
+that generation when it starts. It publishes through `publishCheckStatus`,
+which re-checks both under `updateMu` and performs the status write,
+progress-channel hand-off and SSE broadcast in that same critical section.
+Both hand-offs are non-blocking. A check that was running when an operation
+was admitted, or that started while one was in flight, therefore never
+replaces that operation's progress or terminal status in `/api/updates/status`,
+the SSE cached status, the progress channel or any stream, including when the
+check returns after the operation has ended. Only checks started after the
+operation released its slot publish again. Suppression covers status
+publication only. The check's returned result or error, the per-channel
+check cache and the effective-channel check observation are recorded as
+before, and genuine apply and rollback errors still publish. Lock order is
+`updateMu`, then `statusMu`, then `lifecycleMu`, then `progressMu`, then the
+broadcaster's locks. Nothing holding a later lock acquires `updateMu`.
+`internal/updates/manager_check_status_ownership_test.go` proves this
+concurrently through real checks, a held apply download and a rollback, on
+the status snapshot, the SSE cache, the progress channel and a live SSE
+client. The modal's filter for update-check chatter remains a client-side
+defence, not the ownership boundary.
 Comment heartbeats run every 15 seconds. `UpdateProgressModal` must not trust
 an open-but-silent EventSource. It also polls `/api/updates/status` after
 `UPDATE_STREAM_SILENCE_FALLBACK_MS` without a stream message, ignores polled
@@ -4879,7 +4945,11 @@ modal opens before the running version is known it fetches `/api/version`
 immediately and also adopts the update store's version once it loads, but
 only while no restart signal has been seen. With no baseline it never reloads
 on unconfirmed completion, and after confirmed completion it reloads only
-once a probe has seen the old process go away, or after the bounded fallback. `internal/updates/sse_test.go`, the
+once a probe has seen the old process go away, or after the bounded fallback. `internal/updates/sse_test.go`,
+`internal/updates/sse_lifecycle_test.go`,
+`internal/updates/manager_check_status_ownership_test.go`,
+`internal/api/update_stream_lifecycle_test.go`,
+`internal/api/token_stream_shutdown_test.go`, the
 stream handler tests in `internal/api/updates_test.go`, and
 `frontend-modern/src/components/__tests__/UpdateProgressModal.test.tsx` are
 the proof surface.
