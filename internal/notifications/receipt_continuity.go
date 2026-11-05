@@ -77,7 +77,7 @@ func (nq *NotificationQueue) deliveryCooldown(id string, start time.Time, destin
 		}
 		// Legacy receipts have no severity history. They still authorise
 		// recovery, but cannot suppress potentially new severity information.
-		if !destinations[destination] || severity == 0 {
+		if !destinations[destination] || severity < 1 || severity > 3 {
 			continue
 		}
 		if nanos == 0 {
@@ -156,6 +156,9 @@ func (n *NotificationManager) updateReceiptDestinationsLocked(previous map[strin
 	}
 	defer n.lifecycle.release()
 	current := n.receiptDestinationKeysLocked()
+	if receiptDestinationScope(previous) == receiptDestinationScope(current) {
+		return
+	}
 	if err := n.queue.updateReceiptDestinations(previous, current, time.Now()); err != nil {
 		log.Error().Err(err).Msg("Could not retain destination receipt retirement; obligations preserved")
 	}
@@ -178,8 +181,10 @@ func (nq *NotificationQueue) updateReceiptDestinations(previous, current map[str
 		}
 	}
 	for key := range current {
-		if _, err := tx.Exec(`DELETE FROM notification_receipt_retirements WHERE destination_key = ?`, key); err != nil {
-			return err
+		if !previous[key] {
+			if _, err := tx.Exec(`DELETE FROM notification_receipt_retirements WHERE destination_key = ?`, key); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()

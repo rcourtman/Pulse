@@ -1729,3 +1729,7 @@ monitoring promotes its graceful reopen and two-native-process receiver controls
 including owed recovery and a new occurrence. The old negative experiments remain
 unaltered evidence. These are synthetic queue/receiver controls, not original-estate,
 crash, signal-driven shutdown, installed-service or external-provider recovery.
+A late completion for a removed endpoint keeps its own receipt without publishing
+a cooldown for the replacement. A durable read of an older occurrence cannot
+evict the newer occurrence's cache entry. Explicit configuration changes invalidate
+the cache's destination scope; they do not permit recovery for a different endpoint.

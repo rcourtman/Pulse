@@ -1384,6 +1384,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	// new information, not a repeat. Scheduled escalation retains its explicit
 	// bypass because its cadence is owned by the alert schedule.
 	record, exists := n.lastNotified[alert.ID]
+	cached := record
 	destinations := n.receiptDestinationKeysLocked()
 	scope := receiptDestinationScope(destinations)
 	if exists && record.destinationScope != "" && record.destinationScope != scope {
@@ -1397,7 +1398,12 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 			log.Error().Err(err).Str("alertID", alert.ID).Msg("Could not restore notification cooldown")
 		} else if exists {
 			record.destinationScope = scope
-			n.lastNotified[alert.ID] = record
+			if !cached.alertStart.After(record.alertStart) {
+				if n.lastNotified == nil {
+					n.lastNotified = make(map[string]notificationRecord)
+				}
+				n.lastNotified[alert.ID] = record
+			}
 		}
 	}
 	severityIncreased := notificationSeverityRank(record.level) > 0 && notificationSeverityRank(alert.Level) > notificationSeverityRank(record.level)
@@ -1517,8 +1523,16 @@ func notificationSeverityRank(level alerts.AlertLevel) int {
 	}
 }
 
-func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, sentAt time.Time) {
+func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, sentAt time.Time, deliveredDestination ...string) {
 	n.mu.Lock()
+	defer n.mu.Unlock()
+	destinations := n.receiptDestinationKeysLocked()
+	if len(deliveredDestination) > 0 && !destinations[deliveredDestination[0]] {
+		// An admitted old snapshot can complete after configuration rotates.
+		// Keep its receipt, but never lend its cooldown to the replacement.
+		return
+	}
+	scope := receiptDestinationScope(destinations)
 	if n.lastNotified == nil {
 		n.lastNotified = make(map[string]notificationRecord)
 	}
@@ -1536,7 +1550,7 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 			if previous.alertStart.After(alert.StartTime) {
 				continue
 			}
-			if previous.alertStart.Equal(alert.StartTime) {
+			if previous.alertStart.Equal(alert.StartTime) && (previous.destinationScope == "" || previous.destinationScope == scope) {
 				// A late warning cannot re-enable critical delivery, and an
 				// earlier completion cannot shorten the same occurrence's hold.
 				if notificationSeverityRank(previous.level) > notificationSeverityRank(level) {
@@ -1551,10 +1565,9 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 			level:            level,
 			lastSent:         lastSent,
 			alertStart:       alert.StartTime,
-			destinationScope: receiptDestinationScope(n.receiptDestinationKeysLocked()),
+			destinationScope: scope,
 		}
 	}
-	n.mu.Unlock()
 }
 
 func (n *NotificationManager) dispatchFiringAlerts(
@@ -1692,7 +1705,7 @@ func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJ
 		// Publish the cooldown/delivered marker only after the per-destination
 		// receipts are durable. Resolution can race the delivery goroutine and
 		// uses this marker as proof that receipt recording has completed.
-		n.markAlertsNotified(job.Alerts, deliveredAt)
+		n.markAlertsNotified(job.Alerts, deliveredAt, destinationKey)
 	}
 }
 
@@ -1820,6 +1833,9 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 	defer n.lifecycle.release()
 	if queue != nil {
 		for _, alert := range alertList {
+			if alert == nil {
+				continue
+			}
 			if err := queue.resolveDeliveryReceipts(alert.ID, &alert.StartTime, time.Now()); err != nil {
 				log.Error().Err(err).Msg("Could not retain notification resolution; receipts remain unsettled")
 			}

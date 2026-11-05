@@ -236,3 +236,36 @@ func TestCooldownCacheMissIsOwnedByShutdownAdmission(t *testing.T) {
 	awaitShutdownSignal(t, "manager stop", stopped)
 	require.Empty(t, m.pendingAlerts)
 }
+
+func TestLateDestinationCompletionDoesNotLendCooldown(t *testing.T) {
+	m := NewNotificationManagerWithDeferredQueue("", t.TempDir())
+	defer m.Stop()
+	m.SetGroupingWindow(3600)
+	original := WebhookConfig{ID: "ops", URL: "https://old.example.test", Enabled: true}
+	m.AddWebhook(original)
+	replacement := original
+	replacement.URL = "https://new.example.test"
+	require.NoError(t, m.UpdateWebhook(original.ID, replacement))
+	a := &alerts.Alert{ID: "late-rotation", StartTime: time.Now(), Level: alerts.AlertLevelCritical}
+	m.recordSuccessfulDelivery(notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{a}, WebhookConfig: &original}, time.Now())
+	m.SendAlert(a)
+	require.Len(t, m.pendingAlerts, 1, "old URL completion muted the new destination")
+}
+
+func TestOldCooldownRestoreCannotEvictNewOccurrence(t *testing.T) {
+	m := NewNotificationManagerWithDeferredQueue("", t.TempDir())
+	defer m.Stop()
+	m.SetGroupingWindow(3600)
+	m.SetCooldown(0)
+	hook := WebhookConfig{ID: "ops", URL: "https://ops.example.test", Enabled: true}
+	m.AddWebhook(hook)
+	old := &alerts.Alert{ID: "restored-old", StartTime: time.Now().Add(-time.Hour), Level: alerts.AlertLevelCritical}
+	current := old.Clone()
+	current.StartTime = current.StartTime.Add(time.Minute)
+	key := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &hook})
+	require.NoError(t, m.queue.recordDeliveryReceipt(old.ID, old.StartTime, key, time.Now(), old.Level))
+	m.markAlertsNotified([]*alerts.Alert{current}, time.Now())
+	m.SendAlert(old)
+	require.Equal(t, current.StartTime, m.lastNotified[current.ID].alertStart)
+	require.Empty(t, m.pendingAlerts)
+}
