@@ -10845,7 +10845,9 @@ no agent enrollment, credential, command, collection or remediation authority;
 it never triggers a poll or a backup. `backup_jobs_test.go` covers retained
 history beyond the live window, unobserved and unavailable history, the
 viewer's zone and method rejection. Collection and persistence proofs remain
-owned by monitoring and storage-recovery.
+owned by monitoring and storage-recovery. Each day now also names its failed and
+warned guests, from the same evidence and behind the same scope, with no new
+authority (5 November 2026).
 
 ### Backup health reporting preserves lifecycle authority
 

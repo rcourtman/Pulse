@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "4d8fe2b7004cd35ffbe5725b062afab8ebd8df2d",
+  "verified_at": "2026-11-05T13:40:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupJobs.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "7064bdbfcf6f4aa7b6d1d3a3496b5c0d8170ff9cea066cfb8caa0c4505dcaf90",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "917087cfbc3c93dc2c4d9c75c5ea830bdf7b25da067b89a3ca6ed88c244c76f5",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "b0e5badd7887d87d94d4390ebcdd3fde3230129c4cb0708a67a917aedd7e5cb9",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "ea95968c59e7d4dca28263af8016e8320e64b85ca7cc4f8abd76c9b0281bf543",
+    "frontend-modern/src/features/proxmox/proxmoxBackupJobs.ts": "4ae5d9b3a2794246035fa436d9b7235a19edc672c2e0639e0dd3bcc6fa9e9be4"
+  },
+  "routes": [
+    "/proxmox/backups",
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mock stack built from this change; the hover outline was the only edit after the full pass, rechecked on the final build at 1440",
+    "Hover on a bar: date, outcome counts and failed guest names at the top of the bar, dark and light at 1440",
+    "Chosen failed day: bar outlined, others dimmed, line under the bars names who failed, Day chip shows, counter reads 690 of 2981",
+    "Empty day: No restore points from Jan 1, 2020, with no bars dimmed because the day is outside the 14",
+    "No horizontal overflow at 390 or 320, bar targets 21 by 56 and 16 by 56",
+    "Mock history holds failures only on today, so an older failed day is covered by tests rather than this pass"
+  ],
+  "interactions": [
+    "Hovered and left a bar: the tooltip appeared and withdrew",
+    "Clicked a bar from Coverage: landed on By date with the day applied",
+    "Clicked another day, then the same day again: the filter moved, then cleared",
+    "Focused a bar and pressed Enter: the tooltip showed and the day applied; Clear filters removed it",
+    "Tapped a failed day at 390 and 320 with touch: stayed on the card with the names on screen, no stuck tooltip",
+    "Tapped a clean day at 390 and 320: the list scrolled into view"
+  ]
+}

@@ -10,6 +10,11 @@ import {
 } from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
+import {
+  getRecoveryFilterDateLabel,
+  recoveryDateKeyFromTimestamp,
+} from '@/utils/recoveryDatePresentation';
+import type { BackupJobsDaySelection } from './ProxmoxBackupJobsCard';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -135,8 +140,9 @@ export const ProxmoxBackupsTable: Component<{
   workloads?: readonly Resource[];
   servers?: readonly Resource[];
   // A page-owned summary beside Backup health (the backup jobs card). It owns
-  // its own read, so the table's inventory reads stay PVE plus PBS.
-  summaryAside?: JSX.Element;
+  // its own read, so the table's inventory reads stay PVE plus PBS. The table
+  // owns the day filter that the summary's bars choose.
+  summaryAside?: (days: BackupJobsDaySelection) => JSX.Element;
   // Page-owned live alert lookup, for the backup servers' fill forecast.
   datastoreAlerts?: (resourceIds: string[]) => Alert[];
 }> = (props) => {
@@ -594,6 +600,27 @@ export const ProxmoxBackupsTable: Component<{
     else target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.reason);
     navigate(`${target.pathname}${target.search}`);
   };
+  // A day chosen on the Backup jobs bars narrows the restore points. Coverage has
+  // no dates, so choosing one from there opens By date, as a health group opens
+  // Coverage.
+  const selectedDateKey = (): string | null => {
+    if (view() !== 'date') return null;
+    const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.day);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+  };
+  const setSelectedDateKey = (value: string | null): void =>
+    setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.day]: value }, { replace: true });
+  const selectBackupDay = (date: string, options: { reveal: boolean }): void => {
+    const next = selectedDateKey() === date ? null : date;
+    if (next && options.reveal) revealRestorePoints();
+    if (routeView() === 'date') {
+      setSelectedDateKey(next);
+      return;
+    }
+    const target = new URL(backupViewPath('date'), 'https://pulse.invalid');
+    if (next) target.searchParams.set(PROXMOX_BACKUPS_QUERY_PARAMS.day, next);
+    navigate(`${target.pathname}${target.search}`);
+  };
   const backupViewTabs = createMemo(() =>
     BACKUP_VIEW_TABS.map((tab) => ({ ...tab, path: backupViewPath(tab.id) })),
   );
@@ -620,7 +647,13 @@ export const ProxmoxBackupsTable: Component<{
   });
 
   const filteredRecoverableArtifacts = createMemo(() => {
-    const list = [...scopedRecoverableArtifacts()];
+    const dateKey = selectedDateKey();
+    const list = scopedRecoverableArtifacts().filter(
+      (artifact) =>
+        !dateKey ||
+        (artifact.createdMs !== undefined &&
+          recoveryDateKeyFromTimestamp(artifact.createdMs) === dateKey),
+    );
     const sortKey = recoverableSortKey();
     const direction = recoverableSortDirection();
     list.sort((a, b) => {
@@ -700,6 +733,21 @@ export const ProxmoxBackupsTable: Component<{
         setValue: (v) => setRecoverableFilter(v as RecoverableFilterValue),
         defaultValue: 'all',
       });
+      const dateKey = selectedDateKey();
+      if (dateKey) {
+        filters.push({
+          id: 'day',
+          label: 'Day',
+          group: 'status',
+          options: () => [
+            { value: '', label: 'All days' },
+            { value: dateKey, label: getRecoveryFilterDateLabel(dateKey) },
+          ],
+          value: () => selectedDateKey() ?? '',
+          setValue: (v) => setSelectedDateKey(v || null),
+          defaultValue: '',
+        });
+      }
     } else {
       filters.push({
         id: 'posture',
@@ -722,7 +770,8 @@ export const ProxmoxBackupsTable: Component<{
       typeFilter() ||
       coverageFilter() !== 'all' ||
       exceptionFilter() !== null ||
-      recoverableFilter() !== 'all',
+      recoverableFilter() !== 'all' ||
+      selectedDateKey(),
     );
   const resetBackupsFilters = (): void =>
     setSearchParams(
@@ -874,7 +923,10 @@ export const ProxmoxBackupsTable: Component<{
                 isGroupPressed={exceptionGroupPressed}
                 onSelectGroup={selectExceptionGroup}
               />
-              {props.summaryAside}
+              {props.summaryAside?.({
+                selectedDay: selectedDateKey,
+                onSelectDay: selectBackupDay,
+              })}
             </div>
 
             <Show when={unreadBackupSourcesNotice()}>
@@ -930,6 +982,7 @@ export const ProxmoxBackupsTable: Component<{
           <Show
             when={
               view() === 'date' &&
+              !selectedDateKey() &&
               scopedRecoverableArtifacts().some((artifact) => artifact.createdMs === undefined)
             }
           >
@@ -980,6 +1033,16 @@ export const ProxmoxBackupsTable: Component<{
               artifacts={filteredRecoverableArtifacts()}
               hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
               emptyIcon={props.emptyIcon}
+              filteredEmptyTitle={
+                selectedDateKey()
+                  ? `No restore points from ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
+                  : undefined
+              }
+              filteredEmptyDescription={
+                selectedDateKey()
+                  ? 'A failed backup usually leaves none, and retention prunes older ones.'
+                  : undefined
+              }
               emptyTitle={
                 inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
               }

@@ -1,7 +1,9 @@
-import { render, screen, within } from '@solidjs/testing-library';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { describe, expect, it, vi } from 'vitest';
 import { ProxmoxBackupJobsCard } from '../ProxmoxBackupJobsCard';
 import type { BackupJobsDay, BackupJobsPayload } from '../proxmoxBackupJobs';
+
+vi.mock('@/components/shared/hoverCapability', () => ({ supportsHoverTooltips: () => true }));
 
 const counts = (success = 0, failed = 0, running = 0) => ({
   success,
@@ -16,6 +18,7 @@ const days = (overrides: Partial<Record<number, Partial<BackupJobsDay>>> = {}): 
     date: `2026-10-${String(19 + i).padStart(2, '0')}`,
     historyState: 'complete' as const,
     counts: counts(10),
+    failures: [],
     ...overrides[i],
   }));
 
@@ -127,5 +130,76 @@ describe('ProxmoxBackupJobsCard', () => {
     ));
     expect(container).toHaveTextContent('History unavailable');
     expect(container.querySelector('[data-backup-jobs-pill]')).toBeNull();
+  });
+
+  const failure = (workloadName: string, outcome = 'failed') => ({
+    workloadId: workloadName,
+    workloadName,
+    instance: 'lab',
+    at: '',
+    outcome,
+  });
+
+  it('shows the day and names who failed when a bar is hovered or focused', async () => {
+    render(() => (
+      <ProxmoxBackupJobsCard
+        jobs={payload({
+          days: days({
+            2: {
+              counts: { ...counts(9, 2), warning: 1 },
+              failures: [failure('web'), failure('db'), failure('cache', 'warning')],
+            },
+          }),
+        })}
+      />
+    ));
+    const bar = screen.getAllByRole('button')[2];
+    expect(document.querySelector('[data-backup-jobs-tooltip]')).toBeNull();
+
+    await fireEvent.mouseEnter(bar);
+    const tip = document.querySelector('[data-backup-jobs-tooltip]')!;
+    expect(tip).toHaveTextContent('2');
+    expect(tip).toHaveTextContent('web, db');
+    expect(tip).toHaveTextContent('cache');
+    expect(tip).toHaveTextContent('ok');
+
+    await fireEvent.mouseLeave(bar);
+    expect(document.querySelector('[data-backup-jobs-tooltip]')).toBeNull();
+
+    await fireEvent.focus(bar);
+    expect(document.querySelector('[data-backup-jobs-tooltip]')).not.toBeNull();
+    await fireEvent.blur(bar);
+    expect(document.querySelector('[data-backup-jobs-tooltip]')).toBeNull();
+  });
+
+  it('reports a clicked day, marks it, and says who failed without needing hover', async () => {
+    const onSelectDay = vi.fn();
+    const jobs = payload({
+      days: days({ 2: { counts: counts(9, 2), failures: [failure('web'), failure('db')] } }),
+    });
+    const { container } = render(() => (
+      <ProxmoxBackupJobsCard jobs={jobs} selectedDay="2026-10-21" onSelectDay={onSelectDay} />
+    ));
+    const bars = screen.getAllByRole('button');
+    expect(bars[2]).toHaveAttribute('aria-pressed', 'true');
+    expect(bars[3]).toHaveAttribute('aria-pressed', 'false');
+    expect(bars[3]).toHaveClass('opacity-40');
+    expect(container.querySelector('[data-backup-jobs-chosen-day]')).toHaveTextContent(
+      '2 failed: web, db',
+    );
+
+    // A clean day's answer is the list; a failed day's answer is this card.
+    await fireEvent.click(bars[5]);
+    expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-24', { reveal: true });
+    await fireEvent.click(bars[2]);
+    expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: false });
+  });
+
+  it('leaves the bars undimmed when the chosen day is outside the 14 days', () => {
+    const { container } = render(() => (
+      <ProxmoxBackupJobsCard jobs={payload()} selectedDay="2026-01-01" />
+    ));
+    expect(screen.getAllByRole('button')[0]).not.toHaveClass('opacity-40');
+    expect(container.querySelector('[data-backup-jobs-chosen-day]')).toBeNull();
   });
 });

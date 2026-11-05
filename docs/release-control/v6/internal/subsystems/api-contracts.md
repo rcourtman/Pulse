@@ -2157,7 +2157,8 @@ guest backup badges and recovery points use. Clients read it rather than inferri
 ownership from namespace, comment or VMID.
 
 `/api/backups/jobs` owns summarized PVE backup job outcomes for the Backups
-page: counts for the last 24 hours and for each of the last 14 days in the
+page: counts for the last 24 hours and for each of the last 14 days, each day
+naming its failed and warned guests once per outcome, in the
 viewer's `timezone` (an IANA name; anything unreadable is UTC), with a
 `historyState` of `complete`, `partial`, `not_observed` or `unavailable` on the
 window and on every day. It is built by `recovery.BuildBackupHealth` from

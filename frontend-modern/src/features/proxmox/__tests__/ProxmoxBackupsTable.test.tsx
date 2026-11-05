@@ -652,7 +652,7 @@ describe('ProxmoxBackupsTable', () => {
     window.history.replaceState(
       {},
       '',
-      '/?view=date&q=pbs-docker&source=pbs&location=pbs%3Apbs-main%3Amain&node=pve-a&type=ct&day=2026-01-01',
+      '/?view=date&q=pbs-docker&source=pbs&location=pbs%3Apbs-main%3Amain&node=pve-a&type=ct&day=2026-05-25',
     );
 
     renderInRouter(() => (
@@ -666,8 +666,7 @@ describe('ProxmoxBackupsTable', () => {
       'aria-pressed',
       'true',
     );
-    // An old bookmark's day no longer narrows the list; Clear filters drops it.
-    expect(screen.queryByRole('button', { name: /clear date filter/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Day: May 25, 2026/ })).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Backup location: PBS · pbs-main / main' }),
     ).toBeInTheDocument();
@@ -857,6 +856,75 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByRole('button', { name: '1 attention' })).toBeNull();
   });
 
+  describe('a day chosen on the summary', () => {
+    const renderWithDays = () =>
+      renderInRouter(() => (
+        <ProxmoxBackupsTable
+          emptyIcon={<span />}
+          workloads={[workloadResource]}
+          summaryAside={(days) => (
+            <>
+              <button
+                type="button"
+                aria-pressed={days.selectedDay() === '2026-05-25'}
+                onClick={() => days.onSelectDay('2026-05-25', { reveal: true })}
+              >
+                Backed up day
+              </button>
+              <button
+                type="button"
+                onClick={() => days.onSelectDay('2026-01-01', { reveal: true })}
+              >
+                Empty day
+              </button>
+            </>
+          )}
+        />
+      ));
+    const dayParam = () => new URLSearchParams(window.location.search).get('day');
+
+    it('opens By date from Coverage with that day applied', async () => {
+      mockBackupAPIs();
+      window.history.replaceState({}, '', '/proxmox/backups/coverage?reason=x');
+      renderWithDays();
+
+      await fireEvent.click(await screen.findByRole('button', { name: 'Backed up day' }));
+
+      await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/date'));
+      expect(dayParam()).toBe('2026-05-25');
+      expect(new URLSearchParams(window.location.search).get('reason')).toBeNull();
+      await screen.findAllByText('pbs-docker');
+      expect(screen.getByRole('button', { name: 'Backed up day' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    it('narrows the list, explains an empty day, and clears on a second click', async () => {
+      mockBackupAPIs();
+      window.history.replaceState({}, '', '/proxmox/backups/date');
+      renderWithDays();
+      await screen.findAllByText('pbs-docker');
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Empty day' }));
+      await screen.findByText(/^No restore points from Jan 1, 2026$/);
+      expect(screen.getByText(/A failed backup usually leaves none/)).toBeInTheDocument();
+      expect(screen.queryByText('pbs-docker')).not.toBeInTheDocument();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Empty day' }));
+      await waitFor(() => expect(dayParam()).toBeNull());
+      await screen.findAllByText('pbs-docker');
+    });
+
+    it('ignores a malformed day', async () => {
+      mockBackupAPIs();
+      window.history.replaceState({}, '', '/proxmox/backups/date?day=yesterday');
+      renderWithDays();
+      await screen.findAllByText('pbs-docker');
+      expect(screen.queryByRole('button', { name: /^Day:/ })).not.toBeInTheDocument();
+    });
+  });
+
   it('places a page-owned summary beside Backup health', async () => {
     mockBackupAPIs('attention');
     window.history.replaceState({}, '', '/proxmox/backups/date');
@@ -865,7 +933,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable
         emptyIcon={<span />}
         workloads={[workloadResource]}
-        summaryAside={<section data-backup-jobs="complete">Backup jobs</section>}
+        summaryAside={() => <section data-backup-jobs="complete">Backup jobs</section>}
       />
     ));
 
