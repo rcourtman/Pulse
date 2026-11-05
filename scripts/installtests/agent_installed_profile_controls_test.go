@@ -230,3 +230,26 @@ func TestNativeInstalledProfileWorkflow(t *testing.T) {
 		t.Fatal("native receipts must be bounded and always retained")
 	}
 }
+
+func TestNativeInstalledProfileTriggers(t *testing.T) {
+	content := secureRuntimeReadFile(t, repoFile(".github", "workflows", "unified-agent-native.yml"))
+	var workflow struct {
+		On map[string]struct{ Paths []string }
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"push", "pull_request"} {
+		paths := "\n" + strings.Join(workflow.On[event].Paths, "\n") + "\n"
+		for _, required := range []string{"cmd/pulse-agent/**", "cmd/pulse-agent-helper/**", "cmd/pulse-agent-runner/**", "internal/actionrunner/**", "internal/agentexec/**", "internal/operationreceipt/**", "scripts/installtests/**", "scripts/install.sh", ".github/workflows/unified-agent-native.yml"} {
+			if !strings.Contains(paths, "\n"+required+"\n") {
+				t.Fatalf("%s does not admit installed-profile input %s", event, required)
+			}
+		}
+		for _, pattern := range workflow.On[event].Paths {
+			if strings.HasPrefix(pattern, "!") {
+				t.Fatalf("%s excludes a native installed-profile input", event)
+			}
+		}
+	}
+}
