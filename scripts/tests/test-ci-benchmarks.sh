@@ -348,6 +348,53 @@ Example-4  100.0n ± 1%  105.0n ± 1%  +5.00% (p=0.001 n=10)
 EOF
 bash "${ROOT_DIR}/scripts/check-bench-regression.sh" "${WORK_DIR}/clean.txt" >/dev/null
 
+# Missing evidence, including a lost row beside a valid pair, cannot turn into
+# a clean verdict. Both sides of unequal-sized samples need the same minimum.
+assert_insufficient() {
+  local output status
+  status=0
+  output="$(bash "${ROOT_DIR}/scripts/check-bench-regression.sh" "${WORK_DIR}/incomplete.txt" 2>&1)" || status=$?
+  [[ "${status}" == 1 ]]
+  grep -qF 'BENCHMARK EVIDENCE INSUFFICIENT' <<<"${output}"
+  ! grep -qF 'No significant benchmark regressions' <<<"${output}"
+}
+: > "${WORK_DIR}/incomplete.txt"
+assert_insufficient
+printf 'pkg: example.test/bench\n' > "${WORK_DIR}/incomplete.txt"
+assert_insufficient
+while IFS= read -r row; do
+  printf '%s\n' "${row}" > "${WORK_DIR}/incomplete.txt"
+  assert_insufficient
+  # One good comparison must not hide another missing or invalid one.
+  cat "${WORK_DIR}/clean.txt" >> "${WORK_DIR}/incomplete.txt"
+  assert_insufficient
+done <<'EOF'
+MissingCandidate-4  100.0n ± 1%
+MissingBaseline-4                     105.0n ± 1%
+Named/with:colon-4  100.0n ± 1%
+MissingStatistics-4  100.0n ± 1%  105.0n ± 1%  ~
+MalformedStatistics-4  100.0n ± 1%  105.0n ± 1%  ~ (p=unknown n=10)
+InvalidProbability-4  100.0n ± 1%  105.0n ± 1%  ~ (p=1.100 n=10)
+MissingCount-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100)
+MissingSecondCount-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100 n1=10)
+ShortBaseline-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100 n1=9 n2=10)
+ShortCandidate-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100 n1=10 n2=9)
+EOF
+cat > "${WORK_DIR}/complete.txt" <<'EOF'
+goos: linux
+goarch: amd64
+pkg: example.test/bench
+cpu: fixture 100
+          │ baseline.txt │ candidate.txt │
+          │ sec/op       │ sec/op vs base │
+Equal-4      100.0n ± 0%   100.0n ± 0%  ~ (p=1.000 n=10) ¹
+Unequal-4    100.0n ± 1%   105.0n ± 1%  +5.00% (p=0.100 n1=10 n2=11)
+Named/with:colon-4  100.0n ± 1%  105.0n ± 1%  +5.00% (p=0.100 n=10)
+geomean      100.0n        102.5n       +2.47%
+¹ all samples are equal
+EOF
+bash "${ROOT_DIR}/scripts/check-bench-regression.sh" "${WORK_DIR}/complete.txt" >/dev/null
+
 # Go SetBytes benchmarks add byte-throughput tables alongside time and
 # allocation costs. Respect their opposite direction without relaxing either
 # the significance/sample gates or the existing cost-metric verdicts.

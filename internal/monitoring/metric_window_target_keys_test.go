@@ -14,6 +14,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // These tests record history through the production writers and registry,
@@ -604,6 +606,12 @@ func TestFactoryCPUWindowFiresAndRecoversForDockerContainer(t *testing.T) {
 // complete healthy alert passes over those same observations so the extra
 // source-reference resolution is compared without changing readiness.
 func BenchmarkMetricWindowNodeAlertPass(b *testing.B) {
+	// Fixture setup can run after Go has printed a benchmark name. Its logs
+	// would split that name from the measured row, which benchstat drops.
+	// Match the other monitoring benchmarks without changing runtime logging.
+	previousLogger := log.Logger
+	log.Logger = zerolog.Nop()
+	b.Cleanup(func() { log.Logger = previousLogger })
 	previous := mock.IsMockEnabled()
 	if err := mock.SetEnabled(false); err != nil {
 		b.Fatal(err)

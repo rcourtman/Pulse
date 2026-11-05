@@ -4,8 +4,8 @@
 # Usage: bash scripts/check-bench-regression.sh <benchstat-output-file>
 # Exits 0 if no regressions >10% with p<0.05, exits 1 otherwise. More time,
 # bytes/op and allocs/op are worse; less byte throughput is worse. Comparisons
-# with fewer than 10 samples are rejected because benchstat cannot treat them
-# as a statistically trustworthy CI signal.
+# with missing pairs or fewer than 10 samples on either side are rejected:
+# absent evidence must not become a successful regression verdict.
 #
 # Expected input: benchstat comparison output containing lines like:
 #   BenchmarkName-N  1.23µ ± 1%  1.45µ ± 2%  +17.89% (p=0.001 n=10)
@@ -31,15 +31,48 @@ TMPFILE=$(mktemp)
 LOW_SAMPLE_FILE=$(mktemp)
 trap 'rm -f "$TMPFILE" "$LOW_SAMPLE_FILE"' EXIT
 
-# Refuse to turn an under-sampled comparison into a regression verdict. Five
-# samples produce infinite 95% confidence intervals and were the source of
-# repeated false failures on otherwise unrelated changes.
+# Refuse empty, one-sided, malformed and under-sampled comparisons before
+# judging deltas. Benchstat can successfully print a table with only one
+# input's rows, and an empty file used to say "no regressions". Ignore table
+# headers, file configuration, footnotes and geomeans, not measured rows.
 awk -v minimum="$MIN_SAMPLES" '
-/p=[^)]*n=[0-9]+/ {
-  match($0, /n=[0-9]+/)
-  samples = substr($0, RSTART+2, RLENGTH-2) + 0
-  if (samples < minimum) {
-    print
+{
+  row = $0
+  sub(/^[[:space:]]+/, "", row)
+  if (row !~ /^[^[:space:]]+[[:space:]]+[0-9]/ ||
+      row ~ /^[^[:space:]]+:[[:space:]]/ || row ~ /^geomean[[:space:]]/) {
+    next
+  }
+  rows++
+  intervals = row
+  if (gsub(/±/, "", intervals) != 2 ||
+      !match(row, /(~|[-+][0-9]+(\.[0-9]+)?%)[[:space:]]+\(p=[0-9]+\.[0-9]+ (n=[0-9]+|n1=[0-9]+ n2=[0-9]+)\)/)) {
+    print "Unpaired or malformed benchmark: " row
+    next
+  }
+  comparison = substr(row, RSTART, RLENGTH)
+  match(comparison, /p=[0-9]+\.[0-9]+/)
+  pvalue = substr(comparison, RSTART+2, RLENGTH-2) + 0
+  if (pvalue > 1) {
+    print "Invalid p-value: " row
+    next
+  }
+  if (match(comparison, /n=[0-9]+/)) {
+    samples = substr(comparison, RSTART+2, RLENGTH-2) + 0
+    other_samples = samples
+  } else {
+    match(comparison, /n1=[0-9]+/)
+    samples = substr(comparison, RSTART+3, RLENGTH-3) + 0
+    match(comparison, /n2=[0-9]+/)
+    other_samples = substr(comparison, RSTART+3, RLENGTH-3) + 0
+  }
+  if (samples < minimum || other_samples < minimum) {
+    print "Under-sampled benchmark: " row
+  }
+}
+END {
+  if (rows == 0) {
+    print "No paired benchmark comparisons found."
   }
 }' "$COMPARISON_FILE" > "$LOW_SAMPLE_FILE"
 
@@ -47,7 +80,7 @@ low_sample_count=$(wc -l < "$LOW_SAMPLE_FILE" | tr -d ' ')
 if [ "$low_sample_count" -ne 0 ]; then
   echo "BENCHMARK EVIDENCE INSUFFICIENT"
   echo "==============================="
-  echo "At least ${MIN_SAMPLES} samples are required; ${low_sample_count} comparison(s) are under-sampled:"
+  echo "Every measured row needs a complete comparison with at least ${MIN_SAMPLES} samples per side:"
   sed 's/^/  /' "$LOW_SAMPLE_FILE"
   exit 1
 fi
