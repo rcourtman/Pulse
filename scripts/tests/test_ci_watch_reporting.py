@@ -29,6 +29,10 @@ sys.modules[spec.name] = reporter
 spec.loader.exec_module(reporter)
 OLD = reporter.Run(100, 1, "a" * 40)
 NOW = reporter.Run(200, 1, "b" * 40)
+# Literal GraphQL Bot response observed on 2026-11-04 for Actions' public
+# database ID. GraphQL uses `github-actions`, unlike REST's `[bot]` suffix.
+# Do not derive API fixtures from the production constant being checked.
+GRAPHQL_ACTIONS_BOT = {"__typename": "Bot", "login": "github-actions", "databaseId": 41898282}
 
 
 def connection(nodes):
@@ -37,7 +41,7 @@ def connection(nodes):
 
 def issue(watch, number=10):
     return {"id": f"I_{number}", "number": number, "title": reporter.WATCHES[watch][1],
-            "body": reporter.body(watch, "failure", OLD, opening=True), "author": deepcopy(reporter.BOT),
+            "body": reporter.body(watch, "failure", OLD, opening=True), "author": deepcopy(GRAPHQL_ACTIONS_BOT),
             "state": "OPEN", "locked": False, "editor": None, "lastEditedAt": None,
             "milestone": None, "labels": {"totalCount": 0}, "assignees": {"totalCount": 0},
             "updatedAt": "2026-11-04T00:00:00Z", "comments": connection([]), "timelineItems": connection([])}
@@ -45,7 +49,7 @@ def issue(watch, number=10):
 
 def reply(row, watch, result="success", run=NOW, author=None):
     comment = {"id": f"C_{len(row['comments']['nodes'])}", "body": reporter.body(watch, result, run),
-               "author": deepcopy(author or reporter.BOT), "editor": None, "lastEditedAt": None}
+               "author": deepcopy(author or GRAPHQL_ACTIONS_BOT), "editor": None, "lastEditedAt": None}
     row["comments"]["nodes"].append(comment)
     row["comments"]["totalCount"] += 1
     row["timelineItems"]["nodes"].append({"__typename": "IssueComment", "id": comment["id"]})
@@ -129,9 +133,31 @@ class WatchReporting(unittest.TestCase):
                 self.assertEqual(api.rows[0]["state"], "OPEN")
                 self.assertEqual(api.rows[0]["body"], reporter.body(watch, "failure", OLD, opening=True))
 
+    def test_literal_graphql_actions_author_is_required_for_issue_and_comments(self):
+        for watch in self.watches():
+            # Validate both the issue author and a previously posted comment.
+            row = issue(watch)
+            reply(row, watch)
+            with self.subTest(watch=watch, identity="observed GraphQL Bot"):
+                api = GitHub([row])
+                reporter.report(api, watch, "failure", reporter.Run(300, 1, "c" * 40))
+                self.assertEqual(len(api.writes), 1)
+                self.assertIn("addComment(", api.writes[0][0])
+                self.assertEqual(api.rows[0]["state"], "OPEN")
+            for field in ("issue", "comment"):
+                for actor in ({**GRAPHQL_ACTIONS_BOT, "login": "github-actions[bot]"},
+                              {**GRAPHQL_ACTIONS_BOT, "databaseId": 1},
+                              {**GRAPHQL_ACTIONS_BOT, "__typename": "User"},
+                              {"login": "github-actions", "__typename": "Bot"}):
+                    with self.subTest(watch=watch, field=field, actor=actor):
+                        changed = deepcopy(row)
+                        target = changed if field == "issue" else changed["comments"]["nodes"][0]
+                        target["author"] = actor
+                        self.denied(GitHub([changed]), watch)
+
     def test_human_title_collision_and_legacy_bot_are_never_adopted(self):
         for watch in self.watches():
-            for actor in ({"login": "reporter", "__typename": "User"}, reporter.BOT):
+            for actor in ({"login": "reporter", "__typename": "User"}, GRAPHQL_ACTIONS_BOT):
                 with self.subTest(watch=watch, actor=actor):
                     row = issue(watch)
                     row.update(author=actor, body="Unresolved original symptoms; not a marked watch report.")
@@ -146,7 +172,7 @@ class WatchReporting(unittest.TestCase):
     def test_copied_marker_cannot_grant_ownership_to_a_human_or_another_bot(self):
         for watch in self.watches():
             for actor in ({"login": "reporter", "__typename": "User"},
-                          {**reporter.BOT, "databaseId": 1}, {**reporter.BOT, "login": "pulse-triage[bot]"}):
+                          {**GRAPHQL_ACTIONS_BOT, "databaseId": 1}, {**GRAPHQL_ACTIONS_BOT, "login": "pulse-triage[bot]"}):
                 row = issue(watch)
                 row["author"] = actor
                 self.denied(GitHub([row]), watch)
@@ -215,18 +241,23 @@ class WatchReporting(unittest.TestCase):
         for watch in self.watches():
             self.denied(GitHub([issue(watch), issue(watch, 12)]), watch)
 
-    def test_complete_inventory_paginates_without_title_search(self):
+    def test_complete_inventory_paginates_without_an_actor_filter_or_title_search(self):
         for watch in self.watches():
             rows = []
             for n in range(100):
                 row = issue(watch, n + 1000)
                 row["body"] = "unrelated legacy report"
+                row["author"] = {"login": "reporter", "__typename": "User"}
                 rows.append(row)
             api = GitHub([*rows, issue(watch)])
             reporter.report(api, watch, "success", NOW)
             self.assertEqual(api.list_count, 2)
             self.assertEqual(len(api.writes), 1)
-            self.assertIn('filterBy:{createdBy:"github-actions[bot]"}', api.calls[0][0])
+            # Enumerate all open issues rather than rely on REST/GraphQL login
+            # aliases in createdBy. Ownership is checked on the returned node.
+            self.assertIn("states:OPEN", api.calls[0][0])
+            self.assertNotIn("filterBy", api.calls[0][0])
+            self.assertNotIn("createdBy", api.calls[0][0])
             self.assertNotIn("search(", api.calls[0][0])
 
     def test_inventory_changes_duplicate_ids_missing_cursor_and_partial_counts(self):
@@ -386,6 +417,21 @@ class WatchReporting(unittest.TestCase):
                 self.assertEqual(len(data["writes"]), 2)
                 self.assertEqual(data["rows"][0]["state"], "OPEN")
                 self.assertEqual(len(data["rows"][0]["comments"]["nodes"]), 1)
+                # A subsequent failure must also recognise the literal bot
+                # comment from recovery, not just a newly created issue.
+                for run_id, outcome in (("400", "failure"), ("500", "success")):
+                    env.update(GITHUB_RUN_ID=run_id, RESULT=outcome)
+                    result = subprocess.run(["bash", "-eu", "-c", command], cwd=ROOT, env=env,
+                                            text=True, capture_output=True, timeout=15)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                data = json.loads(state.read_text())
+                self.assertEqual(len(data["writes"]), 4)
+                self.assertEqual(data["rows"][0]["author"], GRAPHQL_ACTIONS_BOT)
+                self.assertEqual(data["rows"][0]["state"], "OPEN")
+                self.assertEqual(len(data["rows"][0]["comments"]["nodes"]), 3)
+                self.assertTrue(all(c["author"] == GRAPHQL_ACTIONS_BOT
+                                    for c in data["rows"][0]["comments"]["nodes"]))
+                self.assertTrue(all("createIssue(" in q or "addComment(" in q for q, _ in data["writes"]))
 
 
 def fake_gh():
