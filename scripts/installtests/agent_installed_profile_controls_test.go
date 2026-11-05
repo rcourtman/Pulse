@@ -57,6 +57,69 @@ func TestAgentInstalledProfileAdmission(t *testing.T) {
 	}
 }
 
+func TestAgentInstalledProfileSetupUsesSupportedInstallerProfiles(t *testing.T) {
+	fixture := newSecureRuntimeLabFixture([]byte("collector"), "", []byte("helper"), []byte("runner"), "fixture")
+	t.Cleanup(fixture.actionServer.Shutdown)
+	server := httptest.NewTLSServer(fixture)
+	t.Cleanup(server.Close)
+	dir := t.TempDir()
+	ca := filepath.Join(dir, "ca.pem")
+	token := filepath.Join(dir, "runner-token")
+	for path, content := range map[string][]byte{
+		ca:    pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}),
+		token: []byte(secureRuntimeRunnerSecretV1 + "\n"),
+	} {
+		if err := os.WriteFile(path, content, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name  string
+		args  []string
+		valid bool
+	}{
+		{"legacy-root", nativeProfileRootInstallArgs(), true},
+		{"separate-safe-runner", nativeProfileRunnerInstallArgs(token), true},
+		{"forbidden-combined-profile", append(nativeProfileRootInstallArgs(), "--enable-action-runner", "--action-token-file", token), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{repoFile("scripts", "install.sh"), "--url", server.URL, "--cacert", ca,
+				"--state-dir", dir, "--preflight-only", "--output", "json", "--non-interactive",
+				"--disable-docker", "--disable-kubernetes", "--disable-proxmox"}
+			output, err := nativeProfileCommand(t, nil, "bash", append(args, tc.args...)...)
+			if tc.valid {
+				if err != nil || !strings.Contains(string(output), `"code":"agent_download_available"`) {
+					t.Fatalf("supported profile preflight: %v\n%s", err, output)
+				}
+			} else if err == nil || !strings.Contains(string(output), "--enable-action-runner requires the safe") {
+				t.Fatalf("unsupported profile was not refused: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
+func TestAgentInstalledProfileQuiescenceUsesUnitType(t *testing.T) {
+	for _, tc := range []struct {
+		unit, active, pid string
+		quiescent         bool
+	}{
+		{"pulse-agent.service", "inactive", "0", true},
+		{"pulse-agent-helper.service", "failed", "0", true},
+		{"pulse-agent-helper.socket", "inactive", "", true},
+		{"pulse-agent.service", "inactive", "", false},
+		{"pulse-agent.service", "inactive", "42", false},
+		{"pulse-agent.service", "active", "0", false},
+		{"pulse-agent-helper.socket", "active", "", false},
+		{"pulse-agent-helper.socket", "", "", false},
+		{"pulse-agent-helper.socket", "inactive", "42", false},
+		{"pulse-agent.timer", "inactive", "", false},
+	} {
+		if got := nativeProfileUnitQuiescent(tc.unit, tc.active, tc.pid); got != tc.quiescent {
+			t.Errorf("quiescence(%q, %q, %q) = %t, want %t", tc.unit, tc.active, tc.pid, got, tc.quiescent)
+		}
+	}
+}
+
 func TestAgentInstalledProfileSnapshotsBindBytesAndMetadata(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "saved-state")
 	if err := os.WriteFile(path, []byte("original-history"), 0o600); err != nil {

@@ -65,6 +65,30 @@ func nativeProfileAdmission(env map[string]string, goos string, uid int, pid1 st
 	return nil
 }
 
+func nativeProfileRootInstallArgs() []string {
+	return []string{"--enable-commands", "--command-authority", "command-capable"}
+}
+
+func nativeProfileRunnerInstallArgs(token string) []string {
+	return []string{"--least-privilege", "--enable-privileged-helper", "--enable-action-runner", "--action-token-file", token}
+}
+
+func nativeProfileUnitQuiescent(unit, active, mainPID string) bool {
+	if active != "inactive" && active != "failed" {
+		return false
+	}
+	switch {
+	case strings.HasSuffix(unit, ".socket"):
+		// Socket units have no MainPID property; their owning service is
+		// independently stopped and checked in the same batch.
+		return mainPID == ""
+	case strings.HasSuffix(unit, ".service"):
+		return mainPID == "0"
+	default:
+		return false
+	}
+}
+
 type nativeProfilePhase struct {
 	Name     string `json:"name"`
 	At       string `json:"observed_at"`
@@ -370,17 +394,38 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 			"--interval", "2s", "--agent-id", secureRuntimeLabAgentID, "--hostname", secureRuntimeLabHostname, "--non-interactive"}
 		return nativeProfileCommand(t, receipt, "bash", append(commandArgs, args...)...)
 	}
-	if output, err := install(caPath, "--enable-commands", "--command-authority", "command-capable", "--enable-action-runner", "--action-token-file", runnerToken); err != nil {
+	if output, err := install(caPath, nativeProfileRootInstallArgs()...); err != nil {
 		t.Fatalf("initial signed TLS install: %v\n%s", err, output)
 	}
 	secureRuntimeWaitForReports(t, fixture, 1, 45*time.Second)
-	secureRuntimeWaitForActionRunner(t, fixture, true, 30*time.Second)
 	secureRuntimeAssertRootCommandProfile(t)
 	if err := os.WriteFile("/var/lib/pulse-agent/native-history", []byte("existing-history-must-survive\n"), 0o640); err != nil {
 		t.Fatal(err)
 	}
 	statePaths := []string{caPath, "/var/lib/pulse-agent/agent-id", "/var/lib/pulse-agent/native-history", "/var/lib/pulse-agent/connection.env"}
 	baselineState := nativeProfileFiles(t, statePaths...)
+	phase("signed-TLS-root-install", map[string]any{"units": nativeProfileState(t, receipt), "state": baselineState})
+	// The installer correctly forbids a legacy command collector and a new
+	// action runner in one invocation. Establish the independent runner only
+	// under its supported safe profile, then use the real saved rollback to
+	// recover the legacy collector (without resurrecting command authority).
+	// All four measured forward/reverse pairs below start with this runner.
+	if output, err := install(caPath, "--safe-profile-apply"); err != nil {
+		t.Fatalf("runner setup safe-profile apply: %v\n%s", err, output)
+	}
+	secureRuntimeAssertSafeProfile(t)
+	if output, err := install(caPath, nativeProfileRunnerInstallArgs(runnerToken)...); err != nil {
+		t.Fatalf("separate signed TLS runner install: %v\n%s", err, output)
+	}
+	secureRuntimeWaitForActionRunner(t, fixture, true, 30*time.Second)
+	secureRuntimeAssertActionRunnerInstalled(t)
+	reportsBeforeReverse, _, _, _ := fixture.snapshot()
+	nativeProfileMust(t, receipt, "bash", "/etc/pulse-agent/install.sh", "--safe-profile-rollback")
+	secureRuntimeWaitForReports(t, fixture, len(reportsBeforeReverse)+1, 45*time.Second)
+	secureRuntimeAssertRootMonitoringProfile(t)
+	if !reflect.DeepEqual(baselineState, nativeProfileFiles(t, statePaths...)) {
+		t.Fatal("runner setup reverse changed saved CA/identity/history/connection metadata")
+	}
 	runnerPaths := []string{"/usr/local/lib/pulse-agent/pulse-agent-runner", "/etc/systemd/system/pulse-agent-runner.service", "/etc/pulse-agent-runner/runner.env", "/etc/pulse-agent-runner/token"}
 	runnerState := nativeProfileFiles(t, runnerPaths...)
 	runnerPID := strings.TrimSpace(string(nativeProfileMust(t, receipt, "systemctl", "show", "pulse-agent-runner.service", "--property=MainPID", "--value")))
@@ -440,7 +485,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	}
 	assertProcess("collector-v1")
 	assertSavedTrust()
-	phase("signed-TLS-install", map[string]any{"units": nativeProfileState(t, receipt), "state": baselineState, "runner": runnerState, "runner_pid": runnerPID})
+	phase("independent-runner-setup", map[string]any{"units": nativeProfileState(t, receipt), "state": baselineState, "runner": runnerState, "runner_pid": runnerPID})
 	// Wrong local CA and a correctly checksummed helper with another artifact's
 	// valid signature must fail before stopping services or replacing files.
 	wrongCAPath := filepath.Join(keyDir, "untrusted-ca.pem")
@@ -585,16 +630,18 @@ func nativeProfileCleanup(t *testing.T, receipt *nativeProfileReceipt) {
 	}
 	// The same-unit batch is checked after every stop, not just individually.
 	for _, unit := range nativeProfileUnits {
-		for property, accepted := range map[string][]string{"ActiveState": {"inactive", "failed"}, "MainPID": {"0"}} {
-			output, err := nativeProfileCommand(t, receipt, "systemctl", "show", unit, "--property="+property, "--value")
-			value := strings.TrimSpace(string(output))
-			valid := false
-			for _, allow := range accepted {
-				valid = valid || value == allow
-			}
-			if err != nil || !valid {
+		output, err := nativeProfileCommand(t, receipt, "systemctl", "show", unit, "--property=ActiveState", "--value")
+		active := strings.TrimSpace(string(output))
+		mainPID := ""
+		if strings.HasSuffix(unit, ".service") {
+			pidOutput, pidErr := nativeProfileCommand(t, receipt, "systemctl", "show", unit, "--property=MainPID", "--value")
+			mainPID = strings.TrimSpace(string(pidOutput))
+			if pidErr != nil {
 				complete = false
 			}
+		}
+		if err != nil || !nativeProfileUnitQuiescent(unit, active, mainPID) {
+			complete = false
 		}
 	}
 	quiescent := complete
