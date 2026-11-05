@@ -40,7 +40,7 @@ awk -v minimum="$MIN_SAMPLES" '
   row = $0
   sub(/^[[:space:]]+/, "", row)
   if (row !~ /^[^[:space:]]+[[:space:]]+[0-9]/ ||
-      row ~ /^[^[:space:]]+:/ || row ~ /^geomean[[:space:]]/) {
+      row ~ /^[^[:space:]]+:[[:space:]]/ || row ~ /^geomean[[:space:]]/) {
     next
   }
   rows++

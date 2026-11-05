@@ -371,6 +371,7 @@ while IFS= read -r row; do
 done <<'EOF'
 MissingCandidate-4  100.0n ± 1%
 MissingBaseline-4                     105.0n ± 1%
+Named/with:colon-4  100.0n ± 1%
 MissingStatistics-4  100.0n ± 1%  105.0n ± 1%  ~
 MalformedStatistics-4  100.0n ± 1%  105.0n ± 1%  ~ (p=unknown n=10)
 InvalidProbability-4  100.0n ± 1%  105.0n ± 1%  ~ (p=1.100 n=10)
@@ -388,6 +389,7 @@ cpu: fixture 100
           │ sec/op       │ sec/op vs base │
 Equal-4      100.0n ± 0%   100.0n ± 0%  ~ (p=1.000 n=10) ¹
 Unequal-4    100.0n ± 1%   105.0n ± 1%  +5.00% (p=0.100 n1=10 n2=11)
+Named/with:colon-4  100.0n ± 1%  105.0n ± 1%  +5.00% (p=0.100 n=10)
 geomean      100.0n        102.5n       +2.47%
 ¹ all samples are equal
 EOF
