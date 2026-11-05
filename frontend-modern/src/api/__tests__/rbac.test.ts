@@ -45,7 +45,10 @@ describe('RBACAPI', () => {
 
   describe('saveRole', () => {
     it('uses POST for new role', async () => {
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ id: 'new-role', name: 'New Role' });
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        id: 'new-role',
+        name: 'New Role',
+      });
 
       await RBACAPI.saveRole({ id: 'new-role', name: 'New Role' } as any);
 
@@ -56,13 +59,58 @@ describe('RBACAPI', () => {
     });
 
     it('uses PUT for existing role', async () => {
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ id: 'role-1', name: 'Updated' });
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+        id: 'role-1',
+        name: 'Updated',
+      });
 
-      await RBACAPI.saveRole({ id: 'role-1', name: 'Updated', createdAt: '2024-01-01' } as any);
+      await RBACAPI.saveRole({
+        id: 'role-1',
+        name: 'Updated',
+        createdAt: '2024-01-01',
+      } as any);
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/admin/roles/role-1',
         expect.objectContaining({ method: 'PUT' }),
+      );
+    });
+  });
+
+  describe('bounded RBAC object compatibility', () => {
+    it('sends an explicit empty role array for a deliberate access clear', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);
+      await RBACAPI.updateUserRoles('alice', []);
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/admin/users/alice/roles',
+        expect.objectContaining({ method: 'PUT', body: '{"roleIds":[]}' }),
+      );
+    });
+
+    it('keeps the complete deny policy and case-sensitive condition keys in one object', async () => {
+      const role = {
+        id: 'limited',
+        name: 'Saved reader',
+        description: 'Explicit deny',
+        parentId: 'viewer',
+        priority: 17,
+        isBuiltIn: false,
+        permissions: [
+          {
+            action: 'read',
+            resource: 'nodes',
+            effect: 'deny',
+            conditions: { Ops: 'one', ops: 'two' },
+          },
+        ],
+        createdAt: '2026-11-01T09:00:00Z',
+        updatedAt: '2026-11-01T09:00:00Z',
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(role);
+      await RBACAPI.saveRole(role);
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/admin/roles/limited',
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify(role) }),
       );
     });
   });
@@ -149,7 +197,9 @@ describe('RBACAPI', () => {
 
   describe('getUserPermissions', () => {
     it('preserves a refused read rather than converting it to an empty permission set', async () => {
-      const denial = Object.assign(new Error('private refusal detail'), { status: 403 });
+      const denial = Object.assign(new Error('private refusal detail'), {
+        status: 403,
+      });
       vi.mocked(apiFetchJSON).mockRejectedValueOnce(denial);
 
       await expect(RBACAPI.getUserPermissions('alice')).rejects.toBe(denial);
@@ -215,7 +265,11 @@ describe('RBACAPI', () => {
   });
   it('binds role writes to the selected organisation without retries', async () => {
     const controller = new AbortController();
-    const options = { signal: controller.signal, expectedOrgID: 'selected-org', retry: false };
+    const options = {
+      signal: controller.signal,
+      expectedOrgID: 'selected-org',
+      retry: false,
+    };
     const role = {
       id: 'role/one',
       name: 'One',
@@ -237,7 +291,11 @@ describe('RBACAPI', () => {
   });
   it('forwards an exact abortable organisation and no-retry binding for User Access', async () => {
     const controller = new AbortController();
-    const options = { signal: controller.signal, expectedOrgID: 'selected-org', retry: false };
+    const options = {
+      signal: controller.signal,
+      expectedOrgID: 'selected-org',
+      retry: false,
+    };
     vi.mocked(apiFetchJSON).mockResolvedValue([]);
     await RBACAPI.getUsers(options);
     await RBACAPI.getRoles(options);

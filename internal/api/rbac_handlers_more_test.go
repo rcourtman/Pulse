@@ -6,6 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -273,5 +277,199 @@ func TestRBACHandlers_ChangelogAndEffectiveBranches(t *testing.T) {
 	handler.HandleUserEffectivePermissions(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+}
+
+// These controls use the ordinary file-backed manager, so rejecting a body must
+// preserve both the live policy and the bytes that the next process will read.
+func rbacJSONFixture(t *testing.T) (*RBACHandlers, *auth.FileManager, string) {
+	t.Helper()
+	dir := t.TempDir()
+	manager, err := auth.NewFileManager(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SaveRole(auth.Role{ID: "limited", Name: "Saved reader", Description: "Keep this policy", Permissions: []auth.Permission{{Action: "read", Resource: "nodes", Effect: "deny", Conditions: map[string]string{"tag": "production"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.UpdateUserRoles("alice", []string{auth.RoleViewer}); err != nil {
+		t.Fatal(err)
+	}
+	original := auth.GetManager()
+	t.Cleanup(func() { auth.SetManager(original) })
+	auth.SetManager(manager)
+	return NewRBACHandlers(nil), manager, dir
+}
+
+func rbacJSONSavedBytes(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	result := make(map[string]string)
+	for _, name := range []string{"rbac_roles.json", "rbac_assignments.json"} {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result[name] = string(data)
+	}
+	return result
+}
+
+func TestRBACMutationJSONRejectsAmbiguousRoles(t *testing.T) {
+	valid := `{"id":"limited","name":"Changed","permissions":[{"action":"admin","resource":"*"}]}`
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		for _, tc := range []struct{ name, body string }{
+			{"null", `null`},
+			{"array", `[]`},
+			{"empty", ``},
+			{"incomplete", `{"id":"limited"`},
+			{"duplicate id", `{"id":"other","id":"limited"}`},
+			{"escaped id", `{"id":"other","i\u0064":"limited"}`},
+			{"folded name", `{"id":"limited","name":"Keep","NAME":"Changed"}`},
+			{"duplicate identical", `{"id":"limited","name":"Changed","name":"Changed"}`},
+			{"duplicate permissions", `{"id":"limited","permissions":[],"PERMISSIONS":[{"action":"admin","resource":"*"}]}`},
+			{"duplicate action", `{"id":"limited","permissions":[{"action":"read","ACTION":"admin","resource":"*"}]}`},
+			{"duplicate resource", `{"id":"limited","permissions":[{"action":"read","resource":"nodes","resourc\u0065":"*"}]}`},
+			{"duplicate effect", `{"id":"limited","permissions":[{"action":"read","resource":"nodes","effect":"deny","Effect":"allow"}]}`},
+			{"duplicate condition", `{"id":"limited","permissions":[{"action":"read","resource":"nodes","conditions":{"tag":"production","t\u0061g":"private-fragment-not-public"}}]}`},
+			{"second object", valid + `{}`},
+			{"trailing junk", valid + `private-fragment-not-public`},
+			{"oversized suffix", valid + strings.Repeat(" ", 64*1024)},
+		} {
+			t.Run(method+"/"+tc.name, func(t *testing.T) {
+				h, manager, dir := rbacJSONFixture(t)
+				before := rbacJSONSavedBytes(t, dir)
+				policy, _ := manager.GetRole("limited")
+				count := len(manager.GetRoles())
+				target := "/api/admin/roles"
+				if method == http.MethodPut {
+					target += "/limited"
+				}
+				rec := httptest.NewRecorder()
+				h.HandleRoles(rec, httptest.NewRequest(method, target, strings.NewReader(tc.body)))
+				if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"invalid_json"`) {
+					t.Fatalf("rejection = %d %s", rec.Code, rec.Body.String())
+				}
+				if strings.Contains(rec.Body.String(), "private-fragment-not-public") {
+					t.Fatal("rejection echoed request data")
+				}
+				after, _ := manager.GetRole("limited")
+				if !reflect.DeepEqual(policy, after) || len(manager.GetRoles()) != count {
+					t.Fatal("rejected body changed live roles")
+				}
+				if !reflect.DeepEqual(before, rbacJSONSavedBytes(t, dir)) {
+					t.Fatal("rejected body changed persisted access")
+				}
+			})
+		}
+	}
+}
+
+func TestRBACMutationJSONRejectsAmbiguousAssignments(t *testing.T) {
+	valid := `{"roleIds":["admin"]}`
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		for _, tc := range []struct{ name, body string }{
+			{"null", `null`},
+			{"array", `[]`},
+			{"empty", ``},
+			{"wrong type", `{"roleIds":"admin"}`},
+			{"duplicate", `{"roleIds":["viewer"],"roleIds":["admin"]}`},
+			{"escaped duplicate", `{"roleIds":["viewer"],"roleId\u0073":["admin"]}`},
+			{"folded duplicate", `{"roleIds":["viewer"],"ROLEIDS":["admin"]}`},
+			{"unicode duplicate", `{"roleIds":["viewer"],"roleIdſ":[]}`},
+			{"identical duplicate", `{"roleIds":["viewer"],"roleIds":["viewer"]}`},
+			{"second object", valid + `{}`},
+			{"trailing junk", valid + `private-fragment-not-public`},
+			{"oversized suffix", valid + strings.Repeat(" ", 64*1024)},
+		} {
+			t.Run(method+"/"+tc.name, func(t *testing.T) {
+				h, manager, dir := rbacJSONFixture(t)
+				before := rbacJSONSavedBytes(t, dir)
+				assignment, _ := manager.GetUserAssignment("alice")
+				rec := httptest.NewRecorder()
+				h.HandleUserRoleActions(rec, httptest.NewRequest(method, "/api/admin/users/alice/roles", strings.NewReader(tc.body)))
+				if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"invalid_json"`) {
+					t.Fatalf("rejection = %d %s", rec.Code, rec.Body.String())
+				}
+				if strings.Contains(rec.Body.String(), "private-fragment-not-public") {
+					t.Fatal("rejection echoed request data")
+				}
+				after, _ := manager.GetUserAssignment("alice")
+				if !reflect.DeepEqual(assignment, after) {
+					t.Fatal("rejected body changed live assignment")
+				}
+				if !reflect.DeepEqual(before, rbacJSONSavedBytes(t, dir)) {
+					t.Fatal("rejected body changed persisted access")
+				}
+			})
+		}
+	}
+}
+
+type rbacJSONBrokenBody struct{ body string }
+
+func (b *rbacJSONBrokenBody) Read(p []byte) (int, error) {
+	if b.body == "" {
+		return 0, errors.New("synthetic body transport failure")
+	}
+	n := copy(p, b.body)
+	b.body = b.body[n:]
+	return n, nil
+}
+func (*rbacJSONBrokenBody) Close() error { return nil }
+
+func TestRBACMutationJSONRejectsUnreadRemainder(t *testing.T) {
+	for _, role := range []bool{false, true} {
+		h, _, dir := rbacJSONFixture(t)
+		before := rbacJSONSavedBytes(t, dir)
+		target, body := "/api/admin/users/alice/roles", `{"roleIds":["admin"]}`
+		handler := h.HandleUserRoleActions
+		if role {
+			target, body, handler = "/api/admin/roles/limited", `{"id":"limited","permissions":[]}`, h.HandleRoles
+		}
+		req := httptest.NewRequest(http.MethodPut, target, nil)
+		req.Body = &rbacJSONBrokenBody{body: body}
+		rec := httptest.NewRecorder()
+		handler(rec, req)
+		if rec.Code != http.StatusBadRequest || !reflect.DeepEqual(before, rbacJSONSavedBytes(t, dir)) {
+			t.Fatalf("incomplete body changed access: status %d", rec.Code)
+		}
+	}
+}
+
+func TestRBACMutationJSONKeepsSupportedObjects(t *testing.T) {
+	t.Run("role aliases and complete policy", func(t *testing.T) {
+		h, manager, _ := rbacJSONFixture(t)
+		body := `{"ID":"limited","NAME":"Deliberate policy","parentId":"viewer","priority":17,"permissions":[{"ACTION":"read","resource":"nodes","effect":"deny","conditions":{"Ops":"one","ops":"two"}}],"future":{"name":"ignored","NAME":"also ignored"}}`
+		// A complete body exactly at the existing 64 KiB bound is still valid.
+		body += strings.Repeat(" ", 64*1024-len(body))
+		rec := httptest.NewRecorder()
+		h.HandleRoles(rec, httptest.NewRequest(http.MethodPut, "/api/admin/roles/limited", strings.NewReader(body)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("supported role = %d %s", rec.Code, rec.Body.String())
+		}
+		role, _ := manager.GetRole("limited")
+		if role.Name != "Deliberate policy" || role.ParentID != "viewer" || role.Priority != 17 || len(role.Permissions) != 1 || role.Permissions[0].Effect != "deny" || len(role.Permissions[0].Conditions) != 2 {
+			t.Fatalf("policy lost fields: %+v", role)
+		}
+	})
+	for _, body := range []string{`{"ROLEIDS":["operator"],"future":{}}`, `{"roleIdſ":["operator"]}`, `{"roleIds":[]}`, `{"roleIds":null}`, `{}`} {
+		t.Run("assignment "+body, func(t *testing.T) {
+			h, manager, _ := rbacJSONFixture(t)
+			rec := httptest.NewRecorder()
+			h.HandleUserRoleActions(rec, httptest.NewRequest(http.MethodPut, "/api/admin/users/alice/roles", strings.NewReader(body)))
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("supported assignment = %d %s", rec.Code, rec.Body.String())
+			}
+			got, _ := manager.GetUserAssignment("alice")
+			want := []string(nil)
+			if strings.Contains(body, "operator") {
+				want = []string{auth.RoleOperator}
+			} else if strings.Contains(body, "[]") {
+				want = []string{}
+			}
+			if !reflect.DeepEqual(want, got.RoleIDs) {
+				t.Fatalf("roles = %#v, want %#v", got.RoleIDs, want)
+			}
+		})
 	}
 }
