@@ -97,6 +97,8 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
                 embedded_version = version if version.startswith("v") else f"v{version}"
                 ldflags = (
                     f"-s -w -X main.Version={embedded_version} "
+                "-X github.com/rcourtman/pulse-go-rewrite/internal/agentidentity."
+                f"ReleaseIdentity=[[pulse-agent-release:v1:{embedded_version}]] "
                     "-X github.com/rcourtman/pulse-go-rewrite/internal/updatesignature."
                     f"EmbeddedTrustedPublicKeys={self.update_public_keys}"
                 )
@@ -576,6 +578,17 @@ class SecureRuntimeAttestationV6Test(unittest.TestCase):
         self.assertEqual(set(verified), set(v5.ARTIFACT_ARGUMENTS))
         self.assertTrue(all(item["buildvcs"] is False for item in verified.values()))
         self.assertNotIn("main.Version=vv", self.build_contract()["artifacts"]["collector_v1"]["build"]["ldflags"])
+
+    def test_build_contract_matches_actual_agent_release_recipe(self) -> None:
+        recipe = Path(__file__).resolve().parents[1] / "release_ldflags.sh"
+        contract = self.build_contract()
+        for name in ("collector_v1", "helper"):
+            version = self.receipt["artifact_versions"].get(name, self.tag[1:])
+            actual = subprocess.check_output(
+                ["bash", str(recipe), "agent", "--version", version,
+                 "--update-public-keys", self.update_public_keys], text=True,
+            ).strip()
+            self.assertEqual(actual, contract["artifacts"][name]["build"]["ldflags"])
 
     def test_rejects_local_vcs_stamped_or_wrong_key_build_contract(self) -> None:
         for name, mutate, message in (

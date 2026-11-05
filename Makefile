@@ -120,16 +120,7 @@ test-all: test test-integration
 
 # Build all agent binaries for all platforms
 build-agents:
-	@echo "Building agent binaries for all platforms..."
-	@mkdir -p bin
-	@VERSION=$$(cat VERSION | tr -d '\n') && \
-	echo "Building unified agent binaries..." && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-linux-arm64 ./cmd/pulse-agent && \
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-darwin-amd64 ./cmd/pulse-agent && \
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-darwin-arm64 ./cmd/pulse-agent && \
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-windows-amd64.exe ./cmd/pulse-agent
-	@echo "✓ All agent binaries built in bin/"
+	./scripts/build-agents.sh
 
 # Session handoff — merge a Claude session's handoff entry into MEMORY.md (flock-safe)
 # Usage: make handoff SESSION_ID=<id>

@@ -92,7 +92,12 @@
     "scripts/secure-runtime-rootful-runtime.sh",
     "scripts/release_control/secure_runtime_rootful_source_manifest_v1.json",
     "scripts/release_control/secure_runtime_rootless_attestation_v1.py",
-    "scripts/run-secure-runtime-rootful-qualification.sh"
+    "scripts/run-secure-runtime-rootful-qualification.sh",
+    "internal/agentidentity/version-pattern.txt",
+    "scripts/installtests/agent_armv6_repair_test.go",
+    "scripts/installtests/build_agents_test.go",
+    "cmd/verify-agent-release/main.go",
+    "cmd/verify-agent-release/main_test.go"
   ],
   "recursive_roots": [
     "cmd/pulse-agent",
@@ -101,6 +106,7 @@
     "internal/agentcapabilities",
     "internal/agentexec",
     "internal/agenthelper",
+    "internal/agentidentity",
     "internal/agenttarget",
     "internal/agenttls",
     "internal/agentupdate",

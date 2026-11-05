@@ -733,6 +733,24 @@
       ]
     },
     {
+      "path": "internal/agentidentity/identity.go",
+      "rationale": "the executable package, release identity and compiler target authority is shared by agent activation, download API validation and release artifact selection",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts",
+        "deployment-installability"
+      ]
+    },
+    {
+      "path": "internal/agentidentity/version-pattern.txt",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts",
+        "deployment-installability"
+      ],
+      "rationale": "the canonical release-version grammar is shared by runtime executable identity and release producer validation"
+    },
+    {
       "path": "internal/api/access_control_handlers.go",
       "rationale": "RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -954,6 +972,14 @@
     {
       "path": "internal/api/unified_agent.go",
       "rationale": "unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/api/unified_agent_validation.go",
+      "rationale": "validated executable metadata, digest caching and descriptor-bound downloads are jointly owned by agent lifecycle and API artifact delivery",
       "subsystems": [
         "agent-lifecycle",
         "api-contracts"
@@ -1239,6 +1265,14 @@
         "agent-lifecycle",
         "deployment-installability"
       ]
+    },
+    {
+      "path": "scripts/verify-agent-executable-identity.sh",
+      "subsystems": [
+        "agent-lifecycle",
+        "deployment-installability"
+      ],
+      "rationale": "reproducible canonical executable, installer and emulated ARM update proofs are owned jointly by agent lifecycle and artifact delivery"
     }
   ],
   "subsystems": [
@@ -1250,6 +1284,7 @@
         "internal/actionrunner/",
         "internal/agentexec/",
         "internal/agenthelper/",
+        "internal/agentidentity/",
         "internal/agenttarget/",
         "internal/agentupdate/",
         "internal/collectorlifecycle/",
@@ -1317,6 +1352,7 @@
         "frontend-modern/src/utils/nodeModalPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentStatusPresentation.ts",
+        "internal/agentidentity/version-pattern.txt",
         "internal/agenttls/config.go",
         "internal/api/agent_ingest.go",
         "internal/api/agent_install_command_shared.go",
@@ -1325,11 +1361,13 @@
         "internal/api/configapi/config_setup_handlers.go",
         "internal/api/configapi/setup_script_render.go",
         "internal/api/unified_agent.go",
+        "internal/api/unified_agent_validation.go",
         "internal/config/host_continuity.go",
         "internal/dockeragent/action_runtime.go",
         "internal/dockeragent/agent.go",
         "internal/dockeragent/container_update.go",
         "internal/dockeragent/container_update_typed.go",
+        "internal/dockeragent/self_update.go",
         "internal/hostmetrics/collector.go",
         "internal/kubernetesagent/agent.go",
         "internal/models/models.go",
@@ -1347,6 +1385,7 @@
         "scripts/run-native-pve-action-qualification.sh",
         "scripts/run-secure-runtime-rootful-qualification.sh",
         "scripts/run-secure-runtime-rootless-qualification.sh",
+        "scripts/verify-agent-executable-identity.sh",
         "tests/integration/tests/84-docker-restart-real-lab-artifact.spec.ts"
       ],
       "verification": {
@@ -1355,6 +1394,36 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "agent-executable-identity",
+            "label": "exact executable identity and compiler target proof",
+            "match_prefixes": [
+              "internal/agentidentity/"
+            ],
+            "match_files": [
+              "internal/agentidentity/identity.go",
+              "internal/agentidentity/version-pattern.txt",
+              "internal/agentupdate/identity.go",
+              "internal/api/unified_agent_validation.go",
+              "internal/dockeragent/self_update.go",
+              "scripts/verify-agent-executable-identity.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-agent/release_identity_test.go",
+              "internal/agentidentity/canonical_release_test.go",
+              "internal/agentidentity/identity_test.go",
+              "internal/agentupdate/arm_emulation_test.go",
+              "internal/agentupdate/identity_test.go",
+              "internal/api/unified_agent_canonical_release_test.go",
+              "internal/api/unified_agent_test.go",
+              "internal/api/unified_agent_validation_test.go",
+              "internal/updates/pro_update_target_test.go",
+              "scripts/installtests/agent_armv6_repair_test.go",
+              "scripts/installtests/release_ldflags_test.go"
+            ]
+          },
           {
             "id": "collector-lifecycle-installer-transport",
             "label": "authenticated collector authority transition and registration proof",
@@ -1503,6 +1572,7 @@
               "cmd/pulse-agent/main_test.go",
               "cmd/pulse-agent/observers_config_test.go",
               "cmd/pulse-agent/pending_update_evidence_test.go",
+              "cmd/pulse-agent/release_identity_test.go",
               "scripts/installtests/agent_state_dir_lifecycle_test.go"
             ]
           },
@@ -2823,6 +2893,8 @@
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
+        "internal/agentidentity/identity.go",
+        "internal/agentidentity/version-pattern.txt",
         "internal/api/configapi/setup_script_render.go",
         "internal/config/persistence_metadata_accessors.go",
         "internal/config/report_schedules.go",
@@ -2857,6 +2929,35 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "agent-executable-identity",
+            "label": "exact executable identity and compiler target proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/agentidentity/identity.go",
+              "internal/agentidentity/version-pattern.txt",
+              "internal/api/unified_agent_validation.go",
+              "internal/api/unified_agent_validation_darwin.go",
+              "internal/api/unified_agent_validation_freebsd.go",
+              "internal/api/unified_agent_validation_linux.go",
+              "internal/api/unified_agent_validation_other.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-agent/release_identity_test.go",
+              "internal/agentidentity/canonical_release_test.go",
+              "internal/agentidentity/identity_test.go",
+              "internal/agentupdate/arm_emulation_test.go",
+              "internal/agentupdate/identity_test.go",
+              "internal/api/unified_agent_canonical_release_test.go",
+              "internal/api/unified_agent_test.go",
+              "internal/api/unified_agent_validation_test.go",
+              "internal/updates/pro_update_target_test.go",
+              "scripts/installtests/agent_armv6_repair_test.go",
+              "scripts/installtests/release_ldflags_test.go"
+            ]
+          },
           {
             "id": "sso-provider-management",
             "label": "SSO provider label, CRUD and runtime-preservation proof",
@@ -3350,7 +3451,8 @@
               "internal/api/router_helpers_more_test.go",
               "internal/api/router_resource_wiring_test.go",
               "internal/api/router_set_monitor_agents_test.go",
-              "internal/api/router_webhook_cidr_reload_test.go"
+              "internal/api/router_webhook_cidr_reload_test.go",
+              "internal/api/unified_agent_validation_test.go"
             ]
           },
           {
@@ -4724,6 +4826,7 @@
       "lane": "L1",
       "contract": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
       "owned_prefixes": [
+        "cmd/verify-agent-release/",
         "deploy/helm/pulse/",
         "deploy/provider-msp/",
         "docs/releases/",
@@ -4798,6 +4901,8 @@
         "go.mod",
         "go.sum",
         "install.sh",
+        "internal/agentidentity/identity.go",
+        "internal/agentidentity/version-pattern.txt",
         "internal/api/updates.go",
         "internal/cloudcp/docker/labels.go",
         "internal/cloudcp/docker/manager.go",
@@ -4816,6 +4921,7 @@
         "pulse-pro:scripts/validate_paid_runtime_distribution.py",
         "scripts/backfill-release-assets.sh",
         "scripts/browser_os_packages.py",
+        "scripts/build-agents.sh",
         "scripts/build-release-binaries.sh",
         "scripts/build-release.sh",
         "scripts/build-secure-runtime-qualification.sh",
@@ -4890,6 +4996,7 @@
         "scripts/trigger-stable-patch.sh",
         "scripts/uninstall-sensor-proxy.sh",
         "scripts/validate-release.sh",
+        "scripts/verify-agent-executable-identity.sh",
         "scripts/verify-github-release-integrity.sh",
         "tests/integration/docker-compose.test.yml",
         "tests/integration/playwright.config.ts",
@@ -4921,6 +5028,38 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "agent-executable-identity",
+            "label": "exact executable identity and compiler target proof",
+            "match_prefixes": [
+              "cmd/verify-agent-release/"
+            ],
+            "match_files": [
+              "internal/agentidentity/identity.go",
+              "internal/agentidentity/version-pattern.txt",
+              "internal/updates/manager.go",
+              "internal/updates/pro_update.go",
+              "Makefile",
+              "scripts/build-agents.sh",
+              "scripts/build-release.sh",
+              "scripts/dev-deploy-agent.sh",
+              "scripts/verify-agent-executable-identity.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-agent/release_identity_test.go",
+              "cmd/verify-agent-release/main_test.go",
+              "internal/agentidentity/identity_test.go",
+              "internal/agentupdate/arm_emulation_test.go",
+              "internal/agentupdate/identity_test.go",
+              "internal/api/unified_agent_test.go",
+              "internal/updates/pro_update_target_test.go",
+              "scripts/installtests/agent_armv6_repair_test.go",
+              "scripts/installtests/build_agents_test.go",
+              "scripts/installtests/release_ldflags_test.go"
+            ]
+          },
           {
             "id": "deployment-update-runtime",
             "label": "deployment update runtime proof",
@@ -5441,7 +5580,6 @@
               "scripts/clean-mock-alerts.sh",
               "scripts/com.pulse.hot-dev.plist.template",
               "scripts/dev-check.sh",
-              "scripts/dev-deploy-agent.sh",
               "scripts/dev-launchd-setup.sh",
               "scripts/dev-launchd-wrapper.sh",
               "scripts/hot-dev-bg.sh",

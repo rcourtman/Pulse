@@ -905,3 +905,25 @@ func TestInstallPS1ServiceRemovalRefusesUnknownRuntimeBeforeMutation(t *testing.
 		t.Log("rejected the complete supplied parent installer")
 	}
 }
+
+func TestNativeLifecycleCollectorsUseCanonicalReleaseRecipe(t *testing.T) {
+	source, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(source)
+	// Versioned lifecycle artifacts must exercise the same release identity as
+	// shipped agents; a main.Version-only fixture would be refused by activation.
+	for _, required := range []string{
+		`./scripts/release_ldflags.sh agent --version "6.0.0-native-profile.${version}"`,
+		`bash ./scripts/release_ldflags.sh agent --version 6.0.5-ci.1`,
+		`bash ./scripts/release_ldflags.sh agent --version 6.0.5-ci.2`,
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("native collector release recipe missing %q", required)
+		}
+	}
+	if strings.Contains(workflow, `-ldflags="-s -w -X main.Version=6.0`) {
+		t.Fatal("version-only native collector fixture bypasses canonical executable identity")
+	}
+}

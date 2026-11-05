@@ -49,7 +49,10 @@
     "scripts/require-safe-gh-attestation.sh",
     "scripts/validate-published-release.sh",
     "scripts/validate-release.sh",
-    "scripts/verify-github-release-integrity.sh"
+    "scripts/verify-github-release-integrity.sh",
+    "internal/agentidentity/version-pattern.txt",
+    "cmd/verify-agent-release/main.go",
+    "cmd/verify-agent-release/main_test.go"
   ],
   "recursive_roots": [
     "cmd/pulse-agent",
@@ -58,6 +61,7 @@
     "internal/actionrunner",
     "internal/agentexec",
     "internal/agenthelper",
+    "internal/agentidentity",
     "internal/agenttls",
     "internal/agentupdate",
     "internal/api",

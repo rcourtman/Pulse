@@ -29,6 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	pulseconfig "github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -1402,6 +1403,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	disableCephFlag := fs.Bool("disable-ceph", utils.ParseBool(envDisableCeph), "Disable local Ceph status polling")
 	disableClusterPeerSensorsFlag := fs.Bool("disable-cluster-peer-sensors", utils.ParseBool(envDisableClusterPeerSensors), "Skip SSH sensor collection from Proxmox cluster peers")
 	showVersion := fs.Bool("version", false, "Print the agent version and exit")
+	showReleaseIdentity := fs.Bool("release-identity", false, "Print the embedded release identity and exit")
 	selfTest := fs.Bool("self-test", false, "Perform self-test and exit (used during auto-update)")
 	validateURL := fs.Bool("validate-url", false, "Validate the primary Pulse URL policy and exit without reading credentials, writing state or starting modules")
 
@@ -1420,8 +1422,21 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 
+	if *showReleaseIdentity {
+		identity, err := agentidentity.RuntimeReleaseIdentity(Version)
+		if err != nil {
+			return Config{}, err
+		}
+		fmt.Println(identity)
+		return Config{}, flag.ErrHelp
+	}
+
 	if *showVersion {
-		fmt.Println(Version)
+		version, err := agentidentity.StampedVersion(Version)
+		if err != nil {
+			return Config{}, err
+		}
+		fmt.Println(version)
 		return Config{}, flag.ErrHelp
 	}
 

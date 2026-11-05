@@ -561,6 +561,8 @@ def verify_release_build_contract(
             embedded_version = artifact_version if artifact_version.startswith("v") else f"v{artifact_version}"
             expected_ldflags = (
                 f"-s -w -X main.Version={embedded_version} "
+                "-X github.com/rcourtman/pulse-go-rewrite/internal/agentidentity."
+                f"ReleaseIdentity=[[pulse-agent-release:v1:{embedded_version}]] "
                 "-X github.com/rcourtman/pulse-go-rewrite/internal/updatesignature."
                 f"EmbeddedTrustedPublicKeys={update_public_keys}"
             )

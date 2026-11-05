@@ -7,13 +7,16 @@ import "context"
 func PerformUpdateWithExecPathForTest(u *Updater, ctx context.Context, execPath string) error {
 	origRestart := restartProcessFn
 	origSelfTest := u.selfTestFn
+	origIdentity := u.verifyIdentityFn
 	restartProcessFn = func(string) error { return nil }
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
 	defer func() {
 		restartProcessFn = origRestart
 		u.selfTestFn = origSelfTest
+		u.verifyIdentityFn = origIdentity
 	}()
-	return u.performUpdateWithExecPath(ctx, execPath)
+	return u.performUpdateWithExecPathForVersion(ctx, execPath, "6.0.0")
 }
 
 // WithExecutablePathForTest temporarily points update-info lookups at the
@@ -38,10 +41,12 @@ func UseExecPathForUpdateChecksForTest(u *Updater, execPath string) func() {
 	origEval := evalSymlinksFn
 	origRestart := restartProcessFn
 	origSelfTest := u.selfTestFn
+	origIdentity := u.verifyIdentityFn
 
 	osExecutableFn = func() (string, error) { return execPath, nil }
 	evalSymlinksFn = func(string) (string, error) { return execPath, nil }
 	restartProcessFn = func(string) error { return nil }
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
 	u.performUpdateFn = func(ctx context.Context, targetVersion string) error {
 		return u.performUpdateWithExecPathForVersion(ctx, execPath, targetVersion)
@@ -50,6 +55,7 @@ func UseExecPathForUpdateChecksForTest(u *Updater, execPath string) func() {
 	return func() {
 		u.performUpdateFn = origPerform
 		u.selfTestFn = origSelfTest
+		u.verifyIdentityFn = origIdentity
 		osExecutableFn = origExec
 		evalSymlinksFn = origEval
 		restartProcessFn = origRestart

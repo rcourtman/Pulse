@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity/identitytest"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,13 +49,25 @@ func expectedAgentVersionForTest() string {
 	return expectedAgentBinaryVersion(versionInfo.Version)
 }
 
-func validTestUnifiedAgentBinary(suffix string) []byte {
-	return []byte("ELF test binary " + canonicalUnifiedAgentReportPath + " " +
-		expectedAgentVersionForTest() + " " + suffix)
+func validTestUnifiedAgentBinary(t *testing.T, suffix string) []byte {
+	target := "linux-amd64"
+	switch suffix {
+	case "offline-freebsd-fixture":
+		target = "freebsd-amd64"
+	case "windows-amd64", "darwin-arm64", "freebsd-amd64", "freebsd-arm64":
+		target = suffix
+	}
+	path := identitytest.Build(t, identitytest.Options{Version: expectedAgentVersionForTest(), Target: target, Extra: suffix, ReportPath: canonicalUnifiedAgentReportPath})
+	body, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return body
 }
 
-func staleTestUnifiedAgentBinary(suffix string) []byte {
-	return []byte("ELF stale binary " + legacyUnifiedAgentReportPath + " " + suffix)
+func staleTestUnifiedAgentBinary(t *testing.T, suffix string) []byte {
+	path := identitytest.Build(t, identitytest.Options{Version: expectedAgentVersionForTest(), Target: "linux-amd64", Extra: suffix, ReportPath: legacyUnifiedAgentReportPath})
+	body, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return body
 }
 
 func encodedTestSSHSignature(payload string) string {
@@ -132,7 +145,7 @@ func TestDownloadUnifiedAgent_Local_Generic(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 
 	// Create dummy binary in project root / bin
-	binContent := validTestUnifiedAgentBinary("generic")
+	binContent := validTestUnifiedAgentBinary(t, "generic")
 	binPath := filepath.Join(tempDir, "bin", "pulse-agent")
 	err := os.WriteFile(binPath, binContent, 0755)
 	require.NoError(t, err)
@@ -169,7 +182,7 @@ func TestDownloadUnifiedAgent_Local_SpecificArch(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 
 	// Create dummy binary for linux-amd64
-	binContent := validTestUnifiedAgentBinary("linux-amd64")
+	binContent := validTestUnifiedAgentBinary(t, "linux-amd64")
 	binPath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
 	err := os.WriteFile(binPath, binContent, 0755)
 	require.NoError(t, err)
@@ -187,7 +200,7 @@ func TestDownloadUnifiedAgent_LocalReleaseBinaryIncludesSignatureHeader(t *testi
 	router, tempDir := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v6.0.0"
 
-	binContent := validTestUnifiedAgentBinary("linux-amd64")
+	binContent := validTestUnifiedAgentBinary(t, "linux-amd64")
 	binPath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
 	err := os.WriteFile(binPath, binContent, 0755)
 	require.NoError(t, err)
@@ -216,7 +229,7 @@ func TestDownloadUnifiedAgent_LocalWindowsReleaseUsesExecutableSignatures(t *tes
 	router.serverVersion = "v6.4.2"
 	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("proxy must not be used"))
 
-	binContent := validTestUnifiedAgentBinary("windows-amd64")
+	binContent := validTestUnifiedAgentBinary(t, "windows-amd64")
 	binPath := filepath.Join(tempDir, "bin", "pulse-agent-windows-amd64.exe")
 	require.NoError(t, os.WriteFile(binPath, binContent, 0755))
 	require.NoError(t, os.WriteFile(binPath+".sig", []byte("signed-windows-agent"), 0644))
@@ -242,9 +255,9 @@ func TestDownloadUnifiedAgent_SkipsStaleLocalBinaryAndProxies(t *testing.T) {
 	router.serverVersion = "v6.0.0-rc.1"
 
 	stalePath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
-	require.NoError(t, os.WriteFile(stalePath, staleTestUnifiedAgentBinary("linux-amd64"), 0755))
+	require.NoError(t, os.WriteFile(stalePath, staleTestUnifiedAgentBinary(t, "linux-amd64"), 0755))
 
-	binaryContent := "fresh github binary"
+	binaryContent := releaseAgentFixture(t, "linux-amd64")
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-agent-linux-amd64"
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
@@ -269,7 +282,7 @@ func TestDownloadUnifiedAgent_DevModeRejectsStaleLocalBinary(t *testing.T) {
 	router.serverVersion = "dev"
 
 	stalePath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
-	require.NoError(t, os.WriteFile(stalePath, staleTestUnifiedAgentBinary("linux-amd64"), 0755))
+	require.NoError(t, os.WriteFile(stalePath, staleTestUnifiedAgentBinary(t, "linux-amd64"), 0755))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -279,7 +292,7 @@ func TestDownloadUnifiedAgent_DevModeRejectsStaleLocalBinary(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "stale or incompatible")
 	assert.Contains(t, w.Body.String(), legacyUnifiedAgentReportPath)
-	assert.Contains(t, w.Body.String(), "go build -o bin/pulse-agent-linux-amd64")
+	assert.Contains(t, w.Body.String(), "go build -ldflags=")
 }
 
 func TestDownloadUnifiedAgent_ProxyFromGitHub(t *testing.T) {
@@ -288,7 +301,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub(t *testing.T) {
 
 	// Ensure NO local files exist (temp dir is empty of binaries)
 	// Set up a mock HTTP client to simulate GitHub response
-	binaryContent := "fake binary content for proxy test"
+	binaryContent := releaseAgentFixture(t, "linux-amd64")
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-agent-linux-amd64"
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
@@ -320,7 +333,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_UsesConfiguredRepo(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v6.0.0-rc.1"
 
-	binaryContent := "fake binary content for proxy test"
+	binaryContent := releaseAgentFixture(t, "linux-amd64")
 	expectedURL := "https://github.com/example/pulse-fork/releases/download/v6.0.0-rc.1/pulse-agent-linux-amd64"
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
@@ -341,7 +354,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_Windows(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v6.0.0-rc.1"
 
-	binaryContent := "MZ fake windows binary"
+	binaryContent := releaseAgentFixture(t, "windows-amd64")
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-agent-windows-amd64.exe"
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
@@ -365,7 +378,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_Darwin(t *testing.
 	router, _ := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v9.9.9"
 
-	binaryContent := []byte("darwin arm64 binary payload")
+	binaryContent := []byte(releaseAgentFixture(t, "darwin-arm64", "v9.9.9"))
 	archivePayload := buildTestTarGz(t, "pulse-agent-darwin-arm64", binaryContent)
 	binaryURL := "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/pulse-agent-darwin-arm64"
 	signatureURL := binaryURL + ".sig"
@@ -432,7 +445,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_UsesConfiguredRepo
 	router, _ := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v9.9.9"
 
-	binaryContent := []byte("darwin arm64 binary payload")
+	binaryContent := []byte(releaseAgentFixture(t, "darwin-arm64", "v9.9.9"))
 	archivePayload := buildTestTarGz(t, "pulse-agent-darwin-arm64", binaryContent)
 	binaryURL := "https://github.com/example/pulse-fork/releases/download/v9.9.9/pulse-agent-darwin-arm64"
 	signatureURL := binaryURL + ".sig"
@@ -532,7 +545,7 @@ func TestDownloadUnifiedAgent_DevPrereleaseRejectsGitHubFallback(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "dev mode")
-	assert.Contains(t, w.Body.String(), "go build -o bin/pulse-agent-linux-amd64")
+	assert.Contains(t, w.Body.String(), "go build -ldflags=")
 }
 
 func TestDownloadUnifiedAgent_DevModeReportsRequestedLocalBuildCommand(t *testing.T) {
@@ -547,19 +560,19 @@ func TestDownloadUnifiedAgent_DevModeReportsRequestedLocalBuildCommand(t *testin
 	require.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "Agent binary not found for \"darwin-arm64\" in dev mode.")
 	assert.Contains(t, w.Body.String(), "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64")
-	assert.Contains(t, w.Body.String(), "go build -o bin/pulse-agent-darwin-arm64 ./cmd/pulse-agent")
+	assert.Contains(t, w.Body.String(), unifiedAgentLocalBuildCommand("darwin-arm64"))
 	assert.NotContains(t, w.Body.String(), "bin/pulse-agent-linux-amd64")
 }
 
 func TestUnifiedAgentLocalBuildCommandHandlesArmVariants(t *testing.T) {
 	assert.Equal(
 		t,
-		"CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o bin/pulse-agent-linux-armv7 ./cmd/pulse-agent",
+		"CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags=\"$(./scripts/release_ldflags.sh agent --version \"$(cat VERSION)\")\" -trimpath -o bin/pulse-agent-linux-armv7 ./cmd/pulse-agent",
 		unifiedAgentLocalBuildCommand("linux-armv7"),
 	)
 	assert.Equal(
 		t,
-		"CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -o bin/pulse-agent-linux-armv6 ./cmd/pulse-agent",
+		"CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -ldflags=\"$(./scripts/release_ldflags.sh agent --version \"$(cat VERSION)\")\" -trimpath -o bin/pulse-agent-linux-armv6 ./cmd/pulse-agent",
 		unifiedAgentLocalBuildCommand("linux-armv6"),
 	)
 }
@@ -607,17 +620,9 @@ func buildTestTarGz(t *testing.T, name string, payload []byte) []byte {
 	return buf.Bytes()
 }
 
-// writeAgentBinaryFixture builds a stand-in for a compiled agent. The real
-// validator is a byte scan, so a file carrying the same needles exercises it
-// faithfully without shipping a multi-megabyte binary into the test tree.
+// writeAgentBinaryFixture builds a real stripped executable with Go metadata.
 func writeAgentBinaryFixture(t *testing.T, reportPath string, versionString string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "pulse-agent")
-	body := "\x7fELF padding " + reportPath + " more padding " + versionString + " trailing\n"
-	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
-		t.Fatalf("write agent fixture: %v", err)
-	}
-	return path
+	return identitytest.Build(t, identitytest.Options{Version: versionString, Target: "linux-amd64", ReportPath: reportPath})
 }
 
 func TestExpectedAgentBinaryVersionDropsBuildMetadata(t *testing.T) {
@@ -649,7 +654,7 @@ func TestValidateUnifiedAgentBinaryRejectsStaleBuild(t *testing.T) {
 	// contract, so every existing check passes, but built weeks earlier.
 	stale := writeAgentBinaryFixture(t, canonicalUnifiedAgentReportPath, "v6.0.5-54-gc862fb0ca0")
 
-	if err := validateUnifiedAgentBinary(stale, "v6.2.0-rc.8"); err == nil {
+	if err := validateUnifiedAgentBinary(stale, "v6.2.0-rc.8", "linux-amd64"); err == nil {
 		t.Fatal("a binary that does not carry this server's agent version must be refused")
 	} else if !strings.Contains(err.Error(), "stale build") {
 		t.Fatalf("error should name staleness, got %v", err)
@@ -657,14 +662,14 @@ func TestValidateUnifiedAgentBinaryRejectsStaleBuild(t *testing.T) {
 
 	// Premise check: without the version guard this same binary is accepted,
 	// which is exactly how it reached a host in the first place.
-	if err := validateUnifiedAgentBinary(stale, ""); err != nil {
+	if err := validateUnifiedAgentBinary(stale, "", "linux-amd64"); err != nil {
 		t.Fatalf("premise check failed: the stale binary is supposed to pass every other check, got %v", err)
 	}
 }
 
 func TestValidateUnifiedAgentBinaryAcceptsMatchingBuild(t *testing.T) {
 	current := writeAgentBinaryFixture(t, canonicalUnifiedAgentReportPath, "v6.2.0-rc.8")
-	if err := validateUnifiedAgentBinary(current, "v6.2.0-rc.8"); err != nil {
+	if err := validateUnifiedAgentBinary(current, "v6.2.0-rc.8", "linux-amd64"); err != nil {
 		t.Fatalf("a binary carrying this server's agent version must be served: %v", err)
 	}
 }
@@ -673,7 +678,18 @@ func TestValidateUnifiedAgentBinaryStillRejectsLegacyContract(t *testing.T) {
 	// The version guard must not displace the endpoint guard: a correctly
 	// versioned binary on the deprecated report path is still refused.
 	legacy := writeAgentBinaryFixture(t, legacyUnifiedAgentReportPath, "v6.2.0-rc.8")
-	if err := validateUnifiedAgentBinary(legacy, "v6.2.0-rc.8"); err == nil {
+	if err := validateUnifiedAgentBinary(legacy, "v6.2.0-rc.8", "linux-amd64"); err == nil {
 		t.Fatal("a binary on the deprecated report endpoint must still be refused")
 	}
+}
+
+func releaseAgentFixture(t *testing.T, target string, versions ...string) string {
+	version := "v6.0.0-rc.1"
+	if len(versions) > 0 {
+		version = versions[0]
+	}
+	path := identitytest.Build(t, identitytest.Options{Version: version, Target: target, ReportPath: canonicalUnifiedAgentReportPath})
+	body, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return string(body)
 }

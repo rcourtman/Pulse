@@ -17,14 +17,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
@@ -117,23 +116,11 @@ func updateReleaseDownloadPrefix() string {
 }
 
 func updateReleaseAssetForRuntime(tagName string) (ReleaseAsset, bool) {
-	armVariant := ""
-	if runtime.GOARCH == "arm" {
-		// GOARCH alone cannot distinguish the separately published ARMv6 and
-		// ARMv7 server binaries. Release builds record their GOARM setting.
-		if info, ok := debug.ReadBuildInfo(); ok {
-			for _, setting := range info.Settings {
-				if setting.Key == "GOARM" {
-					armVariant = setting.Value
-					break
-				}
-			}
-		}
-	}
-	targetArch, ok := updateReleaseArchitecture(runtime.GOARCH, armVariant)
-	if !ok {
+	target, err := agentidentity.CurrentTarget()
+	if err != nil || !strings.HasPrefix(target, "linux-") {
 		return ReleaseAsset{}, false
 	}
+	targetArch := strings.TrimPrefix(target, "linux-")
 
 	assetName := fmt.Sprintf("pulse-%s-linux-%s.tar.gz", tagName, targetArch)
 	downloadURL := fmt.Sprintf(
@@ -146,17 +133,11 @@ func updateReleaseAssetForRuntime(tagName string) (ReleaseAsset, bool) {
 }
 
 func updateReleaseArchitecture(goarch, goarm string) (string, bool) {
-	switch goarch {
-	case "amd64", "arm64", "386":
-		return goarch, true
-	case "arm":
-		// GOARM=5 has no server archive. An absent or unknown variant must not
-		// silently select ARMv7, which may not run on an ARMv6 host.
-		if goarm == "6" || goarm == "7" {
-			return "armv" + goarm, true
-		}
+	target, err := agentidentity.TargetForSettings("linux", goarch, goarm)
+	if err != nil {
+		return "", false
 	}
-	return "", false
+	return strings.TrimPrefix(target, "linux-"), true
 }
 
 func updateReleaseAPIPath() string {

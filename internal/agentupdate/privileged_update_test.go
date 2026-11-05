@@ -87,6 +87,7 @@ func TestPrivilegedUpdateStagesActivatesAndRollsBackRestartFailure(t *testing.T)
 		t.Fatal(err)
 	}
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(_ context.Context, path string) error {
 		helper.events = append(helper.events, "self-test")
 		data, err := os.ReadFile(path)
@@ -96,7 +97,7 @@ func TestPrivilegedUpdateStagesActivatesAndRollsBackRestartFailure(t *testing.T)
 		return nil
 	}
 
-	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update", "1.1.0")
+	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update", "1.1.0", "linux-amd64")
 	if err == nil || !strings.Contains(err.Error(), "update rolled back") {
 		t.Fatalf("performPrivilegedUpdate error = %v", err)
 	}
@@ -116,9 +117,10 @@ func TestPrivilegedUpdateFailsClosedBeforeActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
 
-	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), strings.Repeat("0", 64), "signed-update", "1.1.0")
+	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), strings.Repeat("0", 64), "signed-update", "1.1.0", "linux-amd64")
 	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 		t.Fatalf("performPrivilegedUpdate error = %v", err)
 	}

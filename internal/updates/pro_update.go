@@ -5,16 +5,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
@@ -198,12 +199,14 @@ func (e *proBrokerStatusError) Error() string {
 
 // proUpdateTarget maps the running architecture to the broker's artifact
 // target naming (same mapping the community release assets use).
+var proRuntimeTarget = agentidentity.CurrentTarget
+
 func proUpdateTarget() string {
-	arch := runtime.GOARCH
-	if arch == "arm" {
-		arch = "armv7"
+	target, err := proRuntimeTarget()
+	if err != nil || !strings.HasPrefix(target, "linux-") {
+		return ""
 	}
-	return "linux-" + arch
+	return target
 }
 
 func proBrokerBaseURL(licenseServerURL string) (*url.URL, error) {
@@ -268,7 +271,11 @@ func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateC
 		return nil, fmt.Errorf("build Pulse Pro download broker URL: %w", err)
 	}
 	query := target.Query()
-	query.Set("target", proUpdateTarget())
+	releaseTarget := proUpdateTarget()
+	if releaseTarget == "" {
+		return nil, errors.New("unsupported Pro executable release target")
+	}
+	query.Set("target", releaseTarget)
 	// rc-channel installs ask the dual-channel broker for the RC slot; the
 	// stable default is left implicit so the URL is unchanged for brokers
 	// that predate the channel parameter.
@@ -432,6 +439,9 @@ func (m *Manager) resolveProUpdateArtifact(ctx context.Context, channel string) 
 	}
 
 	wantTarget := proUpdateTarget()
+	if wantTarget == "" {
+		return resolvedUpdateArtifact{}, errors.New("unsupported Pro executable release target")
+	}
 	var artifact *proBrokerArtifact
 	for i := range manifest.Artifacts {
 		if manifest.Artifacts[i].Target == wantTarget {

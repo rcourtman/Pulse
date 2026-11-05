@@ -111,6 +111,7 @@ func newHelperRecoveryUpdater(t *testing.T, rollbackErr error) (*fakePrivilegedU
 		PrivilegedUpdate: helper,
 	})
 	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
 	return helper, u, exits
 }
@@ -465,7 +466,7 @@ func TestLocalReplacementKeepsExecutableServicePathThroughPowerLoss(t *testing.T
 	u := newUpdaterForTest("https://pulse.example.com")
 	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("performUpdateWithExecPath: %v", err)
 	}
 
@@ -498,7 +499,7 @@ func TestLocalReplacementStagedSyncFailureKeepsRunningBinary(t *testing.T) {
 	u := newUpdaterForTest("https://pulse.example.com")
 	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
 
-	err := u.performUpdateWithExecPath(context.Background(), execPath)
+	err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0")
 	if err == nil || !strings.Contains(err.Error(), "failed to sync staged binary") {
 		t.Fatalf("performUpdateWithExecPath error = %v", err)
 	}
@@ -529,7 +530,7 @@ func TestLocalReplacementRenameFailureNeverEmptiesServicePath(t *testing.T) {
 	u := newUpdaterForTest("https://pulse.example.com")
 	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
 
-	err := u.performUpdateWithExecPath(context.Background(), execPath)
+	err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0")
 	if err == nil || !strings.Contains(err.Error(), "failed to replace binary") {
 		t.Fatalf("performUpdateWithExecPath error = %v", err)
 	}
@@ -575,7 +576,7 @@ func TestLocalReplacementDirectorySyncFailureKeepsBackupAndReplacesStaleEvidence
 	u := newUpdaterForTest("https://pulse.example.com")
 	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("performUpdateWithExecPath: %v", err)
 	}
 	if got := rec.ops(); !reflect.DeepEqual(got, []string{"create", "close", "chmod", "syncfile", "rename", "writefile", "restart"}) {
@@ -605,7 +606,7 @@ func TestWindowsReplacementPinsMissingServicePathGap(t *testing.T) {
 	u := newUpdaterForTest("https://pulse.example.com")
 	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("performUpdateWithExecPath: %v", err)
 	}
 	want := []string{"create", "close", "chmod", "syncfile", "rename", "rename", "syncdir", "remove", "writefile", "restart"}
@@ -635,7 +636,7 @@ func TestWindowsReplacementRestoresBackupWhenSecondRenameFails(t *testing.T) {
 	u := newUpdaterForTest("https://pulse.example.com")
 	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
 
-	err := u.performUpdateWithExecPath(context.Background(), execPath)
+	err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0")
 	if err == nil || !strings.Contains(err.Error(), "failed to replace binary") {
 		t.Fatalf("performUpdateWithExecPath error = %v", err)
 	}
