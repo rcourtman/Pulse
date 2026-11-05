@@ -4,7 +4,6 @@ import type { OrganizationMember } from '@/api/orgs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { OrganizationAccessPanel } from '../OrganizationAccessPanel';
-import organizationAccessStateSource from '../useOrganizationAccessPanelState.ts?raw';
 
 const orgGetMock = vi.fn();
 const listMembersMock = vi.fn();
@@ -215,10 +214,72 @@ describe('OrganizationAccessPanel', () => {
     },
   );
 
-  it('normalizes org scope through the shared helper', () => {
-    expect(organizationAccessStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationAccessStateSource).not.toContain("getOrgID() || 'default'");
-  });
+  it.each([
+    { raw: undefined, scope: 'default' },
+    { raw: null, scope: 'default' },
+    { raw: '', scope: 'default' },
+    { raw: ' \t ', scope: 'default' },
+    { raw: 'default', scope: 'default' },
+    { raw: ' org-a \t', scope: 'org-a' },
+    { raw: 'org-a', scope: 'org-a' },
+  ])(
+    'binds access reads and a member change to normalized scope $scope from "$raw"',
+    async ({ raw, scope }) => {
+      getOrgIDMock.mockReturnValue(raw);
+      orgGetMock.mockResolvedValue({
+        ...baseOrg,
+        id: scope,
+        canManageMembers: true,
+        ownerUserId: scope === 'default' ? undefined : baseOrg.ownerUserId,
+      });
+      renderPanel();
+
+      const input = await screen.findByRole('textbox', { name: 'Invite user ID' });
+      expect(screen.getByText('user-2')).toBeInTheDocument();
+      const binding = {
+        expectedOrgID: scope,
+        retry: false,
+        signal: expect.any(AbortSignal),
+      };
+      for (const read of [orgGetMock, listMembersMock, listPendingInvitationsMock]) {
+        expect(read).toHaveBeenCalledExactlyOnceWith(scope, binding);
+      }
+      expect(listMyInvitationsMock).toHaveBeenCalledExactlyOnceWith(binding);
+
+      const roles = screen.getByRole('combobox', { name: 'Invite role' }) as HTMLSelectElement;
+      if (scope === 'default') {
+        expect(Array.from(roles.options, (option) => option.value)).toEqual(['viewer']);
+      }
+      fireEvent.input(input, { target: { value: 'new-user' } });
+      fireEvent.click(screen.getByRole('button', { name: scope === 'default' ? 'Add' : 'Invite' }));
+      await waitFor(() =>
+        expect(inviteMemberMock).toHaveBeenCalledExactlyOnceWith(
+          scope,
+          { userId: 'new-user', role: 'viewer' },
+          binding,
+        ),
+      );
+      await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
+      await screen.findByRole('textbox', { name: 'Invite user ID' });
+      expect(loggerErrorMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, undefined])(
+    'does not infer default member administration from an owner ID when canManageMembers is %s',
+    async (canManageMembers) => {
+      getOrgIDMock.mockReturnValue(' \t ');
+      orgGetMock.mockResolvedValue({ ...baseOrg, id: 'default', canManageMembers });
+      renderPanel();
+
+      await screen.findByText('user-2');
+      expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Role for user-2' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+      expect(listPendingInvitationsMock).not.toHaveBeenCalled();
+      expectNoWrites();
+    },
+  );
 });
 
 describe('Organization Access selection safety', () => {

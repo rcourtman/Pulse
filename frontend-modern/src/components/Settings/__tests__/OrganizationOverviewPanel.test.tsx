@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { OrganizationOverviewPanel } from '../OrganizationOverviewPanel';
-import organizationOverviewStateSource from '../useOrganizationOverviewPanelState.ts?raw';
 
 const orgGetMock = vi.fn();
 const listMembersMock = vi.fn();
@@ -12,7 +11,9 @@ const getOrgIDMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const eventBusOnMock = vi.fn();
+const eventBusEmitMock = vi.fn();
 const loggerErrorMock = vi.fn();
+const listeners = new Map<string, Set<() => void>>();
 
 vi.mock('@/api/orgs', () => ({
   OrgsAPI: {
@@ -46,6 +47,7 @@ vi.mock('@/stores/notifications', () => ({
 vi.mock('@/stores/events', () => ({
   eventBus: {
     on: (...args: unknown[]) => eventBusOnMock(...args),
+    emit: (...args: unknown[]) => eventBusEmitMock(...args),
   },
 }));
 
@@ -97,12 +99,21 @@ beforeEach(() => {
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   eventBusOnMock.mockReset();
+  eventBusEmitMock.mockReset();
   loggerErrorMock.mockReset();
+  listeners.clear();
 
   isMultiTenantEnabledMock.mockReturnValue(true);
   presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(false);
   getOrgIDMock.mockReturnValue('org-a');
-  eventBusOnMock.mockReturnValue(() => undefined);
+  eventBusOnMock.mockImplementation((event, callback) => {
+    if (!listeners.has(event)) listeners.set(event, new Set());
+    listeners.get(event)!.add(callback);
+    return () => listeners.get(event)?.delete(callback);
+  });
+  eventBusEmitMock.mockImplementation((event) => {
+    listeners.get(event)?.forEach((callback) => callback());
+  });
   orgGetMock.mockResolvedValue(baseOrg);
   listMembersMock.mockResolvedValue(baseMembers);
   updateOrgMock.mockResolvedValue({ ...baseOrg, displayName: 'Updated Org' });
@@ -136,10 +147,53 @@ describe('OrganizationOverviewPanel', () => {
     expect(listMembersMock).toHaveBeenCalledWith('org-a', options);
   });
 
-  it('normalizes org scope through the shared helper', () => {
-    expect(organizationOverviewStateSource).toContain('normalizeOrgScope(getOrgID())');
-    expect(organizationOverviewStateSource).not.toContain("getOrgID() || 'default'");
-  });
+  it.each([
+    { raw: undefined, scope: 'default' },
+    { raw: null, scope: 'default' },
+    { raw: '', scope: 'default' },
+    { raw: ' \t ', scope: 'default' },
+    { raw: 'default', scope: 'default' },
+    { raw: ' org-a \t', scope: 'org-a' },
+    { raw: 'org-a', scope: 'org-a' },
+  ])(
+    'binds overview reads and a rename to normalized scope $scope from "$raw"',
+    async ({ raw, scope }) => {
+      getOrgIDMock.mockReturnValue(raw);
+      orgGetMock.mockResolvedValue({ ...baseOrg, id: scope });
+      const savedOrg = { ...baseOrg, id: scope, displayName: 'Selected workspace' };
+      updateOrgMock.mockImplementation(async () => {
+        orgGetMock.mockResolvedValue(savedOrg);
+        return savedOrg;
+      });
+      renderPanel();
+
+      const input = await screen.findByRole('textbox', { name: 'Display Name' });
+      expect(input).toHaveValue(baseOrg.displayName);
+      expect(screen.getByText('user-2')).toBeInTheDocument();
+      const binding = {
+        expectedOrgID: scope,
+        retry: false,
+        signal: expect.any(AbortSignal),
+      };
+      expect(orgGetMock).toHaveBeenCalledExactlyOnceWith(scope, binding);
+      expect(listMembersMock).toHaveBeenCalledExactlyOnceWith(scope, binding);
+
+      fireEvent.input(input, { target: { value: 'Selected workspace' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(updateOrgMock).toHaveBeenCalledExactlyOnceWith(
+          scope,
+          { displayName: 'Selected workspace' },
+          binding,
+        ),
+      );
+      await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
+      expect(await screen.findByRole('textbox', { name: 'Display Name' })).toHaveValue(
+        savedOrg.displayName,
+      );
+      expect(loggerErrorMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('stays unavailable in demo mode without loading organization data', () => {
     presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(true);
