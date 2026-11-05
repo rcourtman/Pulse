@@ -84,10 +84,10 @@ func guestHasReplicationJob(endpoint string, vmid int) bool {
 	return guestAgentGuards.replicationGuests[key][vmid]
 }
 
-// A complete answer of 404 or 501 means an unknown route. A complete 500 is PVE's
-// job_status failing, as it does without quorum; get_next_job calls it too, so no
-// new job can start, and deferring would only cost readings during that outage.
-// Every other failure leaves the job's state unknown and stays an error.
+// A complete 404 or 501 retains compatibility with an unsupported route.
+// A server error, including a complete 500, cannot establish whether an already
+// running job has finished freezing/thawing its guest. Keep that state unknown
+// until a usable status reply arrives; do not infer safety from a quorum error.
 func (c *Client) readGuestReplicationStatus(ctx context.Context, node string, vmid int) ([]byte, bool, error) {
 	readClient := *c.httpClient
 	readClient.CheckRedirect = func(*http.Request, []*http.Request) error {
@@ -99,7 +99,7 @@ func (c *Client) readGuestReplicationStatus(ctx context.Context, node string, vm
 		var response *apiResponseError
 		if errors.As(err, &response) {
 			switch response.statusCode {
-			case http.StatusNotFound, http.StatusNotImplemented, http.StatusInternalServerError:
+			case http.StatusNotFound, http.StatusNotImplemented:
 				return nil, false, nil
 			}
 		}
