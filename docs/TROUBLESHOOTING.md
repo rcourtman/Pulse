@@ -567,6 +567,10 @@ run Diagnostics or replay a mutation just to collect them. Keep tokens,
 cookies, passwords, full configuration, **Copy as cURL** and network exports
 private; a cropped error must not expose saved credentials or private hosts.
 
+For membership, invitation, role or plan problems, use the
+[saved-access reporting guidance](ISSUE_TRIAGE.md#saved-access-and-plan-reports).
+It uses existing observations, not another grant, transfer or activation attempt.
+
 #### Infrastructure changes were saved but not applied
 
 **Configuration saved but failed to apply changes** means Pulse saved the
