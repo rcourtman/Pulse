@@ -17,6 +17,7 @@ import (
 type SessionStore struct {
 	sessions   map[string]*SessionData
 	mu         sync.RWMutex
+	persistMu  sync.Mutex // serializes snapshot selection and disk writes; never acquire while holding mu
 	dataPath   string
 	saveTicker *time.Ticker
 	stopChan   chan bool
@@ -148,7 +149,7 @@ func (s *SessionStore) migrateLegacySessions(data []byte, now time.Time) (bool, 
 
 	loaded := s.loadLegacySessions(legacy, now)
 	log.Info().Int("loaded", loaded).Int("total", len(legacy)).Msg("Sessions loaded from disk (legacy raw-token format)")
-	s.saveUnsafe()
+	s.save()
 	return true, nil
 }
 
@@ -212,7 +213,6 @@ func (s *SessionStore) backgroundWorker() {
 // CreateSession creates a new session
 func (s *SessionStore) CreateSession(token string, duration time.Duration, userAgent, ip, username string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	key := sessionHash(token)
 	s.sessions[key] = &SessionData{
@@ -227,14 +227,14 @@ func (s *SessionStore) CreateSession(token string, duration time.Duration, userA
 	}
 
 	// Save immediately for important operations
-	s.saveUnsafe()
+	s.mu.Unlock()
+	s.save()
 }
 
 // CreateRecoverySession creates a localhost-bound recovery session for the
 // configured browser client without disabling auth globally.
 func (s *SessionStore) CreateRecoverySession(token string, duration time.Duration, userAgent, ip, username string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	key := sessionHash(token)
 	s.sessions[key] = &SessionData{
@@ -248,7 +248,8 @@ func (s *SessionStore) CreateRecoverySession(token string, duration time.Duratio
 		OriginalDuration: duration,
 	}
 
-	s.saveUnsafe()
+	s.mu.Unlock()
+	s.save()
 }
 
 // OIDCTokenInfo contains OAuth2 token information from the IdP
@@ -269,7 +270,6 @@ func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, u
 // principal and a separate human-readable label for UI display.
 func (s *SessionStore) CreateOIDCSessionWithDisplayName(token string, duration time.Duration, userAgent, ip, username, displayUsername string, oidc *OIDCTokenInfo) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if displayUsername == "" {
 		displayUsername = username
@@ -302,7 +302,8 @@ func (s *SessionStore) CreateOIDCSessionWithDisplayName(token string, duration t
 	s.sessions[key] = session
 
 	// Save immediately for important operations
-	s.saveUnsafe()
+	s.mu.Unlock()
+	s.save()
 }
 
 // SAMLTokenInfo contains SAML session information for Single Logout support
@@ -321,7 +322,6 @@ func (s *SessionStore) CreateSAMLSession(token string, duration time.Duration, u
 // principal and a separate human-readable label for UI display.
 func (s *SessionStore) CreateSAMLSessionWithDisplayName(token string, duration time.Duration, userAgent, ip, username, displayUsername string, saml *SAMLTokenInfo) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if displayUsername == "" {
 		displayUsername = username
@@ -348,7 +348,8 @@ func (s *SessionStore) CreateSAMLSessionWithDisplayName(token string, duration t
 	s.sessions[key] = session
 
 	// Save immediately for important operations
-	s.saveUnsafe()
+	s.mu.Unlock()
+	s.save()
 }
 
 // GetSAMLSessionInfo returns SAML-specific session info for the given token
@@ -386,12 +387,12 @@ func (s *SessionStore) GetSession(token string) *SessionData {
 // UpdateOIDCTokens updates the OIDC tokens for a session after a successful refresh
 func (s *SessionStore) UpdateOIDCTokens(token string, refreshToken string, accessTokenExp time.Time) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	now := time.Now()
 	key := sessionHash(token)
 	session, exists := s.sessions[key]
 	if !exists {
+		s.mu.Unlock()
 		return
 	}
 
@@ -406,7 +407,8 @@ func (s *SessionStore) UpdateOIDCTokens(token string, refreshToken string, acces
 	}
 
 	// Save immediately after token refresh
-	s.saveUnsafe()
+	s.mu.Unlock()
+	s.save()
 }
 
 // InvalidateSession removes a session (used when OIDC refresh fails)
@@ -466,10 +468,10 @@ func (s *SessionStore) ValidateAndExtendSession(token string) bool {
 // DeleteSession removes a session
 func (s *SessionStore) DeleteSession(token string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	delete(s.sessions, sessionHash(token))
-	s.saveUnsafe()
+	s.mu.Unlock()
+	s.save()
 }
 
 // DeleteSessionsForUser removes every persisted session for a stable
@@ -477,7 +479,6 @@ func (s *SessionStore) DeleteSession(token string) {
 // CSRF records can be removed without access to raw session tokens.
 func (s *SessionStore) DeleteSessionsForUser(username string) []string {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	deletedKeys := make([]string, 0)
 	for key, session := range s.sessions {
@@ -486,8 +487,9 @@ func (s *SessionStore) DeleteSessionsForUser(username string) []string {
 			deletedKeys = append(deletedKeys, key)
 		}
 	}
+	s.mu.Unlock()
 	if len(deletedKeys) > 0 {
-		s.saveUnsafe()
+		s.save()
 	}
 	return deletedKeys
 }
@@ -506,43 +508,28 @@ func (s *SessionStore) cleanup() {
 	}
 }
 
-// save persists sessions to disk
+// save selects and persists a detached snapshot. It must be called without mu:
+// slow storage or encryption must not stall authentication, sliding expiry or
+// live withdrawal. Mutations still wait for their save before returning.
+//
+// Select the snapshot AFTER acquiring persistMu, not before. Otherwise a save
+// queued behind newer state could later overwrite it and resurrect a session
+// deleted by another caller. No path acquires persistMu while holding mu.
 func (s *SessionStore) save() {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	s.saveUnsafe()
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
+
+	persisted := s.persistenceSnapshot()
+	s.persistSnapshot(persisted)
 }
 
-// saveUnsafe saves without locking (caller must hold lock)
-func (s *SessionStore) saveUnsafe() {
-	sessionsFile := filepath.Join(s.dataPath, "sessions.json")
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(s.dataPath, 0700); err != nil {
-		log.Error().Err(err).Msg("Failed to create sessions directory")
-		return
-	}
-
-	// Marshal sessions
+// persistenceSnapshot owns every mutable field before mu is released. Token
+// encryption, marshaling, filesystem operations and logging happen afterwards.
+func (s *SessionStore) persistenceSnapshot() []sessionPersisted {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	persisted := make([]sessionPersisted, 0, len(s.sessions))
 	for key, session := range s.sessions {
-		refreshToken := session.OIDCRefreshToken
-		// Refresh tokens must not be persisted unless they can be encrypted.
-		if refreshToken != "" {
-			if s.crypto != nil {
-				if encrypted, err := s.crypto.EncryptString(refreshToken); err == nil {
-					refreshToken = encrypted
-				} else {
-					log.Error().Err(err).Msg("Failed to encrypt refresh token")
-					// Don't persist if encryption fails to prevent leak
-					refreshToken = ""
-				}
-			} else {
-				log.Warn().Msg("Skipping OIDC refresh token persistence because session-store crypto is unavailable")
-				refreshToken = ""
-			}
-		}
-
 		persisted = append(persisted, sessionPersisted{
 			Key:                     key,
 			Username:                session.Username,
@@ -553,7 +540,7 @@ func (s *SessionStore) saveUnsafe() {
 			UserAgent:               session.UserAgent,
 			IP:                      session.IP,
 			OriginalDuration:        session.OriginalDuration,
-			OIDCRefreshToken:        refreshToken,
+			OIDCRefreshToken:        session.OIDCRefreshToken,
 			OIDCAccessTokenExp:      session.OIDCAccessTokenExp,
 			OIDCAccessTokenIssuedAt: session.OIDCAccessTokenIssuedAt,
 			OIDCIssuer:              session.OIDCIssuer,
@@ -562,6 +549,36 @@ func (s *SessionStore) saveUnsafe() {
 			SAMLNameID:              session.SAMLNameID,
 			SAMLSessionIndex:        session.SAMLSessionIndex,
 		})
+	}
+	return persisted
+}
+
+// persistSnapshot is called only under persistMu, with no session mutex held.
+func (s *SessionStore) persistSnapshot(persisted []sessionPersisted) {
+	sessionsFile := filepath.Join(s.dataPath, "sessions.json")
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(s.dataPath, 0700); err != nil {
+		log.Error().Err(err).Msg("Failed to create sessions directory")
+		return
+	}
+
+	for i := range persisted {
+		// Refresh tokens must not be persisted unless they can be encrypted.
+		if persisted[i].OIDCRefreshToken != "" {
+			if s.crypto != nil {
+				if encrypted, err := s.crypto.EncryptString(persisted[i].OIDCRefreshToken); err == nil {
+					persisted[i].OIDCRefreshToken = encrypted
+				} else {
+					log.Error().Err(err).Msg("Failed to encrypt refresh token")
+					// Don't persist if encryption fails to prevent leak
+					persisted[i].OIDCRefreshToken = ""
+				}
+			} else {
+				log.Warn().Msg("Skipping OIDC refresh token persistence because session-store crypto is unavailable")
+				persisted[i].OIDCRefreshToken = ""
+			}
+		}
 	}
 
 	data, err := json.Marshal(persisted)
@@ -583,7 +600,7 @@ func (s *SessionStore) saveUnsafe() {
 		return
 	}
 
-	log.Debug().Int("count", len(s.sessions)).Msg("Sessions saved to disk")
+	log.Debug().Int("count", len(persisted)).Msg("Sessions saved to disk")
 }
 
 // load reads sessions from disk
