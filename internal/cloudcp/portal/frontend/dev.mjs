@@ -32,7 +32,7 @@ function standardSetupTemplates() {
     agent_naming: 'Keep the client workspace as the identity boundary; repeated hostnames are expected across clients.',
     alert_routing: 'Create at least one enabled alert route inside each client workspace.',
     reporting: 'Schedule at least one client performance report before the workspace is marked ready.',
-    access: 'Invite provider staff from Access and keep client users on the smallest useful role.',
+    access: 'Invite your own staff from Access on the smallest useful role. Everyone there can see every client.',
   }];
 }
 

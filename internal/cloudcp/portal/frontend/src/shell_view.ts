@@ -1245,7 +1245,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
             '</div>' +
             '<div class="workspace-setup-step">' +
               '<span class="workspace-setup-status" id="workspace-management-check-access-' + escapeAttr(account.id) + '"></span>' +
-              '<div><strong>Review access</strong><span>Invite provider staff or client users from Access.</span></div>' +
+              '<div><strong>Review access</strong><span>Invite your own staff from Access. Everyone there can see every client.</span></div>' +
             '</div>' +
           '</div>' +
           '<div class="workspace-management-next-steps" id="workspace-management-next-steps-' +

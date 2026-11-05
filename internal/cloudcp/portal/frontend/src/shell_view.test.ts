@@ -295,6 +295,8 @@ describe('shell view', function() {
     expect(html).toContain('Schedule reports');
     expect(html).toContain('Open the workspace-bound install commands.');
     expect(html).toContain('Alerts and performance reports stay inside the client workspace.');
+    expect(html).toContain('Invite your own staff from Access.');
+    expect(html).not.toContain('client users');
     expect(html).toContain('data-action="select-workspace"');
     expect(html).toContain('Add a client');
     expect(html).toContain('Access changes stay in Access. Billing changes stay in Billing.');
