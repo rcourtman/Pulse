@@ -54,6 +54,10 @@ group mappings are configured, the next sign-in replaces manually assigned
 roles with the mapped set. Review [automatic role assignment](#automatic-role-assignment-via-oidc)
 before relying on a manual assignment for continued access.
 
+If a save or removal response is lost, use
+[unconfirmed-change recovery](#a-role-or-user-change-could-not-be-confirmed)
+before making another change.
+
 ### If Roles or Users is missing or unavailable
 
 - **Controls missing:** Settings navigation checks the runtime's `rbac`
@@ -68,6 +72,45 @@ before relying on a manual assignment for continued access.
   read is not proof that no roles or users exist. Use the panel's **Retry** for
   that read when access is available. Do not create or delete access records to
   test it, and keep tokens, cookies and full API responses out of reports.
+
+### A role or user change could not be confirmed
+
+A timeout, server error or unreadable response can happen **after** Pulse has
+saved a role or removed access. It does not establish that the change failed
+or was undone. Do not repeat the Save or Delete, recreate a user or role, or
+restore an old permission list just to clear the warning.
+
+Keep your working administrator session open. In **Settings → Security**, use
+the read-only check for the affected panel, when offered:
+
+- **Roles → Check saved roles** reloads saved role definitions. Review the
+  affected role's permissions, not just its name.
+- **Users → Check saved access** reloads saved user assignments and roles.
+  Review the intended user's identity and complete role list. A saved empty
+  role list means no assigned roles, not that the previous roles still apply.
+
+These checks do not repeat the change, send a connection test or change an
+account's permissions. Pulse hides the unconfirmed list and closes its editor
+so an old draft cannot be mistaken for saved access. If your version does not
+offer these buttons, reopen the affected panel to read its saved list before
+considering another write. Do not replay the API request as a substitute.
+
+If the read fails, access remains unknown, not empty or unchanged. Use the
+panel's read retry only when the intended account has access. If the session
+is refused or the account or organisation changed, return to the intended
+account and organisation first. Keep existing restrictions and an independent
+administrator recovery path. Do not grant broader roles, widen a token or
+disable authentication to recover an unread list.
+
+A successful read establishes the saved assignments, not that the intended
+user's access works. Check [OIDC role mapping](#automatic-role-assignment-via-oidc)
+before relying on a manual assignment: the next sign-in can replace it. User
+removal also does not disable the upstream identity-provider account.
+
+For [help](TROUBLESHOOTING.md#-getting-help), give the original action, time,
+Pulse version, redacted error and whether the saved-state read succeeded, where
+already known. Do not repeat the change to obtain evidence. Keep identities,
+permission exports, tokens, cookies and full responses private.
 
 ---
 

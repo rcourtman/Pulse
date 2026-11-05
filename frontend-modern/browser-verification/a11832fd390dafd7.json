@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "78db56a12efd5f2debd6b5e24aee2b7eab4faadd",
+  "verified_at": "2026-11-05T00:09:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "cb1a8d1353156cd4d89bc4df31784670721177cdc45105122995cac66f350032",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "d25f3f6178d9c8a4b0ee46f612b8557d2d3a1853368a488ea854c6e6281074be"
+  },
+  "routes": [
+    "/settings/users (real UserAssignmentsPanel, current-reader state, RBACAPI/client, grid/dialog and shipped CSS; synthetic HTTP)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Four before/final configurations: Chromium desktop/light, phone/light/dark; WebKit phone/light. Identical synthetic accounts, inventories, queries, theme and viewports. Playwright 1.56.1; Chromium 141.0.7390.37, WebKit 26.0. All 28 retained captures opened natively in this turn.",
+    "A populated directory with a nonmatching search no longer claims No users yet or recommends SSO setup. Visible/total result counts and No matching users distinguish the filter from directory absence. Accepted empty directories retain all first-login guidance, and failed reads retain their existing unknown/Retry state with no result count.",
+    "Padded case-insensitive email, name, stable principal and provider queries match existing users. Whitespace-only search leaves the accepted directory unfiltered. Current identity, provider, stable principal, roles and action controls remain available at a glance. No horizontal overflow or unexpected browser errors."
+  ],
+  "interactions": [
+    "Keyboard Tab/Enter reaches Show all users from search through the existing Clear search control. Activating it restores both accepted rows and input focus, without another request. Filtering all identity fields also sends no request.",
+    "A normal saved-permission read after filtering preserves the selected Reader role and unselected Operator role; Cancel does not write. All scenarios issue GET only with the expected fixture organization. The registered suite additionally covers pending/failed and withdrawn-reader counts.",
+    "Proof uses real consuming modules with safe HTTP, not the full App shell, backend authorization, original saved accounts, native IdP, installed recovery or release availability."
+  ],
+  "evidence": {
+    "before": "before-results.json",
+    "after": "after-results.json",
+    "captures": "CAPTURES.md",
+    "identities": "CAPTURE-IDENTITIES.json",
+    "fixture": "BROWSER-EVIDENCE.tar.xz"
+  }
+}

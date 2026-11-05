@@ -320,6 +320,9 @@ guest incidents. Table filters and alert suppression do not stop API polling.
 | Filesystem usage and guest information | `VM.GuestAgent.Audit` | `VM.Monitor` |
 | Reading Linux guest memory via `/proc/meminfo` | Also `VM.GuestAgent.FileRead` | `VM.Monitor` |
 
+A VM with a current linked Pulse Agent takes its memory from that agent and
+skips the `/proc/meminfo` read.
+
 Windows has no `/proc/meminfo`. A failure reading that Linux path is not evidence
 that Windows filesystem collection needs `VM.GuestAgent.FileRead` or that the
 guest agent is stopped. Keep memory-file access separate from filesystem access;

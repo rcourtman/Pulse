@@ -697,6 +697,26 @@ Paired desktop/narrow browser captures exercise the real panel, state, RBAC API
 and client with safe HTTP fixtures. This changes no grant, endpoint, entitlement,
 authorization or IdP semantics and is not original saved-account recovery.
 
+### User Access search is not directory absence
+
+Only an accepted current directory may supply User Access result counts. An
+identity search trims surrounding whitespace and matches the existing display
+name, email, provider and stable principal fields case-insensitively. A populated
+directory with no matching rows says **No matching users**, reports the visible
+and total counts, and offers **Show all users**. Clearing that filter restores
+the same accepted rows and keyboard focus to search without another API read or
+write. Only a genuinely empty accepted directory shows the first-login/SSO setup
+guidance. Pending, failed, unconfirmed or withdrawn readers show neither counts
+nor a search-empty recovery action, and retain their existing recovery path.
+
+`RBACPaywallPanels.test.tsx` exercises identity matching, padded/whitespace-only
+queries, result counts, local clear/focus, genuine empty state and reader
+withdrawal. Existing `UserAccessReaderLifetime.test.tsx` continues to cover
+unknown inventories and action authority. Comparable desktop/narrow browser
+captures cover the real panel, grid, API client and current-reader state using
+safe HTTP fixtures. Search changes no account, role, grant or request authority;
+this is not original saved-account or installed recovery.
+
 ### User Access requests retain their confirmed context
 
 RBAC directory/role reads, saved-permission reads and user assignment/removal

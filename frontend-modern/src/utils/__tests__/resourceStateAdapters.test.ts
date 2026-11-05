@@ -1040,12 +1040,42 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expectSplitRows(firstSplitTick);
   });
 
+  it('takes action refusals from the incoming row alone', () => {
+    const refusal = [{ name: 'stop', available: false, reason: 'Command agent is not connected.' }];
+    const row = {
+      id: 'container-1',
+      type: 'app-container',
+      name: 'web',
+      displayName: 'web',
+      platformType: 'docker',
+      sourceType: 'agent',
+      status: 'online',
+      lastSeen,
+      capabilities: [{ name: 'stop' }],
+      docker: { runtime: 'docker', agentId: 'agent-1' },
+    } as unknown as Resource;
+
+    // A frame with no refusal ends one an earlier frame or REST read recorded.
+    const [cleared] = mergeCanonicalResourceSnapshot(
+      [row],
+      [{ ...row, actionReadiness: refusal } as unknown as Resource],
+    );
+    expect(cleared?.actionReadiness).toBeUndefined();
+    expect(cleared?.capabilities).toEqual([{ name: 'stop' }]);
+
+    const [refused] = mergeCanonicalResourceSnapshot(
+      [{ ...row, actionReadiness: refusal } as unknown as Resource],
+      [row],
+    );
+    expect(refused?.actionReadiness).toEqual(refusal);
+  });
+
   it('keeps REST-only scopes a departed source did not own', () => {
     // A Docker container in a Proxmox LXC whose availability check was
     // removed: REST promoted its platform scopes and source status,
     // which the realtime payload never carries. Docker stays listed, so its
-    // status entry, its recorded action refusal and its Proxmox scope (the LXC
-    // host) stay; only the availability entry goes.
+    // status entry and its Proxmox scope (the LXC host) stay; only the
+    // availability entry goes. The row's own refusals stand for action readiness.
     const restRow = {
       id: 'app-container-frigate',
       type: 'app-container',
@@ -1084,9 +1114,7 @@ describe('resourceStateAdapters nodeFromResource', () => {
     );
 
     expect(row?.platformScopes).toEqual(['proxmox-pve', 'docker']);
-    expect(row?.actionReadiness).toEqual([
-      { name: 'restart', available: false, reason: 'lifecycle disabled' },
-    ]);
+    expect(row?.actionReadiness).toBeUndefined();
     expect(row?.availability).toBeUndefined();
     expect(row?.sourceStatus).toEqual({ docker: { status: 'impaired' } });
     expect((row?.platformData as Record<string, unknown>).sourceStatus).toEqual({

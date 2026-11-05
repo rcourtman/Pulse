@@ -141,34 +141,94 @@ func agentCommandContext(ctx context.Context) context.Context {
 	return agentexec.WithOrganizationID(ctx, GetOrgID(ctx))
 }
 
+// The hostname lookups scan every session and each session check takes the
+// global config lock, while an availability pass asks the same few questions
+// once per capability per resource. A pass (BeginAvailabilityBatch) answers
+// each question once. Outside a pass every call reads live, as dispatch and
+// planning must.
+type agentLookupKind uint8
+
+const (
+	agentLookupConnected agentLookupKind = iota
+	agentLookupHost
+	agentLookupToken
+	agentLookupIdentity
+	agentLookupReceiptVersion
+	agentLookupActionRunner
+)
+
+type agentLookupKey struct {
+	kind   agentLookupKind
+	first  string
+	second string
+}
+
+type agentLookupResult struct {
+	agentID string
+	ok      bool
+	version int
+}
+
+type agentLookupMemo map[agentLookupKey]agentLookupResult
+
+type agentLookupMemoContextKey struct{}
+
+func withAgentLookupMemo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, agentLookupMemoContextKey{}, agentLookupMemo{})
+}
+
+func memoizedAgentLookup(ctx context.Context, key agentLookupKey, lookup func() agentLookupResult) agentLookupResult {
+	memo, _ := ctx.Value(agentLookupMemoContextKey{}).(agentLookupMemo)
+	if memo == nil {
+		return lookup()
+	}
+	if result, ok := memo[key]; ok {
+		return result
+	}
+	result := lookup()
+	memo[key] = result
+	return result
+}
+
 func isAgentCommandConnected(ctx context.Context, agents any, agentID string) bool {
-	if scoped, ok := agents.(scopedActionAgentCommander); ok {
-		return scoped.IsAgentConnectedForOrganization(GetOrgID(ctx), agentID)
-	}
-	if legacy, ok := agents.(interface{ IsAgentConnected(string) bool }); ok {
-		return legacy.IsAgentConnected(agentID)
-	}
-	return false
+	return memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupConnected, first: agentID}, func() agentLookupResult {
+		if scoped, ok := agents.(scopedActionAgentCommander); ok {
+			return agentLookupResult{ok: scoped.IsAgentConnectedForOrganization(GetOrgID(ctx), agentID)}
+		}
+		if legacy, ok := agents.(interface{ IsAgentConnected(string) bool }); ok {
+			return agentLookupResult{ok: legacy.IsAgentConnected(agentID)}
+		}
+		return agentLookupResult{}
+	}).ok
 }
 
 func commandAgentForHost(ctx context.Context, agents actionAgentCommander, hostname string) (string, bool) {
-	if scoped, ok := agents.(scopedActionAgentCommander); ok {
-		return scoped.GetAgentForHostForOrganization(GetOrgID(ctx), hostname)
-	}
-	if agents == nil {
-		return "", false
-	}
-	return agents.GetAgentForHost(hostname)
+	result := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupHost, first: hostname}, func() agentLookupResult {
+		if scoped, ok := agents.(scopedActionAgentCommander); ok {
+			agentID, found := scoped.GetAgentForHostForOrganization(GetOrgID(ctx), hostname)
+			return agentLookupResult{agentID: agentID, ok: found}
+		}
+		if agents == nil {
+			return agentLookupResult{}
+		}
+		agentID, found := agents.GetAgentForHost(hostname)
+		return agentLookupResult{agentID: agentID, ok: found}
+	})
+	return result.agentID, result.ok
 }
 
 func commandAgentForToken(ctx context.Context, agents actionAgentCommander, tokenID string) (string, bool) {
 	if strings.TrimSpace(tokenID) == "" {
 		return "", false
 	}
-	if scoped, ok := agents.(scopedActionAgentCommander); ok {
-		return scoped.GetAgentForTokenForOrganization(GetOrgID(ctx), tokenID)
-	}
-	return "", false
+	result := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupToken, first: tokenID}, func() agentLookupResult {
+		if scoped, ok := agents.(scopedActionAgentCommander); ok {
+			agentID, found := scoped.GetAgentForTokenForOrganization(GetOrgID(ctx), tokenID)
+			return agentLookupResult{agentID: agentID, ok: found}
+		}
+		return agentLookupResult{}
+	})
+	return result.agentID, result.ok
 }
 
 func commandAgentForIdentity(ctx context.Context, agents actionAgentCommander, agentID, hostname string) (string, bool) {
@@ -177,20 +237,26 @@ func commandAgentForIdentity(ctx context.Context, agents actionAgentCommander, a
 	if agentID == "" || hostname == "" {
 		return "", false
 	}
-	if scoped, ok := agents.(scopedActionIdentityAgentCommander); ok {
-		return scoped.GetAgentForIdentityForOrganization(GetOrgID(ctx), agentID, hostname)
-	}
-	return "", false
+	result := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupIdentity, first: agentID, second: hostname}, func() agentLookupResult {
+		if scoped, ok := agents.(scopedActionIdentityAgentCommander); ok {
+			matched, found := scoped.GetAgentForIdentityForOrganization(GetOrgID(ctx), agentID, hostname)
+			return agentLookupResult{agentID: matched, ok: found}
+		}
+		return agentLookupResult{}
+	})
+	return result.agentID, result.ok
 }
 
 func liveAgentOperationReceiptVersion(ctx context.Context, agents any, agentID string) int {
-	if scoped, ok := agents.(scopedAgentOperationReceiptCapability); ok {
-		return scoped.AgentOperationReceiptVersionForOrganization(GetOrgID(ctx), agentID)
-	}
-	if capability, ok := agents.(agentOperationReceiptCapability); ok {
-		return capability.AgentOperationReceiptVersion(agentID)
-	}
-	return 0
+	return memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupReceiptVersion, first: agentID}, func() agentLookupResult {
+		if scoped, ok := agents.(scopedAgentOperationReceiptCapability); ok {
+			return agentLookupResult{version: scoped.AgentOperationReceiptVersionForOrganization(GetOrgID(ctx), agentID)}
+		}
+		if capability, ok := agents.(agentOperationReceiptCapability); ok {
+			return agentLookupResult{version: capability.AgentOperationReceiptVersion(agentID)}
+		}
+		return agentLookupResult{}
+	}).version
 }
 
 type actionHandlerProvider interface {
@@ -300,6 +366,11 @@ func (e routedActionExecutor) executorForDispatchAttempt(record unified.ActionAu
 		return nil, fmt.Errorf("unsupported durable dispatch operation %q", operation)
 	}
 	return executor, nil
+}
+
+// BeginAvailabilityBatch implements actionlifecycle.AvailabilityBatcher.
+func (e routedActionExecutor) BeginAvailabilityBatch(ctx context.Context) context.Context {
+	return withAgentLookupMemo(ctx)
 }
 
 func (e routedActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {

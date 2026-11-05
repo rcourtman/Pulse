@@ -963,7 +963,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		filepath.Join("..", "api", "resourceapi", "resources.go"): {
 			"actionAvailability  actionlifecycle.AvailabilityChecker",
 			"func (h *QueryService) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
-			"resources[i].ActionReadiness = readinesses",
+			"actionlifecycle.ProjectActionAvailability(ctx, h.actionAvailability, resources)",
 		},
 		filepath.Join("..", "api", "agent_events.go"): {
 			"func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord)",

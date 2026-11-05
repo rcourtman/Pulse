@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "3d2b368eeb5fd61475a4e08f57e1fd2d1d512960",
+  "verified_at": "2026-11-05T01:41:19.237413Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useRolesPanelState.ts": "6dea6be2f74b1316317f6b637a30a84f1a72ae657858542ddc4a689c30a96f16"
+  },
+  "routes": [
+    "/settings/roles -> existing RolesPanel/editor/state/RBACAPI/client PUT; existing UserAssignmentsPanel saved-permission read consumer (synthetic HTTP, not full App shell)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Four paired configurations: Chromium desktop/light, phone/light/dark and WebKit phone/light; identical fixtures, viewports, theme and edit state. Playwright 1.56.1, Chromium 141.0.7390.37 and WebKit 26.0. All 24 retained captures opened natively.",
+    "A current inherited custom role is renamed/re-described without changing its rule selection. Parent sends an update without parentId/priority/other unedited metadata; repaired source sends the complete original snapshot with only the intended name/description deltas. Direct permission effect/conditions remain exact.",
+    "The safe HTTP producer replaces its saved role with the actual PUT body. Its known-parent rule appears in the actual saved-permissions consumer after the repaired update, whereas the parent loses it. This is synthetic request-preservation and consuming-surface evidence, not real policy evaluation, storage or original-account acceptance.",
+    "No information or existing control is removed or moved; editor, identity, selected roles, saved-permissions distinction and footer remain visible at both widths/themes. No horizontal overflow or unexpected browser errors."
+  ],
+  "interactions": [
+    "Keyboard Enter on Update Role sends exactly one PUT with expected fixture organization and existing CSRF header; all remaining requests are GETs. No user assignment or deletion is sent.",
+    "Opening the saved-permission dialog before and after the real role editor update preserves the exact principal and selected role. New-role isolation, explicit refused-save retry, unchanged edits and explicit permission edits are covered by registered normal-suite regressions.",
+    "Real consumer modules and shipped CSS with safe HTTP fixtures, not full App shell, backend authorization or storage, installed forward/reverse recovery, native IdP, exposure measurement or release availability."
+  ],
+  "evidence": {
+    "before": "before-results.json",
+    "after": "after-results.json",
+    "captures": "CAPTURES.md",
+    "fixture": "BROWSER-EVIDENCE.tar.xz"
+  }
+}

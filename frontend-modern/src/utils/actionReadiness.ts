@@ -5,9 +5,10 @@ const normalizeToken = (value: unknown): string => (asTrimmedString(value) ?? ''
 
 /**
  * Resolve the server-reported refusal for a capability from the unified
- * resource's actionReadiness facet. The server strips capabilities it would
- * refuse from `capabilities` and records the refusal here, so a match means
- * POST /api/actions/plan would reject the action. Prefers the server-provided
+ * resource's actionReadiness facet. Websocket and REST rows both carry it, so a
+ * match means POST /api/actions/plan would reject the action. Consumers read
+ * this facet and not the absence of a capability: REST strips refused
+ * capabilities and websocket rows keep them. Prefers the server-provided
  * reason; falls back to a canned message per reason code.
  */
 export const getActionReadinessRefusal = (
@@ -24,6 +25,8 @@ export const getActionReadinessRefusal = (
   switch (normalizeToken(readiness.reasonCode)) {
     case 'command_agent_disconnected':
       return 'Docker / Podman command agent is not connected.';
+    case 'no_command_agent':
+      return 'Install the Pulse agent inside this guest to manage its containers.';
     case 'command_agent_unavailable':
       return 'Docker / Podman command execution is not available.';
     case 'stale_inventory':

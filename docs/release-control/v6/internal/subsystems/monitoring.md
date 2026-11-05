@@ -3902,6 +3902,13 @@ downstream surfaces can warn, and it must clear on its own once only one
 machine keeps reporting for the window. Monitoring must not auto-split the
 collapsed identity: the machine ID is the identity key, and the remedy
 (regenerating the clone's machine-id) belongs to the operator.
+A report from the Proxmox LXC probe has no token or machine ID, and its hostname
+only says what the guest calls itself, so hostname must never identify it: two
+guests sharing a name would alternately overwrite one row (#2681). Its
+`proxmox-lxc-docker:` agent ID names the guest and alone finds its row, through a
+guest rename as well. A live migration keeps the row and any removal block,
+because a connection and VMID identify one guest whichever node the ID carries.
+No other report may fold into a probed guest's row by hostname.
 Host-agent identity collapse follows the same doctrine. Host report ingest
 keys agent identity on the machine-derived agent ID, so template deployments
 that still share `/etc/machine-id` fold two physical machines into one
@@ -7505,8 +7512,10 @@ source: recorded PVE 8 and PVE 9 guest `rrddata` responses (fixtures under
 columns exist only in node RRD, so `GuestRRDPoint` parses only the recorded
 guest columns (`time`, `maxmem`), `PVEClientInterface` exposes no guest RRD
 lookups, and the VM memory resolver must not consult the guest RRD endpoint
-(#1634). Monitoring must try guest-agent `/proc/meminfo` via the shared
-Proxmox client, and only then linked host-agent memory. Guest-agent fallback
+(#1634). Monitoring must use a current linked host-agent sample before
+guest-agent `/proc/meminfo`, so that file-read stays off the guest's shared
+agent channel (#2439), and try the read before a last-known agent sample.
+Guest-agent fallback
 caches must key on `(instance, node, vmid)` instead of raw `node/vmid`, so
 separate Proxmox instances cannot leak stale or foreign memory evidence into
 each other just because they reuse the same node name and VMID.
@@ -9609,3 +9618,8 @@ HTTP delivery before any router exists for default and tenant paths, saved
 public URL precedence and deployment lock, and a tenant grant that cannot override installation revocation.
 `TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation` covers corrupt
 settings and invalid CIDRs without creating queue storage.
+`Monitor.SetBroadcastActionAvailability` installs the action refusal pass on every
+state a monitor builds, including tenant monitors and reload replacements through
+`configureMonitorDependencies`. It writes top-level fields of the broadcast's own
+rows and never the store's. `TestBroadcastStateRunsTheRefusalProjectionOnItsOwnRows`
+and `TestConfigureMonitorDependenciesAttachesRefusalsToTheBroadcast` hold this.

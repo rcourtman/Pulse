@@ -2610,3 +2610,383 @@ func TestCollectProxmoxGuestDockerInventory_InFlightAndExpiredContext(t *testing
 		t.Fatalf("first inventory cycle never finished")
 	}
 }
+
+type probedDockerGuest struct {
+	instance string
+	node     string
+	vmid     int
+}
+
+func (g probedDockerGuest) container(name string) models.Container {
+	return models.Container{
+		ID:        makeGuestID(g.instance, g.node, g.vmid),
+		Instance:  g.instance,
+		Node:      g.node,
+		VMID:      g.vmid,
+		Name:      name,
+		Type:      "lxc",
+		Status:    "running",
+		HasDocker: true,
+	}
+}
+
+func (g probedDockerGuest) rowID() string {
+	return proxmoxGuestDockerAgentID(g.container(""))
+}
+
+// report builds a report the way the LXC probe does, from the inventory
+// command's output, so these tests cannot assume a token or machine ID it lacks.
+func (g probedDockerGuest) report(t *testing.T, hostname, containerName string, at time.Time) agentsdocker.Report {
+	t.Helper()
+	output := strings.Join([]string{
+		proxmoxGuestDockerInventoryMarker,
+		"HOSTNAME\t" + hostname,
+		"VERSION\t\"26.1.4\"",
+		"CONTAINER\t\"" + containerName + "-id\"\t\"" + containerName + "\"\t\"nginx:latest\"\t\"running\"\t\"Up 2 hours\"\t\"\"\t\"2 hours ago\"",
+		"PS_OK",
+		"",
+	}, "\n")
+	report, ok, err := parseProxmoxGuestDockerInventory(output, g.container(hostname), at)
+	if err != nil || !ok {
+		t.Fatalf("parse probe output for %s: ok=%v err=%v", g.rowID(), ok, err)
+	}
+	return report
+}
+
+// assertProbedDockerRow checks one Docker host row in the state and in the read
+// state the Docker page is built from.
+func assertProbedDockerRow(t *testing.T, monitor *Monitor, rowID, agentID, containerName string) {
+	t.Helper()
+	var found *models.DockerHost
+	hosts := monitor.state.GetDockerHosts()
+	for i := range hosts {
+		if hosts[i].ID == rowID {
+			found = &hosts[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("no Docker host row %q in state: %#v", rowID, hosts)
+	}
+	if found.AgentID != agentID {
+		t.Fatalf("row %q AgentID = %q, want %q", rowID, found.AgentID, agentID)
+	}
+	if len(found.Containers) != 1 || found.Containers[0].Name != containerName {
+		t.Fatalf("row %q containers = %#v, want only %q", rowID, found.Containers, containerName)
+	}
+
+	readState := monitor.snapshotBackedAgentLookupReadState()
+	viewFound := false
+	for _, view := range readState.DockerHosts() {
+		if view != nil && dockerHostStableID(view) == rowID {
+			viewFound = true
+		}
+	}
+	if !viewFound {
+		t.Fatalf("read state has no Docker host row %q", rowID)
+	}
+	containerFound := false
+	for _, view := range readState.DockerContainers() {
+		if view != nil && view.Name() == containerName {
+			containerFound = true
+			if view.HostSourceID() != rowID {
+				t.Fatalf("container %q sits on row %q, want %q", containerName, view.HostSourceID(), rowID)
+			}
+		}
+	}
+	if !containerFound {
+		t.Fatalf("read state has no container %q", containerName)
+	}
+}
+
+func TestApplyDockerReport_ProbedGuestsSharingANameKeepTheirOwnRows(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		first, second probedDockerGuest
+	}{
+		{
+			name:   "two connections",
+			first:  probedDockerGuest{"lab", "pve1", 200},
+			second: probedDockerGuest{"site", "pve2", 300},
+		},
+		{
+			name:   "node name and VMID repeated across connections",
+			first:  probedDockerGuest{"lab", "pve1", 200},
+			second: probedDockerGuest{"site", "pve1", 200},
+		},
+		{
+			name:   "two guests on one connection",
+			first:  probedDockerGuest{"lab", "pve1", 200},
+			second: probedDockerGuest{"lab", "pve1", 201},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := newTestMonitor(t)
+			base := time.Now().UTC()
+			guestsByInstance := make(map[string][]models.Container)
+			for _, guest := range []probedDockerGuest{tc.first, tc.second} {
+				guestsByInstance[guest.instance] = append(guestsByInstance[guest.instance], guest.container("dock"))
+			}
+			for instance, guests := range guestsByInstance {
+				monitor.state.UpdateContainersForInstance(instance, guests)
+			}
+
+			for round := 0; round < 3; round++ {
+				at := base.Add(time.Duration(round) * time.Minute)
+				for _, step := range []struct {
+					guest     probedDockerGuest
+					container string
+				}{{tc.first, "first-app"}, {tc.second, "second-app"}} {
+					host, err := monitor.ApplyDockerReport(step.guest.report(t, "dock", step.container, at), nil)
+					if err != nil {
+						t.Fatalf("round %d: apply report for %s: %v", round, step.guest.rowID(), err)
+					}
+					if host.ID != step.guest.rowID() {
+						t.Fatalf("round %d: report for %s landed on row %q", round, step.guest.rowID(), host.ID)
+					}
+				}
+			}
+
+			if hosts := monitor.state.GetDockerHosts(); len(hosts) != 2 {
+				t.Fatalf("expected one row per guest, got %d: %#v", len(hosts), hosts)
+			}
+			assertProbedDockerRow(t, monitor, tc.first.rowID(), tc.first.rowID(), "first-app")
+			assertProbedDockerRow(t, monitor, tc.second.rowID(), tc.second.rowID(), "second-app")
+		})
+	}
+}
+
+// A live migration changes the node in a guest's ID, not the guest, so the row
+// and everything keyed on its ID stay with it. A guest elsewhere reusing the name
+// and VMID is still another guest.
+func TestApplyDockerReport_ProbedGuestKeepsItsRowWhenItChangesNode(t *testing.T) {
+	monitor := newTestMonitor(t)
+	base := time.Now().UTC()
+	before := probedDockerGuest{"lab", "pve1", 200}
+	after := probedDockerGuest{"lab", "pve2", 200}
+	elsewhere := probedDockerGuest{"site", "pve2", 200}
+
+	reports := []struct {
+		guest     probedDockerGuest
+		container string
+		wantRow   string
+	}{
+		{before, "app", before.rowID()},
+		{after, "app", before.rowID()},
+		{elsewhere, "other-app", elsewhere.rowID()},
+		{after, "app", before.rowID()},
+	}
+	for i, step := range reports {
+		host, err := monitor.ApplyDockerReport(step.guest.report(t, "dock", step.container, base.Add(time.Duration(i)*time.Minute)), nil)
+		if err != nil {
+			t.Fatalf("report %d: %v", i, err)
+		}
+		if host.ID != step.wantRow {
+			t.Fatalf("report %d for %s landed on row %q, want %q", i, step.guest.rowID(), host.ID, step.wantRow)
+		}
+	}
+
+	if hosts := monitor.state.GetDockerHosts(); len(hosts) != 2 {
+		t.Fatalf("expected the moved guest and the other guest, got %d rows: %#v", len(hosts), hosts)
+	}
+	assertProbedDockerRow(t, monitor, before.rowID(), after.rowID(), "app")
+	assertProbedDockerRow(t, monitor, elsewhere.rowID(), elsewhere.rowID(), "other-app")
+}
+
+func TestApplyDockerReport_ProbedGuestKeepsItsRowWhenRenamed(t *testing.T) {
+	monitor := newTestMonitor(t)
+	base := time.Now().UTC()
+	guest := probedDockerGuest{"lab", "pve1", 200}
+
+	if _, err := monitor.ApplyDockerReport(guest.report(t, "dock", "app", base), nil); err != nil {
+		t.Fatalf("first report: %v", err)
+	}
+	host, err := monitor.ApplyDockerReport(guest.report(t, "dock-renamed", "app", base.Add(time.Minute)), nil)
+	if err != nil {
+		t.Fatalf("report after rename: %v", err)
+	}
+	if host.ID != guest.rowID() || host.Hostname != "dock-renamed" {
+		t.Fatalf("renamed guest landed on row %q with hostname %q", host.ID, host.Hostname)
+	}
+	if hosts := monitor.state.GetDockerHosts(); len(hosts) != 1 {
+		t.Fatalf("expected one row for the renamed guest, got %d: %#v", len(hosts), hosts)
+	}
+	assertProbedDockerRow(t, monitor, guest.rowID(), guest.rowID(), "app")
+}
+
+// Agents reporting without a token (an install with no auth configured) reach the
+// same hostname match, so a row must not move between a guest and an agent there.
+func TestApplyDockerReport_TokenlessAgentAndProbedGuestKeepSeparateRows(t *testing.T) {
+	guest := probedDockerGuest{"lab", "pve1", 200}
+	agentReport := func(at time.Time) agentsdocker.Report {
+		return agentsdocker.Report{
+			Agent: agentsdocker.AgentInfo{ID: "machine-on-another-site", Type: "unified", IntervalSeconds: 30},
+			Host:  agentsdocker.HostInfo{Hostname: "dock", MachineID: "machine-on-another-site", Runtime: "docker"},
+			Containers: []agentsdocker.Container{{
+				ID: "agent-app-id", Name: "agent-app", Image: "nginx:latest", State: "running",
+			}},
+			Timestamp: at,
+		}
+	}
+
+	for _, tc := range []struct {
+		name       string
+		guestFirst bool
+	}{{"guest reports first", true}, {"agent reports first", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := newTestMonitor(t)
+			base := time.Now().UTC()
+			for round := 0; round < 3; round++ {
+				at := base.Add(time.Duration(round) * time.Minute)
+				applyGuest := func() {
+					host, err := monitor.ApplyDockerReport(guest.report(t, "dock", "guest-app", at), nil)
+					if err != nil {
+						t.Fatalf("round %d: guest report: %v", round, err)
+					}
+					if host.ID != guest.rowID() {
+						t.Fatalf("round %d: guest report landed on row %q", round, host.ID)
+					}
+				}
+				applyAgent := func() {
+					host, err := monitor.ApplyDockerReport(agentReport(at), nil)
+					if err != nil {
+						t.Fatalf("round %d: agent report: %v", round, err)
+					}
+					if host.ID != "machine-on-another-site" {
+						t.Fatalf("round %d: agent report landed on row %q", round, host.ID)
+					}
+				}
+				if tc.guestFirst {
+					applyGuest()
+					applyAgent()
+				} else {
+					applyAgent()
+					applyGuest()
+				}
+			}
+			if hosts := monitor.state.GetDockerHosts(); len(hosts) != 2 {
+				t.Fatalf("expected the guest and the agent apart, got %d rows: %#v", len(hosts), hosts)
+			}
+			assertProbedDockerRow(t, monitor, guest.rowID(), guest.rowID(), "guest-app")
+			assertProbedDockerRow(t, monitor, "machine-on-another-site", "machine-on-another-site", "agent-app")
+		})
+	}
+}
+
+// A token holder choosing an agent ID that names a guest does not get that guest's
+// row, on its current node or on another one.
+func TestApplyDockerReport_TokenDoesNotTakeAProbedGuestsRow(t *testing.T) {
+	monitor := newTestMonitor(t)
+	base := time.Now().UTC()
+	guest := probedDockerGuest{"lab", "pve1", 200}
+	if _, err := monitor.ApplyDockerReport(guest.report(t, "dock", "guest-app", base), nil); err != nil {
+		t.Fatalf("guest report: %v", err)
+	}
+
+	token := &config.APITokenRecord{ID: "another-agents-token", Name: "Another agent"}
+	for i, claimed := range []probedDockerGuest{guest, {"lab", "pve2", 200}} {
+		host, err := monitor.ApplyDockerReport(claimed.report(t, "dock", "claimed-app", base.Add(time.Duration(i+1)*time.Minute)), token)
+		if err != nil {
+			continue
+		}
+		if host.ID == guest.rowID() {
+			t.Fatalf("a report with a token and agent ID %q took the guest's row", claimed.rowID())
+		}
+	}
+	assertProbedDockerRow(t, monitor, guest.rowID(), guest.rowID(), "guest-app")
+}
+
+func TestApplyDockerReport_ProbedGuestDoesNotTakeARowHoldingAToken(t *testing.T) {
+	monitor := newTestMonitor(t)
+	base := time.Now().UTC()
+	claimed := probedDockerGuest{"lab", "pve1", 200}
+	guest := probedDockerGuest{"lab", "pve2", 200}
+
+	token := &config.APITokenRecord{ID: "an-agents-token", Name: "An agent"}
+	if _, err := monitor.ApplyDockerReport(claimed.report(t, "foreign", "agent-app", base), token); err != nil {
+		t.Fatalf("agent report: %v", err)
+	}
+	host, err := monitor.ApplyDockerReport(guest.report(t, "dock", "guest-app", base.Add(time.Minute)), nil)
+	if err != nil {
+		t.Fatalf("guest report: %v", err)
+	}
+	if host.ID != guest.rowID() || host.TokenID != "" {
+		t.Fatalf("guest report landed on row %q holding token %q", host.ID, host.TokenID)
+	}
+	assertProbedDockerRow(t, monitor, claimed.rowID(), claimed.rowID(), "agent-app")
+	assertProbedDockerRow(t, monitor, guest.rowID(), guest.rowID(), "guest-app")
+}
+
+func TestRemoveDockerHost_BlocksOnlyThatProbedGuest(t *testing.T) {
+	monitor := newTestMonitor(t)
+	base := time.Now().UTC()
+	removed := probedDockerGuest{"lab", "pve1", 200}
+	kept := probedDockerGuest{"site", "pve2", 300}
+
+	for _, step := range []struct {
+		guest     probedDockerGuest
+		container string
+	}{{removed, "first-app"}, {kept, "second-app"}} {
+		if _, err := monitor.ApplyDockerReport(step.guest.report(t, "dock", step.container, base), nil); err != nil {
+			t.Fatalf("report for %s: %v", step.guest.rowID(), err)
+		}
+	}
+	if _, err := monitor.RemoveDockerHost(removed.rowID()); err != nil {
+		t.Fatalf("remove %s: %v", removed.rowID(), err)
+	}
+
+	later := base.Add(time.Minute)
+	if _, err := monitor.ApplyDockerReport(removed.report(t, "dock", "first-app", later), nil); err == nil {
+		t.Fatalf("removed guest %s was allowed to report again", removed.rowID())
+	}
+	host, err := monitor.ApplyDockerReport(kept.report(t, "dock", "second-app", later), nil)
+	if err != nil {
+		t.Fatalf("the other guest was blocked by its namesake's removal: %v", err)
+	}
+	if host.ID != kept.rowID() {
+		t.Fatalf("the other guest landed on row %q", host.ID)
+	}
+	if hosts := monitor.state.GetDockerHosts(); len(hosts) != 1 {
+		t.Fatalf("expected only the kept guest's row, got %d: %#v", len(hosts), hosts)
+	}
+}
+
+// Removal follows the guest across nodes: its row can hold an ID naming the node
+// it left, and a guest removed before a migration stays removed after it.
+func TestRemoveDockerHost_BlockFollowsAProbedGuestAcrossNodes(t *testing.T) {
+	before := probedDockerGuest{"lab", "pve1", 200}
+	after := probedDockerGuest{"lab", "pve2", 200}
+	elsewhere := probedDockerGuest{"site", "pve2", 200}
+
+	for _, tc := range []struct {
+		name          string
+		movedBeforeIt bool
+	}{{"guest moved, then removed", true}, {"guest removed, then moved", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := newTestMonitor(t)
+			base := time.Now().UTC()
+			if _, err := monitor.ApplyDockerReport(before.report(t, "dock", "app", base), nil); err != nil {
+				t.Fatalf("first report: %v", err)
+			}
+			if tc.movedBeforeIt {
+				base = base.Add(time.Minute)
+				if _, err := monitor.ApplyDockerReport(after.report(t, "dock-renamed", "app", base), nil); err != nil {
+					t.Fatalf("report after the move: %v", err)
+				}
+			}
+			if _, err := monitor.RemoveDockerHost(before.rowID()); err != nil {
+				t.Fatalf("remove: %v", err)
+			}
+
+			later := base.Add(time.Minute)
+			if _, err := monitor.ApplyDockerReport(after.report(t, "dock-renamed", "app", later), nil); err == nil {
+				t.Fatalf("removed guest came back through %s", after.rowID())
+			}
+			if _, err := monitor.ApplyDockerReport(elsewhere.report(t, "dock-renamed", "other-app", later), nil); err != nil {
+				t.Fatalf("a guest on another connection was blocked: %v", err)
+			}
+			if hosts := monitor.state.GetDockerHosts(); len(hosts) != 1 || hosts[0].ID != elsewhere.rowID() {
+				t.Fatalf("expected only the other connection's guest, got %#v", hosts)
+			}
+		})
+	}
+}

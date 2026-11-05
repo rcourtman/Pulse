@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "d273eaffbf7d37660e282762876afd99ae28f937",
+  "verified_at": "2026-11-04T21:15:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/actionReadiness.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "5ab701be5a435543188d1262798d55c4733a4636eb103d2cba1556bf0fc0aab4",
+    "frontend-modern/src/stores/websocket.ts": "390129a41627ff31309c14b7e0d89cdc9ebf8c957cd6b6e29e146101cd3b932f",
+    "frontend-modern/src/types/api.ts": "a91d51f3472c92ff00ecd299aea9a5d006dc2bd6799a268b65b6918dbf078aa9",
+    "frontend-modern/src/types/resource.ts": "6ec9457b9ea5d8703d309cc136669559852e48792f8336b869a69e72431d5e54",
+    "frontend-modern/src/utils/actionReadiness.ts": "a4562395af1eadd0829109771a58bec016dc51f96352efbe6fe265a7e0cd9e0b",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "f9c26c323da3b719dd56c9f7e80bb62b78edee5acd18614cd1ecc224f2444dea"
+  },
+  "routes": [
+    "/docker"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 1000
+    },
+    {
+      "width": 740,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Private mock stack: backend and Vite built from this change",
+    "Direct load at 1680: all 75 containers show Stop and Restart disabled from first paint, each with the server reason in the title",
+    "In-app navigation from /proxmox to /docker sampled every 50ms: no container shows Stop or Restart enabled at any point; the unfixed build showed 60 enabled until REST returned",
+    "Rows on a proxmox-lxc-docker host show the no_command_agent reason; rows on an agent host show command_agent_disconnected",
+    "Menu at 740: Start, Stop and Restart disabled, reasons in their titles, row height unchanged",
+    "Resource detail surface shows the same disabled actions and reasons as the row",
+    "No new console errors after a clean load"
+  ],
+  "interactions": [
+    "Connected a stand-in command agent for ops-services-01 with the page open: its 14 containers enabled Stop after 2.2s with no reload",
+    "Closed that agent with the page open: the 14 containers disabled Stop with the server reason after 5.0s, where the unfixed build stayed enabled past 20s",
+    "Opened the row actions menu at 740",
+    "Expanded a container row to the resource detail surface",
+    "Reloaded the page with the agent connected and with it disconnected"
+  ]
+}

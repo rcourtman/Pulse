@@ -84,6 +84,11 @@ func resolveDockerHostIdentifier(report agentsdocker.Report, tokenRecord *config
 // exactly once, while two live machines alternate, so a report whose machine
 // ID *returns* to a value already seen behind the candidate identity is proof
 // of a second machine and must not be folded.
+//
+// A report from the LXC probe never reaches those fallbacks. It carries no token
+// or machine ID, and its hostname is only what the guest calls itself, which any
+// number of guests can share. Its agent ID names the guest, so that alone finds
+// its row. No probe report carries a token, so one that does is an ordinary agent.
 func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report agentsdocker.Report, tokenRecord *config.APITokenRecord, machineRevisit func(identifier, machineID string) bool) (*unifiedresources.DockerHostView, bool) {
 	agentID := strings.TrimSpace(report.Agent.ID)
 	tokenID := ""
@@ -107,6 +112,10 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 				return host, true
 			}
 		}
+	}
+
+	if tokenID == "" && unifiedresources.IsProxmoxLXCDockerHostID(agentID) {
+		return findDockerHostOfProbedGuest(hosts, agentID)
 	}
 
 	if machineID != "" && hostname != "" {
@@ -159,6 +168,10 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 			}
 			if unifiedresources.HostnamesEquivalent(host.Hostname(), hostname) &&
 				strings.TrimSpace(host.TokenID()) == "" {
+				// A probed guest's row is that guest's alone.
+				if unifiedresources.IsProxmoxLXCDockerHostID(host.AgentID()) {
+					continue
+				}
 				if dockerHostMachineIDRevisits(host, agentID, machineID, machineRevisit) {
 					continue
 				}
@@ -168,6 +181,40 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 	}
 
 	return nil, false
+}
+
+// findDockerHostOfProbedGuest finds a probed guest's row after a rename or a node
+// move. A guest's ID carries its node, but a live migration does not make it
+// another guest: a VMID is unique within a connection. The row keeps its ID, and
+// everything keyed on that ID stays with the guest.
+func findDockerHostOfProbedGuest(hosts []*unifiedresources.DockerHostView, agentID string) (*unifiedresources.DockerHostView, bool) {
+	for _, host := range hosts {
+		// A row holding a token came from an agent, whatever ID it chose.
+		if host == nil || strings.TrimSpace(host.TokenID()) != "" {
+			continue
+		}
+		if sameProbedDockerGuest(host.AgentID(), agentID) {
+			return host, true
+		}
+	}
+	return nil, false
+}
+
+// sameProbedDockerGuest reports whether two LXC probe agent IDs name one guest:
+// the same connection and VMID, whichever node each ID carries.
+func sameProbedDockerGuest(leftID, rightID string) bool {
+	leftInstance, leftVMID, leftOK := probedGuestOfDockerAgentID(leftID)
+	rightInstance, rightVMID, rightOK := probedGuestOfDockerAgentID(rightID)
+	return leftOK && rightOK && leftInstance == rightInstance && leftVMID == rightVMID
+}
+
+func probedGuestOfDockerAgentID(agentID string) (instance string, vmid int, ok bool) {
+	sourceID, probed := strings.CutPrefix(strings.TrimSpace(agentID), proxmoxGuestDockerAgentIDPrefix)
+	if !probed {
+		return "", 0, false
+	}
+	instance, _, vmid, ok = unifiedresources.ParseProxmoxGuestSourceID(sourceID)
+	return instance, vmid, ok
 }
 
 // dockerHostMachineIDRevisits reports whether folding a report with the given

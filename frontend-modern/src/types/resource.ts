@@ -1661,6 +1661,9 @@ export interface Resource {
   // expands it into `capabilities` at ingestion so consumers keep reading the
   // inline shape.
   capabilitiesRef?: string;
+  // Reference into the state payload's actionReadinessCatalog; the websocket
+  // store expands it into `actionReadiness`. A row without it refuses nothing.
+  actionReadinessRef?: string;
   // References into the state payload's policyCatalog / aiSafeSummaryCatalog;
   // the websocket store expands them into `policy` / `aiSafeSummary` at
   // ingestion under the same contract.

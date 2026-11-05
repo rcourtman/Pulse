@@ -600,8 +600,8 @@ type UnifiedResourcesCacheEntry = {
   lastFetchAt: number;
   // When this entry last received the REST snapshot itself. Websocket ticks
   // and all-resources seeding refresh cachedAt but carry none of the
-  // REST-only enrichment (action readiness, source status, scoped facets),
-  // so cachedAt alone cannot say whether that enrichment is current.
+  // REST-only enrichment (source status, scoped facets), so cachedAt alone
+  // cannot say whether that enrichment is current.
   canonicalAt: number;
   sharedFetch: Promise<Resource[]> | null;
   realtimeVersion: number;

@@ -22,6 +22,9 @@ const (
 	proxmoxGuestDockerSocketMarker         = "PULSE_DOCKER_SOCKET"
 	proxmoxGuestDockerNegativeRecheckAfter = 5 * time.Minute
 
+	// Every report from the LXC probe carries this prefix on the guest's ID.
+	proxmoxGuestDockerAgentIDPrefix = "proxmox-lxc-docker:"
+
 	// A probe that errors (as opposed to succeeding with "no docker") is
 	// retried with exponential backoff instead of on every poll cycle: a
 	// persistent failure such as an agent token without agent:exec or an
@@ -1181,7 +1184,7 @@ func proxmoxGuestDockerAgentID(container models.Container) string {
 	if id == "" {
 		id = fmt.Sprintf("lxc:%d", container.VMID)
 	}
-	return "proxmox-lxc-docker:" + id
+	return proxmoxGuestDockerAgentIDPrefix + id
 }
 
 func proxmoxGuestDockerDisplayName(container models.Container) string {

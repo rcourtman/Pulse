@@ -1010,7 +1010,12 @@ through the state-level `capabilityCatalog` and per-resource
 `capabilitiesRef`, and non-default policy postures and AI-safe prose dedupe
 the same way through `policyCatalog`/`policyRef` and
 `aiSafeSummaryCatalog`/`aiSafeSummaryRef` (estates carry only a handful of
-distinct postures and templated summaries); default-posture policy is
+distinct postures and templated summaries); action refusals dedupe through
+`actionReadinessCatalog`/`actionReadinessRef` without their per-host `detail`,
+so a disconnected host costs one ref per row. The per-broadcast refusal pass
+answers each agent lookup once (`AvailabilityBatcher`), because a lookup scans
+every session and each session check takes `config.Mu`, and a row with nothing
+refused allocates nothing in it; default-posture policy is
 omitted and synthesized at ingestion, and neither superseded canonical ids
 nor the row's own wire id are duplicated into the alias list — the primary
 id stays so aliases remain the complete live vocabulary a host is reachable

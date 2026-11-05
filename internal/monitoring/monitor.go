@@ -1342,7 +1342,8 @@ type Monitor struct {
 	metricsHistory             *MetricsHistory
 	metricsStore               *metrics.Store // Persistent SQLite metrics storage
 	alertManager               *alerts.Manager
-	operatorIntentIdentity     atomic.Pointer[operatorIntentIdentity] // read state alert intent resolves through (monitor_alert_intent.go)
+	operatorIntentIdentity     atomic.Pointer[operatorIntentIdentity]      // read state alert intent resolves through (monitor_alert_intent.go)
+	broadcastActionRefusals    atomic.Pointer[BroadcastActionAvailability] // attaches action refusals to broadcast rows
 	alertResolvedAICallback    func(*alerts.Alert)
 	alertTriggeredAICallback   func(*alerts.Alert)
 	alertPushCallback          func(*alerts.Alert)
@@ -4720,6 +4721,34 @@ func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateF
 	return snapshot.ToFrontend()
 }
 
+// BroadcastActionAvailability records the server's action refusals on one
+// organization's broadcast rows. It writes only top-level resource fields, and
+// the monitor package does not need to know which executors answer it.
+type BroadcastActionAvailability func(orgID string, resources []unifiedresources.Resource)
+
+// SetBroadcastActionAvailability installs the refusal projection every state
+// this monitor builds runs through. A refusal changes with the command agent's
+// connection, which no monitor poll observes, so each broadcast re-evaluates it.
+func (m *Monitor) SetBroadcastActionAvailability(project BroadcastActionAvailability) {
+	if m == nil {
+		return
+	}
+	if project == nil {
+		m.broadcastActionRefusals.Store(nil)
+		return
+	}
+	m.broadcastActionRefusals.Store(&project)
+}
+
+func (m *Monitor) attachBroadcastActionRefusals(resources []unifiedresources.Resource) {
+	if m == nil {
+		return
+	}
+	if project := m.broadcastActionRefusals.Load(); project != nil {
+		(*project)(m.GetOrgID(), resources)
+	}
+}
+
 func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot, scope mockModeScope) models.StateFrontend {
 	return m.buildBroadcastFrontendStateFromSnapshotWithClock(snapshot, scope, time.Now)
 }
@@ -4752,10 +4781,12 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 		health := unifiedresources.EvaluateResourceHealth(broadcastResources[i], healthAlerts, now)
 		broadcastResources[i].Health = &health
 	}
+	m.attachBroadcastActionRefusals(broadcastResources)
 	attachBroadcastMetricsTargetsInPlace(broadcastResources, metricsTargetResolver)
 	broadcastFrontendResources, broadcastCatalogs := convertPresentationResourcesForBroadcast(broadcastResources)
 	frontendState.Resources = broadcastFrontendResources
 	frontendState.CapabilityCatalog = broadcastCatalogs.capabilities
+	frontendState.ActionReadinessCatalog = broadcastCatalogs.actionReadiness
 	frontendState.PolicyCatalog = broadcastCatalogs.policies
 	frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries
 	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
@@ -7141,6 +7172,7 @@ func (m *Monitor) dockerAppContainerCustomURL(
 // broadcast conversion extracts from per-resource static metadata.
 type broadcastResourceCatalogs struct {
 	capabilities    map[string]json.RawMessage
+	actionReadiness map[string]json.RawMessage
 	policies        map[string]json.RawMessage
 	aiSafeSummaries map[string]string
 }
@@ -7175,6 +7207,7 @@ func convertPresentationResourcesForBroadcast(allResources []unifiedresources.Re
 	sortKeys := make([]string, len(allResources))
 	catalogs := broadcastResourceCatalogs{
 		capabilities:    make(map[string]json.RawMessage),
+		actionReadiness: make(map[string]json.RawMessage),
 		policies:        make(map[string]json.RawMessage),
 		aiSafeSummaries: make(map[string]string),
 	}
@@ -7185,6 +7218,11 @@ func convertPresentationResourcesForBroadcast(allResources []unifiedresources.Re
 			catalogs.capabilities[id] = input.Capabilities
 			input.CapabilitiesRef = id
 			input.Capabilities = nil
+		}
+		if encoded := broadcastActionRefusalsJSON(r.ActionReadiness); len(encoded) > 0 {
+			id := capabilityCatalogID(encoded)
+			catalogs.actionReadiness[id] = encoded
+			input.ActionReadinessRef = id
 		}
 		// Non-default policies and AI-safe summaries dedupe the same way:
 		// estates carry a handful of distinct postures and templated summary
@@ -7212,6 +7250,9 @@ func convertPresentationResourcesForBroadcast(allResources []unifiedresources.Re
 	sort.Sort(broadcastFrontendSort{resources: result, keys: sortKeys})
 	if len(catalogs.capabilities) == 0 {
 		catalogs.capabilities = nil
+	}
+	if len(catalogs.actionReadiness) == 0 {
+		catalogs.actionReadiness = nil
 	}
 	if len(catalogs.policies) == 0 {
 		catalogs.policies = nil
@@ -7468,6 +7509,21 @@ func isDefaultBroadcastResourcePolicy(policy *unifiedresources.ResourcePolicy) b
 		policy.Sensitivity == unifiedresources.ResourceSensitivityInternal &&
 		policy.Routing.Scope == unifiedresources.ResourceRoutingScopeCloudSummary &&
 		len(policy.Routing.Redact) == 0
+}
+
+// broadcastActionRefusalsJSON encodes a row's refusals for the catalog without
+// Detail. Detail names one host's identity for logs and error envelopes, and
+// leaving it in would give every disconnected host its own catalog entry.
+func broadcastActionRefusalsJSON(refusals []unifiedresources.ResourceActionReadiness) json.RawMessage {
+	if len(refusals) == 0 {
+		return nil
+	}
+	wire := make([]unifiedresources.ResourceActionReadiness, len(refusals))
+	for i, refusal := range refusals {
+		refusal.Detail = ""
+		wire[i] = refusal
+	}
+	return monitorRawJSON(wire)
 }
 
 // capabilityCatalogID derives the stable catalog id for one marshaled
