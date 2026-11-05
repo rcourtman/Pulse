@@ -582,6 +582,9 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 
 		cspDirectives := []string{
 			"default-src 'self'",
+			// Pulse has no HTML base element. default-src does not constrain
+			// one injected into a document, which could redirect relative links.
+			"base-uri 'none'",
 			scriptSrc,
 			styleSrc,
 			"img-src 'self' data: blob:",
