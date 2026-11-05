@@ -271,6 +271,46 @@ type nativeProfileDownloads struct {
 	badHelper  bool
 }
 
+// Installer inputs and autonomous update offers are separate experiment
+// controls. Keep the fixture's original advertised version: advancing it also
+// wakes the running predecessor's updater, before snapshot or after rollback.
+// This lab measures explicit installer recovery, not concurrent self-updates.
+func (d *nativeProfileDownloads) stageCollector(fixture *secureRuntimeLabFixture, artifact []byte, signature string) {
+	fixture.setCollector(artifact, "")
+	d.Lock()
+	d.signatures["/download/pulse-agent"] = signature
+	d.Unlock()
+}
+
+// Inspect only the owned transaction's binary, never source a saved env file
+// or follow a recovery pointer outside the fixed disposable installation.
+func nativeProfileRecoveryPath(root string, data []byte) (string, error) {
+	transaction := ""
+	count := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "TRANSACTION_DIR=") {
+			count++
+			transaction = strings.TrimPrefix(line, "TRANSACTION_DIR=")
+		}
+	}
+	if count != 1 || filepath.Clean(transaction) != transaction || filepath.Dir(transaction) != root || !strings.HasPrefix(filepath.Base(transaction), "transaction-") {
+		return "", errors.New("native recovery pointer is absent, ambiguous or outside the owned transaction root")
+	}
+	return filepath.Join(transaction, "collector-binary"), nil
+}
+
+func nativeProfileRecoveryBinary(t *testing.T, root string) secureRuntimeFileIdentity {
+	t.Helper()
+	current := filepath.Join(root, "current.env")
+	nativeProfileFiles(t, current)
+	path, err := nativeProfileRecoveryPath(root, secureRuntimeReadFile(t, current))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeProfileDirectory(t, filepath.Dir(path))
+	return nativeProfileFiles(t, path)[path]
+}
+
 func (d *nativeProfileDownloads) wrap(fixture *secureRuntimeLabFixture) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d.Lock()
@@ -573,10 +613,8 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		t.Fatal("TLS refusal changed installed state")
 	}
 	phase("TLS-refusal", map[string]any{"files_unchanged": true, "units_unchanged": true})
-	fixture.setCollector(artifacts["collector-v2"], "")
-	fixture.setServerVersion(versions["collector-v2"])
+	downloads.stageCollector(fixture, artifacts["collector-v2"], signatures["collector-v2"])
 	downloads.Lock()
-	downloads.signatures["/download/pulse-agent"] = signatures["collector-v2"]
 	downloads.badHelper = true
 	downloads.Unlock()
 	if output, err := install(caPath, "--safe-profile-apply"); err == nil || !strings.Contains(string(output), "signature verification failed") {
@@ -592,6 +630,15 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	for _, flags := range []struct{ active, enabled bool }{{true, true}, {true, false}, {false, true}, {false, false}} {
 		nativeProfileServiceFlags(t, receipt, flags.active, flags.enabled)
 		baseline := secureRuntimeStableSnapshot(t)
+		fixture.mu.Lock()
+		advertisedVersion := fixture.serverVersion
+		fixture.mu.Unlock()
+		if advertisedVersion != versions["collector-v1"] {
+			t.Fatal("explicit migration lab advertised a concurrent automatic update")
+		}
+		if baseline["/usr/local/bin/pulse-agent"].Hash != receipt.Artifacts["collector-v1"] {
+			t.Fatal("forward did not start with the original collector executable")
+		}
 		started := time.Now()
 		if output, err := install(caPath, "--safe-profile-apply"); err != nil {
 			t.Fatalf("signed TLS safe-profile apply: %v\n%s", err, output)
@@ -611,9 +658,15 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		}
 		checkRunner()
 		phase("forward-"+strconv.FormatBool(flags.active)+"-"+strconv.FormatBool(flags.enabled), map[string]any{"units": nativeProfileState(t, receipt), "collector_sha256": receipt.Artifacts["collector-v2"], "helper_sha256": receipt.Artifacts["helper"], "history": assertHistory(), "runner_unchanged": true, "authenticated_report": forwardReport})
+		savedCollector := nativeProfileRecoveryBinary(t, "/var/lib/pulse-agent-profile")
+		phase("recovery-snapshot-"+strconv.FormatBool(flags.active)+"-"+strconv.FormatBool(flags.enabled), map[string]any{"baseline_collector": baseline["/usr/local/bin/pulse-agent"], "saved_collector": savedCollector, "configured_advertised_version": advertisedVersion})
+		if savedCollector != baseline["/usr/local/bin/pulse-agent"] {
+			t.Fatal("migration snapshot did not preserve the pre-forward executable bytes and metadata")
+		}
 		// The saved installer invocation recovers the endpoint and CA itself.
 		reverseStarted := time.Now()
 		nativeProfileMust(t, receipt, "bash", "/etc/pulse-agent/install.sh", "--safe-profile-rollback")
+		phase("reverse-command-return-"+strconv.FormatBool(flags.active)+"-"+strconv.FormatBool(flags.enabled), map[string]any{"installed_collector": nativeProfileFiles(t, "/usr/local/bin/pulse-agent"), "units": nativeProfileState(t, receipt)})
 		nativeProfileAssertFlags(t, receipt, flags.active, flags.enabled)
 		secureRuntimeWaitForStableIdentity(t, secureRuntimeWithoutCollectorUnit(baseline), 10*time.Second, "native reverse")
 		assertRestoredState()
