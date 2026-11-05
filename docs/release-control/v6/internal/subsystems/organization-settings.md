@@ -15,6 +15,27 @@
 
 ## Purpose
 
+### Invitation decisions identify the exact organization
+
+Your Invitations shows each organization's display name **and** ID beside its
+existing role, inviter, date and Accept/Decline controls. A missing name or one
+equal to the ID shows the ID once. Same-named organizations therefore remain
+distinguishable without a tooltip or disclosure. Each invitation is an accessible
+group, and both actions name its organization and ID. Long names, IDs and inviter
+identities wrap instead of escaping the card at narrow or desktop widths.
+`getOrganizationInvitationPresentation` owns that visible and accessible copy
+in the existing organization presentation helper, with its registered unit proof.
+
+The existing current-reader, session/CSRF and no-automatic-retry transport is
+unchanged: the action uses the invitation ID, not the display name or active
+organization. Read-only sessions keep those decisions disabled. No membership
+or permission is added by presentation alone. `OrganizationAccessPanel.test.tsx`
+covers same-named decisions, exact dispatch/readback, ID fallbacks and read-only
+controls. Comparable actual-panel desktop/narrow browser fixtures exercise the
+real state, API and HTTP client with synthetic invitations, including keyboard
+acceptance/decline, long identities and dark theme. This does not establish
+original-account recovery or installed service acceptance.
+
 ### Sharing requests require an explicitly chosen recipient
 
 A fresh Organization Sharing draft starts at **Select organization**. Neither

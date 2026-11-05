@@ -5,6 +5,7 @@ import {
   getOrganizationAccessMemberAddedMessage,
   getOrganizationAccessMemberRemovedMessage,
   getOrganizationAccessRoleUpdatedMessage,
+  getOrganizationInvitationPresentation,
   getOrganizationAddMemberErrorMessage,
   getOrganizationDisplayNameRequiredMessage,
   getOrganizationDisplayNameUpdateErrorMessage,
@@ -40,6 +41,29 @@ import {
 } from '@/utils/organizationSettingsPresentation';
 
 describe('organizationSettingsPresentation', () => {
+  it('keeps same-named invitation identities distinct in visible and accessible copy', () => {
+    for (const id of ['client-east', 'client-west']) {
+      expect(getOrganizationInvitationPresentation(id, 'Operations')).toEqual({
+        organization: `Operations (${id})`,
+        groupLabel: `Invitation to Operations (${id})`,
+        acceptLabel: `Accept invitation to Operations (${id})`,
+        declineLabel: `Decline invitation to Operations (${id})`,
+      });
+    }
+  });
+
+  it.each([undefined, '', 'client-east'])(
+    'uses the invitation ID once for display name %j',
+    (displayName) => {
+      expect(getOrganizationInvitationPresentation('client-east', displayName)).toEqual({
+        organization: 'client-east',
+        groupLabel: 'Invitation to client-east',
+        acceptLabel: 'Accept invitation to client-east',
+        declineLabel: 'Decline invitation to client-east',
+      });
+    },
+  );
+
   it('returns canonical multi-tenant fallback presentation', () => {
     expect(ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE).toBe(
       'Organization settings are not available on this server.',

@@ -2,7 +2,7 @@ import { createSignal } from 'solid-js';
 import { useOrganizationAccessPanelState } from '../useOrganizationAccessPanelState';
 import type { OrganizationMember } from '@/api/orgs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { OrganizationAccessPanel } from '../OrganizationAccessPanel';
 
 const orgGetMock = vi.fn();
@@ -169,6 +169,90 @@ afterEach(() => {
 });
 
 describe('OrganizationAccessPanel', () => {
+  const sameNamedInvitations = () =>
+    ['client-east', 'client-west'].map((orgId) => ({
+      orgId,
+      orgDisplayName: 'Operations',
+      userId: 'user-1',
+      role: 'viewer',
+      invitedBy: 'admin@example.test',
+      invitedAt: '2026-11-01T10:00:00Z',
+    }));
+
+  it('distinguishes same-named invitations with visible organization IDs and named actions', async () => {
+    listMyInvitationsMock.mockResolvedValue(sameNamedInvitations());
+    renderPanel();
+
+    for (const orgId of ['client-east', 'client-west']) {
+      const invitation = await screen.findByRole('group', {
+        name: `Invitation to Operations (${orgId})`,
+      });
+      expect(within(invitation).getByText(`Operations (${orgId})`)).toBeVisible();
+      expect(invitation).toHaveTextContent('admin@example.test');
+      expect(invitation).toHaveTextContent('viewer');
+      for (const action of ['Accept', 'Decline']) {
+        expect(
+          within(invitation).getByRole('button', {
+            name: `${action} invitation to Operations (${orgId})`,
+          }),
+        ).toBeEnabled();
+      }
+    }
+    expectNoWrites();
+  });
+
+  it.each(['Accept', 'Decline'])(
+    '%s sends only the named invitation ID and refreshes without changing the active organization',
+    async (action) => {
+      let invitations = sameNamedInvitations();
+      listMyInvitationsMock.mockImplementation(async () => invitations);
+      const request = action === 'Accept' ? acceptMyInvitationMock : declineMyInvitationMock;
+      request.mockImplementation(async (orgId) => {
+        invitations = invitations.filter((invitation) => invitation.orgId !== orgId);
+        return { kind: 'member' };
+      });
+      renderPanel();
+
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: `${action} invitation to Operations (client-west)`,
+        }),
+      );
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+      expect(request).toHaveBeenCalledWith(
+        'client-west',
+        expect.objectContaining({ expectedOrgID: 'org-a', retry: false }),
+      );
+      expect(
+        action === 'Accept' ? declineMyInvitationMock : acceptMyInvitationMock,
+      ).not.toHaveBeenCalled();
+      expect(
+        await screen.findByRole('group', { name: 'Invitation to Operations (client-east)' }),
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('group', { name: 'Invitation to Operations (client-west)' }),
+      ).not.toBeInTheDocument();
+      expect(getOrgIDMock()).toBe('org-a');
+      expect(inviteMemberMock).not.toHaveBeenCalled();
+      expect(updateMemberRoleMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['', 'client-east'])(
+    'shows the ID once when the display name is %j',
+    async (orgDisplayName) => {
+      listMyInvitationsMock.mockResolvedValue([{ ...sameNamedInvitations()[0], orgDisplayName }]);
+      renderPanel();
+      const invitation = await screen.findByRole('group', { name: 'Invitation to client-east' });
+      expect(within(invitation).getByText('client-east')).toBeVisible();
+      expect(
+        within(invitation).getByRole('button', { name: 'Accept invitation to client-east' }),
+      ).toBeEnabled();
+      expect(invitation).not.toHaveTextContent('client-east (client-east)');
+      expectNoWrites();
+    },
+  );
+
   it('renders loading skeleton first, then loaded content', async () => {
     const orgDeferred = deferred<typeof baseOrg>();
     orgGetMock.mockReturnValueOnce(orgDeferred.promise);
@@ -722,8 +806,16 @@ describe('Organization Access change safety', () => {
     setReadOnly(true);
     renderPanel();
     await screen.findByText('Organization access is read-only for this session.');
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', {
+        name: 'Accept invitation to Inviting Organization (inviting-org)',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', {
+        name: 'Decline invitation to Inviting Organization (inviting-org)',
+      }),
+    ).toBeDisabled();
     expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).not.toBeInTheDocument();
     expect(
       screen.queryByText('Admin or owner role required to manage organization access.'),
