@@ -12,6 +12,16 @@ export function getOrganizationAccessReloadMessage(orgId: string): string {
   return `Reload checks saved members and invitations for ${orgId}. It does not repeat an access change.`;
 }
 
+export function getOrganizationInvitationPresentation(orgId: string, displayName?: string) {
+  const organization = displayName && displayName !== orgId ? `${displayName} (${orgId})` : orgId;
+  return {
+    organization,
+    groupLabel: `Invitation to ${organization}`,
+    acceptLabel: `Accept invitation to ${organization}`,
+    declineLabel: `Decline invitation to ${organization}`,
+  };
+}
+
 export const ORGANIZATION_SHARING_UNCONFIRMED_CHANGE_MESSAGE =
   'The last sharing change could not be confirmed. Reload saved sharing before making another change.';
 export const ORGANIZATION_SHARING_RELOAD_LABEL = 'Reload sharing';

@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
+import { getOrganizationInvitationPresentation } from '@/utils/organizationSettingsPresentation';
 import { formatOrgDate } from '@/utils/orgUtils';
 import type { useOrganizationAccessPanelState } from './useOrganizationAccessPanelState';
 
@@ -20,40 +21,50 @@ export const OrganizationAccessInvitationsSection: Component<
         </div>
         <div class="space-y-3">
           <For each={props.state.myInvitations()}>
-            {(invitation) => (
-              <div class="rounded-md border border-border bg-surface px-3 py-3">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div class="space-y-1">
-                    <div class="text-sm font-medium text-base-content">
-                      {invitation.orgDisplayName || invitation.orgId}
+            {(invitation) => {
+              const presentation = () =>
+                getOrganizationInvitationPresentation(invitation.orgId, invitation.orgDisplayName);
+              return (
+                <div
+                  role="group"
+                  aria-label={presentation().groupLabel}
+                  class="rounded-md border border-border bg-surface px-3 py-3"
+                >
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="min-w-0 space-y-1 [overflow-wrap:anywhere]">
+                      <div class="text-sm font-medium text-base-content">
+                        {presentation().organization}
+                      </div>
+                      <div class="text-xs text-muted">
+                        Invited by {invitation.invitedBy || 'an admin'} on{' '}
+                        {formatOrgDate(invitation.invitedAt)}
+                      </div>
                     </div>
-                    <div class="text-xs text-muted">
-                      Invited by {invitation.invitedBy || 'an admin'} on{' '}
-                      {formatOrgDate(invitation.invitedAt)}
-                    </div>
+                    <OrganizationRoleBadge role={invitation.role} />
                   </div>
-                  <OrganizationRoleBadge role={invitation.role} />
+                  <div class="mt-3 flex gap-2">
+                    <Button
+                      variant="primary"
+                      size="mdCompact"
+                      aria-label={presentation().acceptLabel}
+                      onClick={() => void props.state.acceptInvitation(invitation.orgId)}
+                      disabled={!props.state.canChangeAccess()}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      variant="dangerOutline"
+                      size="mdCompact"
+                      aria-label={presentation().declineLabel}
+                      onClick={() => void props.state.declineInvitation(invitation.orgId)}
+                      disabled={!props.state.canChangeAccess()}
+                    >
+                      Decline
+                    </Button>
+                  </div>
                 </div>
-                <div class="mt-3 flex gap-2">
-                  <Button
-                    variant="primary"
-                    size="mdCompact"
-                    onClick={() => void props.state.acceptInvitation(invitation.orgId)}
-                    disabled={!props.state.canChangeAccess()}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    variant="dangerOutline"
-                    size="mdCompact"
-                    onClick={() => void props.state.declineInvitation(invitation.orgId)}
-                    disabled={!props.state.canChangeAccess()}
-                  >
-                    Decline
-                  </Button>
-                </div>
-              </div>
-            )}
+              );
+            }}
           </For>
         </div>
       </section>

@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "5528d505717e3a480c4addee7a4f9d6caaa88b53",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx": "07c08add5d926471d511e7501234de9cda8291f8d11793ddb7f781125f875723",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "9fd38b96c93c6308cb5f97186626f61f97d9331f684ce08a4488a890099aebce"
+  },
+  "routes": [
+    "Settings / Organization Access / Your Invitations (actual panel, state, OrgsAPI and HTTP client, synthetic HTTP responses)"
+  ],
+  "states": [
+    "Two same-named organizations, distinct IDs and roles",
+    "Keyboard acceptance of client-east leaves client-west pending",
+    "Read-only session with disabled decisions",
+    "Long organization name, ID and inviter, without hiding date or actions",
+    "Missing display name uses the ID once",
+    "Light desktop and phone; dark phone"
+  ],
+  "interactions": [
+    "Keyboard Enter sends one CSRF/session-bound POST for client-east, never an API-token write, then explicit fresh readback",
+    "Keyboard Enter sends one DELETE for client-west, never a second acceptance, with active org-a unchanged",
+    "Read-only decisions remain disabled and a dispatched click sends no write",
+    "Each action is named with the organization identity and grouped with its own invitation",
+    "All 22 final captures opened through native view_image and compared: roles, inviter, date and controls remain visible; no collapse, aggregation or hover-only data"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-05T12:07:05Z",
+  "browser": {
+    "client": "1.56.1",
+    "browser": "141.0.7390.37"
+  },
+  "notes": "11 comparable pairs with identical HTTP fixture data, viewport, theme, UTC locale and interaction state. Final checks use the verified launch graph e2185308. Before loads the exact assigned base panel and presentation-helper bytes through a Vite pre-load plugin; all consumers and client code are real. Final code only identifies and wraps existing invitation data; no server authorization, original-account, installed or release acceptance is claimed."
+}
