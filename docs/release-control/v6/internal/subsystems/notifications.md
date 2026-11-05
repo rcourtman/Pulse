@@ -1733,3 +1733,9 @@ A late completion for a removed endpoint keeps its own receipt without publishin
 a cooldown for the replacement. A durable read of an older occurrence cannot
 evict the newer occurrence's cache entry. Explicit configuration changes invalidate
 the cache's destination scope; they do not permit recovery for a different endpoint.
+Configuration retirement is serialized separately from the manager's policy lock.
+Live policy and its shutdown lease are published first, then storage is updated
+without that lock; a blocked accepted enqueue cannot hide a channel-disable or
+destination change from its observers. Existing email-disable drain controls and
+`TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue` pin this ordering and
+require the retirement write to survive shutdown. No read/retention gate is waived.

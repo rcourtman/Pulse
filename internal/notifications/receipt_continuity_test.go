@@ -269,3 +269,61 @@ func TestOldCooldownRestoreCannotEvictNewOccurrence(t *testing.T) {
 	require.Equal(t, current.StartTime, m.lastNotified[current.ID].alertStart)
 	require.Empty(t, m.pendingAlerts)
 }
+
+func TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue(t *testing.T) {
+	for _, action := range []string{"webhook-delete", "webhook-rotate", "apprise-disable"} {
+		t.Run(action, func(t *testing.T) {
+			f := newShutdownAdmissionFixture(t)
+			m := f.open(func(m *NotificationManager) {
+				if action == "apprise-disable" {
+					m.SetAppriseConfig(AppriseConfig{Enabled: true, Mode: AppriseModeCLI, Targets: []string{"json://ops.example.test"}})
+				}
+			})
+			barrier := newAdmissionBarrier()
+			a := quietReplayAlert("retirement-"+action, alerts.AlertLevelWarning, time.Now().Add(-time.Hour))
+			a.Metadata = map[string]interface{}{"barrier": barrier}
+			admitted := make(chan struct{})
+			go func() { defer close(admitted); m.SendAlert(a) }()
+			awaitShutdownSignal(t, "accepted enqueue holding the queue lock", barrier.entered)
+			acted := make(chan struct{})
+			go func() {
+				defer close(acted)
+				switch action {
+				case "webhook-delete":
+					if err := m.DeleteWebhook(f.hook.ID); err != nil {
+						t.Error(err)
+					}
+				case "webhook-rotate":
+					updated := f.hook
+					updated.URL = "https://new.example.test"
+					if err := m.UpdateWebhook(f.hook.ID, updated); err != nil {
+						t.Error(err)
+					}
+				case "apprise-disable":
+					config := m.GetAppriseConfig()
+					config.Enabled = false
+					m.SetAppriseConfig(config)
+				}
+			}()
+			awaitShutdownCondition(t, "new policy visible without taking the blocked queue lock", func() bool {
+				if action == "apprise-disable" {
+					return !m.GetAppriseConfig().Enabled
+				}
+				hooks := m.GetWebhooks()
+				return len(hooks) == 0 || hooks[0].URL == "https://new.example.test"
+			})
+			stopped := make(chan struct{})
+			go func() { m.Stop(); close(stopped) }()
+			close(barrier.release)
+			awaitShutdownSignal(t, "accepted enqueue", admitted)
+			awaitShutdownSignal(t, "retirement write", acted)
+			awaitShutdownSignal(t, "stop owns retirement write", stopped)
+			q, err := NewNotificationQueue(f.dir)
+			require.NoError(t, err)
+			defer q.Stop()
+			var retired int
+			require.NoError(t, q.db.QueryRow(`SELECT COUNT(*) FROM notification_receipt_retirements`).Scan(&retired))
+			require.Equal(t, 1, retired, "published retirement lost across shutdown")
+		})
+	}
+}

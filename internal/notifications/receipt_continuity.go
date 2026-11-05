@@ -150,17 +150,21 @@ func receiptDestinationScope(keys map[string]bool) string {
 // is not removal evidence. Historic orphans without removal evidence remain
 // uncertain, rather than being silently expired. Late in-flight receipts use
 // the same durable retirement marker as receipts already present at removal.
-func (n *NotificationManager) updateReceiptDestinationsLocked(previous map[string]bool) {
-	if n.queue == nil || !n.lifecycle.join() {
-		return
-	}
-	defer n.lifecycle.release()
+// Call under receiptConfigMu and mu. The returned write must run after mu is
+// released: an accepted enqueue can be blocked in payload serialization with
+// the queue lock held, while a policy observer needs mu to release that enqueue.
+// receiptConfigMu preserves configuration order; the lease preserves storage.
+func (n *NotificationManager) prepareReceiptDestinationUpdateLocked(previous map[string]bool) func() {
 	current := n.receiptDestinationKeysLocked()
-	if receiptDestinationScope(previous) == receiptDestinationScope(current) {
-		return
+	if n.queue == nil || receiptDestinationScope(previous) == receiptDestinationScope(current) || !n.lifecycle.join() {
+		return func() {}
 	}
-	if err := n.queue.updateReceiptDestinations(previous, current, time.Now()); err != nil {
-		log.Error().Err(err).Msg("Could not retain destination receipt retirement; obligations preserved")
+	queue := n.queue
+	return func() {
+		defer n.lifecycle.release()
+		if err := queue.updateReceiptDestinations(previous, current, time.Now()); err != nil {
+			log.Error().Err(err).Msg("Could not retain destination receipt retirement; obligations preserved")
+		}
 	}
 }
 

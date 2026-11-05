@@ -304,6 +304,7 @@ func (l *notificationLifecycle) close() {
 // NotificationManager handles sending notifications
 type NotificationManager struct {
 	mu                 sync.RWMutex
+	receiptConfigMu    sync.Mutex // Orders configuration/retirement publication without holding mu across storage.
 	stopOnce           sync.Once
 	cleanupWG          sync.WaitGroup
 	lifecycle          notificationLifecycle // Admission and shutdown ownership of queue and direct delivery work
@@ -1002,11 +1003,13 @@ func (n *NotificationManager) GetPublicURL() string {
 
 // SetEmailConfig updates email configuration
 func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
+	n.receiptConfigMu.Lock()
+	defer n.receiptConfigMu.Unlock()
 	n.mu.Lock()
 	config = normalizeEmailConfig(copyEmailConfig(config))
 	previousDestinations := n.receiptDestinationKeysLocked()
 	n.emailConfig = config
-	n.updateReceiptDestinationsLocked(previousDestinations)
+	retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
 
 	// Recreate email manager with new config to preserve rate limiting state
 	rateLimit := effectiveEmailRateLimit(config.RateLimit)
@@ -1026,6 +1029,7 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 		queue = n.queue
 	}
 	n.mu.Unlock()
+	retireReceipts()
 
 	if queue != nil {
 		defer n.lifecycle.release()
@@ -1037,15 +1041,18 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 
 // SetAppriseConfig updates Apprise configuration.
 func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) {
+	n.receiptConfigMu.Lock()
+	defer n.receiptConfigMu.Unlock()
 	n.mu.Lock()
 	previousDestinations := n.receiptDestinationKeysLocked()
 	n.appriseConfig = NormalizeAppriseConfig(config)
-	n.updateReceiptDestinationsLocked(previousDestinations)
+	retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
 	var queue *NotificationQueue
 	if !n.appriseConfig.Enabled && n.queue != nil && n.lifecycle.join() {
 		queue = n.queue
 	}
 	n.mu.Unlock()
+	retireReceipts()
 
 	if queue != nil {
 		defer n.lifecycle.release()
@@ -1202,42 +1209,51 @@ func (n *NotificationManager) SetGroupingOptions(byNode, byGuest bool) {
 
 // AddWebhook adds a webhook configuration
 func (n *NotificationManager) AddWebhook(webhook WebhookConfig) {
+	n.receiptConfigMu.Lock()
+	defer n.receiptConfigMu.Unlock()
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	previousDestinations := n.receiptDestinationKeysLocked()
 	n.webhooks = append(n.webhooks, copyWebhookConfig(NormalizeWebhookConfig(webhook)))
-	n.updateReceiptDestinationsLocked(previousDestinations)
+	retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
+	n.mu.Unlock()
+	retireReceipts()
 }
 
 // UpdateWebhook updates an existing webhook
 func (n *NotificationManager) UpdateWebhook(webhookID string, webhook WebhookConfig) error {
+	n.receiptConfigMu.Lock()
+	defer n.receiptConfigMu.Unlock()
 	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	for i, w := range n.webhooks {
 		if w.ID == webhookID {
 			previousDestinations := n.receiptDestinationKeysLocked()
 			n.webhooks[i] = copyWebhookConfig(NormalizeWebhookConfig(webhook))
-			n.updateReceiptDestinationsLocked(previousDestinations)
+			retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
+			n.mu.Unlock()
+			retireReceipts()
 			return nil
 		}
 	}
+	n.mu.Unlock()
 	return fmt.Errorf("webhook not found: %s", webhookID)
 }
 
 // DeleteWebhook removes a webhook
 func (n *NotificationManager) DeleteWebhook(webhookID string) error {
+	n.receiptConfigMu.Lock()
+	defer n.receiptConfigMu.Unlock()
 	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	for i, w := range n.webhooks {
 		if w.ID == webhookID {
 			previousDestinations := n.receiptDestinationKeysLocked()
 			n.webhooks = append(n.webhooks[:i], n.webhooks[i+1:]...)
-			n.updateReceiptDestinationsLocked(previousDestinations)
+			retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
+			n.mu.Unlock()
+			retireReceipts()
 			return nil
 		}
 	}
+	n.mu.Unlock()
 	return fmt.Errorf("webhook not found: %s", webhookID)
 }
 
