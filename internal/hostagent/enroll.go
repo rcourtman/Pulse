@@ -331,7 +331,7 @@ func (a *Agent) persistRuntimeToken(token string) {
 		return
 	}
 	tokenPath := filepath.Join(a.stateDir, runtimeTokenFile)
-	if err := a.collector.WriteFile(tokenPath, []byte(token), 0600); err != nil {
+	if err := writePrivateAgentState(a.collector, tokenPath, []byte(token)); err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to persist runtime token")
 		return
 	}
