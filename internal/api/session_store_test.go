@@ -647,7 +647,7 @@ func TestSessionPersistedStruct_Fields(t *testing.T) {
 	}
 }
 
-func TestSessionStore_SaveUnsafe_MkdirAllError(t *testing.T) {
+func TestSessionStore_Save_MkdirAllError(t *testing.T) {
 	// Create a file where the directory should be - MkdirAll will fail
 	tmpDir := t.TempDir()
 	blockedPath := filepath.Join(tmpDir, "blocked")
@@ -670,8 +670,8 @@ func TestSessionStore_SaveUnsafe_MkdirAllError(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	// saveUnsafe should handle error gracefully (logs but doesn't panic)
-	store.saveUnsafe()
+	// save should handle error gracefully (logs but doesn't panic)
+	store.save()
 
 	// Verify the blocking file still exists (wasn't overwritten)
 	data, err := os.ReadFile(blockedPath)
@@ -683,7 +683,7 @@ func TestSessionStore_SaveUnsafe_MkdirAllError(t *testing.T) {
 	}
 }
 
-func TestSessionStore_SaveUnsafe_WriteFileError(t *testing.T) {
+func TestSessionStore_Save_WriteFileError(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("Skipping permission test running as root")
 	}
@@ -716,8 +716,8 @@ func TestSessionStore_SaveUnsafe_WriteFileError(t *testing.T) {
 		_ = os.Chmod(readOnlyDir, 0755) // Restore for cleanup
 	})
 
-	// saveUnsafe should handle error gracefully (logs but doesn't panic)
-	store.saveUnsafe()
+	// save should handle error gracefully (logs but doesn't panic)
+	store.save()
 
 	// Verify no file was created
 	sessionsFile := filepath.Join(readOnlyDir, "sessions.json")
@@ -726,7 +726,7 @@ func TestSessionStore_SaveUnsafe_WriteFileError(t *testing.T) {
 	}
 }
 
-func TestSessionStore_SaveUnsafe_RenameError(t *testing.T) {
+func TestSessionStore_Save_RenameError(t *testing.T) {
 	// Create a directory at the target path to cause rename error
 	tmpDir := t.TempDir()
 
@@ -749,8 +749,8 @@ func TestSessionStore_SaveUnsafe_RenameError(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	// saveUnsafe should handle rename error gracefully
-	store.saveUnsafe()
+	// save should handle rename error gracefully
+	store.save()
 
 	// The blocking directory should still exist (rename failed)
 	info, err := os.Stat(sessionsFilePath)
@@ -923,7 +923,7 @@ func TestEnsureSessionStoreReturnsOwnedStoreForPath(t *testing.T) {
 	}
 }
 
-func TestSessionStore_SaveUnsafe_DropsRefreshTokenWithoutCrypto(t *testing.T) {
+func TestSessionStore_Save_DropsRefreshTokenWithoutCrypto(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := &SessionStore{
 		sessions: make(map[string]*SessionData),
@@ -939,7 +939,7 @@ func TestSessionStore_SaveUnsafe_DropsRefreshTokenWithoutCrypto(t *testing.T) {
 		OIDCRefreshToken: "plain-refresh-token",
 	}
 
-	store.saveUnsafe()
+	store.save()
 
 	data, err := os.ReadFile(filepath.Join(tmpDir, "sessions.json"))
 	if err != nil {
