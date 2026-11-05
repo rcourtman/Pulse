@@ -91,6 +91,9 @@ func (f *basicTenantFixture) serve(t *testing.T, method, path, orgID, password, 
 	}
 	credentials := base64.StdEncoding.EncodeToString([]byte(basicTenantAdmin + ":" + password))
 	req.Header.Set("Authorization", "Basic "+credentials)
+	// Pulse's web client is the one Basic caller that gets a session, so these
+	// requests cover whether an organization denial still issues one.
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	rec := httptest.NewRecorder()
 	f.router.Handler().ServeHTTP(rec, req)
 	return rec

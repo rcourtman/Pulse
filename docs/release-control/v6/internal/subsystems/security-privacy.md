@@ -3818,6 +3818,22 @@ tenant admission could not apply before they were verified. Proxy identities
 need the configured admin role, and API tokens preserve organization binding
 plus the operation-specific `settings:read` or `settings:write` scope.
 
+### Basic API clients receive no browser session
+
+A verified Basic request from an API client is authenticated for that request alone:
+`checkAuth` creates no session or CSRF token and sets no cookie, so reusing Basic
+credentials cannot evict a signed-in browser. Only a request marked by Pulse's own
+web client gets a session, which serves browsers behind a proxy that forwards Basic
+credentials. That marker is a hint, not a boundary, because the caller has already
+proved the credentials and a session grants nothing beyond them.
+
+A rejected session cookie reaching the Basic branch is retired, so a handler that
+reads the cookie cannot attribute the request to its old owner. A password used only
+over Basic still leaves a trace: the first successful call per organization, user and
+client address is audited, then once a day, and an address the bounded tracker cannot
+remember is audited on every call. Failed attempts count toward lockout and are always
+audited.
+
 No-auth recovery trusts only a direct loopback transport without forwarded
 identity headers. `ALLOW_UNPROTECTED_EXPORT` is an export-only exception and is
 ineffective once any authentication or hosted mode is active. Security status

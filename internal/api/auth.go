@@ -985,67 +985,24 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							// RequireAuth passes the original request pointer to its handler.
 							*r = *attachUserContext(r, parts[0])
 
-							// Valid credentials - create session
 							if w != nil {
-								// Invalidate any pre-existing session to prevent session fixation attacks.
+								// A session cookie that reaches this branch was rejected above:
+								// expired, unknown, or a recovery session outside its binding.
+								// Retire it, so a session issued below replaces it and nothing
+								// reading the cookie can attribute this request to its old owner.
 								InvalidateOldSessionFromRequest(r)
 
-								token := generateSessionToken()
-								if token == "" {
-									return false
+								// Basic credentials authenticate an API client for this request
+								// alone, as an API token does. Only Pulse's own web client gets a
+								// session, so polling with Basic credentials cannot evict the
+								// user's browser at maxSessionsPerUser.
+								if requestIsPulseWebClient(r) {
+									if !issueBasicBrowserSession(w, r, parts[0]) {
+										return false
+									}
+								} else if basicAuthAudits.due(GetOrgID(r.Context()), parts[0], clientIP, time.Now()) {
+									LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, true, "Basic auth login")
 								}
-
-								// Store session persistently (including username for restart survival)
-								userAgent := r.Header.Get("User-Agent")
-								clientIP := GetClientIP(r)
-								GetSessionStore().CreateSession(token, 24*time.Hour, userAgent, clientIP, parts[0])
-
-								// Track session for user (in-memory for fast lookups)
-								TrackUserSession(parts[0], token)
-
-								// Generate CSRF token
-								csrfToken := generateCSRFToken(token)
-
-								// Get appropriate cookie settings based on proxy detection
-								cookiePolicy := getBrowserCookiePolicy(r)
-
-								// Debug logging for Cloudflare tunnel issues
-								sameSiteName := "Default"
-								switch cookiePolicy.sameSite {
-								case http.SameSiteNoneMode:
-									sameSiteName = "None"
-								case http.SameSiteLaxMode:
-									sameSiteName = "Lax"
-								case http.SameSiteStrictMode:
-									sameSiteName = "Strict"
-								}
-
-								log.Debug().
-									Bool("secure", cookiePolicy.secure).
-									Str("same_site", sameSiteName).
-									Str("token", safePrefixForLog(token, 8)+"...").
-									Str("remote_addr", r.RemoteAddr).
-									Msg("Setting session cookie after successful login")
-
-									// Set session cookie
-								cookiePolicy.setHTTPOnly(w, &http.Cookie{
-									Name:     sessionCookieName(cookiePolicy.secure),
-									Value:    token,
-									Path:     "/",
-									HttpOnly: true,
-									MaxAge:   86400, // 24 hours
-								})
-
-								// Set CSRF cookie (not HttpOnly so JS can read it)
-								cookiePolicy.setClientReadable(w, &http.Cookie{
-									Name:   CookieNameCSRF,
-									Value:  csrfToken,
-									Path:   "/",
-									MaxAge: 86400, // 24 hours
-								})
-
-								// Audit log successful login
-								LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], GetClientIP(r), r.URL.Path, true, "Basic auth login")
 							}
 							w.Header().Set("X-Authenticated-User", parts[0])
 							w.Header().Set("X-Auth-Method", "basic")

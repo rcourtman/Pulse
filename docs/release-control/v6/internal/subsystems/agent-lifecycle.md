@@ -8767,6 +8767,9 @@ header alone is not identity. This lets a Basic-authenticated qualification
 operator approve or reject an agent action while preserving the agent token's
 separate reporting and command authority; invalid credentials must never reach
 the action handler or acquire an operator principal.
+That verification lasts one request and issues no browser session, so a
+qualification client polling with Basic credentials cannot sign out an operator's
+browser.
 
 ### Multi-destination reporting authority
 

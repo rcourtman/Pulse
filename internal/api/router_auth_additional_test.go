@@ -18,7 +18,7 @@ import (
 func newAuthRouter(t *testing.T) *Router {
 	t.Helper()
 	dir := t.TempDir()
-	// Basic authentication creates both a session and its CSRF token. Bare
+	// The password handlers read and revoke sessions and CSRF tokens. Bare
 	// handler fixtures must own that setup instead of relying on a previous
 	// router test to have initialized the process-wide stores.
 	InitSessionStore(dir)

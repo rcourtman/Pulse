@@ -27,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -6064,5 +6065,286 @@ func TestReportAckNamesNoCommandIdentityInMockMode(t *testing.T) {
 	}
 	if named, present := ack["commandAgentId"]; present {
 		t.Fatalf("mock ack named command identity %v", named)
+	}
+}
+
+// newBasicSessionFixture signs the configured admin in through the login flow
+// and returns a handler behind RequireAuth, plus the browser's session cookie
+// and the audit events recorded so far.
+func newBasicSessionFixture(t *testing.T) (http.HandlerFunc, *http.Cookie, *auditCaptureLogger) {
+	t.Helper()
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+	resetSessionTracking()
+	resetFailedLogins()
+	basicAuthAudits = newBasicAuthAuditTracker()
+	capture := &auditCaptureLogger{}
+	previousLogger, previousManager := audit.GetLogger(), GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(previousLogger)
+		SetTenantAuditManager(previousManager)
+		resetSessionTracking()
+		resetFailedLogins()
+		basicAuthAudits = newBasicAuthAuditTracker()
+	})
+
+	hash, err := auth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{AuthUser: "admin", AuthPass: hash}
+
+	login := httptest.NewRequest(http.MethodPost, "/api/login",
+		strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	authLimiter.Reset(GetClientIP(login))
+	loginRecorder := httptest.NewRecorder()
+	(&Router{config: cfg}).handleLogin(loginRecorder, login)
+	if loginRecorder.Code != http.StatusOK {
+		t.Fatalf("sign-in status = %d: %s", loginRecorder.Code, loginRecorder.Body.String())
+	}
+	browser := responseSessionCookie(loginRecorder)
+	if browser == nil {
+		t.Fatal("sign-in did not issue a session cookie")
+	}
+
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	return handler, browser, capture
+}
+
+func responseSessionCookie(recorder *httptest.ResponseRecorder) *http.Cookie {
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == sessionCookieName(false) {
+			return cookie
+		}
+	}
+	return nil
+}
+
+func auditEventCount(capture *auditCaptureLogger, event string, success bool) int {
+	recorded, err := capture.Query(audit.QueryFilter{})
+	if err != nil {
+		return -1
+	}
+	count := 0
+	for _, entry := range recorded {
+		if entry.EventType == event && entry.Success == success {
+			count++
+		}
+	}
+	return count
+}
+
+func basicAuthRequest(path, password string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.SetBasicAuth("admin", password)
+	return req
+}
+
+// A script or dashboard widget polling with Basic credentials used to issue a
+// session on every call, so a handful of calls evicted the owner's browser and
+// each call wrote a login audit event.
+func TestBasicAuthenticatedAPIClientLeavesBrowserSessionsAlone(t *testing.T) {
+	handler, browser, capture := newBasicSessionFixture(t)
+
+	for call := 0; call < maxSessionsPerUser+5; call++ {
+		recorder := httptest.NewRecorder()
+		handler(recorder, basicAuthRequest("/api/backups/pbs", "correct-password"))
+
+		if recorder.Code != http.StatusNoContent {
+			t.Fatalf("call %d status = %d: %s", call, recorder.Code, recorder.Body.String())
+		}
+		if got := recorder.Header().Get("X-Auth-Method"); got != "basic" {
+			t.Fatalf("call %d X-Auth-Method = %q, want basic", call, got)
+		}
+		if got := recorder.Result().Cookies(); len(got) != 0 {
+			t.Fatalf("call %d set cookies %v, want none", call, got)
+		}
+	}
+
+	sessionsMu.RLock()
+	tracked := len(allSessions["admin"])
+	sessionsMu.RUnlock()
+	if tracked != 1 {
+		t.Fatalf("tracked sessions = %d, want only the browser's", tracked)
+	}
+	// The browser's sign-in, and the first Basic call from this address.
+	if got := auditEventCount(capture, "login", true); got != 2 {
+		t.Fatalf("successful login audit events = %d, want 2", got)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/backups/pbs", nil)
+	req.AddCookie(&http.Cookie{Name: browser.Name, Value: browser.Value})
+	recorder := httptest.NewRecorder()
+	handler(recorder, req)
+	if recorder.Code != http.StatusNoContent || recorder.Header().Get("X-Auth-Method") != "session" {
+		t.Fatalf("browser after polling: status %d, method %q", recorder.Code, recorder.Header().Get("X-Auth-Method"))
+	}
+
+	// A valid session still wins over Basic credentials on the same request.
+	both := basicAuthRequest("/api/backups/pbs", "correct-password")
+	both.AddCookie(&http.Cookie{Name: browser.Name, Value: browser.Value})
+	recorder = httptest.NewRecorder()
+	handler(recorder, both)
+	if recorder.Header().Get("X-Auth-Method") != "session" || !GetSessionStore().ValidateSession(browser.Value) {
+		t.Fatalf("valid session with Basic: method %q", recorder.Header().Get("X-Auth-Method"))
+	}
+}
+
+// A browser behind a proxy that forwards Basic credentials, such as an Authentik
+// proxy provider (issue 396), signs in through Pulse's web client, and its later
+// requests must ride a session rather than a password check each.
+func TestBasicAuthenticatedWebClientGetsASession(t *testing.T) {
+	handler, _, capture := newBasicSessionFixture(t)
+	before := auditEventCount(capture, "login", true)
+
+	req := basicAuthRequest("/api/state/summary", "correct-password")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	recorder := httptest.NewRecorder()
+	handler(recorder, req)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	session := responseSessionCookie(recorder)
+	if session == nil || !GetSessionStore().ValidateSession(session.Value) {
+		t.Fatalf("web client got no usable session: %v", recorder.Result().Cookies())
+	}
+	if got := auditEventCount(capture, "login", true); got != before+1 {
+		t.Fatalf("successful login audit events = %d, want %d", got, before+1)
+	}
+}
+
+// A cookie that reaches the Basic branch was rejected: handlers read the username
+// from the cookie, so its session must not outlive the request and misattribute it.
+func TestBasicAuthenticatedRequestRetiresARejectedSessionCookie(t *testing.T) {
+	handler, _, _ := newBasicSessionFixture(t)
+	create := map[string]func(token string){
+		"expired": func(token string) {
+			GetSessionStore().CreateSession(token, -time.Hour, "fixture", "127.0.0.1", "alice")
+			TrackUserSession("alice", token)
+		},
+		"recovery outside its binding": func(token string) {
+			GetSessionStore().CreateRecoverySession(token, time.Hour, "fixture", "127.0.0.1", "alice")
+			TrackUserSession("alice", token)
+		},
+	}
+	for name, seed := range create {
+		t.Run(name, func(t *testing.T) {
+			token := "synthetic-rejected-" + strings.ReplaceAll(name, " ", "-")
+			seed(token)
+			if GetSessionUsername(token) != "alice" {
+				t.Fatal("fixture session does not resolve to its owner")
+			}
+
+			req := basicAuthRequest("/api/backups/pbs", "correct-password")
+			req.AddCookie(&http.Cookie{Name: sessionCookieName(false), Value: token})
+			recorder := httptest.NewRecorder()
+			handler(recorder, req)
+
+			if recorder.Code != http.StatusNoContent || recorder.Header().Get("X-Auth-Method") != "basic" {
+				t.Fatalf("status %d, method %q", recorder.Code, recorder.Header().Get("X-Auth-Method"))
+			}
+			if got := recorder.Result().Cookies(); len(got) != 0 {
+				t.Fatalf("set cookies %v, want none", got)
+			}
+			if got := GetSessionUsername(token); got != "" {
+				t.Fatalf("rejected cookie still resolves to %q", got)
+			}
+		})
+	}
+}
+
+// The sign-in flow stays the session issuer, including replacing whatever session
+// the browser arrived with.
+func TestLoginStillRotatesTheSessionItReplaces(t *testing.T) {
+	_, browser, capture := newBasicSessionFixture(t)
+	hash, err := auth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	login := httptest.NewRequest(http.MethodPost, "/api/login",
+		strings.NewReader(`{"username":"admin","password":"correct-password"}`))
+	login.AddCookie(&http.Cookie{Name: browser.Name, Value: browser.Value})
+	authLimiter.Reset(GetClientIP(login))
+	recorder := httptest.NewRecorder()
+	(&Router{config: &config.Config{AuthUser: "admin", AuthPass: hash}}).handleLogin(recorder, login)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("sign-in status = %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if GetSessionStore().ValidateSession(browser.Value) {
+		t.Fatal("sign-in kept the session it should have replaced")
+	}
+	replacement := responseSessionCookie(recorder)
+	if replacement == nil || replacement.Value == browser.Value || !GetSessionStore().ValidateSession(replacement.Value) {
+		t.Fatalf("sign-in issued no usable new session: %v", recorder.Result().Cookies())
+	}
+	if got := auditEventCount(capture, "login", true); got != 2 {
+		t.Fatalf("successful login audit events = %d, want one per sign-in", got)
+	}
+}
+
+func TestBasicAuthenticatedFailureStaysAuditedAndIssuesNoSession(t *testing.T) {
+	handler, _, capture := newBasicSessionFixture(t)
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		recorder := httptest.NewRecorder()
+		handler(recorder, basicAuthRequest("/api/backups/pbs", "wrong-password"))
+
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong password status = %d: %s", recorder.Code, recorder.Body.String())
+		}
+		if got := recorder.Result().Cookies(); len(got) != 0 {
+			t.Fatalf("set cookies %v, want none", got)
+		}
+		if got := auditEventCount(capture, "login", false); got != attempt {
+			t.Fatalf("failed login audit events = %d, want %d", got, attempt)
+		}
+	}
+}
+
+func TestBasicAuthAuditTrackerRecordsNewAccessOnly(t *testing.T) {
+	tracker := newBasicAuthAuditTracker()
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+
+	if !tracker.due("default", "admin", "192.0.2.1", now) {
+		t.Fatal("first call from an address must be audited")
+	}
+	if tracker.due("default", "admin", "192.0.2.1", now.Add(time.Minute)) {
+		t.Fatal("repeat call from the same address must not be audited")
+	}
+	if !tracker.due("default", "admin", "192.0.2.2", now.Add(time.Minute)) {
+		t.Fatal("a new address must be audited")
+	}
+	if !tracker.due("other", "admin", "192.0.2.1", now.Add(time.Minute)) {
+		t.Fatal("another organization must be audited")
+	}
+	if !tracker.due("default", "admin", "192.0.2.1", now.Add(basicAuthAuditInterval)) {
+		t.Fatal("continued access must be audited after the interval")
+	}
+
+	full := newBasicAuthAuditTracker()
+	for i := 0; i < maxBasicAuthAudits; i++ {
+		full.due("default", "admin", fmt.Sprint("address-", i), now)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if !full.due("default", "admin", "unremembered", now.Add(time.Minute)) {
+			t.Fatal("an unremembered address must stay audited at capacity")
+		}
+	}
+	if len(full.last) != maxBasicAuthAudits {
+		t.Fatalf("remembered %d addresses, want the %d cap", len(full.last), maxBasicAuthAudits)
+	}
+	if !full.due("default", "admin", "after-expiry", now.Add(basicAuthAuditInterval)) {
+		t.Fatal("a new address must be audited after entries expire")
+	}
+	if full.due("default", "admin", "after-expiry", now.Add(basicAuthAuditInterval+time.Minute)) {
+		t.Fatal("an expired slot must be reusable")
 	}
 }
