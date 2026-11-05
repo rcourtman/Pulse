@@ -445,6 +445,27 @@ not interchangeable. Keep any boot-pool name already supplied in a report,
 but do not rename `freenas-boot` or `boot-pool`, recreate the connection or
 install an agent just to make the readings appear.
 
+**A populated chart is not proof of correct disk attribution.** Similar curves
+can be real during shared work, such as a scrub. If TrueNAS Reporting shows
+different curves for those same disks while Pulse repeats one, use TrueNAS's
+individual-disk graphs for that comparison. Do not add the copied curves
+together to reconstruct a missing host total. A working disk chart does not
+verify the host chart or another disk's History.
+
+When describing an existing comparison, distinguish **Overview's host total**
+from **Storage's individual disk**, and a current reading from **History**.
+Keep the selected appliance and disk consistent across views. Compare the
+read and write legend, units and time range, including the timezone if shown.
+If you already have screenshots, keep their chart title, selection, legend
+and axes visible. Use consistent aliases for private names and disk identifiers
+so different disks remain distinguishable. Keep serial numbers and full
+inventories private.
+
+Existing observations are enough to report this mismatch. Do not start a scrub,
+backup or disk workload, enable Debug logging, delete History or change the
+connection to produce a comparison. No additional graph response or browser
+network capture is needed just to describe it.
+
 #### Memory usage and ARC cache
 
 In **TrueNAS → Overview**, the memory bar's percentage alone does not explain
