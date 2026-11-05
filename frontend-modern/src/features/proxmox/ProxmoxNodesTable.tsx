@@ -201,6 +201,18 @@ const getHostSortValue = (
   }
 };
 
+const repeatedLabels = (labels: string[]): Set<string> => {
+  const seen = new Set<string>();
+  const repeated = new Set<string>();
+  for (const label of labels) {
+    const key = label.toLowerCase();
+    if (!key) continue;
+    if (seen.has(key)) repeated.add(key);
+    seen.add(key);
+  }
+  return repeated;
+};
+
 export const ProxmoxNodesTable: Component<{
   nodes: Resource[];
   guests: Resource[];
@@ -229,6 +241,13 @@ export const ProxmoxNodesTable: Component<{
       ? getProxmoxHostTableLayoutModeForContainer(measuredWidth)
       : getWorkloadTableLayoutMode(breakpoint.width());
   });
+  // Two installations can each have a pmx1, and a narrow row has no Cluster column.
+  const sharedNativeNames = createMemo(() =>
+    repeatedLabels(props.nodes.map((node) => asTrimmedString(node.proxmox?.nodeName) ?? '')),
+  );
+  const sharedNames = createMemo(() =>
+    repeatedLabels(props.nodes.map((node) => asTrimmedString(node.name) || node.id)),
+  );
   const singleClusterName = createMemo(() => {
     const labels = new Set(props.nodes.map((node) => getResourceClusterLabel(node)));
     if (labels.size !== 1) return null;
@@ -402,10 +421,15 @@ export const ProxmoxNodesTable: Component<{
               {(node) => {
                 const name = () => asTrimmedString(node.name) || node.id;
                 const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';
-                const visibleNodeLabel = () =>
-                  layoutMode() === 'narrow' && nativeNodeName().length > 0
-                    ? nativeNodeName()
+                const visibleNodeLabel = () => {
+                  if (layoutMode() !== 'narrow') return name();
+                  const native = nativeNodeName();
+                  if (native && !sharedNativeNames().has(native.toLowerCase())) return native;
+                  const connection = asTrimmedString(node.proxmox?.instance);
+                  return sharedNames().has(name().toLowerCase()) && connection
+                    ? `${name()} (${connection})`
                     : name();
+                };
                 const drawerNode = createMemo(() => nodeFromResource(node));
                 const detailRowId = () => `proxmox-host-drawer-${node.id}`;
                 const isSelected = () => selectedNodeId() === node.id;

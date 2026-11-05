@@ -1249,3 +1249,30 @@ describe('canonicalizeRealtimeResource platformScopes', () => {
     expect(result.platformScopes).toEqual(['docker', 'proxmox-pve']);
   });
 });
+
+describe('clusterName (via nodeFromResource)', () => {
+  it('leaves a standalone node without a cluster, whatever the node is called', () => {
+    const node = nodeFromResource(
+      agentNode({
+        name: 'Hetzner pmx1',
+        displayName: 'Hetzner pmx1',
+        proxmox: { nodeName: 'pmx1', instance: 'Hetzner pmx1' } as unknown as Resource['proxmox'],
+      }),
+    );
+    expect(node?.clusterName).toBeUndefined();
+  });
+
+  it('keeps the cluster a member node reports', () => {
+    const node = nodeFromResource(
+      agentNode({
+        proxmox: {
+          nodeName: 'pmx1',
+          instance: 'Home',
+          clusterName: 'Home',
+          isClusterMember: true,
+        } as unknown as Resource['proxmox'],
+      }),
+    );
+    expect(node?.clusterName).toBe('Home');
+  });
+});

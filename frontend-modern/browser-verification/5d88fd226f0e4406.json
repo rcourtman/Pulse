@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "cf9354876e0482a8edc8386557e17e06a99c3aec",
+  "verified_at": "2026-11-05T18:26:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "9ac015c7a187e45bdc9ed48e7b9ccf60b5e897b0c8ff055f45c6b9f9265579e9",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "a5d34ef524c84a75396f7598cfc2dd7da51d19878f9c9afc541cc6ddff31cda6"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1500,
+      "height": 950
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Two real Proxmox VE 9.2 installs, a cluster and a standalone host, each with a node named pmx1",
+    "Phone width before the change: both node rows read pmx1",
+    "Phone width after the change: the rows read Hetzner pmx1 and pmx1, each 32px high, with no page overflow",
+    "Standalone node details before the change: the summary read Cluster Hetzner pmx1",
+    "Standalone node details after the change: no cluster fact, and the table says Standalone",
+    "Cluster member details: the summary still reads Cluster Home"
+  ],
+  "interactions": [
+    "Expand the standalone node's details and read its summary line",
+    "Expand the cluster member's details and read its summary line",
+    "Resize to phone width and read each node row and its height"
+  ]
+}
