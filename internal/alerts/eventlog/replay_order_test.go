@@ -233,73 +233,139 @@ func TestWalkByIDReleasesEachPageReaderBeforeVisiting(t *testing.T) {
 }
 
 func TestWalkByIDStopsAtCapturedHighWaterDuringConcurrentAppends(t *testing.T) {
-	store, err := Open(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(store.Close)
-	importDisordered(t, store, 2*maxQueryLimit+5, TypeAcknowledged)
-	boundary, err := store.ReplayBoundary()
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, tc := range []struct {
+		name      string
+		throughID int64
+	}{
+		{name: "captured"},
+		{name: "lower_through_id", throughID: maxQueryLimit + 3},
+		{name: "higher_through_id", throughID: 3 * maxQueryLimit},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := Open(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(store.Close)
+			importDisordered(t, store, 2*maxQueryLimit+5, TypeAcknowledged)
+			// A commit before WalkByID starts belongs to its captured boundary,
+			// even if another caller sampled an older ReplayBoundary before it.
+			if err := store.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "before-walk"}); err != nil {
+				t.Fatal(err)
+			}
+			boundary, err := store.ReplayBoundary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantLastID := boundary.LastID
+			if tc.throughID > 0 && tc.throughID < wantLastID {
+				wantLastID = tc.throughID
+			}
 
-	stop := make(chan struct{})
-	var writers sync.WaitGroup
-	var background int
-	writers.Add(1)
-	go func() {
-		defer writers.Done()
-		for {
+			startWriter := make(chan struct{})
+			firstAppend := make(chan error, 1)
+			stop := make(chan struct{})
+			var writers sync.WaitGroup
+			var stopOnce sync.Once
+			stopWriter := func() {
+				stopOnce.Do(func() { close(stop) })
+				writers.Wait()
+			}
+			t.Cleanup(stopWriter)
+			var background int
+			writers.Add(1)
+			go func() {
+				defer writers.Done()
+				select {
+				case <-startWriter:
+				case <-stop:
+					return
+				}
+				for {
+					select {
+					case <-stop:
+						return
+					default:
+					}
+					err := store.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "concurrent"})
+					if background == 0 {
+						firstAppend <- err
+					}
+					if err != nil {
+						t.Errorf("concurrent append: %v", err)
+						return
+					}
+					background++
+				}
+			}()
+
+			inVisitor := 0
+			visited := 0
+			done := make(chan error, 1)
+			go func() {
+				done <- store.WalkByID(Filter{ThroughID: tc.throughID}, func(event Event) error {
+					if event.ID > wantLastID {
+						return fmt.Errorf("visited id %d beyond the walk's upper bound %d", event.ID, wantLastID)
+					}
+					if event.ID != int64(visited+1) {
+						return fmt.Errorf("visited id %d, want contiguous id %d", event.ID, visited+1)
+					}
+					visited++
+					if visited == 1 {
+						// The first callback proves WalkByID has captured its boundary.
+						// Starting the writer earlier races the test's separate sample.
+						close(startWriter)
+						select {
+						case err := <-firstAppend:
+							if err != nil {
+								return err
+							}
+						case <-stop:
+							return errors.New("writer stopped before its first append")
+						}
+						// This row is still in the buffered first page when the
+						// background commit finishes; it must not move the boundary.
+					}
+					// Every visit also commits a matching event, so a walk that
+					// follows new appends cannot merely win a scheduling race.
+					if err := store.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "visitor"}); err != nil {
+						return err
+					}
+					inVisitor++
+					return nil
+				})
+			}()
+			var walkErr error
 			select {
-			case <-stop:
-				return
-			default:
+			case walkErr = <-done:
+			case <-time.After(60 * time.Second):
+				walkErr = errors.New("walk did not finish while appends continued")
 			}
-			if err := store.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "concurrent"}); err != nil {
-				t.Errorf("concurrent append: %v", err)
-				return
+			stopWriter()
+			if walkErr != nil {
+				t.Fatal(walkErr)
 			}
-			background++
-		}
-	}()
+			if visited != int(wantLastID) {
+				t.Fatalf("visited %d events, want the complete inclusive prefix through %d", visited, wantLastID)
+			}
+			if background == 0 || inVisitor != visited {
+				t.Fatalf("missing concurrent commits: background=%d visitor=%d visits=%d", background, inVisitor, visited)
+			}
 
-	inVisitor := 0
-	visited := 0
-	done := make(chan error, 1)
-	go func() {
-		done <- store.WalkByID(Filter{}, func(event Event) error {
-			if event.ID > boundary.LastID {
-				return fmt.Errorf("visited id %d beyond the high-water mark %d captured at start", event.ID, boundary.LastID)
+			// Resume after the actual bounded prefix: include both any rows
+			// deferred by ThroughID and every append from the first walk.
+			tail := walkIDs(t, store, Filter{AfterID: wantLastID})
+			wantTail := int(boundary.LastID-wantLastID) + inVisitor + background
+			if len(tail) != wantTail {
+				t.Fatalf("next pass visited %d events, want %d deferred and appended events", len(tail), wantTail)
 			}
-			visited++
-			// Every visit commits another matching event. Without a captured
-			// high-water mark this walk would never finish.
-			inVisitor++
-			return store.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "visitor"})
+			for i, event := range tail {
+				if want := wantLastID + int64(i) + 1; event.ID != want {
+					t.Fatalf("next pass position %d visited id %d, want contiguous id %d", i, event.ID, want)
+				}
+			}
 		})
-	}()
-	var walkErr error
-	select {
-	case walkErr = <-done:
-	case <-time.After(60 * time.Second):
-		walkErr = errors.New("walk did not finish while appends continued")
 	}
-	close(stop)
-	writers.Wait()
-	if walkErr != nil {
-		t.Fatal(walkErr)
-	}
-	if visited != int(boundary.LastID) {
-		t.Fatalf("visited %d events, want exactly the %d committed before the walk", visited, boundary.LastID)
-	}
-
-	// The next pass from the stored cursor picks up everything appended since.
-	tail := walkIDs(t, store, Filter{AfterID: boundary.LastID})
-	if want := inVisitor + background; len(tail) != want {
-		t.Fatalf("next pass visited %d events, want the %d appended during the first", len(tail), want)
-	}
-	requireAscendingIDs(t, tail)
 }
 
 func TestWalkByIDReturnsVisitorErrorAndStops(t *testing.T) {
