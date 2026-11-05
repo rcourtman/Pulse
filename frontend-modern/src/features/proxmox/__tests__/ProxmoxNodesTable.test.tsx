@@ -349,6 +349,67 @@ describe('ProxmoxNodesTable', () => {
     expect(screen.getByTitle('West Production A · Proxmox node pve1')).toBeInTheDocument();
   });
 
+  it('tells same-named nodes apart on a narrow row', () => {
+    const narrowLabels = (nodes: Parameters<typeof makeNodeResource>[0][]) => {
+      const { unmount } = render(() => (
+        <ProxmoxNodesTable
+          nodes={nodes.map((node) => makeNodeResource(node))}
+          guests={[]}
+          layoutWidth={() => 340}
+          emptyIcon={<span />}
+          emptyTitle="No Proxmox VE nodes"
+          emptyDescription="No nodes"
+        />
+      ));
+      const labels = nodes
+        .map((node) => node?.id ?? '')
+        .map(
+          (id) =>
+            screen.getByRole('button', {
+              name: new RegExp(`^Show guests on ${nodes.find((n) => n?.id === id)?.name}`),
+            }).textContent,
+        );
+      unmount();
+      return labels;
+    };
+
+    // A unique native name stays the short label.
+    expect(
+      narrowLabels([
+        {
+          id: 'a',
+          name: 'West Production A',
+          displayName: 'West Production A',
+          proxmox: { instance: 'west', nodeName: 'pve1' },
+        },
+        {
+          id: 'b',
+          name: 'East Production A',
+          displayName: 'East Production A',
+          proxmox: { instance: 'east', nodeName: 'pve2' },
+        },
+      ]),
+    ).toEqual(['pve1', 'pve2']);
+
+    // A shared native name gives way to the name Pulse knows each node by.
+    expect(
+      narrowLabels([
+        {
+          id: 'home',
+          name: 'pmx1',
+          displayName: 'pmx1',
+          proxmox: { clusterName: 'Home', instance: 'Home', nodeName: 'pmx1' },
+        },
+        {
+          id: 'hetzner',
+          name: 'Hetzner pmx1',
+          displayName: 'Hetzner pmx1',
+          proxmox: { instance: 'Hetzner pmx1', nodeName: 'pmx1' },
+        },
+      ]),
+    ).toEqual(['pmx1', 'Hetzner pmx1']);
+  });
+
   it('passes alert-backed temperature thresholds into the node temperature gauge', () => {
     render(() => (
       <ProxmoxNodesTable

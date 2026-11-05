@@ -33,7 +33,6 @@ import {
 } from '@/utils/agentResources';
 import {
   getPreferredInfrastructureDisplayName,
-  getPreferredResourceClusterName,
   getPreferredResourceHostname,
   resolveGuestUrlWithIdentity,
 } from '@/utils/resourceIdentity';
@@ -1488,7 +1487,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     lastSeen: toISOTime(undefined, resource.lastSeen),
     connectionHealth: asString(proxmox?.connectionHealth) || resource.status || 'unknown',
     isClusterMember: asBoolean(proxmox?.isClusterMember),
-    clusterName: getPreferredResourceClusterName(resource),
+    clusterName: getExplicitResourceClusterName(resource),
     linkedAgentId,
   };
 };
