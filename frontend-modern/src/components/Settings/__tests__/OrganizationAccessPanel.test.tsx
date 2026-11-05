@@ -173,16 +173,17 @@ describe('OrganizationAccessPanel', () => {
     const orgDeferred = deferred<typeof baseOrg>();
     orgGetMock.mockReturnValueOnce(orgDeferred.promise);
 
-    const { container } = renderPanel();
+    renderPanel();
 
-    expect(container.querySelector('.animate-pulse')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Invite Member' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Loading organization access')).toBeInTheDocument();
+    expect(screen.queryByText('Invite Member', { selector: 'h4' })).not.toBeInTheDocument();
 
     orgDeferred.resolve(baseOrg);
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Invite Member' })).toBeInTheDocument();
-    });
+    const heading = await screen.findByText('Invite Member', { selector: 'h4' });
+    expect(heading).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Invite Member' })).toBe(heading);
+    expect(screen.queryByLabelText('Loading organization access')).not.toBeInTheDocument();
   });
 
   it.each(['role', 'remove'] as const)(
