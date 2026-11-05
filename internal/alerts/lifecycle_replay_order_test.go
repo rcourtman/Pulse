@@ -71,7 +71,7 @@ func TestReplayLifecycleEventsFollowsDurableIDsAndKeepsStoredFacts(t *testing.T)
 		snapshotEvent(t, eventlog.TypeEscalated, brief, base.Add(2*time.Minute)),
 		// A lifecycle label without a snapshot, and an unreadable snapshot.
 		{Type: eventlog.TypeResolved, AlertID: "no-snapshot", OccurredAt: base},
-		{Type: eventlog.TypeHistoryImported, AlertID: "corrupt", OccurredAt: base, Snapshot: json.RawMessage(`{"id":`)},
+		{Type: eventlog.TypeHistoryImported, AlertID: "corrupt", OccurredAt: base, Snapshot: json.RawMessage(`"not an alert object"`)},
 	}); err != nil {
 		t.Fatal(err)
 	}

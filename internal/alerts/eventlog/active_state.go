@@ -9,6 +9,50 @@ import (
 
 const activeStateInitializedKey = "active_state_initialized"
 const activeStateRevisionKey = "active_state_revision"
+const activeCheckpointCompleteKey = "active_state_checkpoint_complete"
+const activeCheckpointProtocolKey = "active_state_checkpoint_protocol"
+
+// A lifecycle row proves that occurrence, not a complete imported baseline.
+// Migrate the legacy authority declaration once, before any new replay writes.
+func (s *Store) ensureActiveCheckpointProtocol() error {
+	var version string
+	err := s.db.QueryRow(`SELECT value FROM alert_store_meta WHERE key = ?`, activeCheckpointProtocolKey).Scan(&version)
+	if err == nil {
+		if version != "1" {
+			return fmt.Errorf("unsupported active checkpoint protocol %q", version)
+		}
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO alert_store_meta(key,value)
+		SELECT ?, '1' WHERE EXISTS (SELECT 1 FROM alert_store_meta WHERE key = ? AND value = '1')
+		AND NOT EXISTS (SELECT 1 FROM alert_store_meta WHERE key = ?)`, activeCheckpointCompleteKey, activeStateInitializedKey, activeCheckpointProtocolKey); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO alert_store_meta(key,value) VALUES (?, '1')`, activeCheckpointProtocolKey); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ActiveCheckpointComplete requires a full checkpoint, independently of event
+// retention. Legacy authority declarations keep their original contract.
+func (s *Store) ActiveCheckpointComplete() (bool, error) {
+	if s == nil {
+		return false, fmt.Errorf("event log is not enabled")
+	}
+	var complete int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM alert_store_meta WHERE key = ? AND value = '1')
+		OR (NOT EXISTS(SELECT 1 FROM alert_store_meta WHERE key = ?) AND EXISTS(SELECT 1 FROM alert_store_meta WHERE key = ? AND value = '1'))`, activeCheckpointCompleteKey, activeCheckpointProtocolKey, activeStateInitializedKey).Scan(&complete)
+	return complete != 0, err
+}
 
 // ActiveStateSnapshot is one current alert occurrence projected alongside the
 // append-only lifecycle log. The projection is deliberately independent of
@@ -163,6 +207,9 @@ func replaceActiveStateTx(tx *sql.Tx, snapshots []ActiveStateSnapshot) error {
 	if err := markActiveStateInitialized(tx); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`INSERT INTO alert_store_meta(key,value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value='1'`, activeCheckpointCompleteKey); err != nil {
+		return err
+	}
 	return incrementActiveStateRevision(tx)
 }
 
@@ -230,7 +277,9 @@ func incrementActiveStateRevision(tx *sql.Tx) error {
 }
 
 type activeSnapshotEnvelope struct {
-	StartTime time.Time `json:"startTime"`
+	StartTime    time.Time  `json:"startTime"`
+	LastSeen     time.Time  `json:"lastSeen"`
+	LastNotified *time.Time `json:"lastNotified"`
 }
 
 func activeSnapshotFromEvent(event Event) (ActiveStateSnapshot, error) {
@@ -240,9 +289,12 @@ func activeSnapshotFromEvent(event Event) (ActiveStateSnapshot, error) {
 	if len(event.Snapshot) == 0 || !json.Valid(event.Snapshot) {
 		return ActiveStateSnapshot{}, fmt.Errorf("active lifecycle event %q has an invalid snapshot", event.AlertID)
 	}
-	var envelope activeSnapshotEnvelope
+	var envelope *activeSnapshotEnvelope
 	if err := json.Unmarshal(event.Snapshot, &envelope); err != nil {
 		return ActiveStateSnapshot{}, fmt.Errorf("decode active lifecycle snapshot %q: %w", event.AlertID, err)
+	}
+	if envelope == nil {
+		return ActiveStateSnapshot{}, fmt.Errorf("active lifecycle snapshot %q must be an object", event.AlertID)
 	}
 	return ActiveStateSnapshot{
 		AlertID:             event.AlertID,
@@ -264,9 +316,20 @@ func projectLifecycleActiveState(tx *sql.Tx, event Event) error {
 		return nil
 	}
 	switch event.Type {
-	case TypeFired, TypeRefired, TypeAcknowledged, TypeUnacknowledged, TypeSnoozed, TypeUnsnoozed, TypeEscalated:
+	case TypeActiveMoved:
 		snapshot, err := activeSnapshotFromEvent(event)
 		if err != nil {
+			return err
+		}
+		previous := event.Details["previousAlertId"]
+		if previous == "" || previous == event.AlertID {
+			return fmt.Errorf("invalid active identity move")
+		}
+		startedAt := ""
+		if !snapshot.OccurrenceStartedAt.IsZero() {
+			startedAt = snapshot.OccurrenceStartedAt.UTC().Format(time.RFC3339Nano)
+		}
+		if _, err := tx.Exec(`DELETE FROM alert_active_state WHERE alert_id = ? AND occurrence_started_at = ?`, previous, startedAt); err != nil {
 			return err
 		}
 		if err := upsertActiveSnapshot(tx, snapshot); err != nil {
@@ -276,7 +339,92 @@ func projectLifecycleActiveState(tx *sql.Tx, event Event) error {
 			return err
 		}
 		return incrementActiveStateRevision(tx)
-	case TypeResolved:
+	case TypeFired, TypeRefired, TypeAcknowledged, TypeUnacknowledged, TypeSnoozed, TypeUnsnoozed, TypeEscalated:
+		snapshot, err := activeSnapshotFromEvent(event)
+		if err != nil {
+			return err
+		}
+		if event.Type != TypeFired && event.Type != TypeRefired {
+			var existing string
+			startedAt := ""
+			if !snapshot.OccurrenceStartedAt.IsZero() {
+				startedAt = snapshot.OccurrenceStartedAt.UTC().Format(time.RFC3339Nano)
+			}
+			err := tx.QueryRow(`SELECT snapshot FROM alert_active_state WHERE alert_id = ? AND occurrence_started_at = ?`, snapshot.AlertID, startedAt).Scan(&existing)
+			if err == sql.ErrNoRows {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			// User controls mutate their own fields. A delayed control snapshot
+			// cannot roll back newer detector observations or recreate a resolved
+			// occurrence after its terminal fact committed.
+			var current, incoming map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(existing), &current); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(snapshot.Snapshot, &incoming); err != nil {
+				return err
+			}
+			if current == nil || incoming == nil {
+				return fmt.Errorf("active control snapshot must be an object")
+			}
+			var priorObservation, nextObservation activeSnapshotEnvelope
+			if err := json.Unmarshal([]byte(existing), &priorObservation); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(snapshot.Snapshot, &nextObservation); err != nil {
+				return err
+			}
+			if nextObservation.LastSeen.After(priorObservation.LastSeen) {
+				// A control snapshot can carry a genuinely newer observation. Keep
+				// that observation while preserving unrelated control state.
+				observed := make(map[string]json.RawMessage, len(incoming))
+				for key, value := range incoming {
+					observed[key] = value
+				}
+				for _, key := range []string{"acknowledged", "ackTime", "ackUser", "operationalRecord", "latestTransition", "transitions", "lastEscalation", "escalationTimes"} {
+					if value, ok := current[key]; ok {
+						observed[key] = value
+					} else {
+						delete(observed, key)
+					}
+				}
+				if priorObservation.LastNotified != nil && (nextObservation.LastNotified == nil || priorObservation.LastNotified.After(*nextObservation.LastNotified)) {
+					observed["lastNotified"] = current["lastNotified"]
+				}
+				current = observed
+			}
+			keys := []string{}
+			switch event.Type {
+			case TypeAcknowledged, TypeUnacknowledged:
+				keys = []string{"acknowledged", "ackTime", "ackUser"}
+			case TypeSnoozed, TypeUnsnoozed:
+				keys = []string{"operationalRecord", "latestTransition", "transitions"}
+			case TypeEscalated:
+				keys = []string{"lastEscalation", "escalationTimes"}
+			}
+			for _, key := range keys {
+				if value, ok := incoming[key]; ok {
+					current[key] = value
+				} else {
+					delete(current, key)
+				}
+			}
+			snapshot.Snapshot, err = json.Marshal(current)
+			if err != nil {
+				return err
+			}
+		}
+		if err := upsertActiveSnapshot(tx, snapshot); err != nil {
+			return err
+		}
+		if err := markActiveStateInitialized(tx); err != nil {
+			return err
+		}
+		return incrementActiveStateRevision(tx)
+	case TypeResolved, TypeActiveRetired:
 		snapshot, err := activeSnapshotFromEvent(event)
 		if err != nil {
 			return err

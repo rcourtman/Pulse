@@ -5,6 +5,7 @@ import (
 	"time"
 
 	alertconfig "github.com/rcourtman/pulse-go-rewrite/internal/alerts/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -66,7 +67,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 					Str("alertID", id).
 					Dur("age", now.Sub(*alert.AckTime)).
 					Msg("Cleaning up old acknowledged alert (TTL)")
-				m.removeActiveAlertNoLock(id)
+				m.retireActiveAlertNoLock(id, "acknowledged-retention")
 			}
 		}
 	}
@@ -83,7 +84,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 					Str("alertID", id).
 					Dur("age", now.Sub(alert.StartTime)).
 					Msg("Cleaning up old unacknowledged alert (TTL)")
-				m.removeActiveAlertNoLock(id)
+				m.retireActiveAlertNoLock(id, "inactive-retention")
 			}
 		}
 	}
@@ -92,7 +93,7 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		if alert.Acknowledged && alert.AckTime != nil &&
 			now.Sub(*alert.AckTime) > maxAge &&
 			lastSeenTooOld(alert, maxAge) {
-			m.removeActiveAlertNoLock(id)
+			m.retireActiveAlertNoLock(id, "acknowledged-retention")
 		}
 	}
 
@@ -329,7 +330,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 
 		node := alert.Node
 		if node == "" || !existingNodes[node] {
-			m.removeActiveAlertNoLock(alertID)
+			m.retireActiveAlertNoLock(alertID, "resource-removed")
 			removedCount++
 			log.Debug().Str("alertID", alertID).Str("node", node).Msg("removed alert for non-existent node")
 		}
@@ -347,9 +348,14 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 func (m *Manager) ClearActiveAlerts() {
 	m.mu.Lock()
 	if len(m.activeAlerts) == 0 && len(m.intentPending) == 0 && len(m.smartCounterSnapshots) == 0 && len(m.hostDiskTempPendingContexts) == 0 && len(m.hostNativeSensorPendingCtx) == 0 {
+		m.resetActiveRecoveryState()
 		m.mu.Unlock()
 		return
 	}
+	for id := range m.activeAlerts {
+		m.retireActiveAlertNoLock(id, "state-reset")
+	}
+	m.resetActiveRecoveryState()
 	m.activeAlerts = make(map[string]*Alert)
 	m.restoredBackupNotifications = nil
 	m.activeAlertAlias = make(map[string]string)
@@ -380,4 +386,14 @@ func (m *Manager) ClearActiveAlerts() {
 	log.Info().Msg("cleared all active and pending alerts")
 
 	m.saveActiveAlertsAsync("clear active alerts")
+}
+
+// Retirement records removal by housekeeping/reset without inventing detector
+// recovery or dispatching resolution callbacks. The caller holds m.mu.
+func (m *Manager) retireActiveAlertNoLock(id, reason string) {
+	alert, ok := m.getActiveAlertNoLock(id)
+	m.removeActiveAlertNoLock(id)
+	if ok && alert != nil {
+		m.recordAlertEvent(eventlog.TypeActiveRetired, alert, id, reason, "Active alert retired without detector recovery.", nil)
+	}
 }

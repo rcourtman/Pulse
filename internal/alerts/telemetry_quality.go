@@ -112,7 +112,7 @@ func (m *Manager) AlertQualityTelemetrySnapshot(now time.Time) AlertQualitySnaps
 	if intent.Revision > 0 || intent.UpdatedAt != nil || len(intent.Defaults) > 0 || len(intent.ResourceTypes) > 0 || len(intent.Resources) > 0 {
 		snapshot.IntentPolicyTenants = 1
 	}
-	if m.eventLogStore() != nil && m.eventHistoryAuthoritative.Load() {
+	if m.eventLogStore().Healthy() && m.eventHistoryAuthoritative.Load() {
 		snapshot.EventHistoryHealthyTenants = 1
 	}
 	if m.eventLogStore() != nil && m.activeStateAuthoritative.Load() {

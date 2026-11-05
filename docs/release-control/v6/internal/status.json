@@ -5294,6 +5294,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/event-history-durability-repair-2026-11-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
           "kind": "file"
         },

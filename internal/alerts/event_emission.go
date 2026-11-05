@@ -3,8 +3,8 @@ package alerts
 // Alert event emission: the manager records lifecycle transitions and
 // notification decisions — including suppressions, with reasons — into the
 // append-only event log (docs/ALERT_ENGINE_EVOLUTION.md, Phase 0). Emission
-// is additive and non-blocking: a nil or failed store records nothing and
-// changes no lifecycle behavior.
+// is fail-open: bounded journal admission precedes SQLite writes, and storage
+// failures never suppress lifecycle or delivery callbacks.
 
 import (
 	"encoding/json"
@@ -70,8 +70,10 @@ func (m *Manager) AlertEvents(filter eventlog.Filter) ([]eventlog.Event, error) 
 	if store == nil {
 		return nil, nil
 	}
-	if err := store.Flush(); err != nil {
-		return nil, err
+	if err := store.Settle(); err != nil {
+		// Retained rows remain readable during an unsettled write or journal
+		// fault. Durability status and response headers expose the missing tail.
+		log.Warn().Err(err).Msg("reading retained alert events while history settlement is deferred")
 	}
 	return store.Query(filter)
 }
@@ -210,10 +212,14 @@ func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reas
 		return
 	}
 	if eventCarriesAlertSnapshot(eventType) {
-		if eventType == eventlog.TypeResolved {
+		if eventType == eventlog.TypeResolved || eventType == eventlog.TypeActiveRetired {
 			m.removeActiveRecoveryAlert(alert, event.AlertID)
 		} else if alert != nil {
-			m.setActiveRecoveryAlert(alert, event.AlertID)
+			if eventType == eventlog.TypeFired || eventType == eventlog.TypeRefired {
+				m.setActiveRecoveryAlert(alert, event.AlertID)
+			} else {
+				m.setActiveRecoveryAlert(alert, event.AlertID, eventType)
+			}
 		}
 	}
 
@@ -221,7 +227,6 @@ func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reas
 	if store := m.eventLogStore(); store != nil {
 		if eventCarriesAlertSnapshot(eventType) {
 			if err := store.AppendDurable(event); err != nil {
-				m.eventHistoryAuthoritative.Store(false)
 				m.activeStateFailureEpoch.Add(1)
 				if mirrorErr := m.checkpointActiveRecoveryAfterDurableFailure(err); mirrorErr != nil {
 					log.Error().Err(mirrorErr).
@@ -241,7 +246,7 @@ func (m *Manager) recordAlertEvent(eventType string, alert *Alert, alertID, reas
 		}
 	}
 
-	if eventCarriesAlertSnapshot(eventType) && alert != nil {
+	if eventCarriesAlertSnapshot(eventType) && eventType != eventlog.TypeActiveRetired && eventType != eventlog.TypeActiveMoved && alert != nil {
 		lifecycleEvent := LifecycleEvent{
 			Type:       eventType,
 			OccurredAt: event.OccurredAt,
@@ -283,6 +288,8 @@ func cloneStringMap(input map[string]string) map[string]string {
 // decisions stay lean.
 func eventCarriesAlertSnapshot(eventType string) bool {
 	switch eventType {
+	case eventlog.TypeActiveRetired, eventlog.TypeActiveMoved:
+		return true
 	case eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeResolved,
 		eventlog.TypeAcknowledged, eventlog.TypeUnacknowledged, eventlog.TypeSnoozed,
 		eventlog.TypeUnsnoozed, eventlog.TypeEscalated:
@@ -290,4 +297,26 @@ func eventCarriesAlertSnapshot(eventType string) bool {
 	default:
 		return false
 	}
+}
+
+// EventHistoryDurability reports retained obligations and explicit missing-fact
+// evidence independently of migration authority and delivery callbacks.
+func (m *Manager) EventHistoryDurability() eventlog.DurabilityStatus {
+	if m == nil {
+		return (*eventlog.Store)(nil).DurabilityStatus()
+	}
+	status := m.eventLogStore().DurabilityStatus()
+	if !m.eventHistoryAuthoritative.Load() && status.Error == "" {
+		status.Error = "legacy alert history migration is incomplete"
+	}
+	return status
+}
+
+// AcknowledgeEventHistoryGaps accepts missing facts at an exact observed gap
+// revision. Pending retained events are never discarded by this operation.
+func (m *Manager) AcknowledgeEventHistoryGaps(revision uint64, reason string) error {
+	if m == nil {
+		return (*eventlog.Store)(nil).AcknowledgeGaps(revision, reason)
+	}
+	return m.eventLogStore().AcknowledgeGaps(revision, reason)
 }

@@ -455,6 +455,47 @@ describe('account view', function() {
     expect((document.getElementById('workspace-management-primary-form-acct_1') as HTMLFormElement).action).toContain('/api/accounts/acct_1/tenants/ws_1/handoff?target_path=%2Fsettings%2Finfrastructure%3Fadd%3Dlinux-host');
   });
 
+  it('points the next-step button at the output the workspace is missing', function() {
+    document.body.innerHTML = createWorkspaceManagementDOM('acct_1');
+    var base = createAccount().workspaces[0];
+    var primaryAction = function(alertRoutes: number, reportSchedules: number): string {
+      renderWorkspaceManagement(
+        createAccount({
+          workspaces: [{
+            ...base,
+            id: 'ws_1',
+            state: 'active',
+            health_status: 'healthy',
+            agent_count: 1,
+            alert_route_count: alertRoutes,
+            report_schedule_count: reportSchedules,
+          }],
+        }),
+        createEntry({ selectedWorkspaceID: 'ws_1' }),
+        '/api/accounts',
+      );
+      return (document.getElementById('workspace-management-primary-form-acct_1') as HTMLFormElement).action;
+    };
+
+    expect(primaryAction(0, 1)).toContain('target_path=' + encodeURIComponent('/alerts/notifications'));
+    expect(primaryAction(0, 0)).toContain('target_path=' + encodeURIComponent('/alerts/notifications'));
+    expect(primaryAction(1, 0)).toContain('target_path=' + encodeURIComponent('/settings/support/reporting'));
+  });
+
+  it('tells a provider inviting to the account that everyone there sees every client', function() {
+    var invite = function(clientLanguage: string): string {
+      document.body.innerHTML =
+        '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true" data-client-language="' +
+        clientLanguage +
+        '"><div id="access-stats-acct_1"></div><div id="access-list-acct_1"></div><div id="access-task-copy-acct_1"></div></div>';
+      renderAccessSection('acct_1', createEntry({ activeAccessJob: 'invite' }));
+      return document.getElementById('access-task-copy-acct_1')?.textContent || '';
+    };
+
+    expect(invite('true')).toContain('Everyone here can see every client.');
+    expect(invite('false')).not.toContain('every client');
+  });
+
   it('keeps workspace action labels for non-MSP hosted accounts', function() {
     document.body.innerHTML = createWorkspaceManagementDOM('acct_1');
 

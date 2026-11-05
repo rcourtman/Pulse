@@ -32,6 +32,9 @@ func TestAlertSnoozeIsDurableAndEnforcedByDeliveryPolicy(t *testing.T) {
 	m.mu.Lock()
 	m.setActiveAlertNoLock(alert.ID, alert)
 	m.mu.Unlock()
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatal(err)
+	}
 
 	deliveries := 0
 	m.SetAlertCallback(func(*Alert) { deliveries++ })

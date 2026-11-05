@@ -6,17 +6,20 @@
 // "why didn't I get notified?" is answerable from durable data instead of
 // being reconstructed from logs (docs/ALERT_ENGINE_EVOLUTION.md, Phase 0).
 //
-// Delivery-diagnostic appends are additive to the live alert manager: they do
-// not block evaluation and may be dropped under sustained pressure. Lifecycle
-// events use AppendDurable because alert history is projected from this store.
+// Every accepted event is journalled independently of events.db before the
+// SQLite write. Storage failures never stop alert evaluation; unsettled events
+// and explicit gaps remain visible until recovered or acknowledged.
 package eventlog
 
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,9 +36,13 @@ const (
 	// reactivation that resumed a recently resolved occurrence. Both come
 	// from the reducer core's explicit activation events, so persisted
 	// restores are never misreported as firings.
-	TypeFired                  = "fired"
-	TypeRefired                = "refired"
-	TypeResolved               = "resolved"
+	TypeFired    = "fired"
+	TypeRefired  = "refired"
+	TypeResolved = "resolved"
+	// TypeActiveMoved preserves an occurrence across an explicit identity re-key.
+	TypeActiveMoved = "active_moved"
+	// TypeActiveRetired records housekeeping/reset removal, never detector recovery.
+	TypeActiveRetired          = "active_retired"
 	TypeAcknowledged           = "acknowledged"
 	TypeUnacknowledged         = "unacknowledged"
 	TypeSnoozed                = "snoozed"
@@ -61,17 +68,19 @@ const (
 
 // Event is one immutable alert event.
 type Event struct {
-	ID           int64             `json:"id"`
-	OccurredAt   time.Time         `json:"occurredAt"`
-	Type         string            `json:"type"`
-	AlertID      string            `json:"alertId"`
-	ResourceID   string            `json:"resourceId,omitempty"`
-	ResourceName string            `json:"resourceName,omitempty"`
-	AlertType    string            `json:"alertType,omitempty"`
-	Level        string            `json:"level,omitempty"`
-	Reason       string            `json:"reason,omitempty"`
-	Message      string            `json:"message,omitempty"`
-	Details      map[string]string `json:"details,omitempty"`
+	ID              int64 `json:"id"`
+	journalID       string
+	journalSequence int64
+	OccurredAt      time.Time         `json:"occurredAt"`
+	Type            string            `json:"type"`
+	AlertID         string            `json:"alertId"`
+	ResourceID      string            `json:"resourceId,omitempty"`
+	ResourceName    string            `json:"resourceName,omitempty"`
+	AlertType       string            `json:"alertType,omitempty"`
+	Level           string            `json:"level,omitempty"`
+	Reason          string            `json:"reason,omitempty"`
+	Message         string            `json:"message,omitempty"`
+	Details         map[string]string `json:"details,omitempty"`
 	// Snapshot is the full alert state at the moment of the event, recorded
 	// for lifecycle transitions (fired, refired, resolved, acknowledged,
 	// unacknowledged, snoozed, unsnoozed) so alert history can be projected
@@ -91,6 +100,9 @@ type Filter struct {
 	// id they have fully applied so a walk visits only the un-projected tail
 	// instead of the whole log.
 	AfterID int64
+	// JournalID and AfterJournalSequence replay facts admitted after a recovery checkpoint.
+	JournalID            string
+	AfterJournalSequence int64
 	// ThroughID fixes an inclusive replay boundary while new events arrive.
 	ThroughID int64
 }
@@ -117,22 +129,26 @@ const (
 // Store is the SQLite-backed event log. A nil *Store is valid: Append and
 // Close are no-ops and Query returns no events.
 type Store struct {
-	db        *sql.DB
-	readDB    *sql.DB
-	dbPath    string
-	events    chan Event
-	stop      chan struct{}
-	wg        sync.WaitGroup
-	closeOnce sync.Once
-	dropped   atomic.Int64
-	appended  atomic.Int64
-	written   atomic.Int64
-	failed    atomic.Int64
-	failureMu sync.RWMutex
-	lastError error
-	retention time.Duration
-	episodeMu sync.Mutex
-	episodes  map[string]string
+	targetReady bool
+	db          *sql.DB
+	readDB      *sql.DB
+	dbPath      string
+	wake        chan struct{}
+	journalMu   sync.Mutex
+	applyMu     sync.Mutex
+	journal     *recoveryJournal
+	closed      bool
+	stop        chan struct{}
+	wg          sync.WaitGroup
+	closeOnce   sync.Once
+	operations  sync.WaitGroup
+	dropped     atomic.Int64
+	appended    atomic.Int64
+	written     atomic.Int64
+	failed      atomic.Int64
+	retention   time.Duration
+	episodeMu   sync.Mutex
+	episodes    map[string]string
 }
 
 func sqliteDSN(path string) string {
@@ -191,14 +207,15 @@ func openDSN(dbPath, dsn string) (*Store, error) {
 		db:        db,
 		readDB:    db,
 		dbPath:    dbPath,
-		events:    make(chan Event, appendBufferSize),
+		wake:      make(chan struct{}, 1),
 		stop:      make(chan struct{}),
 		retention: defaultRetention,
 		episodes:  make(map[string]string),
 	}
-	if err := s.initSchema(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("init alert event log schema: %w", err)
+	schemaErr := s.initSchema()
+	s.targetReady = schemaErr == nil
+	if schemaErr != nil {
+		log.Error().Err(schemaErr).Msg("alert event database unavailable; retaining independent journal owner")
 	}
 	if dbPath != ":memory:" {
 		reader, err := sql.Open("sqlite", sqliteDSN(dbPath)+"&mode=ro&_pragma=query_only(1)")
@@ -208,14 +225,23 @@ func openDSN(dbPath, dsn string) (*Store, error) {
 		}
 		reader.SetMaxOpenConns(2)
 		reader.SetMaxIdleConns(2)
-		if err := reader.Ping(); err != nil {
-			reader.Close()
-			db.Close()
-			return nil, fmt.Errorf("initialize alert event reader: %w", err)
-		}
+		// Keep the read pool even while target bootstrap is unavailable. Its lazy
+		// connection can recover without replacing a pool under active readers.
 		s.readDB = reader
 	}
 
+	if err := s.openJournal(filepath.Dir(dbPath)); err != nil {
+		if s.readDB != db {
+			s.readDB.Close()
+		}
+		db.Close()
+		return nil, fmt.Errorf("open event history recovery journal: %w", err)
+	}
+	// Recover before consumers bootstrap their projections. A database write
+	// failure leaves the journal installed and visible, never discards it.
+	if err := s.recoverThrough(0); err != nil {
+		s.recordWriteFailure(err)
+	}
 	s.wg.Add(1)
 	go s.writeLoop()
 
@@ -237,7 +263,9 @@ func (s *Store) initSchema() error {
 			reason TEXT NOT NULL DEFAULT '',
 			message TEXT NOT NULL DEFAULT '',
 			details TEXT NOT NULL DEFAULT '',
-			snapshot TEXT NOT NULL DEFAULT ''
+			snapshot TEXT NOT NULL DEFAULT '',
+ journal_id TEXT NOT NULL DEFAULT '',
+ journal_sequence INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE INDEX IF NOT EXISTS idx_alert_events_alert ON alert_events(alert_id, occurred_at);
 		CREATE INDEX IF NOT EXISTS idx_alert_events_time ON alert_events(occurred_at);
@@ -256,7 +284,13 @@ func (s *Store) initSchema() error {
 	if err != nil {
 		return err
 	}
-	return s.ensureSnapshotColumn()
+	if err := s.ensureSnapshotColumn(); err != nil {
+		return err
+	}
+	if err := s.ensureJournalColumns(); err != nil {
+		return err
+	}
+	return s.ensureActiveCheckpointProtocol()
 }
 
 // ensureSnapshotColumn upgrades a pre-snapshot database in place. ALTER TABLE
@@ -287,77 +321,117 @@ func (s *Store) ensureSnapshotColumn() error {
 	return err
 }
 
-// Append records one event without blocking: when the buffer is full the
-// event is dropped and counted, never stalling alert evaluation. Safe to
-// call on a nil store and while holding manager locks.
+// Append retains one diagnostic event independently of SQLite, then wakes the
+// background committer. Admission performs bounded journal I/O; it never waits
+// for the SQLite writer. Unchanged decision episodes are coalesced. Capacity or
+// I/O refusal records a gap rather than claiming successful retention.
 func (s *Store) Append(event Event) {
 	if s == nil {
 		return
 	}
+	if err := s.beginOperation(1, true); err != nil {
+		s.dropped.Add(1)
+		log.Error().Err(err).Msg("closed event log rejected diagnostic event")
+		return
+	}
+	defer s.operations.Done()
 	if event.OccurredAt.IsZero() {
 		event.OccurredAt = time.Now()
 	}
+	s.episodeMu.Lock()
+	defer s.episodeMu.Unlock()
+	signature := ""
 	if event.AlertID != "" && coalescesUnchangedDeliveryEpisode(event.Type) {
-		signature := deliveryEpisodeSignature(event)
-		s.episodeMu.Lock()
+		signature = deliveryEpisodeSignature(event)
 		if s.episodes[event.AlertID] == signature {
-			s.episodeMu.Unlock()
 			return
 		}
-		select {
-		case s.events <- event:
-			s.episodes[event.AlertID] = signature
-			s.appended.Add(1)
-		default:
-			s.dropped.Add(1)
-		}
-		s.episodeMu.Unlock()
+	}
+	if _, err := s.journalEvents([]Event{event}, true); err != nil {
+		s.dropped.Add(1)
+		log.Error().Err(err).Msg("alert event not retained; history gap recorded")
 		return
 	}
-	s.clearDeliveryEpisode(event.AlertID)
-	select {
-	case s.events <- event:
-		s.appended.Add(1)
-	default:
-		s.dropped.Add(1)
+	if signature != "" {
+		s.episodes[event.AlertID] = signature
+	} else {
+		delete(s.episodes, event.AlertID)
 	}
+	s.appended.Add(1)
+	s.signalWriter()
 }
 
-// AppendDurable commits one lifecycle event before returning. Lifecycle
-// volume is low, and this explicit durability boundary prevents alert history
-// from silently losing state when the diagnostic append buffer is saturated.
+// AppendDurable journals and commits one lifecycle fact. An error means the
+// SQLite commit is unsettled (the journal can still retain it for recovery),
+// or admission itself failed and is reported as a persistent gap.
 func (s *Store) AppendDurable(event Event) error {
 	if s == nil {
 		return fmt.Errorf("event log is not enabled")
 	}
-	if event.OccurredAt.IsZero() {
-		event.OccurredAt = time.Now()
+	if err := s.beginOperation(1, true); err != nil {
+		return err
 	}
-	s.clearDeliveryEpisode(event.AlertID)
-	if err := s.insertBatch([]Event{event}); err != nil {
+	defer s.operations.Done()
+	s.episodeMu.Lock()
+	delete(s.episodes, event.AlertID)
+	seq, err := s.journalEvents([]Event{event}, false)
+	s.episodeMu.Unlock()
+	if err != nil {
+		return err
+	}
+	if err := s.recoverThrough(seq); err != nil {
 		s.recordWriteFailure(err)
 		return err
 	}
 	return nil
 }
 
-// ImportEvents writes events synchronously, bypassing the droppable append
-// buffer. It exists for the one-time legacy-history migration, where losing
-// an entry to a full buffer would silently lose user data.
+// ImportEvents uses the same ordered recovery boundary as lifecycle writes.
+// Legacy history's own immutable identity also deduplicates caller retries.
 func (s *Store) ImportEvents(events []Event) error {
 	if s == nil {
 		return fmt.Errorf("event log is not enabled")
 	}
-	for i := range events {
-		if events[i].OccurredAt.IsZero() {
-			events[i].OccurredAt = time.Now()
-		}
+	if len(events) == 0 {
+		return nil
 	}
-	return s.insertBatch(events)
+	if err := s.beginOperation(len(events), false); err != nil {
+		return err
+	}
+	defer s.operations.Done()
+	for start := 0; start < len(events); {
+		end := min(start+128, len(events))
+		var seq int64
+		for {
+			var err error
+			seq, err = s.journalEvents(events[start:end], false, true)
+			if err == nil {
+				break
+			}
+			if errors.Is(err, errJournalCapacity) && end-start > 1 {
+				end = start + (end-start)/2
+				continue
+			}
+			return err // the caller retains the migration source until full success
+		}
+		if err := s.recoverThrough(seq); err != nil {
+			s.recordWriteFailure(err)
+			return err
+		}
+		start = end
+	}
+	return nil
 }
 
-// Dropped reports how many events were discarded because the append buffer
-// was full. A non-zero value means the log is incomplete for that window.
+func (s *Store) signalWriter() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+// Dropped counts diagnostic admissions refused by the bounded journal in this
+// process. Durable gap metadata, rather than this counter, defines completeness.
 func (s *Store) Dropped() int64 {
 	if s == nil {
 		return 0
@@ -367,48 +441,26 @@ func (s *Store) Dropped() int64 {
 
 func (s *Store) writeLoop() {
 	defer s.wg.Done()
-	pruneTicker := time.NewTicker(pruneInterval)
-	defer pruneTicker.Stop()
+	retry := time.NewTicker(time.Second)
+	defer retry.Stop()
+	prune := time.NewTicker(pruneInterval)
+	defer prune.Stop()
 	s.pruneOld()
-
 	for {
 		select {
-		case event := <-s.events:
-			batch := []Event{event}
-		drain:
-			for len(batch) < 128 {
-				select {
-				case next := <-s.events:
-					batch = append(batch, next)
-				default:
-					break drain
-				}
-			}
-			if err := s.insertBatch(batch); err != nil {
-				s.forgetFailedDeliveryEpisodes(batch)
-				s.recordWriteFailure(err)
-				log.Error().Err(err).Int("events", len(batch)).Msg("alert event log write failed")
-				continue
-			}
-			s.written.Add(int64(len(batch)))
-		case <-pruneTicker.C:
+		case <-s.wake:
+		case <-retry.C:
+		case <-prune.C:
 			s.pruneOld()
+			continue
 		case <-s.stop:
-			// Final drain so a clean shutdown does not lose buffered events.
-			for {
-				select {
-				case event := <-s.events:
-					if err := s.insertBatch([]Event{event}); err != nil {
-						s.forgetFailedDeliveryEpisodes([]Event{event})
-						s.recordWriteFailure(err)
-						log.Error().Err(err).Msg("alert event log final drain write failed")
-						continue
-					}
-					s.written.Add(1)
-				default:
-					return
-				}
+			if err := s.recoverThrough(0); err != nil {
+				s.recordWriteFailure(err)
 			}
+			return
+		}
+		if err := s.recoverThrough(0); err != nil {
+			s.recordWriteFailure(err)
 		}
 	}
 }
@@ -417,34 +469,36 @@ func (s *Store) recordWriteFailure(err error) {
 	if s == nil || err == nil {
 		return
 	}
-	s.failureMu.Lock()
-	s.lastError = err
-	s.failureMu.Unlock()
 	s.failed.Add(1)
 }
 
-func (s *Store) writeError() error {
-	if s == nil || s.failed.Load() == 0 {
-		return nil
-	}
-	s.failureMu.RLock()
-	err := s.lastError
-	s.failureMu.RUnlock()
-	if err == nil {
-		return fmt.Errorf("alert event log write failed")
-	}
-	return fmt.Errorf("alert event log write failed: %w", err)
-}
+func (s *Store) insertBatch(batch []Event) error { return s.insertJournalBatch(batch, "") }
 
-func (s *Store) insertBatch(batch []Event) error {
+func (s *Store) insertJournalBatch(batch []Event, cursor string) error {
+	if cursor != "" {
+		split := strings.LastIndex(cursor, ":")
+		if split < 0 {
+			return fmt.Errorf("invalid journal cursor")
+		}
+		sequence, err := strconv.ParseInt(cursor[split+1:], 10, 64)
+		if err != nil {
+			return err
+		}
+		for i := range batch {
+			if batch[i].journalID == "" {
+				batch[i].journalID = cursor[:split]
+				batch[i].journalSequence = sequence
+			}
+		}
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	stmt, err := tx.Prepare(`
 		INSERT INTO alert_events
-			(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot, journal_id, journal_sequence)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		_ = tx.Rollback()
@@ -453,8 +507,8 @@ func (s *Store) insertBatch(batch []Event) error {
 	defer stmt.Close()
 	decisionStmt, err := tx.Prepare(`
 		INSERT INTO alert_events
-			(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot)
-		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+			(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot, journal_id, journal_sequence)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		WHERE NOT EXISTS (
 			SELECT 1 FROM alert_events AS latest
 			WHERE latest.id = (
@@ -486,8 +540,8 @@ func (s *Store) insertBatch(batch []Event) error {
 		}
 		importStmt, err = tx.Prepare(`
 			INSERT INTO alert_events
-				(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot)
-			SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+				(occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot, journal_id, journal_sequence)
+			SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 			WHERE NOT EXISTS (
 				SELECT 1 FROM alert_events
 				WHERE event_type = ? AND alert_id = ? AND occurred_at = ? AND snapshot = ?
@@ -522,6 +576,8 @@ func (s *Store) insertBatch(batch []Event) error {
 			event.Message,
 			details,
 			snapshot,
+			event.journalID,
+			event.journalSequence,
 		}
 		var insertErr error
 		if event.Type == TypeHistoryImported {
@@ -552,6 +608,12 @@ func (s *Store) insertBatch(batch []Event) error {
 			return insertErr
 		}
 		if err := projectLifecycleActiveState(tx, event); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	if cursor != "" {
+		if _, err := tx.Exec(`INSERT INTO alert_store_meta(key,value) VALUES ('history_journal_cursor',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, cursor); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -592,32 +654,6 @@ func deliveryEpisodeSignature(event Event) string {
 		Snapshot:     string(event.Snapshot),
 	})
 	return string(encoded)
-}
-
-func (s *Store) clearDeliveryEpisode(alertID string) {
-	if s == nil || alertID == "" {
-		return
-	}
-	s.episodeMu.Lock()
-	delete(s.episodes, alertID)
-	s.episodeMu.Unlock()
-}
-
-func (s *Store) forgetFailedDeliveryEpisodes(events []Event) {
-	if s == nil {
-		return
-	}
-	s.episodeMu.Lock()
-	defer s.episodeMu.Unlock()
-	for _, event := range events {
-		if !coalescesUnchangedDeliveryEpisode(event.Type) {
-			continue
-		}
-		signature := deliveryEpisodeSignature(event)
-		if s.episodes[event.AlertID] == signature {
-			delete(s.episodes, event.AlertID)
-		}
-	}
 }
 
 func (s *Store) pruneOld() {
@@ -753,28 +789,32 @@ func (s *Store) ReplayBoundary() (ReplayBoundary, error) {
 	return boundary, err
 }
 
-// Flush blocks until every diagnostic event appended before the call has been
-// written. It reports failed writes and timeouts rather than claiming a lost
-// batch was successfully flushed.
+// Settle commits the captured accepted prefix without certifying completeness.
+// Reads can use the retained rows while reporting missing facts separately.
+func (s *Store) Settle() error {
+	if s == nil {
+		return nil
+	}
+	if err := s.beginOperation(0, false); err != nil {
+		return err
+	}
+	defer s.operations.Done()
+	s.journalMu.Lock()
+	target := s.journal.next
+	s.journalMu.Unlock()
+	return s.recoverThrough(target)
+}
+
+// Flush settles the captured prefix and certifies that no unacknowledged gap
+// remains. Reopen and unrelated writes never clear missing-fact evidence.
 func (s *Store) Flush() error {
 	if s == nil {
 		return nil
 	}
-	target := s.appended.Load()
-	deadline := time.Now().Add(5 * time.Second)
-	for s.written.Load() < target && time.Now().Before(deadline) {
-		if err := s.writeError(); err != nil {
-			return err
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if err := s.writeError(); err != nil {
+	if err := s.Settle(); err != nil {
 		return err
 	}
-	if written := s.written.Load(); written < target {
-		return fmt.Errorf("alert event log flush timed out: wrote %d of %d events", written, target)
-	}
-	return nil
+	return s.gapError()
 }
 
 // deliveryEpisodeQuerySource projects legacy poll-frequency duplicates as the
@@ -968,7 +1008,7 @@ func (s *Store) WalkByID(filter Filter, visit func(Event) error) error {
 		if err != nil {
 			return fmt.Errorf("walk alert event log by id: %w", err)
 		}
-		page, scanErr := scanEventRows(rows, pageLimit)
+		page, scanErr := scanEventRows(rows, pageLimit, filter.JournalID != "")
 		closeErr := rows.Close()
 		if scanErr != nil {
 			return scanErr
@@ -1000,7 +1040,11 @@ func idPageQuery(filter Filter, afterID, throughID int64, pageLimit int) (string
 	bounded.AfterID = afterID
 	bounded.ThroughID = throughID
 	where, args := eventFilterWhere(bounded)
-	query := "SELECT id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot FROM alert_events NOT INDEXED"
+	columns := "id, occurred_at, event_type, alert_id, resource_id, resource_name, alert_type, level, reason, message, details, snapshot"
+	if filter.JournalID != "" {
+		columns += ", COALESCE(journal_id,''), COALESCE(journal_sequence,0)"
+	}
+	query := "SELECT " + columns + " FROM alert_events NOT INDEXED"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -1036,6 +1080,10 @@ func historyPageQuery(filter Filter, cursorOccurredAt string, cursorID int64, pa
 func eventFilterWhere(filter Filter) ([]string, []any) {
 	where := make([]string, 0, 4)
 	args := make([]any, 0, 6)
+	if filter.JournalID != "" {
+		where = append(where, "journal_id = ? AND journal_sequence > ?")
+		args = append(args, filter.JournalID, filter.AfterJournalSequence)
+	}
 	if trimmed := strings.TrimSpace(filter.AlertID); trimmed != "" {
 		where = append(where, "alert_id = ?")
 		args = append(args, trimmed)
@@ -1073,7 +1121,7 @@ func eventFilterWhere(filter Filter) ([]string, []any) {
 	return where, args
 }
 
-func scanEventRows(rows *sql.Rows, capacity int) ([]Event, error) {
+func scanEventRows(rows *sql.Rows, capacity int, withOrigin ...bool) ([]Event, error) {
 	if capacity < 0 || capacity > maxQueryLimit {
 		capacity = maxQueryLimit
 	}
@@ -1081,7 +1129,7 @@ func scanEventRows(rows *sql.Rows, capacity int) ([]Event, error) {
 	for rows.Next() {
 		var event Event
 		var occurredAt, details, snapshot string
-		if err := rows.Scan(
+		targets := []any{
 			&event.ID,
 			&occurredAt,
 			&event.Type,
@@ -1094,7 +1142,11 @@ func scanEventRows(rows *sql.Rows, capacity int) ([]Event, error) {
 			&event.Message,
 			&details,
 			&snapshot,
-		); err != nil {
+		}
+		if len(withOrigin) > 0 && withOrigin[0] {
+			targets = append(targets, &event.journalID, &event.journalSequence)
+		}
+		if err := rows.Scan(targets...); err != nil {
 			return nil, fmt.Errorf("scan alert event: %w", err)
 		}
 		if snapshot != "" {
@@ -1120,8 +1172,13 @@ func (s *Store) Close() {
 		return
 	}
 	s.closeOnce.Do(func() {
+		s.journalMu.Lock()
+		s.closed = true
+		s.journalMu.Unlock()
 		close(s.stop)
 		s.wg.Wait()
+		s.operations.Wait()
+		s.closeJournal()
 		if s.readDB != s.db {
 			if err := s.readDB.Close(); err != nil {
 				log.Error().Err(err).Msg("alert event reader close failed")
@@ -1131,4 +1188,38 @@ func (s *Store) Close() {
 			log.Error().Err(err).Msg("alert event log close failed")
 		}
 	})
+}
+
+// ensureJournalColumns upgrades the durable origin used to reconcile active
+// recovery checkpoints. Origin is retained with the event through compaction.
+func (s *Store) ensureJournalColumns() error {
+	rows, err := s.db.Query(`PRAGMA table_info(alert_events)`)
+	if err != nil {
+		return err
+	}
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, typ string
+		var dflt any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, column := range []struct{ name, definition string }{{"journal_id", "TEXT NOT NULL DEFAULT ''"}, {"journal_sequence", "INTEGER NOT NULL DEFAULT 0"}} {
+		if !columns[column.name] {
+			if _, err := s.db.Exec("ALTER TABLE alert_events ADD COLUMN " + column.name + " " + column.definition); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_alert_events_journal ON alert_events(journal_id,journal_sequence)`)
+	return err
 }
