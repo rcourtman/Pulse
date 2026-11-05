@@ -99,6 +99,33 @@ func TestAgentInstalledProfileSetupUsesSupportedInstallerProfiles(t *testing.T) 
 	}
 }
 
+func TestAgentInstalledProfileLifecycleRequiresProtectedInstallParent(t *testing.T) {
+	dir := t.TempDir()
+	parent := filepath.Join(dir, "bin")
+	if err := os.Mkdir(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(parent, "pulse-agent")
+	if err := os.WriteFile(binary, []byte("fixture executable\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	functions := ""
+	for _, name := range []string{"portable_path_uid", "portable_path_mode", "trusted_lifecycle_regular_file"} {
+		functions += extractInstallShellFunction(t, name) + "\n"
+	}
+	for _, mode := range []os.FileMode{0o777, 0o775, 0o755} {
+		t.Run(mode.String(), func(t *testing.T) {
+			if err := os.Chmod(parent, mode); err != nil {
+				t.Fatal(err)
+			}
+			_, err := nativeProfileCommand(t, nil, "bash", "-c", "set -euo pipefail\n"+functions+`trusted_lifecycle_regular_file "$1" 755`, "native-install-parent", binary)
+			if (err == nil) != (mode == 0o755) {
+				t.Fatalf("installer parent mode %s: %v", mode, err)
+			}
+		})
+	}
+}
+
 func TestAgentInstalledProfileQuiescenceUsesUnitType(t *testing.T) {
 	for _, tc := range []struct {
 		unit, active, pid string
@@ -378,7 +405,8 @@ func nativeProfileWorkflowSteps(t *testing.T) []nativeAgentFrontendStep {
 
 func TestNativeInstalledProfileWorkflow(t *testing.T) {
 	steps := nativeProfileWorkflowSteps(t)
-	var build, execute, retain *nativeAgentFrontendStep
+	var build, prepare, execute, retain *nativeAgentFrontendStep
+	prepareIndex, executeIndex := -1, -1
 	for i := range steps {
 		step := &steps[i]
 		if step.ContinueOnError {
@@ -387,14 +415,21 @@ func TestNativeInstalledProfileWorkflow(t *testing.T) {
 		switch step.Name {
 		case "Build exact-source installed profile inputs":
 			build = step
+		case "Prepare protected native installation directory":
+			prepare, prepareIndex = step, i
 		case "Exercise signed TLS installed profile forward and reverse":
-			execute = step
+			execute, executeIndex = step, i
 		case "Retain native installed profile observations":
 			retain = step
 		}
 	}
-	if build == nil || execute == nil || retain == nil || build.If != "" || execute.If != "" || execute.WorkingDirectory != "scripts/installtests" || retain.If != "always()" {
+	if build == nil || prepare == nil || execute == nil || retain == nil || build.If != "" || prepare.If != "" || execute.If != "" || prepareIndex >= executeIndex || execute.WorkingDirectory != "scripts/installtests" || retain.If != "always()" {
 		t.Fatal("native profile execution/retention cannot be skipped")
+	}
+	for _, required := range []string{`test "$RUNNER_ENVIRONMENT" = github-hosted`, "test -d /usr/local/bin && test ! -L /usr/local/bin", "native-install-parent before", "sudo install -d -o root -g root -m 0755 /usr/local/bin", "native-install-parent after", `test "$(stat -c '%u:%g:%a' /usr/local/bin)" = 0:0:755`} {
+		if !strings.Contains(prepare.Run, required) {
+			t.Fatalf("native install parent preparation omitted %s", required)
+		}
 	}
 	for _, required := range []string{`test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"`, "git diff --exit-code HEAD", "for version in 1 2", "-buildvcs=true", "./cmd/pulse-agent", "./cmd/pulse-agent-helper", "./cmd/pulse-agent-runner", "go test -c", "./scripts/installtests", "$RUNNER_TEMP/pulse-native-profile-inputs."} {
 		if !strings.Contains(build.Run, required) {
