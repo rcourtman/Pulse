@@ -7505,8 +7505,10 @@ source: recorded PVE 8 and PVE 9 guest `rrddata` responses (fixtures under
 columns exist only in node RRD, so `GuestRRDPoint` parses only the recorded
 guest columns (`time`, `maxmem`), `PVEClientInterface` exposes no guest RRD
 lookups, and the VM memory resolver must not consult the guest RRD endpoint
-(#1634). Monitoring must try guest-agent `/proc/meminfo` via the shared
-Proxmox client, and only then linked host-agent memory. Guest-agent fallback
+(#1634). Monitoring must use a current linked host-agent sample before
+guest-agent `/proc/meminfo`, so that file-read stays off the guest's shared
+agent channel (#2439), and try the read before a last-known agent sample.
+Guest-agent fallback
 caches must key on `(instance, node, vmid)` instead of raw `node/vmid`, so
 separate Proxmox instances cannot leak stale or foreign memory evidence into
 each other just because they reuse the same node name and VMID.

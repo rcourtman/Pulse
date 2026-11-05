@@ -317,6 +317,44 @@ func (m *Monitor) resolveGuestStatusMemory(
 		}
 	}
 
+	selectLinkedAgentMemory := func(requireCurrent bool) {
+		agentHost, ok := vmIDToHostAgent[guestID]
+		if !ok ||
+			!agentHost.Memory.HasKnownUsage() ||
+			agentHost.Memory.Total <= 0 ||
+			(memTotal != 0 && uint64(agentHost.Memory.Total) > memTotal) ||
+			(requireCurrent && agentHost.Memory.Observation.State == "last-known") {
+			return
+		}
+		memTotal = uint64(agentHost.Memory.Total)
+		memAvailable = uint64(agentHost.Memory.Total - agentHost.Memory.Used)
+		hasMemAvailable = true
+		selectedUsed = uint64(agentHost.Memory.Used)
+		hasSelectedUsed = true
+		memorySource = "agent"
+		if guestRaw != nil {
+			guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+			guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
+		}
+		log.Debug().
+			Str("vm", guestName).
+			Str("node", node).
+			Int("vmid", vmid).
+			Uint64("total", memTotal).
+			Uint64("available", memAvailable).
+			Int64("agentTotal", agentHost.Memory.Total).
+			Int64("agentUsed", agentHost.Memory.Used).
+			Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+	}
+
+	// A current linked agent is as cache-aware as /proc/meminfo. Taking it first
+	// keeps this file-read off the guest's shared agent channel, where a command
+	// in flight when a freeze starts can break the thaw (#2439). A last-known
+	// sample ranks below the read.
+	if !hasMemAvailable {
+		selectLinkedAgentMemory(true)
+	}
+
 	triedGuestAgentMemAvailable := false
 	guestReadDeferred := false
 	if !hasMemAvailable && shouldPreferGuestAgentMemAvailable(status, memTotal) {
@@ -363,31 +401,7 @@ func (m *Monitor) resolveGuestStatusMemory(
 	}
 
 	if !hasMemAvailable && !hasSelectedUsed {
-		if agentHost, ok := vmIDToHostAgent[guestID]; ok &&
-			agentHost.Memory.HasKnownUsage() &&
-			agentHost.Memory.Total > 0 &&
-			(memTotal == 0 || uint64(agentHost.Memory.Total) <= memTotal) {
-			memTotal = uint64(agentHost.Memory.Total)
-			agentAvailable := uint64(agentHost.Memory.Total - agentHost.Memory.Used)
-			memAvailable = agentAvailable
-			hasMemAvailable = true
-			selectedUsed = uint64(agentHost.Memory.Used)
-			hasSelectedUsed = true
-			memorySource = "agent"
-			if guestRaw != nil {
-				guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
-				guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
-			}
-			log.Debug().
-				Str("vm", guestName).
-				Str("node", node).
-				Int("vmid", vmid).
-				Uint64("total", memTotal).
-				Uint64("available", memAvailable).
-				Int64("agentTotal", agentHost.Memory.Total).
-				Int64("agentUsed", agentHost.Memory.Used).
-				Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
-		}
+		selectLinkedAgentMemory(false)
 	}
 
 	memUsed := uint64(0)
