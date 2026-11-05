@@ -12,9 +12,11 @@ import (
 // requestIsPulseWebClient reports whether Pulse's own web client sent this
 // request: frontend-modern/src/utils/apiClient.ts marks every API call it makes.
 // Scripts and dashboards do not send the header, and a page on another origin
-// cannot without Pulse's CORS policy allowing it. It is a hint, not a boundary:
-// the caller has already proved the credentials, and a session grants nothing
-// those credentials do not.
+// cannot without Pulse's CORS policy allowing it, which
+// TestPulseCORSNeverAllowsTheWebClientMarker holds. Issuing a session on it is a
+// hint, not a boundary: the caller has already proved the credentials, and a
+// session grants nothing those credentials do not. isCrossSiteBrowserRequest does
+// rely on it, where the browser sent no Sec-Fetch-Site.
 func requestIsPulseWebClient(r *http.Request) bool {
 	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Requested-With")), "XMLHttpRequest")
 }

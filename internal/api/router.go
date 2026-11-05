@@ -4291,6 +4291,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Add CORS headers if configured
+		originMayUseCredentials := false
 		if r.config.AllowedOrigins != "" {
 			reqOrigin := req.Header.Get("Origin")
 			allowedOrigin := ""
@@ -4323,6 +4324,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Access-Control-Expose-Headers", "X-CSRF-Token, X-Authenticated-User, X-Auth-Method")
 				// Allow credentials when origin is specific (not *)
 				if allowedOrigin != "*" {
+					originMayUseCredentials = true
 					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					// Must add Vary: Origin when Origin is used to decide the response
 					w.Header().Add("Vary", "Origin")
@@ -4520,10 +4522,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			(!authConfigured || validRecoveryToken) {
 			skipCSRF = true
 		}
-		// Skip CSRF for setup-script-url endpoint (generates temporary tokens, not a state change)
-		if req.URL.Path == "/api/setup-script-url" {
-			skipCSRF = true
-		}
+		// The setup-script-url endpoint needs no session CSRF token, because it only mints a
+		// short-lived setup token, but that token is a credential, so the origin checks
+		// below still apply to it.
+		skipSessionCSRFToken := req.URL.Path == "/api/setup-script-url"
 		// Skip CSRF for bootstrap token validation (used during initial setup before session exists)
 		if req.URL.Path == "/api/security/validate-bootstrap-token" {
 			skipCSRF = true
@@ -4557,7 +4559,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Cross-site browser mutation blocked for proxy auth")
 			return
 		}
-		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !CheckCSRF(w, req) {
+		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !originMayUseCredentials && isCrossSiteBasicAuthWrite(req) {
+			http.Error(w, "CSRF origin validation failed", http.StatusForbidden)
+			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Cross-site browser mutation blocked for Basic auth")
+			return
+		}
+		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !skipSessionCSRFToken && !CheckCSRF(w, req) {
 			http.Error(w, "CSRF token validation failed", http.StatusForbidden)
 			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")
 			return
@@ -4979,7 +4986,8 @@ func sameOrigin(left, right string) bool {
 // isCrossSiteBrowserRequest detects browser requests that Pulse's own origin
 // did not make. It is the CSRF boundary for sessionless proxy-auth flows: the
 // forward-auth proxy attaches the identity to every request that carries its
-// sign-in cookie, so there is no Pulse session to bind a CSRF token to.
+// sign-in cookie, so there is no Pulse session to bind a CSRF token to. Basic
+// credentials added by a proxy are the same case; see isCrossSiteBasicAuthWrite.
 //
 // Sec-Fetch-Site "same-site" only says the initiator shares the registrable
 // domain; a sibling subdomain or another port on the same host is same-site
@@ -4988,6 +4996,11 @@ func sameOrigin(left, right string) bool {
 // including scheme and port. Same-site reads keep their previous admission.
 // Requests with no browser origin metadata at all (non-browser clients) are
 // not treated as cross-site.
+//
+// A browser sends no Sec-Fetch-Site on plain HTTP or when it is old, leaving only
+// the Origin comparison, and a proxy that rewrites Host or hides the scheme makes
+// Pulse's own pages fail that. Their marker settles it: another origin's page
+// cannot send it, because no CORS response from Pulse allows that header.
 func isCrossSiteBrowserRequest(req *http.Request) bool {
 	if req == nil {
 		return false
@@ -5005,6 +5018,9 @@ func isCrossSiteBrowserRequest(req *http.Request) bool {
 		return !browserOriginMetadataMatches(req, requestOrigin(req), false)
 	}
 
+	if requestIsPulseWebClient(req) {
+		return false
+	}
 	return !browserOriginMetadataMatches(req, requestOrigin(req), true)
 }
 
@@ -5038,6 +5054,28 @@ func browserOriginMetadataMatches(req *http.Request, expected string, allowMissi
 	}
 
 	return allowMissing
+}
+
+// isCrossSiteBasicAuthWrite reports a write from another origin's page that would
+// authenticate with Basic credentials. A page cannot add those itself without
+// passing CORS, but a reverse proxy can add them to every request it forwards and a
+// browser resends ones it has cached for the site. They then arrive like a cookie,
+// with no session to bind a CSRF token to, so CheckCSRF cannot judge the request.
+// The router admits an origin the operator listed before asking. "*" does not count,
+// because it grants no credentialed browser access.
+func isCrossSiteBasicAuthWrite(req *http.Request) bool {
+	if req == nil || isSafeBrowserMethod(req.Method) {
+		return false
+	}
+	if !strings.HasPrefix(strings.ToLower(req.Header.Get("Authorization")), "basic ") {
+		return false
+	}
+	// An explicit API token outranks Basic in checkAuth, so Basic is not the
+	// credential here, and a page can only send one after passing CORS.
+	if _, hasToken := explicitAPITokenFromRequest(req); hasToken {
+		return false
+	}
+	return isCrossSiteBrowserRequest(req)
 }
 
 func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {

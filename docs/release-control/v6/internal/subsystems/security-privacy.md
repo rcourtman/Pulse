@@ -1385,8 +1385,9 @@ the `white_label` branding entitlement.
    with the scheme taken only from TLS or a trusted proxy; an opaque `null`
    origin or a same-site write without either header is refused.
    `cross-site` stays refused. Same-origin and user-initiated requests,
-   requests with no browser origin metadata (non-browser clients) and
-   same-site reads keep their admission. This gate is additional to, never a
+   requests with no browser origin metadata (non-browser clients), requests
+   without `Sec-Fetch-Site` that carry the web client's marker, and same-site
+   reads keep their admission. This gate is additional to, never a
    substitute for, the session CSRF token. `proxy_csrf_origin_test.go` covers
    the router matrix, the trusted-forwarded-scheme comparison and the
    unchanged session-token requirement.
@@ -3832,8 +3833,8 @@ A verified Basic request from an API client is authenticated for that request al
 `checkAuth` creates no session or CSRF token and sets no cookie, so reusing Basic
 credentials cannot evict a signed-in browser. Only a request marked by Pulse's own
 web client gets a session, which serves browsers behind a proxy that forwards Basic
-credentials. That marker is a hint, not a boundary, because the caller has already
-proved the credentials and a session grants nothing beyond them.
+credentials. For issuing a session that marker is a hint, not a boundary, because the
+caller has already proved the credentials and a session grants nothing beyond them.
 
 A rejected session cookie reaching the Basic branch is retired, so a handler that
 reads the cookie cannot attribute the request to its old owner. A password used only
@@ -3841,6 +3842,30 @@ over Basic still leaves a trace: the first successful call per organization, use
 client address is audited, then once a day, and an address the bounded tracker cannot
 remember is audited on every call. Failed attempts count toward lockout and are always
 audited.
+
+### Basic credentials a proxy attaches do not admit other origins
+
+A reverse proxy that adds Basic credentials to every request, or a browser resending
+cached ones, attaches them to a form another site's page submits. No session cookie
+arrives, so `CheckCSRF` has nothing to judge and the proxy's credentials would admit
+the write. `isCrossSiteBasicAuthWrite` in `internal/api/router.go` refuses any write
+carrying Basic credentials that `isCrossSiteBrowserRequest` calls cross-site, before
+the handler or a route-local Basic check runs. An exact origin on the operator's CORS
+list stays admitted, because that list is what grants credentialed browser access;
+`*` grants none. A client sending no browser origin metadata is unaffected, while one
+that sets a foreign `Origin` or `Referer` itself is judged as a browser. An explicit
+API token outranks Basic and stays judged by its scopes, and reads are unchanged.
+`/api/setup-script-url` needs no session CSRF token, but it mints a credential, so
+these origin checks apply to it under Basic and proxy auth alike.
+
+Without `Sec-Fetch-Site`, on plain HTTP or in an old browser, only the `Origin`
+comparison is left, and a proxy that rewrites `Host` or hides the scheme makes Pulse's
+own pages fail it. `isCrossSiteBrowserRequest` therefore accepts the web client's marker
+on that path, for proxy auth as well. Here the marker is a boundary, and it holds only
+because no Pulse CORS response allows that header, which
+`TestPulseCORSNeverAllowsTheWebClientMarker` pins. It never overrides a `Sec-Fetch-Site`
+of `cross-site` or `same-site`. `TestBasicAuthenticatedBrowserWritesRequireExactOrigin`
+covers the matrix.
 
 No-auth recovery trusts only a direct loopback transport without forwarded
 identity headers. `ALLOW_UNPROTECTED_EXPORT` is an export-only exception and is

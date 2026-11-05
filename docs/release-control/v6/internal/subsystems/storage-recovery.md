@@ -9708,7 +9708,10 @@ storage or recovery path.
 `internal/api/basic_auth_session.go` limits Basic session issuance to Pulse's own web
 client, so API clients polling with Basic credentials stop rewriting the persisted
 session store on every call. No backup, restore or storage data is read or written,
-and no storage or recovery path changes.
+and no storage or recovery path changes. `isCrossSiteBasicAuthWrite` refuses a
+cross-site Basic write before its handler runs, which now includes a config import
+reached through a proxy attaching Basic credentials; it opens no storage or recovery
+path.
 
 ### Same-named machines hold their own command sessions
 

@@ -85,6 +85,7 @@ func TestProxyAuthBrowserWritesRequireExactOrigin(t *testing.T) {
 
 	cases := []proxyCSRFCase{
 		{name: "cross-site", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://attacker.invalid"}},
+		{name: "cross-site setup token mint", target: "https://pulse.example.test/api/setup-script-url", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://attacker.invalid"}},
 		{name: "same-site sibling origin", headers: map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://sibling.example.test"}},
 		{name: "same-site same host other port", headers: map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://pulse.example.test:8443"}},
 		{name: "same-site same host other scheme", headers: map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "http://pulse.example.test"}},
@@ -102,6 +103,8 @@ func TestProxyAuthBrowserWritesRequireExactOrigin(t *testing.T) {
 		{name: "user-initiated", headers: map[string]string{"Sec-Fetch-Site": "none"}, reached: true},
 		{name: "legacy browser matching origin", headers: map[string]string{"Origin": "https://pulse.example.test"}, reached: true},
 		{name: "non-browser client without origin metadata", reached: true},
+		{name: "plain HTTP own page behind a Host-rewriting proxy", headers: map[string]string{"Origin": "http://pulse.lan:8080", "X-Requested-With": "XMLHttpRequest"}, reached: true},
+		{name: "cross-site cannot claim the web client marker", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "https://attacker.invalid", "X-Requested-With": "XMLHttpRequest"}},
 		{name: "same-site read", method: http.MethodGet, headers: map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://sibling.example.test"}, reached: true},
 	}
 	for _, tc := range cases {

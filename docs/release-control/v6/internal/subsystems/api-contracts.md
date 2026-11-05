@@ -11896,7 +11896,9 @@ evict the owner's browser at `maxSessionsPerUser`. A rejected session cookie tha
 reaches the Basic branch is still retired, because handlers read the username from
 the cookie. Successful unmarked Basic use is audited once per organization, user and
 client address per day; a failed attempt counts toward lockout and is always
-audited.
+audited. A write carrying Basic credentials and browser metadata from another origin
+gets 403 `CSRF origin validation failed` unless that exact origin is on the CORS list,
+because a reverse proxy can attach those credentials for the browser.
 
 Basic credentials are verified after `TenantMiddleware` has admitted the
 request organization, so that admission saw no principal. Immediately after
