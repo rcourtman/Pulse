@@ -283,6 +283,7 @@ describe('OrganizationSharingPanel', () => {
       expect(screen.getByRole('heading', { name: 'Create Share' })).toBeInTheDocument();
     });
 
+    fireEvent.change(screen.getByLabelText('Target Organization'), { target: { value: 'org-b' } });
     fireEvent.change(screen.getByLabelText('Quick Pick Resource'), {
       target: { value: 'vm::vm-100' },
     });
@@ -328,6 +329,7 @@ describe('OrganizationSharingPanel', () => {
       expect(screen.getByRole('heading', { name: 'Create Share' })).toBeInTheDocument();
     });
 
+    fireEvent.change(screen.getByLabelText('Target Organization'), { target: { value: 'org-b' } });
     fireEvent.change(screen.getByLabelText('Quick Pick Resource'), {
       target: { value: 'vm::vm-200' },
     });
@@ -448,6 +450,7 @@ describe('OrganizationSharingPanel', () => {
       }
       expect(listOrgsMock).toHaveBeenCalledExactlyOnceWith(binding);
 
+      fireEvent.change(target, { target: { value: targetOrg.id } });
       fireEvent.change(screen.getByRole('combobox', { name: 'Quick Pick Resource' }), {
         target: { value: 'vm::vm-100' },
       });
@@ -577,6 +580,101 @@ const strictOptions = (org = 'org-a') =>
     signal: expect.any(AbortSignal),
   });
 
+describe('deliberate sharing destination', () => {
+  const peer = { ...targetOrg, id: 'org-c', displayName: 'Organization C' };
+
+  it.each([
+    { directory: [baseOrg], label: 'no other organization' },
+    { directory: [baseOrg, targetOrg], label: 'one other organization' },
+    { directory: [peer, baseOrg, targetOrg], label: 'multiple organizations in API order' },
+  ])('does not infer consent from $label', async ({ directory }) => {
+    listOrgsMock.mockResolvedValue(directory);
+    const { state } = renderState();
+    await accepted(state);
+    expect(state.targetOrgId()).toBe('');
+    expect(state.targetOrgError()).toBe('');
+    state.applyResourceQuickPick('vm::vm-100');
+    expect(state.canCreateShare()).toBe(false);
+    await state.createShare();
+    expect(createShareMock).not.toHaveBeenCalled();
+    expect(state.targetOrgError()).toBe('Target organization is required');
+
+    // Completing the manual path must not supply a destination either.
+    state.updateResourceType('vm');
+    state.updateResourceId('manual-vm');
+    expect(state.canCreateShare()).toBe(false);
+    await state.createShare();
+    expect(createShareMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps Create Share disabled until a recipient is chosen explicitly', async () => {
+    listOrgsMock.mockResolvedValue([baseOrg, targetOrg, peer]);
+    renderPanel();
+    const target = await screen.findByRole('combobox', { name: 'Target Organization' });
+    const create = screen.getByRole('button', { name: 'Create Share' });
+    expect(target).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('Quick Pick Resource'), {
+      target: { value: 'vm::vm-100' },
+    });
+    expect(create).toBeDisabled();
+    fireEvent.click(create);
+    expect(createShareMock).not.toHaveBeenCalled();
+    fireEvent.change(target, { target: { value: peer.id } });
+    expect(create).toBeEnabled();
+    fireEvent.click(create);
+    await waitFor(() => expect(createShareMock).toHaveBeenCalledTimes(1));
+    expect(createShareMock).toHaveBeenCalledWith(
+      'org-a',
+      expect.objectContaining({ targetOrgId: peer.id, resourceId: 'vm-100' }),
+      strictOptions(),
+    );
+  });
+
+  it.each(['reload', 'directory event', 'failed read recovery', 'new destination'])(
+    'keeps an untouched destination blank across %s',
+    async (refresh) => {
+      const { state } = renderState();
+      await accepted(state);
+      state.applyResourceQuickPick('vm::vm-100');
+      if (refresh === 'failed read recovery') {
+        listOrgsMock.mockRejectedValueOnce(new Error('503'));
+        await state.loadSharingData();
+        expect(state.loadError()).toBeTruthy();
+      }
+      listOrgsMock.mockResolvedValue(
+        refresh === 'new destination' ? [peer, baseOrg, targetOrg] : [targetOrg, baseOrg],
+      );
+      if (refresh === 'directory event') emit('organizations_changed');
+      else await state.loadSharingData();
+      await accepted(state);
+      expect(state.targetOrgId()).toBe('');
+      expect(state.targetOrgError()).toBe('');
+      expect(state.selectedQuickPick()).toBe('vm::vm-100');
+      expect(state.canCreateShare()).toBe(false);
+      await state.createShare();
+      expect(createShareMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('retains an explicit choice by ID across a reordered directory, but not after clearing it', async () => {
+    listOrgsMock.mockResolvedValue([baseOrg, targetOrg, peer]);
+    const { state } = renderState();
+    await accepted(state);
+    state.applyResourceQuickPick('vm::vm-100');
+    state.updateTargetOrg(peer.id);
+    listOrgsMock.mockResolvedValue([peer, targetOrg, baseOrg]);
+    await state.loadSharingData();
+    expect(state.targetOrgId()).toBe(peer.id);
+    expect(state.canCreateShare()).toBe(true);
+    state.updateTargetOrg('');
+    await state.loadSharingData();
+    expect(state.targetOrgId()).toBe('');
+    expect(state.canCreateShare()).toBe(false);
+    await state.createShare();
+    expect(createShareMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('sharing read admission and recovery', () => {
   it.each(['organization', 'members', 'organizations', 'outgoing', 'incoming'])(
     'keeps a failed %s read distinct from empty sharing and permits a deliberate read-only retry',
@@ -646,6 +744,7 @@ describe('sharing read admission and recovery', () => {
   it('preserves same-selection drafts across failed reloads but clears every peer draft', async () => {
     const { state } = renderState();
     await accepted(state);
+    state.updateTargetOrg('org-b');
     state.updateResourceType('vm');
     state.updateResourceId('unsent-alpha');
     state.updateResourceName('Alpha draft');
@@ -653,6 +752,7 @@ describe('sharing read admission and recovery', () => {
     orgGetMock.mockRejectedValueOnce(new Error('503'));
     await state.loadSharingData();
     expect(state.resourceId()).toBe('unsent-alpha');
+    expect(state.targetOrgId()).toBe('org-b');
     await state.loadSharingData();
     expect(state.resourceId()).toBe('unsent-alpha');
     getOrgIDMock.mockReturnValue('org-b');
@@ -664,12 +764,13 @@ describe('sharing read admission and recovery', () => {
     expect(state.resourceName()).toBe('');
     expect(state.selectedQuickPick()).toBe('');
     expect(state.accessRole()).toBe('viewer');
-    expect(state.targetOrgId()).toBe('org-a');
+    expect(state.targetOrgId()).toBe('');
   });
 
   it('requires a new destination when a retained target disappears instead of silently choosing a peer', async () => {
     const { state } = renderState();
     await accepted(state);
+    state.updateTargetOrg('org-b');
     state.applyResourceQuickPick('vm::vm-100');
     expect(state.targetOrgId()).toBe('org-b');
     listOrgsMock.mockResolvedValue([
@@ -694,6 +795,7 @@ describe('sharing read admission and recovery', () => {
       const replacementOrg = { ...targetOrg, id: 'org-c', displayName: 'Organization C' };
       const { state } = renderState();
       await accepted(state);
+      state.updateTargetOrg('org-b');
       state.applyResourceQuickPick('vm::vm-100');
       expect(state.targetOrgId()).toBe('org-b');
       listOrgsMock.mockResolvedValue([baseOrg, replacementOrg]);
@@ -759,6 +861,7 @@ describe('sharing read admission and recovery', () => {
       const replacementOrg = { ...targetOrg, id: 'org-c', displayName: 'Organization C' };
       const { state, setUser } = renderState();
       await accepted(state);
+      state.updateTargetOrg('org-b');
       state.applyResourceQuickPick('vm::vm-100');
       listOrgsMock.mockResolvedValue([baseOrg, replacementOrg]);
       await state.loadSharingData();
@@ -772,7 +875,7 @@ describe('sharing read admission and recovery', () => {
         setUser('user-3');
       }
       await accepted(state);
-      expect(state.targetOrgId()).toBe(selection === 'organization' ? 'org-a' : 'org-c');
+      expect(state.targetOrgId()).toBe('');
       expect(state.selectedQuickPick()).toBe('');
       expect(state.resourceType()).toBe('');
       expect(state.resourceId()).toBe('');
@@ -833,6 +936,7 @@ describe('sharing changes require an admitted current snapshot', () => {
       name: 'create',
       mock: createShareMock,
       run: (state: ReturnType<typeof useOrganizationSharingPanelState>) => {
+        state.updateTargetOrg('org-b');
         state.applyResourceQuickPick('vm::vm-100');
         return state.createShare();
       },
@@ -1020,6 +1124,7 @@ describe('sharing changes require an admitted current snapshot', () => {
     readResources = resources;
     const { state } = renderState();
     await accepted(state);
+    state.updateTargetOrg('org-b');
     state.applyResourceQuickPick('vm::opaque::vm/100');
     await state.createShare();
     await accepted(state);

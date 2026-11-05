@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "6dad5ede0c1b279e2d57776eeccf52ccdecc85b4",
+  "changed_paths": ["frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts"],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "4ab521d4a72bc9b3a85fcd12d02267cae2aa2968a3b3deef1b83064d11ecc0b7"
+  },
+  "routes": [
+    "Settings / Organization Sharing (actual panel, state, resources hook, OrgsAPI and HTTP client over synthetic data)"
+  ],
+  "states": [
+    "fresh recipient, with no choice inferred from directory order",
+    "resource-only draft",
+    "explicit recipient and reordered directory",
+    "same-reader failed-read recovery",
+    "pending-share readback",
+    "removed/returned recipient",
+    "workspace change"
+  ],
+  "interactions": [
+    "Resource choice alone previously enabled a pending request to the first peer; now no write is sent until an explicit recipient is chosen",
+    "Explicit Gamma client selection sends one session/CSRF-bound POST with its exact ID and viewer role; reads back Pending approval, never live access",
+    "Same-reader reordered directory and failed read with explicit Reload sharing retain the chosen ID and resource draft",
+    "Removed/returned recipient stays unselected; workspace change clears recipient and resource draft",
+    "All 36 comparable captures opened natively and inspected; names, resource IDs, roles, statuses and controls retain the existing layout"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-05T09:21:41Z",
+  "browser": {
+    "client": "1.56.1",
+    "browser": "141.0.7390.37"
+  },
+  "notes": "18 matched before/after pairs, light theme, same synthetic HTTP records and interactions. Before is assigned main; final runtime content matches the receipt. No server authorization, original-account, installed or release acceptance is claimed. Existing target acceptance and mobile grid presentation are unchanged."
+}

@@ -255,11 +255,12 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
         ) {
           targetOrgNeedsReselection = true;
         }
-        const firstTarget = targetOrgNeedsReselection
-          ? ''
-          : draftTarget || allOrgs.find((candidate) => candidate.id !== orgId)?.id || '';
-        setTargetOrgId(firstTarget);
-        setTargetOrgError(firstTarget === '' ? getOrganizationShareTargetOrgRequiredMessage() : '');
+        // Directory order (even a sole peer) is not an operator's choice of
+        // recipient. Preserve only a current reader's explicit draft.
+        setTargetOrgId(targetOrgNeedsReselection ? '' : draftTarget);
+        setTargetOrgError(
+          targetOrgNeedsReselection ? getOrganizationShareTargetOrgRequiredMessage() : '',
+        );
       });
     } catch (error) {
       if (!isCurrent()) return;
