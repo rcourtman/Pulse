@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -144,6 +145,122 @@ func TestAgentInstalledProfileSnapshotsBindBytesAndMetadata(t *testing.T) {
 	}
 	if reflect.DeepEqual(before, nativeProfileTree(t, filepath.Dir(path))) {
 		t.Fatal("accepted changed snapshot file metadata")
+	}
+}
+
+func TestAgentInstalledProfileHistoryHandoffKeepsContentModeAndServiceOwner(t *testing.T) {
+	before := secureRuntimeFileIdentity{Present: true, Mode: 0o640, Hash: "original-history"}
+	after := before
+	after.UID, after.GID = 777, 778
+	if !nativeProfileHistoryHandedOff(before, after, 777, 778) {
+		t.Fatal("rejected the intended root-to-collector handoff")
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*secureRuntimeFileIdentity)
+	}{
+		{"missing", func(v *secureRuntimeFileIdentity) { v.Present = false }},
+		{"bytes", func(v *secureRuntimeFileIdentity) { v.Hash = "different-history" }},
+		{"mode", func(v *secureRuntimeFileIdentity) { v.Mode = 0o644 }},
+		{"root-owner", func(v *secureRuntimeFileIdentity) { v.UID = 0 }},
+		{"root-group", func(v *secureRuntimeFileIdentity) { v.GID = 0 }},
+		{"other-owner", func(v *secureRuntimeFileIdentity) { v.UID++ }},
+		{"other-group", func(v *secureRuntimeFileIdentity) { v.GID++ }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := after
+			tc.change(&changed)
+			if nativeProfileHistoryHandedOff(before, changed, 777, 778) {
+				t.Fatal("accepted history damage or the wrong service owner")
+			}
+		})
+	}
+	if nativeProfileHistoryHandedOff(before, after, 0, 778) || nativeProfileHistoryHandedOff(before, after, 777, 0) ||
+		nativeProfileHistoryHandedOff(secureRuntimeFileIdentity{}, after, 777, 778) {
+		t.Fatal("accepted an unbound history or root service identity")
+	}
+	// An already handed-off descendant must remain collector-owned across
+	// subsequent forward/reverse pairs, not revert to its original root owner.
+	if !nativeProfileHistoryHandedOff(after, after, 777, 778) || nativeProfileHistoryHandedOff(after, before, 777, 778) {
+		t.Fatal("history recovery did not preserve the established handoff")
+	}
+}
+
+func TestAgentInstalledProfileProtectedMetadataAndAbsenceStayExact(t *testing.T) {
+	dir := t.TempDir()
+	root := nativeProfileDirectory(t, dir)
+	if err := os.Chmod(dir, root.Mode^0o100); err != nil {
+		t.Fatal(err)
+	}
+	if root == nativeProfileDirectory(t, dir) {
+		t.Fatal("state-root metadata change was hidden by descendant handoff")
+	}
+	if err := os.Chmod(dir, root.Mode); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "connection.env")
+	absent := nativeProfileOptionalFiles(t, path)
+	if absent[path].Present {
+		t.Fatal("absent lifecycle file was reported present")
+	}
+	if err := os.WriteFile(path, []byte("saved-connection"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	present := nativeProfileOptionalFiles(t, path)
+	if reflect.DeepEqual(absent, present) || !reflect.DeepEqual(present, nativeProfileFiles(t, path)) {
+		t.Fatal("lifecycle snapshot lost absence or exact bytes/metadata")
+	}
+	if err := os.Chmod(path, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if reflect.DeepEqual(present, nativeProfileOptionalFiles(t, path)) {
+		t.Fatal("protected lifecycle permissions were relaxed")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(absent, nativeProfileOptionalFiles(t, path)) {
+		t.Fatal("lifecycle absence was not restored")
+	}
+}
+
+func TestAgentInstalledProfileRollbackMetadataDoesNotReclaimDescendants(t *testing.T) {
+	dir := t.TempDir()
+	state, transaction := filepath.Join(dir, "state"), filepath.Join(dir, "transaction")
+	for _, path := range []string{state, transaction} {
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	history := filepath.Join(state, "native-history")
+	if err := os.WriteFile(history, []byte("history-must-survive"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	before, beforeRoot := nativeProfileFiles(t, history), nativeProfileDirectory(t, state)
+	script := `set -euo pipefail
+ROOT="$1"
+STATE_DIR="$ROOT/state"
+SAFE_PROFILE_TRANSACTION_DIR="$ROOT/transaction"
+fail() { exit "$2"; }
+# Observe the requested ownership operations without granting root to this
+# component test. The hosted journey checks actual service ownership.
+chown() { printf '%s\0' "$@" >> "$ROOT/chown-calls"; }
+` + extractInstallShellFunction(t, "safe_profile_snapshot_state_metadata") + "\n" +
+		extractInstallShellFunction(t, "safe_profile_restore_state_metadata") + `
+safe_profile_snapshot_state_metadata
+# An old format-v2 snapshot may contain a descendant record. It must not
+# reclaim collector-controlled paths or change history permissions.
+printf 'native-history\0000\0000\000600\000file\000' >> "$SAFE_PROFILE_TRANSACTION_DIR/state-metadata.bin"
+chmod 0750 "$STATE_DIR"
+safe_profile_restore_state_metadata "$SAFE_PROFILE_TRANSACTION_DIR" "$STATE_DIR"
+`
+	nativeProfileMust(t, nil, "bash", "-c", script, "native-metadata-control", dir)
+	if !reflect.DeepEqual(before, nativeProfileFiles(t, history)) || beforeRoot != nativeProfileDirectory(t, state) {
+		t.Fatal("rollback metadata did not preserve the history and restore only the state root")
+	}
+	want := strconv.FormatUint(uint64(beforeRoot.UID), 10) + ":" + strconv.FormatUint(uint64(beforeRoot.GID), 10) + "\x00" + state + "\x00"
+	if got := string(secureRuntimeReadFile(t, filepath.Join(dir, "chown-calls"))); got != want {
+		t.Fatalf("ownership operation targeted a descendant or did not restore the root: %q", got)
 	}
 }
 
