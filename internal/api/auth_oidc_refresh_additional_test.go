@@ -99,7 +99,7 @@ func TestRefreshOIDCSessionTokens_Success(t *testing.T) {
 		t.Fatalf("expected session to exist")
 	}
 
-	refreshOIDCSessionTokens(cfg, sessionToken, session)
+	store.refreshOIDCSessionTokens(cfg, sessionToken, session)
 
 	updated := store.GetSession(sessionToken)
 	if updated == nil {
@@ -150,7 +150,7 @@ func TestRefreshOIDCSessionTokens_IssuerMismatchSkipsRefresh(t *testing.T) {
 		t.Fatalf("expected session to exist")
 	}
 
-	refreshOIDCSessionTokens(cfg, sessionToken, session)
+	store.refreshOIDCSessionTokens(cfg, sessionToken, session)
 
 	// Session should survive — the issuer mismatch means this is likely an SSO
 	// OIDC session managed by a different provider. Skip refresh, don't invalidate.
@@ -206,7 +206,7 @@ func TestRefreshOIDCSessionTokens_RefreshFailureInvalidates(t *testing.T) {
 		t.Fatalf("expected session to exist")
 	}
 
-	refreshOIDCSessionTokens(cfg, sessionToken, session)
+	store.refreshOIDCSessionTokens(cfg, sessionToken, session)
 
 	if store.GetSession(sessionToken) != nil {
 		t.Fatalf("expected session to be invalidated after refresh failure")
@@ -237,7 +237,7 @@ func TestRefreshOIDCSessionTokens_OIDCDisabledDoesNotInvalidate(t *testing.T) {
 		t.Fatalf("expected session to exist")
 	}
 
-	refreshOIDCSessionTokens(cfg, sessionToken, session)
+	store.refreshOIDCSessionTokens(cfg, sessionToken, session)
 
 	if store.GetSession(sessionToken) == nil {
 		t.Fatalf("expected session to remain when OIDC is disabled")

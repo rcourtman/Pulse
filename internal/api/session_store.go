@@ -23,6 +23,14 @@ type SessionStore struct {
 	workerDone chan struct{}
 	stopOnce   sync.Once
 	crypto     *crypto.CryptoManager
+	// Refresh ownership is transient and belongs to this store, not the global
+	// store selector or a raw-token-only process-wide guard.
+	oidcRefreshes map[string]*oidcSessionRefresh
+}
+
+type oidcSessionRefresh struct {
+	session  *SessionData
+	snapshot SessionData
 }
 
 func sessionHash(token string) string {
@@ -381,6 +389,84 @@ func (s *SessionStore) GetSession(token string) *SessionData {
 	// Return a copy to avoid race conditions
 	copy := *session
 	return &copy
+}
+
+// sameOIDCRefreshSource ignores sliding session expiry and the transient busy
+// flag, but not the principal, session generation or token version that was
+// observed before background work was scheduled.
+func sameOIDCRefreshSource(a, b *SessionData) bool {
+	return a != nil && b != nil && a.CreatedAt.Equal(b.CreatedAt) &&
+		a.Username == b.Username && a.RecoveryBypass == b.RecoveryBypass &&
+		a.OIDCIssuer == b.OIDCIssuer && a.OIDCClientID == b.OIDCClientID &&
+		a.OIDCRefreshToken == b.OIDCRefreshToken &&
+		a.OIDCAccessTokenIssuedAt.Equal(b.OIDCAccessTokenIssuedAt) &&
+		a.OIDCAccessTokenExp.Equal(b.OIDCAccessTokenExp)
+}
+
+// beginOIDCRefresh atomically revalidates a queued snapshot and claims the live
+// session. A caller queued behind a completed rotation must not send the old
+// refresh token to the IdP after the previous claim has been released.
+func (s *SessionStore) beginOIDCRefresh(token string, observed *SessionData) *oidcSessionRefresh {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	session := s.sessions[key]
+	now := time.Now()
+	if !sameOIDCRefreshSource(session, observed) || !now.Before(session.ExpiresAt) ||
+		!shouldRefreshOIDCSessionToken(now, session) || s.oidcRefreshes[key] != nil {
+		return nil
+	}
+	if s.oidcRefreshes == nil {
+		s.oidcRefreshes = make(map[string]*oidcSessionRefresh)
+	}
+	attempt := &oidcSessionRefresh{session: session, snapshot: *session}
+	s.oidcRefreshes[key] = attempt
+	session.OIDCTokenRefreshing = true
+	return attempt
+}
+
+func (s *SessionStore) endOIDCRefresh(token string, attempt *oidcSessionRefresh) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	if s.oidcRefreshes[key] != attempt {
+		return
+	}
+	delete(s.oidcRefreshes, key)
+	if session := s.sessions[key]; session == attempt.session {
+		session.OIDCTokenRefreshing = false
+	}
+}
+
+// completeOIDCRefresh applies an IdP outcome only to its still-live source
+// session and token version. A nil result invalidates that session; it must
+// never delete a replacement or a newer independently refreshed credential.
+func (s *SessionStore) completeOIDCRefresh(token string, attempt *oidcSessionRefresh, result *OIDCRefreshResult) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	session := s.sessions[key]
+	now := time.Now()
+	if s.oidcRefreshes[key] != attempt || session != attempt.session ||
+		!sameOIDCRefreshSource(session, &attempt.snapshot) || !now.Before(session.ExpiresAt) {
+		return false
+	}
+	if result == nil {
+		delete(s.sessions, key)
+	} else {
+		session.OIDCRefreshToken = result.RefreshToken
+		session.OIDCAccessTokenExp = result.Expiry
+		session.OIDCAccessTokenIssuedAt = now
+		session.OIDCTokenRefreshing = false
+		if session.OriginalDuration > 0 {
+			session.ExpiresAt = now.Add(session.OriginalDuration)
+		}
+	}
+	s.saveUnsafe()
+	return true
 }
 
 // UpdateOIDCTokens updates the OIDC tokens for a session after a successful refresh
