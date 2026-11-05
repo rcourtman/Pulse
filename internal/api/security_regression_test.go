@@ -6348,3 +6348,203 @@ func TestBasicAuthAuditTrackerRecordsNewAccessOnly(t *testing.T) {
 		t.Fatal("an expired slot must be reusable")
 	}
 }
+
+const basicWriteOriginPassword = "SyntheticPassword!1"
+
+func newBasicWriteOriginRouter(t *testing.T) (*Router, *config.Config) {
+	t.Helper()
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+	hash, err := auth.HashPassword(basicWriteOriginPassword)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "synthetic-admin", AuthPass: hash}
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	return router, cfg
+}
+
+// A reverse proxy that adds Basic credentials to every request, such as an
+// Authentik proxy provider, attaches them to a form another site's page submits
+// too. No session cookie arrives, so CheckCSRF skips the request and the proxy's
+// credentials used to admit the write.
+func TestBasicAuthenticatedBrowserWritesRequireExactOrigin(t *testing.T) {
+	router, cfg := newBasicWriteOriginRouter(t)
+	const listedOrigin = "https://dashboard.example.test"
+	const attacker = "https://attacker.invalid"
+
+	cases := []struct {
+		name    string
+		allowed string
+		method  string
+		target  string
+		headers map[string]string
+		reached bool
+	}{
+		{name: "cross-site form", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "cross-site opaque origin", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "null"}},
+		{name: "cross-site without origin", headers: map[string]string{"Sec-Fetch-Site": "cross-site"}},
+		{name: "cross-site cannot claim the web client marker", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker, "X-Requested-With": "XMLHttpRequest"}},
+		{name: "same-site sibling", headers: map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://sibling.example.test"}},
+		{name: "same-site without origin", headers: map[string]string{"Sec-Fetch-Site": "same-site"}},
+		{name: "plain HTTP foreign origin", headers: map[string]string{"Origin": attacker}},
+		{name: "plain HTTP opaque origin", headers: map[string]string{"Origin": "null"}},
+		{name: "plain HTTP foreign referer", headers: map[string]string{"Referer": attacker + "/page"}},
+		{name: "wildcard allow-list grants no credentials", allowed: "*", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "another origin than the listed one", allowed: listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "route-local Basic on config import", target: "https://pulse.example.test/api/config/import", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "setup token mint", target: "https://pulse.example.test/api/setup-script-url", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+
+		{name: "API client without browser metadata", reached: true},
+		{name: "setup token mint from a script", target: "https://pulse.example.test/api/setup-script-url", reached: true},
+		{name: "same-origin page", headers: map[string]string{"Sec-Fetch-Site": "same-origin", "Origin": "https://pulse.example.test"}, reached: true},
+		{name: "same-site matching origin", headers: map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://pulse.example.test"}, reached: true},
+		{name: "user initiated", headers: map[string]string{"Sec-Fetch-Site": "none"}, reached: true},
+		{name: "plain HTTP matching origin", headers: map[string]string{"Origin": "https://pulse.example.test"}, reached: true},
+		{name: "own page behind a Host-rewriting proxy", headers: map[string]string{"Origin": "http://pulse.lan:8080", "X-Requested-With": "XMLHttpRequest"}, reached: true},
+		{name: "origin the operator listed", allowed: listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": listedOrigin}, reached: true},
+		{name: "origin in a longer list", allowed: "https://other.example.test, " + listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": listedOrigin}, reached: true},
+		{name: "cross-site read", method: http.MethodGet, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}, reached: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg.AllowedOrigins = tc.allowed
+			method := tc.method
+			if method == "" {
+				method = http.MethodPost
+			}
+			target := tc.target
+			if target == "" {
+				target = proxyCSRFTestTarget
+			}
+			body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
+			req := httptest.NewRequest(method, target, body)
+			req.Header.Set("Content-Type", "text/plain")
+			req.SetBasicAuth("synthetic-admin", basicWriteOriginPassword)
+			for key, value := range tc.headers {
+				req.Header.Set(key, value)
+			}
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			blocked := rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), proxyCSRFBlocked)
+			if !tc.reached {
+				if !blocked {
+					t.Fatalf("other-origin write was admitted: %d %s", rec.Code, rec.Body.String())
+				}
+				if body.reads != 0 {
+					t.Fatalf("blocked write's body was read %d times", body.reads)
+				}
+				return
+			}
+			if blocked {
+				t.Fatalf("legitimate request was blocked: %d %s", rec.Code, rec.Body.String())
+			}
+			if method == http.MethodPost && (rec.Code != http.StatusBadRequest || body.reads == 0) {
+				t.Fatalf("legitimate write did not reach the handler: status %d, reads %d: %s", rec.Code, body.reads, rec.Body.String())
+			}
+		})
+	}
+}
+
+// A browser behind such a proxy keeps both: its session from the web client's
+// marker, and the session CSRF token, which the origin check does not replace.
+func TestBasicProxyBrowserSessionKeepsItsCSRFToken(t *testing.T) {
+	router, _ := newBasicWriteOriginRouter(t)
+
+	send := func(method, target string, cookies []*http.Cookie, csrf string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, target, strings.NewReader(`{not-json`))
+		req.SetBasicAuth("synthetic-admin", basicWriteOriginPassword)
+		req.Header.Set("X-Requested-With", "XMLHttpRequest")
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
+		if csrf != "" {
+			req.Header.Set("X-CSRF-Token", csrf)
+		}
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	signIn := send(http.MethodGet, proxyCSRFTestTarget, nil, "")
+	if signIn.Code != http.StatusOK {
+		t.Fatalf("first page load = %d: %s", signIn.Code, signIn.Body.String())
+	}
+	// A routed call passes the auth check twice, so keep each cookie's last value,
+	// as a browser does.
+	latest := map[string]*http.Cookie{}
+	for _, cookie := range signIn.Result().Cookies() {
+		latest[cookie.Name] = cookie
+	}
+	var cookies []*http.Cookie
+	for _, cookie := range latest {
+		cookies = append(cookies, cookie)
+	}
+	if latest[sessionCookieName(true)] == nil || latest[CookieNameCSRF] == nil {
+		t.Fatalf("first page load issued no session and CSRF pair: %v", cookies)
+	}
+	csrf := latest[CookieNameCSRF].Value
+
+	if rec := send(http.MethodPost, proxyCSRFTestTarget, cookies, ""); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "CSRF token validation failed") {
+		t.Fatalf("write without the CSRF token = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := send(http.MethodPost, proxyCSRFTestTarget, cookies, csrf); rec.Code != http.StatusBadRequest {
+		t.Fatalf("write with the CSRF token = %d %s", rec.Code, rec.Body.String())
+	}
+	// Minting a setup token has never asked for the session CSRF token.
+	if rec := send(http.MethodPost, "https://pulse.example.test/api/setup-script-url", cookies, ""); rec.Code != http.StatusBadRequest {
+		t.Fatalf("setup token mint without the CSRF token = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCrossSiteBasicAuthWriteIsAudited(t *testing.T) {
+	router, _ := newBasicWriteOriginRouter(t)
+	capture := &auditCaptureLogger{}
+	previousLogger, previousManager := audit.GetLogger(), GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(previousLogger)
+		SetTenantAuditManager(previousManager)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, proxyCSRFTestTarget, strings.NewReader(`{}`))
+	req.SetBasicAuth("synthetic-admin", basicWriteOriginPassword)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "https://attacker.invalid")
+	router.Handler().ServeHTTP(httptest.NewRecorder(), req)
+
+	if got := auditEventCount(capture, "csrf_failure", false); got != 1 {
+		t.Fatalf("csrf_failure audit events = %d, want 1", got)
+	}
+}
+
+// isCrossSiteBrowserRequest trusts the web client's marker only because a page on
+// another origin cannot send it. Adding it to the allowed headers removes that.
+func TestPulseCORSNeverAllowsTheWebClientMarker(t *testing.T) {
+	router, cfg := newBasicWriteOriginRouter(t)
+	const listedOrigin = "https://dashboard.example.test"
+
+	for _, allowed := range []string{listedOrigin, "*"} {
+		cfg.AllowedOrigins = allowed
+		req := httptest.NewRequest(http.MethodOptions, proxyCSRFTestTarget, nil)
+		req.Header.Set("Origin", listedOrigin)
+		req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+		req.Header.Set("Access-Control-Request-Headers", "x-requested-with")
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+
+		headers := rec.Header().Get("Access-Control-Allow-Headers")
+		if headers == "" {
+			t.Fatalf("allowed %q: preflight offered no CORS headers, so this test proves nothing", allowed)
+		}
+		lowered := strings.ToLower(headers)
+		if strings.Contains(lowered, "x-requested-with") || strings.Contains(lowered, "*") {
+			t.Fatalf("allowed %q: preflight allows the web client marker: %q", allowed, headers)
+		}
+	}
+}

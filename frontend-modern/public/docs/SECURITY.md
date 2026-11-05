@@ -364,7 +364,9 @@ discarding state. Do not test exposure by making a public export.
   - Stored in `api_tokens.json` and managed via the UI
   - API-only mode supported (no password auth required)
 - **CSRF protection**: session-authenticated state changes require CSRF tokens;
-  API-token requests use their enforced scopes rather than a copied session cookie
+  API-token requests use their enforced scopes rather than a copied session cookie;
+  writes from another origin's page are refused when they carry Basic or proxy-auth
+  credentials, because a reverse proxy can attach those for the browser
 - **Rate limiting**
   - Auth endpoints: 10 attempts/minute per IP
   - Config changes: 30 requests/minute per IP
