@@ -187,6 +187,9 @@ describe('ProxmoxBackupJobsCard', () => {
     expect(bars[2]).toHaveAttribute('aria-pressed', 'true');
     expect(bars[3]).toHaveAttribute('aria-pressed', 'false');
     expect(bars[3]).toHaveClass('opacity-40');
+    // Hover must not repaint the chosen bar's outline while the pointer is on it.
+    expect(bars[2]).toHaveClass('outline-blue-500');
+    expect(bars[2]).not.toHaveClass('hover:outline-border');
     expect(container.querySelector('[data-backup-jobs-chosen-day]')).toHaveTextContent(
       '2 failed: web, db',
     );
