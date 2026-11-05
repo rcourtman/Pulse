@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "35f0a31074ed94d8803918e6c780a559b790a284",
+  "verified_at": "2026-11-05T16:32:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/apiClient.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/apiClient.ts": "b8d21a67285cdbf56761106bc8e2bd8277887d54addb54f3a89fb09f2a23998c"
+  },
+  "routes": [
+    "/ (offline production-mode fixture consuming the existing Settings RolesPanel)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Light theme, identical synthetic saved constrained role and malformed HTTP 200 bodies before and after; real RolesPanel, state, RBACAPI, API client and logger.",
+    "Unreadable initial inventory: generic load failure and Retry, New Role disabled, no false-empty result.",
+    "Inventory after explicit Retry: saved role name, description, both permissions and actions remain visible.",
+    "Applied but unreadable save: generic uncertainty warning, no replay, changes disabled until explicit saved-role read.",
+    "Recovery after Check saved roles: edited name with full original metadata and deny policy retained; one PUT only.",
+    "Two parse diagnostics per viewport: before each includes the synthetic private body; after neither contains the body, URL, credentials or parser exception.",
+    "All sixteen retained before/after screenshots opened using native image viewing; no information, control or layout loss observed."
+  ],
+  "interactions": [
+    "Chromium 141.0.7390.37 with Playwright 1.56.1, matching integration lockfile; desktop and narrow viewports.",
+    "Trigger malformed initial role read; click Retry; edit saved role name; return malformed successful write; check saved roles explicitly.",
+    "Assert original org/API-token/CSRF binding, one write/no automatic replay, saved policy and metadata, no console body after repair, no page errors or horizontal overflow.",
+    "Production-mode fixture through the assigned constrained browser runner; browser and preview server close in both accepted runs."
+  ]
+}
