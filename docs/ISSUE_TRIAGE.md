@@ -201,6 +201,37 @@ distinction matters, use an existing, locally reviewed error code or redacted
 explanation, never a raw response, Debug capture or replay. Historical errors
 and other exports are not retroactively scrubbed; the full entry remains private.
 
+## Saved access and plan reports
+
+For membership, invitation, role or plan problems, keep these distinctions from
+the evidence already supplied:
+
+- **Which reader and workspace:** use consistent aliases for the signed-in
+  account and intended organisation or client workspace, not real names, email
+  addresses or account IDs. A role in one workspace does not establish access
+  to another. Preserve any working administrator session.
+- **Which operation:** distinguish loading saved access from an intentional
+  change. Retain the original action, time, request path without query strings,
+  HTTP status and relevant redacted error where known. A lost change response
+  may follow a committed write; do not repeat an invitation, role change,
+  ownership transfer or activation to find out.
+- **What should be allowed:** retain the intended role, affected page or action
+  and expected permitted or denied result separately from what Pulse displayed.
+  A working sign-in, saved role and active plan are not interchangeable proofs.
+  An unavailable read is not an empty membership list or a revoked licence.
+
+Use the whole thread before asking for a consequential missing distinction.
+Unknown is valid and existing reports need no refile. Do not request new
+Diagnostics, a password reset, wider permissions, a workspace change or key
+reapplication just to complete the report. Maintainers investigate the read and
+write paths independently before asking the reporter to do more.
+
+Keep cookies, tokens, keys, full configuration and account evidence private.
+Use the [private vulnerability route](../SECURITY.md#reporting-a-vulnerability)
+for suspected exposure or access to another workspace's private data, not a
+public reproduction. Purchase, payment and licence-ownership disputes belong
+in the existing private account/support conversation, not a public issue.
+
 ## Reports on older releases
 
 Before asking for more information from someone still running an older release,
