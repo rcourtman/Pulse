@@ -3854,7 +3854,7 @@ the handler or a route-local Basic check runs. An exact origin on the operator's
 list stays admitted, because that list is what grants credentialed browser access;
 `*` grants none. A client sending no browser origin metadata is unaffected, while one
 that sets a foreign `Origin` or `Referer` itself is judged as a browser. An explicit
-API token outranks Basic and stays judged by its scopes, and reads are unchanged.
+API token outranks Basic and is judged by the rule below, and reads are unchanged.
 `/api/setup-script-url` needs no session CSRF token, but it mints a credential, so
 these origin checks apply to it under Basic and proxy auth alike.
 
@@ -3866,6 +3866,20 @@ because no Pulse CORS response allows that header, which
 `TestPulseCORSNeverAllowsTheWebClientMarker` pins. It never overrides a `Sec-Fetch-Site`
 of `cross-site` or `same-site`. `TestBasicAuthenticatedBrowserWritesRequireExactOrigin`
 covers the matrix.
+
+### API tokens a proxy attaches do not admit origins without a CORS grant
+
+A proxy that adds `X-API-Token` or a Bearer token to every request attaches it to a form
+another site's page submits, and the page then spends that token's scopes.
+`isCrossSiteAPITokenWrite` in `internal/api/router.go` refuses a token write that
+`isCrossSiteBrowserRequest` calls cross-site, before the handler or a route-local check
+runs, unless the origin has a CORS grant. A page cannot send its own token without one,
+because the browser stops it at preflight, so no such page is refused. Any grant admits
+the write, `*` included: unlike Basic, a page under `*` may send its own token, and Pulse
+cannot tell that apart from one a proxy attached. A client sending no browser metadata is
+unaffected and reads are unchanged. A client or server-side forwarder that passes on a
+foreign `Origin`, `Referer` or `Sec-Fetch-Site` is judged as a browser.
+`TestBasicAuthenticatedBrowserWritesRequireExactOrigin` covers the matrix.
 
 No-auth recovery trusts only a direct loopback transport without forwarded
 identity headers. `ALLOW_UNPROTECTED_EXPORT` is an export-only exception and is

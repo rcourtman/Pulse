@@ -6349,7 +6349,17 @@ func TestBasicAuthAuditTrackerRecordsNewAccessOnly(t *testing.T) {
 	}
 }
 
-const basicWriteOriginPassword = "SyntheticPassword!1"
+const (
+	basicWriteOriginPassword = "SyntheticPassword!1"
+	writeOriginAPIToken      = "synthetic-write-origin-api-token"
+	sendsXAPIToken           = "X-API-Token"
+	sendsBearerToken         = "Bearer"
+)
+
+func seedWriteOriginAPIToken(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	cfg.APITokens = []config.APITokenRecord{newTokenRecord(t, writeOriginAPIToken, []string{config.ScopeWildcard}, nil)}
+}
 
 func newBasicWriteOriginRouter(t *testing.T) (*Router, *config.Config) {
 	t.Helper()
@@ -6368,9 +6378,12 @@ func newBasicWriteOriginRouter(t *testing.T) (*Router, *config.Config) {
 // A reverse proxy that adds Basic credentials to every request, such as an
 // Authentik proxy provider, attaches them to a form another site's page submits
 // too. No session cookie arrives, so CheckCSRF skips the request and the proxy's
-// credentials used to admit the write.
+// credentials used to admit the write. The cases naming a token cover a proxy that
+// adds an API token instead. A page may send its own token under "*", and it cannot
+// without a grant, so only a grant separates the two.
 func TestBasicAuthenticatedBrowserWritesRequireExactOrigin(t *testing.T) {
 	router, cfg := newBasicWriteOriginRouter(t)
+	seedWriteOriginAPIToken(t, cfg)
 	const listedOrigin = "https://dashboard.example.test"
 	const attacker = "https://attacker.invalid"
 
@@ -6380,6 +6393,7 @@ func TestBasicAuthenticatedBrowserWritesRequireExactOrigin(t *testing.T) {
 		method  string
 		target  string
 		headers map[string]string
+		token   string
 		reached bool
 	}{
 		{name: "cross-site form", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
@@ -6406,6 +6420,33 @@ func TestBasicAuthenticatedBrowserWritesRequireExactOrigin(t *testing.T) {
 		{name: "origin the operator listed", allowed: listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": listedOrigin}, reached: true},
 		{name: "origin in a longer list", allowed: "https://other.example.test, " + listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": listedOrigin}, reached: true},
 		{name: "cross-site read", method: http.MethodGet, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}, reached: true},
+
+		{name: "token cross-site form", token: sendsXAPIToken, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "bearer cross-site form", token: sendsBearerToken, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "token cross-site opaque origin", token: sendsXAPIToken, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": "null"}},
+		{name: "token cross-site without origin", token: sendsXAPIToken, headers: map[string]string{"Sec-Fetch-Site": "cross-site"}},
+		{name: "token cross-site cannot claim the web client marker", token: sendsXAPIToken, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker, "X-Requested-With": "XMLHttpRequest"}},
+		{name: "token same-site sibling", token: sendsXAPIToken, headers: map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "https://sibling.example.test"}},
+		{name: "token plain HTTP foreign origin", token: sendsXAPIToken, headers: map[string]string{"Origin": attacker}},
+		{name: "token plain HTTP foreign referer", token: sendsXAPIToken, headers: map[string]string{"Referer": attacker + "/page"}},
+		{name: "bearer plain HTTP foreign origin", token: sendsBearerToken, headers: map[string]string{"Origin": attacker}},
+		{name: "token another origin than the listed one", token: sendsXAPIToken, allowed: listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "token beside Basic credentials", token: sendsXAPIToken, headers: map[string]string{"Authorization": "Basic c3ludGhldGljOmFkbWlu", "Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "token delete", token: sendsXAPIToken, method: http.MethodDelete, target: proxyCSRFTestTarget + "/some-id", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "token listing its own origin", token: sendsXAPIToken, target: "https://pulse.example.test/api/system/settings/update", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "token on config import", token: sendsXAPIToken, target: "https://pulse.example.test/api/config/import", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+		{name: "token setup token mint", token: sendsXAPIToken, target: "https://pulse.example.test/api/setup-script-url", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}},
+
+		{name: "token API client without browser metadata", token: sendsXAPIToken, reached: true},
+		{name: "bearer API client without browser metadata", token: sendsBearerToken, reached: true},
+		{name: "token same-origin page", token: sendsXAPIToken, headers: map[string]string{"Sec-Fetch-Site": "same-origin", "Origin": "https://pulse.example.test"}, reached: true},
+		{name: "token user initiated", token: sendsXAPIToken, headers: map[string]string{"Sec-Fetch-Site": "none"}, reached: true},
+		{name: "token own page behind a Host-rewriting proxy", token: sendsXAPIToken, headers: map[string]string{"Origin": "http://pulse.lan:8080", "X-Requested-With": "XMLHttpRequest"}, reached: true},
+		{name: "token origin the operator listed", token: sendsXAPIToken, allowed: listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": listedOrigin}, reached: true},
+		{name: "token origin in a longer list", token: sendsXAPIToken, allowed: "https://other.example.test, " + listedOrigin, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": listedOrigin}, reached: true},
+		{name: "token page under a wildcard", token: sendsXAPIToken, allowed: "*", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}, reached: true},
+		{name: "bearer page under a wildcard", token: sendsBearerToken, allowed: "*", headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}, reached: true},
+		{name: "token cross-site read", token: sendsXAPIToken, method: http.MethodGet, headers: map[string]string{"Sec-Fetch-Site": "cross-site", "Origin": attacker}, reached: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -6421,7 +6462,14 @@ func TestBasicAuthenticatedBrowserWritesRequireExactOrigin(t *testing.T) {
 			body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
 			req := httptest.NewRequest(method, target, body)
 			req.Header.Set("Content-Type", "text/plain")
-			req.SetBasicAuth("synthetic-admin", basicWriteOriginPassword)
+			switch tc.token {
+			case sendsXAPIToken:
+				req.Header.Set("X-API-Token", writeOriginAPIToken)
+			case sendsBearerToken:
+				req.Header.Set("Authorization", "Bearer "+writeOriginAPIToken)
+			default:
+				req.SetBasicAuth("synthetic-admin", basicWriteOriginPassword)
+			}
 			for key, value := range tc.headers {
 				req.Header.Set(key, value)
 			}
@@ -6514,6 +6562,29 @@ func TestCrossSiteBasicAuthWriteIsAudited(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, proxyCSRFTestTarget, strings.NewReader(`{}`))
 	req.SetBasicAuth("synthetic-admin", basicWriteOriginPassword)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "https://attacker.invalid")
+	router.Handler().ServeHTTP(httptest.NewRecorder(), req)
+
+	if got := auditEventCount(capture, "csrf_failure", false); got != 1 {
+		t.Fatalf("csrf_failure audit events = %d, want 1", got)
+	}
+}
+
+func TestCrossSiteAPITokenWriteIsAudited(t *testing.T) {
+	router, cfg := newBasicWriteOriginRouter(t)
+	seedWriteOriginAPIToken(t, cfg)
+	capture := &auditCaptureLogger{}
+	previousLogger, previousManager := audit.GetLogger(), GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(previousLogger)
+		SetTenantAuditManager(previousManager)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, proxyCSRFTestTarget, strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", writeOriginAPIToken)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	req.Header.Set("Origin", "https://attacker.invalid")
 	router.Handler().ServeHTTP(httptest.NewRecorder(), req)
