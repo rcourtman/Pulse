@@ -1688,3 +1688,54 @@ destinations: pending work remains delayed with no attempt or audit. These are
 source/native process proofs, not installed-service, external provider, stable
 release or reporter recovery. A crash before graceful checkpointing can still
 lose volatile firing buffers; this repair makes no crash-durability promise.
+
+### Firing cooldown and owed recovery survive reopen and cleanup (5 November 2026)
+
+The repeat-delivery map is a cache of successful occurrence-bound delivery.
+On a cache miss, under the existing manager admission lease, current destination
+receipts restore the highest delivered severity and latest completion instant.
+Both high-water marks only advance, including out-of-order completions. A
+legacy receipt without severity still establishes recovery eligibility, but
+cannot suppress potentially new severity information. A genuinely new occurrence,
+higher severity, expired cooldown and scheduled escalation retain their existing
+admission. Unreadable delivery evidence must not silence a wanted firing.
+
+Firing age alone never expires an owed recovery. Active or uncertain receipts
+remain until successful recovery, explicit resolution or explicit destination
+retirement. The existing occurrence-aware cancellation boundary records positive
+resolution, even when recovery notifications are disabled. Recovery dispatch also
+records it. Missing callbacks, an unavailable/stopped lifecycle owner and an empty
+startup configuration are not evidence that an occurrence ended. Historic orphan
+receipts with no positive resolution/removal evidence remain uncertain.
+
+Explicit destination removal, disable or endpoint/recipient/target rotation starts
+a durable 30-day retirement grace; it neither retargets nor authorises delivery.
+An exact configuration revert during grace restores the old obligation; after
+retirement cleanup it does not recreate one. New completion timestamps, resolution
+and removal must all be at least 30 days old before their applicable receipt can
+be deleted. Pending/sending/retryable work pins its exact occurrence/destination,
+including a recovery waiting beyond the grace. Unreadable queued work prevents
+receipt cleanup, not age-only fallback. Retirement markers cover late completions
+and are themselves removed when no receipt or retryable job needs them. Future
+rotations therefore do not accumulate permanent receipt/marker state. This does
+not infer resolution for old unobserved orphans or guarantee provider inbox receipt.
+
+`receipt_continuity_test.go` covers migration, severity/completion monotonicity,
+legacy uncertainty, cache eviction, destination separation, expiry, exact revert,
+all three transport retirement paths, pending/retryable/unreadable work and shutdown
+admission. `receipt_retention_continuity_test.go` promotes the independent real-HTTP
+one-day/31-day retention experiment; `notification_restart_continuity_test.go` in
+monitoring promotes its graceful reopen and two-native-process receiver controls,
+including owed recovery and a new occurrence. The old negative experiments remain
+unaltered evidence. These are synthetic queue/receiver controls, not original-estate,
+crash, signal-driven shutdown, installed-service or external-provider recovery.
+A late completion for a removed endpoint keeps its own receipt without publishing
+a cooldown for the replacement. A durable read of an older occurrence cannot
+evict the newer occurrence's cache entry. Explicit configuration changes invalidate
+the cache's destination scope; they do not permit recovery for a different endpoint.
+Configuration retirement is serialized separately from the manager's policy lock.
+Live policy and its shutdown lease are published first, then storage is updated
+without that lock; a blocked accepted enqueue cannot hide a channel-disable or
+destination change from its observers. Existing email-disable drain controls and
+`TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue` pin this ordering and
+require the retirement write to survive shutdown. No read/retention gate is waived.
