@@ -100,11 +100,8 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 	defer conn.Close()
 
 	prober := NewAgentExecProber(server, "")
-	if agentID, ok := prober.GetAgentForHost("node-a"); !ok || agentID != "agent-1" {
-		t.Fatalf("GetAgentForHost(node-a) = (%q, %v), want (agent-1, true)", agentID, ok)
-	}
-	if _, ok := prober.GetAgentForHost("missing-node"); ok {
-		t.Fatalf("expected missing host lookup to return false")
+	if agents := prober.GetConnectedAgents(); len(agents) != 1 || agents[0].AgentID != "agent-1" || agents[0].Hostname != "node-a" {
+		t.Fatalf("GetConnectedAgents() = %+v, want agent-1 on node-a", agents)
 	}
 
 	done := make(chan pingAgentResult, 1)
@@ -200,8 +197,8 @@ func TestAgentExecProber_StaysInsideItsOrganization(t *testing.T) {
 	defer conn.Close()
 
 	prober := NewAgentExecProber(server, "org-a")
-	if agentID, ok := prober.GetAgentForHost("node-a"); ok {
-		t.Fatalf("org-a resolved a default-organization agent %q", agentID)
+	if agents := prober.GetConnectedAgents(); len(agents) != 0 {
+		t.Fatalf("org-a listed default-organization agents %+v", agents)
 	}
 	// The agent never replies, so a dispatch that reached it would fail by
 	// timing out; only the organization check reports it as not connected.

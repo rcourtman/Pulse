@@ -19,13 +19,13 @@ type ConnectionsHandlers struct {
 	getMonitor                   func(ctx context.Context) *monitoring.Monitor
 	getTrueNASPoller             func(ctx context.Context) *monitoring.TrueNASPoller
 	getVMwarePoller              func(ctx context.Context) *monitoring.VMwarePoller
-	agentCommandSessionConnected func(organizationID, tokenID, agentID, hostname string) bool
+	agentCommandSessionConnected func(organizationID, tokenID, agentID string) bool
 }
 
 // SetAgentCommandSessionProvider wires the live command-channel registry into
 // the ledger. Telemetry liveness alone is not command readiness.
 func (h *ConnectionsHandlers) SetAgentCommandSessionProvider(
-	connected func(organizationID, tokenID, agentID, hostname string) bool,
+	connected func(organizationID, tokenID, agentID string) bool,
 ) {
 	if h == nil {
 		return
@@ -89,7 +89,6 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 				organizationID,
 				conn.agentTokenID,
 				conn.agentID,
-				conn.AgentIdentity.Hostname,
 			)
 			conn.commandChannelConnected = &connected
 			conn.Fleet.RemoteControl = connectionFleetRemoteControl(*conn)

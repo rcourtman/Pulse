@@ -25,6 +25,7 @@ type fakeProxmoxActionAgentCommander struct {
 	mutateResult   func(*agentexec.ProxmoxGuestLifecycleResultPayload)
 	receiptVersion *int
 	organizationID string
+	runners        []agentexec.ConnectedAgent
 }
 
 func (f *fakeProxmoxActionAgentCommander) ExecuteCommand(context.Context, string, agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
@@ -36,13 +37,22 @@ func (f *fakeProxmoxActionAgentCommander) GetAgentForHost(string) (string, bool)
 func (f *fakeProxmoxActionAgentCommander) IsAgentConnected(string) bool {
 	panic("generic connectivity is not typed runner authority")
 }
-func (f *fakeProxmoxActionAgentCommander) GetActionRunnerForHostForOrganization(org, hostname string) (string, bool) {
+func (f *fakeProxmoxActionAgentCommander) GetActionRunnersForOrganization(org string) []agentexec.ConnectedAgent {
 	f.organizationID = org
-	id := "node-agent-1"
-	if f.agentByHost != nil {
-		id = f.agentByHost[hostname]
+	if f.runners != nil {
+		return f.runners
 	}
-	return id, id != "" && (f.connected == nil || f.connected[id])
+	byHost := f.agentByHost
+	if byHost == nil {
+		byHost = map[string]string{"delly": "node-agent-1"}
+	}
+	runners := make([]agentexec.ConnectedAgent, 0, len(byHost))
+	for hostname, id := range byHost {
+		if id != "" && (f.connected == nil || f.connected[id]) {
+			runners = append(runners, agentexec.ConnectedAgent{AgentID: id, Hostname: hostname})
+		}
+	}
+	return runners
 }
 func (f *fakeProxmoxActionAgentCommander) AgentOperationReceiptVersion(string) int {
 	if f.receiptVersion != nil {
@@ -238,6 +248,80 @@ func TestProxmoxGuestActionExecutorResolvesTypedRunnerByNodeHostname(t *testing.
 		if agentID != "command-agent-1" {
 			t.Fatalf("called agent %q, want command-agent-1; all calls %#v", agentID, agents.callAgents)
 		}
+	}
+}
+
+// Node names and VMIDs repeat across installations, and a typed lifecycle action
+// carries only the VMID. A runner chosen by the node's name could stop the other
+// machine's guest 160 (#2681).
+func TestProxmoxGuestActionRunsOnlyThroughTheGuestsOwnNodeRunner(t *testing.T) {
+	now := time.Now().UTC()
+	resources := []unified.Resource{}
+	for _, instance := range []string{"home", "hetzner"} {
+		resources = append(resources, unified.Resource{
+			ID: "node-" + instance, Type: unified.ResourceTypeAgent, Name: "pmx1", LastSeen: now,
+			Sources: []unified.DataSource{unified.SourceProxmox, unified.SourceAgent},
+			Proxmox: &unified.ProxmoxData{Instance: instance, NodeName: "pmx1", SourceID: instance + ":pmx1"},
+			Agent:   &unified.AgentData{AgentID: "runner-" + instance, Hostname: "pmx1"},
+		})
+		guest := proxmoxGuestActionResource("vm:"+instance, unified.ResourceTypeVM, "running", now)
+		guest.Proxmox.Instance = instance
+		guest.Proxmox.NodeName = "pmx1"
+		resources = append(resources, guest)
+	}
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: resources})
+	both := []agentexec.ConnectedAgent{{AgentID: "runner-home", Hostname: "pmx1"}, {AgentID: "runner-hetzner", Hostname: "pmx1"}}
+
+	// A readiness pass shares one lookup memo across every row it checks.
+	memo := withAgentLookupMemo(context.Background())
+	check := func(agents *fakeProxmoxActionAgentCommander, resourceID string) unified.ResourceActionReadiness {
+		var guest unified.Resource
+		for _, candidate := range resources {
+			if candidate.ID == resourceID {
+				guest = candidate
+			}
+		}
+		return newProxmoxGuestActionExecutor(h, agents, nil).(proxmoxGuestActionExecutor).CheckActionAvailable(memo, unified.ActionRequest{
+			RequestID: "req", ResourceID: resourceID, CapabilityName: "reboot", Reason: "operator requested reboot", RequestedBy: "operator",
+		}, guest)
+	}
+
+	for _, instance := range []string{"home", "hetzner"} {
+		agents := &fakeProxmoxActionAgentCommander{runners: both}
+		if readiness := check(agents, "vm:"+instance); !readiness.Available {
+			t.Fatalf("%s's guest readiness = %+v, want its own runner", instance, readiness)
+		}
+		result, err := newProxmoxGuestActionExecutor(h, agents, nil).ExecuteAction(actionDispatchTestContext(t, "act_"+instance), proxmoxGuestActionRecord("act_"+instance, "vm:"+instance, "reboot"))
+		if err != nil {
+			t.Fatalf("%s: %v", instance, err)
+		}
+		if result == nil || !result.Success {
+			t.Fatalf("%s: result = %+v", instance, result)
+		}
+		if len(agents.callAgents) == 0 {
+			t.Fatalf("%s: no dispatch", instance)
+		}
+		for _, agentID := range agents.callAgents {
+			if agentID != "runner-"+instance {
+				t.Fatalf("%s's guest dispatched to %s", instance, agentID)
+			}
+		}
+	}
+
+	onlyHome := &fakeProxmoxActionAgentCommander{runners: both[:1]}
+	memo = withAgentLookupMemo(context.Background())
+	if readiness := check(onlyHome, "vm:home"); !readiness.Available {
+		t.Fatalf("home's guest readiness with its runner up = %+v", readiness)
+	}
+	if readiness := check(onlyHome, "vm:hetzner"); readiness.Available || readiness.ReasonCode != "action_runner_unavailable" {
+		t.Fatalf("hetzner's guest readiness with only home's runner up = %+v", readiness)
+	}
+	if _, err := newProxmoxGuestActionExecutor(h, onlyHome, nil).ExecuteAction(actionDispatchTestContext(t, "act_offline"), proxmoxGuestActionRecord("act_offline", "vm:hetzner", "reboot")); err == nil {
+		t.Fatal("hetzner's guest ran through home's runner")
+	}
+	if len(onlyHome.callAgents) != 0 {
+		t.Fatalf("hetzner's guest dispatched to %v", onlyHome.callAgents)
 	}
 }
 

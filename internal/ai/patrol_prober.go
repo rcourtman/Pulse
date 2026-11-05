@@ -34,12 +34,12 @@ func NewAgentExecProber(server *agentexec.Server, organizationID string) GuestPr
 	return &agentExecProber{server: server, organizationID: organizationID}
 }
 
-// GetAgentForHost returns the agent ID for a given hostname, if connected.
-func (p *agentExecProber) GetAgentForHost(hostname string) (string, bool) {
+// GetConnectedAgents lists the organization's connected agents.
+func (p *agentExecProber) GetConnectedAgents() []agentexec.ConnectedAgent {
 	if p.server == nil {
-		return "", false
+		return nil
 	}
-	return p.server.GetAgentForHostForOrganization(p.organizationID, hostname)
+	return p.server.GetConnectedAgentsForOrganization(p.organizationID)
 }
 
 // PingGuests pings a list of IPs from a specific agent and returns results.

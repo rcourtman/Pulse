@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	aitools "github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -77,22 +79,21 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		}
 	}
 
-	// Build a map of available agents for quick lookup and error messages
-	agentMap := make(map[string]agentexec.ConnectedAgent) // lowercase hostname -> agent
+	// Available hosts, for error messages
 	var agentHostnames []string
 	for _, agent := range agents {
-		hostname := strings.TrimSpace(strings.ToLower(agent.Hostname))
-		agentMap[hostname] = agent
 		agentHostnames = append(agentHostnames, agent.Hostname)
 	}
 
+	// The connection settles which node a repeated node name means.
+	targetInstance := ""
+	if inst, ok := req.Context["instance"].(string); ok {
+		targetInstance = inst
+	}
+	targetGuestID := ""
+
 	// Step 1: Try VMID-based routing (most authoritative for pct/qm commands)
 	if vmID, requiresOwnerNode, found := extractVMIDFromCommand(command); found && requiresOwnerNode {
-		targetInstance := ""
-		if inst, ok := req.Context["instance"].(string); ok {
-			targetInstance = inst
-		}
-
 		guests := s.lookupGuestsByVMID(vmID, targetInstance)
 
 		if len(guests) == 0 {
@@ -100,6 +101,8 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 				fmt.Sprintf("VMID %d not found in Pulse state - routing based on context", vmID))
 		} else if len(guests) == 1 {
 			result.TargetNode = strings.ToLower(guests[0].Node)
+			targetInstance = guests[0].Instance
+			targetGuestID = guests[0].ResourceID
 			result.RoutingMethod = "vmid_lookup"
 			log.Info().
 				Int("vmid", vmID).
@@ -112,6 +115,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 				for _, g := range guests {
 					if strings.EqualFold(g.Instance, targetInstance) {
 						result.TargetNode = strings.ToLower(g.Node)
+						targetGuestID = g.ResourceID
 						result.RoutingMethod = "vmid_lookup_with_instance"
 						log.Info().
 							Int("vmid", vmID).
@@ -197,15 +201,11 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 		if vmID := extractVMIDFromTargetID(req.TargetID); vmID > 0 {
 			result.TargetVMID = strconv.Itoa(vmID)
 
-			// Try instance from context
-			targetInstance := ""
-			if inst, ok := req.Context["instance"].(string); ok {
-				targetInstance = inst
-			}
-
 			guests := s.lookupGuestsByVMID(vmID, targetInstance)
 			if len(guests) == 1 {
 				result.TargetNode = strings.ToLower(guests[0].Node)
+				targetInstance = guests[0].Instance
+				targetGuestID = guests[0].ResourceID
 				result.RoutingMethod = "target_id_vmid_lookup"
 				log.Debug().
 					Int("vmid", vmID).
@@ -219,9 +219,20 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 	// Step 4: Try to find exact matching agent
 	if result.TargetNode != "" {
 		targetNodeClean := strings.TrimSpace(strings.ToLower(result.TargetNode))
+		s.mu.RLock()
+		rs := s.readState
+		s.mu.RUnlock()
 
-		// EXACT match only - no substring matching
-		if agent, exists := agentMap[targetNodeClean]; exists {
+		// EXACT match only - no substring matching. A name two machines share routes
+		// only through the node's own agent, and a guest found above names its node.
+		var agent agentexec.ConnectedAgent
+		var exists bool
+		if targetGuestID != "" {
+			agent, exists = aitools.ConnectedAgentForGuestNode(rs, targetGuestID, targetInstance, targetNodeClean, agents)
+		} else {
+			agent, exists = aitools.ConnectedAgentForNodeName(rs, targetInstance, targetNodeClean, agents)
+		}
+		if exists {
 			result.AgentID = agent.AgentID
 			result.AgentHostname = agent.Hostname
 			log.Debug().
@@ -230,6 +241,15 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 				Str("method", result.RoutingMethod).
 				Msg("Exact agent match found")
 			return result, nil
+		}
+
+		if machineNameRepeats(rs, targetInstance, targetNodeClean, agents) {
+			return nil, &RoutingError{
+				TargetNode:      result.TargetNode,
+				AvailableAgents: agentHostnames,
+				Reason:          fmt.Sprintf("More than one machine is named %q", result.TargetNode),
+				Suggestion:      "Name its Proxmox connection in the instance field, or target the resource by its ID",
+			}
 		}
 
 		// Try cluster peer routing
@@ -289,6 +309,38 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 
 }
 
+// machineNameRepeats reports a name that cannot pick a machine: two connected
+// agents hold it, or two nodes do with no connection to settle which.
+func machineNameRepeats(rs unifiedresources.ReadState, instance, name string, agents []agentexec.ConnectedAgent) bool {
+	var holder string
+	for _, agent := range agents {
+		if !unifiedresources.HostnamesEquivalent(agent.Hostname, name) {
+			continue
+		}
+		if holder != "" && holder != agent.AgentID {
+			return true
+		}
+		holder = agent.AgentID
+	}
+	if strings.TrimSpace(instance) != "" {
+		return false
+	}
+	return nodesNamed(rs, name) > 1
+}
+
+func nodesNamed(rs unifiedresources.ReadState, name string) int {
+	if rs == nil {
+		return 0
+	}
+	count := 0
+	for _, node := range rs.Nodes() {
+		if node != nil && unifiedresources.HostnamesEquivalent(node.NodeName(), name) {
+			count++
+		}
+	}
+	return count
+}
+
 // extractVMIDFromTargetID extracts a numeric VMID from various target ID formats.
 // Handles formats like:
 // - "homelab-pve-node-106" -> 106
@@ -330,7 +382,9 @@ func extractVMIDFromTargetID(targetID string) int {
 
 // findClusterPeerAgent finds an agent that can execute commands for a node in the same cluster.
 // For PVE clusters, any node can execute pvesh/vzdump commands, but pct exec/qm guest exec
-// require the agent to be on the specific node.
+// require the agent to be on the specific node. Node names repeat across
+// connections, so a repeated target says nothing about which cluster it is in, and
+// a same-named agent is a peer only if it is that member's own.
 func (s *Service) findClusterPeerAgent(targetNode string, agents []agentexec.ConnectedAgent) string {
 	// Check for nil persistence
 	if s.persistence == nil {
@@ -343,14 +397,22 @@ func (s *Service) findClusterPeerAgent(targetNode string, agents []agentexec.Con
 		return ""
 	}
 
+	s.mu.RLock()
+	rs := s.readState
+	s.mu.RUnlock()
+	if nodesNamed(rs, targetNode) > 1 {
+		return ""
+	}
+
 	// Find which cluster the target node belongs to
-	var targetCluster string
+	var targetCluster, targetClusterInstance string
 	var clusterEndpoints []config.ClusterEndpoint
 
 	for _, pve := range nodesConfig.PVEInstances {
 		if strings.EqualFold(pve.Name, targetNode) {
 			if pve.IsCluster && pve.ClusterName != "" {
 				targetCluster = pve.ClusterName
+				targetClusterInstance = pve.Name
 				clusterEndpoints = pve.ClusterEndpoints
 			}
 			break
@@ -360,6 +422,7 @@ func (s *Service) findClusterPeerAgent(targetNode string, agents []agentexec.Con
 			if strings.EqualFold(ep.NodeName, targetNode) {
 				if pve.IsCluster && pve.ClusterName != "" {
 					targetCluster = pve.ClusterName
+					targetClusterInstance = pve.Name
 					clusterEndpoints = pve.ClusterEndpoints
 				}
 				break
@@ -381,6 +444,10 @@ func (s *Service) findClusterPeerAgent(targetNode string, agents []agentexec.Con
 	for _, agent := range agents {
 		agentHostname := strings.ToLower(agent.Hostname)
 		if clusterNodes[agentHostname] {
+			member, ok := aitools.ConnectedAgentForNodeName(rs, targetClusterInstance, agent.Hostname, agents)
+			if !ok || member.AgentID != agent.AgentID {
+				continue
+			}
 			log.Debug().
 				Str("target_node", targetNode).
 				Str("cluster", targetCluster).

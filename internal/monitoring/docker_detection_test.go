@@ -1409,6 +1409,66 @@ func TestCollectProxmoxGuestDockerInventory_NoProvenNodeAgentIsNotAFailure(t *te
 	}
 }
 
+// A proven agent with no session yet, as while agents reconnect after a Pulse
+// restart, dispatches nothing. Counting that opened the node breaker on every
+// restart, and the node's LXC Docker containers left the Docker page until it closed.
+func TestProxmoxNodeAgentWithoutASessionIsNotAFailure(t *testing.T) {
+	notConnected := fmt.Errorf("command execution failed: %w", ErrProxmoxNodeAgentNotConnected)
+	guest := models.Container{ID: "ct-1", VMID: 101, Name: "guest", Instance: "site-b", Node: "pve", Status: "running", Uptime: 60}
+
+	t.Run("probe", func(t *testing.T) {
+		state := models.NewState()
+		known := guest
+		known.HasDocker, known.DockerCheckedAt, known.Uptime = true, time.Now().Add(-time.Hour), 3600
+		state.UpdateContainers([]models.Container{known})
+		monitor := &Monitor{state: state}
+		checker := &mockDockerChecker{errs: map[int]error{101: notConnected}}
+		monitor.SetDockerChecker(checker)
+
+		for cycle := 0; cycle < proxmoxGuestDockerNodeFailureThreshold+1; cycle++ {
+			result := monitor.CheckContainersForDocker(context.Background(), []models.Container{guest})
+			if !result[0].HasDocker || !result[0].DockerCheckedAt.IsZero() {
+				t.Fatalf("cycle %d: want the prior answer kept and the guest asked again: %+v", cycle, result[0])
+			}
+			state.UpdateContainers(result)
+		}
+		if monitor.dockerNodeProbeBreakerOpen(guest) || monitor.dockerProbeInFailureBackoff(guest.ID) {
+			t.Fatal("a session gap counted against the node or the guest")
+		}
+		monitor.dockerProbeFailureMu.Lock()
+		noted := len(monitor.dockerNodesWithoutProvenAgent)
+		monitor.dockerProbeFailureMu.Unlock()
+		if noted != 0 {
+			t.Fatal("a linked agent without a session was reported as no agent linked")
+		}
+
+		// The agent is back, so the guest is answered on the next poll.
+		checker.mu.Lock()
+		checker.errs = nil
+		checker.results = map[int]bool{101: false}
+		checker.mu.Unlock()
+		result := monitor.CheckContainersForDocker(context.Background(), []models.Container{guest})
+		if result[0].HasDocker || result[0].DockerCheckedAt.IsZero() {
+			t.Fatalf("guest was not asked once its agent had a session: %+v", result[0])
+		}
+	})
+
+	t.Run("inventory", func(t *testing.T) {
+		monitor := &Monitor{state: models.NewState()}
+		monitor.SetDockerInventoryCollector(&routedInventoryCollector{err: notConnected})
+		withDocker := guest
+		withDocker.HasDocker = true
+		for cycle := 0; cycle < proxmoxGuestDockerNodeFailureThreshold+1; cycle++ {
+			monitor.CollectProxmoxGuestDockerInventory(context.Background(), []models.Container{withDocker})
+		}
+		monitor.dockerProbeFailureMu.Lock()
+		defer monitor.dockerProbeFailureMu.Unlock()
+		if len(monitor.dockerNodeProbeFailures) != 0 || len(monitor.dockerProbesInFlight) != 0 || len(monitor.dockerNodesWithoutProvenAgent) != 0 {
+			t.Fatalf("session gap left state behind: node=%d inFlight=%d noted=%d", len(monitor.dockerNodeProbeFailures), len(monitor.dockerProbesInFlight), len(monitor.dockerNodesWithoutProvenAgent))
+		}
+	})
+}
+
 // A same-named node on another connection is another machine, so its failing
 // commands must not stop this node's probes, and this node's success must not
 // close that node's breaker.

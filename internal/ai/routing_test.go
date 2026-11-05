@@ -707,3 +707,130 @@ func TestFindClusterPeerAgent_EndpointMatch(t *testing.T) {
 		t.Errorf("expected peer agent, got %q", got)
 	}
 }
+
+// Two installations can reuse a node name and VMIDs, and each machine's agent now
+// holds its own session (#2681). The legacy route used to take whichever agent the
+// map held last.
+func TestRouteToAgent_SameNamedMachines(t *testing.T) {
+	registry := unifiedresources.NewRegistry(nil)
+	records := []unifiedresources.Resource{}
+	for _, instance := range []string{"home", "hetzner"} {
+		nodeID := "node-" + instance
+		records = append(records,
+			unifiedresources.Resource{
+				ID: nodeID, Type: unifiedresources.ResourceTypeAgent, Name: "pmx1",
+				Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+				Proxmox: &unifiedresources.ProxmoxData{Instance: instance, NodeName: "pmx1", SourceID: instance + ":pmx1"},
+				Agent:   &unifiedresources.AgentData{AgentID: "agent-" + instance, Hostname: "pmx1"},
+			},
+			unifiedresources.Resource{
+				ID: unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, instance, 100), Type: unifiedresources.ResourceTypeVM, Name: "docker1",
+				Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox}, ParentID: &nodeID,
+				Proxmox: &unifiedresources.ProxmoxData{Instance: instance, NodeName: "pmx1", VMID: 100, SourceID: instance + ":pmx1:100"},
+			},
+		)
+	}
+	onlyHetznerNodeID := "node-hetzner"
+	records = append(records, unifiedresources.Resource{
+		ID: unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "hetzner", 200), Type: unifiedresources.ResourceTypeVM, Name: "only-hetzner",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox}, ParentID: &onlyHetznerNodeID,
+		Proxmox: &unifiedresources.ProxmoxData{Instance: "hetzner", NodeName: "pmx1", VMID: 200, SourceID: "hetzner:pmx1:200"},
+	})
+	registry.IngestResources(records)
+
+	both := []agentexec.ConnectedAgent{{AgentID: "agent-home", Hostname: "pmx1"}, {AgentID: "agent-hetzner", Hostname: "pmx1"}}
+	s := &Service{readState: registry}
+
+	t.Run("a named connection reaches that machine's own agent", func(t *testing.T) {
+		for _, instance := range []string{"home", "hetzner"} {
+			req := ExecuteRequest{TargetType: "vm", Context: map[string]interface{}{"instance": instance}}
+			for i := 0; i < 20; i++ {
+				result, err := s.routeToAgent(req, "pct exec 100 -- hostname", both)
+				if err != nil {
+					t.Fatalf("%s: %v", instance, err)
+				}
+				if result.AgentID != "agent-"+instance {
+					t.Fatalf("%s's guest routed to %s", instance, result.AgentID)
+				}
+			}
+		}
+	})
+
+	t.Run("a VMID only one connection has finds its machine with no connection named", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			result, err := s.routeToAgent(ExecuteRequest{TargetType: "vm"}, "pct exec 200 -- hostname", both)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.AgentID != "agent-hetzner" {
+				t.Fatalf("hetzner's only guest routed to %s", result.AgentID)
+			}
+		}
+		if result, err := s.routeToAgent(ExecuteRequest{TargetType: "vm"}, "pct exec 200 -- hostname", both[:1]); err == nil {
+			t.Fatalf("hetzner's only guest borrowed home's agent: %s", result.AgentID)
+		}
+	})
+
+	t.Run("a bare repeated name refuses and says why", func(t *testing.T) {
+		_, err := s.routeToAgent(ExecuteRequest{TargetType: "agent", Context: map[string]interface{}{"node": "pmx1"}}, "uptime", both)
+		routingErr, ok := err.(*RoutingError)
+		if !ok || !strings.Contains(routingErr.Reason, "More than one machine") {
+			t.Fatalf("got %v, want a same-name refusal", err)
+		}
+	})
+
+	t.Run("a machine whose agent is offline does not borrow its namesake's", func(t *testing.T) {
+		req := ExecuteRequest{TargetType: "vm", Context: map[string]interface{}{"instance": "hetzner"}}
+		result, err := s.routeToAgent(req, "pct exec 100 -- hostname", both[:1])
+		if err == nil {
+			t.Fatalf("hetzner's guest routed to %s", result.AgentID)
+		}
+	})
+
+	t.Run("with no inventory two sessions under one name still refuse", func(t *testing.T) {
+		bare := &Service{}
+		_, err := bare.routeToAgent(ExecuteRequest{TargetType: "agent", Context: map[string]interface{}{"node": "pmx1"}}, "uptime", both)
+		if routingErr, ok := err.(*RoutingError); !ok || !strings.Contains(routingErr.Reason, "More than one machine") {
+			t.Fatalf("got %v, want a same-name refusal", err)
+		}
+	})
+}
+
+func TestFindClusterPeerAgent_NeverTakesANamesakeForAMember(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	if err := persistence.SaveNodesConfig([]config.PVEInstance{{
+		Name: "cluster-master", IsCluster: true, ClusterName: "cluster-a",
+		ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "node-a"}, {NodeName: "node-b"}},
+	}}, nil, nil); err != nil {
+		t.Fatalf("SaveNodesConfig: %v", err)
+	}
+	member := unifiedresources.Resource{
+		ID: "node-b-member", Type: unifiedresources.ResourceTypeAgent, Name: "node-b",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+		Proxmox: &unifiedresources.ProxmoxData{Instance: "cluster-master", NodeName: "node-b", SourceID: "cluster-master:node-b"},
+		Agent:   &unifiedresources.AgentData{AgentID: "agent-member", Hostname: "node-b"},
+	}
+	otherSite := unifiedresources.Resource{
+		ID: "node-b-other", Type: unifiedresources.ResourceTypeAgent, Name: "node-b",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+		Proxmox: &unifiedresources.ProxmoxData{Instance: "other-site", NodeName: "node-b", SourceID: "other-site:node-b"},
+		Agent:   &unifiedresources.AgentData{AgentID: "agent-namesake", Hostname: "node-b"},
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources([]unifiedresources.Resource{member, otherSite})
+	s := &Service{persistence: persistence, readState: registry}
+
+	namesake := agentexec.ConnectedAgent{AgentID: "agent-namesake", Hostname: "node-b"}
+	own := agentexec.ConnectedAgent{AgentID: "agent-member", Hostname: "node-b"}
+	if got := s.findClusterPeerAgent("node-a", []agentexec.ConnectedAgent{namesake}); got != "" {
+		t.Fatalf("a namesake at another site was taken for a cluster member: %q", got)
+	}
+	for i := 0; i < 20; i++ {
+		if got := s.findClusterPeerAgent("node-a", []agentexec.ConnectedAgent{namesake, own}); got != "agent-member" {
+			t.Fatalf("peer = %q, want the member's own agent", got)
+		}
+	}
+	if got := s.findClusterPeerAgent("node-b", []agentexec.ConnectedAgent{own}); got != "" {
+		t.Fatalf("a repeated target name chose cluster-a's peer: %q", got)
+	}
+}

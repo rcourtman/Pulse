@@ -98,7 +98,6 @@ func strandedActionDispatchWindowElapsed(attempt unified.ActionDispatchAttempt, 
 
 type actionAgentCommander interface {
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
-	GetAgentForHost(hostname string) (string, bool)
 	IsAgentConnected(agentID string) bool
 }
 
@@ -108,7 +107,6 @@ type actionPreflightAgentCommander interface {
 
 type scopedActionAgentCommander interface {
 	IsAgentConnectedForOrganization(organizationID, agentID string) bool
-	GetAgentForHostForOrganization(organizationID, hostname string) (string, bool)
 	GetAgentForTokenForOrganization(organizationID, tokenID string) (string, bool)
 }
 
@@ -150,7 +148,6 @@ type agentLookupKind uint8
 
 const (
 	agentLookupConnected agentLookupKind = iota
-	agentLookupHost
 	agentLookupToken
 	agentLookupIdentity
 	agentLookupReceiptVersion
@@ -200,21 +197,6 @@ func isAgentCommandConnected(ctx context.Context, agents any, agentID string) bo
 		}
 		return agentLookupResult{}
 	}).ok
-}
-
-func commandAgentForHost(ctx context.Context, agents actionAgentCommander, hostname string) (string, bool) {
-	result := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupHost, first: hostname}, func() agentLookupResult {
-		if scoped, ok := agents.(scopedActionAgentCommander); ok {
-			agentID, found := scoped.GetAgentForHostForOrganization(GetOrgID(ctx), hostname)
-			return agentLookupResult{agentID: agentID, ok: found}
-		}
-		if agents == nil {
-			return agentLookupResult{}
-		}
-		agentID, found := agents.GetAgentForHost(hostname)
-		return agentLookupResult{agentID: agentID, ok: found}
-	})
-	return result.agentID, result.ok
 }
 
 func commandAgentForToken(ctx context.Context, agents actionAgentCommander, tokenID string) (string, bool) {

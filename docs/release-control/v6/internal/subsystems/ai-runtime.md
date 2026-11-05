@@ -3296,7 +3296,14 @@ resolve canonical/source IDs and unique aliases before collection, reject
     `internal/ai/tools/tools_control.go`, and adjacent AI command helpers may
     match a short host against its FQDN, but they must not broaden that
     fallback into a generic short-name collapse that would make two distinct
-    FQDNs with the same short host look interchangeable.
+    FQDNs with the same short host look interchangeable. Two machines can also
+    hold one exact hostname, each under its own agent ID (#2681).
+    `tools.ConnectedAgentNamed` refuses that tie and never reads an agent ID as a
+    name. A machine whose agent is offline never borrows its namesake's:
+    `tools.ConnectedAgentForGuestNode` starts from the guest's own record for Patrol
+    probes, since a guest's address means nothing from another machine's network, and
+    `tools.ConnectedAgentForNodeName` serves the legacy `routeToAgent` and its cluster
+    peer lookup, where a request names a node and perhaps a connection.
 11. Keep AI runtime transport compatibility separate from operator-facing
     product copy. Existing Patrol payload fields such as `fixed_count`,
     `auto_fix_model`, and `patrol_auto_fix` may remain stable wire/API names,

@@ -245,9 +245,54 @@ func TestProxmoxGuestDockerProbesStayOnTheGuestsOwnNode(t *testing.T) {
 		}
 	})
 
-	t.Run("an agent refused a session never borrows another machine's through a shared token", func(t *testing.T) {
-		// The command server admits one session per hostname, so site-b's agent
-		// has none while site-a's holds it, and both enrolled with one token.
+	t.Run("two machines with one hostname both hold a session and answer for their own guests", func(t *testing.T) {
+		rig := newDockerRouteRig(t, siteA, siteB)
+		rig.state.UpsertHost(dockerRouteHost("agent-a", "pve", "token-a", "10.0.0.5"))
+		rig.state.UpsertHost(dockerRouteHost("agent-b", "pve", "token-b", "10.1.0.5"))
+		rig.state.UpdateNodesForInstance("site-a", []models.Node{dockerRouteNode("site-a", "pve", "10.0.0.5")})
+		rig.state.UpdateNodesForInstance("site-b", []models.Node{dockerRouteNode("site-b", "pve", "10.1.0.5")})
+		agentA := rig.connectAgent("agent-a", "pve", "token-a", true)
+		agentB := rig.connectAgent("agent-b", "pve", "token-b", false)
+
+		onA := probeDocker(rig, dockerRouteGuest("site-a", "pve", 101))
+		onB := probeDocker(rig, dockerRouteGuest("site-b", "pve", 101))
+
+		if got := agentA.ranCommands(); len(got) != 1 {
+			t.Fatalf("site-a's agent ran %q, want only its own guest's probe", got)
+		}
+		if got := agentB.ranCommands(); len(got) != 1 {
+			t.Fatalf("site-b's agent ran %q, want only its own guest's probe", got)
+		}
+		if !onA.HasDocker || onB.HasDocker {
+			t.Fatalf("answers crossed the sites: site-a=%v site-b=%v, want true and false", onA.HasDocker, onB.HasDocker)
+		}
+	})
+
+	t.Run("an agent reconnecting after a restart is probed as soon as it has a session", func(t *testing.T) {
+		rig := newDockerRouteRig(t, siteA, siteB)
+		rig.state.UpsertHost(dockerRouteHost("agent-a", "pve", "token-a", "10.0.0.5"))
+		rig.state.UpsertHost(dockerRouteHost("agent-b", "pve", "token-b", "10.1.0.5"))
+		rig.state.UpdateNodesForInstance("site-a", []models.Node{dockerRouteNode("site-a", "pve", "10.0.0.5")})
+		rig.state.UpdateNodesForInstance("site-b", []models.Node{dockerRouteNode("site-b", "pve", "10.1.0.5")})
+		agentA := rig.connectAgent("agent-a", "pve", "token-a", false)
+
+		for cycle := 0; cycle < 5; cycle++ {
+			probeDocker(rig, dockerRouteGuest("site-b", "pve", 101))
+		}
+		if got := agentA.ranCommands(); len(got) != 0 {
+			t.Fatalf("site-b's guest was probed through site-a's agent: %q", got)
+		}
+
+		agentB := rig.connectAgent("agent-b", "pve", "token-b", true)
+		guest := probeDocker(rig, dockerRouteGuest("site-b", "pve", 101))
+		if got := agentB.ranCommands(); len(got) != 1 || !guest.HasDocker {
+			t.Fatalf("site-b's agent ran %q and the guest reads %+v, want one probe right away", got, guest)
+		}
+	})
+
+	t.Run("an agent with no session never borrows another machine's through a shared token", func(t *testing.T) {
+		// One enrollment token binds one agent ID, so site-b's agent has no session
+		// while site-a's holds the token, and both enrolled with it.
 		rig := newDockerRouteRig(t, siteA, siteB)
 		rig.state.UpsertHost(dockerRouteHost("agent-a", "pve", "shared-token", "10.0.0.5"))
 		rig.state.UpsertHost(dockerRouteHost("agent-b", "pve", "shared-token", "10.1.0.5"))
