@@ -17,6 +17,8 @@
     "scripts/release_ldflags.sh",
     "scripts/installtests/account_portal_workflow_test.go",
     "scripts/installtests/agent_id_recovery_unix_test.go",
+    "scripts/installtests/agent_installed_profile_controls_test.go",
+    "scripts/installtests/agent_installed_profile_systemd_test.go",
     "scripts/installtests/agent_installed_removal_transport_test.go",
     "scripts/installtests/agent_portable_tr_test.go",
     "scripts/installtests/agent_state_dir_lifecycle_test.go",
