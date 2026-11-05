@@ -221,7 +221,7 @@ func TestNativeInstalledProfileWorkflow(t *testing.T) {
 			t.Fatalf("native build omitted %s", required)
 		}
 	}
-	for _, required := range []string{"sudo env -i", "RUNNER_ENVIRONMENT=github-hosted", "GITHUB_REPOSITORY=rcourtman/Pulse", "PULSE_NATIVE_INSTALLED_PROFILE=1", `PULSE_NATIVE_PROFILE_INPUTS="$PULSE_NATIVE_PROFILE_INPUTS"`, "'^TestAgentInstalledProfileSystemd$'", "-test.timeout=11m"} {
+	for _, required := range []string{`test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"`, "git diff --exit-code HEAD", "sudo env -i", "RUNNER_ENVIRONMENT=github-hosted", "GITHUB_REPOSITORY=rcourtman/Pulse", "PULSE_NATIVE_INSTALLED_PROFILE=1", `PULSE_NATIVE_PROFILE_INPUTS="$PULSE_NATIVE_PROFILE_INPUTS"`, "'^TestAgentInstalledProfileSystemd$'", "-test.timeout=11m"} {
 		if !strings.Contains(execute.Run, required) {
 			t.Fatalf("native execution omitted %s", required)
 		}

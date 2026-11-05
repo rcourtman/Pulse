@@ -124,6 +124,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --exit-code HEAD
           sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C \
             GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted GITHUB_REPOSITORY=rcourtman/Pulse \
             EXPECTED_SOURCE_SHA="$EXPECTED_SOURCE_SHA" RUNNER_TEMP="$RUNNER_TEMP" \

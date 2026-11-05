@@ -103,6 +103,7 @@ func nativeProfileCommand(t *testing.T, receipt *nativeProfileReceipt, executabl
 	if receipt != nil {
 		receipt.Commands = append(receipt.Commands, map[string]any{
 			"executable": filepath.Base(executable), "exit": exit, "deadline": ctx.Err() != nil,
+			"command_error": err != nil, "wait_delay_exceeded": errors.Is(err, exec.ErrWaitDelay),
 			"output_bytes": len(output), "output_sha256": secureRuntimeHash(output),
 		})
 	}
@@ -280,18 +281,18 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 			}
 		}
 	}
-	if _, err := exec.Command("id", "pulse-agent").Output(); err == nil {
-		t.Fatal("refusing pre-existing pulse-agent account")
-	}
-	if _, err := exec.Command("getent", "group", "pulse-agent").Output(); err == nil {
-		t.Fatal("refusing pre-existing pulse-agent group")
+	for _, database := range []string{"passwd", "group"} {
+		_, err := nativeProfileCommand(t, nil, "getent", database, "pulse-agent")
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 2 {
+			t.Fatalf("cannot confirm absent pulse-agent %s entry", database)
+		}
 	}
 	source := env["EXPECTED_SOURCE_SHA"]
-	head := strings.TrimSpace(string(nativeProfileMust(t, nil, "git", "-C", repoFile(), "rev-parse", "HEAD")))
-	if head != source {
-		t.Fatal("native checkout/source mismatch")
-	}
-	nativeProfileMust(t, nil, "git", "-C", repoFile(), "diff", "--exit-code", "HEAD")
+	// The ordinary checkout owner verifies HEAD and cleanliness immediately
+	// before sudo. Root does not alter Git trust/configuration to read a
+	// checkout owned by a different user. Every supplied application binary is
+	// also independently bound to this revision by its clean VCS build record.
 	dir := os.Getenv("PULSE_NATIVE_PROFILE_INPUTS")
 	if !filepath.IsAbs(dir) {
 		t.Fatal("native source-built inputs directory must be absolute")
@@ -349,10 +350,10 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	}
 	// From this point every fixed install path was observed absent and is owned
 	// solely by this lab. Failed stop or remaining process prevents deletion.
-	t.Cleanup(func() { nativeProfileCleanup(t, receipt) })
 	if err := os.Mkdir(nativeProfileRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { nativeProfileCleanup(t, receipt) })
 	caPath := filepath.Join(nativeProfileRoot, "ca.pem")
 	if err := os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o644); err != nil {
 		t.Fatal(err)
@@ -386,6 +387,10 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	if runnerPID == "0" || runnerPID == "" {
 		t.Fatal("independent action runner has no process")
 	}
+	runnerPIDNumber, err := strconv.Atoi(runnerPID)
+	if err != nil || secureRuntimeProcessExecutableHash(t, runnerPIDNumber) != receipt.Artifacts["runner"] {
+		t.Fatal("running action runner is not the signed input")
+	}
 	checkRunner := func() {
 		if !reflect.DeepEqual(runnerState, nativeProfileFiles(t, runnerPaths...)) {
 			t.Fatal("collector migration changed the independent action runner files")
@@ -412,6 +417,26 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		if !reflect.DeepEqual(baselineState[caPath], nativeProfileFiles(t, caPath)[caPath]) {
 			t.Fatal("saved CA bytes/metadata changed")
 		}
+	}
+	waitReport := func(version string, after time.Time, safe bool) secureRuntimeLabReport {
+		deadline := time.Now().Add(45 * time.Second)
+		for time.Now().Before(deadline) {
+			reports, _, _, _ := fixture.snapshot()
+			for _, report := range reports {
+				if !report.ReceivedAt.After(after) || report.AgentVersion != version || report.CommandsEnabled {
+					continue
+				}
+				if safe && !report.RunningAsRoot && report.ServiceUser == "pulse-agent" && report.Authority == "monitoring-only" && report.TypedHelper {
+					return report
+				}
+				if !safe && report.RunningAsRoot {
+					return report
+				}
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+		t.Fatal("no fresh authenticated HTTPS report from the selected executable/profile")
+		return secureRuntimeLabReport{}
 	}
 	assertProcess("collector-v1")
 	assertSavedTrust()
@@ -454,24 +479,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		if output, err := install(caPath, "--safe-profile-apply"); err != nil {
 			t.Fatalf("signed TLS safe-profile apply: %v\n%s", err, output)
 		}
-		deadline := time.Now().Add(45 * time.Second)
-		fresh := false
-		for time.Now().Before(deadline) {
-			reports, _, _, _ := fixture.snapshot()
-			for _, report := range reports {
-				if report.ReceivedAt.After(started) && report.AgentVersion == versions["collector-v2"] && !report.RunningAsRoot &&
-					report.ServiceUser == "pulse-agent" && report.Authority == "monitoring-only" && report.TypedHelper && !report.CommandsEnabled {
-					fresh = true
-				}
-			}
-			if fresh {
-				break
-			}
-			time.Sleep(200 * time.Millisecond)
-		}
-		if !fresh {
-			t.Fatal("no fresh authenticated HTTPS report from the changed least-privilege executable")
-		}
+		forwardReport := waitReport(versions["collector-v2"], started, true)
 		secureRuntimeAssertSafeProfile(t)
 		secureRuntimeAssertHelperProtocol(t)
 		assertProcess("collector-v2")
@@ -479,9 +487,15 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		if secureRuntimeHash(secureRuntimeReadFile(t, "/usr/local/lib/pulse-agent/pulse-agent-helper")) != receipt.Artifacts["helper"] {
 			t.Fatal("installed helper differs from signed source input")
 		}
+		helperPIDText := strings.TrimSpace(string(nativeProfileMust(t, receipt, "systemctl", "show", "pulse-agent-helper.service", "--property=MainPID", "--value")))
+		helperPID, err := strconv.Atoi(helperPIDText)
+		if err != nil || helperPID <= 1 || secureRuntimeProcessExecutableHash(t, helperPID) != receipt.Artifacts["helper"] {
+			t.Fatal("running helper differs from signed source input")
+		}
 		checkRunner()
-		phase("forward-"+strconv.FormatBool(flags.active)+"-"+strconv.FormatBool(flags.enabled), map[string]any{"units": nativeProfileState(t, receipt), "collector_sha256": receipt.Artifacts["collector-v2"], "helper_sha256": receipt.Artifacts["helper"], "runner_unchanged": true})
+		phase("forward-"+strconv.FormatBool(flags.active)+"-"+strconv.FormatBool(flags.enabled), map[string]any{"units": nativeProfileState(t, receipt), "collector_sha256": receipt.Artifacts["collector-v2"], "helper_sha256": receipt.Artifacts["helper"], "runner_unchanged": true, "authenticated_report": forwardReport})
 		// The saved installer invocation recovers the endpoint and CA itself.
+		reverseStarted := time.Now()
 		nativeProfileMust(t, receipt, "bash", "/etc/pulse-agent/install.sh", "--safe-profile-rollback")
 		nativeProfileAssertFlags(t, receipt, flags.active, flags.enabled)
 		secureRuntimeWaitForStableIdentity(t, secureRuntimeWithoutCollectorUnit(baseline), 10*time.Second, "native reverse")
@@ -494,6 +508,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		if flags.active {
 			assertProcess("collector-v1")
 			secureRuntimeAssertRootMonitoringProfile(t)
+			waitReport(versions["collector-v1"], reverseStarted, false)
 		}
 		assertSavedTrust()
 		checkRunner()
@@ -616,7 +631,9 @@ func nativeProfileCleanup(t *testing.T, receipt *nativeProfileReceipt) {
 		return
 	}
 	output := filepath.Join(os.Getenv("RUNNER_TEMP"), "pulse-installed-profile.json")
-	if err := os.WriteFile(output, append(data, '\n'), 0o600); err != nil {
+	// Only secret-free source/digest/service observations are published here;
+	// the ordinary artifact uploader must be able to read root's receipt.
+	if err := os.WriteFile(output, append(data, '\n'), 0o644); err != nil {
 		t.Error(err)
 	}
 }
