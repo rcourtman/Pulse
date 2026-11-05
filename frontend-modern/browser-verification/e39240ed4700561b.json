@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "6c5156b6f36cfaab34bd92d721f7b60e889a5b32",
+  "verified_at": "2026-11-05T14:31:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts": "d8c407219db970c32f943d3a5a7a1a8a302c35c53c770d596ffd5f4fe35504ff",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts": "81427589f0365c4e6d6189721cb65d514e3433477d60ba09c5f912bd7cd5dbf6"
+  },
+  "routes": [
+    "/alerts/thresholds/proxmox on a private mock stack with 45 nodes across clusters with one-word and multi-word names",
+    "/proxmox on the same stack, to compare node names",
+    "/alerts/thresholds/docker on the same stack, as the control for the shared hostname rule"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1300
+    },
+    {
+      "width": 900,
+      "height": 1300
+    },
+    {
+      "width": 390,
+      "height": 1344
+    }
+  ],
+  "states": [
+    "Before: nodes in the Analytics and Research clusters read A to F, and nodes in other clusters read only their first word, such as Branch, Core, Disaster and East",
+    "Virtualization Hosts reads Analytics A, Branch Services A, Core Services A, Disaster Recovery A, East Production A, Edge Sites A, Research A and West Production A, the names on the Proxmox page",
+    "Each row keeps its cluster on its second line",
+    "VMs & Containers group headers read as before",
+    "Docker control: rows read App Platform 01, Edge Apps 01 (2) and the rest, unchanged",
+    "No horizontal page scroll at any width; table row heights match the before pass"
+  ],
+  "interactions": [
+    "Searched Analytics A, East Production, Edge Sites, Research, West Production and zzz-nothing: each found the matching whole-named rows, or none",
+    "Opened Configure alert delay for Analytics A: the row's control and the policy panel's Resource field name the same node",
+    "Expanded both sections at all three widths and read the row names"
+  ]
+}

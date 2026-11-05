@@ -617,10 +617,44 @@ describe('ThresholdsTable Resource Rendering', () => {
       expect(screen.getByTestId('section-Virtualization Hosts')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-name-node1')).toHaveTextContent('PVE');
+    expect(screen.getByTestId('resource-name-node1')).toHaveTextContent(/^PVE Node 1$/);
 
     expect(screen.getByTestId('section-VMs & Containers')).toBeInTheDocument();
     expect(screen.getByTestId('resource-name-guest1')).toHaveTextContent('vm1');
+  });
+
+  it('keeps Proxmox node names whole, whether or not they repeat a cluster word', async () => {
+    setPathname('/alerts/thresholds/infrastructure');
+    const node = (id: string, displayName: string, clusterName?: string) => ({
+      id,
+      name: id,
+      displayName,
+      status: 'online',
+      platformData: clusterName ? { clusterName, isClusterMember: true } : undefined,
+    });
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        nodes={[
+          node('standalone', 'Home Lab'),
+          node('west-a', 'West Production A', 'Production West'),
+          node('research-a', 'Research A', 'Research'),
+          node('analytics-a', 'Analytics A', 'Analytics'),
+          node('prefixed', 'Research (pve1)', 'Research'),
+        ]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('section-Virtualization Hosts')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-name-standalone')).toHaveTextContent(/^Home Lab$/);
+    expect(screen.getByTestId('resource-name-west-a')).toHaveTextContent(/^West Production A$/);
+    expect(screen.getByTestId('resource-name-research-a')).toHaveTextContent(/^Research A$/);
+    expect(screen.getByTestId('resource-name-analytics-a')).toHaveTextContent(/^Analytics A$/);
+    expect(screen.getByTestId('resource-name-prefixed')).toHaveTextContent(/^pve1$/);
   });
 
   it('renders policy-redacted guests with their raw display name in operator-local UI', async () => {

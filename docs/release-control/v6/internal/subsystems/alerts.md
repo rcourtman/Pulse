@@ -37,11 +37,13 @@ order, so after a restart a saved key can belong to the other machine.
 `useThresholdsDockerData.test.ts`, `ResourceTable.test.tsx` and
 `AlertIntentPolicyPanel.test.tsx` carry the proof.
 
-### Docker host names and searches on Alert Thresholds (5 November 2026)
+### Host names and searches on Alert Thresholds (5 November 2026)
 
-Docker rows no longer use the Proxmox node rule, which keeps a name's first word
-and prefers a parenthetical. `getFriendlyDockerHostName` keeps a name whole and
-drops only a single-word FQDN's domain. `getFriendlyNodeName` is unchanged.
+Docker and Proxmox rows no longer keep only a name's first word, drop a cluster
+word, or prefer any parenthetical. `getFriendlyHostName` keeps a name whole and
+drops only a single-word FQDN's domain. `getFriendlyNodeName` adds one case:
+`Prod (pve1)` and `pve1 (Prod)` drop the cluster's half, because the row shows
+the cluster on its own.
 
 A search hid live containers before marking their override IDs as seen, so their
 overrides listed under Unassigned Containers. IDs are now marked first. Those

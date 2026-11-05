@@ -54,8 +54,16 @@ describe('thresholdsResourceModel branch coverage', () => {
       expect(getFriendlyNodeName('titan.example.com')).toBe('titan');
     });
 
-    it('prefers a divergent parenthetical alias over the base token', () => {
-      expect(getFriendlyNodeName('titan (relay)')).toBe('relay');
+    it.each([
+      ['Home Lab', undefined],
+      ['West Production A', 'Production West'],
+      ['Research A', 'Research'],
+      ['node1 prod-cluster', 'prod-cluster'],
+      ['Home Lab (2)', undefined],
+      ['titan (relay)', 'prod-cluster'],
+      ['192.168.1.5', undefined],
+    ])('keeps %s whole', (name, clusterName) => {
+      expect(getFriendlyNodeName(name, clusterName)).toBe(name);
     });
 
     it('returns the base token when the parenthetical normalizes to the same value', () => {
@@ -67,8 +75,14 @@ describe('thresholdsResourceModel branch coverage', () => {
       expect(getFriendlyNodeName('cluster (pve1)', 'cluster')).toBe('pve1');
     });
 
-    it('strips a cluster-name token from a multi-word name when clusterName is supplied', () => {
-      expect(getFriendlyNodeName('node1 prod-cluster', 'prod-cluster')).toBe('node1');
+    it('drops the cluster half of a name whatever its case or length', () => {
+      expect(getFriendlyNodeName('Production West (pve1)', 'production west')).toBe('pve1');
+      expect(getFriendlyNodeName('pve1 (Production West)', 'production west')).toBe('pve1');
+    });
+
+    it('shortens the node half to its hostname', () => {
+      expect(getFriendlyNodeName('pve1.example.com (cluster)', 'cluster')).toBe('pve1');
+      expect(getFriendlyNodeName('cluster (pve1.example.com)', 'cluster')).toBe('pve1');
     });
 
     it('falls back to the trimmed raw value when the cluster filter empties the token', () => {
@@ -87,6 +101,14 @@ describe('thresholdsResourceModel branch coverage', () => {
   });
 
   describe('buildNodeHeaderMeta', () => {
+    it('heads a standalone node group with the connection name it reads elsewhere', () => {
+      const { headerMeta, keys } = buildNodeHeaderMeta(
+        makeNode({ name: 'pve1', displayName: 'Home Lab' }),
+      );
+      expect(headerMeta.displayName).toBe('Home Lab');
+      expect(keys).toEqual(new Set(['pve1', 'Home Lab']));
+    });
+
     it('uses guestURL as-is when it already starts with http', () => {
       const node = makeNode({
         platformData: { guestURL: 'http://titan.local:8006' },
