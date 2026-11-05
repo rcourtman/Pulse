@@ -254,7 +254,10 @@ func (r *Router) createAPITokenRecord(
 		}
 	}
 
-	return rawToken, record, nil
+	// The stored record and the result must not share mutable metadata after
+	// the lock is released and audit/response I/O begins.
+	snapshot := record.Clone()
+	return rawToken, &snapshot, nil
 }
 
 // handleListAPITokens returns all configured API tokens (metadata only).
@@ -505,7 +508,8 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 	}
 
 	config.Mu.Lock()
-	defer config.Mu.Unlock()
+	// Keep validation and durable save/rollback atomic, but never retain
+	// configuration ownership across audit destinations or HTTP output.
 
 	tokenIndex := -1
 	for idx := range r.config.APITokens {
@@ -515,12 +519,14 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 	if tokenIndex == -1 {
+		config.Mu.Unlock()
 		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("API token id=%s not found for update", tokenID))
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
 	}
 
 	if !callerTokenMayManage(getAPITokenRecordFromRequest(req), &r.config.APITokens[tokenIndex]) {
+		config.Mu.Unlock()
 		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Organization boundary denied: caller cannot manage token id=%s", tokenID))
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
@@ -538,6 +544,7 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 		if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
 			for _, scope := range oldRecord.Scopes {
 				if !callerToken.HasScope(scope) {
+					config.Mu.Unlock()
 					r.auditTokenEvent(req, "token_updated", false,
 						fmt.Sprintf("Scope update denied: caller missing existing scope %q on target token id=%s", scope, tokenID))
 					http.Error(w, fmt.Sprintf("Cannot update token with scope %q: your token does not have this scope", scope), http.StatusForbidden)
@@ -546,6 +553,7 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 			}
 			for _, scope := range scopes {
 				if !callerToken.HasScope(scope) {
+					config.Mu.Unlock()
 					r.auditTokenEvent(req, "token_updated", false,
 						fmt.Sprintf("Scope update denied: caller cannot grant scope %q on target token id=%s", scope, tokenID))
 					http.Error(w, fmt.Sprintf("Cannot grant scope %q: your token does not have this scope", scope), http.StatusForbidden)
@@ -557,6 +565,7 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 			promoted := oldRecord.Clone()
 			promoted.Scopes = append([]string(nil), scopes...)
 			if tokenHasInstanceWideAuthority(&promoted) && !tokenHasInstanceWideAuthority(callerToken) {
+				config.Mu.Unlock()
 				r.auditTokenEvent(req, "token_updated", false,
 					fmt.Sprintf("Scope update denied: caller cannot make token id=%s instance-wide", tokenID))
 				http.Error(w, fmt.Sprintf("Cannot grant scope %q in the default organization: your token is not an instance-wide full-access token", config.ScopeWildcard), http.StatusForbidden)
@@ -574,6 +583,7 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 	if r.persistence != nil {
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 			r.config.APITokens[tokenIndex] = storedRecord
+			config.Mu.Unlock()
 			r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Failed to persist token update for token id=%s", tokenID))
 			log.Error().Err(err).Str("token_id", tokenID).Msg("Failed to persist API token update")
 			http.Error(w, "Failed to save token", http.StatusInternalServerError)
@@ -581,7 +591,8 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	updatedRecord := r.config.APITokens[tokenIndex]
+	updatedRecord := r.config.APITokens[tokenIndex].Clone()
+	config.Mu.Unlock()
 	if payload.Scopes != nil {
 		r.auditTokenEvent(req, "token_updated", true,
 			fmt.Sprintf(
@@ -680,11 +691,13 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	}
 
 	config.Mu.Lock()
-	defer config.Mu.Unlock()
+	// Keep validation and durable save/rollback atomic, but never retain
+	// configuration ownership across audit destinations or HTTP output.
 
 	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
 	removed := r.config.RemoveAPIToken(tokenID)
 	if removed == nil {
+		config.Mu.Unlock()
 		r.auditTokenEvent(req, "token_deleted", false, fmt.Sprintf("API token id=%s not found for deletion", tokenID))
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
@@ -699,6 +712,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 			// Put the record back before returning so the in-memory config is unchanged.
 			r.config.APITokens = append(r.config.APITokens, *removed)
 			r.config.SortAPITokens()
+			config.Mu.Unlock()
 			r.auditTokenEvent(req, "token_deleted", false,
 				fmt.Sprintf("Organization boundary denied: caller cannot manage token id=%s", tokenID))
 			http.Error(w, "Token not found", http.StatusNotFound)
@@ -709,6 +723,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 				// Put the record back before returning so the in-memory config is unchanged.
 				r.config.APITokens = append(r.config.APITokens, *removed)
 				r.config.SortAPITokens()
+				config.Mu.Unlock()
 				r.auditTokenEvent(req, "token_deleted", false,
 					fmt.Sprintf("Scope escalation denied: caller missing scope %q on target token id=%s", targetScope, tokenID))
 				http.Error(w, fmt.Sprintf("Cannot delete token with scope %q: your token does not have this scope", targetScope), http.StatusForbidden)
@@ -723,6 +738,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 			r.config.APITokens = previousTokens
 			r.config.SortAPITokens()
+			config.Mu.Unlock()
 			r.auditTokenEvent(req, "token_deleted", false,
 				fmt.Sprintf("Failed to persist API token deletion for id=%s", tokenID))
 			log.Error().Err(err).Msg("Failed to persist API tokens after deletion")
@@ -730,6 +746,8 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 	}
+
+	config.Mu.Unlock()
 
 	r.auditTokenEvent(req, "token_deleted", true, fmt.Sprintf("Deleted API token id=%s", removed.ID))
 
@@ -761,7 +779,8 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	tokenID := strings.TrimSpace(parts[0])
 
 	config.Mu.Lock()
-	defer config.Mu.Unlock()
+	// Keep validation and durable save/rollback atomic, but never retain
+	// configuration ownership across audit destinations or HTTP output.
 
 	// Find existing token
 	var oldRecord config.APITokenRecord
@@ -774,6 +793,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 	if !found {
+		config.Mu.Unlock()
 		r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("API token id=%s not found for rotation", tokenID))
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
@@ -787,6 +807,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// token.
 	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
 		if !callerTokenMayManage(callerToken, &oldRecord) {
+			config.Mu.Unlock()
 			r.auditTokenEvent(req, "token_rotated", false,
 				fmt.Sprintf("Organization boundary denied: caller cannot manage token id=%s", tokenID))
 			http.Error(w, "Token not found", http.StatusNotFound)
@@ -794,6 +815,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 		}
 		for _, targetScope := range oldRecord.Scopes {
 			if !callerToken.HasScope(targetScope) {
+				config.Mu.Unlock()
 				r.auditTokenEvent(req, "token_rotated", false,
 					fmt.Sprintf("Scope escalation denied: caller missing scope %q on target token id=%s", targetScope, tokenID))
 				http.Error(w, fmt.Sprintf("Cannot rotate token with scope %q: your token does not have this scope", targetScope), http.StatusForbidden)
@@ -805,6 +827,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// Generate new token
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
+		config.Mu.Unlock()
 		r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("Failed to generate replacement token for id=%s", tokenID))
 		log.Error().Err(err).Msg("Failed to generate token during rotation")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -813,6 +836,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	newRecord, err := config.NewAPITokenRecord(rawToken, oldRecord.Name, oldRecord.Scopes)
 	if err != nil {
+		config.Mu.Unlock()
 		r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("Failed to construct replacement token for id=%s", tokenID))
 		log.Error().Err(err).Msg("Failed to construct token record during rotation")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -845,12 +869,16 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 			// Rollback the in-memory rotation so the in-memory config stays consistent with disk.
 			r.config.APITokens = prevTokens
 			r.config.SortAPITokens()
+			config.Mu.Unlock()
 			r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("Failed to persist rotated token for id=%s", tokenID))
 			log.Error().Err(err).Msg("Failed to persist API tokens after rotation")
 			http.Error(w, "Failed to save rotated token", http.StatusInternalServerError)
 			return
 		}
 	}
+
+	responseRecord := toAPITokenDTO(*newRecord)
+	config.Mu.Unlock()
 
 	r.auditTokenEvent(req, "token_rotated", true, fmt.Sprintf("Rotated API token old_id=%s new_id=%s", tokenID, newRecord.ID))
 
@@ -865,6 +893,6 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"token":  rawToken,
-		"record": toAPITokenDTO(*newRecord),
+		"record": responseRecord,
 	})
 }
