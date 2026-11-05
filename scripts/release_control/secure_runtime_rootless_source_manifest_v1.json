@@ -16,7 +16,9 @@
     "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
     "scripts/release_control/secure_runtime_rootless_attestation_v1.py",
     "scripts/release_control/secure_runtime_rootless_source_manifest_v1.json",
-    "scripts/run-secure-runtime-rootless-qualification.sh"
+    "scripts/run-secure-runtime-rootless-qualification.sh",
+    "internal/agentidentity/version-pattern.txt",
+    "cmd/verify-agent-release/main.go"
   ],
   "recursive_roots": [
     "cmd/pulse-agent",
@@ -24,6 +26,7 @@
     "internal/actionrunner",
     "internal/agentexec",
     "internal/agenthelper",
+    "internal/agentidentity",
     "internal/agenttls",
     "internal/agentupdate",
     "internal/api",
@@ -34,8 +37,8 @@
     "internal/operationreceipt",
     "internal/securityutil",
     "internal/updatesignature",
-    "pkg/auth",
     "pkg/agents/host",
+    "pkg/auth",
     "pkg/securityutil",
     "pkg/tlsutil"
   ],

@@ -4903,6 +4903,11 @@ vdev layout is reported` in
 
 ## Current State
 
+Agent executable identity validation in `internal/api/unified_agent.go` refuses
+wrong package, target or release bytes before download/activation. It does not
+infer installed identity from shared tokens or hostnames and changes no backup,
+protection, restore, credential-binding or persisted history semantics.
+
 ### Tenant agent install tokens persist in the instance token store
 
 A tenant organization's agent install tokens are persisted in the instance

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -46,9 +47,10 @@ func TestPrivilegedUpdateRollbackFailurePreservesPendingHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	u := New(Config{PrivilegedUpdate: helper, Disabled: true, StateDir: helper.root, CurrentVersion: "1.0.0"})
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
 
-	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update", "1.1.0")
+	err := u.performPrivilegedUpdate(context.Background(), "/usr/local/bin/pulse-agent", bytes.NewReader(binary), int64(len(binary)), digest, "signed-update", "1.1.0", "linux-amd64")
 	if err == nil || !strings.Contains(err.Error(), "typed helper rollback failed") {
 		t.Fatalf("performPrivilegedUpdate error = %v", err)
 	}
@@ -104,6 +106,7 @@ func newUpdaterForTest(serverURL string) *Updater {
 		CheckInterval:  10 * time.Millisecond,
 	}
 	u := New(cfg)
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
 	return u
 }
@@ -202,74 +205,23 @@ func TestRunDownloadedBinarySelfTestPropagatesFailureWithoutTokenArg(t *testing.
 }
 
 func TestDetermineArchOverrides(t *testing.T) {
-	origOS, origArch, origUname := runtimeGOOS, runtimeGOARCH, unameCommand
-	t.Cleanup(func() {
-		runtimeGOOS = origOS
-		runtimeGOARCH = origArch
-		unameCommand = origUname
-	})
-
-	runtimeGOOS = "linux"
-	runtimeGOARCH = "arm"
-	if got := determineArch(); got != "linux-armv7" {
-		t.Fatalf("expected linux-armv7, got %q", got)
+	original := readBuildInfoFn
+	t.Cleanup(func() { readBuildInfoFn = original })
+	for _, tc := range []struct{ os, arch, arm, want string }{
+		{"linux", "arm", "6", "linux-armv6"}, {"linux", "arm", "7,hardfloat", "linux-armv7"},
+		{"linux", "arm", "", ""}, {"linux", "arm", "5", ""}, {"linux", "386", "", "linux-386"},
+		{"freebsd", "arm64", "", "freebsd-arm64"}, {"solaris", "amd64", "", ""},
+	} {
+		readBuildInfoFn = func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{Settings: []debug.BuildSetting{{Key: "GOOS", Value: tc.os}, {Key: "GOARCH", Value: tc.arch}, {Key: "GOARM", Value: tc.arm}}}, true
+		}
+		if got := determineArch(); got != tc.want {
+			t.Fatalf("%+v: got %q", tc, got)
+		}
 	}
-
-	runtimeGOARCH = "386"
-	if got := determineArch(); got != "linux-386" {
-		t.Fatalf("expected linux-386, got %q", got)
-	}
-
-	runtimeGOOS = "freebsd"
-	runtimeGOARCH = "amd64"
-	if got := determineArch(); got != "freebsd-amd64" {
-		t.Fatalf("expected freebsd-amd64, got %q", got)
-	}
-
-	runtimeGOARCH = "arm64"
-	if got := determineArch(); got != "freebsd-arm64" {
-		t.Fatalf("expected freebsd-arm64, got %q", got)
-	}
-
-	runtimeGOOS = "solaris"
-	runtimeGOARCH = "amd64"
-	unameCommand = func() ([]byte, error) { return []byte("aarch64"), nil }
-	if got := determineArch(); got != "linux-arm64" {
-		t.Fatalf("expected linux-arm64, got %q", got)
-	}
-
-	unameCommand = func() ([]byte, error) { return []byte("x86_64"), nil }
-	if got := determineArch(); got != "linux-amd64" {
-		t.Fatalf("expected linux-amd64, got %q", got)
-	}
-
-	unameCommand = func() ([]byte, error) { return []byte("armv7l"), nil }
-	if got := determineArch(); got != "linux-armv7" {
-		t.Fatalf("expected linux-armv7, got %q", got)
-	}
-
-	unameCommand = func() ([]byte, error) { return []byte("mips"), nil }
+	readBuildInfoFn = func() (*debug.BuildInfo, bool) { return nil, false }
 	if got := determineArch(); got != "" {
-		t.Fatalf("expected empty arch for unknown uname, got %q", got)
-	}
-
-	unameCommand = func() ([]byte, error) { return nil, errors.New("fail") }
-	if got := determineArch(); got != "" {
-		t.Fatalf("expected empty arch on uname error, got %q", got)
-	}
-}
-
-func TestUnameCommandDefault(t *testing.T) {
-	if _, err := exec.LookPath("uname"); err != nil {
-		t.Skip("uname not available")
-	}
-
-	orig := unameCommand
-	t.Cleanup(func() { unameCommand = orig })
-	unameCommand = orig
-
-	if _, err := unameCommand(); err != nil {
-		t.Fatalf("expected uname to run, got %v", err)
+		t.Fatalf("missing metadata selected %s", got)
 	}
 }
 
@@ -392,7 +344,7 @@ func TestPerformUpdateWithExecPathInvalidAgentName(t *testing.T) {
 	u.cfg.AgentName = "../pulse-agent"
 
 	_, execPath := writeTempExec(t)
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 		t.Fatalf("expected invalid agent name error")
 	}
 }
@@ -865,7 +817,7 @@ func TestPerformUpdatePersistsPreviousVersionForNextStart(t *testing.T) {
 	osExecutableFn = func() (string, error) { return execPath, nil }
 	evalSymlinksFn = func(string) (string, error) { return execPath, nil }
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("performUpdateWithExecPath: %v", err)
 	}
 
@@ -884,7 +836,7 @@ func TestPerformUpdateWrapper(t *testing.T) {
 		osExecutableFn = func() (string, error) { return "", errors.New("fail") }
 
 		u := newUpdaterForTest("https://example")
-		if err := u.performUpdate(context.Background()); err == nil {
+		if err := u.performUpdateForVersion(context.Background(), "6.0.0"); err == nil {
 			t.Fatalf("expected exec path error")
 		}
 	})
@@ -912,7 +864,7 @@ func TestPerformUpdateWrapper(t *testing.T) {
 		osExecutableFn = func() (string, error) { return execPath, nil }
 		restartProcessFn = func(string) error { return nil }
 
-		if err := u.performUpdate(context.Background()); err != nil {
+		if err := u.performUpdateForVersion(context.Background(), "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 	})
@@ -920,7 +872,7 @@ func TestPerformUpdateWrapper(t *testing.T) {
 
 func TestPerformUpdateInvalidRequest(t *testing.T) {
 	u := newUpdaterForTest("http://[::1")
-	if err := u.performUpdateWithExecPath(context.Background(), ""); err == nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), "", "6.0.0"); err == nil {
 		t.Fatalf("expected error for invalid URL")
 	}
 }
@@ -940,7 +892,7 @@ func TestPerformUpdateDownloadErrorAndHeaders(t *testing.T) {
 		}),
 	}
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 		t.Fatalf("expected download error")
 	}
 	if !sawToken {
@@ -986,7 +938,7 @@ func TestPerformUpdateDownloadRetriesTransientError(t *testing.T) {
 		}),
 	}
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("expected retry recovery success, got %v", err)
 	}
 	if got := atomic.LoadInt32(&calls); got != 3 {
@@ -1023,7 +975,7 @@ func TestPerformUpdateStatusFallbackAndSuccess(t *testing.T) {
 	t.Cleanup(func() { restartProcessFn = origRestart })
 	restartProcessFn = func(string) error { return nil }
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("expected update success, got %v", err)
 	}
 
@@ -1062,7 +1014,7 @@ func TestPerformUpdateSymlinkFallback(t *testing.T) {
 	evalSymlinksFn = func(string) (string, error) { return "", errors.New("fail") }
 	restartProcessFn = func(string) error { return nil }
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("expected update success with symlink fallback, got %v", err)
 	}
 }
@@ -1078,6 +1030,7 @@ func TestPerformUpdateSelfTestFailurePreservesCurrentBinary(t *testing.T) {
 		t.Fatalf("restart should not be reached after self-test failure")
 		return nil
 	}
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return errors.New("self-test fail") }
 
 	u.client = &http.Client{
@@ -1091,7 +1044,7 @@ func TestPerformUpdateSelfTestFailurePreservesCurrentBinary(t *testing.T) {
 		}),
 	}
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil || !strings.Contains(err.Error(), "self-test fail") {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil || !strings.Contains(err.Error(), "self-test fail") {
 		t.Fatalf("expected self-test error, got %v", err)
 	}
 	current, err := os.ReadFile(execPath)
@@ -1124,7 +1077,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			return nil, errors.New("temp fail")
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected create temp error")
 		}
 	})
@@ -1145,7 +1098,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected copy error")
 		}
 	})
@@ -1170,7 +1123,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected size error")
 		}
 	})
@@ -1196,7 +1149,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected size error from content length")
 		}
 	})
@@ -1229,7 +1182,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected close error")
 		}
 	})
@@ -1250,7 +1203,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected invalid binary error")
 		}
 	})
@@ -1271,7 +1224,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected checksum missing error")
 		}
 	})
@@ -1292,7 +1245,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected checksum mismatch error")
 		}
 	})
@@ -1322,7 +1275,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected chmod error")
 		}
 	})
@@ -1362,7 +1315,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected backup rename error")
 		}
 	})
@@ -1402,7 +1355,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 			}),
 		}
 
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil {
 			t.Fatalf("expected replace rename error")
 		}
 	})
@@ -1458,7 +1411,7 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 
 	t.Run("ReadError", func(t *testing.T) {
 		readFileFn = func(string) ([]byte, error) { return nil, errors.New("read fail") }
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 	})
@@ -1472,7 +1425,7 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 			}
 			return file, err
 		}
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 		createTempFn = origCreateTemp
@@ -1487,7 +1440,7 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 			}
 			return os.Rename(oldPath, newPath)
 		}
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 	})
@@ -1496,7 +1449,7 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 		readFileFn = func(string) ([]byte, error) { return []byte("new"), nil }
 		writeFileFn = os.WriteFile
 		renameFn = os.Rename
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 	})
@@ -1561,7 +1514,7 @@ func TestPerformUpdateQNAPPaths(t *testing.T) {
 			return file, err
 		}
 		renameFn = os.Rename
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 		createTempFn = origCreateTemp
@@ -1576,7 +1529,7 @@ func TestPerformUpdateQNAPPaths(t *testing.T) {
 			}
 			return os.Rename(oldPath, newPath)
 		}
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 	})
@@ -1585,7 +1538,7 @@ func TestPerformUpdateQNAPPaths(t *testing.T) {
 		readFileFn = func(string) ([]byte, error) { return []byte("new"), nil }
 		writeFileFn = os.WriteFile
 		renameFn = os.Rename
-		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 			t.Fatalf("expected update success, got %v", err)
 		}
 		got, err := os.ReadFile(persistPath)

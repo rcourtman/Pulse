@@ -18,10 +18,12 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
@@ -94,8 +96,7 @@ type Status struct {
 var (
 	maxBinarySizeBytes     int64 = maxBinarySize
 	runtimeGOOS                  = goOS(runtime.GOOS)
-	runtimeGOARCH                = runtime.GOARCH
-	unameCommand                 = func() ([]byte, error) { return exec.Command("uname", "-m").Output() }
+	readBuildInfoFn              = debug.ReadBuildInfo
 	unraidVersionPath            = "/etc/unraid-version"
 	qnapGetcfgPath               = "/sbin/getcfg"
 	qnapQpkgConfPath             = "/etc/config/qpkg.conf"
@@ -178,10 +179,11 @@ type Updater struct {
 	statusMu        sync.RWMutex
 	status          Status
 
-	performUpdateFn func(context.Context, string) error
-	selfTestFn      func(context.Context, string) error
-	initialDelay    time.Duration
-	newTicker       func(time.Duration) *time.Ticker
+	performUpdateFn  func(context.Context, string) error
+	selfTestFn       func(context.Context, string) error
+	verifyIdentityFn func(context.Context, string, string, string) error
+	initialDelay     time.Duration
+	newTicker        func(time.Duration) *time.Ticker
 
 	nudgeCh           chan struct{}
 	nudgeMu           sync.Mutex
@@ -250,6 +252,7 @@ func New(cfg Config) *Updater {
 	}
 	u.performUpdateFn = u.performUpdateForVersion
 	u.selfTestFn = u.runDownloadedBinarySelfTest
+	u.verifyIdentityFn = u.verifyDownloadedIdentity
 	u.initialDelay = 5 * time.Second
 	if cfg.InitialCheckDelay > 0 {
 		u.initialDelay = cfg.InitialCheckDelay
@@ -867,10 +870,7 @@ func (e *restartAfterReplaceError) Error() string { return e.err.Error() }
 
 func (e *restartAfterReplaceError) Unwrap() error { return e.err }
 
-// performUpdate downloads and installs the new agent binary.
-func (u *Updater) performUpdate(ctx context.Context) error {
-	return u.performUpdateForVersion(ctx, "")
-}
+// performUpdateForVersion downloads and installs the new agent binary.
 
 func (u *Updater) performUpdateForVersion(ctx context.Context, targetVersion string) error {
 	execPath, err := resolveExecutablePath()
@@ -906,10 +906,6 @@ func resolveExecutablePath() (string, error) {
 	return "", fmt.Errorf("failed to get executable path: %w", err)
 }
 
-func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string) error {
-	return u.performUpdateWithExecPathForVersion(ctx, execPath, "")
-}
-
 func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execPath, targetVersion string) error {
 	agentName, err := normalizeAgentName(u.cfg.AgentName)
 	if err != nil {
@@ -919,9 +915,16 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 		return fmt.Errorf("invalid Pulse URL: %w", err)
 	}
 
+	if _, err := agentidentity.Version(targetVersion); err != nil {
+		return fmt.Errorf("invalid advertised executable version: %w", err)
+	}
+
 	// Build download URL
 	downloadBase := fmt.Sprintf("%s/download/%s", strings.TrimRight(u.cfg.PulseURL, "/"), agentName)
 	archParam := determineArch()
+	if archParam == "" {
+		return errors.New("cannot determine supported executable release target from Go build metadata")
+	}
 
 	// Try architecture-specific binary first, then fall back to default
 	candidates := []string{}
@@ -944,12 +947,12 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	candidates = append(candidates, fallbackURL)
 
 	var resp *http.Response
-	lastErr := fmt.Errorf("failed to download binary from all candidate URLs")
+	var downloadErrors []error
 
 	for _, candidateURL := range candidates {
 		response, err := u.getWithRetry(ctx, candidateURL, "binary download")
 		if err != nil {
-			lastErr = err
+			downloadErrors = append(downloadErrors, err)
 			continue
 		}
 
@@ -959,7 +962,7 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	}
 
 	if resp == nil {
-		return lastErr
+		return fmt.Errorf("failed to download binary from all candidate URLs: %w", errors.Join(downloadErrors...))
 	}
 	defer resp.Body.Close()
 	if resp.ContentLength > maxBinarySizeBytes {
@@ -970,7 +973,7 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	checksumHeader := strings.TrimSpace(resp.Header.Get(checksumSHA256Header))
 	signatureHeaderValue := strings.TrimSpace(resp.Header.Get(signatureHeader))
 	if u.cfg.PrivilegedUpdate != nil {
-		return u.performPrivilegedUpdate(ctx, execPath, resp.Body, resp.ContentLength, checksumHeader, signatureHeaderValue, targetVersion)
+		return u.performPrivilegedUpdate(ctx, execPath, resp.Body, resp.ContentLength, checksumHeader, signatureHeaderValue, targetVersion, archParam)
 	}
 
 	// Resolve symlinks to get the real path for atomic rename
@@ -1047,6 +1050,10 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	// Make executable
 	if err := chmodFn(tmpPath, 0755); err != nil {
 		return fmt.Errorf("failed to chmod: %w", err)
+	}
+
+	if err := u.verifyIdentityFn(ctx, tmpPath, targetVersion, archParam); err != nil {
+		return err
 	}
 
 	if err := u.selfTestFn(ctx, tmpPath); err != nil {
@@ -1130,7 +1137,10 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 	return nil
 }
 
-func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, body io.Reader, contentLength int64, checksumHeader, signature, targetVersion string) error {
+func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, body io.Reader, contentLength int64, checksumHeader, signature, targetVersion, target string) error {
+	if target == "" {
+		return errors.New("missing expected executable release target")
+	}
 	if runtimeGOOS != goOSLinux {
 		return errors.New("typed privilege-helper updates are supported only on Linux")
 	}
@@ -1188,6 +1198,9 @@ func (u *Updater) performPrivilegedUpdate(ctx context.Context, execPath string, 
 	}
 	if err := chmodFn(artifactPath, 0o700); err != nil {
 		return fmt.Errorf("make quarantined binary executable for self-test: %w", err)
+	}
+	if err := u.verifyIdentityFn(ctx, artifactPath, targetVersion, target); err != nil {
+		return err
 	}
 	if err := u.selfTestFn(ctx, artifactPath); err != nil {
 		return err
@@ -1410,38 +1423,13 @@ func (u *Updater) runDownloadedBinarySelfTest(ctx context.Context, binaryPath st
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").
 func determineArch() string {
-	goos := runtimeGOOS
-	arch := runtimeGOARCH
-
-	// Normalize architecture
-	switch arch {
-	case "arm":
-		arch = "armv7"
-	case "386":
-		arch = "386"
+	info, ok := readBuildInfoFn()
+	if !ok {
+		return ""
 	}
-
-	// For known OS/arch combinations, return directly
-	switch goos {
-	case goOSLinux, goOSDarwin, goOSWindows, "freebsd":
-		return fmt.Sprintf("%s-%s", goos, arch)
-	}
-
-	// Fall back to uname for edge cases on unknown OS
-	out, err := unameCommand()
+	target, err := agentidentity.Target(info)
 	if err != nil {
 		return ""
 	}
-
-	normalized := strings.ToLower(strings.TrimSpace(string(out)))
-	switch normalized {
-	case "x86_64", "amd64":
-		return "linux-amd64"
-	case "aarch64", "arm64":
-		return "linux-arm64"
-	case "armv7l", "armhf", "armv7":
-		return "linux-armv7"
-	default:
-		return ""
-	}
+	return target
 }

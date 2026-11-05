@@ -191,7 +191,7 @@ if len(spki) != len(prefix) + 32 or not spki.startswith(prefix):
 print(base64.b64encode(spki[len(prefix):]).decode("ascii"), end="")
 PY
 )"
-qualification_version="rootful-v1.${SOURCE_COMMIT:0:12}"
+qualification_version="0.0.0-rootful.v1.g${SOURCE_COMMIT:0:12}"
 agent_ldflags="$(cd "${REPO_ROOT}" && ./scripts/release_ldflags.sh agent --version "${qualification_version}" --update-public-keys "${update_public_key}")"
 helper_ldflags="$(cd "${REPO_ROOT}" && ./scripts/release_ldflags.sh agent --version "${qualification_version}" --update-public-keys "${update_public_key}")"
 

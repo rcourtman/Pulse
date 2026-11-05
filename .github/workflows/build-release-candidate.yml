@@ -409,6 +409,9 @@ jobs:
 
           New-Item -ItemType Directory -Path unsigned-native-agent-binaries -Force | Out-Null
           $ldflags = & bash ./scripts/release_ldflags.sh agent --version "v$env:VERSION" --update-public-keys $env:PULSE_UPDATE_SIGNING_PUBLIC_KEY
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$ldflags)) {
+            throw 'Agent identity flag recipe failed.'
+          }
           foreach ($arch in @('amd64', 'arm64', '386')) {
             $env:GOOS = 'windows'
             $env:GOARCH = $arch

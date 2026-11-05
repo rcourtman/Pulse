@@ -151,35 +151,36 @@ type Router struct {
 	serverVersion                   string
 	projectRoot                     string
 	// Cached system settings to avoid loading from disk on every request
-	settingsMu                sync.RWMutex
-	cachedAllowEmbedding      bool
-	cachedAllowedOrigins      string
-	publicURLMu               sync.Mutex
-	publicURLDetected         bool
-	bootstrapTokenHash        string
-	bootstrapTokenPath        string
-	checksumMu                sync.RWMutex
-	checksumCache             map[string]checksumCacheEntry
-	installScriptClient       *http.Client
-	relayMu                   sync.RWMutex
-	relayClient               relayRuntimeClient
-	relayCancel               context.CancelFunc
-	relayAlertMinimumSeverity string
-	lifecycleCtx              context.Context
-	lifecycleCancel           context.CancelFunc
-	lifecycleWG               sync.WaitGroup
-	backgroundWorkersOnce     sync.Once
-	backgroundShutdownOnce    sync.Once
-	lifecycleMu               sync.Mutex
-	lifecycleStopped          bool
-	hostedMode                bool
-	orgAccess                 *DefaultAuthorizationChecker // organization access policy every caller shares
-	stripeWebhookHandlers     *StripeWebhookHandlers
-	patrolLifecycleMu         sync.Mutex
-	startedPatrolOrgs         map[string]bool
-	actionRecoveryMu          sync.Mutex
-	aiAutoFixEndpoints        extensions.AIAutoFixEndpoints
-	aiAlertAnalysisEndpoints  extensions.AIAlertAnalysisEndpoints
+	settingsMu                  sync.RWMutex
+	cachedAllowEmbedding        bool
+	cachedAllowedOrigins        string
+	publicURLMu                 sync.Mutex
+	publicURLDetected           bool
+	bootstrapTokenHash          string
+	bootstrapTokenPath          string
+	checksumMu                  sync.RWMutex
+	checksumCache               map[string]checksumCacheEntry
+	unifiedAgentValidationCache sync.Map
+	installScriptClient         *http.Client
+	relayMu                     sync.RWMutex
+	relayClient                 relayRuntimeClient
+	relayCancel                 context.CancelFunc
+	relayAlertMinimumSeverity   string
+	lifecycleCtx                context.Context
+	lifecycleCancel             context.CancelFunc
+	lifecycleWG                 sync.WaitGroup
+	backgroundWorkersOnce       sync.Once
+	backgroundShutdownOnce      sync.Once
+	lifecycleMu                 sync.Mutex
+	lifecycleStopped            bool
+	hostedMode                  bool
+	orgAccess                   *DefaultAuthorizationChecker // organization access policy every caller shares
+	stripeWebhookHandlers       *StripeWebhookHandlers
+	patrolLifecycleMu           sync.Mutex
+	startedPatrolOrgs           map[string]bool
+	actionRecoveryMu            sync.Mutex
+	aiAutoFixEndpoints          extensions.AIAutoFixEndpoints
+	aiAlertAnalysisEndpoints    extensions.AIAlertAnalysisEndpoints
 
 	// Per-router perf state: keeps caches and singleflight groups isolated
 	// between tests and prevents cross-tenant cache pollution.

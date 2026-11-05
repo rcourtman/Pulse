@@ -15,6 +15,24 @@ DEFAULT_HOSTS=("tower")
 GOARCH="${GOARCH:-amd64}"
 GOOS="${GOOS:-linux}"
 
+# Use the same compiler targets and identity stamp as served release artifacts.
+source "$SCRIPT_DIR/release_build_targets.sh"
+RELEASE_VERSION="$(tr -d '\r\n' < "$PROJECT_ROOT/VERSION")"
+AGENT_LDFLAGS="$("$SCRIPT_DIR/release_ldflags.sh" agent --version "$RELEASE_VERSION")"
+build_agent() {
+    local arch="$1" arm="${2:-}" target
+    target="${GOOS}-${arch}"
+    if [[ "$arch" == arm ]]; then target="${GOOS}-armv${arm}"; fi
+    local -a target_env
+    local target_settings
+    target_settings="$(pulse_release_target_env "$target")"
+    read -r -a target_env <<< "$target_settings"
+    BINARY_PATH="$PROJECT_ROOT/bin/$(pulse_release_binary_filename agent "$target")"
+    mkdir -p "$PROJECT_ROOT/bin"
+    env CGO_ENABLED=0 "${target_env[@]}" go build -trimpath -buildvcs=false \
+        -ldflags="$AGENT_LDFLAGS" -o "$BINARY_PATH" ./cmd/pulse-agent
+}
+
 # SSH options
 # Default to TOFU for new hosts while still failing closed on host-key changes.
 SSH_KNOWN_HOSTS_FILE="${PULSE_DEV_SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}"
@@ -65,8 +83,7 @@ fi
 log_info "Building pulse-agent for ${GOOS}/${GOARCH}..."
 cd "$PROJECT_ROOT"
 
-BINARY_PATH="$PROJECT_ROOT/bin/pulse-agent-${GOOS}-${GOARCH}"
-CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags="-s -w" -o "$BINARY_PATH" ./cmd/pulse-agent
+build_agent "$GOARCH" "${GOARM:-6}"
 
 if [ ! -f "$BINARY_PATH" ]; then
     log_error "Build failed - binary not found at $BINARY_PATH"
@@ -91,22 +108,20 @@ for host in "${HOSTS[@]}"; do
         continue
     fi
     
-    # Map uname -m to GOARCH
+    # Map this explicit deployment host's architecture to the published target.
+    TARGET_GOARM=""
     case $HOST_ARCH in
         x86_64)  TARGET_GOARCH="amd64" ;;
         aarch64) TARGET_GOARCH="arm64" ;;
-        armv7l)  TARGET_GOARCH="arm" ;;
+        armv6l)  TARGET_GOARCH="arm" ; TARGET_GOARM="6" ;;
+        armv7l)  TARGET_GOARCH="arm" ; TARGET_GOARM="7" ;;
         *)       log_error "Unsupported architecture: $HOST_ARCH"; FAILED_HOSTS+=("$host"); continue ;;
     esac
 
     log_info "  Host architecture: $HOST_ARCH (building for $TARGET_GOARCH)..."
     
     # Build specifically for this host's arch
-    BINARY_PATH="$PROJECT_ROOT/bin/pulse-agent-${GOOS}-${TARGET_GOARCH}"
-    if [ ! -f "$BINARY_PATH" ] || [ $(( $(date +%s) - $(stat -c %Y "$BINARY_PATH" 2>/dev/null || echo 0) )) -gt 60 ]; then
-        log_info "  Building pulse-agent for $TARGET_GOARCH..."
-        CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$TARGET_GOARCH" go build -ldflags="-s -w" -o "$BINARY_PATH" ./cmd/pulse-agent
-    fi
+    build_agent "$TARGET_GOARCH" "$TARGET_GOARM"
     
     # Stop the service
     log_info "  Stopping pulse-agent..."
@@ -149,7 +164,10 @@ for host in "${HOSTS[@]}"; do
     else
         # Try one last ditch effort: run it via the background helper if we can find it
         log_warn "  Agent not running, checking logs..."
-        ssh "${SSH_OPTS[@]}" "$host" "tail -n 5 /var/log/pulse-agent.log /boot/logs/pulse-agent.log 2>/dev/null" | log_warn
+        diagnostic="$(ssh "${SSH_OPTS[@]}" "$host" "tail -n 5 /var/log/pulse-agent.log /boot/logs/pulse-agent.log 2>/dev/null" || true)"
+        if [[ -n "$diagnostic" ]]; then
+            while IFS= read -r line; do log_warn "$line"; done <<< "$diagnostic"
+        fi
         FAILED_HOSTS+=("$host")
     fi
 done

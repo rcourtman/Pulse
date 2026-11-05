@@ -22,17 +22,24 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 )
 
-// These executables are inert, not Pulse agents. They let the actual signed
+// These executables carry the canonical package/stamp as inert fixtures.
+// They let the actual signed
 // HTTPS updater, self-test and child exec paths check Unix execute permissions
 // without replacing the test process or touching an appliance/service.
 func buildNASUpdateExecutable(t *testing.T, version string) []byte {
 	t.Helper()
 	dir := t.TempDir()
 	source := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent\n\ngo 1.26.0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	const program = `package main
 import ("fmt"; "os")
 var version string
+var releaseIdentity string
 func main() {
+ if releaseIdentity == "" {os.Exit(13)}
+ if len(os.Args)>1 && os.Args[1]=="--release-identity" {fmt.Println(releaseIdentity);return}
  if len(os.Args) > 1 && os.Args[1] == "--self-test" {
   if len(os.Args) != 4 || os.Args[2] != "--token-file" { os.Exit(10) }
   info, err := os.Stat(os.Args[3]); if err != nil || info.Mode().Perm() != 0600 { os.Exit(11) }
@@ -47,7 +54,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	binary := filepath.Join(dir, "fixture-agent")
-	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags=-X main.version="+version, "-o", binary, source)
+	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags=-s -w -X main.version="+version+" -X main.releaseIdentity=[[pulse-agent-release:v1:v"+strings.TrimPrefix(version, "v")+"]]", "-o", binary, ".")
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOPROXY=off", "GOWORK=off")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build inert executable: %v\n%s", err, output)
@@ -479,7 +487,7 @@ func TestUpdater_performUpdateWithExecPath_RejectsMissingSignatureWhenTrustedKey
 	u := newUpdaterForTest(server.URL)
 	u.client = server.Client()
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil || !strings.Contains(err.Error(), signatureHeader) {
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err == nil || !strings.Contains(err.Error(), signatureHeader) {
 		t.Fatalf("expected missing signature error, got %v", err)
 	}
 }
@@ -597,6 +605,7 @@ func TestUpdater_CheckAndUpdate_ReconcilesVersionAndBinaryAcrossCachingProxy(t *
 		CurrentVersion: "6.0.0-rc.1",
 	})
 	u.client = server.Client()
+	u.verifyIdentityFn = func(context.Context, string, string, string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
 	u.performUpdateFn = func(ctx context.Context, version string) error {
 		return u.performUpdateWithExecPathForVersion(ctx, execPath, version)
@@ -736,7 +745,7 @@ func TestUpdater_performUpdateWithExecPath_RejectsRedirects(t *testing.T) {
 	t.Cleanup(func() { restartProcessFn = origRestart })
 	restartProcessFn = func(string) error { return nil }
 
-	err := u.performUpdateWithExecPath(context.Background(), execPath)
+	err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0")
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "redirect") {
 		t.Fatalf("expected redirect rejection error, got: %v", err)
 	}

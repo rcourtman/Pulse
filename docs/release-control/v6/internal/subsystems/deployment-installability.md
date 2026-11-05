@@ -16,6 +16,16 @@
 
 ## Purpose
 
+### Served development-agent artifacts
+
+The explicit development deployment script uses the canonical release target
+matrix, filenames and identity flags. ARMv6 and ARMv7 produce separate served
+artifacts, and deployment rebuilds the current source rather than reusing an
+age-based executable cache. The fake-compiler development case in
+`scripts/installtests/build_agents_test.go` executes that producer through an
+unreachable-host refusal before service or deployment effects, checking ARMv6
+target and release stamp coherence. This is source recipe evidence only.
+
 ### Bounded public Go patch graph (3 November 2026)
 
 The managed public graph advances go-jose to 4.1.7, Prometheus common to
@@ -2608,6 +2618,16 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 
 ## Canonical Files
 
+1. `cmd/verify-agent-release/` validates the final copied collector artifacts before release packaging.
+
+1. `scripts/verify-agent-executable-identity.sh` builds the exact staged-source packet and requires full format, installer and ARM execution proofs.
+
+1. `internal/agentidentity/version-pattern.txt` is the shared runtime/producer version grammar.
+
+1. `scripts/build-agents.sh` uses the published target matrix and canonical release metadata recipe for developer agent builds.
+
+1. `internal/agentidentity/identity.go` owns executable package, release stamp and Go compiler target identity.
+
 1. `internal/updates/`
 2. `internal/api/updates.go`
 3. `frontend-modern/src/api/updates.ts`
@@ -2796,6 +2816,8 @@ artifact-selection behaviour.
    `agentUpdateTargetVersion`; update/install surfaces may display the app
    build, but agent update prompts must only use the agent target when the
    backend exposes one.
+1. `internal/agentidentity/identity.go` shared with `agent-lifecycle`, `api-contracts`: the executable package, release identity and compiler target authority is shared by agent activation, download API validation and release artifact selection.
+1. `internal/agentidentity/version-pattern.txt` shared with `agent-lifecycle`, `api-contracts`: the canonical release-version grammar is shared by runtime executable identity and release producer validation.
 2. `internal/api/updates.go` shared with `api-contracts`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
 3. `internal/cloudcp/docker/labels.go` shared with `cloud-paid`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
 4. `internal/cloudcp/docker/manager.go` shared with `cloud-paid`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
@@ -3150,8 +3172,42 @@ artifact-selection behaviour.
 9. `scripts/run-secure-runtime-rootful-qualification.sh` shared with `agent-lifecycle`: the rootful runtime qualification wrapper is both an agent lifecycle typed-helper provider-boundary proof entry point and a deployment installability proof harness.
 
 10. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `agent-lifecycle`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
+1. `scripts/verify-agent-executable-identity.sh` shared with `agent-lifecycle`: reproducible canonical executable, installer and emulated ARM update proofs are owned jointly by agent lifecycle and artifact delivery.
 
 ## Extension Points
+
+### Exact executable identity and ARM target selection
+
+After compiled-payload and native signing replacements, `scripts/build-release.sh`
+checks every published agent target with `cmd/verify-agent-release/` and the
+shared identity authority before archive, checksum and release-signature assembly.
+The Windows signing producer checks the flag recipe exit status and nonempty
+output before compiling. Canonical agent builders consume the release flag recipe
+verbatim, including its stamp-assignment spelling. These gates validate artifacts without publishing them. The sealed production
+inventories include the verifier's main source; its ordinary unit tests remain
+source-CI inputs and are excluded from production provider seals. The standalone
+proof checks the general v7 production-source boundary and the verifier/identity
+inputs in all four manifests, copied recovery recipe syntax and order, and the
+Docker-agent compiler target on the host and emulated ARMv6/ARMv7.
+
+`internal/agentidentity/identity.go` is the common authority for the canonical
+main package, supported GOOS/GOARCH/GOARM targets and bounded release stamp.
+Release builds use `scripts/release_ldflags.sh`; `make build-agents` uses
+`scripts/build-agents.sh` and the published release matrix. Non-trimpath linker
+metadata may repeat one identical stamp. Conflicting identities fail closed.
+Server download validation checks executable package, target and exact version.
+The normal and typed-helper updaters check bounded `--version` and
+`--release-identity` output after format, checksum and required signature checks,
+before self-test or activation. Static metadata is a signed-artifact contract,
+not source or symbol authentication; recorded stamp flags must corroborate the
+canonical symbol when linker metadata is present.
+Windows rename and saved continuity state share that refusal boundary.
+Pro server selection and the dormant Docker helper consume the same target
+authority. The published unified agent disables the older Docker updater.
+Installer `--update --state-dir <existing-state-dir>` recovers local saved
+credentials and installation identity and selects ARMv6 from local armv6l.
+Tokens and hostnames never establish CPU or installed-executable identity.
+
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
 2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, hosted secure-runtime qualification compilation and attestation, governed promotion metadata resolution, artifact release-line validation, post-install live-runtime claim proof, the canonical version file, operator-facing release packet content, model-selected visual release-note capture, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against staged or published release assets, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/build-release-binaries.sh`, `scripts/build-secure-runtime-qualification.sh`, `scripts/release_build_targets.sh`, `scripts/run-release-backend-tests.sh`, `scripts/shard_go_tests.py`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/release_update_key.go`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/capture-release-note-visuals.sh`, `scripts/release-preflight-worker.sh`, `scripts/run-release-preflight.sh`, `scripts/verify-github-release-integrity.sh`, `scripts/verify-release-container-images.sh`, `scripts/release_control/secure_runtime_attestation_v6.py`, `scripts/release_control/secure_runtime_source_manifest_v6.json`, `scripts/release_control/secure_runtime_attestation_v7.py`, `scripts/release_control/secure_runtime_source_manifest_v7.json`, `scripts/release_control/verify_release_container_images_test.py`, `scripts/release_control/capture_release_note_visuals.mjs`, `scripts/release_control/release_note_visuals.py`, `scripts/release_control/live_runtime_proof.py`, `scripts/release_control/live_runtime_proof_test.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `pulse-enterprise:scripts/build-pro-binaries.sh`, `pulse-enterprise:scripts/build-pro-release.sh`, `pulse-enterprise:scripts/validate-pro-release-line.sh`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/build-release-candidate.yml`, `.github/workflows/compile-release-payload.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/promote-private-pro-runtime.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/qualify-secure-runtime-release.yml`, `.github/workflows/recover-release-activation.yml`, `.github/workflows/release-convergence.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/retry-release-convergence.yml`, `.github/workflows/update-demo-server.yml`, `.github/workflows/validate-release-assets.yml`, and `pulse-enterprise:.github/workflows/build-pro-release.yml`
@@ -4558,6 +4614,12 @@ artifact-selection behaviour.
 4. Disabling SSH host-key verification, enrolling unknown keys, or hiding remote trust failures in unattended legacy cleanup
 
 ## Completion Obligations
+
+Executable identity changes require real stripped ELF, PE and Mach-O controls,
+exact prerelease and prefix-collision rejection, compiler ARM target checks,
+and refusal before normal, Windows rename or typed-helper state mutation.
+Installer recovery proof must preserve saved credentials and installation ID.
+Emulation and native device/release qualification remain distinct boundaries.
 
 ### Windows exact-ID unregistration before local erasure
 

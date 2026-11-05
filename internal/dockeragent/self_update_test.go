@@ -24,69 +24,16 @@ import (
 )
 
 func TestDetermineSelfUpdateArch_Coverage(t *testing.T) {
-	t.Run("known arches", func(t *testing.T) {
-		swap(t, &goArch, "amd64")
-		if got := determineSelfUpdateArch(); got != "linux-amd64" {
-			t.Fatalf("expected linux-amd64, got %q", got)
+	for _, target := range []string{"linux-armv6", "linux-armv7", "linux-amd64", "linux-arm64"} {
+		swap(t, &selfUpdateTarget, func() (string, error) { return target, nil })
+		if got := determineSelfUpdateArch(); got != target {
+			t.Fatalf("got %s, want %s", got, target)
 		}
-
-		swap(t, &goArch, "arm64")
-		if got := determineSelfUpdateArch(); got != "linux-arm64" {
-			t.Fatalf("expected linux-arm64, got %q", got)
-		}
-
-		swap(t, &goArch, "arm")
-		if got := determineSelfUpdateArch(); got != "linux-armv7" {
-			t.Fatalf("expected linux-armv7, got %q", got)
-		}
-	})
-
-	t.Run("uname fallback", func(t *testing.T) {
-		swap(t, &goArch, "other")
-		swap(t, &unameMachine, func() (string, error) {
-			return "x86_64", nil
-		})
-		if got := determineSelfUpdateArch(); got != "linux-amd64" {
-			t.Fatalf("expected linux-amd64, got %q", got)
-		}
-	})
-
-	t.Run("uname error", func(t *testing.T) {
-		swap(t, &goArch, "other")
-		swap(t, &unameMachine, func() (string, error) {
-			return "", errors.New("boom")
-		})
-		if got := determineSelfUpdateArch(); got != "" {
-			t.Fatalf("expected empty result, got %q", got)
-		}
-	})
-
-	t.Run("uname arm variants", func(t *testing.T) {
-		swap(t, &goArch, "other")
-		swap(t, &unameMachine, func() (string, error) {
-			return "armv7l", nil
-		})
-		if got := determineSelfUpdateArch(); got != "linux-armv7" {
-			t.Fatalf("expected linux-armv7, got %q", got)
-		}
-
-		swap(t, &unameMachine, func() (string, error) {
-			return "aarch64", nil
-		})
-		if got := determineSelfUpdateArch(); got != "linux-arm64" {
-			t.Fatalf("expected linux-arm64, got %q", got)
-		}
-	})
-
-	t.Run("uname unknown", func(t *testing.T) {
-		swap(t, &goArch, "other")
-		swap(t, &unameMachine, func() (string, error) {
-			return "mips", nil
-		})
-		if got := determineSelfUpdateArch(); got != "" {
-			t.Fatalf("expected empty result, got %q", got)
-		}
-	})
+	}
+	swap(t, &selfUpdateTarget, func() (string, error) { return "", errors.New("missing metadata") })
+	if got := determineSelfUpdateArch(); got != "" {
+		t.Fatalf("guessed target %s", got)
+	}
 }
 
 func TestResolveSymlink(t *testing.T) {

@@ -758,7 +758,7 @@
     },
     {
       "id": "RA9",
-      "summary": "A real v5-installed Pulse Unified Agent upgrades through v6 release assets into one canonical v6 pulse-agent identity, preserves one-shot update continuity metadata, keeps self-update preflight token handling out of argv, keeps legacy persisted host-agent token scopes valid at the v6 canonical agent endpoints, and does not drift agent-count or fallback behavior during the crossover.",
+      "summary": "A real v5-installed Pulse Unified Agent upgrades through v6 release assets into one canonical v6 pulse-agent identity, admits only the exact canonical executable package, release and compiler target before activation, preserves one-shot update continuity metadata, keeps self-update preflight token handling out of argv, keeps legacy persisted host-agent token scopes valid at the v6 canonical agent endpoints, and does not drift agent-count or fallback behavior during the crossover.",
       "kind": "journey",
       "blocking_level": "rc-ready",
       "proof_type": "hybrid",
@@ -774,6 +774,29 @@
         "unified-agent-v5-upgrade-continuity"
       ],
       "proof_commands": [
+        {
+          "id": "unified-agent-executable-identity-full-worker-proof",
+          "run": [
+            "bash",
+            "scripts/verify-agent-executable-identity.sh"
+          ]
+        },
+        {
+          "id": "unified-agent-executable-identity-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/agentidentity/...",
+            "./internal/agentupdate",
+            "./internal/updates",
+            "./internal/api",
+            "./cmd/verify-agent-release",
+            "./cmd/pulse-agent",
+            "-run",
+            "TestTargetUsesCompilerMetadata|TestRealStrippedExecutableIdentity|TestReleaseStampBoundariesAndDuplicates|TestRuntimeReleaseIdentityRequiresActualVariable|TestDownloadedIdentity|TestDownloadedRuntimeReleaseIdentity|TestValidateUnifiedAgent|TestExpectedAgentBinaryVersion|TestDownloadUnifiedAgent|TestUnifiedAgentValidatedDescriptorAndCache|TestPublishedAgentReleaseIdentity|TestUnstampedAgentReleaseIdentityCannotUseLinkerLiteral|TestDownloadedRuntimeIdentityRefusalIsAtomic|TestMalformedReleaseStampIsIndependentOfAlignment|TestVersionOutputCannotBypassBoundThroughCopy|TestDownloadFailurePreservesIdentityConflict|TestUnifiedAgentCacheRejectsInPlacePublicationWithPreservedMtime|TestDetermineArchOverrides|TestProUpdateTargetUsesExecutableMetadata|TestInvalidAdvertisedVersion|TestProxyRejectsInvalidReleaseVersion|TestVerifyAgentRelease|TestRecordedStamp",
+            "-count=1"
+          ]
+        },
         {
           "id": "unified-agent-first-report-continuity-tests",
           "run": [
@@ -797,6 +820,17 @@
           ]
         },
         {
+          "id": "unified-agent-saved-state-repair-tests",
+          "run": [
+            "go",
+            "test",
+            "./scripts/installtests",
+            "-run",
+            "TestAgentBuildRecipe|TestUniversalAgentWrapperDispatchesPublishedLinuxTargets|TestAgentInstallerARMv6SavedStateRepairPreflight|TestPulseAgentStateDirLifecycleIntegration|TestReleaseLdflags",
+            "-count=1"
+          ]
+        },
+        {
           "id": "unified-agent-update-handoff-tests",
           "run": [
             "go",
@@ -811,12 +845,52 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "cmd/pulse-agent/release_identity_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/agent-update-identity-reliability-2026-11-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/unified-agent-v5-upgrade-continuity-2026-03-12.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
+          "path": "docs/UNIFIED_AGENT.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentidentity/canonical_release_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentidentity/identity.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentidentity/version-pattern.txt",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentupdate/arm_emulation_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/agentupdate/coverage_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentupdate/identity_test.go",
           "kind": "file"
         },
         {
@@ -836,6 +910,11 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/unified_agent_canonical_release_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/unified_agent_more_test.go",
           "kind": "file"
         },
@@ -851,12 +930,27 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/unified_agent_validation_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/config/api_tokens_coverage_test.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/hostagent/agent_new_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/installtests/agent_armv6_repair_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/verify-agent-executable-identity.sh",
           "kind": "file"
         }
       ]
@@ -10162,7 +10256,7 @@
     },
     {
       "id": "agent-update-executable-identity-and-armv6-target",
-      "summary": "Real stripped-binary experiments show the agent download validator accepts a prerelease, a longer stable version, or an unrelated dependency version through substring matching. The normal updater can restart into the same stale binary because it does not compare the downloaded executable version with the advertised version. GOARM=6 clients request linux-armv7; QEMU arm1176 reproduces an existing self-test refusal before replacement and a repeat-download failure loop. Repair needs shared executable package, target and exact release-identity authority across build producers, server validation and all activation paths, plus explicit installer recovery for already-installed ARMv6 clients. An isolated source candidate could not be exported for independent review and was not imported or qualified. This remains a separate owned implementation and migration gap.",
+      "summary": "The executable package, exact release identity and compiler-target source repair is implemented with real-format and QEMU controls. Already-installed ARMv6 clients retain their old selection logic until repaired through the documented local saved-state installer path. Installed-fleet recovery and physical ARMv6/ARMv7 device qualification remain unverified. Track release inclusion, saved credentials and identity continuity on affected installed clients, physical CPU execution and observation of ordinary updates before closing this residual migration and qualification gap. The v5-to-v6 release gate alone does not establish ARM fleet recovery.",
       "owner": "project-owner",
       "status": "triaged",
       "recorded_at": "2026-11-05",

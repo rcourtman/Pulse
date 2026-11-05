@@ -197,6 +197,15 @@ elif [[ "${PULSE_REQUIRE_MACOS_SIGNING:-false}" == "true" || "${PULSE_REQUIRE_WI
     exit 1
 fi
 
+# Validate the final bytes after every compiler-payload and native-signing copy.
+# No archive, checksum manifest or release signature may admit a stale, foreign
+# target or unstamped replacement from an otherwise successful producer.
+agent_identity_inputs=()
+for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do
+    agent_identity_inputs+=("${target}" "${BUILD_DIR}/$(pulse_release_binary_filename agent "${target}")")
+done
+go run ./cmd/verify-agent-release --version "v${VERSION}" "${agent_identity_inputs[@]}"
+
 # Build pulse-mcp (Model Context Protocol adapter) for the same
 # multi-OS matrix as the unified agent. The MCP server runs on
 # the integrator's machine (Mac, Windows, Linux desktop) and
@@ -363,6 +372,12 @@ case "$ARCH" in
     armv7l|armhf)
         exec "$(dirname "$0")/pulse-linux-armv7" "$@"
         ;;
+    armv6l)
+        exec "$(dirname "$0")/pulse-linux-armv6" "$@"
+        ;;
+    i386|i686)
+        exec "$(dirname "$0")/pulse-linux-386" "$@"
+        ;;
     *)
         echo "Unsupported architecture: $ARCH" >&2
         exit 1
@@ -384,6 +399,12 @@ case "$ARCH" in
         ;;
     aarch64|arm64)
         exec "$(dirname "$0")/pulse-agent-linux-arm64" "$@"
+        ;;
+    armv6l)
+        exec "$(dirname "$0")/pulse-agent-linux-armv6" "$@"
+        ;;
+    i386|i686)
+        exec "$(dirname "$0")/pulse-agent-linux-386" "$@"
         ;;
     armv7l|armhf)
         exec "$(dirname "$0")/pulse-agent-linux-armv7" "$@"

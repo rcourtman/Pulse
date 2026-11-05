@@ -23,7 +23,7 @@ func TestHandleDownloadUnifiedAgentSetsChecksumAndInvalidatesOnChange(t *testing
 	binDir := setupTempPulseBin(t)
 	filePath := filepath.Join(binDir, "pulse-agent-linux-amd64")
 
-	payload1 := validTestUnifiedAgentBinary("checksum-v1")
+	payload1 := validTestUnifiedAgentBinary(t, "checksum-v1")
 	if err := os.WriteFile(filePath, payload1, 0o755); err != nil {
 		t.Fatalf("failed to write test binary: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestHandleDownloadUnifiedAgentSetsChecksumAndInvalidatesOnChange(t *testing
 
 	// Ensure modtime changes for invalidation.
 	time.Sleep(10 * time.Millisecond)
-	payload2 := validTestUnifiedAgentBinary("checksum-v2")
+	payload2 := validTestUnifiedAgentBinary(t, "checksum-v2")
 	if err := os.WriteFile(filePath, payload2, 0o755); err != nil {
 		t.Fatalf("failed to rewrite test binary: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestHandleDownloadUnifiedAgentAllowsVersionCacheKeyQuery(t *testing.T) {
 	binDir := setupTempPulseBin(t)
 	filePath := filepath.Join(binDir, "pulse-agent-linux-amd64")
 
-	payload := validTestUnifiedAgentBinary("agent-binary-v1")
+	payload := validTestUnifiedAgentBinary(t, "agent-binary-v1")
 	if err := os.WriteFile(filePath, payload, 0o755); err != nil {
 		t.Fatalf("failed to write test binary: %v", err)
 	}

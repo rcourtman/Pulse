@@ -1485,6 +1485,43 @@ including recovery already performed. Keep tokens, full copied commands,
 connection files and service environments private. No new update, Diagnostics
 run or full configuration export is required to ask for help.
 
+### ARMv6 agent repeatedly downloads an update
+
+An older ARMv6 agent can request an ARMv7 update. On ARMv6 hardware its self-test
+refuses the downloaded program and leaves the existing executable installed,
+so the same failed download can recur. That older updater cannot repair its
+own target selection. On a more capable CPU the ARMv7 program may run, so a
+successful update alone does not establish the installed build's target.
+
+Use the canonical agent installer on the affected host after the trusted Pulse
+server carries corrected agent artifacts. Download and inspect that server's
+current `/install.sh` using the
+[HTTPS preparation above](#private-file-installation-linux-macos-and-nas).
+Keep the installed connection state and agent ID. No new token or enrolment is
+needed. For a standard Linux installation using `/var/lib/pulse-agent`:
+
+```bash
+sudo bash "$HOME/.config/pulse/agent-install.sh" --update --state-dir /var/lib/pulse-agent --preflight-only
+```
+
+Check that preflight reports `linux-armv6` on an `armv6l` host. If it succeeds
+and a brief monitoring interruption is acceptable, apply with the same saved
+state directory:
+
+```bash
+sudo bash "$HOME/.config/pulse/agent-install.sh" --update --state-dir /var/lib/pulse-agent
+```
+
+Use the actual existing state directory in both commands for a custom install.
+Do not substitute an empty directory, uninstall, replace the saved token or
+copy a binary by hand. `--update` recovers that installation's connection,
+identity, collectors and privilege profile; the installer selects the target
+from the local host. A shared token or matching hostname does not identify a
+CPU or an installed executable. Preflight is not installation. Check the
+installer result, installed executable version and fresh reporting from that
+same host before treating recovery as complete. If the result is uncertain,
+preserve the redacted error and reconcile local state before retrying.
+
 ### Updating the typed helper
 
 **Automatic agent updates replace the collector only.** They do not replace or

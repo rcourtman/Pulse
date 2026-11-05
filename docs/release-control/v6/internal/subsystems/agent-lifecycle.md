@@ -9,7 +9,9 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["api-contracts"]
+  "dependency_subsystem_ids": [
+    "api-contracts"
+  ]
 }
 ```
 
@@ -1982,6 +1984,14 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Canonical Files
 
+1. `scripts/verify-agent-executable-identity.sh` builds the exact staged-source packet and requires full format, installer and ARM execution proofs.
+
+1. `internal/agentidentity/version-pattern.txt` is the shared runtime/producer version grammar.
+
+1. `internal/api/unified_agent_validation.go` binds validation, digest and serving to one descriptor with inode/version/target-aware caching.
+
+1. `internal/agentidentity/identity.go` owns executable package, release stamp and Go compiler target identity.
+
 - `internal/agentexec/guest_exec_safety.go`
 - `internal/hostagent/guest_exec_guard.go`
 - `internal/hostagent/guest_exec_completion.go`
@@ -2439,6 +2449,8 @@ update, profile rollout, command reachability, or fleet-control authority.
     Linux commands must keep custom CA, insecure/plain-HTTP, and optional-auth
     behavior aligned so the Machines onboarding path does not diverge by OS.
 18. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
+1. `internal/agentidentity/identity.go` shared with `api-contracts`, `deployment-installability`: the executable package, release identity and compiler target authority is shared by agent activation, download API validation and release artifact selection.
+1. `internal/agentidentity/version-pattern.txt` shared with `api-contracts`, `deployment-installability`: the canonical release-version grammar is shared by runtime executable identity and release producer validation.
 19. `internal/api/agent_ingest.go` shared with `api-contracts`: Unified Agent report admission, removal, remote-config identity binding, and re-enrollment responses are both an agent lifecycle authority and a canonical authenticated API contract boundary.
 20. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
     20a. `internal/api/cloud_agent_install_command.go` shared with `api-contracts`, `cloud-paid`: hosted tenant agent install command generation is both an agent lifecycle enrollment surface and a provider-hosted tenant boundary.
@@ -2475,6 +2487,7 @@ update, profile rollout, command reachability, or fleet-control authority.
     details for the operator, but it must not POST an unproven token as a
     completed lifecycle registration.
 23. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+1. `internal/api/unified_agent_validation.go` shared with `api-contracts`: validated executable metadata, digest caching and descriptor-bound downloads are jointly owned by agent lifecycle and API artifact delivery.
 24. `internal/config/host_continuity.go` shared with `monitoring`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
 25. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
 26. `internal/models/models.go` shared with `monitoring`: removed host-agent identity aliases and tombstone state are both agent lifecycle authority and monitoring runtime report state.
@@ -3381,8 +3394,41 @@ instead of lifecycle-local centered icon/text shells.
 32. `scripts/run-secure-runtime-rootful-qualification.sh` shared with `deployment-installability`: the rootful runtime qualification wrapper is both an agent lifecycle typed-helper provider-boundary proof entry point and a deployment installability proof harness.
 
 33. `scripts/run-secure-runtime-rootless-qualification.sh` shared with `deployment-installability`: the rootless runtime qualification wrapper is both an agent lifecycle provider-boundary proof entry point and a deployment installability proof harness.
+1. `scripts/verify-agent-executable-identity.sh` shared with `deployment-installability`: reproducible canonical executable, installer and emulated ARM update proofs are owned jointly by agent lifecycle and artifact delivery.
 
 ## Extension Points
+
+### Exact executable identity and ARM target selection
+
+The standalone proof requires actual PASS events for its native target and
+production-source controls. It checks the v7 production-source boundary and the
+verifier/identity inputs across all four manifests, excluding verifier unit
+tests from production provider inputs. Copied recovery recipes retain preflight
+before update. Docker-agent target assertions run as ARMv6 on ARM1176 and
+Cortex-A7 and as ARMv7 on Cortex-A7; this is emulation. Installed-fleet and
+physical-device qualification remain in the open residual scope.
+
+Recorded linker metadata, when it contains a release marker, must corroborate
+the canonical stamp symbol. This catches mistaken build flags while preserving
+legitimate repeated stamps; it does not authenticate source or replace runtime
+identity probes. Invalid advertised release versions fail before an artifact
+download or helper quarantine, and invalid proxy versions fail closed.
+
+`internal/agentidentity/identity.go` is the common authority for the canonical
+main package, supported GOOS/GOARCH/GOARM targets and bounded release stamp.
+Release builds use `scripts/release_ldflags.sh`; `make build-agents` uses
+`scripts/build-agents.sh` and the published release matrix. Non-trimpath linker
+metadata may repeat one identical stamp. Conflicting identities fail closed.
+Server download validation checks executable package, target and exact version.
+The normal and typed-helper updaters check bounded `--version` output after
+format, checksum and required signature checks, before self-test or activation. A separate bounded `--release-identity` probe binds the runtime value to the canonical stamp variable; static package/stamp metadata remains a signed-artifact contract, not symbol or source authentication.
+Windows rename and saved continuity state share that refusal boundary.
+Pro server selection and the dormant Docker helper consume the same target
+authority. The published unified agent disables the older Docker updater.
+Installer `--update --state-dir <existing-state-dir>` recovers local saved
+credentials and installation identity and selects ARMv6 from local armv6l.
+Tokens and hostnames never establish CPU or installed-executable identity.
+
 
 Safe-profile installation and migration invoke the private lifecycle commands
 in `cmd/pulse-agent/collector_lifecycle.go`, backed by
@@ -4521,6 +4567,12 @@ rejection; they establish neither receiver delivery nor installed recovery.
 
 ## Completion Obligations
 
+Executable identity changes require real stripped ELF, PE and Mach-O controls,
+exact prerelease and prefix-collision rejection, compiler ARM target checks,
+and refusal before normal, Windows rename or typed-helper state mutation.
+Installer recovery proof must preserve saved credentials and installation ID.
+Emulation and native device/release qualification remain distinct boundaries.
+
 ### Windows exact-ID unregistration before local erasure
 
 After independent SCM absence, `scripts/install.ps1` must recover the existing
@@ -4998,6 +5050,8 @@ Agent` secondary handoff against the live setup wizard instead of relying
     `internal/hostagent/smartctl_discovery_test.go`.
 
 ## Current State
+
+Versioned native profile and Windows lifecycle collector fixtures consume `scripts/release_ldflags.sh agent`, preserving their VCS settings while carrying the same runtime release identity required by updater admission. Unversioned native smoke builds remain development controls.
 
 ### AI Discovery removed (2026-10-11)
 

@@ -13,6 +13,7 @@ on:
       - 'internal/operationreceipt/**'
       - 'internal/agenthelper/**'
       - 'internal/agenttls/**'
+      - 'internal/agentidentity/**'
       - 'internal/agentupdate/**'
       - 'internal/dockeragent/**'
       - 'internal/filesystemprobe/**'
@@ -27,6 +28,9 @@ on:
       - 'frontend-modern/package-lock.json'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
+      - 'scripts/release_ldflags.sh'
+      - 'scripts/release_build_targets.sh'
+      - 'scripts/build-agents.sh'
       - 'scripts/install.sh'
       - 'scripts/install.ps1'
       # The Unix installer inventory also executes server/update fixtures.
@@ -52,6 +56,7 @@ on:
       - 'internal/operationreceipt/**'
       - 'internal/agenthelper/**'
       - 'internal/agenttls/**'
+      - 'internal/agentidentity/**'
       - 'internal/agentupdate/**'
       - 'internal/dockeragent/**'
       - 'internal/filesystemprobe/**'
@@ -64,6 +69,9 @@ on:
       - 'frontend-modern/package-lock.json'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
+      - 'scripts/release_ldflags.sh'
+      - 'scripts/release_build_targets.sh'
+      - 'scripts/build-agents.sh'
       - 'scripts/install.sh'
       - 'scripts/install.ps1'
       - 'install.sh'
@@ -115,8 +123,9 @@ jobs:
           git diff --exit-code HEAD
           inputs="$(mktemp -d "$RUNNER_TEMP/pulse-native-profile-inputs.XXXXXX")"
           for version in 1 2; do
+            agent_ldflags="$(./scripts/release_ldflags.sh agent --version "6.0.0-native-profile.${version}")"
             CGO_ENABLED=0 go build -trimpath -buildvcs=true \
-              -ldflags="-s -w -X main.Version=6.0.0-native-profile.${version}" \
+              -ldflags="$agent_ldflags" \
               -o "$inputs/collector-v${version}" ./cmd/pulse-agent
           done
           CGO_ENABLED=0 go build -trimpath -buildvcs=true -o "$inputs/helper" ./cmd/pulse-agent-helper
@@ -434,9 +443,13 @@ jobs:
         shell: powershell
         timeout-minutes: 10
         run: |
-          go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.1" -o pulse-agent-windows-ci-1.exe ./cmd/pulse-agent
+          $agentLdflagsV1 = (bash ./scripts/release_ldflags.sh agent --version 6.0.5-ci.1 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v1 release metadata failed (exit $LASTEXITCODE)." }
+          go build -buildvcs=false -trimpath -ldflags="$agentLdflagsV1" -o pulse-agent-windows-ci-1.exe ./cmd/pulse-agent
           if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v1 build failed (exit $LASTEXITCODE)." }
-          go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.2" -o pulse-agent-windows-ci-2.exe ./cmd/pulse-agent
+          $agentLdflagsV2 = (bash ./scripts/release_ldflags.sh agent --version 6.0.5-ci.2 | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v2 release metadata failed (exit $LASTEXITCODE)." }
+          go build -buildvcs=false -trimpath -ldflags="$agentLdflagsV2" -o pulse-agent-windows-ci-2.exe ./cmd/pulse-agent
           if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle v2 build failed (exit $LASTEXITCODE)." }
           go build -buildvcs=false -trimpath -o windows-lifecycle-server.exe ./scripts/installtests/windowslifecycleserver
           if ($LASTEXITCODE -ne 0) { throw "Windows lifecycle server build failed (exit $LASTEXITCODE)." }

@@ -35,7 +35,7 @@ func TestFreeBSDOfflineAgentPreflight(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			binDir := setupTempPulseBin(t)
-			payload := validTestUnifiedAgentBinary("offline-freebsd-fixture")
+			payload := validTestUnifiedAgentBinary(t, "offline-freebsd-fixture")
 			binaryPath := filepath.Join(binDir, "pulse-agent-freebsd-amd64")
 			write := func(path string, data []byte) {
 				t.Helper()

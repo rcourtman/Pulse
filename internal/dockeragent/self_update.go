@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
@@ -239,32 +240,14 @@ func verifyELFMagic(path string) (retErr error) {
 	return errors.New("not a valid ELF binary")
 }
 
-func determineSelfUpdateArch() string {
-	switch goArch {
-	case "amd64":
-		return "linux-amd64"
-	case "arm64":
-		return "linux-arm64"
-	case "arm":
-		return "linux-armv7"
-	}
+var selfUpdateTarget = agentidentity.CurrentTarget
 
-	out, err := unameMachine()
+func determineSelfUpdateArch() string {
+	target, err := selfUpdateTarget()
 	if err != nil {
 		return ""
 	}
-
-	normalized := strings.ToLower(strings.TrimSpace(out))
-	switch normalized {
-	case "x86_64", "amd64":
-		return "linux-amd64"
-	case "aarch64", "arm64":
-		return "linux-arm64"
-	case "armv7l", "armhf", "armv7":
-		return "linux-armv7"
-	default:
-		return ""
-	}
+	return target
 }
 
 func selfUpdateSleepWithContext(ctx context.Context, d time.Duration) error {
@@ -415,6 +398,9 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 
 	downloadBase := strings.TrimRight(target.URL, "/") + "/download/pulse-agent"
 	archParam := determineSelfUpdateArch()
+	if archParam == "" {
+		return errors.New("unsupported executable release target")
+	}
 
 	type downloadCandidate struct {
 		url  string

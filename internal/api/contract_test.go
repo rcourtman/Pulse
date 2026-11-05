@@ -11149,7 +11149,7 @@ func TestContract_DownloadUnifiedAgentReleaseAssetIncludesSignatureHeader(t *tes
 	router, tempDir := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v6.0.0"
 
-	binContent := validTestUnifiedAgentBinary("linux-amd64")
+	binContent := validTestUnifiedAgentBinary(t, "linux-amd64")
 	binPath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
 	if err := os.WriteFile(binPath, binContent, 0o755); err != nil {
 		t.Fatalf("write binary: %v", err)

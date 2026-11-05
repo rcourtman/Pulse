@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
@@ -154,7 +155,7 @@ func unifiedAgentLocalBuildCommand(normalized string) string {
 		env = append(env, "GOARCH="+goarch)
 	}
 
-	return fmt.Sprintf("%s go build -o bin/%s ./cmd/pulse-agent", strings.Join(env, " "), unifiedAgentLocalFilename(normalized))
+	return fmt.Sprintf("%s go build -ldflags=\"$(./scripts/release_ldflags.sh agent --version \"$(cat VERSION)\")\" -trimpath -o bin/%s ./cmd/pulse-agent", strings.Join(env, " "), unifiedAgentLocalFilename(normalized))
 }
 
 func unifiedAgentLocalFilename(normalized string) string {
@@ -262,38 +263,26 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 			continue
 		}
 
-		info, err := os.Stat(candidate)
-		if err != nil || info.IsDir() {
-			continue
-		}
-
-		if err := validateUnifiedAgentBinary(candidate, expectedAgentVersion); err != nil {
+		file, info, checksum, err := r.openValidatedUnifiedAgent(candidate, expectedAgentVersion, normalized)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
 			log.Warn().Err(err).Str("path", candidate).Msg("Skipping incompatible local unified agent binary")
 			invalidCandidates = append(invalidCandidates, fmt.Sprintf("%s (%v)", candidate, err))
 			continue
 		}
-
-		checksum, err := r.cachedSHA256(candidate, info)
-		if err != nil {
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to compute unified agent checksum")
-			continue
-		}
-
-		file, err := os.Open(candidate)
-		if err != nil {
-			log.Error().Err(err).Str("path", candidate).Msg("Failed to open unified agent binary for download")
-			continue
-		}
-		defer file.Close()
 
 		signature, sigErr := readReleaseAssetSignature(candidate)
 		sshSignature, sshSigErr := readReleaseAssetSSHSignature(candidate)
 		if (sigErr != nil || sshSigErr != nil) && isPublishedReleaseAssetVersion(r.serverVersion) {
 			log.Warn().Err(errors.Join(sigErr, sshSigErr)).Str("path", candidate).Msg("Skipping unsigned local unified agent binary")
 			invalidCandidates = append(invalidCandidates, fmt.Sprintf("%s (%v)", candidate, errors.Join(sigErr, sshSigErr)))
+			_ = file.Close()
 			continue
 		}
 
+		defer func() { _ = file.Close() }()
 		w.Header().Set(checksumHeaderName, checksum)
 		if signature != "" {
 			w.Header().Set(signatureHeaderName, signature)
@@ -560,27 +549,18 @@ func (r *Router) proxyAgentRunnerFromGitHub(w http.ResponseWriter, req *http.Req
 // silently. Refusing here turns that into a loud failure at the point of
 // download: a dev server answers 404 with the build command, and a published
 // release falls through to the GitHub proxy and fetches the correct version.
-func validateUnifiedAgentBinary(path string, expectedVersion string) error {
+func validateUnifiedAgentBinary(path, expectedVersion, target string) error {
 	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("open binary: %w", err)
+		return err
 	}
-	defer file.Close()
-
-	hasCanonical, hasLegacy, hasVersion, err := scanUnifiedAgentBinaryContract(file, expectedVersion)
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
 	if err != nil {
-		return fmt.Errorf("scan binary contract: %w", err)
+		return err
 	}
-	if hasLegacy {
-		return fmt.Errorf("references deprecated host endpoint %s", legacyUnifiedAgentReportPath)
-	}
-	if !hasCanonical {
-		return fmt.Errorf("missing canonical host endpoint %s", canonicalUnifiedAgentReportPath)
-	}
-	if !hasVersion {
-		return fmt.Errorf("stale build: does not carry this server's agent version %s", expectedVersion)
-	}
-	return nil
+	_, err = inspectUnifiedAgentBinary(file, info.Size(), expectedVersion, target)
+	return err
 }
 
 // resolveAgentBinaryVersionSource picks the version this server should expect
@@ -603,78 +583,41 @@ func (r *Router) resolveAgentBinaryVersionSource() string {
 	return r.serverVersion
 }
 
-// expectedAgentBinaryVersion reduces a server version to the release-identity
-// string that `make build-agents` stamps into the agent through
-// -X main.Version, i.e. "v6.2.0-rc.8" for a server reporting
-// "6.2.0-rc.8+git.44.gdd72bd149.dirty". Build metadata is dropped because it
-// records how the server itself was built and never appears in the agent.
-// Returns "" when the version cannot be parsed, which disables the freshness
-// check rather than rejecting every candidate.
+// expectedAgentBinaryVersion uses the shared release identity normalizer.
+// Unknown server versions omit version equality only; package, supported target
+// and explicit release stamp checks still apply. Use make build-agents for dev.
 func expectedAgentBinaryVersion(rawVersion string) string {
-	rawVersion = strings.TrimSpace(rawVersion)
-	if rawVersion == "" || strings.EqualFold(rawVersion, "dev") {
-		return ""
-	}
-	version, err := updates.ParseVersion(rawVersion)
+	version, err := agentidentity.Version(rawVersion)
 	if err != nil {
 		return ""
 	}
-	identity := fmt.Sprintf("v%d.%d.%d", version.Major, version.Minor, version.Patch)
-	if prerelease := strings.TrimSpace(version.Prerelease); prerelease != "" {
-		identity += "-" + prerelease
-	}
-	return identity
+	return version
 }
 
-func scanUnifiedAgentBinaryContract(r io.Reader, versionNeedle string) (hasCanonical bool, hasLegacy bool, hasVersion bool, err error) {
-	canonicalNeedle := []byte(canonicalUnifiedAgentReportPath)
-	legacyNeedle := []byte(legacyUnifiedAgentReportPath)
-	versionBytes := []byte(versionNeedle)
-	// An empty needle would match everything, so treat "no expected version"
-	// as "already satisfied" and skip the comparison entirely.
-	hasVersion = len(versionBytes) == 0
-	maxNeedleLen := len(canonicalNeedle)
-	if len(legacyNeedle) > maxNeedleLen {
-		maxNeedleLen = len(legacyNeedle)
-	}
-	if len(versionBytes) > maxNeedleLen {
-		maxNeedleLen = len(versionBytes)
-	}
-	overlap := maxNeedleLen - 1
-	if overlap < 0 {
-		overlap = 0
-	}
-
+func scanUnifiedAgentBinaryContract(r io.Reader) (hasCanonical bool, hasLegacy bool, err error) {
+	canonical := []byte(canonicalUnifiedAgentReportPath)
+	legacy := []byte(legacyUnifiedAgentReportPath)
+	overlap := max(len(canonical), len(legacy)) - 1
 	buf := make([]byte, 64*1024)
-	window := make([]byte, 0, len(buf)+overlap)
+	var tail []byte
 	for {
 		n, readErr := r.Read(buf)
-		if n > 0 {
-			window = append(window, buf[:n]...)
-			if bytes.Contains(window, canonicalNeedle) {
-				hasCanonical = true
-			}
-			if bytes.Contains(window, legacyNeedle) {
-				hasLegacy = true
-			}
-			if !hasVersion && bytes.Contains(window, versionBytes) {
-				hasVersion = true
-			}
-			if hasCanonical && hasLegacy && hasVersion {
-				return true, true, true, nil
-			}
-			if len(window) > overlap {
-				window = append(window[:0], window[len(window)-overlap:]...)
-			}
+		window := append(tail, buf[:n]...)
+		hasCanonical = hasCanonical || bytes.Contains(window, canonical)
+		hasLegacy = hasLegacy || bytes.Contains(window, legacy)
+		if len(window) > overlap {
+			tail = append(tail[:0], window[len(window)-overlap:]...)
+		} else {
+			tail = window
 		}
 		if readErr == io.EOF {
 			break
 		}
 		if readErr != nil {
-			return false, false, false, readErr
+			return false, false, readErr
 		}
 	}
-	return hasCanonical, hasLegacy, hasVersion, nil
+	return hasCanonical, hasLegacy, nil
 }
 
 // proxyAgentBinaryFromGitHub downloads an agent binary from GitHub releases and serves
@@ -683,6 +626,11 @@ func scanUnifiedAgentBinaryContract(r io.Reader, versionNeedle string) (hasCanon
 // We must proxy instead of redirecting because the agent requires the checksum header
 // for security verification, and GitHub doesn't provide it.
 func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Request, normalized string) {
+	expectedVersion := expectedAgentBinaryVersion(r.serverVersion)
+	if expectedVersion == "" {
+		http.Error(w, "Agent binary unavailable for invalid server release version", http.StatusServiceUnavailable)
+		return
+	}
 	githubURL, err := r.agentBinaryReleaseAssetURL(normalized)
 	if err != nil {
 		log.Error().Err(err).Str("server_version", strings.TrimSpace(r.serverVersion)).Str("arch", normalized).Msg("Agent binary fallback unavailable for current server build")
@@ -728,6 +676,11 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 			http.Error(w, "Failed to fetch agent binary SSH signature", http.StatusServiceUnavailable)
 			return
 		}
+		if err := agentidentity.ValidateReader(bytes.NewReader(content), expectedVersion, normalized); err != nil {
+			log.Error().Err(err).Str("asset_url", githubURL).Str("arch", normalized).Msg("Release agent executable identity mismatch")
+			http.Error(w, "Release agent executable identity mismatch", http.StatusConflict)
+			return
+		}
 		serveProxiedAgentBinaryWithSignatures(w, content, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy")
 		return
 	}
@@ -754,6 +707,11 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 	if sshSigErr != nil {
 		log.Error().Err(sshSigErr).Str("url", sshSignatureURL).Msg("Failed to fetch agent binary SSH signature from GitHub")
 		http.Error(w, "Failed to fetch agent binary SSH signature", http.StatusServiceUnavailable)
+		return
+	}
+	if err := agentidentity.ValidateReader(bytes.NewReader(archiveContent), expectedVersion, normalized); err != nil {
+		log.Error().Err(err).Str("asset_url", githubURL).Str("arch", normalized).Msg("Release agent executable identity mismatch")
+		http.Error(w, "Release agent executable identity mismatch", http.StatusConflict)
 		return
 	}
 	serveProxiedAgentBinaryWithSignatures(w, archiveContent, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy-archive")

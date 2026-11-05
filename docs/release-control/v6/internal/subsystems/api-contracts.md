@@ -1363,6 +1363,12 @@ parity and consuming browser evidence remain separate acceptance obligations.
 
 ## Canonical Files
 
+1. `internal/agentidentity/version-pattern.txt` is the shared runtime/producer version grammar.
+
+1. `internal/api/unified_agent_validation.go` binds validation, digest and serving to one descriptor with inode/version/target-aware caching.
+
+1. `internal/agentidentity/identity.go` owns executable package, release stamp and Go compiler target identity.
+
 1a. `docs/API.md`
 1b. `frontend-modern/public/docs/API.md`
 1. `internal/api/contract_test.go`
@@ -2795,6 +2801,8 @@ payload shape change when the portal presents compact client rows.
 60. `internal/agentcapabilities/transcript.go` shared with `ai-runtime`: Stored Assistant tool results and product history share one result-bearing transcript contract, with an explicit narrower provider-request projection. Observed failures and absent historical result status must survive the API boundary.
 60. `internal/agentcapabilities/types.go` shared with `ai-runtime`: the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
 61. `internal/agentcapabilities/workflow_prompt.go` shared with `ai-runtime`: the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients.
+1. `internal/agentidentity/identity.go` shared with `agent-lifecycle`, `deployment-installability`: the executable package, release identity and compiler target authority is shared by agent activation, download API validation and release artifact selection.
+1. `internal/agentidentity/version-pattern.txt` shared with `agent-lifecycle`, `deployment-installability`: the canonical release-version grammar is shared by runtime executable identity and release producer validation.
 62. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
     The `/api/resources` type filter also treats URL-encoded comma separators
     (`%2C`) the same as literal comma-separated type lists, because frontend
@@ -3213,6 +3221,7 @@ payload shape change when the portal presents compact client rows.
     for the requested normalized OS/architecture, not a hard-coded Linux
     target, so installer preflight failures point operators at the artifact
     they actually need.
+1. `internal/api/unified_agent_validation.go` shared with `agent-lifecycle`: validated executable metadata, digest caching and descriptor-bound downloads are jointly owned by agent lifecycle and API artifact delivery.
 85. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
     `GET /api/updates/release-notes` is the authenticated running-release
     companion to update checks. It returns the exact published tag body as
@@ -3303,6 +3312,30 @@ payload shape change when the portal presents compact client rows.
     the canonical monitored-system blocked payload. Independently, Assistant scope is server-bound: `ai:chat` authorizes conversation, reads, sessions, and knowledge reads only; durable knowledge changes and explicit governed approval/execution require `ai:execute`, relay-mobile chat does not inherit it, trusted proposal correlation identity is server-authored, and unknown/internal model fields fail closed before capture or store access.
 
 ## Extension Points
+
+### Exact executable identity and ARM target selection
+
+Recorded linker metadata, when it contains a release marker, must corroborate
+the canonical stamp symbol. This catches mistaken build flags while preserving
+legitimate repeated stamps; it does not authenticate source or replace runtime
+identity probes. Invalid advertised release versions fail before an artifact
+download or helper quarantine, and invalid proxy versions fail closed.
+
+`internal/agentidentity/identity.go` is the common authority for the canonical
+main package, supported GOOS/GOARCH/GOARM targets and bounded release stamp.
+Release builds use `scripts/release_ldflags.sh`; `make build-agents` uses
+`scripts/build-agents.sh` and the published release matrix. Non-trimpath linker
+metadata may repeat one identical stamp. Conflicting identities fail closed.
+Server download validation checks executable package, target and exact version.
+The normal and typed-helper updaters check bounded `--version` output after
+format, checksum and required signature checks, before self-test or activation. A separate bounded `--release-identity` probe binds the runtime value to the canonical stamp variable; static package/stamp metadata remains a signed-artifact contract, not symbol or source authentication.
+Windows rename and saved continuity state share that refusal boundary.
+Pro server selection and the dormant Docker helper consume the same target
+authority. The published unified agent disables the older Docker updater.
+Installer `--update --state-dir <existing-state-dir>` recovers local saved
+credentials and installation identity and selects ARMv6 from local armv6l.
+Tokens and hostnames never establish CPU or installed-executable identity.
+
 
 The frontend action wire mirror in `frontend-modern/src/types/actionAudit.ts`
 tracks the durable inbox/detail, policy provenance, dispatch, and
@@ -4779,6 +4812,12 @@ bounds. This proves configuration preservation, not external receiver delivery.
     demo-mode read-only guard, or the CSRF check.
 
 ## Completion Obligations
+
+Executable identity changes require real stripped ELF, PE and Mach-O controls,
+exact prerelease and prefix-collision rejection, compiler ARM target checks,
+and refusal before normal, Windows rename or typed-helper state mutation.
+Installer recovery proof must preserve saved credentials and installation ID.
+Emulation and native device/release qualification remain distinct boundaries.
 
 WebSocket events derived from tenant infrastructure use
 `Hub.BroadcastMessageToTenant` or `Hub.BroadcastToTenant` with the owning org.

@@ -1790,6 +1790,8 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+The Router agent artifact cache contains validated executable package/release/target and digest metadata tied to file identity, size, modification time and filesystem change time. Platforms without a reliable change clock revalidate each download. It caches no authentication or tenant decisions and serves the descriptor validated for that request. Runtime activation additionally checks the bounded embedded release identity after checksum and required signature verification.
+
 ### Requested change history retains its disclosure authority
 
 `GET /api/agent/changes` retains the admitted token identity, principal,
