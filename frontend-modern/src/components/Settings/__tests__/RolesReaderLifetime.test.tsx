@@ -88,6 +88,100 @@ describe('Roles reader lifetime', () => {
   });
   afterEach(cleanup);
 
+  const inheritedRole = {
+    ...north,
+    id: 'custom-inherited',
+    parentId: 'viewer',
+    priority: 17,
+    updatedAt: '2026-10-20T08:00:00Z',
+    permissions: [
+      {
+        action: 'delete',
+        resource: 'nodes',
+        effect: 'deny',
+        conditions: { tag: 'production', owner: '${user}' },
+      },
+    ],
+  };
+
+  it('round-trips the entire accepted role when saving an unchanged edit', async () => {
+    mocks.getRoles.mockResolvedValue([inheritedRole]);
+    const { state } = mount();
+    await loaded(state);
+    state.openEditRole(inheritedRole);
+    await state.handleSaveRole();
+    expect(mocks.saveRole).toHaveBeenCalledWith(
+      inheritedRole,
+      expect.objectContaining({ expectedOrgID: 'north', retry: false }),
+    );
+  });
+
+  it.each(['name', 'description', 'permission'] as const)(
+    'preserves inheritance, priority and rule constraints while editing the %s',
+    async (field) => {
+      const original = JSON.parse(JSON.stringify(inheritedRole));
+      mocks.getRoles.mockResolvedValue([inheritedRole]);
+      const { state } = mount();
+      await loaded(state);
+      state.openEditRole(inheritedRole);
+      if (field === 'name') state.setFormName('Renamed role');
+      if (field === 'description') state.setFormDescription('Clearer description');
+      if (field === 'permission') state.updatePermission(0, 'resource', 'nodes:north');
+      await state.handleSaveRole();
+      expect(mocks.saveRole).toHaveBeenCalledTimes(1);
+      expect(mocks.saveRole.mock.calls[0][0]).toEqual({
+        ...inheritedRole,
+        name: field === 'name' ? 'Renamed role' : inheritedRole.name,
+        description: field === 'description' ? 'Clearer description' : inheritedRole.description,
+        permissions: inheritedRole.permissions.map((permission) => ({
+          ...permission,
+          resource: field === 'permission' ? 'nodes:north' : permission.resource,
+        })),
+      });
+      expect(inheritedRole).toEqual(original);
+    },
+  );
+
+  it('preserves the same metadata and corrected draft across an explicit denied-save retry', async () => {
+    mocks.getRoles.mockResolvedValue([inheritedRole]);
+    mocks.saveRole.mockRejectedValueOnce(
+      Object.assign(new Error('denied fixture'), { status: 403 }),
+    );
+    const { state } = mount();
+    await loaded(state);
+    state.openEditRole(inheritedRole);
+    state.setFormName('Renamed role');
+    await state.handleSaveRole();
+    expect(state.showModal()).toBe(true);
+    expect(mocks.saveRole.mock.calls[0][0]).toEqual({ ...inheritedRole, name: 'Renamed role' });
+    state.setFormDescription('Corrected description');
+    await state.handleSaveRole();
+    expect(mocks.saveRole.mock.calls[1][0]).toEqual({
+      ...inheritedRole,
+      name: 'Renamed role',
+      description: 'Corrected description',
+    });
+  });
+
+  it('does not copy an edited role metadata into a subsequent new role', async () => {
+    mocks.getRoles.mockResolvedValue([inheritedRole]);
+    const { state } = mount();
+    await loaded(state);
+    state.openEditRole(inheritedRole);
+    state.closeModal();
+    state.openCreateRole();
+    state.setFormId('new-reader');
+    state.setFormName('New reader');
+    await state.handleSaveRole();
+    expect(mocks.saveRole.mock.calls[0][0]).toEqual({
+      id: 'new-reader',
+      name: 'New reader',
+      description: '',
+      permissions: [{ action: 'read', resource: 'nodes' }],
+      createdAt: undefined,
+    });
+  });
+
   it('withdraws roles, editor and draft on an organisation switch, even for the same role ID', async () => {
     const { state } = mount();
     await loaded(state);
