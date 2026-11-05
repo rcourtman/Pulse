@@ -9702,3 +9702,10 @@ restore or storage data, and opens no new storage or recovery path.
 The action refusal pass on websocket rows in `internal/api/` reads command session
 state only. It reads and writes no backup, restore or storage data, and opens no new
 storage or recovery path.
+
+### Basic API clients write no session state
+
+`internal/api/basic_auth_session.go` limits Basic session issuance to Pulse's own web
+client, so API clients polling with Basic credentials stop rewriting the persisted
+session store on every call. No backup, restore or storage data is read or written,
+and no storage or recovery path changes.

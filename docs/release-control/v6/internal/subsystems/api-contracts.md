@@ -11881,6 +11881,17 @@ This is required for qualification clients and local operators to read,
 approve, reject, and execute governed actions without weakening the same
 capability checks for sessions, proxy users, or API tokens.
 
+Local Basic credentials authenticate an API client for one request and issue it
+nothing, as an API token does. A browser session comes from a sign-in flow, or from
+a Basic request marked `X-Requested-With: XMLHttpRequest` by Pulse's own web client,
+which keeps a browser behind a proxy that forwards Basic credentials signed in. An
+unmarked Basic response sets no cookie, so polling with Basic credentials cannot
+evict the owner's browser at `maxSessionsPerUser`. A rejected session cookie that
+reaches the Basic branch is still retired, because handlers read the username from
+the cookie. Successful unmarked Basic use is audited once per organization, user and
+client address per day; a failed attempt counts toward lockout and is always
+audited.
+
 Basic credentials are verified after `TenantMiddleware` has admitted the
 request organization, so that admission saw no principal. Immediately after
 the password verifies, and before the principal is attached or a Basic session
