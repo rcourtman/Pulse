@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	recoverystore "github.com/rcourtman/pulse-go-rewrite/internal/recovery/store"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -192,6 +193,7 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch reco
 		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to open recovery store for backup ingestion")
 		return
 	}
+	m.retireUnsettledBackupScopes(ctx, store, orgID)
 
 	// Collection-wide evidence is the authority for how much provider history
 	// Pulse could actually see. Persist it before any point mutation so a large
@@ -243,40 +245,21 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch reco
 	}
 }
 
-// retireUnsettledBackupScopesBestEffort forgets the unsettled guests of PBS
-// connections that have been removed. It runs where the monitor starts, because
-// a removed connection never polls again to replace its own answer.
-func (m *Monitor) retireUnsettledBackupScopesBestEffort(ctx context.Context) {
-	if m == nil {
-		return
-	}
+// retireUnsettledBackupScopes forgets the unsettled guests of PBS connections that
+// have been removed, because a removed connection never polls again to replace its
+// own answer. It runs on ingest, where the store is already open.
+func (m *Monitor) retireUnsettledBackupScopes(ctx context.Context, store *recoverystore.Store, orgID string) {
 	m.mu.RLock()
-	rm := m.recoveryManager
-	orgID := strings.TrimSpace(m.orgID)
-	var scopes []string
-	if m.config != nil {
-		for i := range m.config.PBSInstances {
-			scopes = append(scopes, m.config.PBSInstances[i].Name)
-		}
-	}
+	cfg := m.config
 	m.mu.RUnlock()
-	if rm == nil {
+	if cfg == nil {
 		return
 	}
-	if orgID == "" {
-		orgID = "default"
+	scopes := make([]string, 0, len(cfg.PBSInstances))
+	for i := range cfg.PBSInstances {
+		scopes = append(scopes, cfg.PBSInstances[i].Name)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	retireCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	store, err := rm.StoreForOrg(orgID)
-	if err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to open recovery store to retire unsettled backup scopes")
-		return
-	}
-	if err := store.RetainUnsettledProtectionScopes(retireCtx, scopes); err != nil {
+	if err := store.RetainUnsettledProtectionScopes(ctx, scopes); err != nil {
 		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to retire unsettled backup scopes")
 	}
 }

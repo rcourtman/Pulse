@@ -661,3 +661,64 @@ func TestRecoveryIngestKeepsUnsettledGuestsUntilAPollCanEvaluateThem(t *testing.
 		t.Fatalf("settled: state = %s, want unprotected", got)
 	}
 }
+
+// A removed connection never polls again, so any later ingest clears its answer.
+func TestRecoveryIngestForgetsUnsettledGuestsOfARemovedConnection(t *testing.T) {
+	m, manager := recoveryIngestTestMonitor(t)
+	m.config = &config.Config{PBSInstances: []config.PBSInstance{{Name: "shared-pbs"}}}
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"Home",
+		recovery.OutcomeUnknown,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		now.Add(-time.Minute),
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation(): %v", err)
+	}
+	taskTime := now.Add(-time.Hour)
+	points := []recovery.RecoveryPoint{{
+		ID: "pve-task:web1", Provider: recovery.ProviderProxmoxPVE, Kind: recovery.KindOther, Mode: recovery.ModeLocal,
+		Outcome: recovery.OutcomeSuccess, CompletedAt: &taskTime, SubjectResourceID: "resource:web1", ProviderScope: "Home",
+	}}
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{observations: []recovery.ProtectionProviderObservation{observation}, points: points})
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+		reconcile:         &recoveryReconcileScope{provider: string(recovery.ProviderProxmoxPBS), idPrefix: "pbs-backup:", instance: "shared-pbs"},
+		evaluatedSubjects: []string{"resource:web1"},
+		unsettledSubjects: []string{"resource:web1"},
+	})
+	state := func() recovery.ProtectionState {
+		t.Helper()
+		postures, _, err := store.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{SubjectResourceIDs: []string{"resource:web1"}, Page: 1, Limit: 1})
+		if err != nil || len(postures) != 1 {
+			t.Fatalf("ListProtectionPostures() = %v, %v", postures, err)
+		}
+		return postures[0].State
+	}
+	if got := state(); got != recovery.ProtectionStateUnknown {
+		t.Fatalf("connection configured: state = %s, want unknown", got)
+	}
+
+	// The next ingest is only a PVE poll's points.
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{points: points})
+	if got := state(); got != recovery.ProtectionStateUnknown {
+		t.Fatalf("connection still configured after another ingest: state = %s, want unknown", got)
+	}
+
+	m.config = &config.Config{}
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{points: points})
+	if got := state(); got != recovery.ProtectionStateUnprotected {
+		t.Fatalf("connection removed: state = %s, want unprotected", got)
+	}
+}
