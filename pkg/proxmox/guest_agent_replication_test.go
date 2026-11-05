@@ -17,6 +17,7 @@ const (
 	replicationStatusNone         = `{"data":[]}`
 	replicationStatusHTTP500      = "http-500"
 	replicationStatusHTTP404      = "http-404"
+	replicationStatusHTTP501      = "http-501"
 	replicationStatusHTTP502      = "http-502"
 )
 
@@ -39,6 +40,8 @@ func newReplicationFixture(t *testing.T, inventory, status string) (*replication
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/nodes"):
+			fmt.Fprint(w, `{"data":[{"node":"node","status":"online"}]}`)
 		case strings.HasSuffix(r.URL.Path, "/config"):
 			fmt.Fprint(w, `{"data":{}}`)
 		case strings.HasSuffix(r.URL.Path, "/cluster/replication"):
@@ -53,6 +56,8 @@ func newReplicationFixture(t *testing.T, inventory, status string) (*replication
 				http.Error(w, `{"data":null}`, http.StatusInternalServerError)
 			case replicationStatusHTTP404:
 				http.NotFound(w, r)
+			case replicationStatusHTTP501:
+				http.Error(w, `{"data":null}`, http.StatusNotImplemented)
 			case replicationStatusHTTP502:
 				http.Error(w, `{"data":null}`, http.StatusBadGateway)
 			default:
@@ -214,6 +219,7 @@ func TestGuestAgentReplicationInventoryCoversClusterEndpoints(t *testing.T) {
 
 func TestGuestAgentUnknownReplicationStateFailsClosed(t *testing.T) {
 	cases := map[string]string{
+		"server error":  replicationStatusHTTP500,
 		"bad gateway":   replicationStatusHTTP502,
 		"garbage":       `not json`,
 		"null data":     `{"data":null}`,
@@ -237,10 +243,10 @@ func TestGuestAgentUnknownReplicationStateFailsClosed(t *testing.T) {
 	}
 }
 
-func TestGuestAgentReplicationStatusFailureProxmoxReportsDoesNotDeferReads(t *testing.T) {
+func TestGuestAgentUnsupportedReplicationRouteDoesNotDeferReads(t *testing.T) {
 	for name, status := range map[string]string{
-		"no quorum":     replicationStatusHTTP500,
-		"missing route": replicationStatusHTTP404,
+		"missing route":     replicationStatusHTTP404,
+		"unsupported route": replicationStatusHTTP501,
 	} {
 		t.Run(name, func(t *testing.T) {
 			fixture, c := newReplicationFixture(t, replicationInventoryWithGuest, status)

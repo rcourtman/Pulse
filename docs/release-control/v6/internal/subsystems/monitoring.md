@@ -2433,10 +2433,24 @@ local migration file lock, with no config `lock`, and only warns if the thaw
 fails. Guest commands therefore also defer as `replication-active` while the
 guest's job on that node reports a live `pid` and its `last_try` is under an hour
 old, PVE's own limit on a freeze; a longer run's transfer does not hold readings.
-An unreadable answer defers as `lock-unverified`. A complete HTTP 500 does not
-defer: `job_status` fails that way without quorum, and `get_next_job` calls it
-too, so no new job can start. The existing per-cycle `/cluster/replication`
-inventory limits that protected read to guests seen with a job, so a job goes
+An unreadable answer, including a complete HTTP 500, defers as
+`lock-unverified`. A status failure does not establish that an already-running
+job finished its freeze/thaw; it must not be treated as proof that the guest
+channel is safe, even if quorum loss can prevent new jobs from starting. Only a
+later usable status reply resumes reads. Complete 404/501 replies retain the
+existing unsupported-route compatibility.
+
+`TestGuestAgentReplicationHTTP500DefersEveryReader` checks all six readers
+through direct and cluster clients, both initially unknown and active-to-unknown,
+then verified idle resumption without an invented cooldown.
+`TestGuestAgentUnknownReplicationMonitoringContract` checks both collectors and
+client types: an unreadable status preserves the original disk observation,
+unrenewed caches, existing disk alert and History gap through repeated polls;
+a usable idle reply admits fresh readings and ordinary alert recovery. These
+are synthetic HTTP and consuming-projection proofs, not native thaw acceptance.
+
+The existing per-cycle `/cluster/replication` inventory limits that protected
+read to guests seen with a job, so a job goes
 unseen until the next complete inventory, including before the first one after a
 restart. Inventories only add guests, because each is filtered by its token's
 `VM.Audit`. Clones and disk imports from a running VM also freeze it
