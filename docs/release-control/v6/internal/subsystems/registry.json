@@ -2723,12 +2723,14 @@
               "internal/alerts/config_validation_test.go",
               "internal/alerts/eventlog/eventlog_snapshot_test.go",
               "internal/alerts/eventlog/eventlog_test.go",
+              "internal/alerts/eventlog/journal_test.go",
               "internal/alerts/eventlog/reader_isolation_test.go",
               "internal/alerts/external_probe_test.go",
               "internal/alerts/filter_evaluation_test.go",
               "internal/alerts/flapping_threshold_test.go",
               "internal/alerts/guest_snapshot_test.go",
               "internal/alerts/history_concurrency_test.go",
+              "internal/alerts/history_durability_test.go",
               "internal/alerts/history_migration_test.go",
               "internal/alerts/history_projection_parity_test.go",
               "internal/alerts/history_test.go",
@@ -3404,6 +3406,19 @@
             "exact_files": [
               "internal/api/configapi/config_import_admission_test.go",
               "internal/api/configapi/config_import_replay_test.go"
+            ]
+          },
+          {
+            "id": "alert-history-durability-api",
+            "label": "alert history durability transport proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/alerting/history_durability.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/alerting/history_durability_test.go"
             ]
           },
           {

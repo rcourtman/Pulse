@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### Alert history gap disposition does not control agents (5 November 2026)
+
+The scoped alert history durability read and acknowledgement endpoints report
+canonical history completeness. Their exact-revision acknowledgement accepts
+missing facts only; it neither controls an agent nor changes deployment,
+recovery, delivery or action state. Existing tenant and monitoring read/write
+scope admission remains the transport authority.
+
 ### Guest links survive another installation reusing a name (4 November 2026)
 
 `ApplyHostReport` passes the agent's earlier link into guest and node inference,

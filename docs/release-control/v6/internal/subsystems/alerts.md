@@ -51,6 +51,74 @@ rows also obey the search, by their own name or the group's. No evaluation,
 persistence or saved key changes. `useThresholdsDockerData.test.ts` and
 `ThresholdsTable.test.tsx` carry the proof.
 
+### Event history retains unsettled facts and explicit gaps (5 November 2026)
+
+The independent bounded journal in `internal/alerts/eventlog/journal.go` remains
+owned even if SQLite bootstrap is unavailable, and is synced before lifecycle, import and diagnostic admission. SQLite transactions
+commit immutable events, the active projection, journal origins and a replay
+watermark together. Failed writes retain their original facts and occurrence
+times for ordered, idempotent replay; callbacks remain fail-open and replay
+never sends notifications. A delivery callback or `notification_dispatched`
+decision does not prove successful provider delivery.
+
+Unsettled facts do not expire and are bounded to 16,384 events and 32 MiB.
+Diagnostics stop at 75% of either bound, reserving lifecycle headroom.
+Compaction retains only the unsettled suffix; the live log, one replacement
+and one quarantined damaged log bound peak journal payload to 96 MiB.
+Committed event history retains its existing 90-day and 256 MiB snapshot
+policies. Rejected fail-open lifecycle/diagnostic admissions record exact loss counts when metadata can be
+synced. Incomplete/checksum-invalid tails and unclean exits retain an unknown
+gap, with damaged bytes quarantined rather than invented facts. When both
+journal and gap persistence fail, only the earlier synced open-session marker
+supports an unknown tail on reopen; no durable exact loss count is claimed.
+This shares a filesystem with SQLite and is not recovery from loss of that
+filesystem, lying storage, or externally removed state.
+
+`DurabilityStatus`, `Healthy` and `Flush` distinguish pending obligations,
+missing facts and current I/O errors from historical failures. Exact replay
+can settle a transient failure; unrelated writes and reopen cannot clear a
+gap. Missing-fact evidence never expires automatically. Retained event reads use
+`Settle` and expose completeness headers instead of failing solely on a gap. Tenant-scoped
+monitoring-read `GET /api/alerts/history/durability` exposes completeness;
+monitoring-write `POST /api/alerts/history/durability/acknowledgement` requires
+an exact observed revision and bounded reason, refuses pending work/errors,
+and retains a bounded acknowledgement audit. Acknowledgement accepts missing
+facts and never reconstructs events. Migration authority is independent of
+storage health; telemetry reports healthy only when both are established.
+
+Active recovery markers capture the journal boundary before copying state.
+Startup reconciles committed and still-pending origin-tagged facts over an older marker
+before checkpointing the active projection, including a resolution journalled
+before its producer could checkpoint. Origin survives journal compaction in
+the event rows. Snapshot capture prefixes preserve explicit cleanup omission
+while a conservative replay floor remains, and the compatibility mirror capture
+is bound to its exact bytes. Replacing or clearing active state resets the
+failure-checkpoint mirror. Partial folds never advance capture evidence beyond
+the proven prefix. Partial checkpoints cannot replace the complete active
+projection when firing rows have expired from history; only matched observations
+merge over canonical occurrences and controls. Full-checkpoint completeness is
+distinct from an isolated activation. Unreadable baselines remain unavailable.
+A trusted complete fallback survives a failed first SQL checkpoint and can
+establish completeness after an isolated activation; it is not relabelled
+partial merely because the checkpoint write failed. Before the first full
+checkpoint, recovery unions all positive projection rows and the partial fallback
+after folding each from its own cursor. Pruned canonical occurrences and newer
+controls remain intact. Completed reconciliation establishes the full baseline
+without deleting history or requiring a reset.
+Partial schema-2 markers fail closed in old readers; complete schema-1 markers
+remain readable. Housekeeping and full-state clear journal `active_retired`
+without claiming detector recovery or sending resolution callbacks. Control
+facts cannot reactivate a terminal occurrence or replace unrelated observation
+fields. Ordinary retained reads do not depend on unfinished origin-column
+schema migration. Guest node re-keying records an atomic `active_moved` fact,
+retaining occurrence identity and acknowledgement without firing or resolving
+callbacks. Suppression refusal retires the prior identity. Replay order is
+durable ID order, independent of event times.
+`journal_test.go` and `history_durability_test.go` cover real driver faults,
+reopen, process-kill boundaries, bounded admission, damaged tails and producer
+continuity after JSON retirement. These are source tests, not physical power
+cut, installed-service, provider-delivery or release qualification.
+
 ### Node matches name a connection, not just a node (4 November 2026)
 
 Proxmox installations can reuse node names, so `getAlertsForResource` and

@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -98,9 +99,10 @@ func (m *Manager) SaveActiveAlerts() error {
 	for attempt := 0; attempt < maxCheckpointAttempts; attempt++ {
 		failureEpoch := m.activeStateFailureEpoch.Load()
 		store := m.eventLogStore()
-		if store != nil && m.activeStateDegraded() {
+		if store != nil && (m.activeStateDegraded() || m.activeRecoveryIncomplete()) {
+			boundary := store.JournalBoundary()
 			alerts := m.snapshotActiveAlerts()
-			markerErr, mirrorErr := m.writeDegradedActiveState(alerts, errors.New("SQLite active alert state remains degraded"))
+			markerErr, mirrorErr := m.writeDegradedActiveState(alerts, errors.New("SQLite active alert state remains degraded"), boundary)
 			intentErr := m.saveIntentPendingSnapshot()
 			if err := errors.Join(markerErr, mirrorErr, intentErr); err != nil {
 				return fmt.Errorf("failed to checkpoint degraded active alert recovery state: %w", err)
@@ -112,8 +114,9 @@ func (m *Manager) SaveActiveAlerts() error {
 			var err error
 			revision, err = store.ActiveStateRevision()
 			if err != nil {
+				boundary := store.JournalBoundary()
 				alerts := m.snapshotActiveAlerts()
-				markerErr, mirrorErr := m.writeDegradedActiveState(alerts, err)
+				markerErr, mirrorErr := m.writeDegradedActiveState(alerts, err, boundary)
 				if recoveryErr := errors.Join(markerErr, mirrorErr); recoveryErr != nil {
 					return errors.Join(err, recoveryErr)
 				}
@@ -121,8 +124,9 @@ func (m *Manager) SaveActiveAlerts() error {
 			}
 		}
 
+		boundary := store.JournalBoundary()
 		alerts := m.snapshotActiveAlerts()
-		mirrorErr := m.writeActiveAlertsRecoveryMirror(alerts)
+		mirrorErr := m.writeActiveAlertsRecoveryMirror(alerts, boundary)
 		intentErr := m.saveIntentPendingSnapshot()
 		if store == nil {
 			if err := errors.Join(mirrorErr, intentErr); err != nil {
@@ -134,7 +138,7 @@ func (m *Manager) SaveActiveAlerts() error {
 
 		snapshots, err := activeStateSnapshots(alerts)
 		if err != nil {
-			markerErr, degradedMirrorErr := m.writeDegradedActiveState(alerts, err)
+			markerErr, degradedMirrorErr := m.writeDegradedActiveState(alerts, err, boundary)
 			if recoveryErr := errors.Join(markerErr, degradedMirrorErr); recoveryErr != nil {
 				return errors.Join(err, recoveryErr)
 			}
@@ -142,7 +146,7 @@ func (m *Manager) SaveActiveAlerts() error {
 		}
 		replaced, err := store.ReplaceActiveStateIfRevision(snapshots, revision)
 		if err != nil {
-			markerErr, degradedMirrorErr := m.writeDegradedActiveState(alerts, err)
+			markerErr, degradedMirrorErr := m.writeDegradedActiveState(alerts, err, boundary)
 			if recoveryErr := errors.Join(markerErr, degradedMirrorErr); recoveryErr != nil {
 				return errors.Join(err, recoveryErr)
 			}
@@ -190,13 +194,13 @@ func (m *Manager) snapshotActiveAlerts() []*Alert {
 	return alerts
 }
 
-func (m *Manager) writeActiveAlertsRecoveryMirror(alerts []*Alert) error {
+func (m *Manager) writeActiveAlertsRecoveryMirror(alerts []*Alert, boundaries ...eventlog.JournalBoundary) error {
 	m.recoveryMirrorMu.Lock()
 	defer m.recoveryMirrorMu.Unlock()
-	return m.writeActiveAlertsRecoveryMirrorLocked(alerts)
+	return m.writeActiveAlertsRecoveryMirrorLocked(alerts, boundaries...)
 }
 
-func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert) error {
+func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert, boundaries ...eventlog.JournalBoundary) error {
 	if m.activeRecoveryWriteBlock.Load() {
 		return fmt.Errorf("active alert recovery mirror is write-blocked because its startup source was unreadable")
 	}
@@ -246,7 +250,10 @@ func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert) error {
 			closeErr := file.Close()
 			if readErr == nil && closeErr == nil && bytes.Equal(existing, data) {
 				// Also retry a directory sync that failed after an earlier rename.
-				return syncActiveAlertsDirectory(alertsDir)
+				if err := syncActiveAlertsDirectory(alertsDir); err != nil {
+					return err
+				}
+				return m.writeActiveRecoveryCapture(data, boundaries...)
 			}
 		}
 	}
@@ -302,10 +309,10 @@ func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert) error {
 	if err := syncActiveAlertsDirectory(alertsDir); err != nil {
 		return err
 	}
-	return nil
+	return m.writeActiveRecoveryCapture(data, boundaries...)
 }
 
-func (m *Manager) setActiveRecoveryAlert(alert *Alert, fallback string) {
+func (m *Manager) setActiveRecoveryAlert(alert *Alert, fallback string, control ...string) {
 	if m == nil || alert == nil {
 		return
 	}
@@ -319,6 +326,26 @@ func (m *Manager) setActiveRecoveryAlert(alert *Alert, fallback string) {
 	}
 
 	m.activeRecoveryMu.Lock()
+	if len(control) > 0 {
+		existing := m.activeRecoveryState[storageKey]
+		if existing == nil || !existing.StartTime.Equal(clone.StartTime) {
+			m.activeRecoveryMu.Unlock()
+			return
+		}
+		merged := existing.Clone()
+		switch control[0] {
+		case eventlog.TypeAcknowledged, eventlog.TypeUnacknowledged:
+			merged.Acknowledged, merged.AckTime, merged.AckUser = clone.Acknowledged, clone.AckTime, clone.AckUser
+		case eventlog.TypeSnoozed, eventlog.TypeUnsnoozed:
+			merged.OperationalRecord, merged.LatestTransition, merged.Transitions = clone.OperationalRecord, clone.LatestTransition, clone.Transitions
+		case eventlog.TypeEscalated:
+			merged.LastEscalation, merged.EscalationTimes = clone.LastEscalation, clone.EscalationTimes
+		}
+		if clone.LastNotified != nil && (merged.LastNotified == nil || clone.LastNotified.After(*merged.LastNotified)) {
+			merged.LastNotified = clone.LastNotified
+		}
+		clone = merged
+	}
 	if m.activeRecoveryState == nil {
 		m.activeRecoveryState = make(map[string]*Alert)
 	}
@@ -345,6 +372,9 @@ func (m *Manager) removeActiveRecoveryAlert(alert *Alert, fallback string) {
 
 	m.activeRecoveryMu.Lock()
 	for key, existing := range m.activeRecoveryState {
+		if alert != nil && existing != nil && !existing.StartTime.Equal(alert.StartTime) {
+			continue
+		}
 		if key == fallback || key == identity || key == canonicalState ||
 			(existing != nil && effectiveAlertID(existing, key) == identity) {
 			delete(m.activeRecoveryState, key)
@@ -370,28 +400,35 @@ func (m *Manager) activeRecoverySnapshot() []*Alert {
 	return alerts
 }
 
+func (m *Manager) resetActiveRecoveryState() {
+	m.activeRecoveryMu.Lock()
+	m.activeRecoveryState = make(map[string]*Alert)
+	m.activeRecoveryMu.Unlock()
+}
+
 func (m *Manager) checkpointActiveRecoveryAfterDurableFailure(cause error) error {
 	if m == nil {
 		return nil
 	}
 	m.recoveryMirrorMu.Lock()
+	boundary := m.eventLogStore().JournalBoundary()
 	alerts := m.activeRecoverySnapshot()
-	markerErr := m.writeActiveStateDegradedRecovery(alerts, cause)
-	mirrorErr := m.writeActiveAlertsRecoveryMirrorLocked(alerts)
+	markerErr := m.writeActiveStateDegradedRecovery(alerts, cause, boundary)
+	mirrorErr := m.writeActiveAlertsRecoveryMirrorLocked(alerts, boundary)
 	m.recoveryMirrorMu.Unlock()
 	m.activeStateAuthoritative.Store(false)
 	return errors.Join(markerErr, mirrorErr)
 }
 
-func (m *Manager) writeDegradedActiveState(alerts []*Alert, cause error) (markerErr, mirrorErr error) {
+func (m *Manager) writeDegradedActiveState(alerts []*Alert, cause error, boundaries ...eventlog.JournalBoundary) (markerErr, mirrorErr error) {
 	if m == nil {
 		return nil, nil
 	}
 	m.activeStateAuthoritative.Store(false)
 	m.recoveryMirrorMu.Lock()
 	defer m.recoveryMirrorMu.Unlock()
-	markerErr = m.writeActiveStateDegradedRecovery(alerts, cause)
-	mirrorErr = m.writeActiveAlertsRecoveryMirrorLocked(alerts)
+	markerErr = m.writeActiveStateDegradedRecovery(alerts, cause, boundaries...)
+	mirrorErr = m.writeActiveAlertsRecoveryMirrorLocked(alerts, boundaries...)
 	return markerErr, mirrorErr
 }
 
@@ -436,6 +473,7 @@ func (m *Manager) restoreActiveAlertSnapshots(alerts []*Alert, source string, re
 	m.mu.Lock()
 	if replace {
 		m.activeAlerts = make(map[string]*Alert)
+		m.resetActiveRecoveryState()
 		m.restoredBackupNotifications = nil
 		m.activeAlertAlias = make(map[string]string)
 		m.ackState = make(map[string]ackRecord)
@@ -652,4 +690,48 @@ func (m *Manager) periodicSaveAlerts() {
 			return
 		}
 	}
+}
+
+// This small sidecar binds a capture prefix to the exact compatibility mirror.
+// The two atomic replacements may be interrupted; a hash mismatch never lends
+// a newer boundary to an older snapshot.
+type activeRecoveryCapture struct {
+	Boundary eventlog.JournalBoundary `json:"boundary"`
+	SHA256   string                   `json:"sha256"`
+}
+
+func (m *Manager) writeActiveRecoveryCapture(snapshot []byte, boundaries ...eventlog.JournalBoundary) error {
+	if len(boundaries) == 0 || boundaries[0].ID == "" {
+		return nil
+	}
+	boundary := boundaries[0]
+	if floor := m.activeRecoveryJournalFloor; floor != nil && floor.ID == boundary.ID {
+		boundary = *floor
+	}
+	digest := sha256.Sum256(snapshot)
+	data, err := json.Marshal(activeRecoveryCapture{Boundary: boundary, SHA256: fmt.Sprintf("%x", digest[:])})
+	if err != nil {
+		return err
+	}
+	return m.writeActiveRecoveryMetadata("active-alerts.capture.json", data)
+}
+
+func (m *Manager) activeRecoveryCaptureBoundary() eventlog.JournalBoundary {
+	data, err := readLimitedRegularFile(filepath.Join(m.getAlertsDir(), "active-alerts.capture.json"), 4096)
+	if err != nil {
+		return eventlog.JournalBoundary{}
+	}
+	var capture activeRecoveryCapture
+	if json.Unmarshal(data, &capture) != nil {
+		return eventlog.JournalBoundary{}
+	}
+	snapshot, err := readLimitedRegularFile(filepath.Join(m.getAlertsDir(), "active-alerts.json"), maxActiveAlertsFileSizeBytes)
+	if err != nil {
+		return eventlog.JournalBoundary{}
+	}
+	digest := sha256.Sum256(snapshot)
+	if capture.SHA256 != fmt.Sprintf("%x", digest[:]) {
+		return eventlog.JournalBoundary{}
+	}
+	return capture.Boundary
 }
