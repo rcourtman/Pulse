@@ -4969,8 +4969,18 @@ func sameOrigin(left, right string) bool {
 	return schemeL == schemeR && hostL == hostR && portL == portR
 }
 
-// isCrossSiteBrowserRequest detects browser-originated cross-site requests.
-// It is used as an additional safeguard for sessionless proxy-auth flows.
+// isCrossSiteBrowserRequest detects browser requests that Pulse's own origin
+// did not make. It is the CSRF boundary for sessionless proxy-auth flows: the
+// forward-auth proxy attaches the identity to every request that carries its
+// sign-in cookie, so there is no Pulse session to bind a CSRF token to.
+//
+// Sec-Fetch-Site "same-site" only says the initiator shares the registrable
+// domain; a sibling subdomain or another port on the same host is same-site
+// but not same-origin. A same-site write is therefore admitted only when its
+// Origin, or failing that its Referer, exactly matches this request's origin,
+// including scheme and port. Same-site reads keep their previous admission.
+// Requests with no browser origin metadata at all (non-browser clients) are
+// not treated as cross-site.
 func isCrossSiteBrowserRequest(req *http.Request) bool {
 	if req == nil {
 		return false
@@ -4979,28 +4989,48 @@ func isCrossSiteBrowserRequest(req *http.Request) bool {
 	switch strings.ToLower(strings.TrimSpace(req.Header.Get("Sec-Fetch-Site"))) {
 	case "cross-site":
 		return true
-	case "same-origin", "same-site", "none":
+	case "same-origin", "none":
 		return false
+	case "same-site":
+		if isSafeBrowserMethod(req.Method) {
+			return false
+		}
+		return !browserOriginMetadataMatches(req, requestOrigin(req), false)
 	}
 
-	expected := requestOrigin(req)
+	return !browserOriginMetadataMatches(req, requestOrigin(req), true)
+}
+
+// isSafeBrowserMethod reports the methods CheckCSRF treats as non-mutating.
+func isSafeBrowserMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	return false
+}
+
+// browserOriginMetadataMatches compares the request's Origin header, or its
+// Referer when no Origin is present, exactly against expected. An opaque
+// "null" origin never matches. allowMissing decides the result when the
+// request carries neither header, or when expected cannot be derived.
+func browserOriginMetadataMatches(req *http.Request, expected string, allowMissing bool) bool {
 	if expected == "" {
-		return false
+		return allowMissing
 	}
 
 	if origin := strings.TrimSpace(req.Header.Get("Origin")); origin != "" {
 		if strings.EqualFold(origin, "null") {
-			return true
+			return false
 		}
-		return !sameOrigin(origin, expected)
+		return sameOrigin(origin, expected)
 	}
 
 	if referer := strings.TrimSpace(req.Header.Get("Referer")); referer != "" {
-		return !sameOrigin(referer, expected)
+		return sameOrigin(referer, expected)
 	}
 
-	// Allow non-browser or legacy clients with neither Origin nor Referer.
-	return false
+	return allowMissing
 }
 
 func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {

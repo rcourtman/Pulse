@@ -9363,7 +9363,9 @@ organization before entering persistence. Agent registration, report, setup,
 and command credentials do not become configuration-transfer authority merely
 because they authenticate another lifecycle route. An API token must retain
 organization binding and carry `settings:read` for export or `settings:write`
-for import; tenant browser membership without management authority is denied.
+for import; tenant membership without management authority is denied for
+browser sessions and local Basic credentials alike, including the configured
+instance administrator.
 This boundary neither enrolls nor mutates agent identity, tokens, command
 sessions, fleet policy, or update state.
 

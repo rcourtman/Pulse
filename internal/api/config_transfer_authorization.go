@@ -57,6 +57,25 @@ func (r *Router) allowUnauthenticatedConfigTransfer(req *http.Request, op config
 	return op == configTransferExport && os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true"
 }
 
+// configTransferUserManagesOrganization is the management rule for a verified
+// user transferring the request organization's secret-bearing configuration.
+// In a tenant organization the user must manage that organization
+// (CanUserIDManage on the organization TenantMiddleware admitted): instance
+// administration combined with membership is not enough, because export
+// discloses and import replaces that organization's credentials. In the
+// default organization it is the canonical instance-administrator rule.
+func configTransferUserManagesOrganization(cfg *config.Config, req *http.Request, userID string) bool {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false
+	}
+	if sessionIsOrgScoped(req) {
+		org := GetOrganization(req.Context())
+		return org != nil && org.CanUserIDManage(userID)
+	}
+	return sessionUserCarriesAdminPrivileges(cfg, userID)
+}
+
 // authorizeConfigTransfer is the single route-local boundary for export and
 // import. It runs before either handler receives the request, so denial cannot
 // parse an archive, read export persistence, write import state, or reload the
@@ -112,7 +131,10 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 			validSession = requestMatchesRecoverySession(req, session)
 		}
 		if validSession {
-			if !ensureOrgAdminSession(r.config, w, req) {
+			sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+			if !configTransferUserManagesOrganization(r.config, req, sessionUser) {
+				logAuthDenial(req, sessionUser, "Session user without organization management attempted configuration transfer", nil)
+				http.Error(w, "Admin privileges required", http.StatusForbidden)
 				return false
 			}
 			// Transfer is a public recovery route, so it does not pass through
@@ -125,6 +147,10 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 
 	// HTTP Basic represents the configured instance administrator. Validate it
 	// directly so this decision cannot accidentally inherit no-auth fallback.
+	// TenantMiddleware admitted the request's organization before this
+	// credential was verified, so the verified user must then pass the same
+	// organization access policy and the transfer management rule that a
+	// session user passes.
 	if username, password, ok := req.BasicAuth(); ok {
 		config.Mu.RLock()
 		configuredUser := r.config.AuthUser
@@ -133,6 +159,16 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 		if configuredUser != "" && configuredHash != "" &&
 			constantTimeStringEqual(username, configuredUser) &&
 			internalauth.CheckPasswordHash(password, configuredHash) {
+			if access := authorizeVerifiedUserForRequestOrganization(req, configuredUser); !access.Allowed {
+				logAuthDenial(req, configuredUser, "Basic credentials refused for the request organization during configuration transfer", nil)
+				writeJSONError(w, http.StatusForbidden, "access_denied", access.Reason)
+				return false
+			}
+			if !configTransferUserManagesOrganization(r.config, req, configuredUser) {
+				logAuthDenial(req, configuredUser, "Basic credentials without organization management attempted configuration transfer", nil)
+				http.Error(w, "Admin privileges required", http.StatusForbidden)
+				return false
+			}
 			return true
 		}
 	}

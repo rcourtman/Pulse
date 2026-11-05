@@ -752,3 +752,14 @@ user with no usable organization sees their pending invitations at bootstrap.
 Single-tenant and hosted runtimes keep the open default organization.
 `TestOrgHandlers_DefaultOrgMembersInSharedMultiOrgMode` and the
 `org_access_policy_test.go` suite cover these rules.
+
+Organization admission applies to every verified principal, including local
+HTTP Basic credentials that are verified only after tenant admission. The
+configured local administrator reaches a tenant organization by header or
+cookie only as a member of that organization, whether it presents a session or
+Basic credentials, and minting an organization-bound token, reading tenant
+configuration or live state, and configuration transfer all follow that rule.
+Instance administration still grants the default organization. Configuration
+import and export additionally require management of the tenant, not
+membership. `basic_tenant_authorization_test.go` and
+`TestConfigTransferVerifiedUsersRequireTenantManagement` cover these rules.

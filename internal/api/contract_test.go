@@ -517,13 +517,21 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		"isDirectLoopbackRequest(req)",
 		"op == configTransferExport",
 		"getAPITokenRecordFromRequest(req)",
-		"ensureOrgAdminSession(r.config, w, req)",
+		"configTransferUserManagesOrganization(r.config, req, sessionUser)",
+		"configTransferUserManagesOrganization(r.config, req, configuredUser)",
+		"authorizeVerifiedUserForRequestOrganization(req, configuredUser)",
+		"org.CanUserIDManage(userID)",
 		"config.ScopeSettingsRead",
 		"config.ScopeSettingsWrite",
 	} {
 		if !strings.Contains(authority, invariant) {
 			t.Fatalf("canonical config transfer authority missing %q", invariant)
 		}
+	}
+	// ensureOrgAdminSession admits instance administrators on any admitted
+	// organization; transfer requires tenant management instead.
+	if strings.Contains(authority, "ensureOrgAdminSession(") {
+		t.Fatal("canonical config transfer authority must not use the org-settings session shortcut")
 	}
 }
 

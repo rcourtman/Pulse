@@ -959,6 +959,24 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							ClearFailedLogins(parts[0])
 							ClearFailedLogins(GetClientIP(r))
 
+							// TenantMiddleware admitted this request's organization
+							// before these credentials were verified, so it could not
+							// apply the organization access policy to this principal.
+							// Apply it now, before the principal is attached or a
+							// session is issued, so Basic auth obeys the same
+							// membership rule as every other credential.
+							if access := authorizeVerifiedUserForRequestOrganization(r, parts[0]); !access.Allowed {
+								log.Warn().
+									Str("org_id", GetOrgID(r.Context())).
+									Str("user_id", parts[0]).
+									Str("reason", access.Reason).
+									Msg("Unauthorized access attempt to organization")
+								if w != nil {
+									writeJSONError(w, http.StatusForbidden, "access_denied", access.Reason)
+								}
+								return false
+							}
+
 							// Authentication response headers are presentation metadata, not
 							// an identity channel. Persist the independently verified Basic
 							// auth subject on the request itself so downstream RBAC and action
