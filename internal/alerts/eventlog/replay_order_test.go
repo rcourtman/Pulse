@@ -262,8 +262,8 @@ func TestWalkByIDStopsAtCapturedHighWaterDuringConcurrentAppends(t *testing.T) {
 				wantLastID = tc.throughID
 			}
 
-			startWriter := make(chan struct{})
-			firstAppend := make(chan error, 1)
+			appendPage := make(chan struct{})
+			appended := make(chan error, 1)
 			stop := make(chan struct{})
 			var writers sync.WaitGroup
 			var stopOnce sync.Once
@@ -276,30 +276,27 @@ func TestWalkByIDStopsAtCapturedHighWaterDuringConcurrentAppends(t *testing.T) {
 			writers.Add(1)
 			go func() {
 				defer writers.Done()
-				select {
-				case <-startWriter:
-				case <-stop:
-					return
-				}
 				for {
 					select {
 					case <-stop:
 						return
-					default:
+					case <-appendPage:
+						batch := make([]Event, maxQueryLimit)
+						for i := range batch {
+							batch[i] = Event{Type: TypeAcknowledged, AlertID: "concurrent"}
+						}
+						err := store.ImportEvents(batch)
+						if err == nil {
+							background += len(batch)
+						}
+						appended <- err
+						if err != nil {
+							return
+						}
 					}
-					err := store.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "concurrent"})
-					if background == 0 {
-						firstAppend <- err
-					}
-					if err != nil {
-						t.Errorf("concurrent append: %v", err)
-						return
-					}
-					background++
 				}
 			}()
 
-			inVisitor := 0
 			visited := 0
 			done := make(chan error, 1)
 			go func() {
@@ -311,27 +308,26 @@ func TestWalkByIDStopsAtCapturedHighWaterDuringConcurrentAppends(t *testing.T) {
 						return fmt.Errorf("visited id %d, want contiguous id %d", event.ID, visited+1)
 					}
 					visited++
-					if visited == 1 {
-						// The first callback proves WalkByID has captured its boundary.
-						// Starting the writer earlier races the test's separate sample.
-						close(startWriter)
+					if (visited-1)%maxQueryLimit == 0 {
+						// The first callback proves the walk has captured its boundary.
+						// Commit a full matching page before each page's visits finish:
+						// an unbounded walk will always have another full page to chase.
+						// Batching keeps this an ordering test, not thousands of small
+						// durable writes competing against an unbounded producer.
 						select {
-						case err := <-firstAppend:
+						case appendPage <- struct{}{}:
+						case <-stop:
+							return errors.New("writer stopped before its page append")
+						}
+						select {
+						case err := <-appended:
 							if err != nil {
 								return err
 							}
 						case <-stop:
-							return errors.New("writer stopped before its first append")
+							return errors.New("writer stopped before its page committed")
 						}
-						// This row is still in the buffered first page when the
-						// background commit finishes; it must not move the boundary.
 					}
-					// Every visit also commits a matching event, so a walk that
-					// follows new appends cannot merely win a scheduling race.
-					if err := store.AppendDurable(Event{Type: TypeAcknowledged, AlertID: "visitor"}); err != nil {
-						return err
-					}
-					inVisitor++
 					return nil
 				})
 			}()
@@ -348,14 +344,14 @@ func TestWalkByIDStopsAtCapturedHighWaterDuringConcurrentAppends(t *testing.T) {
 			if visited != int(wantLastID) {
 				t.Fatalf("visited %d events, want the complete inclusive prefix through %d", visited, wantLastID)
 			}
-			if background == 0 || inVisitor != visited {
-				t.Fatalf("missing concurrent commits: background=%d visitor=%d visits=%d", background, inVisitor, visited)
+			if want := ((int(wantLastID)-1)/maxQueryLimit + 1) * maxQueryLimit; background != want {
+				t.Fatalf("concurrent writer committed %d events, want exactly %d from the visited pages", background, want)
 			}
 
 			// Resume after the actual bounded prefix: include both any rows
 			// deferred by ThroughID and every append from the first walk.
 			tail := walkIDs(t, store, Filter{AfterID: wantLastID})
-			wantTail := int(boundary.LastID-wantLastID) + inVisitor + background
+			wantTail := int(boundary.LastID-wantLastID) + background
 			if len(tail) != wantTail {
 				t.Fatalf("next pass visited %d events, want %d deferred and appended events", len(tail), wantTail)
 			}
