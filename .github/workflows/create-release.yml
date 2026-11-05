@@ -1457,7 +1457,7 @@ jobs:
           TMP_DIR="$(mktemp -d)"
           trap 'rm -rf "$TMP_DIR"' EXIT
 
-          curl -fsSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_ARCHIVE}" \
+          curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_ARCHIVE}" \
             -o "${TMP_DIR}/${SYFT_ARCHIVE}"
           printf '%s  %s\n' "${SYFT_SHA256}" "${TMP_DIR}/${SYFT_ARCHIVE}" | sha256sum --check --
           tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft
