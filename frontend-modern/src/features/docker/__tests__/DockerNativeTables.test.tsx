@@ -8,6 +8,7 @@ import { ResourceActionsAPI } from '@/api/resourceActions';
 import { WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH } from '@/components/Workloads/guestRowModel';
 import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
+import { DockerHostIdentitiesProvider, buildDockerHostIdentities } from '../dockerHostIdentity';
 import { DockerConfigsTable } from '../DockerConfigsTable';
 import { DockerImagesTable } from '../DockerImagesTable';
 import { DockerNetworksTable } from '../DockerNetworksTable';
@@ -2627,6 +2628,49 @@ describe('Docker native tables', () => {
       '/docker/overview?q=edge-web',
     );
     expect(detail.getByText('Network ID')).toBeInTheDocument();
+  });
+
+  it('reads a container alert threshold from its own host when another shares the hostname', () => {
+    const makeHost = (id: string) =>
+      makeResource({
+        id,
+        type: 'docker-host',
+        name: 'dock',
+        status: 'online',
+        docker: { hostname: 'dock', hostSourceId: id },
+      });
+    const hosts = [makeHost('host-lab'), makeHost('host-site')];
+    getMetricThresholdsSpy.mockClear();
+
+    renderInRouter(() => (
+      <DockerHostIdentitiesProvider value={() => buildDockerHostIdentities(hosts)}>
+        <DockerContainersTable
+          resources={[
+            makeResource({
+              id: 'container-site',
+              type: 'app-container',
+              name: 'redis',
+              status: 'running',
+              docker: {
+                hostname: 'dock',
+                hostSourceId: 'host-site',
+                image: 'redis:latest',
+                containerState: 'running',
+              },
+            }),
+          ]}
+          hosts={hosts}
+          emptyIcon={<span />}
+          emptyTitle="No containers"
+          emptyDescription="No containers"
+          showToolbar={false}
+        />
+      </DockerHostIdentitiesProvider>
+    ));
+
+    const overrideIds = getMetricThresholdsSpy.mock.calls.flatMap(([, , ids]) => ids as string[]);
+    expect(overrideIds.some((id) => id.includes('host-site'))).toBe(true);
+    expect(overrideIds.some((id) => id.includes('host-lab'))).toBe(false);
   });
 
   it('looks container alert thresholds up by name-first override ids, so a recreated container keeps its overrides (#1601)', () => {

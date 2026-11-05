@@ -3348,6 +3348,8 @@ collapse chevron. `ProxmoxNodesTable` must pass its node close handler into
 `NodeDrawer`, the Docker hosts table must pass its close handler into
 `DockerHostDrawer`, and those shells must not fall back to a small icon-only
 collapse target or wrap interactive header actions inside a local button.
+The Docker host drawer names its host from the page's one host identity memo,
+so same-named hosts add no request and no per-row identity work.
 That drawer state now also consumes the same shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper, so row and drawer navigation stay aligned without a second

@@ -583,7 +583,7 @@ const getStorageSystemIdentityBadge = (
   );
 };
 
-const LXC_DOCKER_HOST_PREFIX = 'proxmox-lxc-docker:';
+export const LXC_DOCKER_HOST_PREFIX = 'proxmox-lxc-docker:';
 
 const proxmoxLxcDockerVmid = (resource: Resource): number | null => {
   const sourceId = resource.docker?.hostSourceId;

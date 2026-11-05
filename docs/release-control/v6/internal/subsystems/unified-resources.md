@@ -1735,6 +1735,7 @@ isolation and replacement of a failed outcome by a newly accepted success.
     34b. `frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts`
     34c. `frontend-modern/src/features/docker/dockerContainerTableModel.ts`
     34d. `frontend-modern/src/features/docker/dockerContainerStatePresentation.ts`
+    34e. `frontend-modern/src/features/docker/dockerHostIdentity.tsx`
 35. `frontend-modern/src/features/docker/DockerImagesTable.tsx`
 36. `frontend-modern/src/features/docker/DockerNativeTableShared.tsx`
 37. `frontend-modern/src/features/docker/DockerNetworksTable.tsx`
@@ -9833,3 +9834,10 @@ carriers and non-runtime namesakes. Comparable Chromium desktop/light and
 WebKit narrow/dark producer-fed captures cover visibility, host scoping,
 disclosure and workflow navigation. Empty fixture charts are not native or
 persisted History acceptance.
+
+A Docker hostname is not host identity on the Docker page. `dockerHostIdentity.tsx`
+owns the page's host scope, group key and label: a unique hostname stays the URL
+value and the words, and hosts sharing one key on `docker.hostSourceId` and carry
+a short qualifier. Row scope, grouped status, the host filter and container
+override lookups therefore never let one host speak for another, and a bare
+hostname in `?host=` still selects every host with it.

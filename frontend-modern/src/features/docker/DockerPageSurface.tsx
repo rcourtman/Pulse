@@ -40,6 +40,12 @@ import {
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
 import {
+  DockerHostIdentitiesProvider,
+  buildDockerHostIdentities,
+  getDockerHostRowName,
+  useDockerHostIdentities,
+} from './dockerHostIdentity';
+import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
@@ -156,6 +162,7 @@ export function DockerPageSurface() {
     if (nextFacets) setResourceFacets(nextFacets);
   });
   const model = createMemo(() => buildDockerPageModel(resources()));
+  const hostIdentities = createMemo(() => buildDockerHostIdentities(model().hosts));
 
   const hostFilter = createMemo(() => {
     const rawHost = searchParams[DOCKER_QUERY_PARAMS.host];
@@ -179,101 +186,103 @@ export function DockerPageSurface() {
   };
 
   return (
-    <div data-testid="docker-page" class="pulse-wide-data-surface space-y-3">
-      <PlatformSectionTabs
-        tabs={tabs()}
-        active={activeTab()}
-        ariaLabel="Container runtime sections"
-      />
+    <DockerHostIdentitiesProvider value={hostIdentities}>
+      <div data-testid="docker-page" class="pulse-wide-data-surface space-y-3">
+        <PlatformSectionTabs
+          tabs={tabs()}
+          active={activeTab()}
+          ariaLabel="Container runtime sections"
+        />
 
-      <Show
-        when={!loading() || model().resources.length > 0}
-        fallback={
-          <PlatformTableLoadingState
-            title="Loading container runtime resources"
-            description="Pulse is loading the Docker / Podman resource snapshot."
-          />
-        }
-      >
         <Show
-          when={!error()}
+          when={!loading() || model().resources.length > 0}
           fallback={
-            <PlatformErrorState
-              title="Could not load container runtime resources"
-              description="Refresh the resource snapshot or check the API connection state."
-              onRefresh={() => void refetch()}
+            <PlatformTableLoadingState
+              title="Loading container runtime resources"
+              description="Pulse is loading the Docker / Podman resource snapshot."
             />
           }
         >
           <Show
-            when={model().resources.length > 0}
+            when={!error()}
             fallback={
-              <PlatformTableEmptyState
-                icon={dockerIcon()}
-                title="No Docker or Podman hosts"
-                description="Connect a runtime host with the Pulse agent, or enable guest Docker inventory for a Proxmox LXC."
-                actions={
-                  <ButtonLink
-                    href={buildInfrastructureOnboardingPath('docker')}
-                    variant="primary"
-                    size="sm"
-                    class="gap-2"
-                  >
-                    <BoxIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    Set up Docker or Podman
-                  </ButtonLink>
-                }
+              <PlatformErrorState
+                title="Could not load container runtime resources"
+                description="Refresh the resource snapshot or check the API connection state."
+                onRefresh={() => void refetch()}
               />
             }
           >
-            <DockerIdentityConflictNotice hosts={identityConflictHosts()} />
-            <PlatformOutdatedAgentNotice
-              hosts={outdatedAgentHosts()}
-              targetVersion={serverVersionDisplay()}
-              missingLabel="images, networks, storage, and Swarm details"
-              actionHref={outdatedAgentUpdatePath()}
-              actionLabel="Open agent upgrade commands"
-            />
-            <Show when={activeTab() === 'overview'}>
-              <div class="space-y-4">
-                <DockerOverview
-                  hosts={model().hosts}
-                  hostSourceCount={model().hosts.length}
-                  hostFilter={hostFilter()}
-                  containers={model().containers}
-                  incidents={model().incidents}
-                  onLifecycleActionSettled={refreshDockerResources}
+            <Show
+              when={model().resources.length > 0}
+              fallback={
+                <PlatformTableEmptyState
+                  icon={dockerIcon()}
+                  title="No Docker or Podman hosts"
+                  description="Connect a runtime host with the Pulse agent, or enable guest Docker inventory for a Proxmox LXC."
+                  actions={
+                    <ButtonLink
+                      href={buildInfrastructureOnboardingPath('docker')}
+                      variant="primary"
+                      size="sm"
+                      class="gap-2"
+                    >
+                      <BoxIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                      Set up Docker or Podman
+                    </ButtonLink>
+                  }
                 />
-              </div>
-            </Show>
-            <Show when={activeTab() === 'images'}>
-              <DockerImagesTable
-                resources={model().images}
-                relatedContainers={model().containers}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No images"
-                emptyDescription="Images appear here when a Docker or Podman host reports local image inventory."
+              }
+            >
+              <DockerIdentityConflictNotice hosts={identityConflictHosts()} />
+              <PlatformOutdatedAgentNotice
+                hosts={outdatedAgentHosts()}
+                targetVersion={serverVersionDisplay()}
+                missingLabel="images, networks, storage, and Swarm details"
+                actionHref={outdatedAgentUpdatePath()}
+                actionLabel="Open agent upgrade commands"
               />
-            </Show>
-            <Show when={activeTab() === 'networks'}>
-              <DockerNetworksTable
-                resources={model().networks}
-                relatedResources={model().resources}
-                emptyIcon={dockerIcon()}
-                emptyTitle="No networks"
-                emptyDescription="Networks appear here when the container runtime reports network inventory."
-              />
-            </Show>
-            <Show when={activeTab() === 'storage'}>
-              <DockerStorage model={model()} />
-            </Show>
-            <Show when={activeTab() === 'swarm'}>
-              <DockerSwarm model={model()} />
+              <Show when={activeTab() === 'overview'}>
+                <div class="space-y-4">
+                  <DockerOverview
+                    hosts={model().hosts}
+                    hostSourceCount={model().hosts.length}
+                    hostFilter={hostFilter()}
+                    containers={model().containers}
+                    incidents={model().incidents}
+                    onLifecycleActionSettled={refreshDockerResources}
+                  />
+                </div>
+              </Show>
+              <Show when={activeTab() === 'images'}>
+                <DockerImagesTable
+                  resources={model().images}
+                  relatedContainers={model().containers}
+                  emptyIcon={dockerIcon()}
+                  emptyTitle="No images"
+                  emptyDescription="Images appear here when a Docker or Podman host reports local image inventory."
+                />
+              </Show>
+              <Show when={activeTab() === 'networks'}>
+                <DockerNetworksTable
+                  resources={model().networks}
+                  relatedResources={model().resources}
+                  emptyIcon={dockerIcon()}
+                  emptyTitle="No networks"
+                  emptyDescription="Networks appear here when the container runtime reports network inventory."
+                />
+              </Show>
+              <Show when={activeTab() === 'storage'}>
+                <DockerStorage model={model()} />
+              </Show>
+              <Show when={activeTab() === 'swarm'}>
+                <DockerSwarm model={model()} />
+              </Show>
             </Show>
           </Show>
         </Show>
-      </Show>
-    </div>
+      </div>
+    </DockerHostIdentitiesProvider>
   );
 }
 
@@ -461,6 +470,7 @@ function DockerOverview(props: {
     ].some((candidate) => asTrimmedString(candidate) === normalized);
   };
   const hasMachineInventory = createMemo(() => props.hosts.some(isPulseAgentPlatformResource));
+  const hostIdentities = useDockerHostIdentities();
   // A host row narrows the containers table to that host through the URL host
   // scope the table already reads, as a Proxmox node row does for its guests.
   // Every host stays listed so another can be picked; the scoped one is marked.
@@ -470,12 +480,15 @@ function DockerOverview(props: {
   const scopedHostLabel = createMemo(() => {
     const filter = props.hostFilter.trim();
     if (!filter) return null;
-    return asTrimmedString(props.hosts.find(isScopedHost)?.name) || filter;
+    const scoped = props.hosts.filter(isScopedHost);
+    // A bare hostname can select several hosts, and then it is the right label.
+    return scoped.length === 1 ? getDockerHostRowName(scoped[0], hostIdentities()).label : filter;
   });
   const containersFocus = createPlatformHostScopeFocus();
   const showHostContainers = (host: Resource) => {
-    // Containers name their host by its Docker hostname.
-    const value = asTrimmedString(host.docker?.hostname) || asTrimmedString(host.name) || host.id;
+    // Containers name their host by its Docker hostname, unless others share it.
+    const scope = hostIdentities().scopeFor(host);
+    const value = scope !== '—' ? scope : asTrimmedString(host.name) || host.id;
     const next = isScopedHost(host) ? null : value;
     setSearchParams({ [DOCKER_QUERY_PARAMS.host]: next });
     if (next) {

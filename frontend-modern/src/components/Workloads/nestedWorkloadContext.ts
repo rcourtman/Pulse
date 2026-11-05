@@ -35,6 +35,7 @@ interface BuildNestedWorkloadContextParams {
 
 type NestedWorkloadContextBuildItem = NestedWorkloadContextItem & {
   hostLabel: string;
+  hostId: string;
 };
 
 const cleanText = (value?: string | number | null): string => String(value ?? '').trim();
@@ -113,6 +114,7 @@ const createNestedItem = (guest: WorkloadGuest): NestedWorkloadContextBuildItem 
   status: formatStatusLabel(guest.status),
   runtimeLabel: formatRuntimeLabel(guest.containerRuntime),
   hostLabel: cleanText(guest.dockerHostName) || cleanText(guest.contextLabel),
+  hostId: cleanText(guest.dockerHostId),
 });
 
 const chooseContextLabel = (items: readonly NestedWorkloadContextItem[]): string => {
@@ -121,9 +123,16 @@ const chooseContextLabel = (items: readonly NestedWorkloadContextItem[]): string
   return 'Containers';
 };
 
-const chooseDockerHostFilter = (items: readonly NestedWorkloadContextBuildItem[]): string => {
+const chooseDockerHostFilter = (
+  items: readonly NestedWorkloadContextBuildItem[],
+  hostIdsByLabel: ReadonlyMap<string, ReadonlySet<string>>,
+): string => {
   const labels = Array.from(new Set(items.map((item) => item.hostLabel).filter(Boolean)));
-  return labels.length === 1 ? labels[0] : '';
+  if (labels.length !== 1) return '';
+  // Same-named hosts share a label, so only the host's ID reaches this one.
+  const hostIds = new Set(items.map((item) => item.hostId).filter(Boolean));
+  const labelIsShared = (hostIdsByLabel.get(labels[0])?.size ?? 0) > 1;
+  return labelIsShared && hostIds.size === 1 ? [...hostIds][0] : labels[0];
 };
 
 const buildNestedWorkloadHref = (host: string): string =>
@@ -165,8 +174,17 @@ export const buildNestedWorkloadContextByGuestId = ({
   }
 
   const itemsByParentId = new Map<string, NestedWorkloadContextBuildItem[]>();
+  const hostIdsByLabel = new Map<string, Set<string>>();
   for (const guest of guests) {
     if (resolveWorkloadType(guest) !== 'app-container') continue;
+    // Every platform's containers count here: a standalone Docker host can
+    // share its name with a guest's.
+    const { hostLabel, hostId } = createNestedItem(guest);
+    if (hostLabel && hostId) {
+      const hostIds = hostIdsByLabel.get(hostLabel) ?? new Set<string>();
+      hostIds.add(hostId);
+      hostIdsByLabel.set(hostLabel, hostIds);
+    }
     if (!workloadMatchesPlatformScope(guest, platformScope)) continue;
 
     let parentId: string | null = null;
@@ -188,7 +206,7 @@ export const buildNestedWorkloadContextByGuestId = ({
   for (const [parentId, items] of itemsByParentId) {
     const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
     const label = chooseContextLabel(sortedItems);
-    const host = chooseDockerHostFilter(sortedItems);
+    const host = chooseDockerHostFilter(sortedItems, hostIdsByLabel);
     contexts[parentId] = {
       type: 'app-container',
       label,

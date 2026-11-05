@@ -520,6 +520,7 @@ export function dockerResourceSearchHaystack(resource: Resource): string {
     resource.canonicalIdentity?.primaryId,
     ...(resource.canonicalIdentity?.aliases ?? []),
     docker?.hostname,
+    docker?.hostSourceId,
     docker?.displayName,
     docker?.runtime,
     docker?.runtimeVersion,

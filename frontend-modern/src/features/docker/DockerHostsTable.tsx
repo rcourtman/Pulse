@@ -48,6 +48,11 @@ import {
   hasDockerSwarmEvidence,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
+import {
+  DockerHostQualifier,
+  getDockerHostRowName,
+  useDockerHostIdentities,
+} from './dockerHostIdentity';
 
 // Docker / Podman hosts are container hosts, not generic Pulse Agents.
 // The operator columns that matter are runtime version, container count,
@@ -187,6 +192,7 @@ export const DockerHostsTable: Component<{
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
+  const hostIdentities = useDockerHostIdentities();
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -200,9 +206,17 @@ export const DockerHostsTable: Component<{
     sortKeys: DOCKER_HOST_SORT_KEYS,
     descendingFirst: ['containers', 'cpu', 'memory', 'disk', 'uptime', 'temp'],
   });
-  const sortedHosts = createMemo(() =>
-    sort.sortRows(tableState.filtered(), getDockerHostSortValue),
-  );
+  const hostLabel = (host: Resource) => getDockerHostRowName(host, hostIdentities()).label;
+  const sortedHosts = createMemo(() => {
+    const filtered = tableState.filtered();
+    // Hosts sharing a hostname read in the same order as their container groups.
+    const rows = filtered.some((host) => hostIdentities().qualifierFor(host))
+      ? [...filtered].sort((a, b) => hostLabel(a).localeCompare(hostLabel(b)))
+      : filtered;
+    return sort.sortRows(rows, (host, key) =>
+      key === 'host' ? hostLabel(host) : getDockerHostSortValue(host, key),
+    );
+  });
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
   // A scoping table keeps the details chevron on phones, so the host column
@@ -359,7 +373,8 @@ export const DockerHostsTable: Component<{
                 <PlatformWindowedRows items={sortedHosts} estimatedRowHeight={32}>
                   {(host) => {
                     const docker = () => dockerHostMeta(host);
-                    const name = () => asTrimmedString(host.name) || host.id;
+                    const rowName = () => getDockerHostRowName(host, hostIdentities());
+                    const name = () => rowName().label;
                     const [customUrl, setCustomUrl] = createSignal(asTrimmedString(host.customUrl));
                     const systemBadge = () => getDockerHostSystemBadge(host);
                     const version = () => asTrimmedString(docker()?.runtimeVersion) || '—';
@@ -451,7 +466,7 @@ export const DockerHostsTable: Component<{
                                 class="min-w-0"
                                 nameClass="truncate font-semibold text-base-content"
                               >
-                                <Show when={props.containerScope} fallback={name()}>
+                                <Show when={props.containerScope} fallback={rowName().name}>
                                   {(scope) => (
                                     <PlatformHostScopeNameButton
                                       name={name()}
@@ -459,10 +474,13 @@ export const DockerHostsTable: Component<{
                                       controlsId={scope().sectionId}
                                       selected={isContainerScopeSelected()}
                                       onSelect={() => scope().onShow(host)}
-                                    />
+                                    >
+                                      {rowName().name}
+                                    </PlatformHostScopeNameButton>
                                   )}
                                 </Show>
                               </ResourceNameWithWebInterfaceLink>
+                              <DockerHostQualifier value={rowName().qualifier} />
                             </div>
                           </TableCell>
                           <TableCell

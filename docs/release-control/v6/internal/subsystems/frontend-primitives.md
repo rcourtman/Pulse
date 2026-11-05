@@ -6955,6 +6955,8 @@ source id. The drawer must return saved URL changes to its owning table row so
 the adjacent launch control updates immediately; neither the table nor drawer
 may fork metadata transport, URL validation, or new-tab behavior into a
 Docker-local implementation.
+A Docker host sharing its hostname shows `DockerHostQualifier` beside that same
+name cell. It stays on the row's one line, and the name truncates first.
 Shared-template drift enforcement is registry-backed:
 `frontend-modern/scripts/shared-template-registry.json` is the canonical list of
 standardized repeated affordances, required consumers, and forbidden local

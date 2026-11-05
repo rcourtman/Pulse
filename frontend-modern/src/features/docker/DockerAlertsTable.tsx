@@ -44,6 +44,7 @@ import {
   type DockerIncidentRow,
   type DockerIncidentSeverityFilter,
 } from './dockerPageModel';
+import { useDockerHostIdentities, type DockerHostIdentities } from './dockerHostIdentity';
 
 const DOCKER_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<DockerIncidentSeverityFilter>();
@@ -52,7 +53,10 @@ type AlertDetailSection = DetailSection;
 
 const detailRow = makeDetailRow;
 
-const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSection[] => {
+const buildAlertDetailSections = (
+  incident: DockerIncidentRow,
+  hostIdentities: DockerHostIdentities,
+): AlertDetailSection[] => {
   const docker = incident.resource.docker;
   return compactDetailSections([
     {
@@ -72,7 +76,7 @@ const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSecti
       rows: compactDetailRows([
         detailRow('Name', incident.resourceName),
         detailRow('Type', formatPlatformAlertResourceType(incident.resourceType, 'docker')),
-        detailRow('Host', docker?.hostname),
+        detailRow('Host', docker?.hostname && hostIdentities.labelFor(incident.resource)),
         detailRow('Runtime', docker?.runtime),
         detailRow('Swarm cluster', docker?.swarm?.clusterName),
         detailRow('Resource ID', incident.resourceId),
@@ -92,28 +96,31 @@ const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSecti
   ]);
 };
 
-const AlertDetail: Component<{ incident: DockerIncidentRow; onClose: () => void }> = (props) => (
-  <InlineDetailPanel
-    testId="docker-alert-detail"
-    detailFor={props.incident.id}
-    title={props.incident.resourceName || formatPlatformAlertCode(props.incident.code, 'docker')}
-    status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
-    summary={props.incident.summary || props.incident.label}
-    actions={
-      <RecordOwnerLink
-        subject={{
-          id: props.incident.resourceId,
-          name: props.incident.resourceName,
-          type: props.incident.resourceType,
-          resource: props.incident.resource,
-        }}
-      />
-    }
-    sections={buildAlertDetailSections(props.incident)}
-    detailAttributes={{ 'data-docker-alert-detail-for': props.incident.id }}
-    onClose={props.onClose}
-  />
-);
+const AlertDetail: Component<{ incident: DockerIncidentRow; onClose: () => void }> = (props) => {
+  const hostIdentities = useDockerHostIdentities();
+  return (
+    <InlineDetailPanel
+      testId="docker-alert-detail"
+      detailFor={props.incident.id}
+      title={props.incident.resourceName || formatPlatformAlertCode(props.incident.code, 'docker')}
+      status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
+      summary={props.incident.summary || props.incident.label}
+      actions={
+        <RecordOwnerLink
+          subject={{
+            id: props.incident.resourceId,
+            name: props.incident.resourceName,
+            type: props.incident.resourceType,
+            resource: props.incident.resource,
+          }}
+        />
+      }
+      sections={buildAlertDetailSections(props.incident, hostIdentities())}
+      detailAttributes={{ 'data-docker-alert-detail-for': props.incident.id }}
+      onClose={props.onClose}
+    />
+  );
+};
 
 export const DockerAlertsTable: Component<{
   incidents: DockerIncidentRow[];
@@ -123,6 +130,7 @@ export const DockerAlertsTable: Component<{
   showToolbar?: boolean;
 }> = (props) => {
   const now = useRelativeTimeNow();
+  const hostIdentities = useDockerHostIdentities();
   const tableState = createPlatformTableFilterState({
     resources: () => props.incidents,
     initialStatus: 'all' as DockerIncidentSeverityFilter,
@@ -213,6 +221,10 @@ export const DockerAlertsTable: Component<{
                 <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(incident) => {
                     const docker = () => incident.resource.docker;
+                    const hostLabel = () =>
+                      docker()?.hostname
+                        ? hostIdentities().labelFor(incident.resource)
+                        : docker()?.swarm?.clusterName;
                     const detailRowId = () => drawer.detailRowId(incident);
                     const isExpanded = () => drawer.isExpanded(incident);
                     return (
@@ -276,14 +288,14 @@ export const DockerAlertsTable: Component<{
                             <span
                               class="block truncate text-base-content"
                               title={[
-                                docker()?.hostname || docker()?.swarm?.clusterName,
+                                hostLabel(),
                                 docker()?.runtime ||
                                   formatPlatformAlertCode(incident.code, 'docker'),
                               ]
                                 .filter(Boolean)
                                 .join(' · ')}
                             >
-                              {docker()?.hostname || docker()?.swarm?.clusterName || '-'}
+                              {hostLabel() || '-'}
                             </span>
                           </TableCell>
                           <TableCell

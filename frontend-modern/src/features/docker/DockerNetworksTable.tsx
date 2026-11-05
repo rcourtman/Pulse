@@ -36,7 +36,6 @@ import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
-  dockerHostName,
   dockerLabelsSection,
   dockerReportedBySection,
   dockerJoinValues,
@@ -45,6 +44,7 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
+import { useDockerHostIdentities } from './dockerHostIdentity';
 import {
   buildDockerNetworkAttachmentRows,
   dockerContainerRunState,
@@ -496,6 +496,7 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
 };
 
 export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) => {
+  const hostIdentities = useDockerHostIdentities();
   const allResources = () => props.relatedResources ?? props.resources;
   const attachmentsByNetwork = createMemo(() => {
     const rows = new Map<string, DockerNetworkAttachmentRow[]>();
@@ -697,7 +698,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             >
-                              {dockerHostName(resource)}
+                              {hostIdentities().labelFor(resource)}
                             </TableCell>
                           </Show>
                         </TableRow>
