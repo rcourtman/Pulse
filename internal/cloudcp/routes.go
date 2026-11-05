@@ -20,6 +20,9 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
+// providerIngressTLSAddr is Traefik's TLS entrypoint on the provider network.
+const providerIngressTLSAddr = "traefik:443"
+
 // Deps holds shared dependencies injected into HTTP handlers.
 type Deps struct {
 	Config             *CPConfig
@@ -281,7 +284,15 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, tenant)))
 
 	// Tenant switching handoff (session + account-membership authenticated)
-	handoffHandler := handoff.HandleHandoff(deps.Registry, deps.Config.TenantsDir())
+	var handoffHandler http.Handler = handoff.HandleHandoff(deps.Registry, deps.Config.TenantsDir())
+	if deps.Config.PerClientCertificates && deps.Docker != nil {
+		gate := &handoff.ClientCertificateGate{
+			Registry:       deps.Registry,
+			IngressAddr:    providerIngressTLSAddr,
+			RestartIngress: deps.Docker.RestartProviderIngress,
+		}
+		handoffHandler = gate.Require(handoffHandler)
+	}
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
 
 	if deps.Config.IsProviderHostedMSP() {

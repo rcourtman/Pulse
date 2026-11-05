@@ -356,10 +356,10 @@ func TestProviderMSPTraefikStaticConfigComesFromComposeFlags(t *testing.T) {
 		"--providers.file.filename=/etc/traefik/traefik-dynamic.yml",
 		"--entrypoints.websecure.http.middlewares=security-headers@file",
 		"--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}",
-		"--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
+		"--certificatesresolvers.letsencrypt.acme.${ACME_CHALLENGE_SETTING_1:-dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}}",
 		"--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json",
 		"--certificatesresolvers.le.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}",
-		"--certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
+		"--certificatesresolvers.le.acme.${ACME_CHALLENGE_SETTING_1:-dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}}",
 	)
 	for _, flag := range traefik.Command {
 		if strings.Contains(flag, "acme.email=") && strings.Contains(flag, "example.com") {
@@ -683,8 +683,8 @@ func TestProviderMSPTraefikEnvIsMinimalAndDNSProviderOverridable(t *testing.T) {
 
 	text := string(composeBytes)
 	assertContainsAll(t, text,
-		"--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
-		"--certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}",
+		"--certificatesresolvers.letsencrypt.acme.${ACME_CHALLENGE_SETTING_1:-dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}}",
+		"--certificatesresolvers.le.acme.${ACME_CHALLENGE_SETTING_1:-dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}}",
 		"CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}",
 		"path: ./dns-credentials.env",
 		"required: false",
@@ -780,6 +780,7 @@ func TestProviderMSPSetupAsksForFirstRunValuesUpFront(t *testing.T) {
 		`PULSE_PROVIDER_MSP_ACME_EMAIL="${PULSE_PROVIDER_MSP_ACME_EMAIL:-}"`,
 		`PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN="${PULSE_PROVIDER_MSP_CF_DNS_API_TOKEN:-}"`,
 		`read -r -s -p "Cloudflare API token`,
+		`read -r -p "Domain, e.g. pulse.example.com (Enter for a trial address): "`,
 		`[[ -f "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env" ]] && return 0`,
 		`die "${key} is not valid; check it and run setup.sh again"`,
 		`(umask 077 && cp -n "${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env.example" "${env_path}")`,
@@ -818,7 +819,9 @@ func TestProviderMSPSetupReportsPortalReadiness(t *testing.T) {
 		`PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS="${PULSE_PROVIDER_MSP_CERT_WAIT_SECONDS:-180}"`,
 		`openssl s_client -connect 127.0.0.1:443 -servername "${domain}"`,
 		`-verify_return_error -verify_hostname "${domain}"`,
-		`grep -qxF "DNS:*.${domain}"`,
+		`grep -qxF "${required_san}"`,
+		`required_san="DNS:*.${domain}"`,
+		`required_san="DNS:${domain}"`,
 		"Certificate: verified on this host",
 		`grep -F "Unable to obtain ACME certificate"`,
 		`for name in "${domain}" "pulse-dns-check.${domain}"; do`,
@@ -831,6 +834,9 @@ func TestProviderMSPSetupReportsPortalReadiness(t *testing.T) {
 		"*invalidContact*", "Let's Encrypt refused ACME_EMAIL",
 		"*[Cc]loudflare*", "Zone / Zone / Read and Zone / DNS / Edit",
 		"*rateLimited*",
+		`*"Timeout during connect"*`, "could not reach port 80",
+		`*"too many certificates"*sslip.io*`, "Everyone using sslip.io or nip.io shares it",
+		`*"too many failed authorizations"*`, "it allows 5 an hour",
 	)
 	// The report is printed when it is made, so a failing install proof
 	// cannot hide it, and again in the closing summary.
@@ -842,6 +848,56 @@ func TestProviderMSPSetupReportsPortalReadiness(t *testing.T) {
 	summary := script[strings.Index(script, "Pulse Provider MSP is running."):]
 	summary = summary[:strings.Index(summary, "EOF")]
 	assertContainsAll(t, summary, "${PORTAL_READINESS_REPORT}")
+}
+
+// Trying Pulse MSP should not need a domain or a DNS token. With a domain and no
+// token each client gets its own certificate over port 80. With neither, setup
+// builds a shared trial address from the host's public IP, and that address is
+// labelled trial-only because moving off it means reinstalling every agent.
+func TestProviderMSPSetupOffersCertificatesWithoutADNSToken(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	script := string(scriptBytes)
+	assertContainsAll(t, script,
+		`set_env_value ACME_CHALLENGE_SETTING_1 "httpchallenge=true"`,
+		`set_env_value ACME_CHALLENGE_SETTING_2 "httpchallenge.entrypoint=web"`,
+		`set_env_value CP_PER_CLIENT_CERTIFICATES "true"`,
+		`set_env_value PROVIDER_MSP_TRIAL_ADDRESS "true"`,
+		`trial_address "${ip}" sslip.io`,
+		"A trial address is for evaluation only. Moving to your own domain later",
+		"TRIAL ONLY:",
+		"moving to your own domain later means reinstalling every agent",
+	)
+	// An existing .env is the operator's: only a first run may rename the address.
+	if !strings.Contains(script, `[[ "${FIRST_RUN_ENV_CREATED}" -eq 1 ]] || return 0`) {
+		t.Fatal("setup must not rename the trial address on an install that may have clients")
+	}
+
+	composeBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read provider MSP compose: %v", err)
+	}
+	assertContainsAll(t, string(composeBytes),
+		"${ACME_CHALLENGE_SETTING_2:-dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53}",
+		"${PORTAL_CERTIFICATE_SANS_LABEL:-traefik.http.routers.provider-control-plane.tls.domains[0].sans=*.${DOMAIN}}",
+		"CP_PER_CLIENT_CERTIFICATES=${CP_PER_CLIENT_CERTIFICATES:-false}",
+	)
+
+	envBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", ".env.example"))
+	if err != nil {
+		t.Fatalf("read provider MSP env example: %v", err)
+	}
+	// Blank settings keep DNS-01 and the wildcard, so existing installs and the
+	// paid path are unchanged unless setup or the operator opts in.
+	assertContainsAll(t, string(envBytes),
+		"\nACME_CHALLENGE_SETTING_1=\n",
+		"\nACME_CHALLENGE_SETTING_2=\n",
+		"\nPORTAL_CERTIFICATE_SANS_LABEL=\n",
+		"\nCP_PER_CLIENT_CERTIFICATES=false\n",
+		"\nPROVIDER_MSP_TRIAL_ADDRESS=false\n",
+	)
 }
 
 // Setup pins the images in .env to digests once, so an upgrade used to re-pull

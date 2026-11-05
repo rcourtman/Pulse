@@ -5214,6 +5214,24 @@ workspaces`. Install proofs that only ever ran against an empty install could
 not see this; verification on 2026-09-23 used a v6.4.1 bundle with one client
 whose container Docker reported healthy.
 
+### Provider MSP without a DNS token (5 November 2026)
+
+`deploy/provider-msp/setup.sh` no longer requires a DNS API token. With a blank
+token it writes `ACME_CHALLENGE_SETTING_1`, `ACME_CHALLENGE_SETTING_2` and
+`PORTAL_CERTIFICATE_SANS_LABEL`, which `docker-compose.yml` interpolates in place
+of the DNS-01 flags and wildcard label, and `CP_PER_CLIENT_CERTIFICATES=true`.
+Blank or absent values keep DNS-01 and the wildcard exactly as before, so an
+existing `.env` is unchanged by setup or `upgrade.sh`. With no domain, setup builds
+`pulse.<ip>.sslip.io` from a public IP read from outside and sets
+`PROVIDER_MSP_TRIAL_ADDRESS=true`; that address is trial-only, since each agent's
+service file fixes the client address.
+
+Shared trial names sit under one Let's Encrypt limit. Readiness retries a refused
+order, and only a first run may rename to the other service, because an install
+that may have clients must keep its address. Real Let's Encrypt issuance, port-80
+failure and a real agent were proven on a public host; the 429 paths are covered
+by `scripts/tests/test_msp_portal_readiness.py` fakes only.
+
 ### Reviewed frontend dependency security floors
 
 The 2026-09-21 npm-minor-patch group raises the reviewed floors of the

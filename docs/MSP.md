@@ -397,6 +397,34 @@ with Zone / Zone / Read and Zone / DNS / Edit on that zone); any other
 Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
 and putting that provider's credential variables in `dns-credentials.env`.
 
+**Just trying it, with no domain or token?** Bundles newer than the one pinned
+above offer a trial address at setup's domain prompt. On a server with a public
+IP, press Enter there. Setup builds an address from the server's IP, in the form
+`pulse.<ip-with-dashes>.sslip.io`, and each client gets its own
+Let's Encrypt certificate over port 80. You need no DNS records, Cloudflare
+account or token, but inbound TCP ports 80 and 443 must be open in your cloud
+provider's firewall.
+
+A trial address is for evaluation only:
+
+- Moving to your own domain later means reinstalling every agent, because each
+  agent keeps the address it was installed with.
+- It stops working if the server's IP changes.
+- sslip.io and nip.io are third-party services, and all their users share one
+  Let's Encrypt limit on new certificates. When it is used up, setup tries again
+  and then tries the other service. Later, **Open client** shows a waiting page
+  that keeps trying instead of a browser error.
+
+**Own a domain but have no DNS API token?** On those same bundles, enter the
+domain and press Enter at the token prompt. Point the same two A records here, keep ports 80 and 443 open,
+and each client gets its own certificate. Nothing needs reinstalling later. Let's
+Encrypt allows 50 new certificates a week per registered domain; use DNS-01 if
+you will add clients faster than that, or would rather not list each client
+address in public certificate logs.
+
+To use a DNS provider other than Cloudflare, copy `.env.example` to
+`/opt/pulse-provider-msp/.env` and fill it in before running `setup.sh`.
+
 When setup pauses for `DOMAIN`, `ACME_EMAIL` and `CF_DNS_API_TOKEN`, edit
 `/opt/pulse-provider-msp/.env` from a second session with `sudo`, because the
 file is readable by root only, then press Enter. It ends with

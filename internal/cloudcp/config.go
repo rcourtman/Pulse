@@ -107,6 +107,7 @@ type CPConfig struct {
 	TrialActivationPublicKey          string
 	SessionTTL                        time.Duration // Portal session lifetime (CP_SESSION_TTL)
 	RequireEmailProvider              bool
+	PerClientCertificates             bool   // Each client gets its own HTTP-01 certificate instead of sharing a wildcard
 	ResendAPIKey                      string // Resend API key (optional; if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
 	EmailReplyTo                      string // Support reply address for transactional email
@@ -311,6 +312,7 @@ func LoadConfig() (*CPConfig, error) {
 		TrialActivationPrivateKey: envFirstNonEmpty("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY", "CP_TRIAL_ACTIVATION_PRIVATE_KEY"),
 		SessionTTL:                sessionTTL,
 		RequireEmailProvider:      envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
+		PerClientCertificates:     envOrDefaultBool("CP_PER_CLIENT_CERTIFICATES", false),
 		ResendAPIKey:              strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                 envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
 		EmailReplyTo:              envOrDefault("PULSE_EMAIL_REPLY_TO", "support@pulserelay.pro"),
