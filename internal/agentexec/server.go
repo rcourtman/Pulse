@@ -1433,25 +1433,9 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		closeConn("Failed to close cancelled action runner registration")
 		return
 	}
-	for key, existing := range s.agents {
-		if key != ac.sessionKey &&
-			normalizeOrganizationID(existing.admission.OrganizationID) == admission.OrganizationID &&
-			unifiedresources.HostnamesEquivalent(existing.agent.Hostname, ac.agent.Hostname) {
-			s.mu.Unlock()
-			log.Warn().
-				Str("organization_id", admission.OrganizationID).
-				Str("connected_agent_id", existing.agent.AgentID).
-				Str("requested_agent_id", admission.AgentID).
-				Str("hostname", admission.Hostname).
-				Msg("Agent registration rejected: hostname is already owned by another command identity")
-			rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent hostname is already connected under another identity"})
-			if err == nil {
-				_ = s.sendMessage(conn, rejectedMsg)
-			}
-			closeConn("Failed to close duplicate agent hostname connection")
-			return
-		}
-	}
+	// A session is keyed by tenant and agent ID. A hostname says nothing about
+	// which machine this is, since two installations can reuse one, so it never
+	// decides admission. A route that holds only a hostname refuses a tie.
 	var replaced *agentConn
 	if admission.ActivationPending && admission.RuntimeRole == RuntimeRoleActionRunner {
 		// A prepared transport is staged separately. Reconnect/flood traffic can
@@ -2918,74 +2902,37 @@ func (s *Server) IsAgentConnectedForOrganization(organizationID, agentID string)
 	return ok
 }
 
-// GetAgentForHost finds the agent for a given hostname using the canonical
-// hostname-equivalence contract shared with the unified identity layer.
-func (s *Server) GetAgentForHost(hostname string) (string, bool) {
-	return s.GetAgentForHostForOrganization(defaultOrganizationID, hostname)
-}
-
 func isTypedActionRunner(ac *agentConn) bool {
 	return ac != nil && ac.admission.RuntimeRole == RuntimeRoleActionRunner &&
 		ac.admission.ActionCapability == ActionCapabilityTypedV1
 }
 
-// GetActionRunnerForHostForOrganization resolves exactly one currently admitted
-// typed runner for a canonical host. A collector or legacy command session is
-// not action-runner authority. Pending, fenced and revoked sessions are excluded
-// by the same admission check used at dispatch.
-func (s *Server) GetActionRunnerForHostForOrganization(organizationID, hostname string) (string, bool) {
-	if s == nil || strings.TrimSpace(hostname) == "" {
-		return "", false
-	}
-	organizationID = normalizeOrganizationID(organizationID)
-	s.mu.RLock()
-	ids := make([]string, 0, len(s.agents))
-	for _, ac := range s.agents {
-		if normalizeOrganizationID(ac.admission.OrganizationID) == organizationID &&
-			unifiedresources.HostnamesEquivalent(ac.admission.Hostname, hostname) {
-			ids = append(ids, ac.agent.AgentID)
-		}
-	}
-	s.mu.RUnlock()
-	matched := ""
-	for _, agentID := range ids {
-		ac, ok := s.connectionForOrganization(organizationID, agentID)
-		if !ok || !isTypedActionRunner(ac) ||
-			!unifiedresources.HostnamesEquivalent(ac.admission.Hostname, hostname) {
-			continue
-		}
-		if matched != "" {
-			return "", false
-		}
-		matched = agentID
-	}
-	return matched, matched != ""
-}
-
-// GetAgentForHostForOrganization resolves a hostname only within one tenant.
-func (s *Server) GetAgentForHostForOrganization(organizationID, hostname string) (string, bool) {
+// GetActionRunnersForOrganization lists the currently admitted typed runners of
+// one tenant. A collector or legacy command session is not action-runner
+// authority. Pending, fenced and revoked sessions are excluded by the same
+// admission check used at dispatch. A hostname cannot pick from this list, since
+// another machine's runner can hold the same name: the caller asks which agent
+// runs on the machine it means.
+func (s *Server) GetActionRunnersForOrganization(organizationID string) []ConnectedAgent {
 	if s == nil {
-		return "", false
+		return nil
 	}
 	organizationID = normalizeOrganizationID(organizationID)
 	s.mu.RLock()
 	ids := make([]string, 0, len(s.agents))
 	for _, ac := range s.agents {
-		if normalizeOrganizationID(ac.admission.OrganizationID) == organizationID &&
-			unifiedresources.HostnamesEquivalent(ac.agent.Hostname, hostname) {
+		if normalizeOrganizationID(ac.admission.OrganizationID) == organizationID {
 			ids = append(ids, ac.agent.AgentID)
 		}
 	}
 	s.mu.RUnlock()
-	if len(ids) != 1 {
-		return "", false
-	}
+	runners := make([]ConnectedAgent, 0, len(ids))
 	for _, agentID := range ids {
-		if _, ok := s.connectionForOrganization(organizationID, agentID); ok {
-			return agentID, true
+		if ac, ok := s.connectionForOrganization(organizationID, agentID); ok && isTypedActionRunner(ac) {
+			runners = append(runners, ac.agent)
 		}
 	}
-	return "", false
+	return runners
 }
 
 // GetAgentForTokenForOrganization resolves the canonical live command session

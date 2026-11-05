@@ -3,6 +3,7 @@ package agentexec
 import (
 	"context"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -82,30 +83,39 @@ func TestActionRunnerHostResolutionUsesLiveTenantAdmission(t *testing.T) {
 	if _, err := s.ExecuteProxmoxGuestLifecycle(WithOrganizationID(context.Background(), "org-a"), "legacy", boundProxmoxGuestLifecycle(t)); err == nil || !strings.Contains(err.Error(), "requires a typed action-runner session") {
 		t.Fatalf("legacy session reached typed dispatch: %v", err)
 	}
-	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
-		t.Fatalf("non-admitted runner resolved: %q, %v", id, ok)
+	runners := func(organizationID string) string {
+		ids := make([]string, 0, 2)
+		for _, runner := range s.GetActionRunnersForOrganization(organizationID) {
+			ids = append(ids, runner.AgentID)
+		}
+		sort.Strings(ids)
+		return strings.Join(ids, ",")
+	}
+	if got := runners("org-a"); got != "" {
+		t.Fatalf("non-admitted runner listed: %q", got)
 	}
 	valid := add("org-a", "runner", "delly.home", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid")
-	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); !ok || id != "runner" {
-		t.Fatalf("typed runner not resolved through canonical hostname: %q, %v", id, ok)
+	if got := runners("org-a"); got != "runner" {
+		t.Fatalf("typed runner not listed: %q", got)
 	}
-	add("org-a", "ambiguous", "delly.home", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid")
-	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
-		t.Fatalf("ambiguous runner resolved: %q, %v", id, ok)
+	// Another machine's runner can hold the same name, and both stay listed.
+	add("org-a", "namesake", "delly.home", RuntimeRoleActionRunner, ActionCapabilityTypedV1, "valid")
+	if got := runners("org-a"); got != "namesake,runner" {
+		t.Fatalf("same-named runners = %q, want both", got)
 	}
-	delete(s.agents, agentSessionKey("org-a", "ambiguous"))
+	delete(s.agents, agentSessionKey("org-a", "namesake"))
 	s.actionRunnerPromotionFences[agentSessionKey("org-a", "runner")] = &ActionRunnerSessionPromotion{}
-	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
-		t.Fatalf("fenced runner resolved: %q, %v", id, ok)
+	if got := runners("org-a"); got != "" {
+		t.Fatalf("fenced runner listed: %q", got)
 	}
 	delete(s.actionRunnerPromotionFences, agentSessionKey("org-a", "runner"))
 	delete(s.agents, agentSessionKey("org-a", "runner"))
 	s.pendingActionRunners[agentSessionKey("org-a", "runner")] = valid
-	if id, ok := s.GetActionRunnerForHostForOrganization("org-a", "delly"); ok || id != "" {
-		t.Fatalf("pending runner resolved: %q, %v", id, ok)
+	if got := runners("org-a"); got != "" {
+		t.Fatalf("pending runner listed: %q", got)
 	}
-	if id, ok := s.GetActionRunnerForHostForOrganization("org-b", "delly"); !ok || id != "other-tenant" {
-		t.Fatalf("tenant isolation lost: %q, %v", id, ok)
+	if got := runners("org-b"); got != "other-tenant" {
+		t.Fatalf("tenant isolation lost: %q", got)
 	}
 }
 
@@ -451,14 +461,6 @@ func TestConnectedAgentLookups(t *testing.T) {
 		t.Fatalf("expected missing to not be connected")
 	}
 
-	agentID, ok := s.GetAgentForHost("host2")
-	if !ok || agentID != "a2" {
-		t.Fatalf("expected GetAgentForHost(host2) = (a2, true), got (%q, %v)", agentID, ok)
-	}
-	if _, ok := s.GetAgentForHost("missing"); ok {
-		t.Fatalf("expected missing host to return false")
-	}
-
 	agents := s.GetConnectedAgents()
 	if len(agents) != 2 {
 		t.Fatalf("expected 2 connected agents, got %d", len(agents))
@@ -487,47 +489,6 @@ func TestGetAgentForIdentityForOrganizationRequiresOneExactLiveAdmission(t *test
 		if got, ok := s.GetAgentForIdentityForOrganization(mismatch.org, mismatch.agentID, mismatch.hostname); ok {
 			t.Fatalf("mismatched identity unexpectedly resolved %q for %#v", got, mismatch)
 		}
-	}
-}
-
-func TestGetAgentForHostNormalizesFQDNAndCase(t *testing.T) {
-	s := NewServer(allowAllTestTokens)
-	now := time.Now().Add(-1 * time.Minute)
-
-	s.mu.Lock()
-	s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", Hostname: "prox97.seftic.local", ConnectedAt: now}}
-	s.mu.Unlock()
-
-	cases := []string{"prox97", "PROX97", "prox97.seftic.local", "Prox97.Seftic.Local"}
-	for _, lookup := range cases {
-		agentID, ok := s.GetAgentForHost(lookup)
-		if !ok || agentID != "a1" {
-			t.Errorf("GetAgentForHost(%q) = (%q, %v), want (a1, true)", lookup, agentID, ok)
-		}
-	}
-
-	if _, ok := s.GetAgentForHost(""); ok {
-		t.Errorf("GetAgentForHost(\"\") should return false")
-	}
-}
-
-func TestGetAgentForHostKeepsDistinctFQDNsSeparate(t *testing.T) {
-	s := NewServer(allowAllTestTokens)
-	now := time.Now().Add(-1 * time.Minute)
-
-	s.mu.Lock()
-	s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", Hostname: "prox97.a.local", ConnectedAt: now}}
-	s.agents["a2"] = &agentConn{agent: ConnectedAgent{AgentID: "a2", Hostname: "prox97.b.local", ConnectedAt: now}}
-	s.mu.Unlock()
-
-	agentID, ok := s.GetAgentForHost("prox97.a.local")
-	if !ok || agentID != "a1" {
-		t.Fatalf("GetAgentForHost(%q) = (%q, %v), want (a1, true)", "prox97.a.local", agentID, ok)
-	}
-
-	agentID, ok = s.GetAgentForHost("prox97.b.local")
-	if !ok || agentID != "a2" {
-		t.Fatalf("GetAgentForHost(%q) = (%q, %v), want (a2, true)", "prox97.b.local", agentID, ok)
 	}
 }
 

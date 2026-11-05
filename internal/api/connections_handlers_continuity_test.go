@@ -126,7 +126,7 @@ func TestConnectionsLedgerSeparatesTelemetryHealthFromCommandAdmission(t *testin
 		func(context.Context) *config.ConfigPersistence { return nil },
 		func(context.Context) *monitoring.Monitor { return monitor },
 	)
-	handler.SetAgentCommandSessionProvider(func(_, tokenID, _, _ string) bool {
+	handler.SetAgentCommandSessionProvider(func(_, tokenID, _ string) bool {
 		return tokenID == "token-connected"
 	})
 

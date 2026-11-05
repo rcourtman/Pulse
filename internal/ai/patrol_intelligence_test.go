@@ -2,26 +2,33 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // --- Mock GuestProber ---
 
 type mockGuestProber struct {
-	agents  map[string]string                // hostname -> agentID
-	results map[string]map[string]PingResult // agentID -> ip -> result
-	err     error
+	agents   map[string]string                // hostname -> agentID
+	sessions []agentexec.ConnectedAgent       // sessions a hostname map cannot hold, such as same-named ones
+	results  map[string]map[string]PingResult // agentID -> ip -> result
+	err      error
 }
 
-func (m *mockGuestProber) GetAgentForHost(hostname string) (string, bool) {
-	id, ok := m.agents[hostname]
-	return id, ok
+func (m *mockGuestProber) GetConnectedAgents() []agentexec.ConnectedAgent {
+	agents := make([]agentexec.ConnectedAgent, 0, len(m.agents)+len(m.sessions))
+	for hostname, id := range m.agents {
+		agents = append(agents, agentexec.ConnectedAgent{AgentID: id, Hostname: hostname})
+	}
+	return append(agents, m.sessions...)
 }
 
 func (m *mockGuestProber) PingGuests(ctx context.Context, agentID string, ips []string) (map[string]PingResult, error) {
@@ -538,5 +545,101 @@ func TestSeedResourceInventory_HealthIssuesFallbackType(t *testing.T) {
 	// When no discovery, should use "VM" not "-" in health issues
 	if !strings.Contains(out, "unknown-vm (VM on pve1): Running but UNREACHABLE") {
 		t.Errorf("expected VM type fallback in health issue, got:\n%s", out)
+	}
+}
+
+// sameNamedPatrolFixture is two installations that each have a pmx1 hosting guest 100.
+func sameNamedPatrolFixture() *ur.ResourceRegistry {
+	registry := ur.NewRegistry(nil)
+	records := []ur.Resource{}
+	for _, site := range []struct{ instance, ip string }{{"home", "10.10.10.5"}, {"hetzner", "10.20.20.5"}} {
+		nodeID := "node-" + site.instance
+		records = append(records,
+			ur.Resource{
+				ID: nodeID, Type: ur.ResourceTypeAgent, Name: "pmx1",
+				Sources: []ur.DataSource{ur.SourceProxmox, ur.SourceAgent},
+				Proxmox: &ur.ProxmoxData{Instance: site.instance, NodeName: "pmx1", SourceID: site.instance + ":pmx1"},
+				Agent:   &ur.AgentData{AgentID: "agent-" + site.instance, Hostname: "pmx1"},
+			},
+			ur.Resource{
+				ID: ur.ProxmoxGuestCanonicalID(ur.ResourceTypeVM, site.instance, 100), Type: ur.ResourceTypeVM, Name: "docker1-" + site.instance,
+				Status: ur.StatusOnline, Sources: []ur.DataSource{ur.SourceProxmox}, ParentID: &nodeID,
+				Proxmox:  &ur.ProxmoxData{Instance: site.instance, NodeName: "pmx1", VMID: 100, SourceID: site.instance + ":pmx1:100"},
+				Identity: ur.ResourceIdentity{IPAddresses: []string{site.ip}},
+			},
+		)
+	}
+	registry.IngestResources(records)
+	return registry
+}
+
+func patrolGuestByName(t *testing.T, intel map[string]*GuestIntelligence, name string) *GuestIntelligence {
+	t.Helper()
+	for _, guest := range intel {
+		if guest.Name == name {
+			return guest
+		}
+	}
+	t.Fatalf("no guest named %s in %d", name, len(intel))
+	return nil
+}
+
+// A guest's address means nothing from another machine's network, so a probe from a
+// same-named machine would report a healthy guest unreachable (#2681).
+func TestGatherGuestIntelligence_SameNamedNodesProbeThroughTheirOwnAgents(t *testing.T) {
+	both := []agentexec.ConnectedAgent{{AgentID: "agent-home", Hostname: "pmx1"}, {AgentID: "agent-hetzner", Hostname: "pmx1"}}
+
+	t.Run("both up", func(t *testing.T) {
+		ps := NewPatrolService(nil, nil)
+		ps.SetGuestProber(&mockGuestProber{sessions: both, results: map[string]map[string]PingResult{
+			"agent-home":    {"10.10.10.5": {Reachable: true}},
+			"agent-hetzner": {"10.20.20.5": {Reachable: true}},
+		}})
+		ps.SetReadState(sameNamedPatrolFixture())
+		intel := ps.gatherGuestIntelligence(context.Background())
+		for _, name := range []string{"docker1-home", "docker1-hetzner"} {
+			if guest := patrolGuestByName(t, intel, name); guest.Reachable == nil || !*guest.Reachable {
+				t.Fatalf("%s reachable = %v, want its own agent's answer", name, guest.Reachable)
+			}
+		}
+	})
+
+	t.Run("a namesake never probes for an offline machine", func(t *testing.T) {
+		ps := NewPatrolService(nil, nil)
+		ps.SetGuestProber(&mockGuestProber{sessions: both[:1], results: map[string]map[string]PingResult{
+			"agent-home": {"10.10.10.5": {Reachable: true}, "10.20.20.5": {Reachable: false}},
+		}})
+		ps.SetReadState(sameNamedPatrolFixture())
+		intel := ps.gatherGuestIntelligence(context.Background())
+		if guest := patrolGuestByName(t, intel, "docker1-home"); guest.Reachable == nil || !*guest.Reachable {
+			t.Fatalf("home's guest lost its agent's answer: %v", guest.Reachable)
+		}
+		if guest := patrolGuestByName(t, intel, "docker1-hetzner"); guest.Reachable != nil {
+			t.Fatalf("hetzner's guest took home's answer: %v", *guest.Reachable)
+		}
+	})
+}
+
+func TestVerifyGuestReachabilityState_SameNamedNodeUsesItsOwnAgent(t *testing.T) {
+	both := []agentexec.ConnectedAgent{{AgentID: "agent-home", Hostname: "pmx1"}, {AgentID: "agent-hetzner", Hostname: "pmx1"}}
+	guestID := ur.ProxmoxGuestCanonicalID(ur.ResourceTypeVM, "hetzner", 100)
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	state.readState = sameNamedPatrolFixture()
+
+	ps := NewPatrolService(nil, nil)
+	ps.SetGuestProber(&mockGuestProber{sessions: both, results: map[string]map[string]PingResult{
+		"agent-home":    {"10.20.20.5": {Reachable: false}},
+		"agent-hetzner": {"10.20.20.5": {Reachable: true}},
+	}})
+	reachable, err := ps.verifyGuestReachabilityState(context.Background(), state, guestID)
+	if err != nil || !reachable {
+		t.Fatalf("verification = %v, %v, want its own agent's reachable", reachable, err)
+	}
+
+	ps.SetGuestProber(&mockGuestProber{sessions: both[:1], results: map[string]map[string]PingResult{
+		"agent-home": {"10.20.20.5": {Reachable: false}},
+	}})
+	if _, err := ps.verifyGuestReachabilityState(context.Background(), state, guestID); !errors.Is(err, aicontracts.ErrVerificationUnknown) {
+		t.Fatalf("offline machine's guest verified through its namesake: %v", err)
 	}
 }

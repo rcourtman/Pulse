@@ -7,14 +7,17 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	aitools "github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
 // GuestProber checks reachability of guest IPs via connected host agents.
 type GuestProber interface {
-	// GetAgentForHost returns the agent ID for a given hostname, if connected.
-	GetAgentForHost(hostname string) (agentID string, ok bool)
+	// GetConnectedAgents lists the agents a probe could run through. Which one runs
+	// it is routing's call, because a hostname does not name one machine.
+	GetConnectedAgents() []agentexec.ConnectedAgent
 	// PingGuests pings a list of IPs from a specific agent and returns results.
 	PingGuests(ctx context.Context, agentID string, ips []string) (map[string]PingResult, error)
 }
@@ -31,10 +34,18 @@ type GuestIntelligence struct {
 	Reachable *bool  // nil = not checked (no agent/no IP), true/false = checked
 }
 
+// patrolGuestNode names the node a guest runs on. Node names repeat across
+// connections, and a guest's address means nothing from another machine's network.
+type patrolGuestNode struct {
+	instance string
+	name     string
+}
+
 // guestIPInfo pairs a guest ID with one of its IP addresses for reachability probing.
 type guestIPInfo struct {
-	guestID string
-	ip      string
+	guestID    string
+	resourceID string
+	ip         string
 }
 
 // gatherGuestIntelligence builds a map of guest intelligence keyed by guest ID
@@ -57,7 +68,7 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 
 	// Build a GuestIntelligence entry for every guest
 	// Also collect running guests with IPs grouped by node for reachability probing.
-	nodeGuests := make(map[string][]guestIPInfo) // node name -> guests with IPs
+	nodeGuests := make(map[patrolGuestNode][]guestIPInfo) // node -> guests with IPs
 
 	gatherGuestsFromReadState(rs, intel, nodeGuests)
 
@@ -73,8 +84,9 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 	var wg sync.WaitGroup
 	var mu sync.Mutex // protects intel map writes
 
+	agents := prober.GetConnectedAgents()
 	for node, guests := range nodeGuests {
-		agentID, ok := prober.GetAgentForHost(node)
+		agent, ok := aitools.ConnectedAgentForGuestNode(rs, guests[0].resourceID, node.instance, node.name, agents)
 		if !ok {
 			continue
 		}
@@ -90,12 +102,12 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 		}
 
 		wg.Add(1)
-		go func(node, agentID string, ips []string, guests []guestIPInfo) {
+		go func(node patrolGuestNode, agentID string, ips []string, guests []guestIPInfo) {
 			defer wg.Done()
 
 			results, err := prober.PingGuests(ctx, agentID, ips)
 			if err != nil {
-				log.Warn().Err(err).Str("node", node).Msg("AI Patrol: Guest ping probe failed")
+				log.Warn().Err(err).Str("node", node.name).Str("instance", node.instance).Msg("AI Patrol: Guest ping probe failed")
 				return
 			}
 
@@ -115,7 +127,7 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context) map[string]
 					}
 				}
 			}
-		}(node, agentID, ips, guests)
+		}(node, agent.AgentID, ips, guests)
 	}
 
 	// Wait for all probes to complete (bounded by caller's context timeout)
@@ -169,7 +181,7 @@ type patrolGuestView interface {
 func gatherGuestsFromReadState(
 	rs unifiedresources.ReadState,
 	intel map[string]*GuestIntelligence,
-	nodeGuests map[string][]guestIPInfo,
+	nodeGuests map[patrolGuestNode][]guestIPInfo,
 ) {
 	gatherGuestIntelligenceFromViews(rs.VMs(), "vm", intel, nodeGuests)
 	gatherGuestIntelligenceFromViews(rs.Containers(), "system-container", intel, nodeGuests)
@@ -181,7 +193,7 @@ func gatherGuestIntelligenceFromViews[V patrolGuestView](
 	guests []V,
 	guestType string,
 	intel map[string]*GuestIntelligence,
-	nodeGuests map[string][]guestIPInfo,
+	nodeGuests map[patrolGuestNode][]guestIPInfo,
 ) {
 	for _, g := range guests {
 		if g.Template() {
@@ -202,10 +214,12 @@ func gatherGuestIntelligenceFromViews[V patrolGuestView](
 		intel[sourceID] = gi
 
 		if g.Status() == unifiedresources.StatusOnline && len(g.IPAddresses()) > 0 {
+			node := patrolGuestNode{instance: g.Instance(), name: g.Node()}
 			for _, ip := range g.IPAddresses() {
-				nodeGuests[g.Node()] = append(nodeGuests[g.Node()], guestIPInfo{
-					guestID: sourceID,
-					ip:      ip,
+				nodeGuests[node] = append(nodeGuests[node], guestIPInfo{
+					guestID:    sourceID,
+					resourceID: g.ID(),
+					ip:         ip,
 				})
 			}
 		}

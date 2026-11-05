@@ -256,7 +256,7 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 			if loc.AgentID != "" || loc.TargetID != "" {
 				agent, ok = connectedAgentByID(agents, reference)
 			} else {
-				agent, ok = uniqueConnectedAgent(agents, reference)
+				agent, ok = ConnectedAgentNamed(agents, reference)
 			}
 			if ok {
 				result.AgentID, result.AgentHostname = agent.AgentID, agent.Hostname
@@ -308,7 +308,7 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 			if loc.AgentID != "" {
 				agent, ok = connectedAgentByID(agents, reference)
 			} else {
-				agent, ok = uniqueConnectedAgent(agents, reference)
+				agent, ok = ConnectedAgentNamed(agents, reference)
 			}
 			if ok {
 				result.AgentID, result.AgentHostname = agent.AgentID, agent.Hostname
@@ -320,7 +320,7 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 	}
 
 	// A connected agent absent from the inventory is a bounded legacy boundary.
-	if agent, ok := uniqueConnectedAgent(agents, targetHost); ok {
+	if agent, ok := UniqueConnectedAgent(agents, targetHost); ok {
 		result.AgentID, result.AgentHostname, result.ResolvedKind = agent.AgentID, agent.Hostname, "agent"
 	}
 
@@ -380,19 +380,14 @@ func connectedAgentByID(agents []agentexec.ConnectedAgent, id string) (agentexec
 	return agentexec.ConnectedAgent{}, false
 }
 
-func uniqueConnectedAgent(agents []agentexec.ConnectedAgent, reference string) (agentexec.ConnectedAgent, bool) {
-	if strings.TrimSpace(reference) == "" {
-		return agentexec.ConnectedAgent{}, false
-	}
-	for _, agent := range agents {
-		if agent.AgentID == reference {
-			return agent, true
-		}
-	}
+// ConnectedAgentNamed finds the one connected agent holding a hostname. Two machines
+// can share a name, and a tie is a refusal. An agent ID does not count as a name,
+// because a token holder picks its own first ID.
+func ConnectedAgentNamed(agents []agentexec.ConnectedAgent, name string) (agentexec.ConnectedAgent, bool) {
 	var result agentexec.ConnectedAgent
 	found := false
 	for _, agent := range agents {
-		if !unifiedresources.HostnamesEquivalent(agent.Hostname, reference) {
+		if !unifiedresources.HostnamesEquivalent(agent.Hostname, name) {
 			continue
 		}
 		if found && result.AgentID != agent.AgentID {
@@ -401,6 +396,78 @@ func uniqueConnectedAgent(agents []agentexec.ConnectedAgent, reference string) (
 		result, found = agent, true
 	}
 	return result, found
+}
+
+// UniqueConnectedAgent finds the agent a free-form reference means, which may be an
+// agent ID or a hostname. A reference that fits two agents is a refusal.
+func UniqueConnectedAgent(agents []agentexec.ConnectedAgent, reference string) (agentexec.ConnectedAgent, bool) {
+	if strings.TrimSpace(reference) == "" {
+		return agentexec.ConnectedAgent{}, false
+	}
+	var result agentexec.ConnectedAgent
+	found := false
+	for _, agent := range agents {
+		// An agent with no machine ID reports its hostname as its ID, so an ID match
+		// can tie with another machine holding that name.
+		if agent.AgentID != reference && !unifiedresources.HostnamesEquivalent(agent.Hostname, reference) {
+			continue
+		}
+		if found && result.AgentID != agent.AgentID {
+			return agentexec.ConnectedAgent{}, false
+		}
+		result, found = agent, true
+	}
+	return result, found
+}
+
+// ConnectedAgentForGuestNode names the connected agent on the node hosting a guest,
+// the node a command for that guest goes through. Node names and VMIDs repeat across
+// connections, so the answer starts from the guest's own record, which also knows the
+// node when one machine is monitored through two connections. A guest not on record
+// yet falls back to its connection and node name.
+func ConnectedAgentForGuestNode(rs unifiedresources.ReadState, guestID, instance, nodeName string, agents []agentexec.ConnectedAgent) (agentexec.ConnectedAgent, bool) {
+	location := resourceLocationInReadState(rs, guestID)
+	if !location.Found {
+		return ConnectedAgentForNodeName(rs, instance, nodeName, agents)
+	}
+	return connectedAgentForNodeReference(rs, firstNonEmptyString(location.NodeResourceID, location.Node), agents)
+}
+
+// ConnectedAgentForNodeName answers for a node a request names, optionally on one
+// connection. A name that fits two nodes is a refusal, and so is a name only another
+// connection's node holds. With no such node on record the name routes only if it
+// stands for one machine.
+func ConnectedAgentForNodeName(rs unifiedresources.ReadState, instance, name string, agents []agentexec.ConnectedAgent) (agentexec.ConnectedAgent, bool) {
+	if rs == nil {
+		return ConnectedAgentNamed(agents, name)
+	}
+	instance = strings.TrimSpace(instance)
+	var match *unifiedresources.NodeView
+	matches := 0
+	for _, node := range rs.Nodes() {
+		if node == nil || !unifiedresources.HostnamesEquivalent(node.NodeName(), name) {
+			continue
+		}
+		if instance != "" && !strings.EqualFold(node.Instance(), instance) {
+			continue
+		}
+		match = node
+		matches++
+	}
+	switch matches {
+	case 0:
+		if instance != "" {
+			for connection := range guestConnectionsOnNode(rs, name) {
+				if !strings.EqualFold(connection, instance) {
+					return agentexec.ConnectedAgent{}, false
+				}
+			}
+		}
+		return connectedAgentForNodeReference(rs, name, agents)
+	case 1:
+		return connectedAgentForNode(rs, match, agents)
+	}
+	return agentexec.ConnectedAgent{}, false
 }
 
 // connectedAgentForNodeReference answers for a canonical node ID, or for a bare
@@ -414,7 +481,7 @@ func connectedAgentForNodeReference(rs unifiedresources.ReadState, reference str
 	if !bareNodeNameCanRoute(rs, reference) {
 		return agentexec.ConnectedAgent{}, false
 	}
-	return uniqueConnectedAgent(agents, reference)
+	return ConnectedAgentNamed(agents, reference)
 }
 
 // connectedAgentForNode names the connected agent that runs commands on a known
@@ -460,7 +527,7 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 			return agentexec.ConnectedAgent{}, false
 		}
 	}
-	return uniqueConnectedAgent(agents, hostname)
+	return ConnectedAgentNamed(agents, hostname)
 }
 
 // canonicalLinkedResourceID turns the source ID an agent's link holds into the
@@ -484,6 +551,11 @@ func bareNodeNameCanRoute(rs unifiedresources.ReadState, name string) bool {
 			return false
 		}
 	}
+	return len(guestConnectionsOnNode(rs, name)) <= 1
+}
+
+// guestConnectionsOnNode lists the connections with a guest naming this node.
+func guestConnectionsOnNode(rs unifiedresources.ReadState, name string) map[string]struct{} {
 	connections := make(map[string]struct{})
 	for _, vm := range rs.VMs() {
 		if vm != nil && unifiedresources.HostnamesEquivalent(vm.Node(), name) {
@@ -495,7 +567,7 @@ func bareNodeNameCanRoute(rs unifiedresources.ReadState, name string) bool {
 			connections[ct.Instance()] = struct{}{}
 		}
 	}
-	return len(connections) <= 1
+	return connections
 }
 
 // Formatting helpers for control tools

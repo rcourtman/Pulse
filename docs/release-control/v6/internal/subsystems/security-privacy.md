@@ -2322,6 +2322,14 @@ may open token creation for the external-agent preset, but
 Pulse Intelligence Assistant setup route instead of placing Agent Integrations
 inside the API Access trust surface.
 
+A hostname is not command authority (#2681). The command server admits a session
+by token, tenant and agent ID, and two machines with one hostname each hold their
+own. One agent ID from two hostnames stays refused. A token holder who claims a
+hostname gains no route its real owner holds: a route holding only a name refuses
+the tie, a route that knows its machine asks by identity, and an agent ID never
+reads as a name. A name nothing else contests still routes to its one holder, as it
+did when the first token to connect held the name and locked the real machine out.
+
 That same token-management boundary also reserves token-owner identity for the
 server-authenticated principal. Token-minting helpers must derive
 `owner_user_id` from the authenticated session or caller token and reject any

@@ -835,6 +835,16 @@ func TestAgentCommandAdapter_FindAgentForTarget(t *testing.T) {
 	if got := adapter.FindAgentForTarget(""); got != "" {
 		t.Fatalf("expected empty agent when multiple connected, got %q", got)
 	}
+
+	// Two machines can share a hostname. The name refuses, and an ID still reaches one.
+	conn3 := registerAgent(t, ts.URL, "agent-3", "host-a")
+	defer conn3.Close()
+	if got := adapter.FindAgentForTarget("host-a"); got != "" {
+		t.Fatalf("hostname shared by two machines picked %q", got)
+	}
+	if got := adapter.FindAgentForTarget("agent-3"); got != "agent-3" {
+		t.Fatalf("expected agent-3 by ID, got %q", got)
+	}
 }
 
 func TestPatrolExpiredActionHydrationRemovesQueuedOutcomeWithoutRewritingEvidence(t *testing.T) {

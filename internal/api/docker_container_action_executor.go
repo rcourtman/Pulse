@@ -491,17 +491,10 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 	if unified.IsProxmoxLXCDockerHostID(resource.Docker.AgentID) {
 		return "", errDockerHostHasNoCommandAgent
 	}
-	// The report token finds this resource's agent even when its session registered
-	// under the commandAgentId Pulse acknowledged, not the ID its Docker module
-	// reports. A token alone does not name a machine, because a module on another
-	// machine can report under it, so the session must also hold this resource's
-	// agent ID or hostname.
-	if tokenAgentID, ok := commandAgentForToken(ctx, e.agents, resource.Docker.TokenID); ok {
-		agentID := strings.TrimSpace(tokenAgentID)
-		hostAgentID, _ := commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))
-		if agentID != "" && (agentID == strings.TrimSpace(resource.Docker.AgentID) || agentID == strings.TrimSpace(hostAgentID)) {
-			return agentID, nil
-		}
+	tokenAgentID, _ := commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)
+	tokenAgentID = strings.TrimSpace(tokenAgentID)
+	if tokenAgentID != "" && tokenAgentID == strings.TrimSpace(resource.Docker.AgentID) {
+		return tokenAgentID, nil
 	}
 	// Telemetry retains its last-seen token ID across enrollment-token rotation.
 	// A token miss may therefore use the live admission only when its tenant,
@@ -510,6 +503,17 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 	if tokenID := strings.TrimSpace(resource.Docker.TokenID); tokenID != "" {
 		if agentID, ok := commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname); ok {
 			return strings.TrimSpace(agentID), nil
+		}
+		// The report token finds this resource's agent even when its session registered
+		// under the commandAgentId Pulse acknowledged, not the ID its Docker module
+		// reports. A token alone does not name a machine, because a module on another
+		// machine can report under it, so that session must also hold this hostname.
+		// Another machine can hold the name too, which is why the resource's own
+		// session goes first above.
+		if tokenAgentID != "" {
+			if _, ok := commandAgentForIdentity(ctx, e.agents, tokenAgentID, resource.Docker.Hostname); ok {
+				return tokenAgentID, nil
+			}
 		}
 		return "", fmt.Errorf("docker container command agent is not connected: no live command session on this host matches enrollment token %s or the exact agent %q and hostname %q identity", tokenID, strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
 	}

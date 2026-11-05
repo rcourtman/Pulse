@@ -62,6 +62,14 @@ const (
 // failure nor a node failure, and the guest is considered again next poll.
 var ErrNoProvenProxmoxNodeAgent = errors.New("no agent is linked to this guest's Proxmox node on its connection")
 
+// ErrProxmoxNodeAgentNotConnected reports that the agent proven on a guest's node
+// has no live command session right now, as while agents reconnect after a Pulse
+// restart. Nothing was dispatched, so like ErrNoProvenProxmoxNodeAgent it says
+// nothing about the guest or the node. Counting it opened the node breaker on
+// every restart, and that node's LXC Docker containers then left the Docker page
+// for the backoff window.
+var ErrProxmoxNodeAgentNotConnected = errors.New("the agent on this guest's Proxmox node has no live command session")
+
 // ProxmoxGuestCommandExecutor runs a command on the Proxmox node hosting
 // container and returns (stdout, exitCode, error). It returns
 // ErrNoProvenProxmoxNodeAgent rather than dispatch when no agent is proven to
@@ -231,12 +239,14 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 			}
 			abandoned := dockerProbeAbandoned(result.err)
 			m.releaseDockerProbe(ct.ID, abandoned)
-			if errors.Is(result.err, ErrNoProvenProxmoxNodeAgent) {
+			if errors.Is(result.err, ErrNoProvenProxmoxNodeAgent) || errors.Is(result.err, ErrProxmoxNodeAgentNotConnected) {
 				// The guest may have restarted, and that signal is gone once
 				// this poll is published. Marking it unchecked asks again as
 				// soon as an agent is proven, keeping the prior answer until then.
 				containers[result.index].DockerCheckedAt = time.Time{}
-				m.noteDockerProbeWithoutNodeAgent(ct)
+				if errors.Is(result.err, ErrNoProvenProxmoxNodeAgent) {
+					m.noteDockerProbeWithoutNodeAgent(ct)
+				}
 				continue
 			}
 			if !abandoned {
@@ -702,9 +712,11 @@ func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, contai
 			}
 
 			report, ok, err := collector.CollectDockerInventory(ctx, container)
-			if errors.Is(err, ErrNoProvenProxmoxNodeAgent) {
+			if errors.Is(err, ErrNoProvenProxmoxNodeAgent) || errors.Is(err, ErrProxmoxNodeAgentNotConnected) {
 				m.releaseDockerProbe(claimKey, false)
-				m.noteDockerProbeWithoutNodeAgent(container)
+				if errors.Is(err, ErrNoProvenProxmoxNodeAgent) {
+					m.noteDockerProbeWithoutNodeAgent(container)
+				}
 				mu.Lock()
 				skipped++
 				mu.Unlock()
@@ -862,9 +874,8 @@ func (m *Monitor) ProxmoxNodeAgentForContainer(container models.Container) (Prox
 // ProxmoxNodeAgentOwnsTokenSession reports whether a command session found
 // through agent's token can only be agent's own, registered under an earlier ID.
 // A session under another known agent's ID is that agent's, and a token held by
-// another agent of an equivalent hostname cannot tell the two machines apart: the
-// command server admits one session per hostname, so the other machine's session
-// is the one this lookup would find. It reads live state because an agent that
+// another agent of an equivalent hostname cannot tell the two machines apart, since
+// a token's one session may be the other machine's. It reads live state because an agent that
 // has just enrolled can reach its command channel before the read state lists it.
 func (m *Monitor) ProxmoxNodeAgentOwnsTokenSession(agent ProxmoxNodeAgent, sessionID string) bool {
 	sessionID = strings.TrimSpace(sessionID)

@@ -21035,7 +21035,7 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 		"commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)",
 		"commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)",
 		"resource.Docker.AgentID",
-		"commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))",
+		"commandAgentForIdentity(ctx, e.agents, tokenAgentID, resource.Docker.Hostname)",
 		"ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload)",
 		"ActionDispatchOperationKinds",
 		"BindActionDispatch",
@@ -21068,8 +21068,8 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 			t.Fatalf("docker lifecycle result must preserve independent verification snippet %q", snippet)
 		}
 	}
-	if !strings.Contains(sharedSrc, "GetAgentForHost(hostname string) (string, bool)") {
-		t.Fatal("shared action command interface must keep hostname-based command-agent resolution available")
+	if strings.Contains(sharedSrc, "GetAgentForHost") {
+		t.Fatal("a hostname does not name a machine, so action commands must not resolve an agent by hostname alone")
 	}
 	for _, snippet := range []string{
 		"byOperation map[string]ActionExecutor",
@@ -21103,12 +21103,12 @@ func TestContract_ProxmoxLifecycleActionsResolveTypedRunnerAndVerifyState(t *tes
 		t.Fatal(err)
 	}
 	src := string(source)
-	for _, forbidden := range []string{"ExecuteCommand(", "commandAgentForHost(", "isAgentCommandConnected("} {
+	for _, forbidden := range []string{"ExecuteCommand(", "isAgentCommandConnected("} {
 		if strings.Contains(src, forbidden) {
 			t.Fatalf("Proxmox lifecycle contains legacy dispatch path %q", forbidden)
 		}
 	}
-	for _, required := range []string{"GetActionRunnerForHostForOrganization", "ExecuteProxmoxGuestLifecycle", "ValidateProxmoxGuestLifecycleResultForRequest", "observeProxmoxGuestPostcondition"} {
+	for _, required := range []string{"GetActionRunnersForOrganization", "ExecuteProxmoxGuestLifecycle", "ValidateProxmoxGuestLifecycleResultForRequest", "observeProxmoxGuestPostcondition"} {
 		if !strings.Contains(src, required) {
 			t.Fatalf("Proxmox lifecycle missing typed dispatch contract %q", required)
 		}
@@ -22243,17 +22243,19 @@ func TestContract_AgentCommandSessionLookupSurvivesStaleHostTokenID(t *testing.T
 	}
 
 	tokenID := cfg.APITokens[0].ID
-	if !router.agentCommandSessionConnected("default", tokenID, "agent-1", "host-1") {
+	if !router.agentCommandSessionConnected("default", tokenID, "agent-1") {
 		t.Fatal("live session not found via its canonical token ID")
 	}
-	if !router.agentCommandSessionConnected("default", "rotated-away-token-id", "agent-1", "host-1") {
+	if !router.agentCommandSessionConnected("default", "rotated-away-token-id", "agent-1") {
 		t.Fatal("stale host token ID hid a live command session from the agent-ID fallback")
 	}
-	if !router.agentCommandSessionConnected("default", "rotated-away-token-id", "", "host-1") {
-		t.Fatal("stale host token ID hid a live command session from the hostname fallback")
-	}
-	if router.agentCommandSessionConnected("default", "rotated-away-token-id", "agent-x", "host-x") {
+	// host-1's session is agent-1's. A second machine called host-1 with no session
+	// of its own must not read as connected through it (#2681).
+	if router.agentCommandSessionConnected("default", "rotated-away-token-id", "agent-x") {
 		t.Fatal("unknown agent reported as connected")
+	}
+	if router.agentCommandSessionConnected("default", "rotated-away-token-id", "") {
+		t.Fatal("a row with no identity reported as connected")
 	}
 }
 

@@ -1543,13 +1543,105 @@ func TestCommandSessionsAreTenantScopedAndDuplicateIdentityFailsClosed(t *testin
 		t.Fatal("rejected duplicate identity evicted the original session")
 	}
 
-	duplicateHost, ack := register("token-d", "other-id", "host-a")
-	defer duplicateHost.Close()
-	if ack.Success {
-		t.Fatal("same-tenant hostname was admitted under a second identity")
+	// A hostname does not name a machine, so it does not decide admission.
+	sameName, ack := register("token-d", "other-id", "host-a")
+	defer sameName.Close()
+	if !ack.Success {
+		t.Fatalf("second identity under one hostname was refused: %s", ack.Message)
 	}
-	if !s.IsAgentConnectedForOrganization("org-a", "shared") {
-		t.Fatal("rejected duplicate hostname evicted the original session")
+	if !s.IsAgentConnectedForOrganization("org-a", "shared") || !s.IsAgentConnectedForOrganization("org-a", "other-id") {
+		t.Fatal("a same-named session must not evict the original")
+	}
+}
+
+// Two installations can each have a pmx1 (#2681). Each holds a session under its
+// own identity and each gets only its own commands. tools.ConnectedAgentNamed is
+// where a route holding nothing but the name refuses.
+func TestSameNamedMachinesEachHoldACommandSession(t *testing.T) {
+	admissions := map[string]AgentAdmission{
+		"token-home":    {OrganizationID: "org-a", TokenID: "token-home", AgentID: "agent-home", Hostname: "pmx1"},
+		"token-hetzner": {OrganizationID: "org-a", TokenID: "token-hetzner", AgentID: "agent-hetzner", Hostname: "pmx1"},
+	}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		admission, ok := admissions[token]
+		return admission, ok
+	}, func(AgentAdmission) bool { return true })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	register := func(token string) *websocket.Conn {
+		t.Helper()
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			t.Fatalf("Dial: %v", err)
+		}
+		t.Cleanup(func() { conn.Close() })
+		admission := admissions[token]
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+			AgentID: admission.AgentID, Hostname: admission.Hostname, Token: token,
+		}))
+		if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+			t.Fatalf("%s was refused a session: %s", admission.AgentID, ack.Message)
+		}
+		return conn
+	}
+	home := register("token-home")
+	hetzner := register("token-hetzner")
+
+	ctx := WithOrganizationID(context.Background(), "org-a")
+	for _, target := range []struct {
+		agentID string
+		conn    *websocket.Conn
+	}{{"agent-home", home}, {"agent-hetzner", hetzner}} {
+		requestID := "to-" + target.agentID
+		done := make(chan error, 1)
+		go func() {
+			_, err := s.ExecuteCommand(ctx, target.agentID, ExecuteCommandPayload{RequestID: requestID, Command: "true", Timeout: 10, Trusted: true})
+			done <- err
+		}()
+		command := wsReadRawMessage(t, target.conn)
+		if command.Type != MsgTypeExecuteCmd || command.Payload == nil {
+			t.Fatalf("%s received %+v, want its command", target.agentID, command)
+		}
+		var payload ExecuteCommandPayload
+		if err := json.Unmarshal(*command.Payload, &payload); err != nil {
+			t.Fatalf("decode command: %v", err)
+		}
+		if payload.RequestID != requestID {
+			t.Fatalf("%s received %q, want %q", target.agentID, payload.RequestID, requestID)
+		}
+		wsWriteMessage(t, target.conn, mustNewMessage(t, MsgTypeCommandResult, "", CommandResultPayload{RequestID: requestID, Success: true, Duration: 1}))
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("command to %s: %v", target.agentID, err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("command to %s did not finish", target.agentID)
+		}
+	}
+
+	if agentID, ok := s.GetAgentForTokenForOrganization("org-a", "token-hetzner"); !ok || agentID != "agent-hetzner" {
+		t.Fatalf("token lookup = %q, %v", agentID, ok)
+	}
+	if agentID, ok := s.GetAgentForIdentityForOrganization("org-a", "agent-home", "pmx1"); !ok || agentID != "agent-home" {
+		t.Fatalf("identity lookup = %q, %v", agentID, ok)
+	}
+
+	// A machine reconnecting replaces only its own session.
+	replacement := register("token-home")
+	if _, err := wsReadRawMessageWithTimeout(home, 2*time.Second); err == nil {
+		t.Fatal("expected the replaced session to close")
+	}
+	if !s.IsAgentConnectedForOrganization("org-a", "agent-home") || !s.IsAgentConnectedForOrganization("org-a", "agent-hetzner") {
+		t.Fatal("a reconnect disturbed the other machine's session")
+	}
+
+	// A machine leaving leaves the other's session alone.
+	_ = replacement.Close()
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnectedForOrganization("org-a", "agent-home") })
+	if !s.IsAgentConnectedForOrganization("org-a", "agent-hetzner") {
+		t.Fatal("a disconnect disturbed the other machine's session")
 	}
 }
 

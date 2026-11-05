@@ -134,18 +134,18 @@ func TestMemoizedAgentLookupKeepsQuestionsApart(t *testing.T) {
 	if !isAgentCommandConnected(ctx, agents, "agent-a") || isAgentCommandConnected(ctx, agents, "agent-b") {
 		t.Fatal("connected lookups for two agents shared one answer")
 	}
-	if id, ok := commandAgentForHost(ctx, agents, "host-a"); !ok || id != "agent-a" {
-		t.Fatalf("host lookup = %q, %v", id, ok)
+	if id, ok := commandAgentForIdentity(ctx, agents, "agent-a", "host-a"); !ok || id != "agent-a" {
+		t.Fatalf("identity lookup = %q, %v", id, ok)
 	}
-	if id, ok := commandAgentForHost(ctx, agents, "host-b"); ok || id != "" {
-		t.Fatalf("host lookup for an unknown host = %q, %v", id, ok)
+	if _, ok := commandAgentForIdentity(ctx, agents, "agent-a", "host-b"); ok {
+		t.Fatal("identity lookup for another host shared the first answer")
 	}
 	if id, ok := commandAgentForToken(ctx, agents, "token-a"); !ok || id != "agent-a" {
 		t.Fatalf("token lookup = %q, %v", id, ok)
 	}
 	// The same string asked as a different question must not hit the first answer.
-	if id, ok := commandAgentForToken(ctx, agents, "host-a"); ok || id != "" {
-		t.Fatalf("token lookup reused the host answer: %q, %v", id, ok)
+	if id, ok := commandAgentForToken(ctx, agents, "agent-a"); ok || id != "" {
+		t.Fatalf("token lookup reused the identity answer: %q, %v", id, ok)
 	}
 }
 

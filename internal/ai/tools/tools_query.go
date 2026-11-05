@@ -4589,7 +4589,7 @@ func BuildTopologyResponseFromReadState(rs unifiedresources.ReadState, options T
 			nodeID, known := nodeIDs[key]
 			hasAgent := nodesWithAgents[nodeID]
 			if !known && bareNodeNameCanRoute(rs, key.name) {
-				_, hasAgent = uniqueConnectedAgent(connectedAgents, key.name)
+				_, hasAgent = ConnectedAgentNamed(connectedAgents, key.name)
 			}
 			node.CommandAgentConnected = commandConnectionObservation(connectedAgents, hasAgent)
 			node.CanExecute = commandConnectionObservation(connectedAgents, hasAgent && options.ControlEnabled)

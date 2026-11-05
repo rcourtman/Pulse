@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -54,7 +55,7 @@ type proxmoxGuestPostconditionObserver interface {
 }
 
 type proxmoxGuestLifecycleAgentCommander interface {
-	GetActionRunnerForHostForOrganization(organizationID, hostname string) (string, bool)
+	GetActionRunnersForOrganization(organizationID string) []agentexec.ConnectedAgent
 	ExecuteProxmoxGuestLifecycle(context.Context, string, agentexec.ProxmoxGuestLifecyclePayload) (*agentexec.ProxmoxGuestLifecycleResultPayload, error)
 }
 
@@ -266,6 +267,9 @@ func (e proxmoxGuestActionExecutor) executableProxmoxGuestResource(resource unif
 	return resource, kind, nil
 }
 
+// connectedProxmoxNodeActionRunnerID finds the typed runner on the machine hosting
+// this guest. Node names and VMIDs repeat across connections, so a runner that only
+// shares the node's name could change a different guest with the same VMID.
 func (e proxmoxGuestActionExecutor) connectedProxmoxNodeActionRunnerID(ctx context.Context, resource unified.Resource) (string, error) {
 	if resource.Proxmox == nil {
 		return "", fmt.Errorf("proxmox resource metadata missing")
@@ -274,9 +278,16 @@ func (e proxmoxGuestActionExecutor) connectedProxmoxNodeActionRunnerID(ctx conte
 	if !ok {
 		return "", fmt.Errorf("typed Proxmox lifecycle execution is unavailable")
 	}
-	runner := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupActionRunner, first: resource.Proxmox.NodeName}, func() agentLookupResult {
-		agentID, connected := runners.GetActionRunnerForHostForOrganization(GetOrgID(ctx), resource.Proxmox.NodeName)
-		return agentLookupResult{agentID: agentID, ok: connected}
+	runner := memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupActionRunner, first: resource.Proxmox.NodeName, second: resource.Proxmox.Instance}, func() agentLookupResult {
+		if e.resources == nil {
+			return agentLookupResult{}
+		}
+		registry, err := e.resources.buildRegistry(GetOrgID(ctx))
+		if err != nil {
+			return agentLookupResult{}
+		}
+		agent, connected := tools.ConnectedAgentForGuestNode(registry, resource.ID, resource.Proxmox.Instance, resource.Proxmox.NodeName, runners.GetActionRunnersForOrganization(GetOrgID(ctx)))
+		return agentLookupResult{agentID: agent.AgentID, ok: connected}
 	})
 	if runner.ok && strings.TrimSpace(runner.agentID) != "" {
 		return runner.agentID, nil

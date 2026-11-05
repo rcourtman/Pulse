@@ -8675,6 +8675,11 @@ result caching (minipc probe-storm incident, 2026-08-20):
   completed success closes the breaker. Checker reconfiguration resets
   claims, streaks, and breakers. The breaker belongs to one node on one
   connection, because node names repeat across connections.
+- **Two machines, one name (#2681).** Both hold a command session, so a token's
+  one session may be either machine's, and `ProxmoxNodeAgentOwnsTokenSession` still
+  refuses when another agent of that name holds the token. A proven agent with no
+  session yet, as after a Pulse restart, dispatches nothing, so it feeds neither the
+  probe backoff nor the node breaker.
 - **Proven node agent (#2681).** A command goes only to the agent whose link
   monitoring holds on both sides for the guest's node on its connection
   (`models.Host.LinkedNodeID`, `models.Node.LinkedAgentID`), with one machine

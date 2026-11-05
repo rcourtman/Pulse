@@ -3678,8 +3678,8 @@ unauthenticated bootstrap behavior.
    registering runtime ID exactly once; the versioned result must then require
    both fields. The live registry keys the session by organization plus agent
    ID, retains only non-secret token identity, isolates equal IDs across
-   organizations, rejects same-organization hostname collisions, and
-   revalidates token existence, expiry, scope, organization, and binding before
+   organizations, admits two machines with one hostname under their own IDs,
+   refuses one ID from two hostnames, and revalidates token existence, expiry, scope, organization, and binding before
    reporting connectivity or dispatching work. Reconnect replacement and stale
    socket cleanup must use pointer identity so an old reader cannot remove the
    newly admitted session.
@@ -9080,6 +9080,17 @@ host, which Pulse reads through the Proxmox node's agent, has no agent that can
 carry an action, so its actions read as unavailable with `no_command_agent`. An
 agent installed inside the guest reports its own Docker host and stays a valid
 target (#2681).
+
+Two machines with one hostname each hold a command session (#2681). The registry
+keys a session by tenant and agent ID, so a hostname never decides admission, and
+the server has no lookup by hostname. A sole holder of a name is not proof of a
+machine, because its namesake may be offline, so every route that knows its machine
+asks by identity: an agent or token for a host, `tools.ConnectedAgentForGuestNode`
+for a Proxmox guest's node. A route holding only a name uses
+`tools.ConnectedAgentNamed`, which refuses a tie. A rejected agent used to retry
+every 10 seconds and read as not connected, and whichever machine reconnected first
+after a Pulse restart took the channel, dropping the other node's LXC Docker
+containers from the Docker page.
 
 A blocked registration is not a silent skip. When the pre-registration check
 reports `canRegister=false`, the agent must log at error level, return a setup

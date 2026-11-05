@@ -33,8 +33,9 @@ type fakeDockerActionAgentCommander struct {
 
 type scopedFakeDockerActionAgentCommander struct {
 	*fakeDockerActionAgentCommander
-	tokenAgents map[string]string
-	lastOrg     string
+	tokenAgents      map[string]string
+	lastOrg          string
+	sessionHostnames map[string]string
 }
 
 type observingDockerActionAgentCommander struct {
@@ -72,6 +73,9 @@ func (f *scopedFakeDockerActionAgentCommander) GetAgentForTokenForOrganization(o
 
 func (f *scopedFakeDockerActionAgentCommander) GetAgentForIdentityForOrganization(organizationID, agentID, hostname string) (string, bool) {
 	f.lastOrg = organizationID
+	if f.sessionHostnames != nil {
+		return agentID, f.sessionHostnames[agentID] == hostname
+	}
 	hostAgentID, ok := f.GetAgentForHost(hostname)
 	return agentID, ok && hostAgentID == agentID && f.IsAgentConnected(agentID)
 }
@@ -311,8 +315,8 @@ func TestDockerContainerActionExecutorReachesOwnAgentUnderAcknowledgedID(t *test
 	}
 }
 
-// The command server admits one session per hostname per tenant, so a hostname
-// lookup finds at most one agent, but that agent can be on another machine (#2681).
+// A hostname lookup that finds one agent is not proof it is this resource's. That
+// agent can be on another machine, with this machine's own agent offline (#2681).
 func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
 	const namesake = "namesake-agent"
 	tests := []struct {
@@ -321,8 +325,30 @@ func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
 		connected   map[string]bool
 		agentByHost map[string]string
 		tokenAgents map[string]string
+		sessions    map[string]string // agent ID -> hostname, where two sessions share one
 		wantAgent   string
 	}{
+		{
+			name:        "two machines with one hostname each reach their own session",
+			docker:      unified.DockerData{TokenID: "token-b", AgentID: "agent-b", Hostname: "tower"},
+			tokenAgents: map[string]string{"token-a": "agent-a", "token-b": "agent-b"},
+			sessions:    map[string]string{"agent-a": "tower", "agent-b": "tower"},
+			wantAgent:   "agent-b",
+		},
+		{
+			name:        "an acknowledged session ID still works beside a same-named machine",
+			docker:      unified.DockerData{TokenID: "token-a", AgentID: "pinned-agent-id", Hostname: "tower"},
+			tokenAgents: map[string]string{"token-a": "acknowledged-agent-id"},
+			sessions:    map[string]string{"acknowledged-agent-id": "tower", "agent-b": "tower"},
+			wantAgent:   "acknowledged-agent-id",
+		},
+		{
+			name:        "a machine's own session beats the token another machine holds",
+			docker:      unified.DockerData{TokenID: "shared-token", AgentID: "agent-b", Hostname: "tower"},
+			tokenAgents: map[string]string{"shared-token": "agent-a"},
+			sessions:    map[string]string{"agent-a": "tower", "agent-b": "tower"},
+			wantAgent:   "agent-b",
+		},
 		{
 			name:        "tokenless host with no session of its own stays off a namesake",
 			docker:      unified.DockerData{AgentID: "docker-source-1", Hostname: "tower"},
@@ -378,6 +404,7 @@ func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
 			executor := dockerContainerActionExecutor{agents: &scopedFakeDockerActionAgentCommander{
 				fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{connected: tt.connected, agentByHost: tt.agentByHost},
 				tokenAgents:                    tt.tokenAgents,
+				sessionHostnames:               tt.sessions,
 			}}
 			docker := tt.docker
 			agentID, err := executor.connectedDockerCommandAgentID(context.Background(), unified.Resource{Docker: &docker})

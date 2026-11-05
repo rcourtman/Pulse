@@ -9709,3 +9709,9 @@ storage or recovery path.
 client, so API clients polling with Basic credentials stop rewriting the persisted
 session store on every call. No backup, restore or storage data is read or written,
 and no storage or recovery path changes.
+
+### Same-named machines hold their own command sessions
+
+Admitting two same-named machines to the command server changes which session a
+command in `internal/api/` reaches. It reads and writes no backup, restore or storage
+data, and opens no new storage or recovery path.

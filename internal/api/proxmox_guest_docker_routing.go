@@ -24,7 +24,7 @@ func proxmoxGuestDockerCommandExecutor(server *agentexec.Server, monitor *monito
 		organizationID := monitor.GetOrgID()
 		agentID, connected := proxmoxNodeAgentCommandSession(server, monitor, organizationID, nodeAgent)
 		if !connected {
-			return "", -1, fmt.Errorf("no live command session for agent %s on Proxmox node %s", nodeAgent.AgentID, container.Node)
+			return "", -1, fmt.Errorf("%w: agent %s on node %s", monitoring.ErrProxmoxNodeAgentNotConnected, nodeAgent.AgentID, container.Node)
 		}
 		result, err := server.ExecuteCommand(agentexec.WithOrganizationID(ctx, organizationID), agentID, agentexec.ExecuteCommandPayload{
 			RequestID: fmt.Sprintf("docker-check-%d", time.Now().UnixNano()),

@@ -478,10 +478,11 @@ func (r *Router) validateAgentExecSession(admission agentexec.AgentAdmission) bo
 // for a telemetry host. host.TokenID is sticky across token revocation and
 // rotation (monitoring keeps the last-seen token on the host record), so a
 // token-scoped miss must not be authoritative: fall through to the agent-ID
-// and hostname lookups before declaring the channel disconnected. The
-// token-first order still lets the canonical enrollment token win when its
-// session is live.
-func (r *Router) agentCommandSessionConnected(organizationID, tokenID, agentID, hostname string) bool {
+// lookup before declaring the channel disconnected. The token-first order still
+// lets the canonical enrollment token win when its session is live. A hostname
+// cannot answer: while this machine is offline, another machine with its name
+// would read as this one's channel (#2681).
+func (r *Router) agentCommandSessionConnected(organizationID, tokenID, agentID string) bool {
 	if r == nil || r.agentExecServer == nil {
 		return false
 	}
@@ -490,11 +491,7 @@ func (r *Router) agentCommandSessionConnected(organizationID, tokenID, agentID, 
 			return true
 		}
 	}
-	if strings.TrimSpace(agentID) != "" && r.agentExecServer.IsAgentConnectedForOrganization(organizationID, agentID) {
-		return true
-	}
-	_, connected := r.agentExecServer.GetAgentForHostForOrganization(organizationID, hostname)
-	return connected
+	return strings.TrimSpace(agentID) != "" && r.agentExecServer.IsAgentConnectedForOrganization(organizationID, agentID)
 }
 
 func canBindAgentInstallExecToken(record *config.APITokenRecord, agentID string, hostname string) bool {

@@ -1312,6 +1312,7 @@ func (s *Service) enrichRequestFromFinding(req *ExecuteRequest) {
 
 // GuestInfo contains information about a guest (VM or container) found by VMID lookup
 type GuestInfo struct {
+	ResourceID string `json:"-"`
 	Node       string
 	Name       string
 	Type       string // semantic type: "system-container" or "vm"
@@ -1357,6 +1358,7 @@ func (s *Service) lookupGuestsByVMID(vmID int, targetInstance string) []GuestInf
 		if ct.VMID() == vmID {
 			if targetInstance == "" || ct.Instance() == targetInstance {
 				results = append(results, GuestInfo{
+					ResourceID: ct.ID(),
 					Node:       ct.Node(),
 					Name:       ct.Name(),
 					Type:       "system-container",
@@ -1372,6 +1374,7 @@ func (s *Service) lookupGuestsByVMID(vmID int, targetInstance string) []GuestInf
 		if vm.VMID() == vmID {
 			if targetInstance == "" || vm.Instance() == targetInstance {
 				results = append(results, GuestInfo{
+					ResourceID: vm.ID(),
 					Node:       vm.Node(),
 					Name:       vm.Name(),
 					Type:       "vm",

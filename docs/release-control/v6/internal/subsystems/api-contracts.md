@@ -4384,7 +4384,13 @@ a new API state machine, queue contract, or verification-accounting field.
     distinct FQDNs that merely share the same short hostname into one API
     target. When an explicit `targetHost` misses that canonical match, the
     shared relay adapter must keep the result empty instead of silently
-    falling back to the lone connected agent.
+    falling back to the lone connected agent. A hostname two connected agents
+    share keeps it empty too (#2681). The connections ledger reads a row's own
+    token or agent ID and never its hostname, so a machine with no session does
+    not read as connected through a namesake's, and a Proxmox guest action finds
+    its runner through `tools.ConnectedAgentForGuestNode`. A Docker action's token
+    session counts on a hostname match only after the resource's own session has
+    missed, since another machine can hold that name.
     That same shared runtime-token boundary also owns agent-exec binding.
     `internal/api/deploy_handlers.go`, `internal/api/router.go`, and
     `internal/api/contract_test.go` must mint agent-exec-capable runtime

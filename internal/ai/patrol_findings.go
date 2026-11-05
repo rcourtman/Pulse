@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -2550,12 +2551,17 @@ func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap p
 		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", aicontracts.ErrVerificationUnknown, vmID)
 	}
 
-	agentID, ok := prober.GetAgentForHost(details.node)
-	if !ok || strings.TrimSpace(agentID) == "" {
+	var agent agentexec.ConnectedAgent
+	if snap.readState != nil {
+		agent, ok = tools.ConnectedAgentForGuestNode(snap.readState, details.id, details.instance, details.node, prober.GetConnectedAgents())
+	} else {
+		agent, ok = tools.ConnectedAgentNamed(prober.GetConnectedAgents(), details.node)
+	}
+	if !ok || strings.TrimSpace(agent.AgentID) == "" {
 		return false, fmt.Errorf("%w: no agent available for host %s", aicontracts.ErrVerificationUnknown, details.node)
 	}
 
-	results, err := prober.PingGuests(ctx, agentID, []string{details.ip})
+	results, err := prober.PingGuests(ctx, agent.AgentID, []string{details.ip})
 	if err != nil {
 		return false, fmt.Errorf("%w: reachability probe failed: %v", aicontracts.ErrVerificationUnknown, err)
 	}
@@ -2570,6 +2576,8 @@ func (p *PatrolService) verifyGuestReachabilityState(ctx context.Context, snap p
 
 type patrolGuestRuntimeDetails struct {
 	lastBackup time.Time
+	id         string
+	instance   string
 	node       string
 	ip         string
 }
@@ -2703,6 +2711,8 @@ func patrolVisitGuestRuntimeDetails(snap patrolRuntimeState, visit patrolGuestRu
 		}
 		if !visit(identifiers, patrolGuestRuntimeDetails{
 			lastBackup: guest.lastBackup,
+			id:         guest.id,
+			instance:   guest.instance,
 			node:       guest.node,
 			ip:         guest.ip,
 		}) {
