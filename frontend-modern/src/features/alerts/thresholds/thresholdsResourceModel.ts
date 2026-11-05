@@ -115,59 +115,39 @@ export const findOverrideByCandidates = (
   return undefined;
 };
 
+// A name is the one its owner reads elsewhere in Pulse, so it stays whole. Only a
+// hostname gives up its domain, and an address has none to give up.
+const HOSTNAME_WITH_DOMAIN = /^([^\s.]+)\.\S*[a-z]\S*$/i;
+
+export const getFriendlyHostName = (rawName: string): string => {
+  const name = rawName.trim();
+  return name.match(HOSTNAME_WITH_DOMAIN)?.[1] ?? name;
+};
+
+const NAME_WITH_PARENTHETICAL = /^(.+?)\s*\(([^()]+)\)$/;
+
+// A node row shows its cluster on its own, so `Prod (pve1)` and `pve1 (Prod)` drop
+// the cluster's half. Any other parenthetical or cluster word is part of the name.
 export const getFriendlyNodeName = (value: string, clusterName?: string): string => {
   if (!value) return value;
 
-  const clusterLower = clusterName?.toLowerCase().trim();
+  const name = value.trim();
+  const [, outer = '', inner = ''] = name.match(NAME_WITH_PARENTHETICAL) ?? [];
+  const outerKey = outer.toLowerCase();
+  const innerKey = inner.trim().toLowerCase();
+  const clusterKey = clusterName?.trim().toLowerCase();
 
-  const normalizeToken = (token?: string | null): string => {
-    if (!token) return '';
-    let result = token
-      .replace(/\(.*?\)/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (clusterLower) {
-      result = result
-        .split(' ')
-        .filter((part) => part.toLowerCase() !== clusterLower)
-        .join(' ')
-        .trim();
-    }
-    if (!result) return '';
-    const firstWord = result.split(/\s+/)[0] || result;
-    const withoutDomain = firstWord.includes('.')
-      ? (firstWord.split('.')[0] ?? firstWord)
-      : firstWord;
-    return withoutDomain.trim();
-  };
-
-  const parentheticalMatch = value.match(/\(([^)]+)\)/);
-  const parentheticalRaw = parentheticalMatch?.[1]?.trim();
-
-  let base = normalizeToken(value);
-  if (!base) {
-    base = value.trim();
+  if (outer && (outerKey === clusterKey || outerKey === innerKey)) {
+    return getFriendlyHostName(inner);
   }
-
-  const parenthetical = normalizeToken(parentheticalRaw);
-  if (parenthetical && parenthetical.toLowerCase() !== base.toLowerCase()) {
-    return parenthetical;
+  if (inner && innerKey === clusterKey) {
+    return getFriendlyHostName(outer);
   }
-
-  return base;
+  return getFriendlyHostName(name);
 };
 
 export const getFriendlyAlertNodeName = (value: string, clusterName?: string): string =>
   getFriendlyNodeName(value, clusterName);
-
-// A Docker host's name is the one its owner reads on the Docker page, so it stays
-// whole. Only a hostname gives up its domain, and an address has none to give up.
-const HOSTNAME_WITH_DOMAIN = /^([^\s.]+)\.\S*[a-z]\S*$/i;
-
-export const getFriendlyDockerHostName = (rawName: string): string => {
-  const name = rawName.trim();
-  return name.match(HOSTNAME_WITH_DOMAIN)?.[1] ?? name;
-};
 
 export interface ThresholdsDockerHostLabel {
   /** The host's full name. */
@@ -189,7 +169,7 @@ export const buildThresholdsDockerHostLabels = (
   const rawNamesByFriendlyName = new Map<string, Set<string>>();
   for (const host of hosts) {
     const rawName = getAlertResourceDisplayLabel(host);
-    const friendlyName = getFriendlyDockerHostName(rawName);
+    const friendlyName = getFriendlyHostName(rawName);
     const rawNames = rawNamesByFriendlyName.get(friendlyName) ?? new Set<string>();
     rawNames.add(rawName);
     rawNamesByFriendlyName.set(friendlyName, rawNames);
@@ -197,7 +177,7 @@ export const buildThresholdsDockerHostLabels = (
 
   return (host) => {
     const rawName = getAlertResourceDisplayLabel(host);
-    const friendlyName = getFriendlyDockerHostName(rawName);
+    const friendlyName = getFriendlyHostName(rawName);
     const name = (rawNamesByFriendlyName.get(friendlyName)?.size ?? 0) > 1 ? rawName : friendlyName;
     const qualifier = getDockerHostRowName(host, identities).qualifier ?? undefined;
     return {

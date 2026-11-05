@@ -6974,6 +6974,8 @@ it into the row's controls and dialogs, and `getAlertResourceName` stays the bar
 name for the cell.
 That name stays whole, as on the Docker page, and only a single-word FQDN loses
 its domain in these rows.
+Proxmox node rows read the same way, as on the Proxmox page, and `Prod (pve1)`
+drops its cluster's half because the row shows the cluster on its own.
 Shared-template drift enforcement is registry-backed:
 `frontend-modern/scripts/shared-template-registry.json` is the canonical list of
 standardized repeated affordances, required consumers, and forbidden local

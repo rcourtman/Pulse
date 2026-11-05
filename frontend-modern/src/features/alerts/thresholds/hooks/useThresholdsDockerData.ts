@@ -12,7 +12,7 @@ import {
   dockerContainerOverrideIdCandidates,
   dockerHostOverrideIdCandidates,
   findOverrideByCandidates,
-  getFriendlyDockerHostName,
+  getFriendlyHostName,
   hasThresholdDiff,
   matchesThresholdResourceSearch,
   platformData,
@@ -69,7 +69,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
       .filter((override) => override.type === 'dockerHost' && !seen.has(override.id))
       .forEach((override) => {
         const originalName = override.name || override.id;
-        const friendlyName = getFriendlyDockerHostName(originalName);
+        const friendlyName = getFriendlyHostName(originalName);
         hosts.push({
           id: override.id,
           name: friendlyName,
