@@ -8,6 +8,39 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
+// mergeSSOProviderUpdate applies the existing omission/blank-secret rules to
+// the provider being replaced in the serialized save. Both inputs are private
+// copies; copy an inherited protocol block before changing its presence marker
+// so the lifecycle comparison keeps the exact previous provider as well.
+func mergeSSOProviderUpdate(data []byte, updated, existing *config.SSOProvider) error {
+	if err := preserveUnrepresentedSSOFields(data, updated, existing); err != nil {
+		return err
+	}
+	if updated.Type != existing.Type {
+		return nil
+	}
+	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC == nil && existing.OIDC != nil {
+		oidc := *existing.OIDC
+		updated.OIDC = &oidc
+	}
+	if updated.Type == config.SSOProviderTypeSAML && updated.SAML == nil && existing.SAML != nil {
+		saml := *existing.SAML
+		updated.SAML = &saml
+	}
+	// Visible policy fields retain PUT replacement/clear semantics, even if
+	// empty. Only unrepresented fields and the existing blank OIDC secret
+	// contract keep the latest value; explicit replacements still win.
+	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
+		if updated.OIDC.ClientSecret == "" && (existing.OIDC.ClientSecretSet || existing.OIDC.ClientSecret != "") {
+			updated.OIDC.ClientSecret = existing.OIDC.ClientSecret
+			updated.OIDC.ClientSecretSet = true
+		} else if updated.OIDC.ClientSecret != "" {
+			updated.OIDC.ClientSecretSet = true
+		}
+	}
+	return nil
+}
+
 // preserveUnrepresentedSSOFields keeps only settings absent from the provider
 // detail/editor model. Visible fields retain PUT replacement/clear semantics;
 // client secrets retain their separate blank-means-keep rule. Never expose
