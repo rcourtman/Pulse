@@ -216,15 +216,11 @@ describe('Overview pending renames with the real store and HTTP client', () => {
         break;
       case 'principal':
         view.setUser('viewer@example.test');
-        await waitFor(() =>
-          expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
-        );
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled());
         break;
       case 'read-only':
         policy(true);
-        await waitFor(() =>
-          expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
-        );
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled());
         break;
       case 'hidden':
         policy(true, true);
@@ -237,9 +233,7 @@ describe('Overview pending renames with the real store and HTTP client', () => {
         break;
       case 'same-ID rebind':
         eventBus.emit('org_switched', orgID);
-        await waitFor(() =>
-          expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
-        );
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
         break;
       case 'disposal':
         view.unmount();
