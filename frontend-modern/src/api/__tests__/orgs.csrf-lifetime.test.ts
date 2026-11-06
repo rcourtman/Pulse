@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrgsAPI, type OrganizationAccessRequestOptions } from '../orgs';
-import {
-  clearAuth,
-  getApiToken,
-  getOrgID,
-  setApiToken,
-  setOrgID,
-} from '@/utils/apiClient';
+import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
 
 const mockFetch = vi.fn();
 const csrfToken = 'synthetic-csrf=issued-after-health';
@@ -160,9 +154,7 @@ describe.each(mutations)('$name after a cold CSRF read', ({ path, method, body, 
     const pending = run(request.options);
     expectOnlyHealthRead();
     request.issueCookie();
-    await vi.advanceTimersByTimeAsync(9);
-    expectOnlyHealthRead();
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.runAllTimersAsync();
     await pending;
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -193,7 +185,7 @@ describe.each(mutations)('$name after a cold CSRF read', ({ path, method, body, 
     expectOnlyHealthRead();
     setOrgID('south');
     request.issueCookie();
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.runAllTimersAsync();
     await rejected;
 
     expectOnlyHealthRead();
@@ -209,7 +201,7 @@ describe.each(mutations)('$name after a cold CSRF read', ({ path, method, body, 
     expectOnlyHealthRead();
     request.controller.abort();
     request.issueCookie();
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.runAllTimersAsync();
     await rejected;
 
     expectOnlyHealthRead();
@@ -224,10 +216,11 @@ it('rechecks the reader after cookie issuance, not just when the health response
   const pending = OrgsAPI.removeMember('north', member.userId, request.options);
   const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   request.issueCookie();
-  await vi.advanceTimersByTimeAsync(9);
+  // Let health settle, but do not advance the pending preparation delay.
+  await vi.advanceTimersByTimeAsync(0);
   expectOnlyHealthRead();
   request.controller.abort();
-  await vi.advanceTimersByTimeAsync(1);
+  await vi.runAllTimersAsync();
   await rejected;
   expectOnlyHealthRead();
   expect(vi.getTimerCount()).toBe(0);
