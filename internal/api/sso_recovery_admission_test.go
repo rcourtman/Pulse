@@ -261,7 +261,8 @@ func TestSSOLoadFailureKnownFirstRunKeepsLoopbackManagement(t *testing.T) {
 		{http.MethodPost, "/api/security/sso/providers", `{"id":"new","name":"New","type":"oidc","enabled":false,"oidc":{"clientId":"new"}}`, http.StatusCreated},
 		{http.MethodGet, "/api/security/sso/providers/new", "", http.StatusOK},
 		{http.MethodPut, "/api/security/sso/providers/new", `{"name":"Renamed","enabled":false}`, http.StatusOK},
-		{http.MethodDelete, "/api/security/sso/providers/new", "", http.StatusOK},
+		{http.MethodDelete, "/api/security/sso/providers/new", "", http.StatusNoContent},
+		{http.MethodGet, "/api/security/sso/providers/new", "", http.StatusNotFound},
 	} {
 		req := httptest.NewRequest(op.method, op.path, strings.NewReader(op.body))
 		req.RemoteAddr = "127.0.0.1:1234"
@@ -270,4 +271,5 @@ func TestSSOLoadFailureKnownFirstRunKeepsLoopbackManagement(t *testing.T) {
 		require.Equal(t, op.status, w.Code, w.Body.String())
 		require.False(t, r.ssoAuthenticationLoadFailed())
 	}
+	require.Empty(t, r.currentSSOConfig().Providers)
 }
