@@ -204,6 +204,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if _, ok := r.requireSSOManagementConfig(w, req); !ok {
+			return
+		}
 		ssoAdminEndpoints.HandleProvidersCollection(w, req)
 	})))
 	r.mux.HandleFunc("/api/security/sso/providers/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
@@ -212,8 +215,14 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			if !ensureSettingsReadScope(r.config, w, req) {
 				return
 			}
+			if _, ok := r.requireSSOManagementConfig(w, req); !ok {
+				return
+			}
 		case http.MethodPut, http.MethodDelete:
 			if !ensureSettingsWriteScope(r.config, w, req) {
+				return
+			}
+			if _, ok := r.requireSSOManagementConfig(w, req); !ok {
 				return
 			}
 			// Enforce core-owned environment authority before invoking a bound

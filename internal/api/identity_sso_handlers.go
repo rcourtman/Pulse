@@ -241,7 +241,8 @@ func (r *Router) handleSSOProvider(w http.ResponseWriter, req *http.Request) {
 
 // ensureSSOConfig loads the SSO configuration from persistence on first access,
 // falling back to an empty config if nothing is persisted, and applies the
-// legacy OIDC_* environment provider.
+// legacy OIDC_* environment provider. A failed load keeps a marked fallback for
+// discovery only; management reads and writes use ssoManagementConfig.
 //
 // The returned configuration is a published snapshot that is never mutated
 // afterwards, so callers may read it without holding ssoMu but must not
@@ -260,8 +261,6 @@ func (r *Router) ensureSSOConfigLocked() *config.SSOConfig {
 			if err != nil {
 				r.ssoAuthLoadFailed.Store(true)
 				log.Error().Err(err).Msg("Failed to load SSO config from persistence")
-			} else {
-				r.ssoAuthLoadFailed.Store(false)
 			}
 			current = cfg
 		}
@@ -306,7 +305,11 @@ func (r *Router) commitSSOConfig(mutate func(*config.SSOConfig) error) (applyErr
 	r.ssoMu.Lock()
 	defer r.ssoMu.Unlock()
 
-	next := r.ensureSSOConfigLocked().Clone()
+	current := r.ensureSSOConfigLocked()
+	if r.ssoAuthLoadFailed.Load() {
+		return nil, errSSOConfigUnavailable
+	}
+	next := current.Clone()
 	if err := mutate(next); err != nil {
 		return err, nil
 	}
@@ -322,7 +325,10 @@ func (r *Router) ssoAuthenticationLoadFailed() bool {
 }
 
 func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request) {
-	ssoCfg := r.ensureSSOConfig()
+	ssoCfg, ok := r.requireSSOManagementConfig(w, req)
+	if !ok {
+		return
+	}
 
 	response := EmptySSOProvidersListResponse()
 	response.DefaultProviderID = ssoCfg.DefaultProviderID
@@ -337,7 +343,11 @@ func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request
 }
 
 func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	provider := r.ensureSSOConfig().GetProvider(providerID)
+	cfg, ok := r.requireSSOManagementConfig(w, req)
+	if !ok {
+		return
+	}
+	provider := cfg.GetProvider(providerID)
 	if provider == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
@@ -348,6 +358,9 @@ func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, 
 }
 
 func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Request) {
+	if _, ok := r.requireSSOManagementConfig(w, req); !ok {
+		return
+	}
 	var provider config.SSOProvider
 	if err := decodeAdminJSONObject(w, req, &provider, maxRequestBodySize); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid JSON payload", nil)
@@ -440,6 +453,10 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	if saveErr != nil {
+		if errors.Is(saveErr, errSSOConfigUnavailable) {
+			writeSSOConfigUnavailable(w, req)
+			return
+		}
 		log.Error().Err(saveErr).Msg("Failed to persist SSO configuration")
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
@@ -473,7 +490,11 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	// This immutable snapshot is only an early existence/managed-provider check.
 	// Omitted fields must merge with the current provider at commit, not with
 	// a snapshot taken before a potentially slow request body is read.
-	existing := r.ensureSSOConfig().GetProvider(providerID)
+	cfg, ok := r.requireSSOManagementConfig(w, req)
+	if !ok {
+		return
+	}
+	existing := cfg.GetProvider(providerID)
 	if existing == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
@@ -564,6 +585,10 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	if saveErr != nil {
+		if errors.Is(saveErr, errSSOConfigUnavailable) {
+			writeSSOConfigUnavailable(w, req)
+			return
+		}
 		log.Error().Err(saveErr).Msg("Failed to persist SSO configuration")
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
@@ -619,7 +644,11 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	existing := r.ensureSSOConfig().GetProvider(providerID)
+	cfg, ok := r.requireSSOManagementConfig(w, req)
+	if !ok {
+		return
+	}
+	existing := cfg.GetProvider(providerID)
 	if existing == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
@@ -638,6 +667,10 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	if saveErr != nil {
+		if errors.Is(saveErr, errSSOConfigUnavailable) {
+			writeSSOConfigUnavailable(w, req)
+			return
+		}
 		log.Error().Err(saveErr).Msg("Failed to persist SSO configuration")
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
@@ -666,13 +699,15 @@ func (r *Router) saveSSOConfig() error {
 }
 
 func (r *Router) persistSSOConfigLocked(cfg *config.SSOConfig) error {
+	if r.ssoAuthLoadFailed.Load() {
+		return errSSOConfigUnavailable
+	}
 	if r.persistence != nil {
 		if err := r.persistence.SaveSSOConfig(cfg); err != nil {
 			return err
 		}
 	}
 	setSSOAuthSnapshot(r.config, cfg)
-	r.ssoAuthLoadFailed.Store(false)
 	return nil
 }
 
