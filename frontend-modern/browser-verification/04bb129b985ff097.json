@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "a5faaf37d579200c1cd5ae096b5d0c7a69b153f6",
+  "verified_at": "2026-11-06T01:30:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "19b837f411cdce97121e6b0f056f13380893f22f4d37c0596646e4d1a5879b98",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "b5601d42adf51f6a4e68a7f032a88e8e1e919e64fe284b35868b1d9bbd7d8be0",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts": "801aadc74b3b525ac6a16b098ff227b4c4e6e108f0a86eeecde568299f2ab91c"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real v6.8.0-beta.1 provider install, opened from the portal as the client organization owner",
+    "Client runtime on v6.8.0-beta.1 first: \"Unable to load notification settings\", email, apprise and webhooks answer 403",
+    "Same client on a server built from this change: page loads at both widths, email, apprise, webhooks, health, delivery-log and templates answer 200",
+    "Relay is not licensed on this install, so the relay gate itself is proven by unit test, not by this walk"
+  ],
+  "interactions": [
+    "Turn on delivery: POST /api/alerts/activate 200 and the paused banner clears",
+    "Add Webhook through the form: POST /api/notifications/webhooks 200, listed as 1 configured",
+    "Save Apprise CLI target as the owner: 403 with the Apprise API server message",
+    "Test Apprise CLI with --attach=/etc/passwd as the owner: 403",
+    "Save empty Apprise defaults and email as the owner: 200",
+    "Queue, DLQ, system settings and tokens as the owner: 403",
+    "Sibling client has no webhook file after the save"
+  ]
+}

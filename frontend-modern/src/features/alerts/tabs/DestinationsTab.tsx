@@ -1,6 +1,7 @@
 import { AlertQueueActionFeedback } from '../AlertQueueActionFeedback';
 import { Show } from 'solid-js';
 import { hasFeature } from '@/stores/license';
+import { sessionCanReadRelaySettings } from '@/stores/sessionSettingsCapabilities';
 import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSection';
 import { AlertDeliveryHealthCard } from '../AlertDeliveryHealthCard';
 import { AlertDeliveryLogCard } from '../AlertDeliveryLogCard';
@@ -150,7 +151,7 @@ function LoadedDestinationsTab(props: DestinationsTabProps) {
           />
 
           <AlertPushDestinationsSection
-            relayLicensed={hasFeature('relay')}
+            relayLicensed={hasFeature('relay') && sessionCanReadRelaySettings()}
             minimumSeverity={props.pushMinimumSeverity()}
             onMinimumSeverityChange={(minimumSeverity) => {
               props.setPushMinimumSeverity(minimumSeverity);

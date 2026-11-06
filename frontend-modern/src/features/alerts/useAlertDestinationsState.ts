@@ -6,6 +6,7 @@ import { NotificationsAPI } from '@/api/notifications';
 import type { Webhook } from '@/api/notifications';
 import { RelayAPI } from '@/api/relay';
 import { hasFeature } from '@/stores/license';
+import { sessionCanReadRelaySettings } from '@/stores/sessionSettingsCapabilities';
 import { getAlertDestinationsConfigLoadError } from '@/utils/alertDestinationsPresentation';
 import { logger } from '@/utils/logger';
 import { getOrgID } from '@/utils/apiClient';
@@ -24,6 +25,8 @@ interface AlertDestinationsStateOptions {
   canReload?: Accessor<boolean>;
   isCurrentReader?: Accessor<boolean>;
 }
+
+const relayDestinationAvailable = () => hasFeature('relay') && sessionCanReadRelaySettings();
 
 export function useAlertDestinationsState(options: AlertDestinationsStateOptions) {
   let hasLoadedDestinations = false;
@@ -85,7 +88,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
       NotificationsAPI.getEmailConfig(readOptions),
       NotificationsAPI.getAppriseConfig(readOptions),
       AlertsAPI.getDeadManConfig(readOptions),
-      hasFeature('relay') ? RelayAPI.getConfig(readOptions) : Promise.resolve(null),
+      relayDestinationAvailable() ? RelayAPI.getConfig(readOptions) : Promise.resolve(null),
       NotificationsAPI.getWebhooks(readOptions),
     ]);
 
@@ -147,7 +150,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     appriseDraft: appriseConfig(),
     pingUrl: deadManPingUrl(),
     pushMinimumSeverity: pushMinimumSeverity(),
-    relayEnabled: hasFeature('relay'),
+    relayEnabled: relayDestinationAvailable(),
     reloadVersion,
   });
 
@@ -170,7 +173,7 @@ export function useAlertDestinationsState(options: AlertDestinationsStateOptions
     await AlertsAPI.updateDeadManConfig(snapshot.pingUrl, requestOptions);
     if (!ownsWrite()) return;
 
-    if (snapshot.relayEnabled && hasFeature('relay')) {
+    if (snapshot.relayEnabled && relayDestinationAvailable()) {
       await RelayAPI.updateConfig(
         { alert_minimum_severity: snapshot.pushMinimumSeverity },
         requestOptions,

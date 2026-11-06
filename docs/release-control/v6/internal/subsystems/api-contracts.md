@@ -13879,3 +13879,17 @@ provider MSP client runtime, marked `PULSE_PROVIDER_HOSTED=true` by its control 
 does not answer it for the workspace it was provisioned for: without a valid lease
 that workspace opens with Community behaviour. Organization routes and further
 organizations in that runtime still answer it.
+
+### Notification destinations are organization-bound (6 November 2026)
+
+`/api/notifications/` uses `RequireOrgManager`: sessions of the request
+organization's owners and admins are admitted, as with `RequireOrgAdmin`, and
+tokens bound to an organization stay refused whatever their scopes, because
+destination responses hold reusable webhook URLs and bot tokens. A provider
+opening a client workspace arrives as that organization's owner, and until this
+change every destination read answered 403, so `/alerts/notifications` could not
+load. The dead-letter, queue and terminal-failure routes read one shared queue
+and stay `RequireAdmin`. Apprise CLI targets that are not already saved need
+`requestCarriesInstanceAuthority` on save and on inline test, because they run as
+this server. `internal/api/notifications_org_authority_test.go` holds the session,
+token, cross-organization and Apprise matrices.

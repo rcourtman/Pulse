@@ -1739,3 +1739,17 @@ without that lock; a blocked accepted enqueue cannot hide a channel-disable or
 destination change from its observers. Existing email-disable drain controls and
 `TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue` pin this ordering and
 require the retirement write to survive shutdown. No read/retention gate is waived.
+
+### Destinations belong to the organization's managers (6 November 2026)
+
+An organization's owners and admins read and write its email, Apprise and webhook
+destinations, through that organization's manager and persistence. Nothing falls
+back to the default organization. Apprise CLI stays with instance administrators:
+a CLI target is a bare command-line argument, runs as this server and skips the
+outbound checks every other destination passes, so an organization manager reaches
+Apprise through an API server. Targets already saved as CLI targets may be saved
+again unchanged; targets saved under API mode may not be carried across.
+`NormalizeAppriseConfig` drops any target starting with a dash for everyone, since
+it would reach the CLI as an option such as `--attach`.
+`internal/notifications/apprise_argument_test.go` and
+`internal/api/notifications_org_authority_test.go` pin these.

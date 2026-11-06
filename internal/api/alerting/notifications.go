@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,6 +75,40 @@ type NotificationHandlers struct {
 	mtMonitor      *monitoring.MultiTenantMonitor
 	defaultMonitor NotificationMonitor
 	readState      unifiedresources.ReadState
+	appriseCLI     func(*http.Request) bool
+}
+
+// SetAppriseCLIAuthority sets who may put targets on the Apprise command line.
+// Without it nobody may. Apprise CLI targets run as this server, with its files
+// and its network, and outside the outbound checks every other destination
+// passes, so organization managers configure Apprise through an API server.
+func (h *NotificationHandlers) SetAppriseCLIAuthority(allowed func(*http.Request) bool) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.appriseCLI = allowed
+}
+
+// refuseAppriseCLI answers 403 when the config would put new targets on the
+// command line and the request may not. CLI targets already saved add no
+// authority, so a manager saving other destinations round-trips what an
+// administrator set. Targets saved under API mode were never command-line ones.
+func (h *NotificationHandlers) refuseAppriseCLI(w http.ResponseWriter, r *http.Request, requested notifications.AppriseConfig, manager NotificationManager) bool {
+	normalized := notifications.NormalizeAppriseConfig(requested)
+	if normalized.Mode != notifications.AppriseModeCLI || len(normalized.Targets) == 0 {
+		return false
+	}
+	saved := notifications.NormalizeAppriseConfig(manager.GetAppriseConfig())
+	if saved.Mode == notifications.AppriseModeCLI && slices.Equal(normalized.Targets, saved.Targets) {
+		return false
+	}
+	h.stateMu.RLock()
+	allowed := h.appriseCLI
+	h.stateMu.RUnlock()
+	if allowed != nil && allowed(r) {
+		return false
+	}
+	http.Error(w, "Apprise command-line delivery needs an instance administrator. Use an Apprise API server instead.", http.StatusForbidden)
+	return true
 }
 
 // NewNotificationHandlers creates new notification handlers
@@ -351,6 +386,9 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 	}
 	manager := monitor.GetNotificationManager()
 	existingConfig := manager.GetAppriseConfig()
+	if h.refuseAppriseCLI(w, r, config, manager) {
+		return
+	}
 
 	// An empty API key means "keep the saved key": responses never include the
 	// stored value, so the settings form cannot round-trip it.
@@ -910,6 +948,10 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		var appriseConfig notifications.AppriseConfig
 		if err := json.Unmarshal(req.Config, &appriseConfig); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid Apprise config: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		if h.refuseAppriseCLI(w, r, appriseConfig, monitor.GetNotificationManager()) {
 			return
 		}
 

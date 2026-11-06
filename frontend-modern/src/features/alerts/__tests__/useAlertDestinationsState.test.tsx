@@ -6,6 +6,7 @@ import { NotificationsAPI } from '@/api/notifications';
 import { AlertsAPI } from '@/api/alerts';
 import { RelayAPI } from '@/api/relay';
 import { hasFeature } from '@/stores/license';
+import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import { setOrgID } from '@/utils/apiClient';
 
 import { useAlertDestinationsState } from '../useAlertDestinationsState';
@@ -62,6 +63,39 @@ describe('useAlertDestinationsState', () => {
     vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({ enabled: false } as never);
     vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
     vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
+  });
+
+  it('loads and saves destinations for an organization owner who cannot read the relay', async () => {
+    syncSessionSettingsCapabilities({
+      requiresAuth: true,
+      settingsCapabilities: { relayRead: false } as never,
+    });
+    try {
+      vi.mocked(RelayAPI.getConfig).mockRejectedValue(new Error('Admin privileges required'));
+      vi.mocked(NotificationsAPI.updateEmailConfig).mockResolvedValue(undefined as never);
+      vi.mocked(NotificationsAPI.updateAppriseConfig).mockResolvedValue({
+        enabled: false,
+      } as never);
+      vi.mocked(AlertsAPI.updateDeadManConfig).mockResolvedValue({
+        success: true,
+        configured: false,
+      });
+
+      const { result } = renderHook(() =>
+        useAlertDestinationsState({ activeTab: () => 'destinations' as never }),
+      );
+      await result.loadDestinations();
+
+      expect(RelayAPI.getConfig).not.toHaveBeenCalled();
+      expect(result.destConfigLoadError()).toBeNull();
+
+      await result.saveDestinations();
+
+      expect(NotificationsAPI.updateEmailConfig).toHaveBeenCalledTimes(1);
+      expect(RelayAPI.updateConfig).not.toHaveBeenCalled();
+    } finally {
+      syncSessionSettingsCapabilities({ requiresAuth: false });
+    }
   });
 
   it('owns alert destinations reload and save behavior separately from alert policy config', async () => {

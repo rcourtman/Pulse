@@ -11192,3 +11192,9 @@ A command agent's connect or disconnect now reaches browsers in the next state
 broadcast as an action refusal on its rows, with no change to agent registration,
 session admission or lifecycle state. An availability pass still validates sessions
 through `connectionForOrganization`, once per agent per pass.
+
+### Notification authority beside agent routes (6 November 2026)
+
+`/api/notifications/` moved to `RequireOrgManager`, added in `internal/api/auth.go`
+and `internal/api/security_setup_fix.go`. Agent, install and connection routes keep
+`RequireOrgAdmin` and their token behavior; no agent lifecycle path changes.

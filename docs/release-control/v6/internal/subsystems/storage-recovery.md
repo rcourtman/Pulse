@@ -9718,3 +9718,9 @@ path. `isCrossSiteAPITokenWrite` does the same for a proxy attaching an API toke
 Admitting two same-named machines to the command server changes which session a
 command in `internal/api/` reaches. It reads and writes no backup, restore or storage
 data, and opens no new storage or recovery path.
+
+### Notification authority and recovery (6 November 2026)
+
+Organization managers may now configure alert destinations in their own organization.
+This grants no recovery administration, backup authority or instance setting.
+Notification queue and dead-letter routes remain instance administration.

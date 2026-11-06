@@ -11478,3 +11478,11 @@ which shows on every device. On a touch screen it ignores hover calls, including
 the mouse-leave the browser synthesizes once the tooltip mounts, and ends on the
 next press or scroll. `ContainerUpdateBadge.tsx` uses it for a locked or settled
 update. A disabled control's reason must not rest on `title` or hover alone.
+
+### Relay settings capability helper (6 November 2026)
+
+`sessionCanReadRelaySettings` in `frontend-modern/src/stores/sessionSettingsCapabilities.ts`
+mirrors the instance administration gate on `/api/settings/relay`, following the
+Infrastructure helper beside it: auth-free installs and unresolved sessions keep the
+surface, and a resolved session needs `relayRead`. The alert destinations surfaces
+use it so a page an organization owner may use never depends on a route they are refused.
