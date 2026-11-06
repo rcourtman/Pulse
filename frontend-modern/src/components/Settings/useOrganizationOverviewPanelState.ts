@@ -70,6 +70,9 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
 
   const loadOrganization = async () => {
     if (disposed) return;
+    // An equal-reader refresh cannot undo a pending rename. Keep its outcome
+    // and disabled form; actual reader or authority withdrawal still cancels.
+    if (mutationController && selectionIsCurrent() && !presentationPolicyIsReadOnly()) return;
     invalidateRequests();
     const request = generation;
     const orgId = activeOrgId();

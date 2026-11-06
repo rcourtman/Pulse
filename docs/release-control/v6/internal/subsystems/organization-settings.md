@@ -15,16 +15,23 @@
 
 ## Purpose
 
-### Directory refreshes preserve pending access and sharing outcomes
+### Equal-reader refreshes preserve pending organization changes
 
-Organization Access and Sharing hold same-reader events, repeated effective
-presentation-policy updates and direct reloads behind a dispatched mutation.
+Organization Overview, Access and Sharing hold same-reader events, repeated
+effective presentation-policy updates and direct reloads behind a pending mutation.
 The accepted snapshot remains visible with Saving and disabled mutation controls;
 a refresh cannot undo server work or establish that it is safe to submit again.
 Success emits the existing organizations-changed event, obtaining one fresh
-snapshot. An uncertain or mismatched ownership response keeps the existing
+snapshot. An uncertain or mismatched mutation response keeps the existing
 unavailable state and explicit Reload recovery, not an automatic write retry.
-A never-settled write remains pending rather than being presented as rolled back.
+Overview retains its submitted display-name draft and Saving state across equal
+security-status presentation-policy updates; after success a saved read supplies
+the name. Uncertainty withdraws the editor until a saved read succeeds; Reload
+checks saved details without repeating the rename. Later directory or policy
+refreshes may also perform saved reads, never repeat the write. A pending
+mutation may still be preparing CSRF and need not have reached the server. A
+never-settled write remains pending until completion or reader withdrawal, rather
+than being presented as rolled back.
 
 Observed organization switches, reactive principal/entitlement or surface
 withdrawal, read-only posture and disposal still invalidate and cancel immediately.
@@ -43,8 +50,13 @@ paths plus ownership confirmation, successful and uncertain completion, explicit
 recovery, blocked repeats, direct reloads and true authority/lifetime withdrawal.
 Browser fixtures consume the production panels, state and HTTP client with
 delayed safe responses at desktop/narrow viewports. These are source safeguards,
-not original SSO, secret, tenant or installed-client recovery. Organization
-Overview display-name saving remains outside this bounded two-panel repair.
+not original SSO, secret, tenant or installed-client recovery.
+`OrganizationOverviewMutation.client.test.tsx` isolates equal directory, policy
+and capability refreshes with the production Overview panel, stores and HTTP
+client, plus mismatched responses, failed saved reads, read-only recovery and
+late completion after actual principal, organization, policy, entitlement or
+component withdrawal. `OrganizationOverviewPanel.test.tsx` also pins normalized
+request scopes through the pending rename and resulting saved read.
 
 ### Invitation decisions identify the exact organization
 
