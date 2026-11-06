@@ -1,13 +1,14 @@
-package notifications_test
+package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -24,15 +25,22 @@ func patrolReceiptFinding(id string, start time.Time) *ai.Finding {
 		Severity: ai.FindingSeverityWarning, Category: ai.FindingCategoryCapacity, DetectedAt: start}
 }
 
-func patrolReceiptAlert(f *ai.Finding) *alerts.Alert {
-	return &alerts.Alert{ID: alerts.PatrolFindingNotificationIDPrefix + f.ID, StartTime: f.DetectedAt,
-		Type: "patrol_finding", Level: alerts.AlertLevelWarning, ResourceID: f.ResourceID, Message: f.Title}
+func patrolReceiptDB(t *testing.T, dir string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", filepath.Join(dir, "notification_queue.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	return db
 }
 
-func patrolReceiptLifecycle(store *ai.FindingsStore) func(string, time.Time) alerts.NotificationOccurrenceLifecycle {
-	return func(id string, start time.Time) alerts.NotificationOccurrenceLifecycle {
-		return store.NotificationOccurrenceLifecycle(strings.TrimPrefix(id, alerts.PatrolFindingNotificationIDPrefix), start)
-	}
+// Explicit accepted-receipt fixture. Real delivery is exercised separately
+// below through this package's production finding projector and notifier.
+func seedPatrolReceipt(t *testing.T, db *sql.DB, id string, start, at time.Time) {
+	t.Helper()
+	_, err := db.Exec(`INSERT OR IGNORE INTO notification_destination_state(destination_key,epoch,fingerprint) VALUES('webhook:fixture','00000000-0000-4000-8000-000000000001','fixture');
+		INSERT INTO notification_delivery_receipts(alert_id,alert_start_nanos,destination_key,delivery_epoch,delivered_at,delivered_nanos,severity,success_order)
+		VALUES(?,?,'webhook:fixture','00000000-0000-4000-8000-000000000001',?,?,2,1)`, id, start.UnixNano(), at.Unix(), at.UnixNano())
+	require.NoError(t, err)
 }
 
 func patrolReceiptStore(t *testing.T, dir string) *ai.FindingsStore {
@@ -45,16 +53,16 @@ func patrolReceiptStore(t *testing.T, dir string) *ai.FindingsStore {
 
 func TestPatrolReceiptLifecycleSettlesOnlyPositiveTerminalFacts(t *testing.T) {
 	store := patrolReceiptStore(t, t.TempDir())
-	n := notifications.NewNotificationManagerWithDeferredQueue("", t.TempDir())
+	notificationDir := t.TempDir()
+	n := notifications.NewNotificationManagerWithDeferredQueue("", notificationDir)
 	t.Cleanup(n.Stop)
-	n.SetOccurrenceLifecycleProvider(patrolReceiptLifecycle(store))
-	q := n.GetQueue()
-	db := notifications.ReceiptLifecycleDBForTest(q)
+	n.SetOccurrenceLifecycleProvider(patrolFindingNotificationLifecycle(store, nil))
+	db := patrolReceiptDB(t, notificationDir)
 	start := time.Now().Add(-40 * 24 * time.Hour).Round(0)
 	end := time.Now().Add(-31 * 24 * time.Hour).Round(0)
 	// Seed explicit accepted receipts, not provider calls or invented audits.
 	seed := func(id string) {
-		require.NoError(t, notifications.ReceiptLifecycleSeedForTest(q, alerts.PatrolFindingNotificationIDPrefix+id, start, start))
+		seedPatrolReceipt(t, db, alerts.PatrolFindingNotificationIDPrefix+id, start, start)
 	}
 	const completed = 128
 	for i := 0; i < completed; i++ {
@@ -81,7 +89,7 @@ func TestPatrolReceiptLifecycleSettlesOnlyPositiveTerminalFacts(t *testing.T) {
 	require.Equal(t, completed+3, count())
 	beforeLog, err := n.GetDeliveryLog(time.Time{}, 200)
 	require.NoError(t, err)
-	notifications.ReceiptLifecycleCleanupForTest(q)
+	n.ReconcileOccurrenceReceipts()
 	require.Equal(t, 3, count(), "known old terminal findings must not accumulate in every hourly receipt scan")
 	for _, id := range []string{"active", "dismissed", "missing"} {
 		var resolved int64
@@ -89,7 +97,7 @@ func TestPatrolReceiptLifecycleSettlesOnlyPositiveTerminalFacts(t *testing.T) {
 		require.Zero(t, resolved, "age, intent or absence invented a terminal fact")
 	}
 	require.Equal(t, completed, store.Cleanup(24*time.Hour))
-	notifications.ReceiptLifecycleCleanupForTest(q)
+	n.ReconcileOccurrenceReceipts()
 	require.Equal(t, 3, count())
 	afterLog, err := n.GetDeliveryLog(time.Time{}, 200)
 	require.NoError(t, err)
@@ -129,13 +137,13 @@ func TestPatrolReceiptLifecycleRetainsOldDispositionUntilOwnerCanSettleIt(t *tes
 			case "owner missing":
 				store = nil
 			}
-			n := notifications.NewNotificationManagerWithDeferredQueue("", t.TempDir())
+			notificationDir := t.TempDir()
+			n := notifications.NewNotificationManagerWithDeferredQueue("", notificationDir)
 			t.Cleanup(n.Stop)
-			n.SetOccurrenceLifecycleProvider(patrolReceiptLifecycle(store))
-			q := n.GetQueue()
+			n.SetOccurrenceLifecycleProvider(patrolFindingNotificationLifecycle(store, nil))
 			id := alerts.PatrolFindingNotificationIDPrefix + f.ID
-			require.NoError(t, notifications.ReceiptLifecycleSeedForTest(q, id, start, start))
-			db := notifications.ReceiptLifecycleDBForTest(q)
+			db := patrolReceiptDB(t, notificationDir)
+			seedPatrolReceipt(t, db, id, start, start)
 			// Even a receipt's old positive disposition cannot supersede an
 			// active/newer occurrence, recent end or unavailable owning source.
 			_, err := db.Exec(`UPDATE notification_delivery_receipts SET resolved_at=? WHERE alert_id=?`, time.Now().Add(-31*24*time.Hour).UnixNano(), id)
@@ -180,7 +188,7 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 	store := patrolReceiptStore(t, findingDir)
 	f := patrolReceiptFinding("recovery-fixture", time.Now().Add(-40*24*time.Hour).Round(0))
 	require.True(t, store.Add(f))
-	alert := patrolReceiptAlert(store.Get(f.ID))
+	alert := patrolFindingNotificationAlert(store.Get(f.ID))
 	hook := notifications.WebhookConfig{ID: "fixture", URL: server.URL, Enabled: true, Service: "generic"}
 	open := func() *notifications.NotificationManager {
 		n := notifications.NewNotificationManagerWithDeferredQueue("", notificationDir)
@@ -190,7 +198,7 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 		n.SetNotifyOnResolve(true)
 		n.SetCooldown(30)
 		n.AddWebhook(hook)
-		n.SetOccurrenceLifecycleProvider(patrolReceiptLifecycle(store))
+		n.SetOccurrenceLifecycleProvider(patrolFindingNotificationLifecycle(store, nil))
 		return n
 	}
 	drain := func(n *notifications.NotificationManager) {
@@ -212,11 +220,11 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 	// its actual durable accepted receipt before the 24-hour findings purge.
 	n = open()
 	q := n.GetQueue()
-	db := notifications.ReceiptLifecycleDBForTest(q)
+	db := patrolReceiptDB(t, notificationDir)
 	beforeLog, err := n.GetDeliveryLog(time.Time{}, 200)
 	require.NoError(t, err)
 	require.Len(t, beforeLog, 1, "fixture must contain a real accepted delivery, not empty history")
-	notifications.ReceiptLifecycleCleanupForTest(q)
+	n.ReconcileOccurrenceReceipts()
 	afterLog, err := n.GetDeliveryLog(time.Time{}, 200)
 	require.NoError(t, err)
 	require.Equal(t, beforeLog, afterLog, "harvesting a receipt resolution changed rendered delivery history")
@@ -237,8 +245,8 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 	require.Equal(t, 1, store.Cleanup(0))
 	require.NoError(t, store.ForceSave())
 	store = patrolReceiptStore(t, findingDir)
-	n.SetOccurrenceLifecycleProvider(patrolReceiptLifecycle(store))
-	notifications.ReceiptLifecycleCleanupForTest(q)
+	n.SetOccurrenceLifecycleProvider(patrolFindingNotificationLifecycle(store, nil))
+	n.ReconcileOccurrenceReceipts()
 	var retained int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM notification_delivery_receipts WHERE alert_id=?`, alert.ID).Scan(&retained))
 	require.Equal(t, 1, retained, "pending recovery must pin the expired receipt after findings compaction")
@@ -249,7 +257,7 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 	drain(n)
 	require.Equal(t, 1, count(""), "reopen replayed the acknowledged firing")
 	require.Equal(t, 1, count("resolved"), "the saved destination did not receive its owed recovery")
-	db = notifications.ReceiptLifecycleDBForTest(n.GetQueue())
+	db = patrolReceiptDB(t, notificationDir)
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM notification_delivery_receipts WHERE alert_id=?`, alert.ID).Scan(&retained))
 	require.Zero(t, retained)
 	mu.Lock()
