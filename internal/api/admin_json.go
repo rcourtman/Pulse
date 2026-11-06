@@ -25,15 +25,21 @@ func decodeAdminJSONObject(w http.ResponseWriter, r *http.Request, dst any, limi
 // that must distinguish omitted settings from deliberately supplied zero values.
 func decodeAdminJSONObjectData(w http.ResponseWriter, r *http.Request, dst any, limit int64) ([]byte, error) {
 	if r.Body == nil {
-		return nil, errAmbiguousAdminJSON
+		return nil, io.EOF
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 || data[0] != '{' || !json.Valid(data) {
+	data = bytes.Trim(data, " \t\r\n")
+	// Empty input remains an error for ordinary admin objects. A caller with
+	// an existing bodyless-request contract can explicitly accept only EOF;
+	// failed reads, overflow and JSON null must never become that default.
+	if len(data) == 0 {
+		return nil, io.EOF
+	}
+	if data[0] != '{' || !json.Valid(data) {
 		return nil, errAmbiguousAdminJSON
 	}
 	if err := validateAdminJSONMembers(data, reflect.TypeOf(dst)); err != nil {
