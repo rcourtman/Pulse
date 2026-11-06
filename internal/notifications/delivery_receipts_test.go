@@ -1,11 +1,48 @@
 package notifications
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+func TestReceiptFailureLogsPublicDestinationWithoutReceiverDigest(t *testing.T) {
+	manager := NewNotificationManagerWithDeferredQueue("", t.TempDir())
+	defer manager.Stop()
+	hook := WebhookConfig{
+		ID: "receipt-log-ops", URL: "https://example.test/notify", Enabled: true,
+		Headers: map[string]string{"Authorization": "synthetic-log-credential"},
+	}
+	manager.AddWebhook(hook)
+	job := manager.bindDeliveryEpochs([]notificationDeliveryJob{{
+		Type: "webhook", Event: eventAlert, WebhookConfig: &hook,
+		Alerts: []*alerts.Alert{{ID: "receipt-log", StartTime: time.Now(), Level: alerts.AlertLevelCritical}},
+	}})[0]
+	if !job.ReceiptEpochBound {
+		t.Fatal("fixture did not admit the receiver generation")
+	}
+	if _, err := manager.GetQueue().db.Exec(`CREATE TRIGGER reject_receipt_log BEFORE INSERT ON notification_delivery_receipts BEGIN SELECT RAISE(ABORT,'synthetic receipt projection fault'); END`); err != nil {
+		t.Fatal(err)
+	}
+	logs := captureAppriseLogs(t)
+	if err := manager.recordSuccessfulDelivery(job, time.Now()); err == nil || !strings.Contains(err.Error(), "synthetic receipt projection fault") {
+		t.Fatalf("receipt storage fault was not observed: %v", err)
+	}
+	diagnostic := logs.String()
+	if !strings.Contains(diagnostic, `"destination":"webhook:receipt-log-ops"`) {
+		t.Fatal("receipt diagnostic lost the public destination identity")
+	}
+	for _, private := range []string{
+		notificationDeliveryDestinationKey(job), notificationDeliveryConfigurationFingerprint(job),
+		hook.Headers["Authorization"],
+	} {
+		if strings.Contains(diagnostic, private) {
+			t.Error("receipt diagnostic exposed an internal receiver digest or credential")
+		}
+	}
+}
 
 func TestResolvedJobsRequireReceiptForSameOccurrenceAndDestination(t *testing.T) {
 	manager := NewNotificationManagerWithDataDir("", t.TempDir())

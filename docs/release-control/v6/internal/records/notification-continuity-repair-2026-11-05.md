@@ -159,6 +159,24 @@ implicitly authorises deletion or replacement of existing destinations.
 
 ## Verification
 
+The 6 November CodeQL review traced both `go/weak-sensitive-data-hashing` alerts
+to decrypted configuration-backup content flowing into webhook identity fields.
+The import passphrase is consumed by PBKDF2 and AES-GCM; it does not enter either
+receiver digest. The SHA-256 sinks identify receiver content for generation and
+receipt joins, rather than storing or verifying a password. The two specific
+alerts therefore require a false-positive disposition, without disabling the rule.
+Review also found one receipt-projection error log using the internal receiver key.
+It now uses the canonical public delivery-log destination ID; the real SQLite
+projection-fault regression checks that correlation remains available while the
+internal digest and credential stay absent. Acknowledged pending queue records
+retain their existing plaintext transport snapshots inside private queue storage
+until settlement; the digests do not replace credential encryption or qualify
+installed storage security.
+The logging-only follow-up passed the confidentiality, receiver-fingerprint and
+receipt-commit-fault controls under the race detector (10.460 seconds). It changes
+no delivery, receiver identity or migration behavior; the protected checks still
+requalify the updated commit.
+
 The native grouped-warning control collects real `CheckHost` callback snapshots,
 persists and drains the producer, then admits those snapshots through public
 notifier methods before actual SIGTERM. This keeps producer journal writes out

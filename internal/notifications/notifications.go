@@ -1888,7 +1888,7 @@ func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJ
 				}
 			}
 			if err != nil {
-				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Failed to update notification delivery receipt")
+				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", notificationDestinationIDForJob(job)).Msg("Failed to update notification delivery receipt")
 				receiptErrors = append(receiptErrors, err)
 			} else {
 				n.cacheDeliveryReceipt(alert, destinationKey, deliveredAt, job.Event)

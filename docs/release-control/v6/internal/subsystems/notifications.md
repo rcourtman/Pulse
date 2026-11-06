@@ -1699,6 +1699,13 @@ lose volatile firing buffers; this repair makes no crash-durability promise.
 
 ### Accepted receipts and already-admitted recoveries survive graceful restart
 
+Receipt-projection failures identify the destination with the canonical delivery-log
+ID. Internal receiver fingerprints and receipt keys stay out of diagnostics and raw
+support logs. These digests identify receiver content and generations; they never
+store or verify a login password. Pending transport configuration retains its
+existing private queue-storage boundary until settlement, including acknowledged
+work pinned beyond ordinary retention.
+
 Successful firing receipts own cooldown for the exact alert ID, occurrence
 start, destination identity and durable destination generation. Their persisted highest known severity and
 nondecreasing completion time are read from SQLite for each durable callback. One receiver's
