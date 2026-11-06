@@ -123,12 +123,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   });
   onCleanup(() => window.clearTimeout(recoveryFocusTimer));
 
-  const InventoryCheckNotice: Component<{ draft?: boolean; lastRead?: boolean }> = (notice) => (
+  const InventoryCheckNotice: Component<{ lastRead?: boolean }> = (notice) => (
     <InlineNotice ref={recoveryNotice} tabindex={-1} role="alert" tone="warning">
       <p>{unconfirmedChange()}</p>
-      <Show when={notice.draft}>
-        <p class="text-xs">Checking closes this draft without resubmitting it.</p>
-      </Show>
       <Show when={notice.lastRead && providers().length > 0}>
         <p class="text-xs">
           Providers below are from the last successful read; their current settings are unknown.
@@ -872,7 +869,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             {/* Keep feedback and recovery actions inside the active modal, clear of toasts. */}
             <div class="relative z-10 shrink-0 space-y-3 border-t border-border bg-surface p-4 sm:px-6">
               <Show when={unconfirmedChange()}>
-                <InventoryCheckNotice draft />
+                <p
+                  ref={recoveryNotice}
+                  tabindex={-1}
+                  role="alert"
+                  class="text-sm text-amber-800 dark:text-amber-200"
+                >
+                  Save unconfirmed. It may already have been applied.
+                </p>
               </Show>
               <Show when={editorFeedback()} keyed>
                 {(feedback) => (
@@ -899,15 +903,34 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  isLoading={saving()}
-                  disabled={saving() || testing() || loadingPreview() || !!unconfirmedChange()}
+                <Show
+                  when={unconfirmedChange()}
+                  fallback={
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="md"
+                      isLoading={saving()}
+                      disabled={saving() || testing() || loadingPreview()}
+                    >
+                      {saving()
+                        ? 'Saving...'
+                        : editingProvider()
+                          ? 'Save Changes'
+                          : 'Create Provider'}
+                    </Button>
+                  }
                 >
-                  {saving() ? 'Saving...' : editingProvider() ? 'Save Changes' : 'Create Provider'}
-                </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    disabled={loading() || mutating()}
+                    onClick={() => void loadProviders()}
+                  >
+                    Close draft and check providers
+                  </Button>
+                </Show>
               </div>
             </div>
           </form>

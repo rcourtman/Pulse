@@ -113,7 +113,7 @@ for (const type of ['oidc', 'saml'] as const) {
               'may already have been applied',
             );
             expect(dialog.getByLabelText('Provider Name')).toHaveValue('Changed provider');
-            expect(save).toBeDisabled();
+            expect(save).not.toBeInTheDocument();
             fireEvent.submit(form);
           } else if (operation === 'delete') {
             fireEvent.click(screen.getByRole('button', { name: 'Delete provider' }));
@@ -149,7 +149,9 @@ for (const type of ['oidc', 'saml'] as const) {
           const recoveryScope = screen.queryByRole('dialog')
             ? within(screen.getByRole('dialog'))
             : screen;
-          fireEvent.click(recoveryScope.getByRole('button', { name: 'Check saved providers' }));
+          fireEvent.click(
+            recoveryScope.getByRole('button', { name: /check providers|Check saved providers/ }),
+          );
           await screen.findByText(
             'Unable to load SSO providers. Configured providers are unknown.',
           );

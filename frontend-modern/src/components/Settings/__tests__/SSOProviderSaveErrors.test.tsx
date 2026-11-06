@@ -15,8 +15,7 @@ vi.mock('@/stores/notifications', () => ({
 const guidance =
   'Could not initialise the sign-in provider. Check its settings, metadata and TLS trust, then try again. No configuration was saved.';
 const fallback = 'Unable to save the SSO provider. Check the connection and try saving again.';
-const unconfirmedMessage =
-  'The provider save could not be confirmed. It may already have been applied. Check saved providers before making another change.';
+const unconfirmedMessage = 'Save unconfirmed. It may already have been applied.';
 const canary = 'SYNTHETIC_PRIVATE_RESPONSE_DETAIL';
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -164,7 +163,7 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       if (!unconfirmed) expect(dialog.getByRole('alert').textContent).toBe(expected);
       expect(dialog.getByRole('alert')).not.toHaveTextContent(canary);
       expect(name.value).toBe('Retained draft');
-      if (unconfirmed) expect(save).toBeDisabled();
+      if (unconfirmed) expect(save).not.toBeInTheDocument();
       else expect(save).toBeEnabled();
       expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled();
       expect(successMock).not.toHaveBeenCalled();
@@ -178,7 +177,7 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       if (unconfirmed) {
         fireEvent.submit(form);
         expect(writes()).toHaveLength(1);
-        fireEvent.click(dialog.getByRole('button', { name: 'Check saved providers' }));
+        fireEvent.click(dialog.getByRole('button', { name: 'Close draft and check providers' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
         await waitFor(() => expect(screen.getByRole('button', { name: 'Add OIDC' })).toBeEnabled());
         expect(writes()).toHaveLength(1);
