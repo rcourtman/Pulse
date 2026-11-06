@@ -39,12 +39,13 @@ cette page de téléchargement.
 ## Démarrage rapide : Proxmox LXC
 
 Si vous utilisez Proxmox VE, l'installateur LXC officiel est la méthode la plus
-native pour Pulse. Il installe le serveur Pulse. Remplacez `vX.Y.Z` par le tag
-exact de la version à installer, vérifiez l'installateur signé et exécutez-le
-sur votre hôte Proxmox :
+native pour Pulse. Il installe le serveur Pulse. Exécutez ce bloc sur votre hôte
+Proxmox : il recherche la dernière version, vérifie l'installateur signé et ne
+le lance qu'ensuite :
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
@@ -55,8 +56,8 @@ ssh-keygen -Y verify \
 bash install.sh --version "${PULSE_VERSION}"
 ```
 
-Collez le bloc en entier : si un téléchargement ou la vérification de la
-signature échoue, l'installateur ne s'exécute pas. N'exécutez pas la dernière
+Collez le bloc en entier : si la recherche de version, un téléchargement ou la
+vérification de la signature échoue, l'installateur ne s'exécute pas. N'exécutez pas la dernière
 commande seule pour contourner un échec.
 
 Les installations d'agents et les mises à jour d'agents de v5 vers v6 utilisent
@@ -69,18 +70,21 @@ Pour les environnements conteneurisés ou les tests, vous pouvez lancer Pulse
 directement avec Docker :
 
 ```bash
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  "rcourtman/pulse:${PULSE_VERSION}"
 ```
 
 Ouvrez ensuite Pulse sur `http://<your-ip>:7655`.
 
 Avec Docker Compose, le même fichier peut servir aux images Community et aux
-images Pro privées s'il utilise la variable `PULSE_IMAGE` :
+images Pro privées s'il utilise la variable `PULSE_IMAGE`. Remplacez `vX.Y.Z` par
+le tag de la [dernière version](https://github.com/rcourtman/Pulse/releases/latest) :
 
 ```yaml
 services:

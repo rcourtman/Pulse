@@ -112,7 +112,8 @@ installer over an existing container without checking its state.
 > **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**). Do not use the GitHub server installer to install or update `pulse-agent`.
 
 ### Docker
-Ideal for containerized environments or testing.
+Ideal for containerized environments or testing. Replace `vX.Y.Z` with the
+tag from the [latest release](https://github.com/rcourtman/Pulse/releases/latest).
 
 ```bash
 docker run -d \
@@ -128,7 +129,8 @@ For a new container, continue with [bootstrap-token setup](#step-1-get-the-token
 in your browser; do not add an example password to the command.
 
 ### Docker Compose
-Create a `docker-compose.yml` file:
+Create a `docker-compose.yml` file, replacing `vX.Y.Z` with the tag from the
+[latest release](https://github.com/rcourtman/Pulse/releases/latest):
 
 ```yaml
 services:

@@ -36,12 +36,12 @@ activation key `ppk_live_` y no funcionará en esa página de descarga.
 ## Inicio rápido: Proxmox LXC
 
 Si usas Proxmox VE, el instalador LXC oficial es el camino más nativo de Pulse.
-Instala el servidor Pulse. Sustituye `vX.Y.Z` por la etiqueta exacta del
-release que quieres instalar, verifica el instalador firmado y ejecútalo en tu
-host Proxmox:
+Instala el servidor Pulse. Ejecuta este bloque en tu host Proxmox: busca la
+versión más reciente, verifica el instalador firmado y solo entonces lo ejecuta:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
@@ -52,9 +52,9 @@ ssh-keygen -Y verify \
 bash install.sh --version "${PULSE_VERSION}"
 ```
 
-Pega el bloque completo: si falla una descarga o la verificación de firma, el
-instalador no se ejecuta. No ejecutes el último comando por separado para omitir
-un fallo.
+Pega el bloque completo: si falla la búsqueda de versión, una descarga o la
+verificación de la firma, el instalador no se ejecuta. No ejecutes el último
+comando por separado para omitir un fallo.
 
 Las instalaciones de agentes y las actualizaciones de agentes de v5 a v6 usan
 el comando que Pulse genera en **Settings → Infrastructure → Install on a
@@ -66,18 +66,21 @@ Para entornos en contenedores o pruebas, puedes iniciar Pulse directamente con
 Docker:
 
 ```bash
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  "rcourtman/pulse:${PULSE_VERSION}"
 ```
 
 Después abre Pulse en `http://<your-ip>:7655`.
 
 Con Docker Compose, el mismo archivo puede servir para imágenes Community y
-Pro privadas si usa la variable `PULSE_IMAGE`:
+Pro privadas si usa la variable `PULSE_IMAGE`. Sustituye `vX.Y.Z` por la etiqueta
+del [release más reciente](https://github.com/rcourtman/Pulse/releases/latest):
 
 ```yaml
 services:

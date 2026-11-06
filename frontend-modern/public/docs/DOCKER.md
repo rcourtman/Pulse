@@ -15,6 +15,8 @@ persistent data are separate; see [image size and disk use](#image-size-and-disk
 
 ## 🚀 Quick Start
 
+Replace `vX.Y.Z` with the tag from the [latest release](https://github.com/rcourtman/Pulse/releases/latest).
+
 ```bash
 docker run -d \
   --name pulse \
@@ -31,7 +33,7 @@ Access at `http://<your-ip>:7655`.
 
 ## 📦 Docker Compose
 
-Create a `docker-compose.yml` file:
+Create a `docker-compose.yml` file, using the same tag:
 
 ```yaml
 services:

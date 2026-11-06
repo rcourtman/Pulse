@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the public landing pages' signed-install gate without network access."""
+"""Exercise the public landing pages' install commands without network access."""
 
 from __future__ import annotations
 
@@ -23,6 +23,8 @@ ENTRYPOINTS = (
     "docs/i18n/es/README.md",
     "docs/i18n/fr/README.md",
 )
+LATEST_URL = "https://github.com/rcourtman/Pulse/releases/latest"
+RESOLVED_TAG = "v9.8.7"
 SIGNER = (
     'pulse-installer namespaces="pulse-install" ssh-ed25519 '
     "AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
@@ -42,6 +44,13 @@ def installer_commands(text: str) -> str:
     raise AssertionError("signed server-installer command block is missing")
 
 
+def docker_commands(text: str) -> str:
+    for block in re.findall(r"```bash\n(.*?)\n```", text, flags=re.DOTALL):
+        if "docker run -d" in block:
+            return block + "\n"
+    raise AssertionError("docker run command block is missing")
+
+
 STUB = """#!/usr/bin/python3
 import json
 import os
@@ -59,7 +68,9 @@ with trace.open('a') as out:
 if name == 'curl':
     attempt = 1 + sum(event['command'] == 'curl' for event in events)
     code = int(os.environ.get('CURL_' + str(attempt), '0'))
-    if code == 0:
+    if code == 0 and '-w' in sys.argv:
+        print(sys.argv[-1] + '/../tag/' + os.environ['RESOLVED_TAG'])
+    elif code == 0:
         # Public dummy bytes only. The installer itself is never executed.
         Path(sys.argv[-1].rsplit('/', 1)[-1]).write_text('downloaded fixture\\n')
 elif name == 'ssh-keygen':
@@ -67,6 +78,8 @@ elif name == 'ssh-keygen':
     code = int(os.environ.get('VERIFY', '0'))
 elif name == 'bash':
     code = int(os.environ.get('INSTALL', '0'))
+elif name == 'docker':
+    code = int(os.environ.get('DOCKER', '0'))
 else:
     raise AssertionError('unexpected stub command')
 sys.exit(code)
@@ -78,7 +91,7 @@ def exercise_install(commands: str, exits: dict[str, str]) -> tuple[int, list[di
         root = Path(directory)
         stubs = root / "bin"
         stubs.mkdir()
-        for name in ("curl", "ssh-keygen", "bash"):
+        for name in ("curl", "ssh-keygen", "bash", "docker"):
             stub = stubs / name
             stub.write_text(STUB, encoding="utf-8")
             stub.chmod(0o700)
@@ -89,7 +102,8 @@ def exercise_install(commands: str, exits: dict[str, str]) -> tuple[int, list[di
         completed = subprocess.run(
             ["/bin/bash", "-c", commands],
             cwd=root,
-            env={"PATH": f"{stubs}:/usr/bin:/bin", "TRACE": str(trace), **exits},
+            env={"PATH": f"{stubs}:/usr/bin:/bin", "TRACE": str(trace),
+                 "RESOLVED_TAG": RESOLVED_TAG, **exits},
             capture_output=True,
             text=True,
             timeout=5,
@@ -104,9 +118,10 @@ def exercise_install(commands: str, exits: dict[str, str]) -> tuple[int, list[di
 class ReadmeEntrypointsTest(unittest.TestCase):
     def test_signed_install_stops_at_each_failed_trust_step(self) -> None:
         cases = (
-            ({"CURL_1": "22"}, 22, ["curl"]),
-            ({"CURL_2": "23"}, 23, ["curl", "curl"]),
-            ({"VERIFY": "1"}, 1, ["curl", "curl", "ssh-keygen"]),
+            ({"CURL_1": "6"}, 6, ["curl"]),
+            ({"CURL_2": "22"}, 22, ["curl", "curl"]),
+            ({"CURL_3": "23"}, 23, ["curl", "curl", "curl"]),
+            ({"VERIFY": "1"}, 1, ["curl", "curl", "curl", "ssh-keygen"]),
         )
         for relative_path in ENTRYPOINTS:
             commands = installer_commands(read_repo_text(relative_path))
@@ -125,25 +140,45 @@ class ReadmeEntrypointsTest(unittest.TestCase):
                 self.assertEqual(code, 0)
                 self.assertEqual(
                     [event["command"] for event in events],
-                    ["curl", "curl", "ssh-keygen", "bash"],
+                    ["curl", "curl", "curl", "ssh-keygen", "bash"],
                 )
                 self.assertEqual(
-                    [event["argv"][-1] for event in events[:2]],
+                    [event["argv"][-1] for event in events[:3]],
                     [
-                        "https://github.com/rcourtman/Pulse/releases/download/vX.Y.Z/install.sh",
-                        "https://github.com/rcourtman/Pulse/releases/download/vX.Y.Z/install.sh.sshsig",
+                        LATEST_URL,
+                        f"https://github.com/rcourtman/Pulse/releases/download/{RESOLVED_TAG}/install.sh",
+                        f"https://github.com/rcourtman/Pulse/releases/download/{RESOLVED_TAG}/install.sh.sshsig",
                     ],
                 )
-                self.assertTrue(all(event["argv"][0] == "-fsSLO" for event in events[:2]))
-                self.assertEqual(events[2]["allowed_signers"], SIGNER + "\n")
-                verify = events[2]["argv"]
+                self.assertTrue(all(event["argv"][0] == "-fsSLO" for event in events[1:3]))
+                self.assertEqual(events[3]["allowed_signers"], SIGNER + "\n")
+                verify = events[3]["argv"]
                 for option, value in (
                     ("-I", "pulse-installer"),
                     ("-n", "pulse-install"),
                     ("-s", "install.sh.sshsig"),
                 ):
                     self.assertEqual(verify[verify.index(option) + 1], value)
-                self.assertEqual(events[3]["argv"], ["install.sh", "--version", "vX.Y.Z"])
+                self.assertEqual(events[4]["argv"], ["install.sh", "--version", RESOLVED_TAG])
+
+    def test_docker_command_runs_the_looked_up_exact_image(self) -> None:
+        for relative_path in ENTRYPOINTS:
+            with self.subTest(page=relative_path):
+                commands = docker_commands(read_repo_text(relative_path))
+                code, events = exercise_install(commands, {})
+                self.assertEqual(code, 0)
+                self.assertEqual([event["command"] for event in events], ["curl", "docker"])
+                self.assertEqual(events[0]["argv"][-1], LATEST_URL)
+                self.assertEqual(events[1]["argv"][-1], f"rcourtman/pulse:{RESOLVED_TAG}")
+
+    def test_docker_command_stops_when_the_lookup_fails(self) -> None:
+        for relative_path in ENTRYPOINTS:
+            with self.subTest(page=relative_path):
+                code, events = exercise_install(
+                    docker_commands(read_repo_text(relative_path)), {"CURL_1": "6"}
+                )
+                self.assertEqual(code, 6)
+                self.assertEqual([event["command"] for event in events], ["curl"])
 
     def test_installer_failure_remains_nonzero(self) -> None:
         for relative_path in ENTRYPOINTS:

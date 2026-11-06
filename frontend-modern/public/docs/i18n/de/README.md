@@ -38,12 +38,13 @@ funktioniert auf dieser Download-Seite nicht.
 ## Schnellstart: Proxmox LXC
 
 Wenn du Proxmox VE verwendest, ist der offizielle LXC-Installer der
-Pulse-native Einstieg. Er installiert den Pulse-Server. Ersetze `vX.Y.Z` durch
-den exakten Release-Tag, den du installieren möchtest, prüfe die signierte
-Installer-Datei und führe den Installer auf deinem Proxmox-Host aus:
+Pulse-native Einstieg. Er installiert den Pulse-Server. Führe diesen Block auf
+deinem Proxmox-Host aus: Er ermittelt die neueste Version, prüft die signierte
+Installer-Datei und startet erst dann den Installer:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
@@ -54,8 +55,8 @@ ssh-keygen -Y verify \
 bash install.sh --version "${PULSE_VERSION}"
 ```
 
-Füge den gesamten Block ein: Schlägt ein Download oder die Signaturprüfung fehl,
-wird der Installer nicht ausgeführt. Führe den letzten Befehl nicht separat aus,
+Füge den gesamten Block ein: Schlägt die Versionsabfrage, ein Download oder die
+Signaturprüfung fehl, wird der Installer nicht ausgeführt. Führe den letzten Befehl nicht separat aus,
 um einen Fehler zu umgehen.
 
 Agent-Installationen und v5-zu-v6-Agent-Upgrades verwenden den Befehl, den
@@ -67,18 +68,21 @@ Befehl wird von deinem Pulse-Server über `/install.sh` bereitgestellt.
 Für Container-Umgebungen oder Tests kannst du Pulse direkt mit Docker starten:
 
 ```bash
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  "rcourtman/pulse:${PULSE_VERSION}"
 ```
 
 Öffne danach Pulse unter `http://<your-ip>:7655`.
 
 Für Docker Compose kann dieselbe Compose-Datei Community- und private Pro-Images
-verwenden, wenn sie die `PULSE_IMAGE`-Variable nutzt:
+verwenden, wenn sie die `PULSE_IMAGE`-Variable nutzt. Ersetze `vX.Y.Z` durch den
+Tag des [neuesten Release](https://github.com/rcourtman/Pulse/releases/latest):
 
 ```yaml
 services:

@@ -61,20 +61,22 @@ sample data and signs you in automatically.
 
 ## Install
 
-Pulse is one container or service listening on port 7655. Pick an exact
-version from the [latest release](https://github.com/rcourtman/Pulse/releases/latest)
-and use it in place of `vX.Y.Z` below.
+Pulse is one container or service listening on port 7655. The commands below
+look up the [latest release](https://github.com/rcourtman/Pulse/releases/latest)
+and install that exact version.
 
 ### Docker
 
 ```bash
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  "rcourtman/pulse:${PULSE_VERSION}"
 ```
 
 The Pulse container does not need the Docker socket. Docker hosts are
@@ -82,11 +84,13 @@ monitored by the agent described below.
 
 ### Proxmox LXC or Linux
 
-The installer is signed. This block downloads it, verifies it against the
-pinned `pulse-installer` key, and only then runs it:
+The installer is signed. This block finds the latest version, downloads the
+installer, verifies it against the pinned `pulse-installer` key, and only then
+runs it:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+PULSE_VERSION="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rcourtman/Pulse/releases/latest)" &&
+PULSE_VERSION="${PULSE_VERSION##*/}" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
@@ -97,8 +101,8 @@ ssh-keygen -Y verify \
 bash install.sh --version "${PULSE_VERSION}"
 ```
 
-Paste the whole block. If a download or the signature check fails, it stops;
-don't run the last line on its own to get past a failure.
+Paste the whole block. If the version lookup, a download or the signature check
+fails, it stops; don't run the last line on its own to get past a failure.
 
 Also available: [Docker Compose](docs/INSTALL.md#docker-compose),
 [Kubernetes with Helm](docs/KUBERNETES.md) and the [full install guide](docs/INSTALL.md).
