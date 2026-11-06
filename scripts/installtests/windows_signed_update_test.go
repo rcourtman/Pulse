@@ -282,9 +282,11 @@ for ($i=0; $i -lt 30; $i++) {
 		t.Fatal(err)
 	}
 	saved := map[string][]byte{
-		filepath.Join(root, "fixture-ca.pem"):  ca,
-		filepath.Join(state, "token"):          []byte(signedWindowsToken),
-		filepath.Join(state, "agent-id"):       []byte(signedWindowsID),
+		filepath.Join(root, "fixture-ca.pem"): ca,
+		filepath.Join(state, "token"):         []byte(signedWindowsToken),
+		// Match writeAgentIDFile's existing on-disk format. Byte-preservation
+		// must not mistake normal startup serialization for identity loss.
+		filepath.Join(state, "agent-id"):       []byte(signedWindowsID + "\n"),
 		filepath.Join(state, "retained-state"): []byte("saved Windows state must survive refusal and update"),
 	}
 	for path, body := range saved {
@@ -389,7 +391,7 @@ for ($i=0; $i -lt 30; $i++) {
 		if current.Downloads != 1 || current.VersionChecks < 1 || current.Unexpected != 0 {
 			t.Fatal("canonical request/authentication count differs; fallback is not acceptance")
 		}
-		current.Completed, current.AfterPID, current.Executable, current.SavedRetained, current.Connected, current.UpdatedFrom = true, after.PID, expected, true, true, observed.UpdatedFrom
+		current.AfterPID, current.Executable, current.SavedRetained, current.Connected, current.UpdatedFrom = after.PID, expected, true, true, observed.UpdatedFrom
 		t.Logf("%s: one authenticated canonical download, exact SCM executable and connected identity; saved token/CA/state retained", scenario.name)
 		signedWindowsPS(t, `$s = Get-CimInstance Win32_Service -Filter "Name='PulseAgent'" -ErrorAction Stop;
 if ($null -eq $s -or $s.PathName -cne `+signedWindowsQuote(serviceCommand)+` -or $s.ProcessId -eq 0) { throw 'Owned process is unknown.' };
@@ -397,5 +399,6 @@ $process = Get-Process -Id $s.ProcessId -ErrorAction Stop;
 if ($process.Path -ine `+signedWindowsQuote(binary)+`) { throw 'Owned process executable differs.' };
 Stop-Service PulseAgent -ErrorAction Stop; $controller = Get-Service PulseAgent -ErrorAction Stop; try { $controller.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,[TimeSpan]::FromSeconds(30)) } finally { $controller.Dispose() };
 if (-not $process.WaitForExit(10000)) { throw 'Owned process did not quiesce.' }; $process.Dispose()`)
+		current.Completed = true
 	}
 }
