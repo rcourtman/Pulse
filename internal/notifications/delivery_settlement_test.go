@@ -88,7 +88,9 @@ func TestNotificationFindingOutsideActiveAlertInventoryStillDelivers(t *testing.
 	n := continuityManager(t, t.TempDir(), hook)
 	n.SetOccurrenceLifecycleProvider(owner.NotificationOccurrenceLifecycle)
 	finding := &alerts.Alert{ID: "patrol-finding-owned-elsewhere", StartTime: time.Now(), Level: alerts.AlertLevelWarning, Message: "A finding from an independent producer"}
-	require.True(t, owner.NotificationOccurrenceLifecycle(finding.ID, finding.StartTime).CurrentInactive)
+	state := owner.NotificationOccurrenceLifecycle(finding.ID, finding.StartTime)
+	require.Equal(t, alerts.NotificationOccurrenceUnavailable, state.State)
+	require.False(t, state.CurrentInactive, "the alert owner cannot certify a finding's absence")
 	n.SendAlert(finding)
 	drainContinuity(t, n)
 	require.Equal(t, int32(1), calls.Load(), "absence from another producer's active map discarded a new firing")

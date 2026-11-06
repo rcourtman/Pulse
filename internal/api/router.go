@@ -2380,6 +2380,15 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 	// (unified store is created there) and AFTER findings persistence is loaded
 	patrol := aiService.GetPatrolService()
 	if patrol != nil {
+		if monitor != nil {
+			if nm := monitor.GetNotificationManager(); nm != nil {
+				var alertLifecycle func(string, time.Time) alerts.NotificationOccurrenceLifecycle
+				if owner := monitor.GetAlertManager(); owner != nil {
+					alertLifecycle = owner.NotificationOccurrenceLifecycle
+				}
+				nm.SetOccurrenceLifecycleProvider(patrolFindingNotificationLifecycle(patrol.GetFindings(), alertLifecycle))
+			}
+		}
 		if unifiedStore := r.aiSettingsHandler.GetUnifiedStoreForOrg(orgID); unifiedStore != nil {
 			patrol.SetUnifiedFindingCallback(func(f *ai.Finding) bool {
 				uf := unifiedFindingFromAI(f)

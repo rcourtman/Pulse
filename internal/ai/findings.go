@@ -850,6 +850,9 @@ type FindingsStore struct {
 	occurrenceStarts map[string]time.Time
 	// Persistence layer (optional)
 	persistence FindingsPersistence
+	// A failed or still-running load cannot establish complete current absence
+	// for notification receipts left by an earlier process.
+	persistenceLoaded bool
 	// Debounce save operations
 	saveTimer    *time.Timer
 	savePending  bool
@@ -1021,6 +1024,7 @@ func (s *FindingsStore) OperatorStateProjectionFor(resourceID string, now time.T
 func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 	s.mu.Lock()
 	s.persistence = p
+	s.persistenceLoaded = false
 	s.mu.Unlock()
 
 	// Load existing findings from disk
@@ -1133,6 +1137,7 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 				s.activeCounts[f.Severity]++
 			}
 		}
+		s.persistenceLoaded = true
 		s.mu.Unlock()
 		if normalizedLoadedState {
 			s.scheduleSave()

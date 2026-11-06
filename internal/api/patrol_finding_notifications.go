@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
@@ -10,7 +11,21 @@ import (
 // patrolFindingAlertIDPrefix namespaces synthetic notification alerts so
 // their IDs can never collide with threshold alert IDs in the notification
 // manager's cooldown map.
-const patrolFindingAlertIDPrefix = "patrol-finding-"
+const patrolFindingAlertIDPrefix = alerts.PatrolFindingNotificationIDPrefix
+
+// Keep each producer's lifecycle authority separate. Missing Patrol authority
+// must never fall back to the alert manager's unrelated active inventory.
+func patrolFindingNotificationLifecycle(findings *ai.FindingsStore, alertLifecycle func(string, time.Time) alerts.NotificationOccurrenceLifecycle) func(string, time.Time) alerts.NotificationOccurrenceLifecycle {
+	return func(id string, start time.Time) alerts.NotificationOccurrenceLifecycle {
+		if strings.HasPrefix(id, patrolFindingAlertIDPrefix) {
+			return findings.NotificationOccurrenceLifecycle(strings.TrimPrefix(id, patrolFindingAlertIDPrefix), start)
+		}
+		if alertLifecycle != nil {
+			return alertLifecycle(id, start)
+		}
+		return alerts.NotificationOccurrenceLifecycle{State: alerts.NotificationOccurrenceUnavailable}
+	}
+}
 
 // patrolFindingNotificationAlert projects a Patrol finding into the alert
 // shape the notification manager delivers, so findings reach the operator's

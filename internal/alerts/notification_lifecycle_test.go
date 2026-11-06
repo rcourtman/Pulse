@@ -29,6 +29,15 @@ func TestNotificationOccurrenceLifecycleRequiresPositiveAuthority(t *testing.T) 
 	}
 }
 
+func TestNotificationOccurrenceLifecycleDoesNotOwnPatrolFindings(t *testing.T) {
+	m := NewManagerWithDataDir(t.TempDir(), WithDurableAlertStore())
+	t.Cleanup(m.Stop)
+	state := m.NotificationOccurrenceLifecycle(PatrolFindingNotificationIDPrefix+"fixture", time.Now())
+	if state.State != NotificationOccurrenceUnavailable || state.CurrentInactive || !state.ResolvedAt.IsZero() {
+		t.Fatalf("alert inventory claimed authority over a delivery-only finding: %+v", state)
+	}
+}
+
 func TestNotificationOccurrenceLifecycleHealthyHistoryAndRefire(t *testing.T) {
 	m := newEventLogManager(t)
 	m.activeStateAuthoritative.Store(true)

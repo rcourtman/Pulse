@@ -2,11 +2,16 @@ package alerts
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
+
+// PatrolFindingNotificationIDPrefix identifies delivery-only findings. The
+// alert manager never owns these occurrences, including during router startup.
+const PatrolFindingNotificationIDPrefix = "patrol-finding-"
 
 type NotificationOccurrenceState string
 
@@ -30,7 +35,7 @@ type NotificationOccurrenceLifecycle struct {
 // the difference between healthy history compaction and unavailable authority.
 func (m *Manager) NotificationOccurrenceLifecycle(id string, start time.Time) NotificationOccurrenceLifecycle {
 	unknown := NotificationOccurrenceLifecycle{State: NotificationOccurrenceUnavailable}
-	if m == nil || id == "" || start.IsZero() {
+	if m == nil || id == "" || start.IsZero() || strings.HasPrefix(id, PatrolFindingNotificationIDPrefix) {
 		return unknown
 	}
 	m.stopMu.RLock()
