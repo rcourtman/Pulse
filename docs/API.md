@@ -124,12 +124,11 @@ POST, PUT and PATCH read their JSON body from standard input; GET and DELETE sen
 body. A method being supported is not permission to change a resource. Choose
 each administrative change separately and check its current state afterwards.
 A timeout or incomplete response can occur **after a change was applied**;
-do not repeat a POST, PUT or DELETE merely because the response was lost.
+do not replay a POST, PUT, PATCH or DELETE after a lost response.
 
 Keep `--globoff`: shell quotes alone do not disable curl's URL globbing. Without
 it, a path containing a brace list such as `{review,ops}` or a range such as
-`[1-3]` can send several requests, including several POST, PUT or DELETE
-requests. The helper treats these characters literally, not as a batch of
+`[1-3]` can send several requests, including repeated writes. The helper treats these characters literally, not as a batch of
 targets. Still quote the whole path in the shell, and URL-encode dynamic resource
 IDs and query values; `--globoff` does not encode them for you.
 
@@ -1223,7 +1222,7 @@ request. ID, secret, expiry and organization bindings stay unchanged.
 `POST /api/security/tokens/<id>/rotate`
 
 Replaces one token with a new one and returns `{ "token": "raw-token", "record": { ... } }`
-(the raw token is shown once). The new token keeps the old one's name, scopes,
+(the raw token is [shown once](#when-a-token-change-times-out)). The new token keeps the old one's name, scopes,
 organization bindings, metadata and expiry, and the old token stops working.
 API-token callers must hold every scope on the target token.
 
@@ -2160,3 +2159,50 @@ End-to-end encrypted relay protocol for mobile connectivity.
 ---
 
 > **Note**: This is a summary of the most common endpoints. For a complete list, inspect the network traffic of the Pulse dashboard or check the source code in `internal/api/router.go`.
+
+
+## When a token change times out
+
+A lost response can follow a saved token change. **Do not repeat the change**
+or assume the old credential still works. Keep a working, independent
+administrator session. Do not use the token being edited or rotated as your
+only way to check the result.
+
+Use the [private-header helper](#-authentication) with a separate, already
+authorised administrator credential to read the saved inventory. This sends no
+change and saves the response privately:
+
+```bash
+pulse_api GET /api/security/tokens
+```
+
+The list contains **metadata only**, not raw secrets or complete organisation
+and agent bindings. **Names are not unique.** Compare exact record IDs with the
+original response or, where available, an existing rotation audit event's old
+and new IDs. Do not identify a replacement from its name alone.
+
+A single-record `GET /api/security/tokens/<id>` also returns metadata only.
+**404 can mean absent or hidden from this caller**, not proof that rotation or
+revocation succeeded. A 401, 403, failed read or incomplete response leaves the
+result unknown. Do not widen a token's scopes or organisation access to read it.
+Coordinate with other administrators before another write. A snapshot does not
+prove an earlier request cannot still finish.
+
+- **Edit:** PATCH keeps the record ID and secret. Compare the saved name and
+  complete scope list with the intended change before considering another edit.
+  Do not rotate or recreate the token to resolve an unconfirmed edit.
+- **Rotation:** the old token stops working when its replacement is saved.
+  A complete response already saved in a private file may contain the new
+  secret. Check its record ID against the saved inventory before using it.
+  A partial response is not a complete result. GET cannot recover the raw secret.
+  If the secret is lost, first identify the **exact successor** and settle the
+  original attempt. Then choose a separate, intentional rotation of that record
+  from the independent administrator session. Rotation preserves its existing
+  scopes, bindings, metadata and expiry. Save the one-time result privately and
+  update only its intended consumers. This is not a replay of the old request.
+
+If the successor or original outcome cannot be established, stop and
+[get help](TROUBLESHOOTING.md#-getting-help) rather than guess, grant full access
+or re-enrol agents. Keep tokens, private response files and inventory or audit
+exports out of reports. Give only the original action, time and relevant
+locally redacted error that you already have.
