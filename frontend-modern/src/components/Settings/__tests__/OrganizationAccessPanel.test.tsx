@@ -918,6 +918,31 @@ describe('Organization Access change safety', () => {
     },
   );
 
+  it.each(['user', 'anonymous', 'hidden'])(
+    'invalidates a pending access change on %s withdrawal after same-reader refresh',
+    async (kind) => {
+      const { state, setUser } = renderState();
+      await ready(state);
+      const result = deferred<unknown>();
+      inviteMemberMock.mockReturnValueOnce(result.promise);
+      state.setInviteUserID('new-user');
+      const change = state.inviteMember();
+      const signal = inviteMemberMock.mock.calls[0].at(-1).signal;
+      eventBusEmitMock('organizations_changed');
+      expect(signal.aborted).toBe(false);
+      if (kind === 'user') setUser('other-user');
+      if (kind === 'anonymous') setUser(undefined);
+      if (kind === 'hidden') setHidden(true);
+      expect(signal.aborted).toBe(true);
+      expect(state.saving()).toBe(false);
+      result.reject(new Error('Late old-reader response'));
+      await change;
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+      expect(inviteMemberMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it.each(['success', 'uncertain', 'mismatched confirmation'])(
     'retains a confirmed ownership transfer through equal-reader refreshes: %s',
     async (outcome) => {
@@ -946,7 +971,11 @@ describe('Organization Access change safety', () => {
         { ...member, role: 'owner' },
       ]);
       if (outcome === 'uncertain') result.reject(new Error('Response lost after apply'));
-      else result.resolve({ kind: 'member', member: { ...member, role: outcome === 'success' ? 'owner' : 'viewer' } });
+      else
+        result.resolve({
+          kind: 'member',
+          member: { ...member, role: outcome === 'success' ? 'owner' : 'viewer' },
+        });
       await change;
       if (outcome === 'success') {
         await ready(state);
