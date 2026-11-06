@@ -9628,17 +9628,43 @@ grant private destinations or replace the installation public URL. The
 constructor validates the private CIDR policy, restores the saved public URL
 while preserving a deployment-enforced URL, and installs the policy before activating persisted work. Missing
 settings keep the default private-destination denial. Unreadable settings or an
-invalid CIDR policy fail construction before queue creation, so accepted rows
-cannot acquire a terminal failure merely because bootstrap has not restored
-policy yet. Router settings refresh remains responsible for later live changes.
+invalid CIDR policy hold notification delivery without stopping monitor
+construction or alert detection. Queue storage remains available for admitted
+work, but no processor activates, so incomplete policy cannot manufacture a
+terminal provider failure. Router settings refresh remains responsible for later live changes.
 
 `TestNewRestoresSharedWebhookPolicyBeforeQueueActivation` covers a real pending
 HTTP delivery before any router exists for default and tenant paths, saved
 public URL precedence and deployment lock, and a tenant grant that cannot override installation revocation.
-`TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation` covers corrupt
-settings and invalid CIDRs without creating queue storage.
+`TestNewHoldsUnreadableNotificationPolicyWithoutStoppingMonitoring` covers
+corrupt settings and invalid CIDRs with continued detection, unavailable delivery
+health, refused activation and no newly admitted deliveries.
 `Monitor.SetBroadcastActionAvailability` installs the action refusal pass on every
 state a monitor builds, including tenant monitors and reload replacements through
 `configureMonitorDependencies`. It writes top-level fields of the broadcast's own
 rows and never the store's. `TestBroadcastStateRunsTheRefusalProjectionOnItsOwnRows`
 and `TestConfigureMonitorDependenciesAttachesRefusalsToTheBroadcast` hold this.
+
+
+### Notification retention receives lifecycle authority during bootstrap
+
+Monitor construction binds the alert owner's `NotificationOccurrenceLifecycle`
+query before activating the restored notification queue. It explicitly attests
+successful loading of every saved destination. Saved reads and migration happen
+before constructing live owners. An incomplete read holds notification delivery
+and fences destination reads, writes and tests before persistence while
+monitoring and alert detection continue. New notifications are not queued during
+that hold; previously admitted jobs remain durable. Validated full backup import
+can replace saved settings while held. Full live reconstruction can clear the hold;
+otherwise the response requires restart while independent settings apply normally. Repairing
+storage and restarting reconstructs a complete owner. Notification queue construction,
+storage preparation or reconciliation failure also holds delivery without stopping
+detection. Canonical deferred bootstrap never activates an in-memory queue fallback
+when persistent construction fails. This query supplies positive occurrence facts for
+receipt retention. Missing or unhealthy history and shutdown remain unavailable.
+Notification receipt state continues to own who
+received each firing and which destination can receive recovery. Monitor
+callbacks and reconstructed active snapshots are not provider acceptance.
+The notification continuity integration controls exercise the constructor,
+reopened queues and real local HTTP delivery without claiming installed-provider
+or release qualification.

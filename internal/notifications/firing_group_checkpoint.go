@@ -3,6 +3,7 @@ package notifications
 import (
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -12,7 +13,7 @@ import (
 // (or the later quiet-hours deadline). Later process admissions start a new
 // window, just as work admitted after an ordinary flush does.
 //
-// Queue/policy cancellation remains available during the handoff. Never fall
+// Admitted queue/policy cancellations finish before the handoff. Never fall
 // back to an immediate provider send on a checkpoint error: it would violate the
 // window and quiet hours. Storage errors are reported rather than called durable.
 func (n *NotificationManager) checkpointPendingFiringGroupLocked(queue *NotificationQueue) {
@@ -37,6 +38,24 @@ func (n *NotificationManager) checkpointPendingFiringGroupLocked(queue *Notifica
 	jobs := buildNotificationDeliveryJobsForTarget(copyEmailConfig(n.emailConfig), copyWebhookConfigs(n.webhooks),
 		copyAppriseConfig(n.appriseConfig), n.pendingAlerts, eventAlert, time.Time{}, n.initialTarget)
 	for _, job := range jobs {
+		var dueAlerts []*alerts.Alert
+		for _, alert := range job.Alerts {
+			record, found, err := queue.deliveryReceipt(alert, notificationDeliveryDestinationKey(job))
+			if err != nil || !found || !receiptInCooldown(record, alert, n.cooldown) {
+				dueAlerts = append(dueAlerts, alert)
+			}
+		}
+		job.Alerts = dueAlerts
+		if len(dueAlerts) == 0 {
+			continue
+		}
+		epoch, err := queue.activateDeliveryDestination(notificationDeliveryDestinationKey(job), notificationDeliveryConfigurationFingerprint(job))
+		if err != nil {
+			n.logNotificationJobError(job, err, "failed to preserve notification destination generation")
+		} else {
+			job.ReceiptEpoch = epoch
+			job.ReceiptEpochBound = true
+		}
 		configJSON, err := configJSONForNotificationDeliveryJob(job)
 		if err != nil {
 			n.logNotificationJobError(job, err, "failed to preserve buffered notifications at shutdown")
@@ -54,7 +73,7 @@ func (n *NotificationManager) checkpointPendingFiringGroupLocked(queue *Notifica
 			}
 			row := &QueuedNotification{Type: queueTypeForNotificationDeliveryJob(bucket.job),
 				DestinationID: notificationDestinationIDForJob(bucket.job), Alerts: bucket.job.Alerts,
-				Config: configJSON, MaxAttempts: 3, NextRetryAt: &due}
+				Config: configJSON, MaxAttempts: 3, NextRetryAt: &due, ReceiptEpoch: deliveryJobEpoch(job)}
 			if err := queue.Enqueue(row); err != nil {
 				n.logNotificationJobError(bucket.job, err, "failed to preserve buffered notifications at shutdown; no early direct send")
 			}

@@ -1,11 +1,48 @@
 package notifications
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+func TestReceiptFailureLogsPublicDestinationWithoutReceiverDigest(t *testing.T) {
+	manager := NewNotificationManagerWithDeferredQueue("", t.TempDir())
+	defer manager.Stop()
+	hook := WebhookConfig{
+		ID: "receipt-log-ops", URL: "https://example.test/notify", Enabled: true,
+		Headers: map[string]string{"Authorization": "synthetic-log-credential"},
+	}
+	manager.AddWebhook(hook)
+	job := manager.bindDeliveryEpochs([]notificationDeliveryJob{{
+		Type: "webhook", Event: eventAlert, WebhookConfig: &hook,
+		Alerts: []*alerts.Alert{{ID: "receipt-log", StartTime: time.Now(), Level: alerts.AlertLevelCritical}},
+	}})[0]
+	if !job.ReceiptEpochBound {
+		t.Fatal("fixture did not admit the receiver generation")
+	}
+	if _, err := manager.GetQueue().db.Exec(`CREATE TRIGGER reject_receipt_log BEFORE INSERT ON notification_delivery_receipts BEGIN SELECT RAISE(ABORT,'synthetic receipt projection fault'); END`); err != nil {
+		t.Fatal(err)
+	}
+	logs := captureAppriseLogs(t)
+	if err := manager.recordSuccessfulDelivery(job, time.Now()); err == nil || !strings.Contains(err.Error(), "synthetic receipt projection fault") {
+		t.Fatalf("receipt storage fault was not observed: %v", err)
+	}
+	diagnostic := logs.String()
+	if !strings.Contains(diagnostic, `"destination":"webhook:receipt-log-ops"`) {
+		t.Fatal("receipt diagnostic lost the public destination identity")
+	}
+	for _, private := range []string{
+		notificationDeliveryDestinationKey(job), notificationDeliveryConfigurationFingerprint(job),
+		hook.Headers["Authorization"],
+	} {
+		if strings.Contains(diagnostic, private) {
+			t.Error("receipt diagnostic exposed an internal receiver digest or credential")
+		}
+	}
+}
 
 func TestResolvedJobsRequireReceiptForSameOccurrenceAndDestination(t *testing.T) {
 	manager := NewNotificationManagerWithDataDir("", t.TempDir())
@@ -15,7 +52,7 @@ func TestResolvedJobsRequireReceiptForSameOccurrenceAndDestination(t *testing.T)
 	first := WebhookConfig{ID: "first", URL: "https://first.example.test", Enabled: true}
 	second := WebhookConfig{ID: "second", URL: "https://second.example.test", Enabled: true}
 	firingJob := notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &first}
-	manager.recordSuccessfulDelivery(firingJob, start.Add(time.Second))
+	recordFixtureSuccessfulDelivery(manager, firingJob, start.Add(time.Second))
 
 	resolvedJobs := buildNotificationDeliveryJobs(EmailConfig{}, []WebhookConfig{first, second}, AppriseConfig{}, []*alerts.Alert{alert}, eventResolved, start.Add(time.Minute))
 	filtered := manager.filterResolvedJobsByDeliveryReceipt(resolvedJobs)
@@ -38,7 +75,7 @@ func TestResolvedJobsDoNotReuseReceiptAfterWebhookURLChanges(t *testing.T) {
 	alert := &alerts.Alert{ID: "vm-offline-102", StartTime: start}
 	original := WebhookConfig{ID: "ops", URL: "https://first.example.test", Enabled: true}
 	reconfigured := WebhookConfig{ID: "ops", URL: "https://second.example.test", Enabled: true}
-	manager.recordSuccessfulDelivery(notificationDeliveryJob{
+	recordFixtureSuccessfulDelivery(manager, notificationDeliveryJob{
 		Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &original,
 	}, start.Add(time.Second))
 
@@ -57,7 +94,7 @@ func TestDeliveryReceiptPersistsAndIsClearedAfterRecovery(t *testing.T) {
 	webhook := WebhookConfig{ID: "ops", URL: "https://ops.example.test", Enabled: true}
 
 	first := NewNotificationManagerWithDataDir("", dataDir)
-	first.recordSuccessfulDelivery(notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &webhook}, start.Add(time.Second))
+	recordFixtureSuccessfulDelivery(first, notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &webhook}, start.Add(time.Second))
 	first.Stop()
 
 	second := NewNotificationManagerWithDataDir("", dataDir)
@@ -66,7 +103,7 @@ func TestDeliveryReceiptPersistsAndIsClearedAfterRecovery(t *testing.T) {
 	if got := second.filterResolvedJobsByDeliveryReceipt([]notificationDeliveryJob{resolved}); len(got) != 1 {
 		t.Fatalf("persisted receipt not found: %+v", got)
 	}
-	second.recordSuccessfulDelivery(resolved, start.Add(time.Minute))
+	recordFixtureSuccessfulDelivery(second, resolved, start.Add(time.Minute))
 	if got := second.filterResolvedJobsByDeliveryReceipt([]notificationDeliveryJob{resolved}); len(got) != 0 {
 		t.Fatalf("receipt remained after recovery delivery: %+v", got)
 	}
@@ -96,7 +133,7 @@ func TestDelayedRecoveryPreservesRecurringAndOtherDestinationReceipts(t *testing
 	m := open()
 	for _, a := range []*alerts.Alert{old, current} {
 		for destination := range destinations {
-			m.recordSuccessfulDelivery(job(a, destination, eventAlert), start.Add(time.Minute))
+			recordFixtureSuccessfulDelivery(m, job(a, destination, eventAlert), start.Add(time.Minute))
 		}
 	}
 	m.Stop()
@@ -115,7 +152,7 @@ func TestDelayedRecoveryPreservesRecurringAndOtherDestinationReceipts(t *testing
 	}
 	// Duplicate completion must be harmless as well as the first completion.
 	for range 2 {
-		m.recordSuccessfulDelivery(job(old, 0, eventResolved), start.Add(2*time.Minute))
+		recordFixtureSuccessfulDelivery(m, job(old, 0, eventResolved), start.Add(2*time.Minute))
 	}
 	m.Stop()
 	m = open()
@@ -124,7 +161,7 @@ func TestDelayedRecoveryPreservesRecurringAndOtherDestinationReceipts(t *testing
 	assertReceipt(current, 0, true)
 	assertReceipt(current, 1, true)
 	// The newer incident can still complete independently at either endpoint.
-	m.recordSuccessfulDelivery(job(current, 0, eventResolved), start.Add(3*time.Minute))
+	recordFixtureSuccessfulDelivery(m, job(current, 0, eventResolved), start.Add(3*time.Minute))
 	assertReceipt(current, 0, false)
 	assertReceipt(current, 1, true)
 	assertReceipt(old, 1, true)

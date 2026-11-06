@@ -7,6 +7,10 @@ import { createGuideFixture } from './guideFixture';
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const repoRoot = path.resolve(frontendRoot, '..');
 const readDoc = (name: string) => readFileSync(path.join(repoRoot, 'docs', `${name}.md`), 'utf8');
+const importHandlerSource = readFileSync(
+  path.join(repoRoot, 'internal/api/configapi/config_export_import_handlers.go'),
+  'utf8',
+);
 const articleFor = createGuideFixture(readDoc);
 const textOf = (element: Element) => element.textContent!.replace(/\s+/g, ' ');
 
@@ -41,10 +45,6 @@ describe('Configuration import outcome guidance', () => {
   });
 
   it('matches the producer errors without mistaking a saved archive for a rejection', () => {
-    const source = readFileSync(
-      path.join(repoRoot, 'internal/api/configapi/config_export_import_handlers.go'),
-      'utf8',
-    );
     const section = failureSection();
     const code = [...section.querySelectorAll('code')].map((node) => node.textContent!);
     for (const message of [
@@ -52,19 +52,47 @@ describe('Configuration import outcome guidance', () => {
       'Configuration imported but failed to reload',
       'Configuration imported but failed to apply changes',
     ]) {
-      expect(source).toContain(message);
+      expect(importHandlerSource).toContain(message);
       expect(code).toContain(message);
     }
     const componentNames = [
-      ...source.matchAll(/reloadFailures = append\(reloadFailures, "([^"]+)"\)/g),
+      ...importHandlerSource.matchAll(/reloadFailures = append\(reloadFailures, "([^"]+)"\)/g),
     ].map((match) => match[1]);
-    expect(new Set(componentNames).size).toBe(4);
+    expect(new Set(componentNames)).toEqual(
+      new Set([
+        'alert settings',
+        'webhook settings',
+        'email settings',
+        'Apprise settings',
+        'guest metadata',
+      ]),
+    );
     for (const component of componentNames) expect(textOf(section)).toContain(component);
     const text = textOf(section);
     expect(text).toContain('imported settings are on disk');
     expect(text).toContain('other components may already have applied');
     expect(text).toContain('Do not repeat the import');
     expect(text).toContain('overwrite legitimate changes made since the first attempt');
+  });
+
+  it('distinguishes a saved notification hold from a rejected archive', () => {
+    const section = failureSection();
+    const code = [...section.querySelectorAll('code')].map((node) => textOf(node));
+    const restartMessage =
+      'Configuration saved. Restart Pulse to apply the restored notification settings. Do not repeat the import.';
+    expect(importHandlerSource).toContain(restartMessage);
+    expect(code).toContain(restartMessage);
+    const storageInstruction = 'Repair notification storage, then restart Pulse';
+    expect(importHandlerSource).toContain(storageInstruction);
+    expect(code).toContain(storageInstruction);
+    const text = textOf(section);
+    expect(text).toContain('notification delivery remains on hold');
+    expect(text).toContain('storage failure first');
+    expect(text).toContain('independent monitoring and alert coverage');
+    expect(text).toContain('outbound notifications and remote actions during the restart');
+    expect(text).toContain('Restoring notification settings can resume delivery');
+    expect(text).toContain('Reconnect only through the single-owner handover below');
+    expect(text).toContain('A restart is not a rollback or proof of delivery');
   });
 
   it('treats lost responses and duplicate guards as uncertainty, not a retry timer', () => {
@@ -85,7 +113,8 @@ describe('Configuration import outcome guidance', () => {
     expect(text).toContain('same destination and organisation');
     expect(text).toContain('destination-local administrator access');
     expect(text).toContain('does not prove notification delivery');
-    expect(text).toContain('Do not restart Pulse, send a test notification or repeat a backup');
+    expect(text).toContain('Do not restart Pulse unless the response explicitly requires it');
+    expect(text).toContain('Do not send a test notification or repeat a backup');
     expect(text).toContain('do not enable a second poller');
     expect(section.querySelector('pre, form, input, button')).toBeNull();
     const handover = section.querySelector('a[href="#hand-over-monitoring-once"]');

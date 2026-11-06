@@ -45,6 +45,11 @@ func TestNotificationDeliveryAlertMessageNamesTheOutcome(t *testing.T) {
 			health: notifications.DeliveryHealth{Status: notifications.DeliveryUnavailable},
 			want:   []string{"cannot read the notification queue"},
 		},
+		{
+			name:   "unsettled storage with terminal failures",
+			health: notifications.DeliveryHealth{Status: notifications.DeliveryUnavailable, Failed: 2, DeadLetter: 3, ReasonCodes: []string{"notification_storage_unsettled"}},
+			want:   []string{"waiting to save notification delivery records", "2 failed deliveries", "3 dead-lettered deliveries", "retry or dismissal"},
+		},
 	}
 
 	for _, tc := range cases {

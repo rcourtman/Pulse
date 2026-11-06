@@ -35,6 +35,44 @@ resolve the current tenant without default fallback and retain the existing
 API scope rules. Transport, tenant and scope regressions live alongside the
 handlers; no provider-delivery or filesystem-recovery claim is introduced.
 
+### Destination acknowledgement includes durable receipt retirement
+
+Email, Apprise and webhook edits publish only after their saved configuration is
+written. If retiring the previous destination's notification receipts fails, the
+manager keeps its previous live configuration and the handler restores the
+previous saved configuration, then returns a fixed failure response. A failure
+never acknowledges an effective destination switch. The operator can retry the
+same edit after storage recovers. Rollback failures remain logged storage failures,
+not an atomic multi-file transaction claim. Existing response masking, validation,
+authentication and admitted provider snapshots remain unchanged.
+
+`TestDestinationPublicationFailureRestoresDurableConfiguration` exercises email
+and Apprise HTTP failure and persistence rollback. Notification driver-fault
+controls cover email, Apprise, webhook edit and webhook deletion retirement,
+live rollback, retained receipt authority and a successful retry.
+Configuration import also reports notification live-publication refusal as
+incomplete reload, preserving its existing saved-but-not-applied failure contract.
+Unchanged webhook imports preserve destination generations and changed/removed
+receivers retire atomically. Saved Apprise configuration is reloaded as well.
+Local queue bookkeeping faults report `queue.status="unavailable"`,
+`overall_healthy=false` and `notification_storage_unsettled`, with pending
+settlement count separate from terminal provider failures. They do not invent a
+provider rejection or consume its attempt budget. The existing browser decoder
+retains the unavailable state and its existing review-delivery guidance.
+
+Unreadable saved notification inventory holds delivery without stopping monitoring.
+Destination reads, mutations and tests return 503 before persistence while that
+bootstrap hold is present. Validated full configuration backup import remains
+available as positive replacement authority. It saves the complete restored settings,
+applies independent sections normally, and leaves a still-held notification owner
+unpublished with a fixed restart-required response. A full live reconstruction can
+clear the hold and acknowledge success. Unknown inventory is never
+returned as an empty writable list. Queue health remains readable and unavailable;
+importing a backup or repairing the files and restarting reconstructs a complete notification owner. New notifications
+are not queued during that hold. Configuration health reports unavailable
+inventory rather than disabled email and zero configured webhooks.
+`TestNotificationIncompleteInventoryFencesReadsAndWrites` exercises the HTTP fence.
+
 ### Requested metric history retains its admitted reader
 
 The existing `/api/metrics-store/history` chart read and canonical agent
@@ -1375,6 +1413,7 @@ parity and consuming browser evidence remain separate acceptance obligations.
    1a. `internal/api/platform_connection_shared.go`
    1b. `internal/api/metadata_handlers_shared.go`
    1c. `internal/config/persistence_metadata_accessors.go`
+   1d. `internal/config/export.go` (validates imported destination identity before persistence)
 2. `internal/api/resourceapi/resources.go`
    2a. `internal/api/resources_compat.go`
    2b. `internal/api/chartapi/service.go`

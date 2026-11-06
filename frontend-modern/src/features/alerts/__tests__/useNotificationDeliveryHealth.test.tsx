@@ -41,6 +41,27 @@ describe('useNotificationDeliveryHealth', () => {
       dispose();
     }));
 
+  it.each(['dismissTerminalFailures', 'retryTerminalFailures'] as const)(
+    'confirms only terminal rows for %s while local settlement is pending',
+    (action) =>
+      createRoot(async (dispose) => {
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+        try {
+          vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce({
+            queue: { status: 'unavailable', attentionRequired: 99, failed: 1, deadLetter: 1 },
+          } as never);
+          const state = useNotificationDeliveryHealth();
+          await state.loadDeliveryHealth();
+          await state[action]();
+          expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('2 retained'));
+          expect(NotificationsAPI[action]).not.toHaveBeenCalled();
+        } finally {
+          confirmSpy.mockRestore();
+          dispose();
+        }
+      }),
+  );
+
   it('does not raise attention for a healthy queue', () =>
     createRoot(async (dispose) => {
       vi.mocked(NotificationsAPI.getHealth).mockResolvedValue(healthWith('healthy'));
@@ -169,7 +190,7 @@ describe('useNotificationDeliveryHealth', () => {
         try {
           const state = useNotificationDeliveryHealth();
           vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce({
-            queue: { status: 'degraded', attentionRequired: 2 },
+            queue: { status: 'degraded', attentionRequired: 2, failed: 2, deadLetter: 0 },
           } as never);
           await state.loadDeliveryHealth();
           let finishOld!: (health: Awaited<ReturnType<typeof NotificationsAPI.getHealth>>) => void;
@@ -204,7 +225,7 @@ describe('useNotificationDeliveryHealth', () => {
         try {
           vi.mocked(NotificationsAPI.getHealth)
             .mockResolvedValueOnce({
-              queue: { status: 'degraded', attentionRequired: 2 },
+              queue: { status: 'degraded', attentionRequired: 2, failed: 2, deadLetter: 0 },
             } as never)
             .mockReturnValueOnce(
               new Promise((resolve) => {
@@ -251,7 +272,9 @@ describe('useNotificationDeliveryHealth', () => {
           const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(outcome !== 'cancelled');
           const onAfterQueueAction = vi.fn();
           try {
-            const health = { queue: { status: 'degraded', attentionRequired: 2 } } as never;
+            const health = {
+              queue: { status: 'degraded', attentionRequired: 2, failed: 2, deadLetter: 0 },
+            } as never;
             vi.mocked(NotificationsAPI.getHealth).mockResolvedValueOnce(health);
             const state = useNotificationDeliveryHealth({ onAfterQueueAction });
             await state.loadDeliveryHealth();
@@ -303,7 +326,7 @@ describe('useNotificationDeliveryHealth', () => {
           const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
           try {
             vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
-              queue: { status: 'degraded', attentionRequired: 2 },
+              queue: { status: 'degraded', attentionRequired: 2, failed: 2, deadLetter: 0 },
             } as never);
             vi.mocked(NotificationsAPI[action]).mockRejectedValueOnce(new Error('failed'));
             const state = useNotificationDeliveryHealth();
@@ -342,7 +365,7 @@ describe('useNotificationDeliveryHealth', () => {
             const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
             try {
               vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
-                queue: { status: 'degraded', attentionRequired: 2 },
+                queue: { status: 'degraded', attentionRequired: 2, failed: 2, deadLetter: 0 },
               } as never);
               vi.mocked(NotificationsAPI[action]).mockResolvedValue({ affected: 2 } as never);
               const onAfterQueueAction = () => {
@@ -373,7 +396,7 @@ describe('useNotificationDeliveryHealth', () => {
             const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
             try {
               vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
-                queue: { status: 'degraded', attentionRequired: 2 },
+                queue: { status: 'degraded', attentionRequired: 2, failed: 2, deadLetter: 0 },
               } as never);
               vi.mocked(NotificationsAPI[action]).mockResolvedValue({ affected: 2 } as never);
               let rejectOld!: (error: Error) => void;
@@ -413,7 +436,7 @@ describe('useNotificationDeliveryHealth', () => {
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
       try {
         vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
-          queue: { status: 'degraded', attentionRequired: 2 },
+          queue: { status: 'degraded', attentionRequired: 2, failed: 2, deadLetter: 0 },
         } as never);
         let rejectOld!: (error: Error) => void;
         vi.mocked(NotificationsAPI.retryTerminalFailures).mockReturnValueOnce(

@@ -39,6 +39,37 @@ readers. An unreadable baseline remains unavailable. Once readable, a first
 partial baseline recovers by unioning positive projection and fallback facts,
 folded at their own cursors; one activation alone cannot attest completeness.
 
+### Notification settlement retains positive occurrence authority
+
+The notification queue migrates existing firing receipts without inventing a
+historical severity, then persists highest delivered severity, monotonic completion
+time, destination generation and explicit resolution disposition. Active or
+uncertain obligations survive the old 30-day age boundary. Healthy alerts history
+or a retained positive resolution with healthy compacted history permits bounded
+settlement. An aged explicit receipt resolution plus authoritative complete current
+absence also permits settlement when history remains unhealthy. Absence alone never
+supplies a resolution or expiry timestamp; unavailable, unreadable or shutting-down
+current-state authority cannot authorise expiry. Pending
+recoveries pin their admitted generation until terminal retention or operator
+disposition. Explicit destination retirement removes unpinned old obligations;
+an exact later revert starts a fresh generation.
+
+Provider acceptance and durable acknowledgement remain separate crash boundaries.
+A crash before the successful audit commits can replay a provider send. After
+that audit commits, receipt/status settlement retries only local bookkeeping.
+Pending acknowledged rows retain their audit and supply accepted delivery authority
+until projection finishes. Durable audit order prevents late recovery settlement
+from consuming a newer firing. Receipt commit failure retains a local retry
+obligation rather than claiming successful queue completion.
+Indexed scalar occurrence facts commit atomically with provider success audits,
+without rewriting immutable provider configuration. They are independent of
+quiet-hours queue partitioning and retained queue JSON. Resolution disposition
+preserves nanosecond order, and acknowledged rows stay pending through local
+receipt and final-status persistence failures.
+Native-process restart and abrupt-exit controls use synthetic owned HTTP receivers
+and persisted queue readback; they prove neither physical power-loss durability nor
+installed-provider receipt. Alerts history health remains owned by the event store.
+
 ### A namespace named after a connection settles a shared node name (4 November 2026)
 
 `NamespaceLocationScore` ranks exact node, exact connection, node suffix, then

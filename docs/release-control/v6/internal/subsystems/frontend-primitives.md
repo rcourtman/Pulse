@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Shared delivery warnings distinguish unavailable status from retained failures
+
+`AlertDeliveryHealthCard` keeps review and refresh available when notification
+queue status cannot be verified. It shows retry and dismiss controls for fresh known terminal failures,
+including alongside unavailable local settlement. A failed follow-up read hides
+stale actions without retracting the accepted mutation. The same card serves Overview and Notifications; its transition and
+destination editing tests preserve drafts and restore actions after a fresh read.
+The Notifications tab does not gate this independent health read on destination
+settings success. An unreadable inventory still displays the shared backup/restart
+guidance while the existing settings error withdraws destination details and controls.
+
 ### Platform host rows scope node alert matches by connection (4 November 2026)
 
 The Proxmox, vSphere and TrueNAS host tables pass `getAlertStyles` and the node

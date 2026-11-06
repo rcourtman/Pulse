@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "8ef14813456b4779bf26000dfde54c8524766ef0",
+  "verified_at": "2026-11-06T01:46:43.825Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/MIGRATION.md",
+    "frontend-modern/public/docs/MIGRATION.md"
+  ],
+  "content_sha256": {
+    "docs/MIGRATION.md": "7d0b1cf55e2ac0df1344cbf68220111eb79efc3c18ff64b8f0a78d9f851feeed",
+    "frontend-modern/public/docs/MIGRATION.md": "7d0b1cf55e2ac0df1344cbf68220111eb79efc3c18ff64b8f0a78d9f851feeed"
+  },
+  "routes": [
+    "/docs/MIGRATION#when-an-import-fails-or-times-out",
+    "/docs/API#import-configuration"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Saved but not applied lists all five live components including Apprise",
+    "Saved notification hold includes exact restart and storage-repair instructions",
+    "Explicit restart retains provider, agent, outbound-notification and remote-action isolation until single-owner handover",
+    "Uncertain import responses remain separate from saved restart-required outcomes",
+    "Desktop and narrow prose, inline error code and focused recovery links remain visible and wrapped"
+  ],
+  "interactions": [
+    "Verified served migration guide bytes equal final public source SHA-256",
+    "Opened and reloaded direct migration failure fragment with heading focus",
+    "Inspected desktop and narrow screenshots of component list, held restart guidance, storage repair and API recovery link",
+    "Keyboard-activated same-document handover link and verified destination heading focus",
+    "Hovered and keyboard-activated API saved-or-uncertain recovery link, verifying migration fragment and focus",
+    "Checked horizontal overflow at both viewport sizes"
+  ]
+}

@@ -105,7 +105,33 @@ func deliveryHealthFingerprint(health notifications.DeliveryHealth) string {
 // it, so the message has to stand on its own.
 func notificationDeliveryAlertMessage(health notifications.DeliveryHealth) string {
 	if health.Status == notifications.DeliveryUnavailable {
-		return "Pulse cannot read the notification queue, so alert delivery cannot be confirmed. Check the Pulse logs and the notification settings."
+		var messages []string
+		for _, reason := range health.ReasonCodes {
+			switch reason {
+			case notifications.NotificationReasonStorageBootstrapUnavailable:
+				messages = append(messages, "Pulse cannot prepare saved notification delivery records. Check server storage and logs, then restart Pulse. Existing queued notifications are paused. New notifications are not queued.")
+			case notifications.NotificationReasonConfigurationUnavailable:
+				messages = append(messages, "Pulse could not load saved notification settings. Restore a configuration backup and restart Pulse. Existing queued notifications are paused. New notifications are not queued.")
+			case notifications.NotificationReasonOccurrenceUnavailable:
+				messages = append(messages, "Pulse is waiting for a trustworthy current alert state before replaying retained notifications. Check alert state and server logs, then refresh delivery status.")
+			case "notification_storage_unsettled":
+				messages = append(messages, "Pulse is waiting to save notification delivery records. Check server storage and the Pulse logs, then refresh delivery status.")
+			}
+		}
+		if len(messages) == 0 {
+			return "Pulse cannot read the notification queue, so alert delivery cannot be confirmed. Check the Pulse logs and the notification settings."
+		}
+		var retained []string
+		if health.Failed > 0 {
+			retained = append(retained, pluralDeliveries(health.Failed, "failed delivery", "failed deliveries"))
+		}
+		if health.DeadLetter > 0 {
+			retained = append(retained, pluralDeliveries(health.DeadLetter, "dead-lettered delivery", "dead-lettered deliveries"))
+		}
+		if len(retained) > 0 {
+			messages = append(messages, strings.Join(retained, " and ")+" also remain available for retry or dismissal under Alerts, Notifications.")
+		}
+		return strings.Join(messages, " ")
 	}
 
 	switch {

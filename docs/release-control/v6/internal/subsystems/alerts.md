@@ -119,6 +119,18 @@ reopen, process-kill boundaries, bounded admission, damaged tails and producer
 continuity after JSON retirement. These are source tests, not physical power
 cut, installed-service, provider-delivery or release qualification.
 
+### Unavailable delivery status offers verification before queue mutations
+
+The shared delivery warning card offers review and refresh while queue status is
+unavailable. Retry and dismiss controls appear when fresh known terminal failures exist,
+including alongside unavailable local settlement. A failed health read hides
+stale actions, and local settlement alone supplies no terminal failure to dismiss. Accepted actions remain accepted when their follow-up
+read fails; refreshing restores controls when fresh degraded evidence is available.
+The card transition test and destination editing integration test cover these states.
+Notifications reads delivery health independently when destination settings cannot
+be loaded. The same health card supplies configuration-hold recovery guidance;
+saved destination details, editors and tests remain hidden until settings are readable.
+
 ### Node matches name a connection, not just a node (4 November 2026)
 
 Proxmox installations can reuse node names, so `getAlertsForResource` and
@@ -1672,6 +1684,18 @@ must not reinterpret acknowledgement as resolution, omit suppressed state from
 inspectability, or convert missing/stale evidence into health.
 
 ## Current State
+
+The notification-retention query `NotificationOccurrenceLifecycle` supplies
+exact occurrence facts from a matching live active alert or healthy authoritative
+fired/refired/resolved event snapshots. Healthy no-record is distinct from
+unavailable authority. Incomplete migration, degraded storage and shutdown remain
+unavailable. Retained history includes the latest matching activation time so an
+older receipt disposition cannot settle a later refire. Notifications retain their own
+successful delivery receipts and explicit receipt-obligation dispositions across
+history compaction. They do not infer resolution from absence in active state.
+The lifecycle seam controls cover exact start identity and unknown/shutdown
+boundaries. Actual delivery is tested separately with persistent queues and
+loopback HTTP, including native process restart.
 
 ### Retired AI Discovery progress frames (2026-10-11)
 

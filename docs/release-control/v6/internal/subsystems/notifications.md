@@ -408,7 +408,8 @@ acceptance.
 Monitor bootstrap also restores the shared installation webhook policy before
 activating persistent work, including tenant queues. A later router refresh is
 too late for a due private-webhook job. Missing settings retain default denial;
-unreadable settings or invalid CIDRs fail construction before queue creation.
+unreadable settings or invalid CIDRs hold delivery and queue activation while
+monitoring and alert detection continue. Queue storage preserves admitted work.
 The monitor startup tests cover delivery with no router, installation revocation
 against tenant-local grants, and invalid-policy admission. This boundary keeps
 shutdown-preserved rows from becoming terminal failures during reconstruction.
@@ -457,6 +458,7 @@ or displayed a notification.
 13. `internal/notifications/quiet_hours_queue.go`
 14. `internal/notifications/apprise_diagnostics.go`
 15. `pkg/securityutil/pinned_dial.go`
+16. `internal/notifications/delivery_continuity.go`
 
 ## Shared Boundaries
 
@@ -1678,6 +1680,11 @@ native SMTP acceptance or a containing release.
 warning callbacks through real alert/notification managers, persists active
 warning dispatch markers and performs actual SIGTERM/normal-exit process
 restarts plus same-process manager reload. Zero-repeat and positive-cooldown
+cases collect the initial CheckHost snapshots and persist/drain their producer
+before public notifier admission, so producer fsync cannot consume the short
+grouping window during setup. Later restored callbacks still dispatch directly.
+This deliberately scopes accepted notifier work, not the separate shared
+producer-admission/drain gap. The restart
 cases retain accepted pending batches; two loopback destinations receive the
 two-warning group no earlier than its original window. Another real process
 restart precedes occurrence/destination receipt-gated recoveries. No queue
@@ -1689,53 +1696,209 @@ source/native process proofs, not installed-service, external provider, stable
 release or reporter recovery. A crash before graceful checkpointing can still
 lose volatile firing buffers; this repair makes no crash-durability promise.
 
-### Firing cooldown and owed recovery survive reopen and cleanup (5 November 2026)
 
-The repeat-delivery map is a cache of successful occurrence-bound delivery.
-On a cache miss, under the existing manager admission lease, current destination
-receipts restore the highest delivered severity and latest completion instant.
-Both high-water marks only advance, including out-of-order completions. A
-legacy receipt without severity still establishes recovery eligibility, but
-cannot suppress potentially new severity information. A genuinely new occurrence,
-higher severity, expired cooldown and scheduled escalation retain their existing
-admission. Unreadable delivery evidence must not silence a wanted firing.
+### Accepted receipts and already-admitted recoveries survive graceful restart
 
-Firing age alone never expires an owed recovery. Active or uncertain receipts
-remain until successful recovery, explicit resolution or explicit destination
-retirement. The existing occurrence-aware cancellation boundary records positive
-resolution, even when recovery notifications are disabled. Recovery dispatch also
-records it. Missing callbacks, an unavailable/stopped lifecycle owner and an empty
-startup configuration are not evidence that an occurrence ended. Historic orphan
-receipts with no positive resolution/removal evidence remain uncertain.
+Receipt-projection failures identify the destination with the canonical delivery-log
+ID. Internal receiver fingerprints and receipt keys stay out of diagnostics and raw
+support logs. These digests identify receiver content and generations; they never
+store or verify a login password. Pending transport configuration retains its
+existing private queue-storage boundary until settlement, including acknowledged
+work pinned beyond ordinary retention.
 
-Explicit destination removal, disable or endpoint/recipient/target rotation starts
-a durable 30-day retirement grace; it neither retargets nor authorises delivery.
-An exact configuration revert during grace restores the old obligation; after
-retirement cleanup it does not recreate one. New completion timestamps, resolution
-and removal must all be at least 30 days old before their applicable receipt can
-be deleted. Pending/sending/retryable work pins its exact occurrence/destination,
-including a recovery waiting beyond the grace. Unreadable queued work prevents
-receipt cleanup, not age-only fallback. Retirement markers cover late completions
-and are themselves removed when no receipt or retryable job needs them. Future
-rotations therefore do not accumulate permanent receipt/marker state. This does
-not infer resolution for old unobserved orphans or guarantee provider inbox receipt.
+Successful firing receipts own cooldown for the exact alert ID, occurrence
+start, destination identity and durable destination generation. Their persisted highest known severity and
+nondecreasing completion time are read from SQLite for each durable callback. One receiver's
+success cannot suppress another receiver. Scheduled escalations keep their own
+cadence. A legacy receipt has unknown severity and permits the first known
+severity, rather than fabricating a critical history. No destination establishes
+no successful delivery marker. A successful provider audit supplies accepted
+delivery authority while its receipt projection remains pending. Generation-binding
+failures defer the provider attempt until the binding can be persisted. Queue cache-miss
+reads remain inside the existing notification admission lease through shutdown.
+Unreadable cooldown evidence retains the existing availability-first firing policy:
+it does not establish prior success, and duplicate firing delivery is possible
+during a storage read outage. This differs from a known accepted provider outcome,
+whose remaining local settlement never requests another provider send.
 
-`receipt_continuity_test.go` covers migration, severity/completion monotonicity,
-legacy uncertainty, cache eviction, destination separation, expiry, exact revert,
-all three transport retirement paths, pending/retryable/unreadable work and shutdown
-admission. `receipt_retention_continuity_test.go` promotes the independent real-HTTP
-one-day/31-day retention experiment; `notification_restart_continuity_test.go` in
-monitoring promotes its graceful reopen and two-native-process receiver controls,
-including owed recovery and a new occurrence. The old negative experiments remain
-unaltered evidence. These are synthetic queue/receiver controls, not original-estate,
-crash, signal-driven shutdown, installed-service or external-provider recovery.
-A late completion for a removed endpoint keeps its own receipt without publishing
-a cooldown for the replacement. A durable read of an older occurrence cannot
-evict the newer occurrence's cache entry. Explicit configuration changes invalidate
-the cache's destination scope; they do not permit recovery for a different endpoint.
-Configuration retirement is serialized separately from the manager's policy lock.
-Live policy and its shutdown lease are published first, then storage is updated
-without that lock; a blocked accepted enqueue cannot hide a channel-disable or
-destination change from its observers. Existing email-disable drain controls and
-`TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue` pin this ordering and
-require the retirement write to survive shutdown. No read/retention gate is waived.
+Receipt retention follows the delivery obligation. Current destinations retain
+alerts-owned active occurrences without an age limit. One receipt per occurrence
+and current destination bounds duplicate/configuration growth, but it does not
+bound the lifetime number of independent producer occurrences. Patrol and other
+producers without lifecycle authority accumulate receipts indefinitely until
+explicit resolution or destination retirement. Patrol currently has no resolution
+path, so only retirement ends retention for those findings. This regresses main's 30-day expiry
+for that class. Hourly cleanup performs one owner lookup per retained occurrence,
+including a linear active scan and possible history walk, and loads all receipt
+rows into memory. Its time and memory costs are unbounded. Producer identity/tags and owner-aware expiry are explicitly tracked
+in `notification-callback-shutdown-admission`; this is not bounded retention for
+those producers. An
+explicit resolution is retained with the receipt and supplies a 30-day settlement
+window when healthy alerts authority confirms no retained occurrence and no later
+activation. An alerts-owned positive resolution also supplies that window and is retained in
+the receipt before history can compact. An
+active occurrence or later refire overrides an older local disposition. Missing, unreadable,
+degraded or shutting-down current-state authority never establishes inactivity.
+A retained explicit resolution older than 30 days plus authoritative current absence
+can settle an obligation even when history health remains unavailable. Without
+current-state authority these exceptional obligations remain held until repair or
+explicit destination retirement; no age-only deletion is inferred.
+Uncertain obligations remain held until positive resolution or explicit destination
+retirement. They are exceptional retained obligations, not an age-based assertion
+that a recovery is no longer owed. Firing admission invalidates stale cleanup
+snapshots. Only positive lifecycle reactivation cancels delayed recovery; a
+delayed firing callback for a resolved occurrence is discarded, and unavailable
+authority leaves the recovery intact. The positive resolution remains until a
+newer successful firing replaces it; admission alone is not provider acceptance.
+Resolution disposition and new queue snapshots preserve nanosecond precision.
+Legacy whole-second snapshots cannot establish a later activation within that
+same second; positive live active authority remains decisive.
+
+Removing, disabling or changing a destination's recipient/endpoint identity
+explicitly retires that old destination's recovery obligations. Global pause
+does not. Recipient fingerprints include receiver-routing headers, custom fields,
+payload routing and account/relay identity as well as the endpoint; operational
+timeout, severity and TLS controls do not independently create a new recipient.
+Mention formatting, SMTP password and webhook signing-secret rotation preserve correlation to their
+independently identified receiver. Generic HTTP authentication/routing fields and
+Apprise account keys can select a different tenant, so changing them explicitly
+retires the recipient generation. The registry retains only current identities and UUID generations,
+without a permanent catalogue of every retired configuration.
+Webhook keys include receiver fingerprints as well as logical ID and endpoint,
+so accounts sharing one relay endpoint remain independent. Legacy ID/endpoint
+keys migrate transactionally to a uniquely identified current receiver. If several
+current receivers could own an old key with no recorded fingerprint, the old
+obligation remains explicitly uncertain. Removing one receiver later cannot turn
+that ambiguous evidence into authority for the survivor. Positive lifecycle
+settlement or removal of that legacy endpoint bounds the retained obligation.
+When no retained snapshot identifies the old receiver, historical routing changes
+before upgrade cannot be reconstructed from absent configuration. A contradictory
+retained receiver snapshot holds only that legacy endpoint. An entirely unreadable
+legacy snapshot cannot be attributed and conservatively holds all legacy endpoints.
+Held receipts cannot authorise a current receiver's recovery: still-active warnings
+that do not fire again may receive no recovery. Current receiver normalisation
+prevents blank headers and supported aliases from creating false contradictions.
+This pre-admission replay limitation is part of the callback follow-up below.
+Complete bootstrap reconciliation runs only after the canonical monitor attests
+that every saved destination loaded successfully, before queue activation, and
+retires identities changed while stopped. A failed saved-destination read holds the queue and refuses notification
+configuration reads, writes and tests before persistence. Monitoring and alert
+detection continue for both configuration read and delivery storage write faults.
+The existing validated full configuration backup import remains available: it
+positively replaces the saved inventory and returns a fixed saved-but-restart-required
+response if live reload has not reconstructed the notification owner. It applies
+normal independent settings and leaves notification publication held until that
+reconstruction. A full live monitor reload can apply the restored inventory directly. The
+hold clears only when a repaired owner restarts, so an empty partial inventory
+cannot overwrite saved destinations. New notification callbacks are not queued during that hold;
+previously admitted jobs remain durable. Hold-period firings (including warnings)
+and resolved receipts without a recovery row share the explicit callback re-admission
+follow-up. Storage preparation or reconciliation failure also holds delivery rather
+than refusing monitor construction. No volatile queue fallback activates in canonical
+deferred bootstrap when persistent queue construction fails. The legacy low-level unqualified start
+cannot infer removals and is unsuitable for restoring saved inventories. The
+shipped monitor and tenant bootstrap use explicit complete-inventory attestation. An exact
+later configuration revert requires a new successful firing and cannot resurrect
+the retired receipt. Already admitted recoveries retain their receipt through
+pending, sending and retryable failed/dead-letter states. Their existing terminal
+retention or operator disposition bounds that hold. Retired unpinned receipts
+compact on the next cleanup pass. Live same-ID endpoint edits preserve already-admitted
+configuration snapshots; retirement does not retarget those jobs or revoke an
+in-flight provider request. Such late completions do not authorise new recoveries
+for the retired endpoint, including a revert before that request completes.
+Already admitted firing snapshots still reach their original receiver under the
+existing enabled-ID policy. Explicit recipient retirement means those old
+generations no longer admit a new recovery; it never retargets an old snapshot or
+rebinds it to a newer generation. Positive same-start refire ends the previous cooldown
+and cancels that exact occurrence's delayed recovery before dispatch.
+Retirement and destination-registry removal commit together. A failed retirement
+refuses live publication, leaving the previous configuration visible. HTTP setters
+also restore the previously saved configuration and return failure for a retry.
+Configuration import preserves unchanged webhook generations, retires changed or
+removed receivers atomically, rejects duplicate IDs and reloads saved Apprise state.
+Create and import reject duplicate nonempty logical IDs before saving. Existing
+readable legacy inventories, including ID-less or duplicate-ID receivers, still
+restore. Fingerprinted receiver keys keep distinct accounts independent, and
+bootstrap maps only legacy evidence whose receiver can be identified.
+
+Cleanup asks the lifecycle owner outside queue locks, then compares receipt
+completion, generation and disposition revisions before deleting. Lifecycle lookups
+are shared per occurrence and pending recovery pins are collected once per pass.
+Unreadable pending data conservatively pins its identifiable destination or provider.
+Actual provider acceptance is persisted in the existing successful audit before
+receipt projection. Once that acknowledgement is durable, retries perform local
+settlement only, including after restart, without another provider request or
+provider attempt. Pending acknowledged rows retain their audit beyond ordinary
+audit retention and supply cooldown and recovery authority until projection can
+finish. Scalar occurrence facts commit in the same transaction as the successful audit.
+Their indexed exact identity, severity, completion and resolution/recovery
+disposition supply authority independently of mutable retained queue JSON.
+Durable audit order prevents late projection from resurrecting consumed recovery
+or consuming a newer firing in the same generation. Corrupt acknowledged queue
+configuration or alert payload can still settle from those accepted facts without
+another provider call. Unreadable legacy acknowledged payloads whose facts cannot
+be reconstructed remain explicitly incomplete and require storage restoration.
+Final-status failures retry locally. In-process recovery of abandoned accepted
+sending rows excludes attempts still owned by live workers.
+A crash before acknowledgement persists can repeat an external send; if audit
+storage itself fails, ordinary bounded provider retries remain in force. This is
+durable cooldown and recovery correlation, not exactly-once provider delivery.
+Generation and receipt bookkeeping failures retain pending work on a 30-second
+cadence without consuming provider attempts or fabricating provider outcome audits.
+Unsettled storage reports unavailable delivery health. Known retained terminal
+failures remain individually retryable/dismissible alongside that unavailable
+status. Their confirmation counts exclude local settlement work. Future completion
+timestamps are clamped on write and invalid future evidence is repaired at startup,
+so corrected clocks do not re-arm cooldown on every restart.
+
+The migrated four-column receipt primary key is a forward schema transition.
+An older binary's receipt upsert is incompatible with it and its reads do not
+understand retirement. Downgrade requires restoring the previous database backup;
+ordinary source rollback does not establish notification database compatibility.
+
+`delivery_continuity_test.go` covers real HTTP, separate native processes,
+severity escalation, new occurrences, destination scope, legacy schema migration,
+monotonic concurrent completions and cache-miss shutdown. The connected
+`delivery_retention_continuity_test.go` covers the aged receipt reproduction,
+explicit/unknown lifecycle authority, pending recovery pins and destination
+rotation/revert across reopen, same-URL account changes, malformed pending data,
+storage-failure rollback and the acknowledged-send/receipt-commit crash boundary.
+The monitoring constructor tests exercise complete and corrupt saved configuration;
+HTTP configuration controls exercise durable rollback after publication failure.
+Source verification does not qualify installed
+providers, physical power loss, a release or population reliability.
+
+When a retained resolution exists, complete current active-state absence can
+reject a stale firing even when history is unhealthy. Fresh firings without that
+disposition remain admissible, including Patrol findings owned outside alerts.Manager. It never supplies resolution or an expiry timestamp by itself. An aged explicit
+receipt resolution plus complete current absence permits settlement despite a
+permanent history gap; pending recovery pins and completion revision checks still apply. Already
+admitted firings waiting for genuinely unavailable current-state authority report
+`occurrence_lifecycle_unavailable`, separately from storage settlement. New firing
+callbacks are not queued while a known resolved occurrence lacks reactivation
+authority. Resolution cancellation is guarded by a durable monotonic disposition
+sequence checked again under delivery gates, including across backward clock steps.
+Only a newer resolution order invalidates reactivation; compacting old facts cannot
+drop a valid firing. Queued recovery matching uses exact occurrence identity rather
+than comparing separately sourced wall clocks.
+Retained legacy queue snapshots that contradict today's sole receiver prevent
+shared receipt evidence from becoming that receiver's cooldown or recovery proof.
+Exact already-admitted legacy recovery copies remain retired and pinned at their
+immutable receiver until local completion consumes them.
+
+Independent notification producers do not acquire alerts-manager lifecycle ownership
+merely by using SendAlert. Their successful receipts remain unknown
+obligations until positive resolution or explicit destination retirement if no
+matching lifecycle authority exists. Shared producer lifecycle/admission ownership
+belongs to the callback follow-up; absence from another producer's inventory is
+not evidence that the notification should be dropped or its receipt expired.
+
+Fresh firing admission without a retained resolution deliberately preserves work
+from independent producers. It also permits replay of an alerts-owned stale firing
+whose resolution never reached notifier admission, including checkpointed work at
+shutdown. Producer tags/owner identity are required to restore owner-specific stale
+rejection without dropping findings. This trade remains in the callback follow-up.
+Owner callbacks must invoke the notifier outside their owner's locks whenever its
+lifecycle provider can query that owner. The monitor's asynchronous firing adapter
+and escalation wrapper satisfy this convention; a synchronous subscriber must not
+call the notifier while holding the alerts lock.

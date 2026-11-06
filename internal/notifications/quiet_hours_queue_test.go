@@ -98,7 +98,7 @@ func loadQuietReplay(t *testing.T, q *NotificationQueue, id string) *QueuedNotif
 	t.Helper()
 	n, err := q.scanNotification(q.db.QueryRow(`SELECT id, type, method, status, alerts, config,
   attempts, max_attempts, last_attempt, last_error, created_at, next_retry_at,
-  completed_at, payload_bytes, operational_links FROM notification_queue WHERE id = ?`, id))
+  completed_at, payload_bytes, operational_links, receipt_epoch FROM notification_queue WHERE id = ?`, id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func quietReplayRows(t *testing.T, q *NotificationQueue) []*QueuedNotification {
 	t.Helper()
 	rows, err := q.db.Query(`SELECT id, type, method, status, alerts, config,
   attempts, max_attempts, last_attempt, last_error, created_at, next_retry_at,
-  completed_at, payload_bytes, operational_links FROM notification_queue ORDER BY id`)
+  completed_at, payload_bytes, operational_links, receipt_epoch FROM notification_queue ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,12 +130,16 @@ func quietReplayRows(t *testing.T, q *NotificationQueue) []*QueuedNotification {
 
 func seedQuietReplay(t *testing.T, q *NotificationQueue, hook WebhookConfig, now time.Time, batch ...*alerts.Alert) *QueuedNotification {
 	t.Helper()
+	return seedQuietReplayOfType(t, q, hook, now, "webhook", batch...)
+}
+func seedQuietReplayOfType(t *testing.T, q *NotificationQueue, hook WebhookConfig, now time.Time, kind string, batch ...*alerts.Alert) *QueuedNotification {
+	t.Helper()
 	config, err := json.Marshal(hook)
 	if err != nil {
 		t.Fatal(err)
 	}
 	due := now.Add(-time.Hour)
-	n := &QueuedNotification{ID: "admitted-batch", Type: "webhook", DestinationID: "webhook:" + hook.ID,
+	n := &QueuedNotification{ID: "admitted-batch", Type: kind, DestinationID: "webhook:" + hook.ID,
 		Alerts: batch, Config: config, MaxAttempts: 3, CreatedAt: now.Add(-24 * time.Hour), NextRetryAt: &due}
 	if err := q.Enqueue(n); err != nil {
 		t.Fatal(err)
@@ -242,6 +246,9 @@ func TestQueuedQuietHoursMixedBatchPreservesDeliveryAndBudget(t *testing.T) {
 	originalID := n.ID
 	q.processNotification(n)
 	got := sink.all()
+	if len(q.processingNotifications) != 0 {
+		t.Fatalf("partition retained worker ownership: %+v", q.processingNotifications)
+	}
 	if len(got) != 1 || len(got[0].Alerts) != 1 || got[0].Alerts[0].ID != critical.ID {
 		t.Fatalf("QUIET_MIXED_BATCH: immediately eligible subset was delayed or held member leaked: %+v", got)
 	}
@@ -285,6 +292,9 @@ func TestQueuedQuietHoursMixedBatchPreservesDeliveryAndBudget(t *testing.T) {
 	// third provider attempt, with no repetition of the already sent child.
 	now = *held.NextRetryAt
 	q.processNotification(held)
+	if len(q.processingNotifications) != 0 {
+		t.Fatalf("released partition retained worker ownership: %+v", q.processingNotifications)
+	}
 	if got := sink.all(); len(got) != 2 || got[1].Alerts[0].ID != warning.ID || len(got[1].Alerts) != 1 {
 		t.Fatalf("released partition delivery: %+v", got)
 	}
@@ -419,13 +429,13 @@ func TestQueuedQuietHoursResolvedKeepsUndeliveredReceipt(t *testing.T) {
 	critical := quietReplayAlert("critical", alerts.AlertLevelCritical, now.Add(-time.Hour))
 	batch := []*alerts.Alert{warning, critical}
 	firing := notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: batch, WebhookConfig: &hook}
-	notifier.recordSuccessfulDelivery(firing, now.Add(-time.Hour))
+	recordFixtureSuccessfulDelivery(notifier, firing, now.Add(-time.Hour))
 	for _, alert := range batch {
 		alert.LatestTransition.To = operationaltrust.OperationalResolved
 		annotateResolvedMetadata(alert, now.Add(-time.Minute))
 	}
-	n := seedQuietReplay(t, q, hook, now, batch...)
-	if _, err := q.db.Exec(`UPDATE notification_queue SET type = 'webhook_resolved', method = 'resolved-group' WHERE id = ?`, n.ID); err != nil {
+	n := seedQuietReplayOfType(t, q, hook, now, "webhook_resolved", batch...)
+	if _, err := q.db.Exec(`UPDATE notification_queue SET method = 'resolved-group' WHERE id = ?`, n.ID); err != nil {
 		t.Fatal(err)
 	}
 	q.processNotification(n)

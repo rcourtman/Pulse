@@ -1,11 +1,13 @@
 package notifications
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime/pprof"
 	"strings"
 	"testing"
 	"time"
@@ -334,6 +336,10 @@ func TestRestartKeepsDueDeliveryPendingUntilConfigured(t *testing.T) {
 	select {
 	case <-received:
 	case <-time.After(5 * time.Second):
+		var trace bytes.Buffer
+		if err := pprof.Lookup("goroutine").WriteTo(&trace, 2); err == nil {
+			t.Log(trace.String())
+		}
 		stats, _ := queue.GetQueueStats()
 		t.Fatalf("configured due delivery not sent: %v", stats)
 	}

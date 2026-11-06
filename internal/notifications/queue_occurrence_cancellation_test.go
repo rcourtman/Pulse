@@ -42,7 +42,7 @@ func TestQueueOccurrenceCancellationPreservesRecurrenceAcrossRestart(t *testing.
 					t.Fatal(err)
 				}
 			}
-			if err := q.RecordDeliveryReceipt(current.ID, current.StartTime, "webhook:ops", time.Now()); err != nil {
+			if err := recordFixtureDeliveryReceipt(q, current.ID, current.StartTime, "webhook:ops", time.Now(), notificationSeverityRank(current.Level)); err != nil {
 				t.Fatal(err)
 			}
 			for _, identity := range []struct {

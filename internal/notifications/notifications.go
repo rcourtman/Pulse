@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"math"
@@ -23,6 +24,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	pkgsecurityutil "github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
@@ -71,13 +73,16 @@ const (
 )
 
 type notificationDeliveryJob struct {
-	Type          string
-	Event         notificationEvent
-	Alerts        []*alerts.Alert
-	ResolvedAt    time.Time
-	EmailConfig   *EmailConfig
-	WebhookConfig *WebhookConfig
-	AppriseConfig *AppriseConfig
+	QueueID           string
+	Type              string
+	ReceiptEpoch      string
+	ReceiptEpochBound bool
+	Event             notificationEvent
+	Alerts            []*alerts.Alert
+	ResolvedAt        time.Time
+	EmailConfig       *EmailConfig
+	WebhookConfig     *WebhookConfig
+	AppriseConfig     *AppriseConfig
 }
 
 type notificationQueueBucket struct {
@@ -303,47 +308,50 @@ func (l *notificationLifecycle) close() {
 
 // NotificationManager handles sending notifications
 type NotificationManager struct {
-	mu                 sync.RWMutex
-	receiptConfigMu    sync.Mutex // Orders configuration/retirement publication without holding mu across storage.
-	stopOnce           sync.Once
-	cleanupWG          sync.WaitGroup
-	lifecycle          notificationLifecycle // Admission and shutdown ownership of queue and direct delivery work
-	emailConfig        EmailConfig
-	emailManager       *EnhancedEmailManager // Shared email manager for rate limiting
-	webhooks           []WebhookConfig
-	appriseConfig      AppriseConfig
-	enabled            bool
-	cooldown           time.Duration
-	initialTarget      notificationDeliveryTarget
-	notifyOnResolve    bool
-	lastNotified       map[string]notificationRecord
-	deliveryReceipts   map[string]struct{}
-	groupWindow        time.Duration
-	groupingEnabled    bool
-	pendingAlerts      []*alerts.Alert
-	pendingAlertIndex  map[pendingFiringOccurrence]int
-	groupTimer         *time.Timer
-	groupDeadline      time.Time // First admission fixes this window; shutdown must not restart or shorten it
-	pendingResolved    []*alerts.Alert
-	resolvedGroupTimer *time.Timer
-	groupByNode        bool
-	publicURL          string // Full URL to access Pulse
-	groupByGuest       bool
-	webhookHistory     []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
-	webhookRateLimits  map[string]*webhookRateLimit // Track rate limits per webhook URL
-	webhookRateMu      sync.Mutex                   // Separate mutex for webhook rate limiting
-	webhookRateCleanup time.Time                    // Last cleanup time for webhook rate limit entries
-	appriseExec        appriseExecFunc
-	queue              *NotificationQueue                              // Persistent notification queue
-	tenantID           string                                          // Tenant identity stamped into webhook payloads (env default)
-	tenantName         string                                          // Tenant display name stamped into webhook payloads (env default)
-	tenantResolver     func() (id string, name string)                 // Org-backed tenant identity override (multi-tenant)
-	webhookClient      *http.Client                                    // Shared HTTP client for webhooks
-	stopCleanup        chan struct{}                                   // Signal to stop cleanup goroutine
-	cleanupDone        chan struct{}                                   // Signals cleanup goroutine exit during shutdown
-	allowedPrivateNets []*net.IPNet                                    // Parsed CIDR ranges allowed for private webhook targets
-	allowedPrivateMu   sync.RWMutex                                    // Protects allowedPrivateNets
-	resolveWebhookIPs  func(context.Context, string) ([]net.IP, error) // Test seam; nil uses the context-aware default resolver
+	mu                  sync.RWMutex
+	destinationMu       sync.Mutex // Serialize destination generations without holding mu across storage.
+	destinationRevision uint64
+	stopOnce            sync.Once
+	cleanupWG           sync.WaitGroup
+	lifecycle           notificationLifecycle // Admission and shutdown ownership of queue and direct delivery work
+	emailConfig         EmailConfig
+	emailManager        *EnhancedEmailManager // Shared email manager for rate limiting
+	webhooks            []WebhookConfig
+	appriseConfig       AppriseConfig
+	enabled             bool
+	configurationError  error // Sticky bootstrap hold; restore files and reconstruct the owner.
+	cooldown            time.Duration
+	deliveryCooldown    map[string]notificationRecord
+	initialTarget       notificationDeliveryTarget
+	notifyOnResolve     bool
+	lastNotified        map[string]notificationRecord
+	deliveryReceipts    map[string]struct{}
+	groupWindow         time.Duration
+	groupingEnabled     bool
+	pendingAlerts       []*alerts.Alert
+	pendingAlertIndex   map[pendingFiringOccurrence]int
+	groupTimer          *time.Timer
+	groupDeadline       time.Time // First admission fixes this window; shutdown must not restart or shorten it
+	pendingResolved     []*alerts.Alert
+	resolvedGroupTimer  *time.Timer
+	groupByNode         bool
+	publicURL           string // Full URL to access Pulse
+	groupByGuest        bool
+	webhookHistory      []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
+	webhookRateLimits   map[string]*webhookRateLimit // Track rate limits per webhook URL
+	webhookRateMu       sync.Mutex                   // Separate mutex for webhook rate limiting
+	webhookRateCleanup  time.Time                    // Last cleanup time for webhook rate limit entries
+	appriseExec         appriseExecFunc
+	queue               *NotificationQueue                              // Persistent notification queue
+	tenantID            string                                          // Tenant identity stamped into webhook payloads (env default)
+	tenantName          string                                          // Tenant display name stamped into webhook payloads (env default)
+	tenantResolver      func() (id string, name string)                 // Org-backed tenant identity override (multi-tenant)
+	webhookClient       *http.Client                                    // Shared HTTP client for webhooks
+	stopCleanup         chan struct{}                                   // Signal to stop cleanup goroutine
+	cleanupDone         chan struct{}                                   // Signals cleanup goroutine exit during shutdown
+	allowedPrivateNets  []*net.IPNet                                    // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu    sync.RWMutex                                    // Protects allowedPrivateNets
+	resolveWebhookIPs   func(context.Context, string) ([]net.IP, error) // Test seam; nil uses the context-aware default resolver
 }
 
 type webhookHTTPResult struct {
@@ -505,7 +513,7 @@ func annotateResolvedMetadata(alert *alerts.Alert, resolvedAt time.Time) {
 	if alert.Metadata == nil {
 		alert.Metadata = make(map[string]interface{})
 	}
-	alert.Metadata[metadataResolvedAt] = resolvedAt.Format(time.RFC3339)
+	alert.Metadata[metadataResolvedAt] = resolvedAt.Format(time.RFC3339Nano)
 }
 
 // resolvedAlertMessage is the one-line account of a resolved alert. A close
@@ -687,10 +695,11 @@ func defaultAppriseExec(ctx context.Context, args []string) ([]byte, error) {
 }
 
 type notificationRecord struct {
-	lastSent         time.Time
-	alertStart       time.Time
-	level            alerts.AlertLevel // Highest delivered severity for this occurrence.
-	destinationScope string            // Config identity used by the durable cache read.
+	successOrder int64
+	lastSent     time.Time
+	alertStart   time.Time
+	level        alerts.AlertLevel // Highest delivered severity for this occurrence.
+	resolved     bool
 }
 
 // Alert represents an alert (interface to avoid circular dependency)
@@ -863,7 +872,8 @@ func newNotificationManagerWithDataDir(publicURL string, dataDir string, deferQu
 
 	// Initialize persistent queue with tenant-specific data directory
 	queue, err := NewNotificationQueue(dataDir)
-	if err != nil {
+	persistentQueueErr := err
+	if err != nil && !deferQueueProcessing {
 		log.Error().Err(err).Msg("failed to initialize persistent notification queue, falling back to in-memory queue")
 		queue, err = NewInMemoryNotificationQueue()
 		if err != nil {
@@ -904,6 +914,10 @@ func newNotificationManagerWithDataDir(publicURL string, dataDir string, deferQu
 		cleanupDone:       make(chan struct{}),
 	}
 
+	if deferQueueProcessing && persistentQueueErr != nil {
+		nm.HoldStorageAuthority(persistentQueueErr)
+	}
+
 	// Create webhook client after NotificationManager is initialized
 	nm.webhookClient = nm.createSecureWebhookClient(WebhookTimeout)
 
@@ -921,15 +935,86 @@ func newNotificationManagerWithDataDir(publicURL string, dataDir string, deferQu
 	return nm
 }
 
-// StartQueueProcessing activates persisted deliveries after the owner has
-// restored its complete notification policy and destination configuration.
-func (n *NotificationManager) StartQueueProcessing() {
+// StartQueueProcessing retains the legacy activation API. It does not attest a
+// complete saved destination set and therefore cannot retire omitted identities.
+func (n *NotificationManager) StartQueueProcessing() error { return n.startQueueProcessing(false) }
+
+// StartQueueProcessingWithConfiguration activates only after the bootstrap owner
+// has successfully loaded every destination. An unreadable file is not removal.
+func (n *NotificationManager) StartQueueProcessingWithConfiguration(complete bool) error {
+	if !complete {
+		log.Error().Msg("Notification queue held because saved destination configuration is incomplete")
+		return fmt.Errorf("saved notification destination configuration is incomplete")
+	}
+	return n.startQueueProcessing(true)
+}
+
+func (n *NotificationManager) startQueueProcessing(complete bool) error {
+	if err := n.ConfigurationError(); err != nil {
+		return err
+	}
+	n.destinationMu.Lock()
+	var err error
+	if complete {
+		err = n.reconcileDeliveryDestinations()
+	}
+	n.destinationMu.Unlock()
+	if err != nil {
+		log.Error().Err(err).Msg("Notification queue held because destination reconciliation failed")
+		return err
+	}
 	n.mu.RLock()
 	queue := n.queue
 	n.mu.RUnlock()
 	if queue != nil {
 		queue.SetProcessor(n.ProcessQueuedNotification)
 	}
+	return nil
+}
+
+// HoldIncompleteConfiguration is a bootstrap fence. A partial inventory must
+// neither activate persisted jobs nor become a writable replacement inventory.
+// The hold lasts until the owner is reconstructed after storage is repaired.
+func (n *NotificationManager) HoldIncompleteConfiguration(err error) {
+	if err == nil {
+		return
+	}
+	n.mu.Lock()
+	n.configurationError = errors.Join(n.configurationError, err)
+	n.mu.Unlock()
+}
+
+// ErrNotificationStorageAuthority identifies a bootstrap storage hold without
+// exposing paths or driver errors to the operator-facing health response.
+var ErrNotificationStorageAuthority = errors.New("notification storage authority unavailable")
+
+// HoldStorageAuthority pauses a bootstrap owner while persistent delivery state is unavailable.
+func (n *NotificationManager) HoldStorageAuthority(err error) {
+	if err != nil {
+		n.HoldIncompleteConfiguration(errors.Join(ErrNotificationStorageAuthority, err))
+	}
+}
+
+// ConfigurationHoldReason returns a content-free health reason for a bootstrap hold.
+func ConfigurationHoldReason(err error) string {
+	if errors.Is(err, ErrNotificationStorageAuthority) {
+		return NotificationReasonStorageBootstrapUnavailable
+	}
+	return NotificationReasonConfigurationUnavailable
+}
+
+// ConfigurationHoldMessage describes the operator action without exposing driver details.
+func ConfigurationHoldMessage(err error) string {
+	if errors.Is(err, ErrNotificationStorageAuthority) {
+		return "Notification delivery storage is unavailable. Check server storage and logs, then restart Pulse."
+	}
+	return "Saved notification configuration is unavailable. Restore a configuration backup and restart Pulse."
+}
+
+func (n *NotificationManager) ConfigurationError() error {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.configurationError
 }
 
 // SetQuietHoursPolicyProvider binds persistent replay to the alert owner's
@@ -1002,14 +1087,25 @@ func (n *NotificationManager) GetPublicURL() string {
 }
 
 // SetEmailConfig updates email configuration
-func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
-	n.receiptConfigMu.Lock()
-	defer n.receiptConfigMu.Unlock()
+func (n *NotificationManager) SetEmailConfig(config EmailConfig) error {
+	if err := n.ConfigurationError(); err != nil {
+		return err
+	}
+	if !n.lifecycle.join() {
+		return fmt.Errorf("notification manager stopping")
+	}
+	defer n.lifecycle.release()
+	n.destinationMu.Lock()
+	unlockDestination := sync.OnceFunc(n.destinationMu.Unlock)
+	defer unlockDestination()
 	n.mu.Lock()
 	config = normalizeEmailConfig(copyEmailConfig(config))
-	previousDestinations := n.receiptDestinationKeysLocked()
-	n.emailConfig = config
-	retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
+	oldKey := configuredDeliveryDestinationKey(notificationDeliveryJob{Type: "email", EmailConfig: &n.emailConfig})
+	oldFingerprint := notificationDeliveryConfigurationFingerprint(notificationDeliveryJob{Type: "email", EmailConfig: &n.emailConfig})
+	newKey := configuredDeliveryDestinationKey(notificationDeliveryJob{Type: "email", EmailConfig: &config})
+	if oldFingerprint != notificationDeliveryConfigurationFingerprint(notificationDeliveryJob{Type: "email", EmailConfig: &config}) {
+		newKey = ""
+	}
 
 	// Recreate email manager with new config to preserve rate limiting state
 	rateLimit := effectiveEmailRateLimit(config.RateLimit)
@@ -1023,43 +1119,71 @@ func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 		SkipTLSVerify: false,
 		AuthRequired:  config.Username != "" && config.Password != "",
 	}
-	n.emailManager = NewEnhancedEmailManager(providerConfig)
+	preparedManager := NewEnhancedEmailManager(providerConfig)
 	var queue *NotificationQueue
-	if !config.Enabled && n.queue != nil && n.lifecycle.join() {
+	if !config.Enabled && n.queue != nil {
 		queue = n.queue
 	}
 	n.mu.Unlock()
-	retireReceipts()
+	if err := n.retireDestination(oldKey, newKey); err != nil {
+		return fmt.Errorf("retire previous email destination: %w", err)
+	}
+	n.mu.Lock()
+	n.emailConfig, n.emailManager = config, preparedManager
+	n.destinationRevision++
+	n.mu.Unlock()
+
+	unlockDestination()
 
 	if queue != nil {
-		defer n.lifecycle.release()
 		if err := queue.CancelByTypes([]string{"email", "email" + queueTypeSuffixResolved}, "Email notifications disabled"); err != nil {
 			log.Error().Err(err).Msg("failed to cancel queued email notifications after disabling email delivery")
 		}
 	}
+	return nil
 }
 
 // SetAppriseConfig updates Apprise configuration.
-func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) {
-	n.receiptConfigMu.Lock()
-	defer n.receiptConfigMu.Unlock()
+func (n *NotificationManager) SetAppriseConfig(config AppriseConfig) error {
+	if err := n.ConfigurationError(); err != nil {
+		return err
+	}
+	if !n.lifecycle.join() {
+		return fmt.Errorf("notification manager stopping")
+	}
+	defer n.lifecycle.release()
+	n.destinationMu.Lock()
+	unlockDestination := sync.OnceFunc(n.destinationMu.Unlock)
+	defer unlockDestination()
 	n.mu.Lock()
-	previousDestinations := n.receiptDestinationKeysLocked()
-	n.appriseConfig = NormalizeAppriseConfig(config)
-	retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
+	config = NormalizeAppriseConfig(config)
+	oldKey := configuredDeliveryDestinationKey(notificationDeliveryJob{Type: "apprise", AppriseConfig: &n.appriseConfig})
+	oldFingerprint := notificationDeliveryConfigurationFingerprint(notificationDeliveryJob{Type: "apprise", AppriseConfig: &n.appriseConfig})
+	newKey := configuredDeliveryDestinationKey(notificationDeliveryJob{Type: "apprise", AppriseConfig: &config})
+	if oldFingerprint != notificationDeliveryConfigurationFingerprint(notificationDeliveryJob{Type: "apprise", AppriseConfig: &config}) {
+		newKey = ""
+	}
 	var queue *NotificationQueue
-	if !n.appriseConfig.Enabled && n.queue != nil && n.lifecycle.join() {
+	if !config.Enabled && n.queue != nil {
 		queue = n.queue
 	}
 	n.mu.Unlock()
-	retireReceipts()
+	if err := n.retireDestination(oldKey, newKey); err != nil {
+		return fmt.Errorf("retire previous Apprise destination: %w", err)
+	}
+	n.mu.Lock()
+	n.appriseConfig = config
+	n.destinationRevision++
+	n.mu.Unlock()
+
+	unlockDestination()
 
 	if queue != nil {
-		defer n.lifecycle.release()
 		if err := queue.CancelByTypes([]string{"apprise", "apprise" + queueTypeSuffixResolved}, "Apprise notifications disabled"); err != nil {
 			log.Error().Err(err).Msg("failed to cancel queued Apprise notifications after disabling delivery")
 		}
 	}
+	return nil
 }
 
 // GetAppriseConfig returns a copy of the Apprise configuration.
@@ -1139,6 +1263,7 @@ func (n *NotificationManager) SetGroupingWindow(seconds int) {
 // grouping (or selecting a zero-second window) flushes already-pending alerts
 // as individual deliveries so a live config change cannot merge or lose them.
 func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNode, byGuest bool) {
+	n.destinationMu.Lock()
 	if seconds < 0 {
 		seconds = 0
 	}
@@ -1178,6 +1303,7 @@ func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNod
 		queue = n.queue
 	}
 	n.mu.Unlock()
+	n.destinationMu.Unlock()
 	if len(pending) > 0 {
 		defer n.lifecycle.release()
 	}
@@ -1209,52 +1335,95 @@ func (n *NotificationManager) SetGroupingOptions(byNode, byGuest bool) {
 
 // AddWebhook adds a webhook configuration
 func (n *NotificationManager) AddWebhook(webhook WebhookConfig) {
-	n.receiptConfigMu.Lock()
-	defer n.receiptConfigMu.Unlock()
+	if n.ConfigurationError() != nil {
+		return
+	}
+	n.destinationMu.Lock()
+	defer n.destinationMu.Unlock()
 	n.mu.Lock()
-	previousDestinations := n.receiptDestinationKeysLocked()
+	defer n.mu.Unlock()
 	n.webhooks = append(n.webhooks, copyWebhookConfig(NormalizeWebhookConfig(webhook)))
-	retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
-	n.mu.Unlock()
-	retireReceipts()
+	n.destinationRevision++
 }
 
-// UpdateWebhook updates an existing webhook
-func (n *NotificationManager) UpdateWebhook(webhookID string, webhook WebhookConfig) error {
-	n.receiptConfigMu.Lock()
-	defer n.receiptConfigMu.Unlock()
+func (n *NotificationManager) UpdateWebhook(id string, webhook WebhookConfig) error {
+	if err := n.ConfigurationError(); err != nil {
+		return err
+	}
+	n.destinationMu.Lock()
+	defer n.destinationMu.Unlock()
 	n.mu.Lock()
 	for i, w := range n.webhooks {
-		if w.ID == webhookID {
-			previousDestinations := n.receiptDestinationKeysLocked()
-			n.webhooks[i] = copyWebhookConfig(NormalizeWebhookConfig(webhook))
-			retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
+		if w.ID == id {
+			oldKey := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &w})
+			prepared := copyWebhookConfig(NormalizeWebhookConfig(webhook))
+			newKey := configuredDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &prepared})
+			if notificationDeliveryConfigurationFingerprint(notificationDeliveryJob{Type: "webhook", WebhookConfig: &w}) != notificationDeliveryConfigurationFingerprint(notificationDeliveryJob{Type: "webhook", WebhookConfig: &prepared}) {
+				newKey = ""
+			}
+			aliases := removedLegacyWebhookAliases(n.webhooks, i, &prepared)
 			n.mu.Unlock()
-			retireReceipts()
+			if err := n.retireDestination(oldKey, newKey, aliases...); err != nil {
+				return fmt.Errorf("retire previous webhook destination: %w", err)
+			}
+			n.mu.Lock()
+			n.webhooks[i] = prepared
+			n.destinationRevision++
+			n.mu.Unlock()
 			return nil
 		}
 	}
 	n.mu.Unlock()
-	return fmt.Errorf("webhook not found: %s", webhookID)
+	return fmt.Errorf("webhook not found: %s", id)
 }
 
-// DeleteWebhook removes a webhook
-func (n *NotificationManager) DeleteWebhook(webhookID string) error {
-	n.receiptConfigMu.Lock()
-	defer n.receiptConfigMu.Unlock()
+func (n *NotificationManager) DeleteWebhook(id string) error {
+	if err := n.ConfigurationError(); err != nil {
+		return err
+	}
+	n.destinationMu.Lock()
+	defer n.destinationMu.Unlock()
 	n.mu.Lock()
 	for i, w := range n.webhooks {
-		if w.ID == webhookID {
-			previousDestinations := n.receiptDestinationKeysLocked()
+		if w.ID == id {
+			key := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &w})
+			aliases := removedLegacyWebhookAliases(n.webhooks, i, nil)
+			n.mu.Unlock()
+			if err := n.retireDestination(key, "", aliases...); err != nil {
+				return fmt.Errorf("retire removed webhook destination: %w", err)
+			}
+			n.mu.Lock()
 			n.webhooks = append(n.webhooks[:i], n.webhooks[i+1:]...)
-			retireReceipts := n.prepareReceiptDestinationUpdateLocked(previousDestinations)
+			n.destinationRevision++
 			n.mu.Unlock()
-			retireReceipts()
 			return nil
 		}
 	}
 	n.mu.Unlock()
-	return fmt.Errorf("webhook not found: %s", webhookID)
+	return fmt.Errorf("webhook not found: %s", id)
+}
+
+func removedLegacyWebhookAliases(hooks []WebhookConfig, index int, replacement *WebhookConfig) []string {
+	old := hooks[index]
+	if !old.Enabled {
+		return nil
+	}
+	key, _ := legacyWebhookDestination(old)
+	if replacement != nil && replacement.Enabled {
+		next, _ := legacyWebhookDestination(*replacement)
+		if key == next {
+			return nil
+		}
+	}
+	for i, hook := range hooks {
+		if i != index && hook.Enabled {
+			other, _ := legacyWebhookDestination(hook)
+			if key == other {
+				return nil
+			}
+		}
+	}
+	return []string{key}
 }
 
 // GetWebhooks returns all webhook configurations
@@ -1368,6 +1537,10 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	if alert == nil {
 		return
 	}
+	// Fresh firings cannot inherit local recovery-settlement disposition from
+	// caller metadata. Clone owns this map; the alerts owner's state is intact.
+	delete(alert.Metadata, metadataResolvedAt)
+	delete(alert.Metadata, metadataReceiptRecovered)
 	if options.target == "" {
 		options.target = notificationDeliveryTargetAll
 	}
@@ -1381,8 +1554,8 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		Bool("emailEnabled", n.emailConfig.Enabled).
 		Msg("send alert called")
 
-	if !n.enabled {
-		log.Debug().Msg("notifications disabled, skipping")
+	if !n.enabled || n.configurationError != nil {
+		log.Debug().Msg("notifications disabled or configuration unavailable, skipping")
 		n.mu.Unlock()
 		return
 	}
@@ -1395,48 +1568,44 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 	}
 	defer n.lifecycle.release()
 
-	// Check cooldown. A disabled cooldown means "do not send repeat
-	// notifications for the same active alert occurrence". A higher severity is
-	// new information, not a repeat. Scheduled escalation retains its explicit
-	// bypass because its cadence is owned by the alert schedule.
-	record, exists := n.lastNotified[alert.ID]
-	cached := record
-	destinations := n.receiptDestinationKeysLocked()
-	scope := receiptDestinationScope(destinations)
-	if exists && record.destinationScope != "" && record.destinationScope != scope {
-		exists = false
+	n.mu.Unlock()
+	var exists bool
+	for {
+		var revision uint64
+		exists, revision = n.firingInCooldown(alert, options)
+		n.mu.Lock()
+		if !n.enabled {
+			n.mu.Unlock()
+			return
+		}
+		if revision == n.destinationRevision {
+			break
+		}
+		n.mu.Unlock()
 	}
-	if (!exists || !record.alertStart.Equal(alert.StartTime)) && n.queue != nil {
-		var err error
-		record, exists, err = n.queue.deliveryCooldown(alert.ID, alert.StartTime, destinations)
-		if err != nil {
-			// Unknown evidence must not silence a wanted firing.
-			log.Error().Err(err).Str("alertID", alert.ID).Msg("Could not restore notification cooldown")
-		} else if exists {
-			record.destinationScope = scope
-			if !cached.alertStart.After(record.alertStart) {
-				if n.lastNotified == nil {
-					n.lastNotified = make(map[string]notificationRecord)
-				}
-				n.lastNotified[alert.ID] = record
+	if exists && !options.bypassCooldown {
+		n.mu.Unlock()
+		return
+	}
+	queue := n.queue
+	n.mu.Unlock()
+	if queue != nil {
+		for {
+			err := queue.reopenReceiptOccurrence(alert.ID, alert.StartTime)
+			if errors.Is(err, errNotificationDispositionChanged) {
+				continue
 			}
+			if errors.Is(err, ErrNotificationDeliverySkipped) || errors.Is(err, errNotificationOccurrenceUnavailable) {
+				return
+			}
+			if err != nil {
+				log.Error().Err(err).Msg("Notification firing awaits occurrence lifecycle authority")
+			}
+			break
 		}
 	}
-	severityIncreased := notificationSeverityRank(record.level) > 0 && notificationSeverityRank(alert.Level) > notificationSeverityRank(record.level)
-	if !options.bypassCooldown && !severityIncreased && exists && record.alertStart.Equal(alert.StartTime) && (n.cooldown <= 0 || time.Since(record.lastSent) < n.cooldown) {
-		elapsed := time.Since(record.lastSent)
-		remainingCooldown := time.Duration(0)
-		if n.cooldown > elapsed {
-			remainingCooldown = n.cooldown - elapsed
-		}
-		log.Info().
-			Str("alertID", alert.ID).
-			Str("resourceName", alert.ResourceName).
-			Str("type", alert.Type).
-			Dur("timeSince", elapsed).
-			Dur("cooldown", n.cooldown).
-			Dur("remainingCooldown", remainingCooldown).
-			Msg("alert notification in cooldown for active alert - notification suppressed")
+	n.mu.Lock()
+	if !n.enabled {
 		n.mu.Unlock()
 		return
 	}
@@ -1448,7 +1617,7 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		queue := n.queue
 		n.mu.Unlock()
 
-		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, options.target, options.destinationIDs, queue)
+		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, options.target, options.destinationIDs, queue, options.bypassCooldown)
 		return
 	}
 
@@ -1539,16 +1708,8 @@ func notificationSeverityRank(level alerts.AlertLevel) int {
 	}
 }
 
-func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, sentAt time.Time, deliveredDestination ...string) {
+func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, sentAt time.Time) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
-	destinations := n.receiptDestinationKeysLocked()
-	if len(deliveredDestination) > 0 && !destinations[deliveredDestination[0]] {
-		// An admitted old snapshot can complete after configuration rotates.
-		// Keep its receipt, but never lend its cooldown to the replacement.
-		return
-	}
-	scope := receiptDestinationScope(destinations)
 	if n.lastNotified == nil {
 		n.lastNotified = make(map[string]notificationRecord)
 	}
@@ -1566,7 +1727,7 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 			if previous.alertStart.After(alert.StartTime) {
 				continue
 			}
-			if previous.alertStart.Equal(alert.StartTime) && (previous.destinationScope == "" || previous.destinationScope == scope) {
+			if previous.alertStart.Equal(alert.StartTime) {
 				// A late warning cannot re-enable critical delivery, and an
 				// earlier completion cannot shorten the same occurrence's hold.
 				if notificationSeverityRank(previous.level) > notificationSeverityRank(level) {
@@ -1578,12 +1739,12 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 			}
 		}
 		n.lastNotified[alert.ID] = notificationRecord{
-			level:            level,
-			lastSent:         lastSent,
-			alertStart:       alert.StartTime,
-			destinationScope: scope,
+			level:      level,
+			lastSent:   lastSent,
+			alertStart: alert.StartTime,
 		}
 	}
+	n.mu.Unlock()
 }
 
 func (n *NotificationManager) dispatchFiringAlerts(
@@ -1594,6 +1755,7 @@ func (n *NotificationManager) dispatchFiringAlerts(
 	target notificationDeliveryTarget,
 	destinationIDs []string,
 	queue *NotificationQueue,
+	bypassCooldown ...bool,
 ) {
 	jobs := buildNotificationDeliveryJobsForSelection(
 		emailConfig,
@@ -1605,10 +1767,12 @@ func (n *NotificationManager) dispatchFiringAlerts(
 		target,
 		destinationIDs,
 	)
+	if len(bypassCooldown) == 0 || !bypassCooldown[0] {
+		jobs = n.filterFiringJobsByCooldown(jobs)
+	} else {
+		jobs = n.bindDeliveryEpochs(jobs)
+	}
 	if len(jobs) == 0 {
-		if len(destinationIDs) == 0 {
-			n.markAlertsNotified(alertsToSend, time.Now())
-		}
 		return
 	}
 	if queue != nil {
@@ -1647,6 +1811,9 @@ func notificationDeliveryDestinationKey(job notificationDeliveryJob) string {
 			return ""
 		}
 		identity = strings.Join([]string{webhookID, webhookURL}, "\x1f")
+		// A relay URL can route to different accounts. Include the receiver
+		// fingerprint so each actual recipient owns independent authority.
+		identity += "\x1f" + notificationDeliveryConfigurationFingerprint(job)
 	case "apprise":
 		if job.AppriseConfig == nil {
 			return ""
@@ -1668,8 +1835,17 @@ func notificationDeliveryDestinationKey(job notificationDeliveryJob) string {
 	if identity == "" {
 		return ""
 	}
-	digest := sha256.Sum256([]byte(job.Type + "\x00" + identity))
-	return job.Type + ":" + hex.EncodeToString(digest[:16])
+	return hashDeliveryDestination(job.Type, identity)
+}
+
+func hashDeliveryDestination(kind, identity string) string {
+	digest := sha256.Sum256([]byte(kind + "\x00" + identity))
+	return kind + ":" + hex.EncodeToString(digest[:16])
+}
+
+func legacyWebhookDestination(hook WebhookConfig) (string, string) {
+	identity := strings.Join([]string{strings.TrimSpace(hook.ID), strings.TrimSpace(hook.URL)}, "\x1f")
+	return hashDeliveryDestination("webhook", identity), identity
 }
 
 func notificationDeliveryReceiptKey(alert *alerts.Alert, destinationKey string) string {
@@ -1679,25 +1855,44 @@ func notificationDeliveryReceiptKey(alert *alerts.Alert, destinationKey string) 
 	return alert.ID + "\x00" + strconv.FormatInt(alert.StartTime.UnixNano(), 10) + "\x00" + destinationKey
 }
 
-func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJob, deliveredAt time.Time) {
+func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJob, deliveredAt time.Time) error {
 	destinationKey := notificationDeliveryDestinationKey(job)
 	if destinationKey == "" {
-		return
+		return nil
 	}
 	queue := n.GetQueue()
+	if queue != nil && !job.ReceiptEpochBound {
+		return fmt.Errorf("notification delivery has no admitted destination generation")
+	}
+	var recorded []*alerts.Alert
+	var receiptErrors []error
 	for _, alert := range job.Alerts {
-		if alert == nil || alert.StartTime.IsZero() {
+		if alert == nil {
+			continue
+		}
+		if alert.StartTime.IsZero() {
+			if job.Event == eventAlert && alert.ID != "" {
+				recorded = append(recorded, alert)
+			}
 			continue
 		}
 		if queue != nil {
 			var err error
 			if job.Event == eventResolved {
-				err = queue.DeleteDeliveryReceipt(alert.ID, alert.StartTime, destinationKey)
+				err = queue.deleteDeliveryReceiptEpoch(alert.ID, alert.StartTime, destinationKey, job.ReceiptEpoch, job.QueueID)
 			} else {
-				err = queue.recordDeliveryReceipt(alert.ID, alert.StartTime, destinationKey, deliveredAt, alert.Level)
+				if !job.ReceiptEpochBound {
+					err = fmt.Errorf("notification delivery has no admitted destination generation")
+				} else {
+					err = queue.recordDeliveryReceipt(alert.ID, alert.StartTime, destinationKey, deliveredAt, notificationSeverityRank(alert.Level), job.ReceiptEpoch, job.QueueID)
+				}
 			}
 			if err != nil {
-				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Failed to update notification delivery receipt")
+				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", notificationDestinationIDForJob(job)).Msg("Failed to update notification delivery receipt")
+				receiptErrors = append(receiptErrors, err)
+			} else {
+				n.cacheDeliveryReceipt(alert, destinationKey, deliveredAt, job.Event)
+				recorded = append(recorded, alert)
 			}
 			continue
 		}
@@ -1716,53 +1911,69 @@ func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJ
 			n.deliveryReceipts[key] = struct{}{}
 		}
 		n.mu.Unlock()
+		n.cacheDeliveryReceipt(alert, destinationKey, deliveredAt, job.Event)
+		recorded = append(recorded, alert)
 	}
 	if job.Event == eventAlert {
 		// Publish the cooldown/delivered marker only after the per-destination
 		// receipts are durable. Resolution can race the delivery goroutine and
 		// uses this marker as proof that receipt recording has completed.
-		n.markAlertsNotified(job.Alerts, deliveredAt, destinationKey)
+		n.markAlertsNotified(recorded, deliveredAt)
 	}
+	return errors.Join(receiptErrors...)
 }
 
 func (n *NotificationManager) filterResolvedJobsByDeliveryReceipt(jobs []notificationDeliveryJob) []notificationDeliveryJob {
+	n.destinationMu.Lock()
+	defer n.destinationMu.Unlock()
 	queue := n.GetQueue()
+	n.mu.RLock()
+	currentFingerprints := n.currentDeliveryFingerprintsLocked()
+	n.mu.RUnlock()
 	filtered := make([]notificationDeliveryJob, 0, len(jobs))
 	for _, job := range jobs {
-		destinationKey := notificationDeliveryDestinationKey(job)
-		if destinationKey == "" {
+		key := notificationDeliveryDestinationKey(job)
+		if fingerprint, configured := currentFingerprints[key]; configured && fingerprint != notificationDeliveryConfigurationFingerprint(job) {
 			continue
 		}
-		eligibleAlerts := make([]*alerts.Alert, 0, len(job.Alerts))
+		if key == "" {
+			continue
+		}
+		groups := make(map[string][]*alerts.Alert)
+		var order []string
 		for _, alert := range job.Alerts {
 			if alert == nil || alert.StartTime.IsZero() {
 				continue
 			}
 			eligible := false
+			epoch := ""
 			if queue != nil {
 				var err error
-				eligible, err = queue.HasDeliveryReceipt(alert.ID, alert.StartTime, destinationKey)
+				_, epoch, eligible, err = queue.deliveryReceiptWithEpoch(alert, key)
 				if err != nil {
-					log.Error().Err(err).Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Failed to read notification delivery receipt; suppressing recovery")
+					log.Error().Err(err).Msg("Failed to read notification delivery receipt; suppressing recovery")
 					continue
 				}
 			} else {
-				key := notificationDeliveryReceiptKey(alert, destinationKey)
 				n.mu.RLock()
-				_, eligible = n.deliveryReceipts[key]
+				_, eligible = n.deliveryReceipts[notificationDeliveryReceiptKey(alert, key)]
 				n.mu.RUnlock()
 			}
-			if eligible {
-				eligibleAlerts = append(eligibleAlerts, alert)
+			if !eligible {
 				continue
 			}
-			log.Debug().Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Resolved notification suppressed because this destination did not receive the firing occurrence")
+			if _, found := groups[epoch]; !found {
+				order = append(order, epoch)
+			}
+			groups[epoch] = append(groups[epoch], alert)
 		}
-		if len(eligibleAlerts) == 0 {
-			continue
+		for _, epoch := range order {
+			copy := job
+			copy.Alerts = groups[epoch]
+			copy.ReceiptEpoch = epoch
+			copy.ReceiptEpochBound = true
+			filtered = append(filtered, copy)
 		}
-		job.Alerts = eligibleAlerts
-		filtered = append(filtered, job)
 	}
 	return filtered
 }
@@ -1781,6 +1992,7 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	if alertCopy == nil {
 		return
 	}
+	delete(alertCopy.Metadata, metadataReceiptRecovered)
 
 	resolvedAt := resolved.ResolvedTime
 	if resolvedAt.IsZero() {
@@ -1789,7 +2001,7 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	annotateResolvedMetadata(alertCopy, resolvedAt)
 
 	n.mu.Lock()
-	if !n.enabled || !n.notifyOnResolve || !n.lifecycle.accepting() {
+	if !n.enabled || n.configurationError != nil || !n.notifyOnResolve || !n.lifecycle.accepting() {
 		n.mu.Unlock()
 		return
 	}
@@ -1834,6 +2046,7 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 	if len(alertList) == 0 {
 		return
 	}
+	n.destinationMu.Lock()
 	n.mu.RLock()
 	enabled := n.enabled && n.notifyOnResolve
 	emailConfig := copyEmailConfig(n.emailConfig)
@@ -1843,20 +2056,13 @@ func (n *NotificationManager) dispatchResolvedAlerts(alertList []*alerts.Alert) 
 	// The lease precedes the receipt read below, which already uses the queue.
 	admitted := enabled && n.lifecycle.admit()
 	n.mu.RUnlock()
+	n.destinationMu.Unlock()
 	if !admitted {
 		return
 	}
 	defer n.lifecycle.release()
-	if queue != nil {
-		for _, alert := range alertList {
-			if alert == nil {
-				continue
-			}
-			if err := queue.resolveDeliveryReceipts(alert.ID, &alert.StartTime, time.Now()); err != nil {
-				log.Error().Err(err).Msg("Could not retain notification resolution; receipts remain unsettled")
-			}
-		}
-	}
+	// Synchronous occurrence cancellation owns resolution disposition. Dispatch
+	// can be delayed past a refire and must never relabel that newer firing.
 	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertList, eventResolved, resolvedTimeFromAlerts(alertList))
 	// Filter each destination independently at dispatch, not merely when the
 	// alert enters the window. Never announce a recovery for an undelivered firing.
@@ -1941,6 +2147,7 @@ func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool
 	cancelledPending := 0
 	if queue != nil {
 		defer n.lifecycle.release()
+
 		var err error
 		if start == nil {
 			cancelledPending, err = queue.CancelByAlertIdentifiers([]string{alertID})
@@ -1949,9 +2156,16 @@ func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool
 		}
 		if err != nil {
 			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
-		} else if err := queue.resolveDeliveryReceipts(alertID, start, time.Now()); err != nil {
-			log.Error().Err(err).Str("alertID", alertID).Msg("failed to retain notification resolution; receipts remain unsettled")
 		}
+		n.destinationMu.Lock()
+		n.mu.Lock()
+		for key := range n.deliveryCooldown {
+			if strings.HasPrefix(key, alertID+"\x00") {
+				delete(n.deliveryCooldown, key)
+			}
+		}
+		n.mu.Unlock()
+		n.destinationMu.Unlock()
 	}
 
 	firingNeverDelivered := !firingDelivered && (removed > 0 || cancelledPending > 0)
@@ -1967,15 +2181,18 @@ func (n *NotificationManager) cancelAlert(alertID string, start *time.Time) bool
 
 // sendGroupedAlerts sends all pending alerts as a group
 func (n *NotificationManager) sendGroupedAlerts() {
+	n.destinationMu.Lock()
 	n.mu.Lock()
 	if len(n.pendingAlerts) == 0 {
 		n.mu.Unlock()
+		n.destinationMu.Unlock()
 		return
 	}
 	// A timer racing Stop must leave the buffer for the shutdown checkpoint,
 	// not dispatch it directly or lose it after admission has closed.
 	if !n.lifecycle.admit() {
 		n.mu.Unlock()
+		n.destinationMu.Unlock()
 		return
 	}
 	defer n.lifecycle.release()
@@ -2005,6 +2222,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	initialTarget := n.initialTarget
 	queue := n.queue
 	n.mu.Unlock()
+	n.destinationMu.Unlock()
 
 	n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, alertsToSend, initialTarget, nil, queue)
 }
@@ -2229,6 +2447,9 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 	n.mu.RUnlock()
 	anyFailed := false
 	for _, job := range jobs {
+		if !job.ReceiptEpochBound {
+			job = n.bindDeliveryEpochs([]notificationDeliveryJob{job})[0]
+		}
 		configJSON, err := configJSONForNotificationDeliveryJob(job)
 		if err != nil {
 			n.logNotificationJobError(job, err, "failed to marshal config for queue")
@@ -2243,6 +2464,7 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 				Config:        configJSON,
 				MaxAttempts:   3,
 				NextRetryAt:   bucket.nextRetryAt,
+				ReceiptEpoch:  deliveryJobEpoch(job),
 			}
 			var enqueueErr error
 			if job.Event == eventResolved && groupWindow > 0 && !(job.WebhookConfig != nil && job.WebhookConfig.Service == "pagerduty" && strings.TrimSpace(job.WebhookConfig.Template) == "") {
@@ -2252,6 +2474,12 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 			}
 			if err := enqueueErr; err != nil {
 				anyFailed = true
+				if !bucket.job.ReceiptEpochBound {
+					// Storage is unavailable. Preserve the established best-effort
+					// direct fallback without giving its completion a current generation.
+					bucket.job.ReceiptEpoch = uuid.NewString()
+					bucket.job.ReceiptEpochBound = true
+				}
 				n.logNotificationJobError(bucket.job, err, "failed to enqueue notification - falling back to direct send")
 				n.dispatchNotificationJobAsync(bucket.job, "failed to send notification after queue enqueue failure")
 				continue
@@ -2291,17 +2519,6 @@ func (n *NotificationManager) dispatchNotificationJobsAsync(jobs []notificationD
 	}
 }
 
-func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert) {
-	n.dispatchNotificationJobsAsync(buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertsToSend, eventAlert, time.Time{}))
-}
-
-func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert, resolvedAt time.Time) {
-	if len(alertsToSend) == 0 {
-		return
-	}
-	n.dispatchNotificationJobsAsync(buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertsToSend, eventResolved, resolvedAt))
-}
-
 func (n *NotificationManager) dispatchNotificationJobAsync(job notificationDeliveryJob, failureMessage string) {
 	// Direct delivery stays owned until it finishes, so Stop waits for it and
 	// nothing is sent, or recorded only in memory, after Stop returns.
@@ -2313,14 +2530,93 @@ func (n *NotificationManager) dispatchNotificationJobAsync(job notificationDeliv
 			Msg("notification manager stopped; direct delivery refused")
 		return
 	}
+	n.mu.RLock()
+	queue := n.queue
+	n.mu.RUnlock()
 	spawnAsync(func() {
 		defer n.lifecycle.release()
+		if queue != nil {
+			if job.Event == eventAlert {
+				prepared, release, ok := n.prepareDirectFiringJob(queue, job)
+				if !ok {
+					return
+				}
+				job = prepared
+				defer release()
+			} else {
+				release := queue.acquireAlertDeliveryGates(alertIdentifiersFromAlerts(job.Alerts), false)
+				defer release()
+			}
+		}
+		if !n.IsEnabled() {
+			return
+		}
 		if err := n.deliverNotificationJob(job); err != nil {
 			n.logNotificationJobError(job, err, failureMessage)
 			return
 		}
-		n.recordSuccessfulDelivery(job, time.Now())
+		if err := n.recordSuccessfulDelivery(job, time.Now()); err != nil {
+			n.logNotificationJobError(job, err, "failed to retain successful notification delivery")
+		}
 	})
+}
+
+// Filter stale members independently. A concurrent newer disposition causes
+// a fresh preflight, not loss of an otherwise current grouped direct delivery.
+func (n *NotificationManager) prepareDirectFiringJob(queue *NotificationQueue, job notificationDeliveryJob) (notificationDeliveryJob, func(), bool) {
+	for {
+		var currentAlerts []*alerts.Alert
+		tokens := make(map[pendingFiringOccurrence]int64)
+		for _, alert := range job.Alerts {
+			if alert == nil {
+				continue
+			}
+			for {
+				token, err := queue.reopenReceiptOccurrenceWithToken(alert.ID, alert.StartTime, false)
+				if errors.Is(err, errNotificationDispositionChanged) {
+					continue
+				}
+				if err != nil {
+					n.logNotificationJobError(job, err, "direct firing member refused without current occurrence authority")
+					break
+				}
+				currentAlerts = append(currentAlerts, alert)
+				if key, ok := pendingFiringKey(alert); ok {
+					tokens[key] = token
+				}
+				break
+			}
+		}
+		job.Alerts = currentAlerts
+		if len(job.Alerts) == 0 {
+			return job, nil, false
+		}
+		release := queue.acquireAlertDeliveryGates(alertIdentifiersFromAlerts(job.Alerts), false)
+		queue.mu.RLock()
+		changed := false
+		var readErr error
+		for key, token := range tokens {
+			_, current, err := queue.receiptResolutionLocked(key.id, key.start)
+			if err != nil {
+				readErr = err
+				break
+			}
+			if current > token {
+				changed = true
+				break
+			}
+		}
+		queue.mu.RUnlock()
+		if readErr != nil {
+			release()
+			return job, nil, false
+		}
+		if changed {
+			release()
+			continue
+		}
+		return job, release, true
+	}
 }
 
 func (n *NotificationManager) deliverNotificationJob(job notificationDeliveryJob) error {
@@ -4220,6 +4516,9 @@ func buildNotificationTestAlert() *alerts.Alert {
 
 // GetQueueStats returns statistics about the notification queue
 func (n *NotificationManager) GetQueueStats() (map[string]int, error) {
+	if err := n.ConfigurationError(); err != nil {
+		return nil, err
+	}
 	n.mu.RLock()
 	queue := n.queue
 	n.mu.RUnlock()
@@ -4434,8 +4733,32 @@ func resolvedTimeFromAlerts(alerts []*alerts.Alert) time.Time {
 }
 
 // ProcessQueuedNotification processes a notification from the persistent queue
-func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotification) error {
+func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotification) (resultErr error) {
+	defer func() {
+		// Once the provider acknowledgement is durable, decoding/binding errors
+		// are local settlement faults, never a new provider failure verdict.
+		if notif.ProviderAcceptedAt != nil && resultErr != nil && !errors.Is(resultErr, errNotificationSettlementPending) {
+			resultErr = notificationSettlementError(resultErr)
+		}
+	}()
 	baseType, event := normalizeQueueType(notif.Type)
+	if q := n.GetQueue(); q != nil && notif.ProviderAcceptedAt == nil {
+		at, err := q.providerAcknowledgedAt(notif.ID)
+		if err != nil {
+			return notificationSettlementError(err)
+		}
+		notif.ProviderAcceptedAt = at
+	}
+	if q := n.GetQueue(); q != nil && notif.ProviderAcceptedAt != nil {
+		if found, err := q.settleAcknowledgedNotification(notif.ID); found || err != nil {
+			return notificationSettlementError(err)
+		}
+	}
+	if notif.ReceiptEpoch != nil {
+		if err := validateReceiptEpoch(*notif.ReceiptEpoch); err != nil {
+			return failNotificationConfiguration("invalid retained notification destination generation", err)
+		}
+	}
 
 	log.Debug().
 		Str("notificationID", notif.ID).
@@ -4455,7 +4778,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 			return failNotificationConfiguration("failed to unmarshal email config", err)
 		}
 		currentEmailConfig := n.GetEmailConfig()
-		if !n.IsEnabled() || !currentEmailConfig.Enabled {
+		if notif.ProviderAcceptedAt == nil && (!n.IsEnabled() || !currentEmailConfig.Enabled) {
 			log.Info().
 				Str("notificationID", notif.ID).
 				Str("type", baseType).
@@ -4464,20 +4787,25 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 			return ErrNotificationDeliverySkipped
 		}
 		deliveredJob = notificationDeliveryJob{
-			Type:        "email",
+			QueueID:      notif.ID,
+			Type:         "email",
+			ReceiptEpoch: queuedReceiptEpoch(notif), ReceiptEpochBound: notif.ReceiptEpoch != nil,
 			Event:       event,
 			Alerts:      notif.Alerts,
 			ResolvedAt:  resolvedTimeFromAlerts(notif.Alerts),
 			EmailConfig: &emailConfig,
 		}
-		err = n.deliverNotificationJob(deliveredJob)
+		deliveredJob, err = n.prepareQueuedReceiptEpoch(notif, deliveredJob)
+		if err == nil {
+			err = n.deliverQueuedNotificationJob(notif, deliveredJob)
+		}
 
 	case "webhook":
 		var webhookConfig WebhookConfig
 		if err = json.Unmarshal(notif.Config, &webhookConfig); err != nil {
 			return failNotificationConfiguration("failed to unmarshal webhook config", err)
 		}
-		if !n.IsEnabled() || !n.isQueuedWebhookStillEnabled(webhookConfig) {
+		if notif.ProviderAcceptedAt == nil && (!n.IsEnabled() || !n.isQueuedWebhookStillEnabled(webhookConfig)) {
 			log.Info().
 				Str("notificationID", notif.ID).
 				Str("type", baseType).
@@ -4487,13 +4815,18 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 			return ErrNotificationDeliverySkipped
 		}
 		deliveredJob = notificationDeliveryJob{
-			Type:          "webhook",
+			QueueID:      notif.ID,
+			Type:         "webhook",
+			ReceiptEpoch: queuedReceiptEpoch(notif), ReceiptEpochBound: notif.ReceiptEpoch != nil,
 			Event:         event,
 			Alerts:        notif.Alerts,
 			ResolvedAt:    resolvedTimeFromAlerts(notif.Alerts),
 			WebhookConfig: &webhookConfig,
 		}
-		err = n.deliverNotificationJob(deliveredJob)
+		deliveredJob, err = n.prepareQueuedReceiptEpoch(notif, deliveredJob)
+		if err == nil {
+			err = n.deliverQueuedNotificationJob(notif, deliveredJob)
+		}
 
 	case "apprise":
 		var appriseConfig AppriseConfig
@@ -4501,7 +4834,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 			return failNotificationConfiguration("failed to unmarshal apprise config", err)
 		}
 		currentAppriseConfig := n.GetAppriseConfig()
-		if !n.IsEnabled() || !currentAppriseConfig.Enabled {
+		if notif.ProviderAcceptedAt == nil && (!n.IsEnabled() || !currentAppriseConfig.Enabled) {
 			log.Info().
 				Str("notificationID", notif.ID).
 				Str("type", baseType).
@@ -4510,20 +4843,45 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 			return ErrNotificationDeliverySkipped
 		}
 		deliveredJob = notificationDeliveryJob{
-			Type:          "apprise",
+			QueueID:      notif.ID,
+			Type:         "apprise",
+			ReceiptEpoch: queuedReceiptEpoch(notif), ReceiptEpochBound: notif.ReceiptEpoch != nil,
 			Event:         event,
 			Alerts:        notif.Alerts,
 			ResolvedAt:    resolvedTimeFromAlerts(notif.Alerts),
 			AppriseConfig: &appriseConfig,
 		}
-		err = n.deliverNotificationJob(deliveredJob)
+		deliveredJob, err = n.prepareQueuedReceiptEpoch(notif, deliveredJob)
+		if err == nil {
+			err = n.deliverQueuedNotificationJob(notif, deliveredJob)
+		}
 
 	default:
 		return FailfWithClass(NotificationFailureConfiguration, "unknown notification type")
 	}
 
+	var acknowledgementErr *notificationAcknowledgementError
+	if errors.As(err, &acknowledgementErr) {
+		// An unavailable audit must not prevent independent durable receipt
+		// evidence from preserving ordinary cooldown/recovery when it can commit.
+		if receiptErr := n.recordSuccessfulDelivery(deliveredJob, time.Now()); receiptErr != nil {
+			log.Error().Err(receiptErr).Msg("Provider acknowledgement and receipt both remain unsettled")
+		}
+	}
 	if err == nil {
-		n.recordSuccessfulDelivery(deliveredJob, time.Now())
+		if q := n.GetQueue(); q != nil && notif.ProviderAcceptedAt != nil {
+			if found, settleErr := q.settleAcknowledgedNotification(notif.ID); found || settleErr != nil {
+				if settleErr == nil && event == eventAlert && notificationDeliveryDestinationKey(deliveredJob) != "" {
+					n.markAlertsNotified(notif.Alerts, time.Now())
+				}
+				return notificationSettlementError(settleErr)
+			}
+		}
+		at := time.Now()
+		if notif.ProviderAcceptedAt != nil {
+			at = *notif.ProviderAcceptedAt
+		}
+		err = notificationSettlementError(n.recordSuccessfulDelivery(deliveredJob, at))
 	}
 
 	if err != nil {
@@ -4584,6 +4942,12 @@ func (n *NotificationManager) cleanupOldNotificationRecords() {
 			cutoff := now.Add(-24 * time.Hour)
 			cleaned := 0
 
+			for key, record := range n.deliveryCooldown {
+				if record.lastSent.Before(cutoff) {
+					delete(n.deliveryCooldown, key)
+				}
+			}
+
 			for alertID, record := range n.lastNotified {
 				// Remove entries older than 24 hours
 				if record.lastSent.Before(cutoff) {
@@ -4631,17 +4995,21 @@ func (n *NotificationManager) Stop() {
 		if queue != nil {
 			queue.stopProcessing()
 		}
-		// With workers stopped, no checkpoint can race a provider attempt. Keep
-		// n.mu across the buffer-to-queue handoff: a concurrent resolution/pause
-		// either removes the snapshot first or cancels the committed queue row.
-		// Neither can fall between removing the buffer and persisting the row.
+		// Finish every admitted read/write before the final buffer snapshot. An
+		// admitted SendAlert can still append after a slow cooldown read while
+		// draining; its lease owns that append as well as the storage read.
+		n.lifecycle.close()
+		// Workers and admitted policy changes have finished. Keep the remaining
+		// buffer and destination inventory stable through the queue handoff.
+		n.destinationMu.Lock()
 		n.mu.Lock()
+		if n.groupTimer != nil {
+			n.groupTimer.Stop()
+			n.groupTimer = nil
+		}
 		n.checkpointPendingFiringGroupLocked(queue)
 		n.mu.Unlock()
-
-		// Wait for admitted writes, cancellations, operator changes and direct
-		// deliveries. No lease can be taken once this returns.
-		n.lifecycle.close()
+		n.destinationMu.Unlock()
 
 		n.mu.Lock()
 		n.enabled = false

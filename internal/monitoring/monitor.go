@@ -1859,9 +1859,10 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if sharedDir := notificationPersistence.SharedInstallationDataDir(); sharedDir != notificationPersistence.GetConfigDir() {
 		notificationSystemPersistence = config.NewConfigPersistence(sharedDir)
 	}
+	var notificationRestoreErr error
 	notificationSystemSettings, notificationSettingsErr := notificationSystemPersistence.LoadSystemSettings()
 	if notificationSettingsErr != nil {
-		return nil, fmt.Errorf("load notification system settings: %w", notificationSettingsErr)
+		notificationRestoreErr = fmt.Errorf("load notification system settings: %w", notificationSettingsErr)
 	}
 	notificationPrivateCIDRs := ""
 	notificationPublicURL := cfg.PublicURL
@@ -1873,8 +1874,30 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 	notificationPrivateNetworks, notificationPolicyErr := notifications.ParseAllowedPrivateCIDRs(notificationPrivateCIDRs)
 	if notificationPolicyErr != nil {
-		return nil, fmt.Errorf("load notification private CIDR policy: %w", notificationPolicyErr)
+		notificationRestoreErr = stderrors.Join(notificationRestoreErr, fmt.Errorf("load notification private CIDR policy: %w", notificationPolicyErr))
 	}
+
+	// Restore the complete destination inventory before constructing any worker
+	// or live callback owner. A read failure holds delivery and fences inventory
+	// reads/writes while monitoring continues; it never means removal.
+	savedEmail, err := notificationPersistence.LoadEmailConfig()
+	if err != nil {
+		notificationRestoreErr = stderrors.Join(notificationRestoreErr, fmt.Errorf("load saved email destinations: %w", err))
+	}
+	savedApprise, err := notificationPersistence.LoadAppriseConfig()
+	if err != nil {
+		notificationRestoreErr = stderrors.Join(notificationRestoreErr, fmt.Errorf("load saved Apprise destinations: %w", err))
+	}
+	if err := notificationPersistence.MigrateWebhooksIfNeeded(); err != nil {
+		notificationRestoreErr = stderrors.Join(notificationRestoreErr, fmt.Errorf("migrate saved webhook destinations: %w", err))
+	}
+	savedWebhooks, err := notificationPersistence.LoadWebhooks()
+	if err != nil {
+		notificationRestoreErr = stderrors.Join(notificationRestoreErr, fmt.Errorf("load saved webhook destinations: %w", err))
+	}
+	// Older versions accepted duplicate supplied IDs. Do not turn readable
+	// legacy inventory into a whole-monitor startup outage. New creation/import
+	// boundaries validate before committing a replacement inventory.
 
 	// Initialize temperature collector with sensors SSH key
 	// Will use root user for now - can be made configurable later
@@ -2136,6 +2159,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 		m.pollMetrics.ResetQueueDepth(0)
 	}
 
+	if notificationRestoreErr != nil {
+		m.notificationMgr.HoldIncompleteConfiguration(notificationRestoreErr)
+		log.Error().Err(notificationRestoreErr).Msg("Notification delivery held because saved configuration is unavailable")
+	}
+
 	// Load saved configurations
 	if alertConfig, err := m.configPersist.LoadAlertConfig(); err == nil {
 		m.alertManager.UpdateConfig(*alertConfig)
@@ -2161,10 +2189,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("failed to load alert intent policies")
 	}
 
-	if emailConfig, err := m.configPersist.LoadEmailConfig(); err == nil {
-		m.notificationMgr.SetEmailConfig(*emailConfig)
-	} else {
-		log.Warn().Err(err).Msg("failed to load email configuration")
+	if notificationRestoreErr == nil {
+		if err := m.notificationMgr.SetEmailConfig(*savedEmail); err != nil {
+			notificationRestoreErr = fmt.Errorf("restore email destination authority: %w", err)
+			m.notificationMgr.HoldStorageAuthority(notificationRestoreErr)
+			log.Error().Err(notificationRestoreErr).Msg("Notification delivery held because storage authority could not be restored")
+		}
 	}
 
 	if concurrency > 0 {
@@ -2174,11 +2204,14 @@ func New(cfg *config.Config) (*Monitor, error) {
 		m.guestAgentWorkSlots = make(chan struct{}, guestAgentVMMaxConcurrent)
 	}
 
-	if appriseConfig, err := m.configPersist.LoadAppriseConfig(); err == nil {
-		m.notificationMgr.SetAppriseConfig(*appriseConfig)
-	} else {
-		log.Warn().Err(err).Msg("failed to load Apprise configuration")
+	if notificationRestoreErr == nil {
+		if err := m.notificationMgr.SetAppriseConfig(*savedApprise); err != nil {
+			notificationRestoreErr = fmt.Errorf("restore Apprise destination authority: %w", err)
+			m.notificationMgr.HoldStorageAuthority(notificationRestoreErr)
+			log.Error().Err(notificationRestoreErr).Msg("Notification delivery held because storage authority could not be restored")
+		}
 	}
+
 	if deadManConfig, err := m.configPersist.LoadDeadManConfig(); err == nil {
 		m.deadManConfig = *deadManConfig
 	} else {
@@ -2186,24 +2219,25 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("failed to load dead-man configuration")
 	}
 
-	// Migrate webhooks if needed (from unencrypted to encrypted)
-	if err := m.configPersist.MigrateWebhooksIfNeeded(); err != nil {
-		log.Warn().Err(err).Msg("failed to migrate webhooks")
-	}
-
-	if webhooks, err := m.configPersist.LoadWebhooks(); err == nil {
-		for _, webhook := range webhooks {
+	if notificationRestoreErr == nil {
+		for _, webhook := range savedWebhooks {
 			m.notificationMgr.AddWebhook(webhook)
 		}
-	} else {
-		log.Warn().Err(err).Msg("failed to load webhook configuration")
 	}
+
 	// The queue worker starts with the manager but has no processor until all
 	// saved destinations and shared delivery policy are installed. A router
 	// may not exist yet, so its later settings refresh cannot own this boundary.
 	m.notificationMgr.ApplyAllowedPrivateCIDRs(notificationPrivateCIDRs, notificationPrivateNetworks)
 	m.notificationMgr.SetQuietHoursPolicyProvider(m.alertManager.QuietHoursNotificationPolicy)
-	m.notificationMgr.StartQueueProcessing()
+	m.notificationMgr.SetOccurrenceLifecycleProvider(m.alertManager.NotificationOccurrenceLifecycle)
+	if notificationRestoreErr == nil {
+		if err := m.notificationMgr.StartQueueProcessingWithConfiguration(true); err != nil {
+			notificationRestoreErr = fmt.Errorf("restore notification destination authority: %w", err)
+			m.notificationMgr.HoldStorageAuthority(notificationRestoreErr)
+			log.Error().Err(notificationRestoreErr).Msg("Notification delivery held because storage authority could not be restored")
+		}
+	}
 
 	// In mock mode the canonical sampler owns demo chart history by default.
 	// Support-only hybrid runs can opt back into real client initialization.

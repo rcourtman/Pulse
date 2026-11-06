@@ -28,13 +28,15 @@ func TestDurableCooldownKeepsSeverityTimeAndDestination(t *testing.T) {
 			m := open()
 			key := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &hook})
 			latest := time.Now().Add(-time.Minute).Round(0)
-			require.NoError(t, m.queue.recordDeliveryReceipt(a.ID, a.StartTime, key, latest, a.Level))
-			require.NoError(t, m.queue.recordDeliveryReceipt(a.ID, a.StartTime, key, latest.Add(-time.Hour), alerts.AlertLevelWarning))
+			require.NoError(t, recordFixtureDeliveryReceipt(m.queue, a.ID, a.StartTime, key, latest, notificationSeverityRank(a.Level)))
+			require.NoError(t, recordFixtureDeliveryReceipt(m.queue, a.ID, a.StartTime, key, latest.Add(-time.Hour), notificationSeverityRank(alerts.AlertLevelWarning)))
 			m.Stop()
 			m = open()
 			m.SendAlert(a)
 			require.Empty(t, m.pendingAlerts, "restart/cache miss repeated critical")
-			record := m.lastNotified[a.ID]
+			record, found, err := m.queue.deliveryReceipt(a, key)
+			require.NoError(t, err)
+			require.True(t, found)
 			require.Equal(t, latest, record.lastSent)
 			require.Equal(t, alerts.AlertLevelCritical, record.level)
 			// A cache eviction is not a new notification entitlement.
@@ -78,9 +80,9 @@ func TestDurableCooldownAllowsIncreasesExpiryAndLegacy(t *testing.T) {
 			a := &alerts.Alert{ID: "same", StartTime: time.Now().Add(-2 * time.Hour), Level: alerts.AlertLevelCritical}
 			key := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &hook})
 			if tc.legacy {
-				require.NoError(t, m.queue.RecordDeliveryReceipt(a.ID, a.StartTime, key, time.Now().Add(-tc.age)))
+				require.NoError(t, recordFixtureDeliveryReceipt(m.queue, a.ID, a.StartTime, key, time.Now().Add(-tc.age), 0))
 			} else {
-				require.NoError(t, m.queue.recordDeliveryReceipt(a.ID, a.StartTime, key, time.Now().Add(-tc.age), tc.level))
+				require.NoError(t, recordFixtureDeliveryReceipt(m.queue, a.ID, a.StartTime, key, time.Now().Add(-tc.age), notificationSeverityRank(tc.level)))
 			}
 			m.SendAlert(a)
 			require.Len(t, m.pendingAlerts, tc.want)
@@ -106,9 +108,9 @@ func TestReceiptContinuityMigratesOriginalSchema(t *testing.T) {
 		has, err := q.HasDeliveryReceipt("legacy", time.Unix(0, 123), "webhook:ops")
 		require.NoError(t, err)
 		require.True(t, has)
-		record, known, err := q.deliveryCooldown("legacy", time.Unix(0, 123), map[string]bool{"webhook:ops": true})
+		record, known, err := q.deliveryReceipt(&alerts.Alert{ID: "legacy", StartTime: time.Unix(0, 123)}, "webhook:ops")
 		require.NoError(t, err)
-		require.False(t, known, "migration cannot guess a delivered severity")
+		require.True(t, known, "legacy recovery authority must survive")
 		require.Empty(t, record.level)
 		require.NoError(t, q.Stop())
 	}
@@ -127,22 +129,21 @@ func TestReceiptRetirementIsPositiveBoundedAndPinned(t *testing.T) {
 			a := &alerts.Alert{ID: "owed", StartTime: old.Add(-time.Hour), Level: alerts.AlertLevelCritical}
 			job := notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{a}, WebhookConfig: &hook}
 			key := notificationDeliveryDestinationKey(job)
-			require.NoError(t, q.recordDeliveryReceipt(a.ID, a.StartTime, key, old, a.Level))
+			require.NoError(t, recordFixtureDeliveryReceipt(q, a.ID, a.StartTime, key, old, 3))
+			m.SetOccurrenceLifecycleProvider(func(string, time.Time) alerts.NotificationOccurrenceLifecycle {
+				if policy == "active" {
+					return alerts.NotificationOccurrenceLifecycle{State: alerts.NotificationOccurrenceActive}
+				}
+				if policy == "unknown" {
+					return alerts.NotificationOccurrenceLifecycle{State: alerts.NotificationOccurrenceUnavailable}
+				}
+				return alerts.NotificationOccurrenceLifecycle{State: alerts.NotificationOccurrenceNoRecord}
+			})
 			if policy == "resolved" || policy == "pending-recovery" || policy == "retryable-recovery" || policy == "unreadable-pending" {
-				require.NoError(t, q.resolveDeliveryReceipts(a.ID, &a.StartTime, old))
+				require.NoError(t, q.markReceiptOccurrenceResolved(a.ID, a.StartTime, old))
 			}
 			if policy == "recent-resolution" {
 				m.CancelResolvedAlert(a)
-			}
-			if policy == "rotated" || policy == "revert" {
-				replacement := hook
-				replacement.URL = "https://new.example.test"
-				require.NoError(t, m.UpdateWebhook(hook.ID, replacement))
-				_, err := q.db.Exec(`UPDATE notification_receipt_retirements SET retired_at=?`, old.Unix())
-				require.NoError(t, err)
-				if policy == "revert" {
-					require.NoError(t, m.UpdateWebhook(hook.ID, hook))
-				}
 			}
 			if policy == "pending-recovery" || policy == "retryable-recovery" || policy == "unreadable-pending" {
 				job.Event = eventResolved
@@ -158,15 +159,18 @@ func TestReceiptRetirementIsPositiveBoundedAndPinned(t *testing.T) {
 					require.NoError(t, err)
 				}
 			}
+			if policy == "rotated" || policy == "revert" {
+				replacement := hook
+				replacement.URL = "https://new.example.test"
+				require.NoError(t, m.UpdateWebhook(hook.ID, replacement))
+				if policy == "revert" {
+					require.NoError(t, m.UpdateWebhook(hook.ID, hook))
+				}
+			}
 			q.performCleanup()
 			has, err := q.HasDeliveryReceipt(a.ID, a.StartTime, key)
 			require.NoError(t, err)
-			require.Equal(t, policy != "resolved" && policy != "rotated", has)
-			if policy == "rotated" {
-				var markers int
-				require.NoError(t, q.db.QueryRow(`SELECT COUNT(*) FROM notification_receipt_retirements`).Scan(&markers))
-				require.Zero(t, markers, "rotation markers must retire along with their receipts")
-			}
+			require.Equal(t, policy != "resolved" && policy != "rotated" && policy != "revert", has)
 		})
 	}
 }
@@ -186,24 +190,22 @@ func TestDestinationRetirementTracksLateReceiptsAndAllTransports(t *testing.T) {
 				remove = func() { require.NoError(t, m.DeleteWebhook(c.ID)) }
 			case "email":
 				c := EmailConfig{Enabled: true, From: "pulse@example.test", To: []string{"ops@example.test"}}
-				m.SetEmailConfig(c)
+				require.NoError(t, m.SetEmailConfig(c))
 				key = notificationDeliveryDestinationKey(notificationDeliveryJob{Type: kind, EmailConfig: &c})
-				remove = func() { c.Enabled = false; m.SetEmailConfig(c) }
+				remove = func() { c.Enabled = false; require.NoError(t, m.SetEmailConfig(c)) }
 			case "apprise":
 				c := AppriseConfig{Enabled: true, Mode: AppriseModeCLI, Targets: []string{"json://ops.example.test"}}
-				m.SetAppriseConfig(c)
+				require.NoError(t, m.SetAppriseConfig(c))
 				key = notificationDeliveryDestinationKey(notificationDeliveryJob{Type: kind, AppriseConfig: &c})
-				remove = func() { c.Enabled = false; m.SetAppriseConfig(c) }
+				remove = func() { c.Enabled = false; require.NoError(t, m.SetAppriseConfig(c)) }
 			}
-			remove()
 			q := m.GetQueue()
-			old := time.Now().Add(-31 * 24 * time.Hour)
-			_, err := q.db.Exec(`UPDATE notification_receipt_retirements SET retired_at=?`, old.Unix())
+			epoch, err := fixtureDeliveryEpoch(q, key)
 			require.NoError(t, err)
-			// An already-in-flight request may finish after removal. Its receipt
-			// must not evade the recorded retirement just by arriving late.
+			remove()
+			old := time.Now().Add(-31 * 24 * time.Hour)
 			a := &alerts.Alert{ID: "late", StartTime: old.Add(-time.Hour)}
-			require.NoError(t, q.RecordDeliveryReceipt(a.ID, a.StartTime, key, old))
+			require.NoError(t, q.recordDeliveryReceipt(a.ID, a.StartTime, key, old, 0, epoch))
 			q.performCleanup()
 			has, err := q.HasDeliveryReceipt(a.ID, a.StartTime, key)
 			require.NoError(t, err)
@@ -218,7 +220,7 @@ func TestCooldownCacheMissIsOwnedByShutdownAdmission(t *testing.T) {
 	q := m.GetQueue()
 	a := quietReplayAlert("restored", alerts.AlertLevelCritical, time.Now().Add(-time.Hour))
 	key := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &f.hook})
-	require.NoError(t, q.recordDeliveryReceipt(a.ID, a.StartTime, key, time.Now(), a.Level))
+	require.NoError(t, recordFixtureDeliveryReceipt(q, a.ID, a.StartTime, key, time.Now(), notificationSeverityRank(a.Level)))
 	q.mu.Lock()
 	sent := make(chan struct{})
 	go func() { m.SendAlert(a); close(sent) }()
@@ -243,11 +245,14 @@ func TestLateDestinationCompletionDoesNotLendCooldown(t *testing.T) {
 	m.SetGroupingWindow(3600)
 	original := WebhookConfig{ID: "ops", URL: "https://old.example.test", Enabled: true}
 	m.AddWebhook(original)
+	key := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &original})
+	epoch, err := fixtureDeliveryEpoch(m.GetQueue(), key)
+	require.NoError(t, err)
 	replacement := original
 	replacement.URL = "https://new.example.test"
 	require.NoError(t, m.UpdateWebhook(original.ID, replacement))
 	a := &alerts.Alert{ID: "late-rotation", StartTime: time.Now(), Level: alerts.AlertLevelCritical}
-	m.recordSuccessfulDelivery(notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{a}, WebhookConfig: &original}, time.Now())
+	require.NoError(t, m.GetQueue().recordDeliveryReceipt(a.ID, a.StartTime, key, time.Now(), 3, epoch))
 	m.SendAlert(a)
 	require.Len(t, m.pendingAlerts, 1, "old URL completion muted the new destination")
 }
@@ -263,14 +268,14 @@ func TestOldCooldownRestoreCannotEvictNewOccurrence(t *testing.T) {
 	current := old.Clone()
 	current.StartTime = current.StartTime.Add(time.Minute)
 	key := notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &hook})
-	require.NoError(t, m.queue.recordDeliveryReceipt(old.ID, old.StartTime, key, time.Now(), old.Level))
+	require.NoError(t, recordFixtureDeliveryReceipt(m.queue, old.ID, old.StartTime, key, time.Now(), notificationSeverityRank(old.Level)))
 	m.markAlertsNotified([]*alerts.Alert{current}, time.Now())
 	m.SendAlert(old)
 	require.Equal(t, current.StartTime, m.lastNotified[current.ID].alertStart)
 	require.Empty(t, m.pendingAlerts)
 }
 
-func TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue(t *testing.T) {
+func TestReceiptRetirementKeepsPolicyReadableWhileWaitingForQueue(t *testing.T) {
 	for _, action := range []string{"webhook-delete", "webhook-rotate", "apprise-disable"} {
 		t.Run(action, func(t *testing.T) {
 			f := newShutdownAdmissionFixture(t)
@@ -305,13 +310,13 @@ func TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue(t *testing.T) {
 					m.SetAppriseConfig(config)
 				}
 			}()
-			awaitShutdownCondition(t, "new policy visible without taking the blocked queue lock", func() bool {
-				if action == "apprise-disable" {
-					return !m.GetAppriseConfig().Enabled
-				}
-				hooks := m.GetWebhooks()
-				return len(hooks) == 0 || hooks[0].URL == "https://new.example.test"
-			})
+			awaitShutdownCondition(t, "retirement admitted behind the blocked queue", func() bool { m.lifecycle.mu.Lock(); defer m.lifecycle.mu.Unlock(); return m.lifecycle.leases >= 2 })
+			if action == "apprise-disable" {
+				require.True(t, m.GetAppriseConfig().Enabled)
+			} else {
+				require.Equal(t, f.hook.URL, m.GetWebhooks()[0].URL)
+			}
+
 			stopped := make(chan struct{})
 			go func() { m.Stop(); close(stopped) }()
 			close(barrier.release)
@@ -321,9 +326,16 @@ func TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue(t *testing.T) {
 			q, err := NewNotificationQueue(f.dir)
 			require.NoError(t, err)
 			defer q.Stop()
-			var retired int
-			require.NoError(t, q.db.QueryRow(`SELECT COUNT(*) FROM notification_receipt_retirements`).Scan(&retired))
-			require.Equal(t, 1, retired, "published retirement lost across shutdown")
+			var oldKey string
+			if action == "apprise-disable" {
+				c := AppriseConfig{Enabled: true, Mode: AppriseModeCLI, Targets: []string{"json://ops.example.test"}}
+				oldKey = notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "apprise", AppriseConfig: &c})
+			} else {
+				oldKey = notificationDeliveryDestinationKey(notificationDeliveryJob{Type: "webhook", WebhookConfig: &f.hook})
+			}
+			var current int
+			require.NoError(t, q.db.QueryRow(`SELECT COUNT(*) FROM notification_destination_state WHERE destination_key=?`, oldKey).Scan(&current))
+			require.Zero(t, current, "retired generation remained current across shutdown")
 		})
 	}
 }

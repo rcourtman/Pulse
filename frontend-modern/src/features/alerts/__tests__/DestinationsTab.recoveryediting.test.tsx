@@ -121,7 +121,16 @@ describe('DestinationsTab recovery while editing SMTP', () => {
         isRetrying={() => false}
         isLoadingDestinations={loading}
         onRetryLoad={retry}
-        webhooks={() => []}
+        webhooks={() => [
+          {
+            id: 'fixture',
+            name: 'Saved receiver name',
+            url: 'https://example.test/notify',
+            method: 'POST',
+            headers: {},
+            enabled: true,
+          },
+        ]}
         deadManPingUrl={() => ''}
         setDeadManPingUrl={vi.fn()}
         pushMinimumSeverity={() => 'all'}
@@ -129,12 +138,32 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       />
     ));
     await screen.findByRole('textbox', { name: 'SMTP server' });
+    await screen.findByText('Saved receiver name');
     setLoading(true);
     expect(screen.queryByRole('textbox', { name: 'SMTP server' })).not.toBeInTheDocument();
+    const held = degradedHealth();
+    held.queue = {
+      ...held.queue,
+      status: 'unavailable',
+      failed: 0,
+      deadLetter: 0,
+      attentionRequired: 0,
+      reasonCodes: ['notification_configuration_unavailable'],
+    };
+    vi.mocked(NotificationsAPI.getHealth).mockResolvedValue(held);
     setError('Unable to load notification settings.');
     setLoading(false);
+    expect(
+      await screen.findByText(
+        'Pulse could not load saved notification settings. Restore a configuration backup and restart Pulse. Existing queued notifications are paused. New notifications are not queued.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'SMTP server' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Test/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Saved receiver name')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Retry retained deliveries' }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^Retry$/ }));
     expect(retry).toHaveBeenCalledOnce();
     expect(screen.getByText(/Destination details and controls stay hidden/)).toBeInTheDocument();
@@ -154,8 +183,8 @@ describe('DestinationsTab recovery while editing SMTP', () => {
       entries: [
         {
           notificationId: 'retained-attempt',
-          type: 'email',
-          destinationId: 'email:fixture',
+          type: 'webhook',
+          destinationId: 'webhook:fixture',
           outcome: 'failed',
           success: false,
           alertIds: ['retained-alert'],
@@ -364,7 +393,12 @@ describe('DestinationsTab recovery while editing SMTP', () => {
         await waitFor(() => expect(screen.queryByRole('button', { name: label })).toBeNull());
       } else {
         await screen.findByText('Notification delivery status is unavailable');
-        await waitFor(() => expect(screen.getByRole('button', { name: label })).toBeEnabled());
+        await waitFor(() => expect(screen.queryByRole('button', { name: label })).toBeNull());
+        await waitFor(() =>
+          expect(
+            screen.getAllByRole('button', { name: 'Refresh delivery status' })[0],
+          ).toBeEnabled(),
+        );
       }
       await waitFor(() => expect(NotificationsAPI.getDeliveryLog).toHaveBeenCalledTimes(2));
       expect(screen.getByRole('textbox', { name: 'SMTP server' })).toBe(editor);

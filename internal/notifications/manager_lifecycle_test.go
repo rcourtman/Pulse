@@ -133,7 +133,7 @@ func TestStopWaitsForAdmittedNotificationWrites(t *testing.T) {
 					m.SendAlert(alert)
 				}()
 			case "recovery":
-				m.recordSuccessfulDelivery(notificationDeliveryJob{Type: "webhook", Event: eventAlert,
+				recordFixtureSuccessfulDelivery(m, notificationDeliveryJob{Type: "webhook", Event: eventAlert,
 					Alerts: []*alerts.Alert{alert}, WebhookConfig: &f.hook}, time.Now())
 				go func() {
 					defer close(admitted)
@@ -219,8 +219,15 @@ func TestStopDrainKeepsPauseAndChannelDisable(t *testing.T) {
 				disabled.Enabled = false
 				m.SetEmailConfig(disabled)
 			},
-			visible: func(m *NotificationManager) bool { return !m.GetEmailConfig().Enabled },
-			reason:  "Email notifications disabled",
+			visible: func(m *NotificationManager) bool {
+				// Reads remain responsive while durable retirement waits. The proposed
+				// disabled config is published only after that transaction succeeds.
+				_ = m.GetEmailConfig()
+				m.lifecycle.mu.Lock()
+				defer m.lifecycle.mu.Unlock()
+				return m.lifecycle.leases >= 2
+			},
+			reason: "Email notifications disabled",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -255,6 +262,9 @@ func TestStopDrainKeepsPauseAndChannelDisable(t *testing.T) {
 			close(barrier.release)
 			awaitShutdownSignal(t, "admitted work to finish", admitted)
 			awaitShutdownSignal(t, tc.name+" to finish", acted)
+			if tc.name == "email-disabled" && m.GetEmailConfig().Enabled {
+				t.Fatal("durable disable did not publish")
+			}
 			awaitShutdownSignal(t, "Stop to finish", stopped)
 
 			rows := quietReplayRows(t, f.open(nil).GetQueue())

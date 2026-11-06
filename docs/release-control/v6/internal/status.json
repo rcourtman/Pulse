@@ -10327,38 +10327,72 @@
       ]
     },
     {
-      "id": "notification-occurrence-delivery-state-continuity",
-      "summary": "Native subprocess and loopback HTTP experiments reproduce repeated firing of an already-delivered active critical occurrence after graceful restart inside cooldown. Cooldown is memory-only despite durable destination receipts. Real cleanup of a 31-day-old receipt also suppresses eventual recovery for a still-active occurrence, while a one-day control delivers it. Persisted severity and monotonic completion evidence must restore cooldown under the existing queue admission lease. Receipt retention requires explicit destination-retirement semantics because configuration rotations create historical identities. Missing lifecycle authority cannot justify age-only deletion, and pending recovery jobs retain their receipt obligations. Product policy and migration remain separate governed work.",
+      "id": "notification-callback-shutdown-admission",
+      "summary": "Detector-to-notifier admission remains outside durable accepted receipts and already-pending queue continuity. Alerts asynchronous callbacks and monitoring adapters can remain outside notifier admission at shutdown or arrive out of order after same-start refire. Sticky configuration or active-state authority holds can leave new firings and resolutions unadmitted, including still-active noncritical incidents after restart. Ambiguous pre-upgrade receiver receipts cannot authorise recovery without a new successful firing to a known receiver. A shared producer lifecycle/admission and drain or durable re-admission protocol must cover these boundaries, including detector/finding producers outside the alerts-manager inventory, honour resolve and quiet-hours policy, preserve operator-dismissed recoveries without resurrecting them, and avoid reentrant owner deadlocks. This is discovered source scope, not installed-loss qualification or a durable detector outbox guarantee. Producers without lifecycle authority, notably Patrol, currently retain one receipt per historical finding/destination indefinitely (a regression from main's 30-day expiry); hourly per-occurrence active scans/history walks therefore have unbounded growth and cleanup cost. Add explicit producer tags/owner identity and owner-aware expiry. Unstamped stale alerts-manager firings can replay after shutdown because fresh admission cannot reject absence from an unrelated owner; producer identity must recover safe owner-specific stale rejection.",
       "owner": "project-owner",
-      "status": "triaged",
+      "status": "discovered",
       "recorded_at": "2026-11-05",
       "lane_ids": [
-        "L6"
+        "L6",
+        "L13"
       ],
       "subsystem_ids": [
         "alerts",
+        "monitoring",
         "notifications"
       ],
       "proposed_resolution": "lane-expansion",
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/alert-persistence-reliability-2026-11-05.md",
+          "path": "docs/release-control/v6/internal/records/notification-continuity-repair-2026-11-05.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/alerts/active_persistence.go",
+          "path": "internal/alerts/callbacks.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/notifications/notifications.go",
+          "path": "internal/alerts/lifecycle.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "internal/notifications/queue.go",
+          "path": "internal/monitoring/monitor_alerts.go",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "notification-unreadable-inventory-disposition",
+      "summary": "Unreadable saved notification inventory preserves monitoring and existing queued work with a sticky delivery hold. Destination reads, edits and tests refuse before persistence; new callbacks are not queued. Existing validated full configuration backup import positively replaces the saved inventory and applies independent non-notification sections. A complete live reconstruction can clear the hold; otherwise import returns a saved-but-restart-required response with notification publication still held. Operators without a usable backup still need an explicit audited discard/replacement flow through standard settings that retires old receiver generations, preserves accepted settlement and guards concurrent storage changes. A read error never authorises automatic deletion or empty-inventory inference. The no-backup disposition flow remains outside accepted receipt continuity repair. Unidentifiable legacy accepted rows whose scalar facts cannot be reconstructed also need audited operator disposition; they remain unavailable without resending, not a promise that storage repair can reconstruct absent receiver identity.",
+      "owner": "project-owner",
+      "status": "discovered",
+      "recorded_at": "2026-11-05",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "notifications"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/notification-continuity-repair-2026-11-05.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/alerting/notifications.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor.go",
           "kind": "file"
         }
       ]

@@ -303,7 +303,7 @@ func TestNotificationRedirectOriginQueue(t *testing.T) {
 				resolved := strings.HasSuffix(kind, "_resolved")
 				destination := notificationDeliveryDestinationKey(job)
 				if resolved {
-					if err := q.RecordDeliveryReceipt(alert.ID, alert.StartTime, destination, time.Unix(150, 0)); err != nil {
+					if err := recordFixtureDeliveryReceipt(q, alert.ID, alert.StartTime, destination, time.Unix(150, 0), notificationSeverityRank(alert.Level)); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -315,11 +315,14 @@ func TestNotificationRedirectOriginQueue(t *testing.T) {
 				// Observe the real dispatcher; do not race it with a manual batch.
 				deadline := time.Now().Add(5 * time.Second)
 				for {
-					var count int
-					if err := q.db.QueryRow("SELECT count(*) FROM notification_audit WHERE notification_id = ?", notif.ID).Scan(&count); err != nil {
+					var status string
+					var audited bool
+					if err := q.db.QueryRow(`SELECT status,EXISTS(SELECT 1 FROM notification_audit a WHERE a.notification_id=notification_queue.id) FROM notification_queue WHERE id=?`, notif.ID).Scan(&status, &audited); err != nil {
 						t.Fatal(err)
 					}
-					if count != 0 {
+					// Acceptance is audited before local projection. Wait for the
+					// terminal queue outcome as well before asserting both facts.
+					if audited && (status == string(QueueStatusSent) || status == string(QueueStatusDLQ)) {
 						break
 					}
 					if time.Now().After(deadline) {

@@ -504,85 +504,58 @@ func TestSendGroupedAppriseHTTP(t *testing.T) {
 }
 
 func TestNotificationCooldownAllowsNewAlertInstance(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-	nm := NewNotificationManager("")
-	nm.SetCooldown(1)          // 1 minute cooldown
-	nm.SetGroupingWindow(3600) // keep timer from firing immediately
-
-	alertStart := time.Now().Add(-time.Minute)
-	alertA := &alerts.Alert{
-		ID:        "vm-100-memory",
-		Type:      "memory",
-		Level:     alerts.AlertLevelWarning,
-		StartTime: alertStart,
+	var mu sync.Mutex
+	deliveries := 0
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		deliveries++
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	nm := continuityManager(t, t.TempDir(), WebhookConfig{ID: "ops", URL: server.URL, Enabled: true, Service: "generic"})
+	alert := &alerts.Alert{ID: "vm-100-memory", Type: "memory", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)}
+	nm.SendAlert(alert)
+	drainContinuity(t, nm)
+	nm.SendAlert(alert)
+	drainContinuity(t, nm)
+	mu.Lock()
+	count := deliveries
+	mu.Unlock()
+	if count != 1 {
+		t.Fatalf("repeat deliveries = %d, want 1", count)
 	}
-
-	nm.SendAlert(alertA)
-	flushPending(nm)
-
-	nm.mu.RLock()
-	firstRecord, ok := nm.lastNotified[alertA.ID]
-	nm.mu.RUnlock()
-	if !ok {
-		t.Fatalf("first notification not recorded")
-	}
-
-	nm.SendAlert(alertA)
-
-	nm.mu.RLock()
-	pendingAfter := len(nm.pendingAlerts)
-	nm.mu.RUnlock()
-	if pendingAfter != 0 {
-		t.Fatalf("cooldown alert should not be queued, found %d pending", pendingAfter)
-	}
-
-	alertRestart := &alerts.Alert{
-		ID:        "vm-100-memory",
-		Type:      "memory",
-		Level:     alerts.AlertLevelWarning,
-		StartTime: alertStart.Add(time.Minute),
-	}
-
-	nm.SendAlert(alertRestart)
-	flushPending(nm)
-
-	nm.mu.RLock()
-	recordAfter := nm.lastNotified[alertRestart.ID]
-	nm.mu.RUnlock()
-
-	if !recordAfter.alertStart.Equal(alertRestart.StartTime) {
-		t.Fatalf("expected alertStart %v, got %v", alertRestart.StartTime, recordAfter.alertStart)
-	}
-	if !recordAfter.lastSent.After(firstRecord.lastSent) {
-		t.Fatalf("lastSent was not updated for new alert instance")
+	alert.StartTime = alert.StartTime.Add(time.Minute)
+	nm.SendAlert(alert)
+	drainContinuity(t, nm)
+	mu.Lock()
+	defer mu.Unlock()
+	if deliveries != 2 {
+		t.Fatalf("new occurrence deliveries = %d, want 2", deliveries)
 	}
 }
 
 func TestNotificationCooldownDisabledSuppressesDuplicateActiveAlert(t *testing.T) {
-	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-	nm := NewNotificationManager("")
-	defer nm.Stop()
+	var mu sync.Mutex
+	deliveries := 0
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		deliveries++
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	nm := continuityManager(t, t.TempDir(), WebhookConfig{ID: "ops", URL: server.URL, Enabled: true, Service: "generic"})
 	nm.SetCooldown(0)
-	nm.SetGroupingWindow(3600) // keep timer from firing during assertions
-
-	alert := &alerts.Alert{
-		ID:        "vm-100-cpu",
-		Type:      "cpu",
-		Level:     alerts.AlertLevelWarning,
-		StartTime: time.Now().Add(-time.Minute),
-	}
-
+	alert := &alerts.Alert{ID: "vm-100-cpu", Type: "cpu", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)}
 	nm.SendAlert(alert)
-	flushPending(nm)
-
+	drainContinuity(t, nm)
 	nm.SendAlert(alert)
-
-	nm.mu.RLock()
-	pendingAfterDuplicate := len(nm.pendingAlerts)
-	nm.mu.RUnlock()
-
-	if pendingAfterDuplicate != 0 {
-		t.Fatalf("cooldown-disabled duplicate should not be queued, found %d pending", pendingAfterDuplicate)
+	drainContinuity(t, nm)
+	mu.Lock()
+	defer mu.Unlock()
+	if deliveries != 1 {
+		t.Fatalf("repeat deliveries = %d, want 1", deliveries)
 	}
 }
 
@@ -632,6 +605,13 @@ func TestSendEscalatedAlertBypassesCooldownAndTargetsWebhook(t *testing.T) {
 		queue: queue,
 	}
 
+	// Ordinary cooldown is evidence per destination, rather than a reusable-ID
+	// marker. Seed each delivered destination for this schedule-selection unit.
+	for _, job := range buildNotificationDeliveryJobsForTarget(nm.emailConfig, nm.webhooks, nm.appriseConfig, []*alerts.Alert{alert}, eventAlert, time.Time{}, notificationDeliveryTargetAll) {
+		if err := recordFixtureSuccessfulDelivery(nm, job, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
 	nm.SendAlert(alert)
 	nm.mu.RLock()
 	pendingAfterNormalSend := len(nm.pendingAlerts)
@@ -3328,7 +3308,7 @@ func TestSendNotificationsDirect_MultipleWebhooks(t *testing.T) {
 	alertList := []*alerts.Alert{}
 
 	// Should iterate all webhooks, launching goroutines for enabled ones
-	nm.sendNotificationsDirect(emailConfig, webhooks, appriseConfig, alertList)
+	sendFixtureNotificationsDirect(nm, emailConfig, webhooks, appriseConfig, alertList)
 }
 
 func TestProcessQueuedNotification_InvalidEmailConfig(t *testing.T) {
@@ -4063,7 +4043,7 @@ func TestSendResolvedAlert(t *testing.T) {
 		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
-	nm.recordSuccessfulDelivery(notificationDeliveryJob{
+	recordFixtureSuccessfulDelivery(nm, notificationDeliveryJob{
 		Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &webhook,
 	}, time.Now())
 
@@ -4982,13 +4962,13 @@ func TestSendResolvedAlertQueueEnqueueFailureFallsBackToSharedDeliveryExecutor(t
 		StartTime:    time.Now().Add(-5 * time.Minute),
 	}
 	resolvedAt := time.Now()
-	nm.recordSuccessfulDelivery(notificationDeliveryJob{
+	recordFixtureSuccessfulDelivery(nm, notificationDeliveryJob{
 		Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &webhook,
 	}, resolvedAt.Add(-time.Minute))
 	// Keep the receipt store available while forcing only queue insertion to
 	// fail. Recovery delivery must remain fail-closed if receipt lookup itself
 	// is unavailable.
-	if _, err := queue.db.Exec(`DROP TABLE notification_queue`); err != nil {
+	if _, err := queue.db.Exec(`CREATE TRIGGER reject_recovery_enqueue BEFORE INSERT ON notification_queue BEGIN SELECT RAISE(ABORT,'synthetic queue insertion refusal'); END`); err != nil {
 		t.Fatalf("force queue enqueue failure: %v", err)
 	}
 

@@ -33,18 +33,9 @@ export function DestinationsTab(props: DestinationsTabProps) {
       when={!props.isLoadingDestinations() && !props.isRetrying()}
       fallback={<AlertDestinationsLoadingState />}
     >
-      <Show
-        when={!props.configLoadError()}
-        fallback={
-          <AlertDestinationsLoadErrorCard
-            error={props.configLoadError() || ''}
-            isRetrying={props.isRetrying()}
-            onRetry={props.onRetryLoad}
-          />
-        }
-      >
-        <LoadedDestinationsTab {...props} />
-      </Show>
+      {/* Delivery health remains readable independently of destination settings.
+          The loaded tab hides saved details and editors on any settings error. */}
+      <LoadedDestinationsTab {...props} />
     </Show>
   );
 }
@@ -60,7 +51,7 @@ function LoadedDestinationsTab(props: DestinationsTabProps) {
       unavailable={state.deliveryLogUnavailable()}
       refreshing={state.refreshingDeliveryLog()}
       onRefresh={() => void state.loadDeliveryLog()}
-      webhooks={state.webhooks()}
+      webhooks={state.hasLoadError() ? [] : state.webhooks()}
       heldEvents={state.heldEvents()}
       heldEventsUnavailable={state.heldEventsUnavailable()}
       refreshingHeldEvents={state.refreshingHeldEvents()}

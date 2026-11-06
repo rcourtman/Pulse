@@ -178,6 +178,10 @@ type AlertDestinationsDeliveryHealthInput = {
   deadLetterRetentionDays: number;
   failureClasses7d?: Record<string, number>;
   failureClassesAvailable?: boolean;
+  storageUnsettled?: boolean;
+  configurationUnavailable?: boolean;
+  storageBootstrapUnavailable?: boolean;
+  occurrenceUnavailable?: boolean;
 };
 
 function getRetainedDeliveryOutcomes(input: AlertDestinationsDeliveryHealthInput) {
@@ -202,11 +206,53 @@ function getDominantDeliveryFailure(input: AlertDestinationsDeliveryHealthInput)
     .sort((left, right) => right[1] - left[1])[0];
 }
 
+function getUnavailableDeliveryDescription(
+  input: AlertDestinationsDeliveryHealthInput,
+  summary: boolean,
+) {
+  const causes: string[] = [];
+  if (input.storageBootstrapUnavailable) {
+    causes.push(
+      'Pulse cannot prepare saved notification delivery records. Check server storage and logs, then restart Pulse.',
+    );
+  } else if (input.configurationUnavailable) {
+    causes.push(
+      'Pulse could not load saved notification settings. Restore a configuration backup and restart Pulse.',
+    );
+  }
+  if (input.storageBootstrapUnavailable || input.configurationUnavailable) {
+    causes.push('Existing queued notifications are paused. New notifications are not queued.');
+  }
+  if (input.occurrenceUnavailable) {
+    causes.push(
+      'Pulse is waiting for a trustworthy current alert state before replaying retained notifications. Check alert state and server logs, then refresh delivery status.',
+    );
+  }
+  if (input.storageUnsettled) {
+    causes.push(
+      'Pulse is waiting to save notification delivery records. Check server storage and logs, then refresh delivery status.',
+    );
+  }
+  if (causes.length === 0) {
+    causes.push(
+      summary
+        ? 'Pulse could not verify the notification queue. Review notification delivery before relying on it.'
+        : 'Pulse could not verify the notification queue. Review the destination settings below and send a test before relying on delivery.',
+    );
+  }
+  if (input.failed + input.deadLetter > 0) {
+    causes.push(
+      `${getRetainedDeliveryOutcomes(input)}. These failed deliveries remain available for retry or dismissal.`,
+    );
+  }
+  return causes.join(' ');
+}
+
 export function getAlertDestinationsDeliveryHealthSummary(
   input: AlertDestinationsDeliveryHealthInput,
 ) {
   if (input.status === 'unavailable') {
-    return 'Pulse could not verify the notification queue. Review notification delivery before relying on it.';
+    return getUnavailableDeliveryDescription(input, true);
   }
 
   const dominant = getDominantDeliveryFailure(input);
@@ -220,7 +266,7 @@ export function getAlertDestinationsDeliveryHealthDescription(
   input: AlertDestinationsDeliveryHealthInput,
 ) {
   if (input.status === 'unavailable') {
-    return 'Pulse could not verify the notification queue. Review the destination settings below and send a test before relying on delivery.';
+    return getUnavailableDeliveryDescription(input, false);
   }
 
   const summary = getRetainedDeliveryOutcomes(input);

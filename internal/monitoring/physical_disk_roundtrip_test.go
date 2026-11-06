@@ -54,13 +54,11 @@ func TestMonitorStartupRetainsQueuedAgentDiskAlertUntilDestinationRestored(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
+	occurrence := &alerts.Alert{ID: "disk-wearout", Type: "disk-wearout", ResourceName: "agent-disk", Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute)}
+	seedNotificationBootstrapActive(t, dir, occurrence)
 	if err := seed.Enqueue(&notifications.QueuedNotification{
 		ID: "startup-agent-disk-wearout", Type: "webhook", Status: notifications.QueueStatusPending,
-		DestinationID: hook.ID, Config: configJSON, MaxAttempts: 3,
-		Alerts: []*alerts.Alert{{
-			ID: "disk-wearout", Type: "disk-wearout", ResourceName: "agent-disk",
-			Level: alerts.AlertLevelWarning, StartTime: time.Now().Add(-time.Minute),
-		}},
+		DestinationID: hook.ID, Config: configJSON, MaxAttempts: 3, Alerts: []*alerts.Alert{occurrence},
 	}); err != nil {
 		_ = seed.Stop()
 		t.Fatal(err)

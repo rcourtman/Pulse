@@ -5069,6 +5069,12 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 Versioned native profile and Windows lifecycle collector fixtures consume `scripts/release_ldflags.sh agent`, preserving their VCS settings while carrying the same runtime release identity required by updater admission. Unversioned native smoke builds remain development controls.
 
+Monitor bootstrap also installs the alerts-owned occurrence lifecycle query
+before notification queue activation. Receipt cleanup uses positive lifecycle
+facts and retains unknown obligations. This bootstrap binding adds no new agent
+lifecycle transition or update authority. Notification continuity tests exercise
+reopened delivery without treating a callback as successful provider receipt.
+
 ### AI Discovery removed (2026-10-11)
 
 Agent resource context retains the backend-authored `discoveryTarget` coordinates.
@@ -11156,15 +11162,17 @@ grant private destinations or replace the installation public URL. The
 constructor validates the private CIDR policy, restores the saved public URL
 while preserving a deployment-enforced URL, and installs the policy before activating persisted work. Missing
 settings keep the default private-destination denial. Unreadable settings or an
-invalid CIDR policy fail construction before queue creation, so accepted rows
-cannot acquire a terminal failure merely because bootstrap has not restored
-policy yet. Router settings refresh remains responsible for later live changes.
+invalid CIDR policy hold notification delivery without stopping monitor
+construction or alert detection. Queue storage remains available for admitted
+work, but no processor activates, so incomplete policy cannot manufacture a
+terminal provider failure. Router settings refresh remains responsible for later live changes.
 
 `TestNewRestoresSharedWebhookPolicyBeforeQueueActivation` covers a real pending
 HTTP delivery before any router exists for default and tenant paths, saved
 public URL precedence and deployment lock, and a tenant grant that cannot override installation revocation.
-`TestNewRejectsUnreadableNotificationPolicyBeforeQueueCreation` covers corrupt
-settings and invalid CIDRs without creating queue storage.
+`TestNewHoldsUnreadableNotificationPolicyWithoutStoppingMonitoring` covers
+corrupt settings and invalid CIDRs with continued detection, unavailable delivery
+health, refused activation and no newly admitted deliveries.
 
 ### Read lifetime after session logout
 

@@ -22,6 +22,9 @@ func (nq *NotificationQueue) enqueueResolvedGroup(notif *QueuedNotification, win
 	}
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
+	if err := nq.bindQueuedRecoveryEpochLocked(notif); err != nil {
+		return err
+	}
 	now := time.Now()
 	method := "resolved-group"
 	if notif.NextRetryAt != nil {
@@ -30,9 +33,9 @@ func (nq *NotificationQueue) enqueueResolvedGroup(notif *QueuedNotification, win
 	var id string
 	var raw []byte
 	err := nq.db.QueryRow(`SELECT id, alerts FROM notification_queue
-  WHERE type = ? AND config = ? AND method = ? AND status = 'pending'
-   AND attempts = 0 AND next_retry_at > ? AND created_at >= ?
-  ORDER BY created_at, id LIMIT 1`, notif.Type, string(notif.Config), method, now.Unix(), now.Add(-window).Unix()).Scan(&id, &raw)
+  WHERE type = ? AND config = ? AND receipt_epoch IS ? AND method = ? AND status = 'pending'
+   AND attempts = 0 AND last_attempt IS NULL AND next_retry_at > ? AND created_at >= ?
+  ORDER BY created_at, id LIMIT 1`, notif.Type, string(notif.Config), notif.ReceiptEpoch, method, now.Unix(), now.Add(-window).Unix()).Scan(&id, &raw)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("read pending resolved group: %w", err)
 	}

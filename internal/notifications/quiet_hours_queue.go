@@ -32,13 +32,22 @@ func (nq *NotificationQueue) prepareQuietHoursDelivery(
 	current, err := nq.scanNotification(nq.db.QueryRow(`
   SELECT id, type, method, status, alerts, config, attempts, max_attempts,
          last_attempt, last_error, created_at, next_retry_at, completed_at,
-         payload_bytes, operational_links
+         payload_bytes, operational_links, receipt_epoch
   FROM notification_queue WHERE id = ? AND status = 'pending'`, notif.ID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("reload quiet-hours notification: %w", err)
+	}
+	ack, ackErr := nq.providerAcknowledgedAtLocked(current.ID)
+	if ackErr != nil {
+		return false, ackErr
+	}
+	if ack != nil {
+		current.ProviderAcceptedAt = ack
+		*notif = *current
+		return true, nil
 	}
 	// Another worker may already have postponed this row since GetPending.
 	if current.NextRetryAt != nil && current.NextRetryAt.After(now) {
@@ -122,9 +131,9 @@ func (nq *NotificationQueue) prepareQuietHoursDelivery(
 	_, err = tx.Exec(`INSERT INTO notification_queue
   (id, type, method, status, alerts, operational_links, config, attempts,
    max_attempts, last_attempt, last_error, created_at, next_retry_at,
-   completed_at, payload_bytes)
+	   completed_at, payload_bytes, receipt_epoch)
   SELECT ?, type, method, status, ?, ?, config, attempts, max_attempts,
-         last_attempt, last_error, created_at, NULL, completed_at, payload_bytes
+	       last_attempt, last_error, created_at, NULL, completed_at, payload_bytes, receipt_epoch
   FROM notification_queue WHERE id = ? AND status = 'pending'`, childID, string(readyJSON), string(readyLinksJSON), current.ID)
 	if err != nil {
 		return false, fmt.Errorf("persist ready quiet-hours partition: %w", err)
@@ -137,6 +146,9 @@ func (nq *NotificationQueue) prepareQuietHoursDelivery(
 	}
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("commit quiet-hours partition: %w", err)
+	}
+	if _, owned := nq.processingNotifications[current.ID]; owned {
+		nq.processingNotifications[childID] = struct{}{}
 	}
 	current.ID = childID
 	current.Alerts = ready

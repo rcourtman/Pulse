@@ -203,6 +203,37 @@ describe('alertDestinationsPresentation', () => {
         deadLetterRetentionDays: 30,
       }),
     ).toContain('could not verify the notification queue');
+    const unsettled = getAlertDestinationsDeliveryHealthDescription({
+      status: 'unavailable',
+      storageUnsettled: true,
+      failed: 1,
+      deadLetter: 2,
+      completedRetentionDays: 7,
+      deadLetterRetentionDays: 30,
+    });
+    expect(unsettled).toContain('waiting to save notification delivery records');
+    expect(unsettled).toContain('1 failed delivery');
+    expect(unsettled).toContain('2 dead-lettered deliveries');
+    expect(unsettled).not.toContain('send a test before relying on delivery');
+    for (const describe of [
+      getAlertDestinationsDeliveryHealthDescription,
+      getAlertDestinationsDeliveryHealthSummary,
+    ]) {
+      const mixed = describe({
+        status: 'unavailable',
+        configurationUnavailable: true,
+        occurrenceUnavailable: true,
+        storageUnsettled: true,
+        failed: 1,
+        deadLetter: 2,
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
+      });
+      expect(mixed).toContain('Restore a configuration backup and restart Pulse');
+      expect(mixed).toContain('trustworthy current alert state');
+      expect(mixed).toContain('waiting to save notification delivery records');
+      expect(mixed).toContain('2 dead-lettered deliveries');
+    }
     expect(getAlertDestinationsDeliveryRefreshLabel()).toBe('Refresh delivery status');
     expect(getAlertDestinationsDeliveryRetryLabel()).toBe('Retry retained deliveries');
     expect(getAlertDestinationsDeliveryDismissLabel()).toBe('Dismiss retained failures');

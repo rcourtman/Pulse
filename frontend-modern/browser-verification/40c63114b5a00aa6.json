@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "1e552302e74336ac7547906fcb284933bfcbd5a5",
+  "verified_at": "2026-11-05T22:59:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx",
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts",
+    "frontend-modern/src/utils/alertWebhookPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "d70a7a4e2b4ad1a73d9bb9a02d6cea0a4d54f5d2f9d79a8d2216474f1d57b09f",
+    "frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx": "b06a18cb2d01f0836766ab79c6732fa122a7d1a71345cead82f1c24e52384e7e",
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "0a726f44b39d22b61699d4717f6974495e54b98ea2aae3754065fce02c26feb8",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "c1b62398ba48f453a5287407bf7874317ff8c483a6a9353fd75cf25d5ae58e28",
+    "frontend-modern/src/utils/alertDestinationsPresentation.ts": "65d858df879a4465a75fb0ca31fdbef390328f6042089bf452db63c8bba3b6be",
+    "frontend-modern/src/utils/alertWebhookPresentation.ts": "be300a677e67e25a06bd6169dad5315e3c139d7b9bde83c6c1b44af1b5b8f199"
+  },
+  "routes": [
+    "/alerts/notifications",
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Disabled destination summary and keyboard-revealed SMTP settings; enabled editable destination",
+    "Saving request held for inspection, rejected publication with retained draft and prior saved receiver, successful retry and reload",
+    "Webhook edit explains URL, headers, custom fields, method, service and payload-template generation changes",
+    "Storage-only settlement obligation is unavailable without terminal retry or dismiss actions",
+    "One known retained terminal failure remains actionable beside unrelated local settlement on Notifications and Overview",
+    "Unreadable saved inventory shows backup/restart guidance with destination details and editors withdrawn",
+    "Validated full backup import reconstructs the live owner and health remains healthy after process restart"
+  ],
+  "interactions": [
+    "Keyboard reveal moves focus into settings; edit recipient and save",
+    "Inject a synthetic SQLite retirement failure and observe real HTTP500, retained draft and unchanged saved prior recipient",
+    "Remove owned fault, retry with Enter, observe HTTP200 and verify saved recipient after reload",
+    "Edit webhook, inspect recovery warning and cancel without mutation",
+    "Refresh delivery health on Notifications and Overview at both widths",
+    "Open both native retained-failure confirmations, verify count1 excludes unsettled work and cancel",
+    "Corrupt owned synthetic inventory between process runs; verify settings read/write503 preserve unreadable bytes",
+    "Import the previously exported full backup; observe live reconstruction HTTP200, restart and verify healthy persisted owner",
+    "Inspect desktop and narrow screenshots for wrapping, focus, saving/error states and no horizontal overflow"
+  ]
+}

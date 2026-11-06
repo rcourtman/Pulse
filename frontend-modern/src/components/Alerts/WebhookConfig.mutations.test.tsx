@@ -203,6 +203,13 @@ describe('acknowledged webhook list mutations', () => {
   it('preserves an open edit draft by refusing list changes until it is saved or cancelled', async () => {
     const { owner } = mount();
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(
+      screen.getByText(
+        /Changing the URL, headers, custom fields, HTTP method, service or payload template/,
+      ),
+    ).toHaveTextContent(
+      'It receives recovery messages only for alerts delivered after the change.',
+    );
     fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Unsaved destination' } });
     expectListLocked();
     fireEvent.click(screen.getByRole('button', { name: 'Enabled' }));

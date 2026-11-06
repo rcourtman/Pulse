@@ -32,10 +32,11 @@ const (
 
 // NotificationManager defines the interface for notification management operations.
 type NotificationManager interface {
+	ConfigurationError() error
 	GetEmailConfig() notifications.EmailConfig
-	SetEmailConfig(notifications.EmailConfig)
+	SetEmailConfig(notifications.EmailConfig) error
 	GetAppriseConfig() notifications.AppriseConfig
-	SetAppriseConfig(notifications.AppriseConfig)
+	SetAppriseConfig(notifications.AppriseConfig) error
 	GetWebhooks() []notifications.WebhookConfig
 	ValidateWebhookURL(string) error
 	AddWebhook(notifications.WebhookConfig)
@@ -162,6 +163,20 @@ func (h *NotificationHandlers) requireMonitor(w http.ResponseWriter, r *http.Req
 	return monitor
 }
 
+// requireConfiguredMonitor refuses unknown inventory before any persistence
+// write, and never represents unreadable saved destinations as an empty list.
+func (h *NotificationHandlers) requireConfiguredMonitor(w http.ResponseWriter, r *http.Request) NotificationMonitor {
+	monitor := h.requireMonitor(w, r)
+	if monitor == nil {
+		return nil
+	}
+	if monitor.GetNotificationManager().ConfigurationError() != nil {
+		http.Error(w, notifications.ConfigurationHoldMessage(monitor.GetNotificationManager().ConfigurationError()), http.StatusServiceUnavailable)
+		return nil
+	}
+	return monitor
+}
+
 // MonitorForContext resolves the tenant-scoped notification runtime used by
 // handlers and extensions.
 func (h *NotificationHandlers) MonitorForContext(ctx context.Context) NotificationMonitor {
@@ -195,7 +210,7 @@ func (h *NotificationHandlers) getReadState(ctx context.Context) unifiedresource
 
 // GetEmailConfig returns the current email configuration
 func (h *NotificationHandlers) GetEmailConfig(w http.ResponseWriter, r *http.Request) {
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -245,7 +260,7 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -288,7 +303,13 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		http.Error(w, "failed to save email configuration", http.StatusInternalServerError)
 		return
 	}
-	manager.SetEmailConfig(config)
+	if err := manager.SetEmailConfig(config); err != nil {
+		if rollbackErr := monitor.GetConfigPersistence().SaveEmailConfig(existingConfig); rollbackErr != nil {
+			log.Error().Err(rollbackErr).Msg("Failed to roll back email configuration")
+		}
+		http.Error(w, "failed to publish email configuration", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
@@ -310,7 +331,7 @@ func redactAppriseConfig(config notifications.AppriseConfig) appriseConfigRespon
 
 // GetAppriseConfig returns the current Apprise configuration.
 func (h *NotificationHandlers) GetAppriseConfig(w http.ResponseWriter, r *http.Request) {
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -345,7 +366,7 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 		MinimumSeverity *string `json:"minimumSeverity"`
 	}
 	_ = json.Unmarshal(body, &presenceCheck)
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -378,7 +399,13 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 		http.Error(w, "failed to save Apprise configuration", http.StatusInternalServerError)
 		return
 	}
-	manager.SetAppriseConfig(config)
+	if err := manager.SetAppriseConfig(config); err != nil {
+		if rollbackErr := monitor.GetConfigPersistence().SaveAppriseConfig(existingConfig); rollbackErr != nil {
+			log.Error().Err(rollbackErr).Msg("Failed to roll back Apprise configuration")
+		}
+		http.Error(w, "failed to publish Apprise configuration", http.StatusInternalServerError)
+		return
+	}
 
 	normalized := manager.GetAppriseConfig()
 
@@ -390,7 +417,7 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 
 // GetWebhooks returns all webhook configurations with secrets masked
 func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Request) {
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -514,7 +541,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -527,6 +554,7 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Generate ID if not provided
+	webhook.ID = strings.TrimSpace(webhook.ID)
 	if webhook.ID == "" {
 		webhook.ID = utils.GenerateID("webhook")
 	}
@@ -534,6 +562,10 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	// Persist the complete candidate inventory before exposing the destination
 	// to live alert delivery.
 	webhooks := append(manager.GetWebhooks(), webhook)
+	if err := notifications.ValidateWebhookInventory(webhooks); err != nil {
+		http.Error(w, "duplicate webhook identity", http.StatusConflict)
+		return
+	}
 	if err := monitor.GetConfigPersistence().SaveWebhooks(webhooks); err != nil {
 		log.Error().Err(err).Msg("Failed to save webhooks")
 		http.Error(w, "failed to save webhook configuration", http.StatusInternalServerError)
@@ -632,7 +664,7 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	_ = json.Unmarshal(bodyBytes, &routingPresence)
 
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -717,7 +749,7 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -849,7 +881,7 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -1012,7 +1044,7 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 	// secrets are the masked values from GetWebhooks. Test with the saved
 	// values, as the saved webhook would send; this route requires the same
 	// settings:write scope as UpdateWebhook, which keeps them the same way.
-	monitor := h.requireMonitor(w, r)
+	monitor := h.requireConfiguredMonitor(w, r)
 	if monitor == nil {
 		return
 	}
@@ -1119,16 +1151,15 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 		}
 	} else {
 		healthy, attentionRequired, reasonCodes := classifyNotificationQueueHealth(stats)
-		status := "healthy"
-		if !healthy {
-			status = "degraded"
-		}
+		status := notifications.ClassifyQueueHealth(stats).Status
 		queueStats = map[string]interface{}{
 			"pending":                         stats["pending"],
 			"sending":                         stats["sending"],
 			"sent":                            stats["sent"],
 			"failed":                          stats["failed"],
 			"dlq":                             stats["dlq"],
+			"settlement_pending":              stats["settlement_pending"],
+			"occurrence_pending":              stats["occurrence_pending"],
 			"healthy":                         healthy,
 			"status":                          status,
 			"attention_required":              attentionRequired,
@@ -1144,20 +1175,24 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 		}
 	}
 
-	// Get config status
-	emailCfg := manager.GetEmailConfig()
-	webhooks := manager.GetWebhooks()
+	configurationUnavailable := manager.ConfigurationError() != nil
+	if configurationUnavailable {
+		queueStats["reason_codes"] = []string{notifications.ConfigurationHoldReason(manager.ConfigurationError())}
+	}
+	// Unknown saved inventory is not a disabled/empty destination list.
+	emailStatus := map[string]interface{}{"status": "unavailable"}
+	webhookStatus := map[string]interface{}{"status": "unavailable"}
+	if !configurationUnavailable {
+		emailCfg := manager.GetEmailConfig()
+		webhooks := manager.GetWebhooks()
+		emailStatus = map[string]interface{}{"enabled": emailCfg.Enabled, "configured": emailCfg.SMTPHost != ""}
+		webhookStatus = map[string]interface{}{"total": len(webhooks), "enabled": countEnabledWebhooks(webhooks)}
+	}
 
 	health := map[string]interface{}{
-		"queue": queueStats,
-		"email": map[string]interface{}{
-			"enabled":    emailCfg.Enabled,
-			"configured": emailCfg.SMTPHost != "",
-		},
-		"webhooks": map[string]interface{}{
-			"total":   len(webhooks),
-			"enabled": countEnabledWebhooks(webhooks),
-		},
+		"queue":    queueStats,
+		"email":    emailStatus,
+		"webhooks": webhookStatus,
 		"encryption": map[string]interface{}{
 			"enabled": monitor.GetConfigPersistence().IsEncryptionEnabled(),
 		},

@@ -5,6 +5,7 @@ package notifications_test
 import (
 	"bufio"
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,8 +14,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -26,6 +29,23 @@ import (
 )
 
 const checkpointProcessMarker = "GROUPED_PROCESS "
+
+type checkpointProcessOutput struct {
+	mu   sync.Mutex
+	data bytes.Buffer
+}
+
+func (o *checkpointProcessOutput) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.data.Write(p)
+}
+
+func (o *checkpointProcessOutput) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.data.String()
+}
 
 type checkpointProcessState struct {
 	Phase   string                           `json:"phase"`
@@ -50,7 +70,7 @@ func TestGroupedWarningProcessHelper(t *testing.T) {
 	var am *alerts.Manager
 	var nm *notifications.NotificationManager
 	fired := make(chan *alerts.Alert, 8)
-	open := func() {
+	open := func(collectCallbacks bool) {
 		nm = notifications.NewNotificationManagerWithDeferredQueue("", dir)
 		require.NotNil(t, nm.GetQueue())
 		require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"))
@@ -69,7 +89,12 @@ func TestGroupedWarningProcessHelper(t *testing.T) {
 		cfg.TimeThresholds = map[string]int{"agent": 0, "storage": 0}
 		cfg.SuppressionWindow = 0
 		am.UpdateConfig(cfg)
-		am.SetAlertCallback(func(a *alerts.Alert) { nm.SendAlert(a); fired <- a.Clone() })
+		am.SetAlertCallback(func(a *alerts.Alert) {
+			if !collectCallbacks {
+				nm.SendAlert(a)
+			}
+			fired <- a.Clone()
+		})
 		nm.StartQueueProcessing()
 	}
 	stop := func() {
@@ -83,23 +108,33 @@ func TestGroupedWarningProcessHelper(t *testing.T) {
 		}
 	}
 	defer stop()
-	open()
+	seeding := os.Getenv("PULSE_GROUPED_TEST_SEED") == "1"
+	open(seeding)
 	started := time.Now().UTC()
 	host := models.Host{ID: "process-host", Hostname: "Process host", Sensors: models.HostSensorSummary{Custom: []models.HostCustomSensorMetric{
 		{ID: "probe-one", Name: "Probe one", Status: "warning", ObservedAt: started},
 		{ID: "probe-two", Name: "Probe two", Status: "warning", ObservedAt: started},
 	}}}
-	if os.Getenv("PULSE_GROUPED_TEST_SEED") == "1" {
+	if seeding {
 		am.CheckHost(host)
+		var callbacks []*alerts.Alert
 		for range 2 {
 			select {
 			case a := <-fired:
 				require.Equal(t, alerts.AlertLevelWarning, a.Level)
+				callbacks = append(callbacks, a)
 			case <-time.After(5 * time.Second):
 				t.Fatal("CheckHost did not dispatch both warnings")
 			}
 		}
-		require.NoError(t, am.SaveActiveAlerts())
+		// Complete producer persistence before the short grouping window starts.
+		// This control proves accepted notifier work across SIGTERM, not the
+		// separately governed detector-to-notifier admission/drain boundary.
+		am.Stop()
+		started = time.Now().UTC()
+		for _, a := range callbacks {
+			nm.SendAlert(a)
+		}
 	} else {
 		active := am.GetActiveAlerts()
 		require.Len(t, active, 2)
@@ -142,7 +177,7 @@ func TestGroupedWarningProcessHelper(t *testing.T) {
 			switch command {
 			case "reload":
 				stop()
-				open()
+				open(false)
 				am.CheckHost(host)
 				emit("reloaded")
 			case "status":
@@ -171,7 +206,7 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 	for _, tc := range []struct {
 		mode     string
 		cooldown int
-	}{{"restart", 0}, {"reload", 5}} {
+	}{{"restart", 0}, {"restart_after_window", 0}, {"reload", 5}} {
 		t.Run(tc.mode, func(t *testing.T) {
 			type delivery struct {
 				At      time.Time
@@ -200,7 +235,7 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 				cmd    *exec.Cmd
 				input  io.WriteCloser
 				states chan checkpointProcessState
-				stderr *bytes.Buffer
+				stderr *checkpointProcessOutput
 			}
 			start := func(seed bool) *child {
 				cmd := exec.Command(os.Args[0], "-test.run=^TestGroupedWarningProcessHelper$", "-test.timeout=45s", "-test.v")
@@ -209,7 +244,7 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 				require.NoError(t, err)
 				input, err := cmd.StdinPipe()
 				require.NoError(t, err)
-				c := &child{cmd, input, make(chan checkpointProcessState, 32), &bytes.Buffer{}}
+				c := &child{cmd, input, make(chan checkpointProcessState, 32), &checkpointProcessOutput{}}
 				cmd.Stderr = c.stderr
 				require.NoError(t, cmd.Start())
 				go func() {
@@ -229,12 +264,32 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 			}
 			read := func(c *child, phase string) checkpointProcessState {
 				t.Helper()
+				budget := 15 * time.Second
+				if phase == "ready" || phase == "reloaded" {
+					// Cold durable-store initialization includes a journal fsync.
+					// A captured startup stack on the worker exceeded the command
+					// budget in that syscall. Keep startup separate from delivery
+					// deadlines; the helper still has its 45-second total timeout.
+					budget = 30 * time.Second
+				}
 				select {
 				case state, ok := <-c.states:
+					if !ok {
+						t.Log(c.stderr.String())
+					}
 					require.True(t, ok, "child ended before %s", phase)
 					require.Equal(t, phase, state.Phase)
 					return state
-				case <-time.After(15 * time.Second):
+				case <-time.After(budget):
+					// Preserve the blocked operation before cleanup terminates the
+					// owned helper. A startup deadline alone cannot distinguish a
+					// runtime lock cycle from slow persistent-store initialization.
+					_ = c.cmd.Process.Signal(syscall.SIGQUIT)
+					select {
+					case <-c.states:
+					case <-time.After(2 * time.Second):
+					}
+					t.Log(c.stderr.String())
 					t.Fatalf("no child phase %s", phase)
 					return checkpointProcessState{}
 				}
@@ -267,8 +322,28 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 			seed := read(c, "ready")
 			require.Equal(t, 2, seed.Active)
 			require.Empty(t, seed.Log, "buffer admission is not a provider attempt")
-			if tc.mode == "restart" {
+			notBefore := seed.Started.Add(4 * time.Second)
+			if tc.mode != "reload" {
 				finish(c, true)
+				// Bind the early-send assertion to the actual persisted deadline,
+				// including the queue's whole-second round-up.
+				db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "notification_queue.db")+"?mode=ro")
+				require.NoError(t, err)
+				var count int
+				var firstDue, lastDue int64
+				require.NoError(t, db.QueryRow(`SELECT COUNT(*),COALESCE(MIN(next_retry_at),0),COALESCE(MAX(next_retry_at),0) FROM notification_queue WHERE status='pending'`).Scan(&count, &firstDue, &lastDue))
+				require.NoError(t, db.Close())
+				require.Equal(t, 2, count)
+				require.Positive(t, firstDue)
+				require.Equal(t, firstDue, lastDue, "both receivers retain the same grouped deadline")
+				notBefore = time.Unix(lastDue, 0)
+				if tc.mode == "restart_after_window" {
+					// Advance past the actual persisted policy deadline before boot,
+					// rather than assuming startup always finishes inside the window.
+					if remaining := time.Until(notBefore.Add(time.Millisecond)); remaining > 0 {
+						time.Sleep(remaining)
+					}
+				}
 				c = start(false)
 				read(c, "ready")
 			} else {
@@ -279,14 +354,21 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 			_, err := fmt.Fprintln(c.input, "status")
 			require.NoError(t, err)
 			pending := read(c, "status")
-			require.Equal(t, 2, pending.Stats["pending"], "restored dispatch markers must not strand accepted warnings")
-			require.Empty(t, pending.Log)
+			require.Equal(t, 2, pending.Stats["pending"]+pending.Stats["sending"]+pending.Stats["sent"], "restored dispatch markers must not strand accepted warnings")
+			require.Zero(t, pending.Stats["occurrence_pending"], "restart unexpectedly held occurrence authority")
+			require.Zero(t, pending.Stats["settlement_pending"], "restart unexpectedly deferred local settlement")
+			// Real startup may outlast the grouping window. Successful attempts
+			// may already exist; receiver timestamps below still forbid early send.
+			for _, entry := range pending.Log {
+				require.True(t, entry.Success)
+				require.Equal(t, 1, entry.Attempts)
+			}
 			t.Logf("GROUPED_BROWSER_SNAPSHOT %s", mustCheckpointJSON(t, pending))
 			seen := map[string]bool{}
 			for range 2 {
 				select {
 				case d := <-received:
-					require.False(t, d.At.Before(seed.Started.Add(4*time.Second)), "shutdown shortened grouping window")
+					require.False(t, d.At.Before(notBefore), "shutdown shortened grouping window")
 					require.True(t, d.Grouped)
 					require.Equal(t, 2, d.Count)
 					require.Len(t, d.Alerts, 2)
@@ -299,6 +381,9 @@ func TestGroupedWarningGracefulProcessRestartAndReload(t *testing.T) {
 					require.False(t, seen[d.Path])
 					seen[d.Path] = true
 				case <-time.After(10 * time.Second):
+					finish(c, true)
+					t.Log(c.stderr.String())
+					c = nil
 					t.Fatal("wanted firing did not reach both receivers after restart/reload")
 				}
 			}
