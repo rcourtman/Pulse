@@ -26,6 +26,7 @@ const readOnlyMock = vi.fn();
 const hideOrganizationsMock = vi.fn();
 let setEnabled: (enabled: boolean) => void;
 let setReadOnly: (readOnly: boolean) => void;
+let setHidden: (hidden: boolean) => void;
 const listeners = new Map<string, Set<() => void>>();
 
 vi.mock('@/api/orgs', () => ({
@@ -132,7 +133,9 @@ beforeEach(() => {
   setReadOnly = updateReadOnly;
   isMultiTenantEnabledMock.mockImplementation(enabled);
   readOnlyMock.mockImplementation(readOnly);
-  hideOrganizationsMock.mockReturnValue(false);
+  const [hidden, updateHidden] = createSignal(false);
+  setHidden = updateHidden;
+  hideOrganizationsMock.mockImplementation(hidden);
   vi.stubGlobal(
     'confirm',
     vi.fn(() => true),
@@ -559,11 +562,12 @@ const personalInvitation = {
 };
 const renderState = () => {
   let state!: ReturnType<typeof useOrganizationAccessPanelState>;
+  const [user, setUser] = createSignal<string | undefined>('user-1');
   const view = render(() => {
-    state = useOrganizationAccessPanelState({ currentUser: 'user-1' });
+    state = useOrganizationAccessPanelState({ get currentUser() { return user(); } });
     return <div />;
   });
-  return { state, ...view };
+  return { state, setUser, ...view };
 };
 const ready = async (state: ReturnType<typeof useOrganizationAccessPanelState>) => {
   await waitFor(() => expect(state.loading()).toBe(false));
@@ -789,6 +793,123 @@ describe('Organization Access change safety', () => {
       await ready(state);
       expect(notificationSuccessMock).toHaveBeenCalledTimes(1);
       expect(orgGetMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  const refreshActions = [
+    {
+      name: 'invite',
+      mock: inviteMemberMock,
+      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) => state.inviteMember(),
+    },
+    {
+      name: 'role',
+      mock: updateMemberRoleMock,
+      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) =>
+        state.updateRole(state.members()[1], 'editor'),
+    },
+    {
+      name: 'remove',
+      mock: removeMemberMock,
+      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) =>
+        state.removeMember(state.members()[1]),
+    },
+    {
+      name: 'revoke',
+      mock: revokeInvitationMock,
+      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) =>
+        state.revokeInvitation('invited-user'),
+    },
+    {
+      name: 'accept',
+      mock: acceptMyInvitationMock,
+      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) =>
+        state.acceptInvitation('inviting-org'),
+    },
+    {
+      name: 'decline',
+      mock: declineMyInvitationMock,
+      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) =>
+        state.declineInvitation('inviting-org'),
+    },
+  ];
+
+  it.each(
+    refreshActions.flatMap((action) =>
+      ['success', 'uncertain'].map((outcome) => ({ ...action, outcome })),
+    ),
+  )(
+    'preserves pending $name through equal-reader refreshes and handles $outcome once',
+    async ({ mock, run, outcome }) => {
+      const { state } = renderState();
+      await ready(state);
+      const member = state.members()[1];
+      state.setInviteUserID('new-user');
+      const result = deferred<unknown>();
+      mock.mockReturnValueOnce(result.promise);
+      const change = run(state);
+      const signal = mock.mock.calls[0].at(-1).signal;
+      eventBusEmitMock('organizations_changed');
+      eventBusEmitMock('organizations_changed');
+      eventBusEmitMock('org_switched');
+      await state.loadOrganizationAccess();
+      expect(signal.aborted).toBe(false);
+      expect(state.saving()).toBe(true);
+      expect(orgGetMock).toHaveBeenCalledTimes(1);
+      await exerciseAllChanges(state, state.members()[1]);
+      expect(writes().reduce((sum, write) => sum + write.mock.calls.length, 0)).toBe(1);
+
+      if (outcome === 'success') {
+        result.resolve({ kind: 'member', member });
+        await change;
+        await ready(state);
+        expect(notificationSuccessMock).toHaveBeenCalledTimes(1);
+        expect(orgGetMock).toHaveBeenCalledTimes(2);
+      } else {
+        result.reject(new Error('response lost after the server applied the change'));
+        await change;
+        expect(state.loadError()).toContain('could not be confirmed');
+        expect(state.org()).toBeNull();
+        expect(state.members()).toEqual([]);
+        expect(state.pendingInvitations()).toEqual([]);
+        expect(state.myInvitations()).toEqual([]);
+        expect(notificationSuccessMock).not.toHaveBeenCalled();
+        expect(orgGetMock).toHaveBeenCalledTimes(1);
+        await exerciseAllChanges(state, member);
+        expect(writes().reduce((sum, write) => sum + write.mock.calls.length, 0)).toBe(1);
+        await state.loadOrganizationAccess();
+        await ready(state);
+        expect(orgGetMock).toHaveBeenCalledTimes(2);
+      }
+      expect(mock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['organization', 'read-only', 'entitlement', 'disposal'])(
+    'still cancels a pending access change on %s loss after an equal-reader refresh',
+    async (kind) => {
+      const { state, unmount } = renderState();
+      await ready(state);
+      const result = deferred<unknown>();
+      inviteMemberMock.mockReturnValueOnce(result.promise);
+      state.setInviteUserID('new-user');
+      const change = state.inviteMember();
+      const signal = inviteMemberMock.mock.calls[0].at(-1).signal;
+      eventBusEmitMock('organizations_changed');
+      if (kind === 'organization') {
+        getOrgIDMock.mockReturnValue('org-b');
+        orgGetMock.mockResolvedValue({ ...baseOrg, id: 'org-b' });
+        eventBusEmitMock('org_switched');
+      }
+      if (kind === 'read-only') setReadOnly(true);
+      if (kind === 'entitlement') setEnabled(false);
+      if (kind === 'disposal') unmount();
+      expect(signal.aborted).toBe(true);
+      result.resolve({ kind: 'member' });
+      await change;
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+      expect(inviteMemberMock).toHaveBeenCalledTimes(1);
     },
   );
 
