@@ -2,6 +2,7 @@
 package ai
 
 import (
+	"errors"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -214,6 +215,9 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 	if err != nil {
 		return nil, err
 	}
+	if data.LoadIncomplete {
+		return nil, errors.New("AI findings inventory unavailable after recovery reset")
+	}
 	return recordsToFindings(data.Findings), nil
 }
 
@@ -229,6 +233,9 @@ func (a *FindingsPersistenceAdapter) LoadFindingsAndSuppression() (map[string]*F
 	data, err := a.config.LoadAIFindings()
 	if err != nil {
 		return nil, nil, err
+	}
+	if data.LoadIncomplete {
+		return nil, nil, errors.New("AI findings inventory unavailable after recovery reset")
 	}
 	return recordsToFindings(data.Findings), recordsToSuppressionRules(data.SuppressionRules), nil
 }

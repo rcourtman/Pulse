@@ -2434,6 +2434,9 @@ const aiFindingsDataVersion = 4
 
 // AIFindingsData represents persisted AI findings with metadata
 type AIFindingsData struct {
+	// LoadIncomplete distinguishes recovery's operational empty fallback from
+	// an authoritative empty inventory. It is read metadata, never persisted.
+	LoadIncomplete bool `json:"-"`
 	// Version for future migrations
 	Version int `json:"version"`
 	// LastSaved for debugging/diagnostics
@@ -2633,6 +2636,7 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 			return nil, fmt.Errorf("preserve unparseable AI findings file %s: %w", c.aiFindingsFile, preserveErr)
 		}
 		return &AIFindingsData{
+			LoadIncomplete:   true,
 			Version:          aiFindingsDataVersion,
 			Findings:         make(map[string]*AIFindingRecord),
 			SuppressionRules: make(map[string]*AISuppressionRuleRecord),
@@ -2650,6 +2654,7 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 	// Clear old findings since IDs are incompatible, and persist immediately.
 	if findingsData.Version < 2 {
 		oldCount := len(findingsData.Findings)
+		findingsData.LoadIncomplete = oldCount > 0
 		findingsData.Findings = make(map[string]*AIFindingRecord)
 		findingsData.SuppressionRules = make(map[string]*AISuppressionRuleRecord)
 		findingsData.Version = aiFindingsDataVersion

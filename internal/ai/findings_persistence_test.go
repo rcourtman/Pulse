@@ -2,13 +2,44 @@ package ai
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/stretchr/testify/require"
 )
+
+func TestFindingsPersistenceAdapterRecoveryResetDoesNotCertifyAbsence(t *testing.T) {
+	for _, withSuppression := range []bool{false, true} {
+		t.Run(fmt.Sprint(withSuppression), func(t *testing.T) {
+			dir := t.TempDir()
+			cp := config.NewConfigPersistence(dir)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "ai_findings.json"), []byte("{invalid fixture"), 0600))
+			adapter := NewFindingsPersistenceAdapter(cp)
+			if withSuppression {
+				_, _, err := adapter.LoadFindingsAndSuppression()
+				require.ErrorContains(t, err, "inventory unavailable")
+			} else {
+				_, err := adapter.LoadFindings()
+				require.ErrorContains(t, err, "inventory unavailable")
+			}
+			preserved, err := filepath.Glob(filepath.Join(dir, "ai_findings.json.corrupt-*"))
+			require.NoError(t, err)
+			require.Len(t, preserved, 1)
+			// A store taking the same failed load cannot authorize cleanup.
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "ai_findings.json"), []byte("{invalid fixture"), 0600))
+			s := NewFindingsStore()
+			require.Error(t, s.SetPersistence(adapter))
+			state := s.NotificationOccurrenceLifecycle("missing", time.Now())
+			require.Equal(t, alerts.NotificationOccurrenceUnavailable, state.State)
+			require.False(t, state.CurrentInactive)
+		})
+	}
+}
 
 func TestNewFindingsPersistenceAdapter(t *testing.T) {
 	tmp := t.TempDir()

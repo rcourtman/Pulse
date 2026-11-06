@@ -40,6 +40,7 @@ func TestLoadAIFindings_CorruptFilePreservedBeforeRewrite(t *testing.T) {
 
 	loaded, err := cp.LoadAIFindings()
 	require.NoError(t, err)
+	assert.True(t, loaded.LoadIncomplete, "preserving corruption is not a complete empty inventory")
 	assert.Empty(t, loaded.Findings)
 	assert.Empty(t, loaded.SuppressionRules)
 
@@ -56,6 +57,7 @@ func TestLoadAIFindings_CorruptFilePreservedBeforeRewrite(t *testing.T) {
 
 	reloaded, err := cp.LoadAIFindings()
 	require.NoError(t, err)
+	assert.False(t, reloaded.LoadIncomplete)
 	assert.Len(t, reloaded.Findings, 1)
 
 	preserved = readPreservedCopies(t, cp.aiFindingsFile)
@@ -108,6 +110,7 @@ func TestLoadAIFindings_UndecryptableFilePreserved(t *testing.T) {
 
 	loaded, err := cp.LoadAIFindings()
 	require.NoError(t, err)
+	assert.True(t, loaded.LoadIncomplete, "undecryptable input cannot certify finding absence")
 	assert.Empty(t, loaded.Findings)
 
 	preserved := readPreservedCopies(t, cp.aiFindingsFile)
