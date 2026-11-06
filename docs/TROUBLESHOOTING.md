@@ -463,11 +463,15 @@ needs a browser session cookie. Do not disable authentication, CSRF protection
 or TLS verification to make such a request work. Iframe embedding and proxy
 authentication have separate settings; CORS is not their trust boundary.
 
-A write through your own forwarder that adds an API token returns 403
-`CSRF origin validation failed` when it passes on the browser's `Origin`, `Referer`
-or `Sec-Fetch-Site`. List the page's exact origin above. A forwarder that
-authenticates its callers can remove those headers instead. One that adds the token
-for anyone must not, because any site's page could then spend that token.
+A write through your own forwarder that adds an API token can return 403
+`CSRF origin validation failed` when forwarded browser metadata identifies a
+different origin. Keep `Origin`, `Referer` and `Sec-Fetch-Site` intact. List only
+the trusted page's exact origin above, not `*`.
+
+Do not strip those headers simply because the forwarder requires a sign-in.
+A browser can send its sign-in cookie with a write started by another origin,
+so authentication alone is not a CSRF check. Removing the browser metadata
+prevents Pulse from detecting that write.
 
 Keep cookies, authorization headers, API tokens and full network exports
 private. A report needs only the redacted error, HTTP status and relevant
