@@ -190,6 +190,7 @@ describe('User Access through the real RBAC transport', () => {
       await Promise.resolve();
       expect(operation === 'save' ? state.saving() : state.deletingUser()).toBe(true);
       expect(state.canEdit()).toBe(false);
+      document.cookie = 'pulse_csrf=synthetic-csrf; Path=/';
       csrf.resolve(json({}));
       await waitFor(() => expect(mutations()).toHaveLength(1));
       const request = mutations()[0][1];
