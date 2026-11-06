@@ -3,7 +3,6 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"reflect"
@@ -15,8 +14,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 )
 
-// Preserve the original reader as a test-only reference. Paired benchmarks use
-// the same executable, inputs and cutoff; no SQL or collector is exercised.
+// Preserve the original reader as the test-only reference for the semantics
+// filterMetricsByTime must keep.
 func legacyHistoryReadFilter(data []MetricPoint, cutoff time.Time) []MetricPoint {
 	filtered := make([]MetricPoint, 0)
 	for _, point := range data {
@@ -276,6 +275,9 @@ func TestHistoryReadChartAndWindowSnapshots(t *testing.T) {
 
 var historyReadBenchmarkSink []MetricPoint
 
+// BenchmarkHistoryReadFilter times only the filter that ships. Timing the legacy
+// reference failed the regression gate on unrelated pull requests: its loop moves
+// by up to 20% with its address in the test binary, and it never reaches users.
 func BenchmarkHistoryReadFilter(b *testing.B) {
 	for _, tc := range []struct {
 		name           string
@@ -288,22 +290,15 @@ func BenchmarkHistoryReadFilter(b *testing.B) {
 		{"interleaved", 2880, 1440, true},
 	} {
 		data, cutoff := historyReadFixture(tc.size, tc.retained, tc.interleaved)
-		for _, variant := range []struct {
-			name   string
-			filter func([]MetricPoint, time.Time) []MetricPoint
-		}{
-			{"legacy", legacyHistoryReadFilter}, {"current", filterMetricsByTime},
-		} {
-			b.Run(fmt.Sprintf("%s/%s", tc.name, variant.name), func(b *testing.B) {
-				if !reflect.DeepEqual(variant.filter(data, cutoff), legacyHistoryReadFilter(data, cutoff)) {
-					b.Fatal("benchmark changed samples")
-				}
-				b.ReportAllocs()
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					historyReadBenchmarkSink = variant.filter(data, cutoff)
-				}
-			})
-		}
+		b.Run(tc.name, func(b *testing.B) {
+			if !reflect.DeepEqual(filterMetricsByTime(data, cutoff), legacyHistoryReadFilter(data, cutoff)) {
+				b.Fatal("benchmark changed samples")
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				historyReadBenchmarkSink = filterMetricsByTime(data, cutoff)
+			}
+		})
 	}
 }
