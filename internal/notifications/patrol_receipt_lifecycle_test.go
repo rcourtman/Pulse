@@ -153,18 +153,21 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 	require.NoError(t, err)
 	var mu sync.Mutex
 	counts := map[string]int{}
+	type receivedPayload struct {
+		Event  string         `json:"event"`
+		Alerts []alerts.Alert `json:"alerts"`
+	}
+	var received []receivedPayload
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		var body struct {
-			Event  string         `json:"event"`
-			Alerts []alerts.Alert `json:"alerts"`
-		}
+		var body receivedPayload
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Alerts) != 1 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		mu.Lock()
 		counts[body.Event]++
+		received = append(received, body)
 		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -210,7 +213,13 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 	n = open()
 	q := n.GetQueue()
 	db := notifications.ReceiptLifecycleDBForTest(q)
+	beforeLog, err := n.GetDeliveryLog(time.Time{}, 200)
+	require.NoError(t, err)
+	require.Len(t, beforeLog, 1, "fixture must contain a real accepted delivery, not empty history")
 	notifications.ReceiptLifecycleCleanupForTest(q)
+	afterLog, err := n.GetDeliveryLog(time.Time{}, 200)
+	require.NoError(t, err)
+	require.Equal(t, beforeLog, afterLog, "harvesting a receipt resolution changed rendered delivery history")
 	var resolved int64
 	require.NoError(t, db.QueryRow(`SELECT resolved_at FROM notification_delivery_receipts WHERE alert_id=?`, alert.ID).Scan(&resolved))
 	require.Positive(t, resolved)
@@ -243,5 +252,13 @@ func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.
 	db = notifications.ReceiptLifecycleDBForTest(n.GetQueue())
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM notification_delivery_receipts WHERE alert_id=?`, alert.ID).Scan(&retained))
 	require.Zero(t, retained)
-	t.Logf("PATROL_RECOVERY_FRAME firing_acceptances=%d recovery_acceptances=%d receipt_pinned_before_restart=1 receipts_after=0 production_contact=false", count(""), count("resolved"))
+	mu.Lock()
+	observed := append([]receivedPayload(nil), received...)
+	mu.Unlock()
+	require.Len(t, observed, 2)
+	for _, payload := range observed {
+		require.Equal(t, alert.ID, payload.Alerts[0].ID)
+		require.True(t, alert.StartTime.Equal(payload.Alerts[0].StartTime), "recovery changed the saved occurrence")
+	}
+	t.Logf("PATROL_RECOVERY_FRAME firing_acceptances=%d recovery_acceptances=%d receipt_pinned_before_restart=1 receipts_after=0 nonempty_delivery_log_unchanged=true occurrence=%s start=%s production_contact=false", count(""), count("resolved"), alert.ID, alert.StartTime.Format(time.RFC3339Nano))
 }
