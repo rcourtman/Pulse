@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,6 +31,8 @@ const (
 	maxURLLength          = 2048
 	maxRequestBodySize    = 1 << 20 // 1MB
 )
+
+var errSSOProviderManaged = errors.New("provider is managed by OIDC environment variables")
 
 // providerIDRegex validates provider IDs (alphanumeric, hyphens, underscores)
 var providerIDRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}[a-zA-Z0-9]?$`)
@@ -467,9 +470,10 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	// Work on a private copy: the merge below writes through existing's
-	// nested OIDC/SAML pointers, which the published snapshot must not share.
-	existing := r.ensureSSOConfig().Clone().GetProvider(providerID)
+	// This immutable snapshot is only an early existence/managed-provider check.
+	// Omitted fields must merge with the current provider at commit, not with
+	// a snapshot taken before a potentially slow request body is read.
+	existing := r.ensureSSOConfig().GetProvider(providerID)
 	if existing == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
@@ -532,42 +536,30 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	// Preserve fields the editor cannot represent, without turning explicit
-	// empty strings/false values into keeps or inheriting across provider types.
-	if err := preserveUnrepresentedSSOFields(data, &updated, existing); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid JSON payload", nil)
-		return
-	}
-
-	// Preserve existing config when not provided in update (e.g., toggle enabled/disabled
-	// sends the flat list response format, which doesn't include nested OIDC/SAML objects)
-	if updated.Type == existing.Type && updated.Type == config.SSOProviderTypeOIDC && updated.OIDC == nil && existing.OIDC != nil {
-		updated.OIDC = existing.OIDC
-	}
-	if updated.Type == existing.Type && updated.Type == config.SSOProviderTypeSAML && updated.SAML == nil && existing.SAML != nil {
-		updated.SAML = existing.SAML
-	}
-	// groupsClaim, groupRoleMappings, allowedGroups, allowedDomains and
-	// allowedEmails are NOT preserved on empty: both the detail GET and the
-	// flat list response round-trip them, so an empty value in a PUT is an
-	// intentional clear.
-
-	// Preserve secrets if not provided in update
-	if updated.Type == existing.Type && updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
-		existingHasSecret := existing.OIDC.ClientSecretSet || existing.OIDC.ClientSecret != ""
-		if updated.OIDC.ClientSecret == "" && existingHasSecret {
-			updated.OIDC.ClientSecret = existing.OIDC.ClientSecret
-			updated.OIDC.ClientSecretSet = true
-		} else if updated.OIDC.ClientSecret != "" {
-			updated.OIDC.ClientSecretSet = true
-		}
-	}
-
-	// Update and persist the provider; nothing is published if either step fails.
+	// Merge retained settings and persist under the same configuration lock.
+	// Reading the body and validating supplied URLs never holds this lock.
 	updateErr, saveErr := r.commitSSOConfig(func(cfg *config.SSOConfig) error {
+		current := cfg.GetProvider(providerID)
+		if current == nil {
+			return fmt.Errorf("provider with id %q not found", providerID)
+		}
+		if current.RuntimeManaged {
+			return errSSOProviderManaged
+		}
+		previous := *current
+		if err := mergeSSOProviderUpdate(data, &updated, current); err != nil {
+			return err
+		}
+		// UpdateProvider replaces the slice element current points at. Retain
+		// its prior value for the post-commit service lifecycle comparison.
+		existing = &previous
 		return cfg.UpdateProvider(updated)
 	})
 	if updateErr != nil {
+		if errors.Is(updateErr, errSSOProviderManaged) {
+			writeErrorResponse(w, http.StatusConflict, "provider_managed_by_environment", "Provider is managed by OIDC environment variables", nil)
+			return
+		}
 		writeErrorResponse(w, http.StatusBadRequest, "update_error", updateErr.Error(), nil)
 		return
 	}
