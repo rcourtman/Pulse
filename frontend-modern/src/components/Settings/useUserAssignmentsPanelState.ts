@@ -187,7 +187,10 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     if (!disposed) void loadData();
   };
   createEffect(
-    on([featureGate.licenseReady, accessAllowed, () => props.currentUser], resetContext),
+    on([featureGate.licenseReady, accessAllowed, () => props.currentUser], (current, previous) => {
+      // A fresh status object need not replace the admitted reader or its pending work.
+      if (!previous || current.some((value, index) => value !== previous[index])) resetContext();
+    }),
   );
   const unsubscribeOrg = eventBus.on('org_switched', resetContext);
   onCleanup(() => {

@@ -23,8 +23,13 @@ vi.mock('@/stores/notifications', () => ({
   notificationStore: { success: mocks.success, error: mocks.error },
 }));
 vi.mock('@/utils/logger', () => ({ logger: { error: mocks.log } }));
+let featureEnabled: () => boolean;
+let featureReady: () => boolean;
 vi.mock('../useRBACFeatureGateState', () => ({
-  useRBACFeatureGateState: () => ({ licenseReady: () => true, rbacEnabled: () => true }),
+  useRBACFeatureGateState: () => ({
+    licenseReady: () => featureReady(),
+    rbacEnabled: () => featureReady() && featureEnabled(),
+  }),
 }));
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -78,6 +83,8 @@ function switchOrg() {
 describe('User Access reader lifetime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    featureEnabled = () => true;
+    featureReady = () => true;
     mocks.org = 'north';
     mocks.getUsers.mockReset().mockResolvedValue([alice]);
     mocks.getRoles.mockReset().mockResolvedValue(roles);
@@ -88,6 +95,206 @@ describe('User Access reader lifetime', () => {
     mocks.deleteUser.mockReset().mockResolvedValue(undefined);
   });
   afterEach(cleanup);
+
+  function mountRefreshingReader() {
+    const [status, setStatus] = createSignal({ user: 'operator-a', allowed: true });
+    let state!: ReturnType<typeof useUserAssignmentsPanelState>;
+    const view = render(() => {
+      state = useUserAssignmentsPanelState({
+        get currentUser() {
+          return status().user;
+        },
+        get canManage() {
+          return status().allowed;
+        },
+      });
+      return <div />;
+    });
+    return { state, view, setStatus, refresh: () => setStatus((current) => ({ ...current })) };
+  }
+
+  it('retains a draft, search and accepted permissions when status refreshes for the same reader', async () => {
+    const { state, refresh } = mountRefreshingReader();
+    await loaded(state);
+    await state.openManageAccess(alice);
+    state.toggleRole('reader');
+    state.setSearchQuery('private');
+    const permissions = state.userPermissions();
+    refresh();
+    await pause();
+    expect(state.showModal()).toBe(true);
+    expect(state.editingUser()).toBe(alice);
+    expect(state.formRoleIds()).toEqual([]);
+    expect(state.searchQuery()).toBe('private');
+    expect(state.userPermissions()).toBe(permissions);
+    expect(mocks.getUsers).toHaveBeenCalledTimes(1);
+    expect(mocks.getUserPermissions).toHaveBeenCalledTimes(1);
+    expect(mocks.updateUserRoles).not.toHaveBeenCalled();
+    expect(mocks.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('retains a pending saved-permissions read across an equal status refresh', async () => {
+    const permissions = deferred<Permission[]>();
+    mocks.getUserPermissions.mockReturnValueOnce(permissions.promise);
+    const { state, refresh } = mountRefreshingReader();
+    await loaded(state);
+    const reading = state.openManageAccess(alice);
+    const signal = mocks.getUserPermissions.mock.calls.at(-1)![1].signal;
+    refresh();
+    await pause();
+    expect(signal.aborted).toBe(false);
+    expect(state.loadingPermissions()).toBe(true);
+    expect(state.showModal()).toBe(true);
+    permissions.resolve([{ action: 'read', resource: 'north-private' }]);
+    await reading;
+    expect(state.userPermissions()).toEqual([{ action: 'read', resource: 'north-private' }]);
+    expect(mocks.getUsers).toHaveBeenCalledTimes(1);
+    expect(mocks.getUserPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['save', 'delete'] as const)(
+    'retains a pending %s and its confirmed outcome across equal status refreshes',
+    async (kind) => {
+      const mutation = deferred<void>();
+      const mutate = kind === 'save' ? mocks.updateUserRoles : mocks.deleteUser;
+      mutate.mockReturnValueOnce(mutation.promise);
+      const { state, refresh } = mountRefreshingReader();
+      await loaded(state);
+      if (kind === 'save') {
+        await state.openManageAccess(alice);
+        state.toggleRole('reader');
+      } else state.openDeleteUser(alice);
+      const writing = kind === 'save' ? state.handleSaveAssignments() : state.handleDeleteUser();
+      const signal = mutate.mock.calls.at(-1)![kind === 'save' ? 2 : 1].signal;
+      refresh();
+      refresh();
+      await pause();
+      expect(signal.aborted).toBe(false);
+      expect(state.canEdit()).toBe(false);
+      expect(kind === 'save' ? state.saving() : state.deletingUser()).toBe(true);
+      expect(kind === 'save' ? state.showModal() : !!state.userPendingDeletion()).toBe(true);
+      expect(mocks.getUsers).toHaveBeenCalledTimes(1);
+      await state.handleSaveAssignments();
+      await state.handleDeleteUser();
+      expect(mutate).toHaveBeenCalledTimes(1);
+      mocks.getUsers.mockResolvedValueOnce(kind === 'save' ? [{ ...alice, roleIds: [] }] : []);
+      mutation.resolve();
+      await writing;
+      expect(state.filteredAssignments()).toEqual(
+        kind === 'save' ? [{ ...alice, roleIds: [] }] : [],
+      );
+      expect(state.successNotice()).toBe(
+        kind === 'save'
+          ? `Roles updated for ${alice.username}`
+          : 'User access removed for North private user',
+      );
+      expect(state.showModal()).toBe(false);
+      expect(state.userPendingDeletion()).toBeNull();
+      expect(state.canEdit()).toBe(true);
+      expect(mocks.getUsers).toHaveBeenCalledTimes(2);
+      expect(mutate).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['save', 'delete'] as const)(
+    'retains an uncertain %s outcome and read-only recovery through equal status refreshes',
+    async (kind) => {
+      const mutation = deferred<void>();
+      const mutate = kind === 'save' ? mocks.updateUserRoles : mocks.deleteUser;
+      mutate.mockReturnValueOnce(mutation.promise);
+      const { state, refresh } = mountRefreshingReader();
+      await loaded(state);
+      if (kind === 'save') await state.openManageAccess(alice);
+      else state.openDeleteUser(alice);
+      const writing = kind === 'save' ? state.handleSaveAssignments() : state.handleDeleteUser();
+      refresh();
+      await pause();
+      mutation.reject(Object.assign(new Error('Synthetic lost reply'), { status: 503 }));
+      await writing;
+      const warning = state.unconfirmedChange();
+      expect(warning).toContain('may already have been applied');
+      refresh();
+      await pause();
+      expect(state.unconfirmedChange()).toBe(warning);
+      expect(state.canEdit()).toBe(false);
+      expect(state.filteredAssignments()).toEqual([]);
+      expect(state.successNotice()).toBeNull();
+      expect(mocks.getUsers).toHaveBeenCalledTimes(1);
+      await state.handleSaveAssignments();
+      await state.handleDeleteUser();
+      expect(mutate).toHaveBeenCalledTimes(1);
+      mocks.getUsers.mockResolvedValueOnce(kind === 'save' ? [{ ...alice, roleIds: [] }] : []);
+      await state.loadData();
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(state.canEdit()).toBe(true);
+      expect(mocks.getUsers).toHaveBeenCalledTimes(2);
+      expect(mutate).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('keeps a definitely refused save draft and error across an equal status refresh', async () => {
+    mocks.updateUserRoles.mockRejectedValueOnce(
+      Object.assign(new Error('Synthetic rejection'), { status: 403 }),
+    );
+    const { state, refresh } = mountRefreshingReader();
+    await loaded(state);
+    await state.openManageAccess(alice);
+    state.toggleRole('reader');
+    await state.handleSaveAssignments();
+    const error = state.actionError();
+    refresh();
+    await pause();
+    expect(state.actionError()).toBe(error);
+    expect(error).not.toBeNull();
+    expect(state.showModal()).toBe(true);
+    expect(state.formRoleIds()).toEqual([]);
+    expect(mocks.getUsers).toHaveBeenCalledTimes(1);
+    expect(mocks.updateUserRoles).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    'principal',
+    'authority',
+    'license',
+    'readiness',
+    'same-org-rebind',
+    'org',
+    'disposal',
+  ] as const)(
+    'still withdraws and ignores a pending mutation on %s after an equal refresh',
+    async (kind) => {
+      const [feature, setFeature] = createSignal(true);
+      const [ready, setReady] = createSignal(true);
+      featureEnabled = feature;
+      featureReady = ready;
+      const mutation = deferred<void>();
+      mocks.updateUserRoles.mockReturnValueOnce(mutation.promise);
+      const { state, setStatus, refresh, view } = mountRefreshingReader();
+      await loaded(state);
+      await state.openManageAccess(alice);
+      const writing = state.handleSaveAssignments();
+      const signal = mocks.updateUserRoles.mock.calls.at(-1)![2].signal;
+      refresh();
+      await pause();
+      expect(signal.aborted).toBe(false);
+      if (kind === 'principal') setStatus({ user: 'operator-b', allowed: true });
+      else if (kind === 'authority') setStatus({ user: 'operator-a', allowed: false });
+      else if (kind === 'license') setFeature(false);
+      else if (kind === 'readiness') setReady(false);
+      else if (kind === 'same-org-rebind') eventBus.emit('org_switched', 'north');
+      else if (kind === 'org') switchOrg();
+      else view.unmount();
+      await pause();
+      expect(signal.aborted).toBe(true);
+      expect(state.showModal()).toBe(false);
+      mutation.resolve();
+      await writing;
+      expect(state.successNotice()).toBeNull();
+      expect(state.actionError()).toBeNull();
+      expect(state.unconfirmedChange()).toBeNull();
+      expect(mocks.updateUserRoles).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('withdraws the account directory, draft, permissions and removal confirmation on org switch', async () => {
     const { state } = mount();
