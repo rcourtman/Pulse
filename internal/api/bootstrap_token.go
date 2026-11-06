@@ -44,7 +44,7 @@ func (r *Router) initializeBootstrapToken() {
 	if ssoCfg := r.ensureSSOConfig(); ssoCfg != nil {
 		hasEnabledSSO = ssoCfg.HasEnabledProviders()
 	}
-	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" || r.hostedMode || hasEnabledSSO {
+	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" || r.hostedMode || hasEnabledSSO || r.ssoAuthenticationLoadFailed() {
 		r.clearBootstrapToken()
 		return
 	}
