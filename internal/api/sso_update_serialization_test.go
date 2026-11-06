@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -105,9 +106,21 @@ func TestSSOUpdatePreservesLatestCommittedSettings(t *testing.T) {
 						value.SetString(value.String() + "-current")
 					}
 				}
-				fast := ssoUpdateRequest(r, original.ID, bytes.NewReader(ssoUpdateJSON(t, current)))
+				// Runtime config JSON uses omitempty for false SAML flags. Send
+				// these intended clears explicitly: omission means preserve, not
+				// false, for fields absent from the ordinary editor model.
+				var rotation map[string]any
+				require.NoError(t, json.Unmarshal(ssoUpdateJSON(t, current), &rotation))
+				protocol := rotation[string(kind)].(map[string]any)
+				for _, field := range unrepresentedSSOFields(kind) {
+					if field.Type.Kind() == reflect.Bool {
+						protocol[strings.Split(field.Tag.Get("json"), ",")[0]] = nested.FieldByIndex(field.Index).Bool()
+					}
+				}
+				fast := ssoUpdateRequest(r, original.ID, bytes.NewReader(ssoUpdateJSON(t, rotation)))
 				require.Equal(t, http.StatusOK, fast.Code, fast.Body.String())
 				committed := r.ensureSSOConfig()
+				require.Equal(t, current, *committed.GetProvider(original.ID), "intervening save did not install the intended settings")
 				committedBytes := ssoUpdateJSON(t, committed)
 				slow := finish()
 				require.Equal(t, http.StatusOK, slow.Code, slow.Body.String())
