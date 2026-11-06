@@ -128,7 +128,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       <p>{unconfirmedChange()}</p>
       <Show when={notice.lastRead && providers().length > 0}>
         <p class="text-xs">
-          Providers below are from the last successful read; their current settings are unknown.
+          Providers below are from the last successful read. Their current settings are unknown.
         </p>
       </Show>
       <Button
