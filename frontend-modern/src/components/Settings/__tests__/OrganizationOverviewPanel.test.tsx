@@ -161,10 +161,8 @@ describe('OrganizationOverviewPanel', () => {
       getOrgIDMock.mockReturnValue(raw);
       orgGetMock.mockResolvedValue({ ...baseOrg, id: scope });
       const savedOrg = { ...baseOrg, id: scope, displayName: 'Selected workspace' };
-      updateOrgMock.mockImplementation(async () => {
-        orgGetMock.mockResolvedValue(savedOrg);
-        return savedOrg;
-      });
+      const pending = deferred<typeof savedOrg>();
+      updateOrgMock.mockReturnValueOnce(pending.promise);
       renderPanel();
 
       const input = await screen.findByRole('textbox', { name: 'Display Name' });
@@ -187,6 +185,16 @@ describe('OrganizationOverviewPanel', () => {
           binding,
         ),
       );
+      // Equal-reader refreshes must not discard this normalized-scope rename.
+      eventBusEmitMock('organizations_changed');
+      eventBusEmitMock('organizations_changed');
+      expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+      expect(input).toHaveValue('Selected workspace');
+      expect(input).toBeDisabled();
+      expect(updateOrgMock.mock.calls[0][2].signal.aborted).toBe(false);
+      expect(orgGetMock).toHaveBeenCalledTimes(1);
+      orgGetMock.mockResolvedValue(savedOrg);
+      pending.resolve(savedOrg);
       await waitFor(() => expect(orgGetMock).toHaveBeenCalledTimes(2));
       expect(await screen.findByRole('textbox', { name: 'Display Name' })).toHaveValue(
         savedOrg.displayName,
