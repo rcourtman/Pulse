@@ -30,7 +30,10 @@ Actual organization/principal changes, entitlement or surface withdrawal,
 read-only posture and disposal still invalidate and cancel immediately. Old-reader
 feedback is suppressed; local cancellation does not undo a server-applied write.
 Expected organization, session/CSRF binding, no-retry requests, server authority
-and deliberate ownership confirmation remain unchanged.
+and deliberate ownership confirmation remain unchanged. A production
+`org_switched` event clears runtime capabilities even for the same ID: that
+unknown-authority interval is withdrawal, not an equal-reader directory refresh.
+The runtime capability reset remains intact.
 
 The registered Access and Sharing panel tests exercise all ten plain mutation
 paths plus ownership confirmation, successful and uncertain completion, explicit

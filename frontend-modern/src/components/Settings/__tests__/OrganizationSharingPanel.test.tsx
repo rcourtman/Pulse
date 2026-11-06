@@ -1005,7 +1005,6 @@ describe('sharing changes require an admitted current snapshot', () => {
 
       emit('organizations_changed');
       emit('organizations_changed');
-      emit('org_switched'); // An equal selection is not a new reader.
       await state.loadSharingData();
       syncSessionPresentationPolicy({
         presentationPolicy: {

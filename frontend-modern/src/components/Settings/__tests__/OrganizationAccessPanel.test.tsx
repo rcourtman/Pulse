@@ -855,7 +855,6 @@ describe('Organization Access change safety', () => {
       const signal = mock.mock.calls[0].at(-1).signal;
       eventBusEmitMock('organizations_changed');
       eventBusEmitMock('organizations_changed');
-      eventBusEmitMock('org_switched');
       await state.loadOrganizationAccess();
       setHidden(false); // A new policy object with unchanged effective authority.
       expect(signal.aborted).toBe(false);
