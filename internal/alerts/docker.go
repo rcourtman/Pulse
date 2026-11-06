@@ -802,16 +802,16 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	if alert != nil {
 		if callbacks := m.getAlertForAICallbacks(); len(callbacks) > 0 {
 			alertCopy := cloneAlertForOutput(alert)
-			go func(a *Alert, fns []func(*Alert)) {
+			m.dispatchCallback(true, func() {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
+						log.Error().Interface("panic", r).Str("alertID", alertCopy.ID).Msg("panic in AI alert callback")
 					}
 				}()
-				for _, callback := range fns {
-					callback(a)
+				for _, callback := range callbacks {
+					callback(alertCopy)
 				}
-			}(alertCopy, callbacks)
+			})
 		}
 	}
 

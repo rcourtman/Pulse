@@ -1356,6 +1356,7 @@ type Monitor struct {
 	alertProjectionStopped     bool
 	alertProjectionWG          sync.WaitGroup // tracks scheduled background catch-up runs
 	notificationMgr            *notifications.NotificationManager
+	notificationProducers      notificationProducers
 	deadMan                    *deadManRuntime
 	deadManProgressUnixNano    atomic.Int64
 	deadManConfigMu            sync.RWMutex
@@ -8551,6 +8552,11 @@ func (m *Monitor) stop() error {
 	if m.alertManager != nil {
 		m.alertManager.Stop()
 	}
+
+	// Alert Stop has drained its callbacks, so no producer can still be
+	// scheduled behind this boundary. Finish the monitor's asynchronous sends
+	// while notification admission/storage are still open, then stop delivery.
+	m.notificationProducers.stop()
 
 	// Stop notification manager
 	if m.notificationMgr != nil {

@@ -265,18 +265,18 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		cb := m.callbacks.flappingDetectedCallback()
 		if cb != nil {
 			alertCopy := cloneAlertForOutput(alert)
-			go func(a *Alert, key string, fn func(*Alert, string)) {
+			m.dispatchCallback(true, func() {
 				defer func() {
 					if r := recover(); r != nil {
 						log.Error().
 							Interface("panic", r).
-							Str("alertID", a.ID).
-							Str("trackingKey", key).
+							Str("alertID", alertCopy.ID).
+							Str("trackingKey", trackingKey).
 							Msg("Panic in onFlappingDetected callback")
 					}
 				}()
-				fn(a, key)
-			}(alertCopy, trackingKey, cb)
+				cb(alertCopy, trackingKey)
+			})
 		}
 	}
 	if suppress {
@@ -323,6 +323,12 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 		clearQuietHoursNotificationReplay(alert)
 	}
 
+	// Refused producer admission must not advance LastNotified or claim a
+	// dispatch. Stop owns every accepted callback, even before it is scheduled.
+	if !m.beginCallback() {
+		return false
+	}
+
 	// Record metric for fired alert
 	if recordAlertFired != nil {
 		recordAlertFired(alert)
@@ -336,23 +342,23 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 
 	alertCopy := cloneAlertForOutput(alert)
 	if async {
-		go func(a *Alert, fns []func(*Alert)) {
+		m.runAdmittedCallback(true, func() {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Error().
 						Interface("panic", r).
-						Str("alertID", a.ID).
-						Str("type", a.Type).
+						Str("alertID", alertCopy.ID).
+						Str("type", alertCopy.Type).
 						Msg("Panic in onAlert callback")
 				}
 			}()
-			for _, callback := range fns {
-				callback(a)
+			for _, callback := range callbacks {
+				callback(alertCopy)
 			}
-		}(alertCopy, callbacks)
+		})
 	} else {
 		// Synchronous calls also need panic recovery to prevent service crash
-		func(fns []func(*Alert)) {
+		m.runAdmittedCallback(false, func() {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Error().
@@ -362,10 +368,10 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 						Msg("Panic in onAlert callback (synchronous)")
 				}
 			}()
-			for _, callback := range fns {
+			for _, callback := range callbacks {
 				callback(alertCopy)
 			}
-		}(callbacks)
+		})
 	}
 	return true
 }

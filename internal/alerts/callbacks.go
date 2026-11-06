@@ -469,11 +469,7 @@ func (m *Manager) safeCallResolvedAlertCallback(resolved *ResolvedAlert, fallbac
 		}
 	}
 
-	if async {
-		go callbackFunc()
-	} else {
-		callbackFunc()
-	}
+	m.dispatchCallback(async, callbackFunc)
 }
 
 // safeCallAcknowledgedCallback invokes onAcknowledged with panic recovery and alert cloning.
@@ -487,17 +483,17 @@ func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
 	}
 
 	alertCopy := cloneAlertForOutput(alert)
-	go func(a *Alert, u string) {
+	m.dispatchCallback(true, func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error().
 					Interface("panic", r).
-					Str("alertID", a.ID).
+					Str("alertID", alertCopy.ID).
 					Msg("Panic in onAcknowledged callback")
 			}
 		}()
-		callback(a, u)
-	}(alertCopy, user)
+		callback(alertCopy, user)
+	})
 }
 
 // safeCallUnacknowledgedCallback invokes onUnacknowledged with panic recovery and alert cloning.
@@ -511,17 +507,17 @@ func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
 	}
 
 	alertCopy := cloneAlertForOutput(alert)
-	go func(a *Alert, u string) {
+	m.dispatchCallback(true, func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error().
 					Interface("panic", r).
-					Str("alertID", a.ID).
+					Str("alertID", alertCopy.ID).
 					Msg("Panic in onUnacknowledged callback")
 			}
 		}()
-		callback(a, u)
-	}(alertCopy, user)
+		callback(alertCopy, user)
+	})
 }
 
 // safeCallEscalateCallback invokes onEscalate with panic recovery and alert cloning.
@@ -548,16 +544,16 @@ func (m *Manager) safeCallEscalateCallbackWithKind(alert *Alert, level int, repe
 	}
 
 	alertCopy := cloneAlertForOutput(alert)
-	go func(a *Alert, lvl int) {
+	m.dispatchCallback(true, func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error().
 					Interface("panic", r).
-					Str("alertID", a.ID).
-					Int("level", lvl).
+					Str("alertID", alertCopy.ID).
+					Int("level", level).
 					Msg("Panic in onEscalate callback")
 			}
 		}()
-		callback(a, lvl)
-	}(alertCopy, level)
+		callback(alertCopy, level)
+	})
 }

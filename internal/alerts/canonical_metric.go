@@ -351,14 +351,14 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 
 			if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
 				alertCopy := cloneAlertForOutput(alert)
-				go func(a *Alert) {
+				m.dispatchCallback(true, func() {
 					defer func() {
 						if r := recover(); r != nil {
-							log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
+							log.Error().Interface("panic", r).Str("alertID", alertCopy.ID).Msg("panic in AI alert callback")
 						}
 					}()
-					alertForAICallback(a)
-				}(alertCopy)
+					alertForAICallback(alertCopy)
+				})
 			}
 
 			if !m.checkRateLimit(trackingKey) {

@@ -633,7 +633,8 @@ func (m *Manager) scheduleRestoredCriticalAlert(alert *Alert, epoch uint64) {
 	if m == nil || alert == nil {
 		return
 	}
-	go func(a *Alert) {
+	a := alert.Clone()
+	m.dispatchCallback(true, func() {
 		delay := time.NewTimer(10 * time.Second)
 		defer func() {
 			if !delay.Stop() {
@@ -664,7 +665,7 @@ func (m *Manager) scheduleRestoredCriticalAlert(alert *Alert, epoch uint64) {
 				Str("alertID", a.ID).
 				Msg("Cancelled startup notification due to shutdown")
 		}
-	}(alert.Clone())
+	})
 }
 
 func (m *Manager) getAlertsDir() string {

@@ -554,16 +554,16 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		// Trigger AI analysis callback unconditionally (bypasses notification suppression)
 		if callbacks := m.getAlertForAICallbacks(); len(callbacks) > 0 {
 			alertCopy := cloneAlertForOutput(alert)
-			go func(a *Alert, fns []func(*Alert)) {
+			m.dispatchCallback(true, func() {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
+						log.Error().Interface("panic", r).Str("alertID", alertCopy.ID).Msg("panic in AI alert callback")
 					}
 				}()
-				for _, callback := range fns {
-					callback(a)
+				for _, callback := range callbacks {
+					callback(alertCopy)
 				}
-			}(alertCopy, callbacks)
+			})
 		}
 
 		// Check rate limit (but don't remove alert from tracking)

@@ -158,6 +158,11 @@ type Manager struct {
 	stopMu        sync.RWMutex
 	stopping      bool
 	workerWG      sync.WaitGroup
+	// Callback admission is separate from checkpoint/worker admission: workers
+	// finishing during Stop can still hand their last notification to the
+	// delivery pipeline. Both admissions are protected by stopMu.
+	callbacksClosed bool
+	callbackWG      sync.WaitGroup
 	// stopMu protects checkpoint worker admission and its coalesced request.
 	// The worker releases stopMu before taking saveMu or the manager state lock.
 	activeSaveRunning bool
