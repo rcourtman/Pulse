@@ -6,6 +6,7 @@ import io
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -57,7 +58,10 @@ class InventoryControls(unittest.TestCase):
             self.assertEqual(kwargs["cwd"], runner.ROOT / "scripts/installtests")
             if len(checks) + 2 == failure_at:
                 raise subprocess.CalledProcessError(23, [str(binary), name])
-        with patch.object(runner.subprocess, "run", side_effect=command), patch.object(runner, "run_check", side_effect=check), contextlib.redirect_stdout(io.StringIO()):
+        def selected(binary, names, **kwargs):
+            for name in names:
+                check(binary, name, **kwargs)
+        with patch.object(runner.subprocess, "run", side_effect=command), patch.object(runner, "run_checks", side_effect=selected), contextlib.redirect_stdout(io.StringIO()):
             if failure_at:
                 with self.assertRaises(subprocess.CalledProcessError):
                     runner.main(phase)
@@ -98,6 +102,95 @@ class InventoryControls(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("invalid choice", result.stderr)
 
+    def test_all_keeps_preflight_out_of_the_first_remaining_wave(self):
+        with patch.object(runner.subprocess, "run", return_value=SimpleNamespace(stdout=self.inventory)), \
+                patch.object(runner, "run_checks") as checks, contextlib.redirect_stdout(io.StringIO()):
+            runner.main("all")
+        self.assertEqual(checks.call_count, 2)
+        self.assertEqual(checks.call_args_list[0].args[1], list(runner.PREFLIGHT))
+        self.assertEqual(checks.call_args_list[1].args[1],
+                         [name for name in self.names if name not in runner.PREFLIGHT])
+
+
+class WaveControls(unittest.TestCase):
+    def test_two_checks_overlap_but_next_wave_waits_and_output_stays_ordered(self):
+        barrier = threading.Barrier(2)
+        lock = threading.Lock()
+        active, peak, finished = set(), [0], set()
+        names = ["TestFirst", "TestSecond", "TestLast"]
+        output = io.StringIO()
+        def check(binary, name, *, cwd, output):
+            self.assertEqual(binary, "exact-binary")
+            self.assertEqual(cwd, "exact-cwd")
+            with lock:
+                active.add(name)
+                peak[0] = max(peak[0], len(active))
+                if name == "TestLast":
+                    self.assertEqual(finished, set(names[:2]))
+            if name != "TestLast":
+                barrier.wait(timeout=5)
+            output.write(f"complete {name}\n")
+            with lock:
+                active.remove(name)
+                finished.add(name)
+        with patch.object(runner, "run_check", side_effect=check), contextlib.redirect_stdout(output):
+            runner.run_checks("exact-binary", names, cwd="exact-cwd")
+        self.assertEqual(peak[0], 2)
+        self.assertEqual(finished, set(names))
+        self.assertEqual([line for line in output.getvalue().splitlines() if line.startswith("complete")],
+                         [f"complete {name}" for name in names])
+
+    def test_failed_wave_drains_sibling_and_starts_no_later_check(self):
+        # Fail either position, including a fast second result while the first
+        # is still active. Both outputs survive before the failure is raised.
+        for failed in ("TestFirst", "TestSecond"):
+            with self.subTest(failed=failed):
+                barrier = threading.Barrier(2)
+                names, finished = [], set()
+                output, errors = io.StringIO(), io.StringIO()
+                def check(binary, name, *, cwd, output):
+                    names.append(name)
+                    barrier.wait(timeout=5)
+                    output.write(f"observed {name}\n")
+                    finished.add(name)
+                    if name == failed:
+                        raise subprocess.CalledProcessError(23, [binary, name])
+                with patch.object(runner, "run_check", side_effect=check), \
+                        contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), \
+                        self.assertRaises(subprocess.CalledProcessError) as raised:
+                    runner.run_checks("exact-binary", ["TestFirst", "TestSecond", "TestNever"], cwd="exact-cwd")
+                self.assertEqual(raised.exception.returncode, 23)
+                self.assertEqual(sorted(names), ["TestFirst", "TestSecond"])
+                self.assertEqual(finished, set(names))
+                self.assertIn("observed TestFirst\nobserved TestSecond\n", output.getvalue())
+                self.assertIn("check failed: " + failed, errors.getvalue())
+                self.assertNotIn("TestNever", output.getvalue() + errors.getvalue())
+
+    def test_both_failures_and_complete_output_are_retained(self):
+        output, errors = io.StringIO(), io.StringIO()
+        def check(binary, name, *, cwd, output):
+            output.write(name + "\n" + "fixture bytes Σ" * 10000 + "\n")
+            if name == "TestFirst":
+                raise RuntimeError("missing completion")
+            raise subprocess.CalledProcessError(29, [binary, name])
+        with patch.object(runner, "run_check", side_effect=check), \
+                contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), \
+                self.assertRaisesRegex(RuntimeError, "missing completion"):
+            runner.run_checks("binary", ["TestFirst", "TestSecond", "TestNever"], cwd="cwd")
+        self.assertEqual(output.getvalue().count("fixture bytes Σ"), 20000)
+        self.assertIn("check failed: TestFirst: missing completion", errors.getvalue())
+        self.assertIn("check failed: TestSecond:", errors.getvalue())
+        self.assertIn("29", errors.getvalue())
+
+    def test_single_preflight_and_empty_selection_start_no_extra_check(self):
+        for names in ([], list(runner.PREFLIGHT)):
+            with self.subTest(names=names), patch.object(runner, "run_check") as check, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                runner.run_checks("binary", names, cwd="cwd")
+                self.assertEqual(check.call_count, len(names))
+                if names:
+                    self.assertEqual(check.call_args.args, ("binary", names[0]))
+
 
 class CompiledGoControls(unittest.TestCase):
     @classmethod
@@ -114,6 +207,17 @@ func TestSkip(t *testing.T) { t.Skip("explicit platform skip") }
 func TestFail(t *testing.T) { t.Fatal("real failure") }
 func TestExitZero(t *testing.T) { os.Exit(0) }
 func TestTimeout(t *testing.T) { time.Sleep(time.Hour) }
+func TestConcurrentA(t *testing.T) { concurrent(t, "A", "B") }
+func TestConcurrentB(t *testing.T) { concurrent(t, "B", "A") }
+func concurrent(t *testing.T, own, peer string) {
+    if err := os.WriteFile(own, []byte("ready"), 0600); err != nil { t.Fatal(err) }
+    deadline := time.Now().Add(5 * time.Second)
+    for {
+        if _, err := os.Stat(peer); err == nil { return }
+        if time.Now().After(deadline) { t.Fatal("sibling did not start concurrently") }
+        time.Sleep(time.Millisecond)
+    }
+}
 func FuzzSeeds(f *testing.F) { f.Add("seed"); f.Fuzz(func(t *testing.T, s string) {}) }
 func Example_output() { fmt.Println("installer"); /* Output: installer */ }
 ''')
@@ -143,6 +247,31 @@ func Example_output() { fmt.Println("installer"); /* Output: installer */ }
     def test_no_matching_test_cannot_pass(self):
         with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(RuntimeError):
             runner.run_check(self.binary, "TestMissing", cwd=self.cwd)
+
+    def test_actual_go_processes_overlap_and_keep_separate_verdicts(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            runner.run_checks(self.binary, ["TestConcurrentA", "TestConcurrentB", "TestPass"], cwd=self.cwd)
+        text = output.getvalue()
+        for name in ("TestConcurrentA", "TestConcurrentB", "TestPass"):
+            self.assertEqual(text.count("--- PASS: " + name + " ("), 1)
+        self.assertLess(text.index("--- PASS: TestConcurrentA"), text.index("--- PASS: TestConcurrentB"))
+        self.assertLess(text.index("--- PASS: TestConcurrentB"), text.index("=== RUN   TestPass"))
+
+    def test_actual_failure_does_not_erase_sibling_or_run_a_later_check(self):
+        for failed in ("TestFail", "TestExitZero", "TestTimeout", "TestMissing"):
+            with self.subTest(failed=failed):
+                output, errors = io.StringIO(), io.StringIO()
+                actual = runner.run_check
+                def bounded(binary, name, **kwargs):
+                    return actual(binary, name, timeout="100ms", **kwargs)
+                with patch.object(runner, "run_check", side_effect=bounded), \
+                        contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), \
+                        self.assertRaises((subprocess.CalledProcessError, RuntimeError)):
+                    runner.run_checks(self.binary, [failed, "TestPass", "TestPassExtra"], cwd=self.cwd)
+                self.assertIn("--- PASS: TestPass (", output.getvalue())
+                self.assertNotIn("=== RUN   TestPassExtra", output.getvalue())
+                self.assertIn("check failed: " + failed, errors.getvalue())
 
 
 if __name__ == "__main__":
