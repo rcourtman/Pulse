@@ -252,3 +252,36 @@ names or consistent group aliases. Keep client secrets, authorization codes,
 ID/access/refresh tokens, cookies, email addresses, full callback query strings,
 HAR exports and “Copy as cURL” output private. Never disable TLS verification or
 access restrictions as a diagnostic shortcut.
+
+### A provider change could not be confirmed
+
+A connection failure or server error after **Save**, an enable/disable change
+or **Delete** can happen after Pulse applied it. Do not repeat the change or
+add another provider to clear the warning. Keep your working, independent
+administrator session open.
+
+In **Settings → Security → Single Sign-On**, use **Check saved providers**
+when offered. This discards the open draft, including any typed secret, and
+reads the provider list without repeating the change or running a connection
+test. On versions without that button, reopen the panel for a fresh read before
+considering another write. Do not bypass the warning through the API, edit
+configuration files or restart Pulse to clear it.
+
+Compare the returned list with what you intended. If the provider is present,
+use that card's **Callback / Redirect URL**, not a duplicate provider. Open
+**Edit** without saving to review its login restrictions and role mappings.
+The read shows a snapshot at that time, not proof that an earlier request cannot
+still finish. A failed read means unknown, not empty or unchanged.
+
+**If a provider you know existed is unexpectedly missing, stop without adding
+or deleting anything.** A configuration-load failure can look like an empty
+list. Keep the existing data and administrator access. For help, use the
+original action, time, Pulse version and relevant, locally redacted existing
+error. Do not repeat the action to obtain evidence.
+
+A returned provider or masked secret field does not confirm which client
+secret is stored. It also does not prove working sign-in, intended permissions
+or revoked sessions. Once the intended settings are confirmed, use the
+[separate-session checks in Quick Start](#-quick-start) without signing out of
+your working administrator session. Keep secrets, cookies and full responses
+private.

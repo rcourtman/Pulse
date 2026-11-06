@@ -128,6 +128,46 @@ def assert_refresh_source(case, auth, store):
 
 
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_unconfirmed_changes_use_a_read_without_promising_recovery(self):
+        guide = GUIDE.read_text()
+        recovery = " ".join(guide.split("### A provider change could not be confirmed", 1)[1].split())
+        for expected in (
+            "Do not repeat the change", "independent administrator session open",
+            "Check saved providers", "discards the open draft, including any typed secret",
+            "without repeating the change or running a connection test",
+            "versions without that button", "Do not bypass the warning through the API",
+            "Callback / Redirect URL", "not a duplicate provider",
+            "Open **Edit** without saving", "snapshot at that time",
+            "earlier request cannot still finish", "unknown, not empty or unchanged",
+            "unexpectedly missing, stop without adding or deleting anything",
+            "configuration-load failure can look like an empty list",
+            "does not confirm which client secret is stored",
+            "does not prove working sign-in, intended permissions or revoked sessions",
+            "[separate-session checks in Quick Start](#-quick-start)",
+            "Keep secrets, cookies and full responses private",
+        ):
+            self.assertIn(expected, recovery)
+        self.assertNotIn("```", recovery)
+        # Keep existing troubleshooting visible in its established order.
+        self.assertLess(guide.index("### Safe diagnosis"), guide.index("### A provider change could not be confirmed"))
+
+    def test_provider_check_instructions_match_the_read_only_control(self):
+        state = (ROOT / "frontend-modern/src/components/Settings/useSSOProvidersState.ts").read_text()
+        panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
+        self.assertIn("'Check saved providers'", panel)
+        self.assertIn("onClick={() => void loadProviders()}", panel)
+        self.assertIn("retry: false", state)
+        inventory = state.split("const loadProviders = async () => {", 1)[1].split("const resetContext", 1)[0]
+        self.assertIn("if (unconfirmedChange()) {\n      clearEditor();", inventory)
+        self.assertIn("apiFetch('/api/security/sso/providers', requestOptions(controller))", inventory)
+        self.assertIn("!Array.isArray(data.providers)", inventory)
+        self.assertLess(inventory.index("!Array.isArray(data.providers)"), inventory.index("setUnconfirmedChange(null)"))
+        for mutation in ("method:", "handleSave(", "handleDelete(", "testProvider("):
+            self.assertNotIn(mutation, inventory)
+        detail = state.split("const openEditModal = async", 1)[1].split("const beginMutation", 1)[0]
+        self.assertIn("requestOptions(controller)", detail)
+        self.assertNotIn("method:", detail)
+
     def test_role_assignment_audit_does_not_promise_events_for_cleared_roles(self):
         callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
         assert_role_assignment_audit_scope(self, GUIDE.read_text(), callback)
