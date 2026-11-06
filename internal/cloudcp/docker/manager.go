@@ -998,6 +998,29 @@ func (m *Manager) Restart(ctx context.Context, containerID string) error {
 	return err
 }
 
+// RestartProviderIngress restarts the provider stack's Traefik, which makes it
+// request every certificate it still lacks. No client runtime is touched.
+func (m *Manager) RestartProviderIngress(ctx context.Context) error {
+	if m == nil || m.cli == nil {
+		return fmt.Errorf("docker unavailable")
+	}
+	filters := client.Filters{}
+	filters = filters.Add("label", providerSupportTraefikLabel)
+	result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{Filters: filters})
+	if err != nil {
+		return fmt.Errorf("find provider ingress: %w", err)
+	}
+	if len(result.Items) == 0 {
+		return fmt.Errorf("no running provider ingress")
+	}
+	for _, item := range result.Items {
+		if err := m.Restart(ctx, item.ID); err != nil {
+			return fmt.Errorf("restart provider ingress: %w", err)
+		}
+	}
+	return nil
+}
+
 // EnsureSupportContainersOnTenantNetwork reattaches the provider support
 // containers (Traefik and the control plane) to a tenant's isolated network.
 // They join it when the tenant is created, but recreating either one, as an

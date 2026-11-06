@@ -4102,3 +4102,16 @@ not repaired by this.
 `TestEnsureSupportContainersGivesTraefikTheControlPlaneNameForCapableRuntimes` and
 `TestHostedEntitlementRefreshAdmitsPrivateAddressesOnlyForConfiguredControlPlane`
 pin it.
+
+### Client certificate gate on provider handoff (5 November 2026)
+
+`internal/cloudcp/handoff/client_certificate.go` runs only with
+`CP_PER_CLIENT_CERTIFICATES=true`. It sits inside session and membership auth,
+passes foreign tenants to `HandleHandoff` untouched, and holds a handoff until
+Traefik serves that client's certificate, because sniStrict otherwise lands the
+operator on a browser TLS error. A TLS alert from Traefik or a certificate that
+fails verification against the system roots counts as missing; dial errors and
+cancelled requests never start a retry. The retry
+restarts Traefik through `Manager.RestartProviderIngress`, with the gap doubling
+from 15 minutes to 6 hours until the client that started it is issued, and never
+restarts a client runtime, which could revive a replaced container.
