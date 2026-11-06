@@ -2,6 +2,7 @@ package notifications_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -94,6 +95,57 @@ func TestPatrolReceiptLifecycleSettlesOnlyPositiveTerminalFacts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, beforeLog, afterLog, "receipt housekeeping must not change rendered delivery history")
 	t.Logf("PATROL_FINAL_FRAME completed=%d receipts_before=%d receipts_after=3 active=1 dismissed=1 unknown=1 delivery_log_unchanged=true production_contact=false", completed, completed+3)
+}
+
+type patrolReceiptUnavailablePersistence struct{}
+
+func (patrolReceiptUnavailablePersistence) SaveFindings(map[string]*ai.Finding) error { return nil }
+func (patrolReceiptUnavailablePersistence) LoadFindings() (map[string]*ai.Finding, error) {
+	return nil, errors.New("fixture finding load unavailable")
+}
+
+func TestPatrolReceiptLifecycleRetainsOldDispositionUntilOwnerCanSettleIt(t *testing.T) {
+	for _, status := range []string{"active", "expected_behavior", "not_an_issue", "will_fix_later", "snoozed", "regressed", "owner missing", "load failed", "start mismatch", "recent resolution"} {
+		t.Run(status, func(t *testing.T) {
+			store := patrolReceiptStore(t, t.TempDir())
+			start := time.Now().Add(-40 * 24 * time.Hour).Round(0)
+			f := patrolReceiptFinding("retained-fixture", start)
+			if status == "start mismatch" {
+				f.DetectedAt = start.Add(time.Nanosecond)
+			}
+			require.True(t, store.Add(f))
+			switch status {
+			case "expected_behavior", "not_an_issue", "will_fix_later":
+				require.True(t, store.Dismiss(f.ID, status, "fixture intent"))
+			case "snoozed":
+				require.True(t, store.Snooze(f.ID, time.Hour))
+			case "regressed":
+				require.True(t, store.Resolve(f.ID, false))
+				require.False(t, store.Add(patrolReceiptFinding(f.ID, start)))
+			case "recent resolution":
+				require.True(t, store.Resolve(f.ID, false))
+			case "load failed":
+				require.Error(t, store.SetPersistence(patrolReceiptUnavailablePersistence{}))
+			case "owner missing":
+				store = nil
+			}
+			n := notifications.NewNotificationManagerWithDeferredQueue("", t.TempDir())
+			t.Cleanup(n.Stop)
+			n.SetOccurrenceLifecycleProvider(patrolReceiptLifecycle(store))
+			q := n.GetQueue()
+			id := alerts.PatrolFindingNotificationIDPrefix + f.ID
+			require.NoError(t, notifications.ReceiptLifecycleSeedForTest(q, id, start, start))
+			db := notifications.ReceiptLifecycleDBForTest(q)
+			// Even a receipt's old positive disposition cannot supersede an
+			// active/newer occurrence, recent end or unavailable owning source.
+			_, err := db.Exec(`UPDATE notification_delivery_receipts SET resolved_at=? WHERE alert_id=?`, time.Now().Add(-31*24*time.Hour).UnixNano(), id)
+			require.NoError(t, err)
+			n.ReconcileOccurrenceReceipts()
+			var retained int
+			require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM notification_delivery_receipts WHERE alert_id=?`, id).Scan(&retained))
+			require.Equal(t, 1, retained)
+		})
+	}
 }
 
 func TestPatrolReceiptLifecycleOwedRecoverySurvivesPruningAndRestart(t *testing.T) {
