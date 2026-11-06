@@ -296,8 +296,39 @@ func isAuthWrapper(name string) bool {
 	switch name {
 	case "RequireAuth", "RequireAdmin", "RequireOrgAdmin", "RequireOrgManager", "RequirePermission", "RequireOrgOwnerOrPlatformAdmin", "RequirePlatformAdmin":
 		return true
+	case "requireSSOManagementPermission":
+		// This Router wrapper delegates to RequirePermission for admin/users
+		// and retains the request's pre-authentication recovery state. The
+		// registered-boundary and recovery-admission tests exercise its auth.
+		return true
 	default:
 		return false
+	}
+}
+
+func TestRouterProtectedHandlerClassification(t *testing.T) {
+	for _, tc := range []struct {
+		expression string
+		protected  bool
+	}{
+		{"RequirePermission(config, authorizer, action, resource, handler)", true},
+		{"r.requireSSOManagementPermission(handler)", true},
+		{"r.requireSSOManagementPermission(RequireLicenseFeature(license, feature, handler))", true},
+		{"handler", false},
+		{"RequireLicenseFeature(license, feature, handler)", false},
+		{"r.requireSSOManagementPermissionExtra(handler)", false},
+		{"r.requireSSOManagementConfig(handler)", false},
+		{"r.authorizeSSOManagement", false},
+	} {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := parser.ParseExpr(tc.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := isProtectedHandler(expr); got != tc.protected {
+				t.Fatalf("protected handler = %v, want %v", got, tc.protected)
+			}
+		})
 	}
 }
 

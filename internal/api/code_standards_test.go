@@ -149,6 +149,11 @@ var knownSharedInfrastructureFiles = map[string]bool{
 	// Shared configuration edit adapter: retains omitted stored fields without
 	// exposing them. No authentication, entitlement or paid endpoint logic.
 	"sso_config_preservation.go": true,
+	// Shared Router persistence/recovery and request-admission adapters. They
+	// preserve saved authority through read failures using the existing auth,
+	// scope and permission checks; no paid protocol or entitlement logic.
+	"sso_load_state.go":           true,
+	"sso_management_admission.go": true,
 }
 
 // TestPaidDomainBoundaryAudit enforces two rules:
