@@ -144,12 +144,24 @@ destination's pre-import backup. Distinguish these outcomes:
 - **Saved, but not applied:** `Configuration saved, but live reload failed:`
   means the imported settings are on disk, but the named live components did
   not all reload. The list can name alert settings, webhook settings, email
-  settings or guest metadata; other components may already have applied.
+  settings, Apprise settings or guest metadata; other components may already
+  have applied.
   Older messages `Configuration imported but failed to reload` and
   `Configuration imported but failed to apply changes` also follow a saved
   import. **Do not repeat the import.** It can overwrite legitimate changes
   made since the first attempt; the error does not mean the old settings were
   restored.
+- **Saved, notification restart required:** `Configuration saved. Restart Pulse
+  to apply the restored notification settings. Do not repeat the import.` means
+  the backup was saved, but notification delivery remains on hold. If the
+  response says `Repair notification storage, then restart Pulse`, repair that
+  storage failure first. Preserve the destination's retained data and plan a
+  normal restart with independent monitoring and alert coverage. Keep the
+  destination isolated from providers, agents, outbound notifications and remote
+  actions during the restart. Restoring notification settings can resume
+  delivery. Reconnect only through the single-owner handover below. Other
+  settings may already have applied. A restart is not a rollback or proof of
+  delivery.
 - **No final response, or HTTP 409:** a timeout, lost connection or recently
   submitted/still-running warning does not establish whether the original
   import saved or applied. Do not resubmit it to discover the outcome. The
@@ -161,8 +173,10 @@ actions while reconciling a migration trial. Preserve the redacted error and
 check the **same destination and organisation**, using destination-local
 administrator access. Review the saved settings and the reported component's
 failure through normal maintenance before relying on it; a saved email or
-webhook destination does not prove notification delivery. Do not restart Pulse,
-send a test notification or repeat a backup just to clear the error. Resume the
+webhook destination does not prove notification delivery. Do not restart Pulse
+unless the response explicitly requires it under the isolation rule above.
+Do not send a test notification or repeat a backup just to clear the error.
+Resume the
 [single-owner handover](#hand-over-monitoring-once) only after the failed apply
 has been resolved; if its state remains uncertain, do not enable a second poller.
 

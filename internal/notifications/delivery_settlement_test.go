@@ -163,8 +163,8 @@ func TestNotificationSendingRepairDoesNotReclaimAnOwnedAttempt(t *testing.T) {
 		return err
 	})
 	n.SendAlert(&alerts.Alert{ID: "owned-settlement", StartTime: time.Now(), Level: alerts.AlertLevelCritical})
-	done := make(chan struct{})
-	go func() { q.processBatch(); close(done) }()
+	// Enqueue wakes the real background owner. A separate manual sweep must
+	// not reclaim that owner's accepted attempt while it is still blocked.
 	awaitShutdownSignal(t, "accepted attempt still owned by its worker", entered)
 	require.True(t, n.DeliveryHealth().Healthy, "live accepted completion was reported as a storage failure")
 	q.processBatch()
@@ -173,7 +173,8 @@ func TestNotificationSendingRepairDoesNotReclaimAnOwnedAttempt(t *testing.T) {
 	require.NoError(t, q.db.QueryRow(`SELECT status FROM notification_queue`).Scan(&status))
 	require.Equal(t, string(QueueStatusSending), status)
 	release()
-	awaitShutdownSignal(t, "owned accepted attempt completion", done)
+	drainContinuity(t, n)
+	require.Equal(t, int32(1), processors.Load(), "completion replayed an accepted attempt")
 	require.Equal(t, int32(1), deliveries.Load())
 	require.NoError(t, q.db.QueryRow(`SELECT status FROM notification_queue`).Scan(&status))
 	require.Equal(t, string(QueueStatusSent), status)
@@ -203,14 +204,18 @@ func TestNotificationDelayedFiringRequiresPositiveReactivation(t *testing.T) {
 			})
 			n.SendAlert(a)
 			q.processBatch()
+			var admittedFirings int
+			require.NoError(t, q.db.QueryRow(`SELECT COUNT(*) FROM notification_queue WHERE type='webhook'`).Scan(&admittedFirings))
 			var recoveryStatus string
 			require.NoError(t, q.db.QueryRow(`SELECT status FROM notification_queue WHERE type='webhook_resolved'`).Scan(&recoveryStatus))
 			if initialState == alerts.NotificationOccurrenceActive {
+				require.Equal(t, 2, admittedFirings)
 				require.Equal(t, string(QueueStatusCancelled), recoveryStatus)
 				drainContinuity(t, n)
 				require.Equal(t, int32(2), deliveries.Load())
 				return
 			}
+			require.Equal(t, 1, admittedFirings, "inactive or unavailable authority admitted a fresh replay")
 			require.Equal(t, string(QueueStatusPending), recoveryStatus, "stale or uncertain firing cancelled owed recovery")
 			require.Equal(t, int32(1), deliveries.Load())
 			// Also exercise a stale firing that was already admitted to the queue.
@@ -221,7 +226,25 @@ func TestNotificationDelayedFiringRequiresPositiveReactivation(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, q.Enqueue(&QueuedNotification{ID: "delayed-admitted-firing", Type: "webhook", Alerts: []*alerts.Alert{a.Clone()}, Config: config, ReceiptEpoch: &epoch}))
 			q.processBatch()
-			require.Equal(t, int32(1), deliveries.Load())
+			// A manual sweep can lose the row to the background worker. Wait
+			// for that worker's durable deferral or cancellation and release
+			// of ownership before checking delivery or changing authority.
+			require.Eventually(t, func() bool {
+				var settled bool
+				if initialState == alerts.NotificationOccurrenceUnavailable {
+					stats, err := q.GetQueueStats()
+					settled = err == nil && stats["occurrence_pending"] == 1
+				} else {
+					var status string
+					err := q.db.QueryRow(`SELECT status FROM notification_queue WHERE id='delayed-admitted-firing'`).Scan(&status)
+					settled = err == nil && status == string(QueueStatusCancelled)
+				}
+				q.mu.RLock()
+				_, owned := q.processingNotifications["delayed-admitted-firing"]
+				q.mu.RUnlock()
+				return settled && !owned
+			}, 10*time.Second, 5*time.Millisecond)
+			require.Equal(t, int32(1), deliveries.Load(), "stale admitted firing reached the provider")
 			if initialState == alerts.NotificationOccurrenceUnavailable {
 				stats, err := q.GetQueueStats()
 				require.NoError(t, err)
@@ -240,6 +263,11 @@ func TestNotificationDelayedFiringRequiresPositiveReactivation(t *testing.T) {
 			q.processBatch()
 			drainContinuity(t, n)
 			require.Equal(t, int32(2), deliveries.Load(), "owed recovery did not reach its original receiver")
+			require.NoError(t, q.db.QueryRow(`SELECT status FROM notification_queue WHERE type='webhook_resolved'`).Scan(&recoveryStatus))
+			require.Equal(t, string(QueueStatusSent), recoveryStatus, "a stale firing substituted for the owed recovery")
+			var staleStatus string
+			require.NoError(t, q.db.QueryRow(`SELECT status FROM notification_queue WHERE id='delayed-admitted-firing'`).Scan(&staleStatus))
+			require.Equal(t, string(QueueStatusCancelled), staleStatus)
 		})
 	}
 }

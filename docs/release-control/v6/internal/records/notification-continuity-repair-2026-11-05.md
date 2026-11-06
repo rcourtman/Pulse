@@ -238,3 +238,47 @@ The two separately discovered gaps above remain active. L6 remains partial with
 bounded residual completion; lane scores, readiness assertions and release gates
 are unchanged. Protected source landing still requires the required checks for the
 exact commit. This record does not predeclare their result or release qualification.
+
+## Protected-check integration corrections
+
+The protected checks for `8ef14813456b4779bf26000dfde54c8524766ef0`
+exposed two test synchronization assumptions and missing import guidance.
+The deferred manager leaves its processor absent, but the queue owner is already
+running: installing a processor and enqueueing a row lets that owner win the row
+before an explicit test sweep. A sweep that skips an owned row does not join its
+worker. The ownership proof now holds the real background worker after acceptance,
+checks that a competing sweep leaves its row sending, then awaits durable completion
+and proves one processor call, one receiver call and a sent row. The stale-firing
+proof waits for committed cancellation or occurrence deferral and ownership release.
+It positively requires the owed recovery to be sent and the stale firing cancelled,
+so a wrongly sent firing cannot substitute for a lost recovery in the final count.
+These corrections change test synchronization, not delivery policy or timeouts.
+
+The migration guide now names all five reload components, including Apprise, and
+distinguishes a saved notification hold from archive rejection or an uncertain
+response. An explicit repair/restart instruction preserves retained data and keeps
+the destination isolated, including outbound notifications, until the single-owner
+handover. The rendered guide tests retain producer-message parity without increasing
+the existing source-read allowance.
+
+The containing notification suite passed in 313.629 seconds. The final strengthened
+controls passed 20 repetitions under the race detector in 19.327 seconds. All 58
+documentation test files and 358 tests passed, as did type checking, every lint
+check, the frontend build and the backend build. Current Chromium views passed at
+1440×1000 and 390×844 on the migration failure fragment and API import section.
+Inspected pixels cover the five component names, held restart/storage instructions,
+isolation and wrapping. Keyboard handover and API recovery links preserve fragment
+navigation and heading focus, including after reload. The served migration guide's
+SHA-256 matches the final shipped source. The added browser receipt binds both
+migration guide copies to this proof.
+
+The same protected run reported advisory benchmark timing differences against
+`3426169db981616d2a7dd84becf662b77fb7bd01`: sorted resource listing was
+12.75% slower (p=0.029), and alias vocabularies of 9 and 128 were 15.68% and 18.37%
+slower (p=0.000 and p=0.002). Each comparison retained ten samples per side.
+The benchmark bodies and their direct production files are byte-identical at that
+baseline and head; neither benchmark body invokes notification delivery. The raw
+timing comparisons remain advisory evidence. They are not relabelled as noise or
+used as release qualification, and this notification correction does not change
+those separate performance paths. Required source checks must still pass for the
+new exact head before landing.
