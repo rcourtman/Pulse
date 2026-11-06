@@ -845,20 +845,30 @@ fi
 exit "$status"
 '''
 
+LOCK_DESCRIPTOR_PROBE = r'''
+import errno, os
+from pathlib import Path
+installed = Path(os.environ["PULSE_INSTALL_DIR"]).stat()
+descriptors = Path('/proc/self/fd') if Path('/proc/self/fd').is_dir() else Path('/dev/fd')
+for item in descriptors.iterdir():
+    try:
+        descriptor = os.fstat(int(item.name))
+    except OSError as error:
+        # Directory enumeration can list its own already-closed descriptor.
+        # On macOS, stat('/dev/fd/N') can also fail for a *live* pipe: inspect
+        # the actual descriptor, not a pathname alias that must be reopened.
+        if error.errno != errno.EBADF:
+            raise
+        continue
+    if (descriptor.st_dev, descriptor.st_ino) == (installed.st_dev, installed.st_ino):
+        raise SystemExit('installer inherited the update directory lock')
+'''
+
 LOCK_INSTALLER = r'''#!/bin/bash
 set -euo pipefail
 # A long-lived installer child must not inherit the updater's lock descriptor.
 python3 - <<'CHECK'
-import os
-from pathlib import Path
-installed = Path(os.environ["PULSE_INSTALL_DIR"])
-descriptors = Path('/proc/self/fd') if Path('/proc/self/fd').is_dir() else Path('/dev/fd')
-for item in descriptors.iterdir():
-    try:
-        if item.samefile(installed):
-            raise SystemExit('installer inherited the update directory lock')
-    except FileNotFoundError:
-        pass
+''' + LOCK_DESCRIPTOR_PROBE + r'''
 CHECK
 printf '%s\n' "$LABEL" >> "$FIXTURE/entered"
 if [[ "$BLOCK" == true ]]; then
@@ -941,6 +951,65 @@ class UpdateTransactionLock(unittest.TestCase):
         self.assertEqual((fixture / "config/system.json").read_text(), "saved settings\n")
         self.assertEqual((fixture / "config/agent-id").read_text(), "saved identity\n")
         self.assertEqual(list((fixture / "tmp").iterdir()), [])
+
+    def probe_descriptors(self, *, directory=None, fault=""):
+        # Exercise the exact Python body embedded in the installer. Keep an
+        # unrelated pipe open, including on macOS where its /dev/fd pathname
+        # cannot necessarily be stat'ed, and optionally pass a real directory.
+        reader, writer = os.pipe()
+        descriptors = [reader, writer]
+        if directory is not None:
+            descriptors.append(os.open(directory, os.O_RDONLY))
+        try:
+            wrapper = r'''
+import errno, os, sys
+from pathlib import Path
+from unittest.mock import patch
+real_stat, real_iterdir, real_fstat = Path.stat, Path.iterdir, os.fstat
+pipe_fd = int(os.environ['PROBE_PIPE_FD'])
+fault = os.environ['PROBE_FAULT']
+# A closed descriptor is a real EBADF, independent of this host's fd filesystem.
+closed_fd = os.dup(pipe_fd)
+os.close(closed_fd)
+def entries(path):
+    if str(path) in ('/proc/self/fd', '/dev/fd'):
+        return iter([*(entry for entry in real_iterdir(path) if entry.name != str(closed_fd)),
+                     path / str(closed_fd)])
+    return real_iterdir(path)
+def descriptor_path_stat(path, *args, **kwargs):
+    if path.parent == Path('/proc/self/fd') or path.parent == Path('/dev/fd'):
+        if path.name == str(pipe_fd):
+            raise OSError(errno.EBADF, 'fixture: live pipe pathname cannot be reopened')
+    return real_stat(path, *args, **kwargs)
+def descriptor_stat(fd):
+    if fault == 'unexpected' and fd == pipe_fd:
+        raise OSError(errno.EIO, 'fixture: unexpected descriptor observation failure')
+    return real_fstat(fd)
+with patch.object(Path, 'iterdir', entries), patch.object(Path, 'stat', descriptor_path_stat), \
+     patch.object(os, 'fstat', descriptor_stat):
+    exec(sys.argv[1], {})
+'''
+            env = dict(os.environ, PULSE_INSTALL_DIR=str(self.first / "install"),
+                       PROBE_PIPE_FD=str(reader), PROBE_FAULT=fault)
+            return subprocess.run([sys.executable, "-c", wrapper, LOCK_DESCRIPTOR_PROBE],
+                                  env=env, pass_fds=descriptors, capture_output=True, text=True, timeout=5)
+        finally:
+            for descriptor in descriptors:
+                os.close(descriptor)
+
+    def test_descriptor_probe_handles_live_pipes_and_closed_entries(self):
+        result = self.probe_descriptors(directory=self.first / "tmp")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_descriptor_probe_rejects_real_inherited_installation_directory(self):
+        result = self.probe_descriptors(directory=self.first / "install")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("installer inherited the update directory lock", result.stderr)
+
+    def test_descriptor_probe_preserves_unexpected_observation_errors(self):
+        result = self.probe_descriptors(fault="unexpected")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unexpected descriptor observation failure", result.stderr)
 
     def competing(self, alias=False):
         first = self.start(self.first, "holder", block=True)

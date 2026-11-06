@@ -175,6 +175,9 @@ func TestAutoUpdateTransactionLock(t *testing.T) {
 		t.Fatalf("updater transaction lock controls: %v\n%s", err, out)
 	}
 	for _, name := range []string{
+		"test_descriptor_probe_handles_live_pipes_and_closed_entries",
+		"test_descriptor_probe_rejects_real_inherited_installation_directory",
+		"test_descriptor_probe_preserves_unexpected_observation_errors",
 		"test_same_directory_refuses_competing_transaction",
 		"test_directory_alias_cannot_start_a_second_transaction",
 		"test_independent_installations_do_not_block_each_other",
