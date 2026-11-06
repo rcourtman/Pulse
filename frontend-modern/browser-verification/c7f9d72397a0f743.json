@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "8fa2973b2afda09b23fa80b2f6eec2201deb3344",
+  "verified_at": "2026-11-06T11:18:13.107Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx": "20892f6816cb85b839d1b69797157f76b38612b1643c43f8a424b50404dbff30",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "4a6235291d9d7f040a3fc05fdd6bd5d994fcac170509eef0372bcd6c0b89662f"
+  },
+  "routes": [
+    "/proof-preview/index.html: isolated production OrganizationAccessPanel consuming the same components, state hook, OrgsAPI and apiClient as /settings/organization/access; not full-App navigation"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Comparable manager initial directory in light and dark themes, desktop and narrow",
+    "Long recipient and inviter identities, independent editor/viewer roles and controls; owner and non-owner member rows",
+    "Read-only session warning and role badges without administration",
+    "Post-revocation surviving peer and members; cancelled member confirmation and keyboard focus"
+  ],
+  "interactions": [
+    "Real production-panel reads through OrgsAPI and HTTP client with safe fixture responses",
+    "Keyboard revoke of one exact invitation: selected-org and CSRF headers; one DELETE and post-write readback; peer invitation and members retained",
+    "Keyboard removal cancellation: original exact member/organization confirmation, no DELETE",
+    "Confirmed member removal: one exact DELETE and positive owner/peer readback; owner removal stays unavailable",
+    "Assert unique full-user revoke/remove accessible names, full pending text without overflow, retained 44px touch targets and first-viewport phone member removal"
+  ],
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "source_build": "8fa2973b2afda09b23fa80b2f6eec2201deb3344 / source-lpy05x9u; before 280a08690ca5b4d18b025a30126acfc68d72f400 / source-eqouf712",
+  "before_proof_note": "Initial bounded before matrix: five Chromium scenarios complete, later WebKit immediate-reread assertion failed. Preserved exit1 and all outputs. Corrected WebKit-only positive-readback observation passed without replaying Chromium; same source/fixture/build/theme/viewport. Earlier deadline/output-bound attempts remain adverse.",
+  "pixel_review": "Opened every retained before and after capture natively. Full identities now readable on phone without losing the existing controls/role distinctions; desktop and read-only layout/information preserved. Independent review still required."
+}
