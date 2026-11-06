@@ -105,7 +105,7 @@ See [CONFIGURATION.md](CONFIGURATION.md).
 - For each group that matches a mapping, the corresponding role is assigned.
 - Multiple groups can map to multiple roles (user gets all matching roles).
 - Role assignments are updated on every login to reflect current group membership.
-- Role changes are logged to the audit log for compliance tracking.
+- Successful non-empty assignments get an audit event. Clearing roles does not.
 - Instance-administration routes require the built-in `admin` role or another
   role with an explicit `admin` grant on all resources. The `operator` and
   `viewer` mappings never inherit administrator access on SSO-only instances.

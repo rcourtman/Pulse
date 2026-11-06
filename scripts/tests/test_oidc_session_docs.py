@@ -6,6 +6,7 @@ session, token exchange or installed access removal.
 """
 
 from pathlib import Path
+import re
 import unittest
 
 
@@ -64,6 +65,23 @@ def assert_discovery_test_scope(case, handlers):
     case.assertIn("Client credentials and sign-in have not been tested.", success)
 
 
+def assert_role_assignment_audit_scope(case, guide, callback):
+    mapping = " ".join(guide.split("### Group-to-Role Mapping", 1)[1].split(
+        "### Sessions and `offline_access`", 1)[0].split())
+    case.assertIn("Successful non-empty assignments get an audit event.", mapping)
+    case.assertIn("Clearing roles does not.", mapping)
+    case.assertNotIn("Role changes are logged to the audit log for compliance tracking", mapping)
+    # Source consistency only. A role clear is still applied by the callback,
+    # but its successful empty result does not enter this audit branch.
+    roles = callback.split("if authManager := internalauth.GetManager(); authManager != nil {", 1)[1].split(
+        "// Stamp issuer/client", 1)[0]
+    case.assertIn("applySSORoleAssignments(", roles)
+    case.assertRegex(roles, re.compile(
+        r'} else if len\(rolesToAssign\) > 0 \{\s*'
+        r'LogAuditEventForTenant\(GetOrgID\(req.Context\(\)\), "sso_oidc_role_assignment"'
+    ))
+
+
 def assert_refresh_source(case, auth, store):
     # Follow the captured store through scheduling and conditional completion.
     # The old free-function/global-write spellings cannot establish these
@@ -110,6 +128,30 @@ def assert_refresh_source(case, auth, store):
 
 
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_role_assignment_audit_does_not_promise_events_for_cleared_roles(self):
+        callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
+        assert_role_assignment_audit_scope(self, GUIDE.read_text(), callback)
+
+    def test_role_assignment_audit_consistency_rejects_overclaims_and_source_drift(self):
+        guide = GUIDE.read_text()
+        callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
+        mutations = (
+            ("guide", "Successful non-empty assignments get an audit event. Clearing roles does not.",
+             "Role changes are logged to the audit log for compliance tracking."),
+            ("callback", "} else if len(rolesToAssign) > 0 {", "} else if len(rolesToAssign) >= 0 {"),
+            ("callback", '"sso_oidc_role_assignment"', '"another_event"'),
+        )
+        for target, before, after in mutations:
+            with self.subTest(regression=target + ":" + before):
+                original = guide if target == "guide" else callback
+                self.assertIn(before, original)
+                changed = original.replace(before, after, 1)
+                with self.assertRaises(AssertionError):
+                    assert_role_assignment_audit_scope(
+                        self, changed if target == "guide" else guide,
+                        changed if target == "callback" else callback,
+                    )
+
     def test_setup_orders_callback_and_access_before_cutover(self):
         assert_callback_setup(self, GUIDE.read_text())
 
