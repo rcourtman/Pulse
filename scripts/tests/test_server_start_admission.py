@@ -24,6 +24,11 @@ print_success() { printf 'SUCCESS: %s\n' "$*"; }
 PULSE_WAS_ACTIVE="$PRIOR_ACTIVE"
 STARTS=0
 QUERIES=0
+# This fixture models elapsed time through sleep below. Unsetting Bash's
+# special clock first keeps real scheduling/manager time from adding ticks.
+# Real elapsed-time and forced-stop admission has separate native-clock tests.
+unset SECONDS
+SECONDS=0
 sleep() { : "$((SECONDS += $1))"; }
 timeout() {
     [[ "$1" != -k ]] || shift 2
@@ -40,6 +45,9 @@ systemctl() {
         enable) [[ "$FAULT" != enable-failure ]] ;;
         start) STARTS=$((STARTS + 1)); [[ "$FAULT" != start-failure && "$FAULT" != start-error-active ]] ;;
         is-active)
+            if [[ "$QUERIES" == 0 && "$QUERY_DELAY" != 0 ]]; then
+                command sleep "$QUERY_DELAY"
+            fi
             QUERIES=$((QUERIES + 1))
             case "$FAULT" in
                 active|enable-failure|start-error-active) return 0 ;;
@@ -80,7 +88,7 @@ main || exit "$?"
 
 
 class ServerStartAdmission(unittest.TestCase):
-    def exercise(self, fault, prior=False, body=None, flow=""):
+    def exercise(self, fault, prior=False, body=None, flow="", query_delay="0"):
         with tempfile.TemporaryDirectory(prefix="pulse-server-start-") as temporary:
             fixture = Path(temporary)
             install = fixture / "install with spaces"
@@ -99,7 +107,7 @@ class ServerStartAdmission(unittest.TestCase):
                 path.chmod(0o600)
             env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
             env.update(INSTALLER=str(INSTALLER), FIXTURE=str(fixture), FAULT=fault,
-                       FLOW=flow, PRIOR_ACTIVE=str(prior).lower(),
+                       FLOW=flow, PRIOR_ACTIVE=str(prior).lower(), QUERY_DELAY=query_delay,
                        PULSE_SERVICE_NAME="pulse-start-fixture", PULSE_INSTALL_DIR=str(install),
                        PULSE_CONFIG_DIR=str(config))
             if body is None:
@@ -150,6 +158,15 @@ class ServerStartAdmission(unittest.TestCase):
                 self.assertEqual(e["calls"].count("start pulse-start-fixture"), 2 if prior else 1)
                 self.assertEqual(e["calls"].count("is-active --quiet pulse-start-fixture"),
                                  21 if prior else 20)
+
+    def test_modelled_clock_ignores_wall_time_during_manager_read(self):
+        # Force a real clock boundary inside the first polling read. The
+        # count-based fixture must still spend exactly its simulated budget;
+        # production's real manager-time accounting is tested separately.
+        e = self.exercise("retry-recovers", prior=True, query_delay="1.1")
+        self.assertEqual(e["result"].returncode, 0, e["result"])
+        self.assertEqual(e["calls"].count("start pulse-start-fixture"), 2)
+        self.assertEqual(e["calls"].count("is-active --quiet pulse-start-fixture"), 21)
 
     def test_missing_unit_stops_before_enable_or_start(self):
         e = self.exercise("missing-unit")
