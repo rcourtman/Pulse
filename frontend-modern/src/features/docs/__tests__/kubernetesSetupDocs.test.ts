@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { renderDocMarkdown } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const repoRoot = path.resolve(frontendRoot, '..');
@@ -29,11 +29,7 @@ function canReadMetrics(role: Role, resource: string) {
   );
 }
 
-function articleFor(name: string) {
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(readDoc(name), name);
-  return article;
-}
+const articleFor = createGuideFixture(readDoc);
 
 describe('Kubernetes credential setup and diagnosis', () => {
   it.each([
@@ -115,16 +111,19 @@ describe('Kubernetes credential setup and diagnosis', () => {
     expect(article.textContent).not.toContain('Ensure securityContext.privileged: true');
   });
 
-  it('routes authentication and private evidence to actual destination headings', () => {
+  // Each complete destination guide gets the existing per-case timeout.
+  // Keep both links and their real heading assertions, not excerpts or mocks.
+  it.each([
+    ['UNIFIED_AGENT', 'agent-lookup-returns-http-401-or-403'],
+    ['TROUBLESHOOTING', 'collect-diagnostics-safely'],
+  ])('routes authentication and private evidence to %s#%s', (name, anchor) => {
     const article = articleFor('KUBERNETES');
-    for (const [name, anchor] of [
-      ['UNIFIED_AGENT', 'agent-lookup-returns-http-401-or-403'],
-      ['TROUBLESHOOTING', 'collect-diagnostics-safely'],
-    ]) {
-      expect(article.querySelector(`a[href="/docs/${name}#${anchor}"]`)).not.toBeNull();
-      expect(articleFor(name).querySelector(`#${anchor}`)).not.toBeNull();
-    }
-    expect(article.textContent!.replace(/\s+/g, ' ')).toContain(
+    expect(article.querySelector(`a[href="/docs/${name}#${anchor}"]`)).not.toBeNull();
+    expect(articleFor(name).querySelector(`#${anchor}`)).not.toBeNull();
+  });
+
+  it('keeps the credential and diagnostic evidence boundary beside the setup guidance', () => {
+    expect(articleFor('KUBERNETES').textContent!.replace(/\s+/g, ' ')).toContain(
       'Keep tokens, Secret YAML, kubeconfigs, Helm values, pod environments and full logs private',
     );
   });

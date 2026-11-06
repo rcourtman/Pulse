@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "8e7040a53f714482c7771bdffc458fa79aae9b9f",
+  "changed_paths": [
+    "frontend-modern/src/features/docs/docMarkdown.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docs/docMarkdown.ts": "6a1e48833aeb6c6bbda06a96e728865d94cb9e2742e086845ebe7918b250a694"
+  },
+  "routes": [
+    "/docs/CONFIGURATION",
+    "/docs/KEYBOARD_CONTROL (inert sanitizer/link control)"
+  ],
+  "states": [
+    "Shipped Configuration guide: initial and native keyboard-focused table at desktop and narrow widths, light/dark",
+    "Narrow WebKit: native Tab reaches the named table; ArrowRight reveals Security Level at offset90 instead of skipping the table at offset0",
+    "All initial captures byte-identical; article/table text, dimensions, counts and scoped headers unchanged",
+    "Two independent tables and ordinary inner/following links; forged author ARIA and data markers removed"
+  ],
+  "interactions": [
+    "Native Tab/Shift+Tab into and out of the table; ArrowRight/ArrowLeft reveal and restore columns without custom key handlers",
+    "Native forward router activation and external-link attributes; no stopped Back/reload jobs",
+    "Native Chromium touch pan from the same right-edge start in both phases",
+    "Native pixel inspection of all32 current before/after captures;16 comparable pairs across eight unique cases"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-06T03:22:08.133Z",
+  "browsers": [
+    "Playwright1.56.1 (integration lock parity)",
+    "Chromium141.0.7390.37",
+    "WebKit26.0"
+  ],
+  "limits": "Actual source-proof-built Docs page, renderer, router, shared controls, CSS and shipped guide in an inert surrounding shell. Not complete installed shell, screen-reader certification, native Safari touch or released-binary acceptance."
+}
