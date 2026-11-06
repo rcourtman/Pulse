@@ -34,12 +34,12 @@ def classifier_script(source):
     marker = "      - name: Classify changed files\n"
     if source.count(marker) != 1:
         raise AssertionError("expected one classification step")
-    body = source.split(marker, 1)[1]
+    body = source.split(marker, 1)[1].split("\n      - name:", 1)[0]
     marker = "        run: |\n"
-    if not body.startswith(marker):
+    if body.count(marker) != 1:
         raise AssertionError("expected literal classification command")
     lines = []
-    for line in body[len(marker):].splitlines():
+    for line in body.split(marker, 1)[1].splitlines():
         if line and not line.startswith("          "):
             break
         lines.append(line[10:] if line else "")
@@ -47,6 +47,26 @@ def classifier_script(source):
 
 
 class DocsScopeTest(unittest.TestCase):
+    def test_scalar_reader_handles_step_metadata_without_executing_yaml(self):
+        source = """      - name: Classify changed files
+        id: filter
+        env:
+          FIXTURE: metadata
+        run: |
+          # Real shell comment.
+          printf '%s\\n' actual
+
+      # Not part of the shell command.
+      - name: Another step
+        run: exit 19
+"""
+        self.assertEqual(classifier_script(source),
+                         "# Real shell comment.\nprintf '%s\\n' actual\n\n")
+        for bad in ("", source.replace("        run: |", "        uses: action@fixture"),
+                    source + source):
+            with self.subTest(source=bad), self.assertRaises(AssertionError):
+                classifier_script(bad)
+
     def test_exact_suites_and_document_paths(self):
         self.assertEqual(len(SCOPE.DOC_SUITES), len(set(SCOPE.DOC_SUITES)))
         self.assertIn(SUITE.encode(), SCOPE.DOC_SUITES)
