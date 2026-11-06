@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -212,7 +213,14 @@ class APIAuthDocsTest(unittest.TestCase):
         self.assertNotRegex(bash, r"(?:--insecure|--verbose|--trace\S*|--location|\s-k\b)")
         blocks = re.findall(r"```bash\n(.*?)```", DOC.read_text(), re.DOTALL)
         requests = [block for block in blocks if block.startswith("pulse_api ")]
-        self.assertEqual(len(requests), 9)
+        expected_requests = [
+            ("GET", "/api/state/summary"),
+            *((method, path) for method, path, _ in FLEET_ACTION_REQUESTS),
+            ("POST", "/api/config/nodes"),
+            ("GET", "/api/security/tokens"),
+        ]
+        self.assertEqual([tuple(shlex.split(block.splitlines()[0])[1:3]) for block in requests],
+                         expected_requests, "every copied operation needs an explicit expected route")
         self.assertEqual([block for block in blocks if "curl " in block], [request_helper()],
                          "an example must not bypass the private-response helper")
         self.assertIn("curl --disable --fail-with-body ", request_helper())
