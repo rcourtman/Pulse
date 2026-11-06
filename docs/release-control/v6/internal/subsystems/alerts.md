@@ -5678,3 +5678,11 @@ catalog keys became `alerts.investigate.*` in English, German, and Spanish.
 The websocket store expands `actionReadinessRef` through `actionReadinessCatalog`
 beside the other catalogs and removes `actionReadiness` from a row with no ref.
 Alert state and alert frames are unchanged.
+
+### Destinations page for an organization owner (6 November 2026)
+
+`useAlertDestinationsState` reads and writes relay settings only when the session
+can read them (`sessionCanReadRelaySettings`), and `DestinationsTab` shows the push
+panel on the same rule. The relay route is instance administration, so one refused
+relay read would otherwise fail the whole destinations load for a provider inside a
+client workspace. Alert policy and destination behavior are otherwise unchanged.

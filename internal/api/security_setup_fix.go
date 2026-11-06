@@ -197,6 +197,31 @@ func ensureOrgAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.
 	return true
 }
 
+// ensureOrgManagerSession admits the sessions ensureOrgAdminSession admits and
+// keeps organization-bound API tokens to the instance rule. Notification
+// destinations hold reusable webhook URLs and bot tokens, which a person managing
+// the organization may see but a token holding only settings:read may not.
+func ensureOrgManagerSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	if record := getAPITokenRecordFromRequest(req); record != nil && !refuseOrgBoundToken(w, req, record) {
+		return false
+	}
+	return ensureOrgAdminSession(cfg, w, req)
+}
+
+// requestCarriesInstanceAuthority answers ensureAdminSession's question without
+// refusing the request, for a route that admits organization managers but holds
+// one operation back for instance administrators.
+func requestCarriesInstanceAuthority(cfg *config.Config, req *http.Request) bool {
+	if record := getAPITokenRecordFromRequest(req); record != nil && !tokenActsForInstance(record) {
+		return false
+	}
+	cookie, err := readSessionCookie(req)
+	if err != nil || cookie.Value == "" || !ValidateSession(cookie.Value) {
+		return true
+	}
+	return sessionUserCarriesAdminPrivileges(cfg, strings.TrimSpace(GetSessionUsername(cookie.Value)))
+}
+
 // sessionUserHasSettingsAdminPrivileges is the session rule ensureOrgAdminSession
 // enforces for org-bound routes: the configured local admin; on an
 // org-scoped request, a user who can manage that organization; otherwise an

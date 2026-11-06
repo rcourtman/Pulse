@@ -1099,6 +1099,13 @@ func RequireOrgAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerF
 	return requireAdminSession(cfg, ensureOrgAdminSession, handler)
 }
 
+// RequireOrgManager is RequireOrgAdmin for routes whose responses hold reusable
+// secrets: the organization's managers are admitted in a session, and tokens
+// bound to the organization stay refused whatever their scopes.
+func RequireOrgManager(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
+	return requireAdminSession(cfg, ensureOrgManagerSession, handler)
+}
+
 func requireAdminSession(cfg *config.Config, sessionCheck func(*config.Config, http.ResponseWriter, *http.Request) bool, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for admin endpoints (disabled by default)

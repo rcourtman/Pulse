@@ -3,6 +3,7 @@ import {
   sessionCanReadInfrastructureSettings,
   sessionCanRunPatrol,
   sessionSettingsCapabilities,
+  sessionCanReadRelaySettings,
   syncSessionSettingsCapabilities,
 } from '@/stores/sessionSettingsCapabilities';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
@@ -115,5 +116,22 @@ describe('sessionSettingsCapabilities', () => {
 
     syncSessionPresentationPolicy({ settingsCapabilities: capabilities({}) });
     expect(sessionCanRunPatrol()).toBe(false);
+  });
+
+  it('keeps relay settings to sessions the relay route admits', () => {
+    syncSessionSettingsCapabilities({
+      requiresAuth: true,
+      settingsCapabilities: { relayRead: false } as never,
+    });
+    expect(sessionCanReadRelaySettings()).toBe(false);
+
+    syncSessionSettingsCapabilities({
+      requiresAuth: true,
+      settingsCapabilities: { relayRead: true } as never,
+    });
+    expect(sessionCanReadRelaySettings()).toBe(true);
+
+    syncSessionSettingsCapabilities({ requiresAuth: false });
+    expect(sessionCanReadRelaySettings()).toBe(true);
   });
 });

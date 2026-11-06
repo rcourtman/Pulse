@@ -352,8 +352,14 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// Alert routes enforce read/write scopes inside HandleAlerts per endpoint method.
 	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, r.alertHandlers.HandleAlerts))
 
-	// Notification routes
-	r.mux.HandleFunc("/api/notifications/", RequireAdmin(r.config, r.notificationHandlers.HandleNotifications))
+	// Notification destinations are the request organization's own: every
+	// handler reads and writes through that organization's monitor, so its
+	// managers configure them in a session. The queue routes below read one
+	// shared queue and stay instance administration.
+	r.notificationHandlers.SetAppriseCLIAuthority(func(req *http.Request) bool {
+		return requestCarriesInstanceAuthority(r.config, req)
+	})
+	r.mux.HandleFunc("/api/notifications/", RequireOrgManager(r.config, r.notificationHandlers.HandleNotifications))
 
 	// Notification queue/DLQ routes
 	// Security tokens are handled later in the setup with RBAC
