@@ -832,6 +832,16 @@ status=0
 perform_update v6.6.0 || status=$?
 printf 'STATUS=%s\n' "$status"
 [[ -z "$(trap -p RETURN)" ]] || { echo 'RETURN trap leaked'; exit 98; }
+# Keep this caller alive after the function returned, so process exit cannot
+# hide a leaked descriptor in either the early or full RETURN trap.
+if [[ "$HOLD_RETURN" == true ]]; then
+    touch "$FIXTURE/returned-$LABEL"
+    for ((i=0; i<250; i++)); do
+        [[ -f "$FIXTURE/release-return-$LABEL" ]] && break
+        sleep 0.02
+    done
+    [[ -f "$FIXTURE/release-return-$LABEL" ]] || exit 97
+fi
 exit "$status"
 '''
 
@@ -896,9 +906,10 @@ class UpdateTransactionLock(unittest.TestCase):
         (f / "config/agent-id").write_text("saved identity\n")
         return f
 
-    def start(self, fixture, label, *, block=False, install=None, installer_exit=0, lock_fault="", state_fault=False):
+    def start(self, fixture, label, *, block=False, install=None, installer_exit=0, lock_fault="", state_fault=False, hold_return=False):
         env = dict(os.environ, UPDATER=str(UPDATER), FIXTURE=str(fixture), LABEL=label,
-                   BLOCK="true" if block else "false", INSTALLER_EXIT=str(installer_exit),
+                   BLOCK="true" if block else "false", HOLD_RETURN="true" if hold_return else "false",
+                   INSTALLER_EXIT=str(installer_exit),
                    LOCK_FAULT=lock_fault, STATE_FAULT="true" if state_fault else "false", PULSE_INSTALL_DIR=str(install or fixture / "install"),
                    PULSE_CONFIG_DIR=str(fixture / "config"), PULSE_SERVICE_NAME="pulse-fixture")
         process = subprocess.Popen(["bash", "-c", LOCK_HARNESS], env=env, stdout=subprocess.PIPE,
@@ -913,11 +924,14 @@ class UpdateTransactionLock(unittest.TestCase):
         self.assertNotIn("trap leaked", output)
         return output + error
 
-    def wait_ready(self):
+    def wait_marker(self, path):
         deadline = time.monotonic() + 4
-        while not (self.first / "ready").exists() and time.monotonic() < deadline:
+        while not path.exists() and time.monotonic() < deadline:
             time.sleep(0.02)
-        self.assertTrue((self.first / "ready").exists(), "first transaction did not enter its private installer")
+        self.assertTrue(path.exists(), "transaction did not reach " + path.name)
+
+    def wait_ready(self):
+        self.wait_marker(self.first / "ready")
 
     def release(self, process):
         (self.first / "release").touch()
@@ -967,18 +981,26 @@ class UpdateTransactionLock(unittest.TestCase):
         for status in (0, 23):
             with self.subTest(installer_exit=status):
                 f = self.fixture("sequential-" + str(status))
-                self.finish(self.start(f, "first", installer_exit=status), 0 if status == 0 else 1)
+                first = self.start(f, "first", installer_exit=status, hold_return=True)
+                self.wait_marker(f / "returned-first")
+                self.assertIsNone(first.poll())
                 self.assertEqual((f / "install/VERSION").read_text(), "v6.6.0\n" if status == 0 else "v6.5.0\n")
                 self.finish(self.start(f, "next"), 0)
+                (f / "release-return-first").touch()
+                self.finish(first, 0 if status == 0 else 1)
                 self.assertEqual((f / "entered").read_text().splitlines(), ["first", "next"])
                 self.assert_saved(f)
 
     def test_service_observation_refusal_releases_the_early_lock(self):
-        self.finish(self.start(self.first, "unobserved", state_fault=True), 1)
+        first = self.start(self.first, "unobserved", state_fault=True, hold_return=True)
+        self.wait_marker(self.first / "returned-unobserved")
+        self.assertIsNone(first.poll())
         self.assertFalse((self.first / "download-unobserved").exists())
         self.assertFalse((self.first / "entered").exists())
         self.assertEqual((self.first / "install/VERSION").read_text(), "v6.5.0\n")
         self.finish(self.start(self.first, "next"), 0)
+        (self.first / "release-return-unobserved").touch()
+        self.finish(first, 1)
         self.assert_saved(self.first)
 
     def test_non_directory_or_missing_installation_never_starts_a_transaction(self):
