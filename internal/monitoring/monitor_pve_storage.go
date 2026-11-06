@@ -248,12 +248,7 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 
 	// Clean up alerts for nodes that no longer exist
 	// Get all nodes from the global state (includes all instances)
-	existingNodes := make(map[string]bool)
-	allState := m.state.GetSnapshot()
-	for _, node := range allState.Nodes {
-		existingNodes[node.Name] = true
-	}
-	m.alertManager.CleanupAlertsForNodes(existingNodes)
+	m.alertManager.CleanupAlertsForNodes(m.state.GetNodeNames())
 
 	return modelNodes
 }
