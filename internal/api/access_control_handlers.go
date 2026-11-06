@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -265,6 +267,54 @@ func (h *RBACHandlers) HandleGetUsers(w http.ResponseWriter, r *http.Request) {
 
 // HandleUserRoleActions handles assigning/updating roles for a user.
 func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Request) {
+	// Match the complete escaped path before resolving a store or reading a
+	// mutation body. The subtree registration must not turn an unknown suffix
+	// (or a read-only permissions path) into a role assignment write. Split
+	// before unescaping so an encoded slash cannot select a different user.
+	path, ok := strings.CutPrefix(r.URL.EscapedPath(), "/api/admin/users/")
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	parts := strings.Split(strings.TrimSuffix(path, "/"), "/")
+	if parts[0] == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_username", "Username is required", nil)
+		return
+	}
+	username, err := url.PathUnescape(parts[0])
+	if err != nil || !validUsername.MatchString(username) {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_username", "Invalid username format", nil)
+		return
+	}
+
+	allowedMethods := []string{http.MethodGet, http.MethodDelete}
+	action := ""
+	if len(parts) > 1 {
+		if len(parts) != 2 {
+			http.NotFound(w, r)
+			return
+		}
+		action, err = url.PathUnescape(parts[1])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		switch action {
+		case "roles":
+			allowedMethods = []string{http.MethodGet, http.MethodPut, http.MethodPost}
+		case "permissions":
+			allowedMethods = []string{http.MethodGet}
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}
+	if !slices.Contains(allowedMethods, r.Method) {
+		w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	manager, err := h.getManager(r.Context())
 	if err != nil {
 		writeRBACStoreError(w, err)
@@ -275,27 +325,8 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Extract username from path: /api/admin/users/{username}/roles
-	path := strings.TrimPrefix(r.URL.Path, "/api/admin/users/")
-	parts := strings.Split(strings.Trim(path, "/"), "/")
-	if len(parts) < 1 || parts[0] == "" {
-		writeErrorResponse(w, http.StatusBadRequest, "missing_username", "Username is required", nil)
-		return
-	}
-	username := parts[0]
-
-	// Validate username format to prevent injection
-	if !validUsername.MatchString(username) {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_username", "Invalid username format", nil)
-		return
-	}
-
 	switch r.Method {
 	case http.MethodDelete:
-		if len(parts) != 1 {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
 		callerUser := auth.GetUser(r.Context())
 		if callerUser != "" && strings.EqualFold(callerUser, username) {
 			LogAuditEventForTenant(GetOrgID(r.Context()), "user_deprovision_self_denied", callerUser, GetClientIP(r), r.URL.Path, false, "Attempted to deprovision own identity")
@@ -387,7 +418,7 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 
 	case http.MethodGet:
 		// Get effective permissions
-		if len(parts) > 1 && parts[1] == "permissions" {
+		if action == "permissions" {
 			var perms []auth.Permission
 			if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
 				perms, err = errorAware.GetUserPermissionsWithError(username)
