@@ -185,7 +185,17 @@ jobs:
           echo "triage_helper=$triage_helper" >> "$GITHUB_OUTPUT"
           # Note: -q must not be combined with -v here — BSD grep exits 1 for
           # that combination even when inverted matches exist.
-          if printf '%s\n' "$changed" | grep -vE '^docs/|\.md$' >/dev/null; then
+          # Known documentation safety suites already run in the complete
+          # Public docs workflow. Keep that check, triage policy and the secret
+          # scan, without fanning out unrelated application jobs. Only main has
+          # both push/PR docs coverage. Mixed, new-suite, missing-base and
+          # admission-control changes retain the ordinary runtime path.
+          if [[ "$GOVERNANCE_TARGET_BRANCH" == main ]] &&
+             docs_only=$(python3 scripts/ci_docs_only.py --base "$base" --head "${{ github.sha }}") &&
+             [[ "$docs_only" == true ]]; then
+            echo "Documentation-only tree diff; complete Public docs safety checks apply."
+            code=false
+          elif printf '%s\n' "$changed" | grep -vE '^docs/|\.md$' >/dev/null; then
             code=true
           else
             code=false
