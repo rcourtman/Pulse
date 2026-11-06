@@ -114,9 +114,11 @@ const open = (panel: 'access' | 'sharing') => {
   const reload = () =>
     'loadOrganizationAccess' in state ? state.loadOrganizationAccess() : state.loadSharingData();
   const ready = async () => {
-    await waitFor(() => expect(state.loading()).toBe(false));
-    expect(state.loadError()).toBeNull();
-    expect(state.org()?.id).toBe(orgID);
+    await waitFor(() => {
+      expect(state.loading()).toBe(false);
+      expect(state.loadError()).toBeNull();
+      expect(state.org()?.id).toBe(orgID);
+    });
   };
   return { state, submit, reload, ready };
 };
