@@ -190,7 +190,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		}
 		ssoAdminEndpoints.HandleMetadataPreview(w, req)
 	})))
-	r.mux.HandleFunc("/api/security/sso/providers", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/security/sso/providers", r.requireSSOManagementPermission(RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureSettingsReadScope(r.config, w, req) {
@@ -204,16 +204,25 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if !r.authorizeSSOManagement(w, req) {
+			return
+		}
 		ssoAdminEndpoints.HandleProvidersCollection(w, req)
 	})))
-	r.mux.HandleFunc("/api/security/sso/providers/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc("/api/security/sso/providers/", r.requireSSOManagementPermission(RequireLicenseFeature(r.licenseHandlers, featureSSOKey, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			if !ensureSettingsReadScope(r.config, w, req) {
 				return
 			}
+			if !r.authorizeSSOManagement(w, req) {
+				return
+			}
 		case http.MethodPut, http.MethodDelete:
 			if !ensureSettingsWriteScope(r.config, w, req) {
+				return
+			}
+			if !r.authorizeSSOManagement(w, req) {
 				return
 			}
 			// Enforce core-owned environment authority before invoking a bound

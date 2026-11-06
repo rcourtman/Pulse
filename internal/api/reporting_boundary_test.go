@@ -22,9 +22,10 @@ func TestReportingSubjectBoundaryExemptionIsExact(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := filepath.Join("..", "..")
-	for _, tc := range []struct {
+	type boundaryVariant struct {
 		name, file, content, goMarker string
-	}{
+	}
+	variants := []boundaryVariant{
 		{name: "shared subject pipeline"},
 		{
 			name: "SSO configuration adapter exemption is exact", file: "sso_config_preservation_extra.go", content: "package api\n",
@@ -86,7 +87,24 @@ func TestReportingSubjectBoundaryExemptionIsExact(t *testing.T) {
 			content:  "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/pkg/licensing\"\n",
 			goMarker: "reporting_subject_alerts.go",
 		},
-	} {
+	}
+	for _, adapter := range []string{"sso_load_state", "sso_management_admission"} {
+		for _, variant := range []struct {
+			name, suffix, content, marker string
+		}{
+			{"exact path", "_extra.go", "package api\n", "untracked paid-domain file " + adapter + "_extra.go"},
+			{"not path prefix", ".go.extra.go", "package api\n", "untracked paid-domain file " + adapter + ".go.extra.go"},
+			{"private root import denied", ".go", "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/internal/license\"\n", "direct internal/license import"},
+			{"private implementation import denied", ".go", "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements\"\n", "direct internal/license import"},
+			{"licensing bridge required", ".go", "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/pkg/licensing\"\n", adapter + ".go"},
+		} {
+			variants = append(variants, boundaryVariant{
+				name: adapter + "/" + variant.name, file: adapter + variant.suffix,
+				content: variant.content, goMarker: variant.marker,
+			})
+		}
+	}
+	for _, tc := range variants {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			for _, dir := range []string{"internal/api"} {
