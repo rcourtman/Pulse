@@ -81,6 +81,15 @@ businesses.
 
 ## Network topology and ingress isolation
 
+The provider bundle serves each client's UI and agent check-in on one HTTPS
+address, through Traefik on ports 80 and 443. It has no separate agent port yet,
+so limit who can reach those addresses: your staff network plus each client's
+VPN or egress range. Agent tokens carry report-only scopes and cannot sign in or
+manage the workspace.
+
+The rest of this section applies to a single Pulse instance or a shared-process
+install you run yourself, not to the bundle.
+
 Run the management UI and agent check-in on separate, separately firewalled
 ports. See [Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation)
 for the full reference.
@@ -271,7 +280,12 @@ Webhook targets on private IPs (a Gotify server reached over a VPN tunnel,
 for example) are blocked by default for SSRF safety. Allow them once in
 **Settings → System → Network → Webhook Security**; the allowlist is
 instance-wide and applies to every organization, including ones created
-later.
+later. A provider opening a client runtime cannot reach system settings, so the
+provider bundle can't send to private addresses yet. Use a public HTTPS endpoint.
+
+Apprise command-line delivery is also limited to instance administrators,
+because its targets run as the server. Inside a client runtime, use an Apprise
+API server instead.
 
 Alert webhook payloads carry the firing tenant's identity (`{{.TenantID}}`,
 `{{.TenantName}}`), so a single central PSA endpoint can also route by client.
@@ -560,3 +574,33 @@ the extracted bundle directory:
 sudo docker start $(sudo docker ps -aq --filter 'name=^pulse-t-[A-Z0-9]+$')
 sudo -E bash ./upgrade.sh --dry-run   # still from pulse-provider-msp-${PULSE_VERSION}
 ```
+
+## Backups and moving to a new host
+
+`upgrade.sh` takes a verified backup before it changes anything. To take one
+yourself, from the install directory:
+
+```bash
+cd /opt/pulse-provider-msp
+sudo docker compose run --rm control-plane provider-msp backup create
+```
+
+A backup holds the control plane's data, every client's data and your licence.
+It does not hold `.env` or `dns-credentials.env`. Keep your own copy of both,
+readable only by you, because `.env` holds the signing key your licence is bound
+to (see [How the licence binds your platform](#how-the-licence-binds-your-platform)).
+With a different key, the control plane refuses that licence and won't start.
+
+To check a restore without changing anything:
+
+```bash
+sudo docker compose run --rm control-plane provider-msp backup verify \
+  /data/backups/provider-msp/provider-msp-backup-YYYYMMDDTHHMMSSZ.tar.gz
+sudo docker compose run --rm control-plane provider-msp backup restore \
+  /data/backups/provider-msp/provider-msp-backup-YYYYMMDDTHHMMSSZ.tar.gz \
+  --target-data-dir /data-restore-drill \
+  --dry-run
+```
+
+A full move to a new host has no tested procedure yet, so keep the old host
+running until the new one works.
