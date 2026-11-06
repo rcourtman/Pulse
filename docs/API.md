@@ -58,7 +58,7 @@ pulse_api() (
   set -eu
   umask 077
   if [ "$#" -ne 2 ]; then
-    printf 'Usage: pulse_api GET|POST|PUT|DELETE /api/path\n' >&2
+    printf 'Usage: pulse_api GET|POST|PUT|PATCH|DELETE /api/path\n' >&2
     exit 2
   fi
   method=$1
@@ -69,10 +69,9 @@ pulse_api() (
   esac
   case "$method" in
     GET) set -- ;;
-    POST) set -- --header 'Content-Type: application/json' --request POST --data-binary @- ;;
-    PUT) set -- --header 'Content-Type: application/json' --request PUT --data-binary @- ;;
+    POST|PUT|PATCH) set -- --header 'Content-Type: application/json' --request "$method" --data-binary @- ;;
     DELETE) set -- --request DELETE ;;
-    *) printf 'This example helper accepts only GET, POST, PUT and DELETE.\n' >&2; exit 2 ;;
+    *) printf 'This example helper accepts only GET, POST, PUT, PATCH and DELETE.\n' >&2; exit 2 ;;
   esac
   auth_dir="$HOME/.config/pulse"
   auth_file="$auth_dir/api-header"
@@ -121,7 +120,7 @@ uncertain: inspect the existing action and target before deciding what to do.
 A 2xx response is only HTTP success, not proof that an action completed.
 
 The helper also supports the existing [RBAC administration examples](RBAC.md#managing-roles).
-POST and PUT read their JSON body from standard input; GET and DELETE send no
+POST, PUT and PATCH read their JSON body from standard input; GET and DELETE send no
 body. A method being supported is not permission to change a resource. Choose
 each administrative change separately and check its current state afterwards.
 A timeout or incomplete response can occur **after a change was applied**;

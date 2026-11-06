@@ -396,6 +396,43 @@ class APIAuthDocsTest(unittest.TestCase):
                         self.assertNotIn("Content-Type", headers)
             self.assertEqual(len(requests), 4)
 
+    def test_token_edit_patch_uses_private_stdin_without_redirect_or_retry(self):
+        # PATCH is the existing token-edit method. Exercise the exact copied
+        # helper against a recording HTTP server, not a hand-written curl call.
+        # This witnesses transport/privacy, not backend permission decisions.
+        payload = {"name": "private-fixture-token-name", "scopes": ["monitoring:read"]}
+        for status, partial, expected_exit in ((200, False, 0), (400, False, 22),
+                                               (401, False, 22), (403, False, 22),
+                                               (302, False, 1), (200, True, 18)):
+            for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
+                with self.subTest(status=status, partial=partial, header=key), \
+                        tempfile.TemporaryDirectory() as temporary, \
+                        private_recording_server(status, partial) as (port, requests), \
+                        recording_server() as (proxy_port, proxy_requests):
+                    home = Path(temporary)
+                    body_file = home / "private-token-edit.json"
+                    body_file.write_text(json.dumps(payload) + "\n")
+                    body_file.chmod(0o600)
+                    call = 'pulse_api PATCH /api/security/tokens/doc-fixture < "$HOME/private-token-edit.json"'
+                    result = exercise_curl(self, home, f"{key}: {value}", port,
+                                           request_helper() + "\n" + call,
+                                           private_response=True, proxy_port=proxy_port)
+                    self.assertEqual(result.returncode, expected_exit, result.stderr.decode())
+                    self.assertEqual(len(requests), 1, "token edit must not retry or follow a redirect")
+                    self.assertEqual(proxy_requests, [], "loopback token edit must bypass inherited proxies")
+                    path, headers, method, body = requests[0]
+                    self.assertEqual((method, path), ("PATCH", "/api/security/tokens/doc-fixture"))
+                    self.assertEqual(headers[key], value)
+                    other_key = "Authorization" if key == "X-API-Token" else "X-API-Token"
+                    self.assertNotIn(other_key, headers)
+                    self.assertNotIn("X-Curlrc-Injected", headers)
+                    self.assertEqual(headers["Content-Type"], "application/json")
+                    self.assertEqual(json.loads(body), payload)
+                    self.assertEqual(json.loads(body_file.read_text()), payload)
+                    self.assertEqual(stat.S_IMODE(body_file.stat().st_mode), 0o600)
+                    self.assertNotIn(payload["name"].encode(), result.stdout + result.stderr)
+                    self.assertNotIn(payload["name"], (home / "argv.json").read_text())
+
     def test_shared_helper_keeps_glob_shaped_paths_and_queries_literal(self):
         # One curl process can still send multiple HTTP requests: shell quoting
         # and an argv-count assertion do not prevent curl's own URL expansion.
@@ -416,7 +453,7 @@ class APIAuthDocsTest(unittest.TestCase):
     def assert_literal_requests(self, paths):
         with private_recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
             for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
-                for method in ("GET", "POST", "PUT", "DELETE"):
+                for method in ("GET", "POST", "PUT", "PATCH", "DELETE"):
                     for path in paths:
                         with self.subTest(header=key, method=method, path=path):
                             before = len(requests)
@@ -432,7 +469,7 @@ class APIAuthDocsTest(unittest.TestCase):
                             other_key = "Authorization" if key == "X-API-Token" else "X-API-Token"
                             self.assertNotIn(other_key, headers)
                             self.assertNotIn("X-Curlrc-Injected", headers)
-                            if method in ("POST", "PUT"):
+                            if method in ("POST", "PUT", "PATCH"):
                                 self.assertEqual(headers["Content-Type"], "application/json")
                                 self.assertEqual(json.loads(body), {"fixture": True})
                             else:
@@ -442,7 +479,7 @@ class APIAuthDocsTest(unittest.TestCase):
     def test_glob_shaped_write_fails_privately_without_additional_requests(self):
         for status, partial, expected_exit in ((401, False, 22), (302, False, 1), (200, True, 18)):
             with private_recording_server(status, partial) as (port, requests):
-                for method in ("POST", "DELETE"):
+                for method in ("POST", "PATCH", "DELETE"):
                     for key, value in (("X-API-Token", TEST_TOKEN), ("Authorization", "Bearer " + TEST_TOKEN)):
                         with self.subTest(status=status, method=method, header=key), tempfile.TemporaryDirectory() as temporary:
                             before = len(requests)
@@ -458,7 +495,7 @@ class APIAuthDocsTest(unittest.TestCase):
     def test_shared_helper_refuses_unsupported_methods_urls_and_missing_auth_before_transport(self):
         with recording_server() as (port, requests), tempfile.TemporaryDirectory() as temporary:
             env = dict(os.environ, HOME=temporary)
-            for call, expected_exit in (("pulse_api PATCH /api/admin/roles", 2),
+            for call, expected_exit in (("pulse_api OPTIONS /api/admin/roles", 2),
                                         ("pulse_api GET https://example.invalid/api/admin/roles", 2),
                                         ("pulse_api DELETE", 2),
                                         ("pulse_api DELETE /api/admin/roles/unused", 1)):
