@@ -9,7 +9,7 @@ alert routing, and reporting. It assumes you have read
 
 **Provider-hosted MSP (canonical).** A control plane runs one isolated Pulse
 runtime per client workspace. Alerts, webhook destinations, branded report
-settings, users, audit history, and metrics stay inside the client runtime;
+settings, and metrics stay inside the client runtime;
 duplicate hostnames across clients never collide because they never share a
 runtime namespace.
 
