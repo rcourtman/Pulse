@@ -714,7 +714,15 @@ func snapshotLocalAuthCredentialsLocked(cfg *config.Config) (string, string) {
 	return cfg.AuthUser, cfg.AuthPass
 }
 
-func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, writeDefaultFailure bool) bool {
+func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, writeDefaultFailure bool) (allowed bool) {
+	// Saved-SSO management must distinguish real credential admission from the
+	// legacy loopback fallback, including across concurrent recovery. Annotate
+	// only those routes; this does not change authentication on other routes.
+	anonymous := false
+	if admission, _ := r.Context().Value(ssoManagementAdmissionKey{}).(*ssoManagementAdmission); admission != nil {
+		admission.authenticated = false
+		defer func() { admission.authenticated = allowed && !anonymous }()
+	}
 	// Only the credential selected by this authentication attempt may own a
 	// long-lived read. A later proxy/token/basic admission must not inherit an
 	// earlier session marker if middleware checks this request again.
@@ -870,6 +878,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 			log.Debug().Msg("SSO enabled without local credentials, authentication required")
 		} else {
 			if isDirectLoopbackRequest(r) {
+				anonymous = true
 				log.Debug().Msg("No auth configured, allowing loopback access as 'anonymous'")
 				if w != nil {
 					w.Header().Set("X-Authenticated-User", "anonymous")

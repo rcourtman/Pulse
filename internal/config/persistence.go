@@ -2105,12 +2105,28 @@ func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 func (c *ConfigPersistence) LoadSSOConfig() (*SSOConfig, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.loadSSOConfigLocked(true)
+}
 
+// LoadPersistedSSOConfig reads only the saved multi-provider configuration.
+// Recovery after a failed load must not treat a missing file as permission to
+// migrate older OIDC authority over a temporarily unavailable configuration.
+// Initial startup migration remains the responsibility of LoadSSOConfig.
+func (c *ConfigPersistence) LoadPersistedSSOConfig() (*SSOConfig, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.loadSSOConfigLocked(false)
+}
+
+func (c *ConfigPersistence) loadSSOConfigLocked(allowLegacy bool) (*SSOConfig, error) {
 	var settings SSOConfig
 	migratedPlaintext, _, err := loadEncryptedJSONLocked(c, c.ssoFile, &settings, "sso config")
 	if err != nil {
 		if os.IsNotExist(err) {
-			return c.loadLegacyOIDCConfigAsSSOLocked()
+			if allowLegacy {
+				return c.loadLegacyOIDCConfigAsSSOLocked()
+			}
+			return nil, nil
 		}
 		return nil, err
 	}

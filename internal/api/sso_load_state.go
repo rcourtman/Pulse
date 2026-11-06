@@ -26,7 +26,7 @@ func (r *Router) ssoManagementConfig(retry bool) (*config.SSOConfig, error) {
 		return nil, errSSOConfigUnavailable
 	}
 
-	loaded, err := r.persistence.LoadSSOConfig()
+	loaded, err := r.persistence.LoadPersistedSSOConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to reload SSO config from persistence")
 		return nil, errSSOConfigUnavailable
@@ -65,18 +65,18 @@ func (r *Router) requireSSOManagementConfig(w http.ResponseWriter, req *http.Req
 }
 
 // authorizeSSOManagement is route-only: the usual permission and scope checks
-// have already authenticated the request. During a failed SSO-only startup,
-// their legacy loopback/no-auth fallback is NOT authority to retry disk reads.
+// have already run. A request admitted while saved authority was unknown must
+// carry real authentication even if another request has since recovered it.
 func (r *Router) authorizeSSOManagement(w http.ResponseWriter, req *http.Request) bool {
 	r.ensureSSOConfig()
-	if req.Method == http.MethodGet && r.ssoAuthLoadFailed.Load() {
-		config.Mu.RLock()
-		independentAuth := r.config.AuthUser != "" || r.config.AuthPass != "" ||
-			r.config.HasAPITokens() || r.config.ProxyAuthSecret != ""
-		config.Mu.RUnlock()
-		session := sessionReadRevalidator(req)
-		if !independentAuth && !adminBypassAppliesToRequest(req) && (session == nil || !session()) {
+	admission, _ := req.Context().Value(ssoManagementAdmissionKey{}).(*ssoManagementAdmission)
+	if r.ssoAuthLoadFailed.Load() || admission != nil && admission.unknown {
+		if admission == nil || !admission.authenticated {
 			writeErrorResponse(w, http.StatusUnauthorized, "authentication_required", "Authentication required to check saved SSO configuration", nil)
+			return false
+		}
+		if session := sessionReadRevalidator(req); session != nil && !session() {
+			writeAuthenticationRequired(w, req)
 			return false
 		}
 	}
