@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "e5461fb1d581f6ae7233c5c8faeb9d277bcd477c",
+  "verified_at": "2026-11-06T17:17:55.343162Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useOrganizationOverviewPanelState.ts": "3233d3ae0c433ed8c7dc0c53a10b5e6cf993717154d268788cd7b62a02d945c2"
+  },
+  "routes": [
+    "/proof-preview/index.html: actual OrganizationOverviewPanel, production hook, OrgsAPI/apiClient, capability/presentation stores and ToastContainer with safe delayed HTTP fixtures; existing Settings consumer, not full-App navigation"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched initial, pending and successful/uncertain completion at desktop/light and narrow/dark; all four original organization summary cards and membership distinctions retained",
+    "Unconfirmed rename withdraws stale details and offers explicit saved-details Reload; real readback sees the already-applied name, without another PUT",
+    "Current read-only, organization, principal, hidden surface, failed capabilities, same-ID capability rebind and disposal suppress late feedback"
+  ],
+  "interactions": [
+    "One keyboard-activated exact PUT, expected organization and synthetic CSRF verified; equal directory/policy/capability refreshes retain Saving and disabled draft without replacement reads or a repeat write",
+    "Successful rename obtains one saved read and visible updated name/toast; 503 after synthetic apply reaches existing uncertainty recovery, then Reload reads without write replay",
+    "13 Chromium/WebKit matrix scenarios complete with context/browser/server closes; two bounded WebKit uncertainty traces also complete after native review found an adverse early frame"
+  ],
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "source_build": "source-j7p33ro3/e5461fb1d581f6ae7233c5c8faeb9d277bcd477c passes273 tests, locked Prettier3.9.10, type-check, full lint, production build/budgets and preview. All68 final preview files are byte-identical to the browser-consumed V2 build; later changes are test-query type/format corrections only.",
+  "pixel_review": "All34 retained captures opened natively:10 matched Chromium pairs plus8 original extra frames and6 bounded WebKit diagnostic frames. One original immediate WebKit uncertainty image had poor contrast and is retained as adverse, not accepted as good. Both instrumented immediate/500ms traces have readable light text; the early-theme trace matches production bootstrap. The original frame cause remains unestablished, not claimed fixed. Coordinator independent source/pixel judgment remains required.",
+  "limits": [
+    "Synthetic panel/store/HTTP proof, not installed tenant, original saved-client/SSO/secret recovery, full-App navigation or containing release.",
+    "No layout, style, endpoint, grant or server authorization changes. Real withdrawal remains fail-closed; cancellation is not server rollback.",
+    "Earlier capacity rejection, intermediate unit-query type/format failures, failed raw minifier-tail equality and original adverse WebKit capture are retained rather than cleared by later success."
+  ]
+}
