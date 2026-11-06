@@ -37,8 +37,9 @@ func patrolReceiptDB(t *testing.T, dir string) *sql.DB {
 // below through this package's production finding projector and notifier.
 func seedPatrolReceipt(t *testing.T, db *sql.DB, id string, start, at time.Time) {
 	t.Helper()
-	_, err := db.Exec(`INSERT OR IGNORE INTO notification_destination_state(destination_key,epoch,fingerprint) VALUES('webhook:fixture','00000000-0000-4000-8000-000000000001','fixture');
-		INSERT INTO notification_delivery_receipts(alert_id,alert_start_nanos,destination_key,delivery_epoch,delivered_at,delivered_nanos,severity,success_order)
+	_, err := db.Exec(`INSERT OR IGNORE INTO notification_destination_state(destination_key,epoch,fingerprint) VALUES('webhook:fixture','00000000-0000-4000-8000-000000000001','fixture')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO notification_delivery_receipts(alert_id,alert_start_nanos,destination_key,delivery_epoch,delivered_at,delivered_nanos,severity,success_order)
 		VALUES(?,?,'webhook:fixture','00000000-0000-4000-8000-000000000001',?,?,2,1)`, id, start.UnixNano(), at.Unix(), at.UnixNano())
 	require.NoError(t, err)
 }
@@ -52,7 +53,7 @@ func patrolReceiptStore(t *testing.T, dir string) *ai.FindingsStore {
 }
 
 func TestPatrolReceiptLifecycleSettlesOnlyPositiveTerminalFacts(t *testing.T) {
-	store := patrolReceiptStore(t, t.TempDir())
+	store := ai.NewFindingsStore()
 	notificationDir := t.TempDir()
 	n := notifications.NewNotificationManagerWithDeferredQueue("", notificationDir)
 	t.Cleanup(n.Stop)
@@ -65,13 +66,20 @@ func TestPatrolReceiptLifecycleSettlesOnlyPositiveTerminalFacts(t *testing.T) {
 		seedPatrolReceipt(t, db, alerts.PatrolFindingNotificationIDPrefix+id, start, start)
 	}
 	const completed = 128
+	historical := make(map[string]*ai.Finding, completed)
 	for i := 0; i < completed; i++ {
 		id := fmt.Sprintf("settled-%03d", i)
 		f := patrolReceiptFinding(id, start)
 		f.ResolvedAt = &end
-		require.True(t, store.Add(f))
+		historical[id] = f
 		seed(id)
 	}
+	// Model one saved historical snapshot, not 128 unrelated durable live
+	// edits. The real loader still supplies every terminal finding fact.
+	persistence := ai.NewFindingsPersistenceAdapter(config.NewConfigPersistence(t.TempDir()))
+	require.NoError(t, persistence.SaveFindings(historical))
+	require.NoError(t, store.SetPersistence(persistence))
+	t.Cleanup(func() { require.NoError(t, store.ForceSave()) })
 	for _, id := range []string{"active", "dismissed", "missing"} {
 		if id != "missing" {
 			require.True(t, store.Add(patrolReceiptFinding(id, start)))
