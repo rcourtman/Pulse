@@ -1301,11 +1301,20 @@ jobs:
       - name: Install benchstat
         run: go install golang.org/x/perf/cmd/benchstat@v0.0.0-20260211190930-8161c38c6cdc
 
+      # A shard the change does not reach has nothing to compare, which is not
+      # a passed comparison. Only the collector's own declaration of that ends
+      # the step here; any other empty comparison reaches the check and fails.
       - name: Compare benchmarks against baseline
         if: github.event_name == 'pull_request'
         run: |
           set -eo pipefail
           echo "=== Benchmark comparison (baseline vs current) ==="
+          if grep -qFx 'selection=affected' bench-metadata.txt \
+            && grep -qFx 'packages=' bench-metadata.txt \
+            && [ ! -s bench-baseline.txt ] && [ ! -s bench-results.txt ]; then
+            echo "No benchmarked package in this shard depends on a changed file; nothing to compare." | tee bench-comparison.txt
+            exit 0
+          fi
           benchstat bench-baseline.txt bench-results.txt | tee bench-comparison.txt
           echo ""
           bash scripts/check-bench-regression.sh bench-comparison.txt

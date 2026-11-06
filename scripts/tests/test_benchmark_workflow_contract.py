@@ -4,7 +4,9 @@
 from copy import deepcopy
 import os
 from pathlib import Path
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 import yaml
@@ -98,6 +100,71 @@ class BenchmarkWorkflowContractTest(unittest.TestCase):
                 self.assertEqual(process.returncode, 0 if result == "success" else 1)
                 if result != "success":
                     self.assertIn("incomplete:", process.stdout)
+
+    def run_compare(self, metadata, results="", table=""):
+        """Run the step's real command with a stand-in for benchstat's table."""
+        steps = {step["name"]: step for step in self.workflow["jobs"]["benchmarks"]["steps"]}
+        command = steps["Compare benchmarks against baseline"]["run"]
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            (work / "scripts").mkdir()
+            shutil.copy(ROOT / "scripts" / "check-bench-regression.sh", work / "scripts")
+            (work / "bench-baseline.txt").write_text(results, encoding="utf-8")
+            (work / "bench-results.txt").write_text(results, encoding="utf-8")
+            if metadata is not None:
+                (work / "bench-metadata.txt").write_text(metadata, encoding="utf-8")
+            (work / "table.txt").write_text(table, encoding="utf-8")
+            benchstat = work / "benchstat"
+            benchstat.write_text("#!/bin/sh\ncat table.txt\n", encoding="utf-8")
+            benchstat.chmod(0o755)
+            process = subprocess.run(
+                ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", command],
+                cwd=work,
+                env={**os.environ, "PATH": f"{work}{os.pathsep}{os.environ['PATH']}"},
+                capture_output=True, text=True, check=False,
+            )
+            comparison = (work / "bench-comparison.txt").read_text(encoding="utf-8")
+        return process, comparison
+
+    def test_a_shard_declared_empty_has_nothing_to_compare(self) -> None:
+        process, comparison = self.run_compare("selection=affected\nshard=2\npackages=\n")
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertIn("nothing to compare", process.stdout)
+        self.assertIn("nothing to compare", comparison)
+        self.assertNotIn("No significant", process.stdout)
+
+    def test_every_other_empty_comparison_is_refused(self) -> None:
+        cases = {
+            "packages were selected": ("selection=affected\npackages=./internal/api/\n", ""),
+            "not an affected selection": ("selection=all (module files changed)\npackages=\n", ""),
+            "no metadata": (None, ""),
+            "samples beside the declaration": (
+                "selection=affected\npackages=\n",
+                "BenchmarkExample-4 1 100 ns/op\n",
+            ),
+        }
+        for name, (metadata, results) in cases.items():
+            with self.subTest(name):
+                process, _ = self.run_compare(metadata, results=results)
+                self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+                self.assertIn("BENCHMARK EVIDENCE INSUFFICIENT", process.stdout)
+                self.assertNotIn("nothing to compare", process.stdout)
+
+    def test_a_measured_shard_is_still_judged(self) -> None:
+        metadata = "selection=affected\npackages=./internal/api/\n"
+        samples = "BenchmarkExample-4 1 100 ns/op\n"
+        process, _ = self.run_compare(
+            metadata, results=samples,
+            table="Example-4  100.0n ± 1%  105.0n ± 1%  +5.00% (p=0.001 n=10)\n",
+        )
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertIn("No significant benchmark regressions", process.stdout)
+        process, _ = self.run_compare(
+            metadata, results=samples,
+            table="Example-4  100.0n ± 1%  111.0n ± 1%  +11.00% (p=0.001 n=10)\n",
+        )
+        self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+        self.assertIn("BENCHMARK REGRESSION DETECTED", process.stdout)
 
 
 if __name__ == "__main__":
