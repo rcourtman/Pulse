@@ -379,6 +379,9 @@ MissingCount-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100)
 MissingSecondCount-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100 n1=10)
 ShortBaseline-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100 n1=9 n2=10)
 ShortCandidate-4  100.0n ± 1%  105.0n ± 1%  ~ (p=0.100 n1=10 n2=9)
+UnsignedRegression-4  100.0n ± 1%  111.0n ± 1%  11.00% (p=0.001 n=10)
+UnsignedRoundTen-4  100.0n ± 1%  110.0n ± 1%  10% (p=0.001 n=10)
+UnsignedFraction-4  100.0n ± 1%  100.5n ± 1%  0.50% (p=0.001 n=10)
 EOF
 cat > "${WORK_DIR}/complete.txt" <<'EOF'
 goos: linux
@@ -390,6 +393,7 @@ cpu: fixture 100
 Equal-4      100.0n ± 0%   100.0n ± 0%  ~ (p=1.000 n=10) ¹
 Unequal-4    100.0n ± 1%   105.0n ± 1%  +5.00% (p=0.100 n1=10 n2=11)
 Named/with:colon-4  100.0n ± 1%  105.0n ± 1%  +5.00% (p=0.100 n=10)
+Unchanged/sorted-by-cpu-4  3.928k ± 0%  3.928k ± 0%  0.00% (p=0.044 n=10)
 geomean      100.0n        102.5n       +2.47%
 ¹ all samples are equal
 EOF

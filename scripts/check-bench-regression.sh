@@ -35,6 +35,9 @@ trap 'rm -f "$TMPFILE" "$LOW_SAMPLE_FILE"' EXIT
 # judging deltas. Benchstat can successfully print a table with only one
 # input's rows, and an empty file used to say "no regressions". Ignore table
 # headers, file configuration, footnotes and geomeans, not measured rows.
+# Benchstat prints a significant change that rounds to nothing as an unsigned
+# 0.00%. No other unsigned change passes, because only signed ones are judged
+# below. The leading space stops the zero matching the end of 10.00%.
 awk -v minimum="$MIN_SAMPLES" '
 {
   row = $0
@@ -46,7 +49,7 @@ awk -v minimum="$MIN_SAMPLES" '
   rows++
   intervals = row
   if (gsub(/±/, "", intervals) != 2 ||
-      !match(row, /(~|[-+][0-9]+(\.[0-9]+)?%)[[:space:]]+\(p=[0-9]+\.[0-9]+ (n=[0-9]+|n1=[0-9]+ n2=[0-9]+)\)/)) {
+      !match(row, /(~|[[:space:]]0(\.0+)?%|[-+][0-9]+(\.[0-9]+)?%)[[:space:]]+\(p=[0-9]+\.[0-9]+ (n=[0-9]+|n1=[0-9]+ n2=[0-9]+)\)/)) {
     print "Unpaired or malformed benchmark: " row
     next
   }
