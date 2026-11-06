@@ -101,7 +101,7 @@ const open = async () => {
   expect(input).toHaveValue('Operations');
   const submit = () => {
     fireEvent.input(screen.getByLabelText('Display Name'), { target: { value: ` ${savedName} ` } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   };
   submit();
   await waitFor(() => expect(writes()).toHaveLength(1));
@@ -217,13 +217,13 @@ describe('Overview pending renames with the real store and HTTP client', () => {
       case 'principal':
         view.setUser('viewer@example.test');
         await waitFor(() =>
-          expect(screen.getByRole('button', { name: 'Save', exact: true })).toBeDisabled(),
+          expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
         );
         break;
       case 'read-only':
         policy(true);
         await waitFor(() =>
-          expect(screen.getByRole('button', { name: 'Save', exact: true })).toBeDisabled(),
+          expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
         );
         break;
       case 'hidden':
@@ -238,7 +238,7 @@ describe('Overview pending renames with the real store and HTTP client', () => {
       case 'same-ID rebind':
         eventBus.emit('org_switched', orgID);
         await waitFor(() =>
-          expect(screen.getByRole('button', { name: 'Save', exact: true })).toBeEnabled(),
+          expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
         );
         break;
       case 'disposal':
