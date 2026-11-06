@@ -363,3 +363,24 @@ func TestSSOLoadFailureEnvironmentSurvivesRecovery(t *testing.T) {
 	require.Equal(t, saved, after)
 	require.Nil(t, fallback.GetProvider("saved"), "reload mutated old fallback")
 }
+
+func TestSSOLoadFailureDoesNotAdmitAnonymousRecovery(t *testing.T) {
+	fixture, file, saved := ssoLoadFixture(t)
+	require.NoError(t, os.WriteFile(file, []byte("invalid"), 0600))
+	r := newTestRouter(t, fixture.config, nil, nil, nil, nil, "test")
+	require.True(t, r.ssoAuthenticationLoadFailed())
+	// Unknown saved authentication is not a first-run bootstrap invitation.
+	require.Empty(t, r.bootstrapTokenHash)
+	require.NoError(t, os.WriteFile(file, saved, 0600))
+	for _, path := range []string{"/api/security/sso/providers", "/api/security/sso/providers/saved"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = "127.0.0.1:1234"
+		w := httptest.NewRecorder()
+		r.Handler().ServeHTTP(w, req)
+		require.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+		require.True(t, r.ssoAuthenticationLoadFailed(), "loopback fallback triggered a reload")
+	}
+	after, err := os.ReadFile(file)
+	require.NoError(t, err)
+	require.Equal(t, saved, after)
+}

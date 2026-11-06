@@ -204,7 +204,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if _, ok := r.requireSSOManagementConfig(w, req); !ok {
+		if !r.authorizeSSOManagement(w, req) {
 			return
 		}
 		ssoAdminEndpoints.HandleProvidersCollection(w, req)
@@ -215,14 +215,14 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			if !ensureSettingsReadScope(r.config, w, req) {
 				return
 			}
-			if _, ok := r.requireSSOManagementConfig(w, req); !ok {
+			if !r.authorizeSSOManagement(w, req) {
 				return
 			}
 		case http.MethodPut, http.MethodDelete:
 			if !ensureSettingsWriteScope(r.config, w, req) {
 				return
 			}
-			if _, ok := r.requireSSOManagementConfig(w, req); !ok {
+			if !r.authorizeSSOManagement(w, req) {
 				return
 			}
 			// Enforce core-owned environment authority before invoking a bound

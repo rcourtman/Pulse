@@ -63,3 +63,23 @@ func (r *Router) requireSSOManagementConfig(w http.ResponseWriter, req *http.Req
 	}
 	return cfg, true
 }
+
+// authorizeSSOManagement is route-only: the usual permission and scope checks
+// have already authenticated the request. During a failed SSO-only startup,
+// their legacy loopback/no-auth fallback is NOT authority to retry disk reads.
+func (r *Router) authorizeSSOManagement(w http.ResponseWriter, req *http.Request) bool {
+	r.ensureSSOConfig()
+	if req.Method == http.MethodGet && r.ssoAuthLoadFailed.Load() {
+		config.Mu.RLock()
+		independentAuth := r.config.AuthUser != "" || r.config.AuthPass != "" ||
+			r.config.HasAPITokens() || r.config.ProxyAuthSecret != ""
+		config.Mu.RUnlock()
+		session := sessionReadRevalidator(req)
+		if !independentAuth && !adminBypassAppliesToRequest(req) && (session == nil || !session()) {
+			writeErrorResponse(w, http.StatusUnauthorized, "authentication_required", "Authentication required to check saved SSO configuration", nil)
+			return false
+		}
+	}
+	_, ok := r.requireSSOManagementConfig(w, req)
+	return ok
+}
