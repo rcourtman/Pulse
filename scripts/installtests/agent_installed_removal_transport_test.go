@@ -29,6 +29,11 @@ func TestAgentInstalledRemovalSavedTransport(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("confined Linux removal caller")
 	}
+	// The binary, TLS peers and saved state are private; service/process
+	// operations below are doubles, not the host's live inventory. Admit this
+	// whole ordered scenario set through Go's existing parallel budget before
+	// starting its unchanged build and transport deadlines.
+	t.Parallel()
 	buildDir := t.TempDir()
 	binary := filepath.Join(buildDir, "pulse-agent")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
