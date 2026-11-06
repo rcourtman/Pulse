@@ -3064,6 +3064,7 @@ func TestRootInstallStartupRequiresActiveReadback(t *testing.T) {
 		"test_unconfirmed_start_fails_for_fresh_and_prior_active_installations",
 		"test_confirmed_active_and_delayed_start_consume_liveness_flag",
 		"test_retry_is_bounded_and_only_restores_prior_active_service",
+		"test_modelled_clock_ignores_wall_time_during_manager_read",
 		"test_missing_unit_stops_before_enable_or_start",
 		"test_all_five_main_paths_stop_before_marker_or_completion_in_or_list",
 		"test_all_five_main_paths_complete_only_after_active_readback",
