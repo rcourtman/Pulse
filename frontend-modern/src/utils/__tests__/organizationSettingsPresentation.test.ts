@@ -115,6 +115,12 @@ describe('organizationSettingsPresentation', () => {
     expect(getOrganizationOverviewManageRequiredMessage()).toBe(
       'Admin or owner role required to update organization details.',
     );
+    expect(getOrganizationOverviewManageRequiredMessage(false)).toBe(
+      'Admin or owner role required to update organization details.',
+    );
+    expect(getOrganizationOverviewManageRequiredMessage(true)).toBe(
+      'Organization details are read-only for this session.',
+    );
     expect(getOrganizationOwnerRoleLockedMessage()).toBe(
       'Current owner can only remain owner. Transfer ownership instead.',
     );

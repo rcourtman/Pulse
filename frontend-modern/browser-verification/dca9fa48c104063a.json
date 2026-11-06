@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "fc61eacd20bc7498368627ca02e803e27efebb44",
+  "verified_at": "2026-11-06T18:27:06.462713Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationOverviewDetailsSection.tsx",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationOverviewDetailsSection.tsx": "bffb3d1df2d3048593a7ad2be75b2b61a66bba9e365a552f9734c697d72bef2b",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "bb45f134a783f9d6d992b888466a06037bad99309fd6e9ae954a33a47aa2e6f8"
+  },
+  "routes": [
+    "/proof-preview/index.html: production OrganizationOverviewPanel/DetailsSection, state, session policy/capability stores, OrgsAPI and HTTP client using safe fixtures; actual existing Settings consumer, not full-App navigation"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Read-only Owner at desktop/narrow light/dark sees session restriction, not missing-role guidance; all organization cards, disabled controls and membership roles remain at a glance",
+    "Writable Viewer retains the admin/owner requirement; both matched control pairs are byte-identical",
+    "Read-only withdrawal and directory refresh keep writes disabled; restored writable Owner retains ordinary rename use"
+  ],
+  "interactions": [
+    "7 before scenarios and9 final scenarios complete;6 comparable Chromium pairs plus an extra WebKit phone/dark capture, all13 retained images opened natively",
+    "Chromium and WebKit exercise a policy transition, failed click of disabled Save, read-only directory refresh, restoration and one keyboard rename through exact organization/CSRF HTTP binding and saved readback",
+    "All final contexts,2 browsers and local server have observed closes; no unexpected requests, console or page errors"
+  ],
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "source_build": "source-xbnsaon0/fc61eacd20bc7498368627ca02e803e27efebb44:94 selected registered tests in5 roots, locked formatting, type-check, full lint, production build/budgets, identical fixture-input preview; command/client0, complete output and stopped guest.",
+  "pixel_review": "Four changed-message pairs keep controls/table rows in identical positions and readable light/dark guidance; actual roles remain visible. Writable Viewer pairs unchanged. Extra WebKit final frame readable. Independent Coordinator source/pixel review required.",
+  "limits": [
+    "Synthetic real-panel/store/client proof, not installed tenant, original Authentik/SSO/client recovery or containing release. No lifecycle, request, grant, role, route or layout change.",
+    "Initial baseline badge-case observation failed before capture; corrected observation retained. Earlier final-source attempt had93pass/1fail from premature test completion assertion, corrected in a test-only commit. Before transition observed dispatch; final script positively awaits saved completion. No adverse historical evidence is cleared."
+  ]
+}

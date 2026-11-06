@@ -15,6 +15,20 @@
 
 ## Purpose
 
+### Overview explains the current session's write restriction
+
+When organization details are visible but session presentation policy is
+read-only, Overview explains that organization details are read-only for this
+session, including for the displayed owner. Only a writable session without
+organization-management membership receives the existing admin-or-owner hint.
+Both states keep the name input and Save disabled. Policy and principal changes
+update the explanation through the existing reader lifecycle; equal refreshes
+do not imply new authority. No management predicate, request, role or server
+authorization changes. Registered presentation-helper and production-panel/
+store/client tests cover these distinctions and restored writable-owner use;
+comparable desktop/narrow browser proof retains the summary cards, controls and
+membership distinctions. This is not original SSO or installed-client recovery.
+
 ### Equal-reader refreshes preserve pending organization changes
 
 Organization Overview, Access and Sharing hold same-reader events, repeated
