@@ -15,6 +15,8 @@ on:
       - 'internal/agenttls/**'
       - 'internal/agentidentity/**'
       - 'internal/agentupdate/**'
+      - 'internal/api/unified_agent*.go'
+      - 'internal/api/windows_update_packet_test.go'
       - 'internal/dockeragent/**'
       - 'internal/filesystemprobe/**'
       - 'internal/hostagent/**'
@@ -58,6 +60,8 @@ on:
       - 'internal/agenttls/**'
       - 'internal/agentidentity/**'
       - 'internal/agentupdate/**'
+      - 'internal/api/unified_agent*.go'
+      - 'internal/api/windows_update_packet_test.go'
       - 'internal/dockeragent/**'
       - 'internal/filesystemprobe/**'
       - 'internal/hostagent/**'
@@ -93,6 +97,97 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-update-producer:
+    name: Capture production signed Windows update responses
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up Node for real API embed
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-modern/package-lock.json
+      - name: Build real frontend assets
+        working-directory: frontend-modern
+        run: npm ci && npm run build
+      # The server is Unix-only. Capture its actual canonical .exe response,
+      # including both detached-signature headers, then transfer those exact
+      # bytes to the Windows consumer in THIS run. No release/project key,
+      # GitHub download fallback, hosted endpoint or existing machine is used.
+      - name: Produce exact-source Windows update inputs
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          PULSE_WINDOWS_UPDATE_PACKET: ${{ runner.temp }}/windows-update-packet
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --exit-code HEAD
+          go test -count=1 -timeout 15m -v ./internal/api -run '^TestWindowsSignedUpdatePacket$'
+          go test -count=1 ./scripts/installtests/windowsupdatepacket
+      - name: Transfer production responses within this run
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-update-packet-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-update-packet
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-signed-autoupdate:
+    name: Signed Windows automatic update and SCM recovery
+    needs: windows-update-producer
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Read this run's production responses
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-update-packet-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-update-packet
+      - name: Exercise real signed automatic update on native SCM
+        shell: powershell
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          PULSE_WINDOWS_SIGNED_UPDATE: '1'
+          PULSE_WINDOWS_UPDATE_PACKET: ${{ runner.temp }}/windows-update-packet
+          PULSE_WINDOWS_UPDATE_RECEIPT: ${{ runner.temp }}/windows-signed-update.json
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = (git rev-parse HEAD | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $head -cne $env:EXPECTED_SOURCE_SHA) { throw 'Windows source identity differs.' }
+          git diff --exit-code HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Windows source is dirty.' }
+          go test -count=1 -failfast -timeout 10m -v ./scripts/installtests -run '^TestWindowsSigned(AutomaticUpdate|UpdatePowerShellExitContract)$'
+          if ($LASTEXITCODE -ne 0) { throw "Signed Windows automatic update failed (exit $LASTEXITCODE)." }
+          $receipt = Get-Content $env:PULSE_WINDOWS_UPDATE_RECEIPT -Raw -ErrorAction Stop | ConvertFrom-Json
+          if ($receipt.source -cne $head -or $receipt.passed -ne $true -or $receipt.owned_scm_cleanup -ne $true -or $receipt.cases.Count -ne 3) { throw 'Native terminal receipt is incomplete.' }
+      - name: Retain native updater and owned cleanup observations
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-signed-update-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-signed-update.json
+          if-no-files-found: warn
+          retention-days: 7
+
   installed-profile-systemd:
     name: Signed installer and saved-CA profile recovery
     runs-on: ubuntu-24.04
