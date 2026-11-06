@@ -22,11 +22,13 @@ effective presentation-policy updates and direct reloads behind a pending mutati
 The accepted snapshot remains visible with Saving and disabled mutation controls;
 a refresh cannot undo server work or establish that it is safe to submit again.
 Success emits the existing organizations-changed event, obtaining one fresh
-snapshot. An uncertain or mismatched ownership response keeps the existing
+snapshot. An uncertain or mismatched mutation response keeps the existing
 unavailable state and explicit Reload recovery, not an automatic write retry.
 Overview retains its submitted display-name draft and Saving state across equal
 security-status presentation-policy updates; after success a saved read supplies
-the name, and after uncertainty only an explicit Reload checks it. A pending
+the name. Uncertainty withdraws the editor until a saved read succeeds; Reload
+checks saved details without repeating the rename. Later directory or policy
+refreshes may also perform saved reads, never repeat the write. A pending
 mutation may still be preparing CSRF and need not have reached the server. A
 never-settled write remains pending until completion or reader withdrawal, rather
 than being presented as rolled back.
