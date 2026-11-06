@@ -77,6 +77,32 @@ class ReportingSubjectBoundaryTests(unittest.TestCase):
                 "API files outside bridge allowlist still import pkg/licensing",
             ),
         ]
+        for adapter in ("sso_load_state", "sso_management_admission"):
+            variants.extend([
+                (
+                    f"{adapter} exact path", f"{adapter}_extra.go",
+                    "package api\n", "new production paid-domain implementation files are not baselined",
+                ),
+                (
+                    f"{adapter} not path prefix", f"{adapter}.go.extra.go",
+                    "package api\n", "new production paid-domain implementation files are not baselined",
+                ),
+                (
+                    f"{adapter} private root import", f"{adapter}.go",
+                    'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/internal/license"\n',
+                    "API root imports of internal/license remain",
+                ),
+                (
+                    f"{adapter} private implementation import", f"{adapter}.go",
+                    'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"\n',
+                    "non-test internal API files still import internal/license",
+                ),
+                (
+                    f"{adapter} licensing bridge required", f"{adapter}.go",
+                    'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"\n',
+                    "API files outside bridge allowlist still import pkg/licensing",
+                ),
+            ])
         for name, filename, content, rejection in variants:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 fixture = Path(temporary)

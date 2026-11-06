@@ -5,6 +5,11 @@ internal/api/identity_sso_handlers.go
 # exposing them in responses. No authentication or entitlement implementation.
 # Exact path only; all private-import and licensing-bridge checks still apply.
 internal/api/sso_config_preservation.go
+# Shared router saved-state recovery and request-admission guards. These use
+# existing core persistence/authentication, not private SSO protocol or license
+# implementations. Exact paths only; private-import/bridge checks still apply.
+internal/api/sso_load_state.go
+internal/api/sso_management_admission.go
 internal/api/licensing_bridge.go
 internal/api/licensing_handlers.go
 internal/api/magic_link.go
