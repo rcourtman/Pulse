@@ -71,27 +71,32 @@ export const OrganizationAccessInvitationsSection: Component<
     </Show>
 
     <Show when={props.state.canManageCurrentOrg() && props.state.pendingInvitations().length > 0}>
-      <section class="rounded-md border border-border p-4 space-y-3">
+      <section class="rounded-md border border-border p-3 space-y-2 sm:p-4 sm:space-y-3">
         <div>
           <h4 class="text-sm font-semibold text-base-content">Pending Invitations</h4>
           <p class="text-sm text-muted">These users still need to accept access.</p>
         </div>
-        <div class="space-y-3">
+        <div class="space-y-2 sm:space-y-3">
           <For each={props.state.pendingInvitations()}>
             {(invitation) => (
-              <div class="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div class="space-y-1">
+              <div
+                role="group"
+                aria-label={`Pending invitation for ${invitation.userId}`}
+                class="flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:py-3"
+              >
+                <div class="min-w-0 space-y-1 [overflow-wrap:anywhere]">
                   <div class="text-sm font-medium text-base-content">{invitation.userId}</div>
                   <div class="text-xs text-muted">
                     Invited by {invitation.invitedBy || 'an admin'} on{' '}
                     {formatOrgDate(invitation.invitedAt)}
                   </div>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex shrink-0 items-center gap-2">
                   <OrganizationRoleBadge role={invitation.role} />
                   <Button
                     variant="dangerOutline"
                     size="mdCompact"
+                    aria-label={`Revoke invitation for ${invitation.userId}`}
                     onClick={() => void props.state.revokeInvitation(invitation.userId)}
                     disabled={!props.state.canChangeAccess()}
                   >

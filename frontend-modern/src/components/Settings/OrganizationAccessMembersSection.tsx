@@ -101,6 +101,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                     variant="dangerGhost"
                     size="xs"
                     class="gap-1"
+                    aria-label={`Remove ${member.userId} from organization`}
                     onClick={() => {
                       void props.state.removeMember(member);
                     }}

@@ -169,6 +169,117 @@ afterEach(() => {
 });
 
 describe('OrganizationAccessPanel', () => {
+  const pendingInvitations = () =>
+    [
+      'provisioningserviceaccountfortheoperationsdepartmentanddisasterrecoveryteam@example.test',
+      'analyst@example.test',
+    ].map((userId) => ({
+      userId,
+      role: 'editor' as const,
+      invitedBy: 'centralidentitymanagementadministratorfortheoperationsdepartment@example.test',
+      invitedAt: '2026-11-01T12:00:00Z',
+    }));
+
+  it('identifies each pending invitation and its revocation action without shortening identities', async () => {
+    listPendingInvitationsMock.mockResolvedValue(pendingInvitations());
+    renderPanel();
+
+    for (const invitation of pendingInvitations()) {
+      const group = await screen.findByRole('group', {
+        name: `Pending invitation for ${invitation.userId}`,
+      });
+      expect(within(group).getByText(invitation.userId, { exact: true })).toBeVisible();
+      expect(group).toHaveTextContent(`Invited by ${invitation.invitedBy}`);
+      expect(within(group).getByText('editor', { exact: true })).toBeVisible();
+      expect(
+        within(group).getByRole('button', {
+          name: `Revoke invitation for ${invitation.userId}`,
+        }),
+      ).toBeEnabled();
+    }
+    expectNoWrites();
+  });
+
+  it.each([0, 1])(
+    'revokes only the invitation named by action %s and rereads saved access',
+    async (index) => {
+      let invitations = pendingInvitations();
+      const target = invitations[index].userId;
+      const retained = invitations[1 - index].userId;
+      listPendingInvitationsMock.mockImplementation(async () => invitations);
+      revokeInvitationMock.mockImplementation(async (_orgId, userId) => {
+        invitations = invitations.filter((invitation) => invitation.userId !== userId);
+      });
+      renderPanel();
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: `Revoke invitation for ${target}` }),
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('group', { name: `Pending invitation for ${target}` }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(revokeInvitationMock).toHaveBeenCalledExactlyOnceWith(
+        'org-a',
+        target,
+        expect.objectContaining({ expectedOrgID: 'org-a', retry: false }),
+      );
+      expect(
+        await screen.findByRole('group', { name: `Pending invitation for ${retained}` }),
+      ).toBeVisible();
+      expect(await screen.findByText('user-2', { exact: true })).toBeVisible();
+      expect(removeMemberMock).not.toHaveBeenCalled();
+      expect(updateMemberRoleMock).not.toHaveBeenCalled();
+      expect(inviteMemberMock).not.toHaveBeenCalled();
+      expect(acceptMyInvitationMock).not.toHaveBeenCalled();
+      expect(declineMyInvitationMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['user-2', 'user-3'])(
+    'names member removal for %s and keeps the existing confirmation',
+    async (target) => {
+      listMembersMock.mockResolvedValue([
+        ...baseMembers,
+        { userId: 'user-3', role: 'viewer', addedAt: '2026-11-01T12:00:00Z' },
+      ]);
+      vi.mocked(confirm).mockReturnValue(false);
+      renderPanel();
+
+      for (const userId of ['user-2', 'user-3']) {
+        expect(
+          await screen.findByRole('button', { name: `Remove ${userId} from organization` }),
+        ).toBeEnabled();
+      }
+      expect(
+        screen.queryByRole('button', { name: 'Remove user-1 from organization' }),
+      ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: `Remove ${target} from organization` }));
+
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(vi.mocked(confirm).mock.calls[0][0]).toContain(target);
+      expect(vi.mocked(confirm).mock.calls[0][0]).toContain('Organization A');
+      expectNoWrites();
+    },
+  );
+
+  it('does not expose named invitation or member administration in a read-only session', async () => {
+    listPendingInvitationsMock.mockResolvedValue(pendingInvitations());
+    setReadOnly(true);
+    renderPanel();
+
+    await screen.findByText('user-2', { exact: true });
+    expect(
+      screen.queryByRole('button', { name: /^Revoke invitation for / }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^Remove .* from organization$/ }),
+    ).not.toBeInTheDocument();
+    expectNoWrites();
+  });
+
   const sameNamedInvitations = () =>
     ['client-east', 'client-west'].map((orgId) => ({
       orgId,
@@ -321,7 +432,7 @@ describe('OrganizationAccessPanel', () => {
           ),
         );
       } else {
-        fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Remove user-2 from organization' }));
         await waitFor(() =>
           expect(removeMemberMock).toHaveBeenCalledWith(
             'org-a',
@@ -394,7 +505,9 @@ describe('OrganizationAccessPanel', () => {
       await screen.findByText('user-2');
       expect(screen.queryByRole('textbox', { name: 'Invite user ID' })).not.toBeInTheDocument();
       expect(screen.queryByRole('combobox', { name: 'Role for user-2' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /^Remove .* from organization$/ }),
+      ).not.toBeInTheDocument();
       expect(listPendingInvitationsMock).not.toHaveBeenCalled();
       expectNoWrites();
     },
