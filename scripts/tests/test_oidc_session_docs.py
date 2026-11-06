@@ -64,6 +64,51 @@ def assert_discovery_test_scope(case, handlers):
     case.assertIn("Client credentials and sign-in have not been tested.", success)
 
 
+def assert_refresh_source(case, auth, store):
+    # Follow the captured store through scheduling and conditional completion.
+    # The old free-function/global-write spellings cannot establish these
+    # claims after refresh ownership moved into SessionStore.
+    case.assertIn("store := GetSessionStore()", auth)
+    case.assertIn("session := store.GetSession(cookie.Value)", auth)
+    case.assertIn("go store.refreshOIDCSessionTokens(cfg, cookie.Value, session)", auth)
+    marker = "func (store *SessionStore) refreshOIDCSessionTokens("
+    case.assertIn(marker, auth)
+    refresh = auth.split(marker, 1)[1]
+    for expected in (
+        "attempt := store.beginOIDCRefresh(sessionToken, session)",
+        "defer store.endOIDCRefresh(sessionToken, attempt)",
+        "if oidcCfg == nil", "if err != nil",
+        "if !store.completeOIDCRefresh(sessionToken, attempt, nil)",
+        "if !store.completeOIDCRefresh(sessionToken, attempt, result)",
+    ):
+        case.assertIn(expected, refresh)
+    for forbidden in (
+        "GetSessionStore().InvalidateSession", "GetSessionStore().UpdateOIDCTokens",
+        "resolveGroupRoles", "AllowedGroups",
+    ):
+        case.assertNotIn(forbidden, refresh)
+
+    marker = "func (s *SessionStore) completeOIDCRefresh("
+    case.assertIn(marker, store)
+    completion = store.split(marker, 1)[1].split("// UpdateOIDCTokens", 1)[0]
+    for expected in (
+        "s.oidcRefreshes[key] != attempt", "session != attempt.session",
+        "!sameOIDCRefreshSource(session, &attempt.snapshot)",
+        "!now.Before(session.ExpiresAt)",
+        "if result == nil {", "delete(s.sessions, key)",
+        "session.OIDCRefreshToken = result.RefreshToken",
+        "session.OIDCAccessTokenExp = result.Expiry",
+        "session.ExpiresAt = now.Add(session.OriginalDuration)",
+        "s.mu.Unlock()\n\ts.save()", "return true",
+    ):
+        case.assertIn(expected, completion)
+    invalidation, success = completion.split("if result == nil {", 1)[1].split("} else {", 1)
+    case.assertIn("delete(s.sessions, key)", invalidation)
+    case.assertIn("session.OIDCRefreshToken = result.RefreshToken", success)
+    case.assertNotIn("defer s.mu.Unlock()", completion)
+    case.assertLess(completion.index("s.save()"), completion.index("return true"))
+
+
 class OIDCSessionDocsTest(unittest.TestCase):
     def test_setup_orders_callback_and_access_before_cutover(self):
         assert_callback_setup(self, GUIDE.read_text())
@@ -173,14 +218,32 @@ class OIDCSessionDocsTest(unittest.TestCase):
         self.assertIn("now.After(session.ExpiresAt)", sliding)
         self.assertIn("session.ExpiresAt = now.Add(session.OriginalDuration)", sliding)
         auth = (ROOT / "internal/api/auth.go").read_text()
-        self.assertIn("go refreshOIDCSessionTokens(cfg, cookie.Value, session)", auth)
-        refresh = auth.split("func refreshOIDCSessionTokens(", 1)[1]
-        self.assertIn("if oidcCfg == nil", refresh)
-        self.assertIn("if err != nil", refresh)
-        self.assertIn("GetSessionStore().InvalidateSession(sessionToken)", refresh)
-        self.assertIn("GetSessionStore().UpdateOIDCTokens", refresh)
-        self.assertNotIn("resolveGroupRoles", refresh)
-        self.assertNotIn("AllowedGroups", refresh)
+        assert_refresh_source(self, auth, store)
+
+    def test_refresh_consistency_rejects_ownership_and_persistence_regressions(self):
+        auth = (ROOT / "internal/api/auth.go").read_text()
+        store = (ROOT / "internal/api/session_store.go").read_text()
+        mutations = (
+            ("auth", "go store.refreshOIDCSessionTokens(cfg, cookie.Value, session)",
+             "go GetSessionStore().refreshOIDCSessionTokens(cfg, cookie.Value, session)"),
+            ("auth", "if !store.completeOIDCRefresh(sessionToken, attempt, nil)", "if false"),
+            ("auth", "if !store.completeOIDCRefresh(sessionToken, attempt, result)", "if false"),
+            ("store", "session != attempt.session", "false"),
+            ("store", "if result == nil {\n\t\tdelete(s.sessions, key)",
+             "if result == nil {\n\t\t// Invalidation accidentally omitted"),
+            ("store", "session.OIDCRefreshToken = result.RefreshToken",
+             "// Rotated refresh token accidentally omitted"),
+            ("store", "s.mu.Unlock()\n\ts.save()\n\treturn true\n}", "s.mu.Unlock()\n\treturn true\n}"),
+            ("store", "s.mu.Unlock()\n\ts.save()\n\treturn true\n}", "s.save()\n\ts.mu.Unlock()\n\treturn true\n}"),
+        )
+        for source, before, after in mutations:
+            with self.subTest(source=source, regression=before):
+                original = auth if source == "auth" else store
+                self.assertIn(before, original)
+                changed = original.replace(before, after, 1)
+                with self.assertRaises(AssertionError):
+                    assert_refresh_source(self, changed if source == "auth" else auth,
+                                          changed if source == "store" else store)
 
     def test_claim_gating_and_targeted_removal_match_source(self):
         callback = (ROOT / "internal/api/oidc_handlers.go").read_text()
