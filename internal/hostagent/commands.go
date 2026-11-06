@@ -55,6 +55,15 @@ var (
 	reconnectJitterRatio = 0.1
 	reconnectRandFloat64 = rand.Float64
 
+	// How long an admitted session must stay up for its end to restart the
+	// reconnect backoff. Admission alone is not enough: Pulse evicts a session
+	// when another agent registers the same identity, so two agents sharing one
+	// would otherwise evict each other every reconnectDelay forever, dropping
+	// the live session each time. This must stay above reconnectDelay for that
+	// loop to back off, and it outlasts the first 30s keepalive so a connection
+	// that dies on that ping does not count as healthy.
+	healthySessionDuration = time.Minute
+
 	commandApprovalGrantRejectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "pulse_hostagent_command_approval_grant_rejections_total",
 		Help: "Total number of approval-required commands rejected by the host agent due to invalid approval grants.",
@@ -341,6 +350,9 @@ func (c *CommandClient) Run(ctx context.Context) error {
 				return ctx.Err()
 			}
 
+			if endedHealthySession(err) {
+				consecutiveFailures = 0
+			}
 			consecutiveFailures++
 			delay := computeReconnectDelay(consecutiveFailures)
 
@@ -380,11 +392,27 @@ func (c *CommandClient) Run(ctx context.Context) error {
 				return nil
 			case <-timer.C:
 			}
-		} else {
-			// Connection closed cleanly (shouldn't happen in normal operation)
-			consecutiveFailures = 0
 		}
 	}
+}
+
+// commandSessionEndedError is how connectAndHandle reports the end of a session
+// that reached the message loop, so Run can tell it from a failed attempt.
+type commandSessionEndedError struct {
+	uptime time.Duration
+	err    error
+}
+
+func (e *commandSessionEndedError) Error() string { return e.err.Error() }
+
+func (e *commandSessionEndedError) Unwrap() error { return e.err }
+
+// endedHealthySession reports whether err ended a session that stayed up for
+// healthySessionDuration. It reads the session that just ended rather than the
+// client's admission state, which stays set for the client's whole life.
+func endedHealthySession(err error) bool {
+	var ended *commandSessionEndedError
+	return errors.As(err, &ended) && ended.uptime >= healthySessionDuration
 }
 
 func (c *CommandClient) connectAndHandle(ctx context.Context) error {
@@ -498,8 +526,14 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	go c.pingLoop(ctx, conn, pingDone)
 	defer close(pingDone)
 
-	// Handle incoming messages
-	return c.handleMessages(ctx, conn)
+	// Handle incoming messages. The session's uptime starts here, after any
+	// action-runner activation, so a runner Pulse admits but cannot activate
+	// keeps backing off.
+	sessionStart := time.Now()
+	if err := c.handleMessages(ctx, conn); err != nil {
+		return &commandSessionEndedError{uptime: time.Since(sessionStart), err: err}
+	}
+	return nil
 }
 
 func (c *CommandClient) buildWebSocketURL() (string, error) {
