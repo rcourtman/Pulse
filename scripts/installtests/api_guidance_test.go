@@ -313,7 +313,7 @@ func TestPulseAPIGuidancePreparationIsPrivateAndFailClosed(t *testing.T) {
 func TestPulseAPIGuidanceHelperStopsBeforeCurlOnUnsafeFilesOrPreparation(t *testing.T) {
 	t.Parallel()
 	_, helper, _ := pulseAPIReference(t)
-	for _, mode := range []string{"missing", "file symlink", "config symlink", "directory symlink", "non-regular", "chmod failure", "mktemp failure", "unsupported method", "full URL", "extra argument"} {
+	for _, mode := range []string{"missing", "file symlink", "config symlink", "directory symlink", "non-regular", "chmod failure", "mktemp failure", "unsupported method", "unsupported standard method", "full URL", "extra argument"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			home, bin := t.TempDir(), t.TempDir()
@@ -361,9 +361,11 @@ func TestPulseAPIGuidanceHelperStopsBeforeCurlOnUnsafeFilesOrPreparation(t *test
 			call := "pulse_api GET /api/state/summary"
 			switch mode {
 			case "unsupported method":
-				// DELETE and PUT are supported by the existing RBAC recipes.
-				// Keep the rejection control outside that reviewed method set.
-				call = "pulse_api PATCH /api/actions/act_example"
+				// Use a deliberately nonstandard verb, not one a documented
+				// recipe can later support (as happened with DELETE and PATCH).
+				call = "pulse_api UNSUPPORTED /api/actions/act_example"
+			case "unsupported standard method":
+				call = "pulse_api TRACE /api/actions/act_example"
 			case "full URL":
 				call = "pulse_api GET https://not-this-instance.invalid/api/state"
 			case "extra argument":
