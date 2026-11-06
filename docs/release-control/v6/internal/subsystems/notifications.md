@@ -1902,3 +1902,37 @@ Owner callbacks must invoke the notifier outside their owner's locks whenever it
 lifecycle provider can query that owner. The monitor's asynchronous firing adapter
 and escalation wrapper satisfy this convention; a synchronous subscriber must not
 call the notifier while holding the alerts lock.
+
+`receipt_continuity_test.go` covers migration, severity/completion monotonicity,
+legacy uncertainty, cache eviction, destination separation, expiry, exact revert,
+all three transport retirement paths, pending/retryable/unreadable work and shutdown
+admission. `receipt_retention_continuity_test.go` promotes the independent real-HTTP
+one-day/31-day retention experiment; `notification_restart_continuity_test.go` in
+monitoring promotes its graceful reopen and two-native-process receiver controls,
+including owed recovery and a new occurrence. The old negative experiments remain
+unaltered evidence. These are synthetic queue/receiver controls, not original-estate,
+crash, signal-driven shutdown, installed-service or external-provider recovery.
+A late completion for a removed endpoint keeps its own receipt without publishing
+a cooldown for the replacement. A durable read of an older occurrence cannot
+evict the newer occurrence's cache entry. Explicit configuration changes invalidate
+the cache's destination scope; they do not permit recovery for a different endpoint.
+Configuration retirement is serialized separately from the manager's policy lock.
+Live policy and its shutdown lease are published first, then storage is updated
+without that lock; a blocked accepted enqueue cannot hide a channel-disable or
+destination change from its observers. Existing email-disable drain controls and
+`TestReceiptRetirementPublishesPolicyBeforeWaitingForQueue` pin this ordering and
+require the retirement write to survive shutdown. No read/retention gate is waived.
+
+### Destinations belong to the organization's managers (6 November 2026)
+
+An organization's owners and admins read and write its email, Apprise and webhook
+destinations, through that organization's manager and persistence. Nothing falls
+back to the default organization. Apprise CLI stays with instance administrators:
+a CLI target is a bare command-line argument, runs as this server and skips the
+outbound checks every other destination passes, so an organization manager reaches
+Apprise through an API server. Targets already saved as CLI targets may be saved
+again unchanged; targets saved under API mode may not be carried across.
+`NormalizeAppriseConfig` drops any target starting with a dash for everyone, since
+it would reach the CLI as an option such as `--attach`.
+`internal/notifications/apprise_argument_test.go` and
+`internal/api/notifications_org_authority_test.go` pin these.

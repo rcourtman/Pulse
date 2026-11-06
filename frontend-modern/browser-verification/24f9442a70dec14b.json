@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "571da6375e5891f30feb5ae319b22b49e1e7a1de",
+  "verified_at": "2026-11-06T09:09:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx": "ad5189ee2ba403ed89cde60127ee5ba49affc72fae321709a910c3d74cee90d8",
+    "frontend-modern/src/features/alerts/useAlertDestinationsState.ts": "b5601d42adf51f6a4e68a7f032a88e8e1e919e64fe284b35868b1d9bbd7d8be0",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts": "801aadc74b3b525ac6a16b098ff227b4c4e6e108f0a86eeecde568299f2ab91c"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Real v6.8.0-beta.1 provider install, opened from the portal as the client organization owner",
+    "Client runtime on v6.8.0-beta.1 first: \"Unable to load notification settings\", email, apprise and webhooks answer 403",
+    "Same client on a server built from this change: page loads at both widths, email, apprise, webhooks, health, delivery-log and templates answer 200",
+    "Relay is not licensed on this install, so the relay gate itself is proven by unit test, not by this walk"
+  ],
+  "interactions": [
+    "Turn on delivery: POST /api/alerts/activate 200 and the paused banner clears, on the earlier build of this change; delivery stayed on for this build",
+    "Add Webhook through the form: POST /api/notifications/webhooks 200, listed in the destinations",
+    "Save Apprise CLI target as the owner: 403 with the Apprise API server message",
+    "Test Apprise CLI with --attach=/etc/passwd as the owner: 403",
+    "Save empty Apprise defaults and email as the owner: 200",
+    "Queue, DLQ, system settings and tokens as the owner: 403",
+    "Sibling client has no webhook file after the save"
+  ]
+}

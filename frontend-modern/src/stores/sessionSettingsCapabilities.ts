@@ -43,6 +43,20 @@ export function sessionCanReadInfrastructureSettings(): boolean {
 }
 
 /**
+ * Mirrors the instance administration gate on /api/settings/relay. A provider
+ * opening a client workspace is that organization's owner, who manages its alert
+ * destinations but not the instance's relay, so the destinations page must not
+ * depend on it. Auth-free installs and unresolved sessions keep it, like the
+ * Infrastructure gate above.
+ */
+export function sessionCanReadRelaySettings(): boolean {
+  if (!sessionSettingsCapabilitiesResolved() || !sessionRequiresAuth()) {
+    return true;
+  }
+  return sessionSettingsCapabilities()?.relayRead === true;
+}
+
+/**
  * Mirrors the RequireAdmin + ai:execute gate on POST /api/ai/patrol/run, so a
  * surface that starts a Patrol run never offers one the route would refuse.
  * Auth-free installs pass: RequireAdmin leaves their routes reachable even

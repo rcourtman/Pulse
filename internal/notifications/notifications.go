@@ -652,7 +652,9 @@ func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	seen := make(map[string]struct{}, len(normalized.Targets))
 	for _, target := range normalized.Targets {
 		trimmed := strings.TrimSpace(target)
-		if trimmed == "" {
+		// A target is a destination. One starting with a dash would reach the
+		// Apprise CLI as an option, such as --attach with a server file.
+		if trimmed == "" || strings.HasPrefix(trimmed, "-") {
 			continue
 		}
 		lower := strings.ToLower(trimmed)
