@@ -118,43 +118,43 @@ permission exports, tokens, cookies and full responses private.
 
 ### Before Using the API
 
-Prefer **Settings → Security → Roles** and **Settings → Security → Users** for one-off administration.
-The API examples require the licensed `rbac` capability and permission to
-administer users. With RBAC enabled, role and user administration requires a
-full-access (`*`) API token bound to an authorised administrator; a monitoring
-token is not enough. Do not widen an agent's token for this job.
+Prefer **Settings → Security → Roles** and **Settings → Security → Users** for
+one-off changes. API calls need licensed `rbac`, permission to administer users and a
+full-access (`*`) token bound to an authorised administrator. A monitoring token
+is not enough. Do not widen an agent's token.
 
-If you already use an administration token, prepare its private header file
-and define `pulse_api` **in the same Bash session** using
-[API authentication](API.md#-authentication). The helper is local example code,
-not an installed Pulse command. Never paste the token or a session cookie into
-a command, URL or report, or use browser **Copy as cURL**.
+Use [API authentication](API.md#-authentication) to prepare a private header
+file and define `pulse_api` **in the same Bash session**. It is example code,
+not an installed Pulse command. Never paste tokens or session cookies into
+commands, URLs or reports, or use **Copy as cURL**. Use loopback on the Pulse
+host. Remotely, use that guide's HTTPS origin with certificate verification enabled.
 
-On the Pulse host, the helper uses loopback; for remote use, follow that guide's
-HTTPS-origin instructions and keep certificate verification enabled. It makes
-one request with a five-second connection limit and a twenty-second total limit,
-prints only the HTTP status and saves each response in a new owner-only file.
-Inspect the file privately, including on failure: role lists, user identities
-and errors can contain private information. Share only a relevant redacted
-excerpt, not full responses, header files or tokens. HTTP 401/402/403, redirects
-and transport errors are not an empty role or user list.
+The helper sends one request with five-second connection and twenty-second
+total limits. It prints only HTTP status and saves each response in a new
+owner-only file. Inspect errors and results privately. Share only a relevant
+redacted excerpt, not full responses, header files or tokens.
+HTTP 401/402/403, redirects and transport errors are not an empty role or user list.
 
-**These are separate operations, not a script to run from top to bottom.**
-Choose the intended target and change before making a request; preserve an
-existing administrator recovery path. Deleting a role or user and sending an
-empty role list remove access. After a change, check that target's saved roles
-and intended access through the normal UI or a separate read-only request.
-The helper does not follow redirects or retry. A timeout or partial response
-can occur **after the change was applied**; inspect the current state before
-deciding what to do, rather than repeating the mutation blindly. HTTP success
-alone does not establish the intended access or disable an upstream IdP account.
+**Choose each operation separately, not as a top-to-bottom script.** Keep an
+administrator recovery path. Deleting a role or user, or sending an empty role
+list, removes access. The helper does not follow redirects or retry. A partial
+response or timeout can follow an applied change. Check saved roles and intended
+access in the UI or a separate read before writing again. HTTP success does not
+prove access or disable an upstream IdP account.
+
+**Role PUT replaces the complete policy.** Read the existing role from
+`GET /api/admin/roles`. Preserve its exact ID, `parentId`, `priority`, and each
+permission's `effect` and `conditions`, except for intended changes. Missing
+`effect` means `allow`, not “keep deny”. Use lowercase `allow` or `deny`. Stop
+on failed reads or missing/null `permissions`. Coordinate writers.
+Re-read the list after saving, not just the write response.
 
 ### Creating a Role
 
 **UI:** Settings → Security → Roles → New Role
 
-Use a new custom role ID. Built-in roles (`admin`, `operator`, `viewer`,
-`auditor`) cannot be modified or deleted. These examples use `alert-manager`.
+Use a new role ID. Built-in roles (`admin`, `operator`, `viewer`,
+`auditor`) cannot be modified or deleted. These examples use the new `alert-manager`.
 
 **API:**
 ```bash
@@ -180,18 +180,17 @@ pulse_api GET /api/admin/roles
 
 ### Updating a Role
 
+**Full replacement.** [Preserve saved fields](#before-using-the-api).
+
 ```bash
 pulse_api PUT /api/admin/roles/alert-manager <<'JSON'
-  {
-    "name": "Alert Manager",
-    "description": "Updated description",
-    "permissions": [
-      {"action": "read", "resource": "alerts"},
-      {"action": "write", "resource": "alerts"},
-      {"action": "read", "resource": "nodes"},
-      {"action": "read", "resource": "ai"}
-    ]
-  }
+{ "permissions": [
+    {"action": "read", "resource": "alerts"},
+    {"action": "write", "resource": "alerts"},
+    {"action": "read", "resource": "nodes"},
+    {"action": "read", "resource": "ai"}
+  ], "name": "Alert Manager",
+  "description": "Updated description" }
 JSON
 ```
 
