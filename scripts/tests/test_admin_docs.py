@@ -276,13 +276,54 @@ class AdminDocsTest(unittest.TestCase):
 
     def test_rbac_guidance_preserves_private_and_uncertain_change_boundaries(self):
         guide = (DOCS / "RBAC.md").read_text()
+        readable = " ".join(guide.replace("**", "").split())
         for boundary in ("in the same Bash session", "not an installed Pulse command",
                          "owner-only file", "redacted", "five-second", "twenty-second",
-                         "not a script to run from top to bottom", "administrator recovery path",
-                         "empty role list remove access", "does not follow redirects or retry",
-                         "after the change was applied", "inspect the current state",
+                         "not as a top-to-bottom script", "administrator recovery path",
+                         "empty role list, removes access", "does not follow redirects or retry",
+                         "timeout can follow an applied change", "read before writing again",
                          "HTTP success", "upstream IdP account"):
-            self.assertIn(boundary, guide)
+            self.assertIn(boundary, readable)
+
+    def test_role_replacement_guidance_preserves_the_current_policy(self):
+        guide = (DOCS / "RBAC.md").read_text()
+        readable = " ".join(guide.replace("**", "").split())
+        for boundary in (
+            "Role PUT replaces the complete policy",
+            "existing role from `GET /api/admin/roles`",
+            "exact ID, `parentId`, `priority`",
+            "each permission's `effect` and `conditions`",
+            "Missing `effect` means `allow`, not “keep deny”",
+            "lowercase `allow` or `deny`",
+            "Stop on failed reads or missing/null `permissions`",
+            "Coordinate writers",
+            "Re-read the list after saving, not just the write response",
+            "examples use the new `alert-manager`",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, readable)
+        update = guide.split("### Updating a Role\n", 1)[1].split("### Deleting a Role\n", 1)[0]
+        self.assertIn("**Full replacement.** [Preserve saved fields](#before-using-the-api).", update)
+
+        # The live tenant store, not the legacy file manager, owns this policy.
+        provider = (ROOT / "internal/api/access_tenant_provider.go").read_text()
+        self.assertIn("auth.NewSQLiteManager(auth.SQLiteManagerConfig{", provider)
+        handler = (ROOT / "internal/api/access_control_handlers.go").read_text()
+        put = handler.split("case http.MethodPut:", 1)[1].split("case http.MethodDelete:", 1)[0]
+        self.assertIn("var role auth.Role", put)
+        self.assertIn("role.ID = roleID", put)
+        self.assertIn("manager.SaveRole(role)", put)
+        store = (ROOT / "pkg/auth/sqlite_manager.go").read_text()
+        save = store.split("func (m *SQLiteManager) SaveRoleWithContext(", 1)[1].split("func (m *SQLiteManager) getRoleUnsafe(", 1)[0]
+        for field in ("name", "description", "parent_id", "priority"):
+            self.assertIn(f"{field} = excluded.{field}", save)
+        self.assertIn('DELETE FROM rbac_permissions WHERE role_id = ?', save)
+        self.assertIn("effect := perm.GetEffect()", save)
+        self.assertIn("json.Marshal(perm.Conditions)", save)
+        role = (ROOT / "pkg/auth/rbac.go").read_text()
+        self.assertIn('if p.Effect == "" {\n\t\treturn EffectAllow', role)
+        evaluator = (ROOT / "pkg/auth/policy_evaluator.go").read_text()
+        self.assertIn("if len(perm.Conditions) == 0 {\n\t\treturn true", evaluator)
 
     def test_rbac_operations_keep_private_success_bodies_in_new_owner_only_files(self):
         steps = recipes("RBAC")
