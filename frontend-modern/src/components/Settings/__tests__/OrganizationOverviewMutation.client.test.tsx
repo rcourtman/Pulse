@@ -168,8 +168,9 @@ describe('Overview pending renames with the real store and HTTP client', () => {
     await waitFor(() => expect(writes()).toHaveLength(1));
     applied = true;
     completion.resolve(response(organization()));
+    await waitFor(() => expect(feedback.success).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByLabelText('Display Name')).toHaveValue(savedName));
-    expect(feedback.success).toHaveBeenCalledTimes(1);
+    expect(reads()).toHaveLength(5);
     expect(writes()).toHaveLength(1);
   });
 
