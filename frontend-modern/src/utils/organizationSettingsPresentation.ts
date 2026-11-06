@@ -85,7 +85,8 @@ export function getOrganizationDisplayNameUpdatedMessage(): string {
   return 'Organization name has been updated.';
 }
 
-export function getOrganizationOverviewManageRequiredMessage(): string {
+export function getOrganizationOverviewManageRequiredMessage(readOnly = false): string {
+  if (readOnly) return 'Organization details are read-only for this session.';
   return 'Admin or owner role required to update organization details.';
 }
 

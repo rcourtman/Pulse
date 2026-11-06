@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import { Button } from '@/components/shared/Button';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { formatOrgDate } from '@/utils/orgUtils';
 import { getOrganizationOverviewManageRequiredMessage } from '@/utils/organizationSettingsPresentation';
 import type { useOrganizationOverviewPanelState } from './useOrganizationOverviewPanelState';
@@ -61,7 +62,9 @@ export const OrganizationOverviewDetailsSection: Component<
             </Button>
           </div>
           <Show when={!props.state.canManageCurrentOrg()}>
-            <p class="text-xs text-muted">{getOrganizationOverviewManageRequiredMessage()}</p>
+            <p class="text-xs text-muted">
+              {getOrganizationOverviewManageRequiredMessage(presentationPolicyIsReadOnly())}
+            </p>
           </Show>
         </div>
       </div>

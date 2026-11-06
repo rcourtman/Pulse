@@ -119,6 +119,60 @@ const unchangedRefresh = async (kind = 'combined') => {
 // Use the production panel, capability/presentation stores, OrgsAPI and HTTP
 // client so a same-ID capability reset cannot be mistaken for an equal reader.
 describe('Overview pending renames with the real store and HTTP client', () => {
+  it.each([owner, 'viewer@example.test'])(
+    'explains read-only policy rather than missing membership for %s',
+    async (currentUser) => {
+      policy(true);
+      render(() => <OrganizationOverviewPanel currentUser={currentUser} />);
+
+      expect(
+        await screen.findByText('Organization details are read-only for this session.'),
+      ).toBeInTheDocument();
+      expect(screen.getByText(owner)).toBeInTheDocument();
+      expect(screen.getByText('owner')).toBeInTheDocument();
+      expect(screen.getByLabelText('Display Name')).toHaveValue('Operations');
+      expect(screen.getByLabelText('Display Name')).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(
+        screen.queryByText('Admin or owner role required to update organization details.'),
+      ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it('keeps role guidance for a writable nonmanager and updates it with current policy', async () => {
+    const [user, setUser] = createSignal('viewer@example.test');
+    render(() => <OrganizationOverviewPanel currentUser={user()} />);
+    const roleHint = 'Admin or owner role required to update organization details.';
+    const readOnlyHint = 'Organization details are read-only for this session.';
+
+    expect(await screen.findByText(roleHint)).toBeInTheDocument();
+    expect(screen.queryByText(readOnlyHint)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    policy(true);
+    expect(await screen.findByText(readOnlyHint)).toBeInTheDocument();
+    expect(screen.queryByText(roleHint)).not.toBeInTheDocument();
+    setUser(owner);
+    expect(await screen.findByText(readOnlyHint)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(writes()).toHaveLength(0);
+
+    policy(false);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+    expect(screen.queryByText(readOnlyHint)).not.toBeInTheDocument();
+    expect(screen.queryByText(roleHint)).not.toBeInTheDocument();
+    fireEvent.input(screen.getByLabelText('Display Name'), { target: { value: savedName } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    applied = true;
+    completion.resolve(response(organization()));
+    await waitFor(() => expect(screen.getByLabelText('Display Name')).toHaveValue(savedName));
+    expect(feedback.success).toHaveBeenCalledTimes(1);
+    expect(writes()).toHaveLength(1);
+  });
+
   it.each(
     ['directory', 'policy', 'capability'].flatMap((refresh) =>
       ['success', 'uncertain', 'mismatched response'].map((outcome) => ({ refresh, outcome })),
