@@ -5058,9 +5058,9 @@ func browserOriginMetadataMatches(req *http.Request, expected string, allowMissi
 
 // isCrossSiteBasicAuthWrite reports a write from another origin's page that would
 // authenticate with Basic credentials. A page cannot add those itself without
-// passing CORS, but a reverse proxy can add them to every request it forwards and a
-// browser resends ones it has cached for the site. They then arrive like a cookie,
-// with no session to bind a CSRF token to, so CheckCSRF cannot judge the request.
+// passing CORS, but a reverse proxy can add them to every request it forwards. They
+// then arrive like a cookie, with no session to bind a CSRF token to, so CheckCSRF
+// cannot judge the request.
 // The router admits an origin the operator listed before asking. "*" does not count,
 // because it grants no credentialed browser access.
 func isCrossSiteBasicAuthWrite(req *http.Request) bool {
