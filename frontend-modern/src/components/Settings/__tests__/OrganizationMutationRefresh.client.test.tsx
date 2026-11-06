@@ -27,6 +27,7 @@ const deferred = <T,>() => {
 };
 let completion: ReturnType<typeof deferred<Response>>;
 let applied = false;
+let failCapabilities = false;
 let mutationSignal: AbortSignal | undefined;
 const requests: { url: string; method: string }[] = [];
 const writes = () => requests.filter((request) => request.method === 'POST');
@@ -44,6 +45,7 @@ const writablePolicy = () =>
 beforeEach(async () => {
   completion = deferred<Response>();
   applied = false;
+  failCapabilities = false;
   mutationSignal = undefined;
   requests.length = 0;
   feedback.success.mockReset();
@@ -57,8 +59,10 @@ beforeEach(async () => {
     vi.fn(async (url: string, init: RequestInit) => {
       const method = init.method || 'GET';
       requests.push({ url, method });
-      if (url === '/api/license/runtime-capabilities')
+      if (url === '/api/license/runtime-capabilities') {
+        if (failCapabilities) throw new Error('Synthetic capability read failure');
         return response({ capabilities: ['multi_tenant'], limits: [], max_history_days: 7 });
+      }
       if (method === 'POST') {
         mutationSignal = init.signal as AbortSignal;
         return completion.promise;
@@ -158,6 +162,28 @@ describe('pending organization changes with the real capability store and HTTP c
     expect(reads()).toHaveLength(2);
     expect(writes()).toHaveLength(1);
   });
+
+  it.each(['access', 'sharing'] as const)(
+    'cancels %s when a forced capability refresh fails closed',
+    async (panel) => {
+      const { state, submit, ready } = open(panel);
+      await ready();
+      const change = submit();
+      await waitFor(() => expect(writes()).toHaveLength(1));
+      eventBus.emit('organizations_changed');
+      expect(mutationSignal?.aborted).toBe(false);
+      failCapabilities = true;
+      await loadRuntimeCapabilities(true);
+      expect(mutationSignal?.aborted).toBe(true);
+      expect(state.saving()).toBe(false);
+      expect(state.org()).toBeNull();
+      completion.reject(new Error('Late response after authority became unavailable'));
+      await change;
+      expect(feedback.success).not.toHaveBeenCalled();
+      expect(feedback.error).not.toHaveBeenCalled();
+      expect(writes()).toHaveLength(1);
+    },
+  );
 
   it.each(['access', 'sharing'] as const)(
     'cancels %s on a same-ID org switch because capabilities are withdrawn',

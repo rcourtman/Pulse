@@ -26,14 +26,17 @@ snapshot. An uncertain or mismatched ownership response keeps the existing
 unavailable state and explicit Reload recovery, not an automatic write retry.
 A never-settled write remains pending rather than being presented as rolled back.
 
-Actual organization/principal changes, entitlement or surface withdrawal,
-read-only posture and disposal still invalidate and cancel immediately. Old-reader
+Observed organization switches, reactive principal/entitlement or surface
+withdrawal, read-only posture and disposal still invalidate and cancel immediately.
+A silent organization-field change fails the live reader check at the next load
+or completion; this repair adds no observer for that pre-existing path. Old-reader
 feedback is suppressed; local cancellation does not undo a server-applied write.
 Expected organization, session/CSRF binding, no-retry requests, server authority
 and deliberate ownership confirmation remain unchanged. A production
 `org_switched` event clears runtime capabilities even for the same ID: that
 unknown-authority interval is withdrawal, not an equal-reader directory refresh.
-The runtime capability reset remains intact.
+The runtime capability reset remains intact. A failed forced capability refresh
+also cancels through the existing fail-closed Community fallback.
 
 The registered Access and Sharing panel tests exercise all ten plain mutation
 paths plus ownership confirmation, successful and uncertain completion, explicit
