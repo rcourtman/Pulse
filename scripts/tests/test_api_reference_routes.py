@@ -9,6 +9,7 @@ fails here instead of surfacing as a support question.
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import re
 import unittest
 
@@ -164,6 +165,36 @@ class APIReferenceRoutesTest(unittest.TestCase):
         audit = self.doc.split("## 🧾 Audit Log (Pro)", 1)[1].split("\n## ", 1)[0]
         self.assertNotIn("/api/security/validate-token", audit)
         self.assertIn("/api/security/validate-token", self.doc)
+
+    def test_token_create_explains_scope_defaults_without_widening_the_example(self) -> None:
+        create = self.doc.split("### Create API Token\n", 1)[1].split("### Edit API Token\n", 1)[0]
+        prose = " ".join(create.split())
+        self.assertIn("Omitting `scopes` or sending `null` requests full access (`*`)", prose)
+        self.assertIn("`[]` returns `400`", prose)
+        example = re.search(r"```json\n(.*?)\n```", create, re.S)
+        self.assertIsNotNone(example)
+        self.assertEqual(json.loads(example.group(1))["scopes"], ["monitoring:read"])
+        # These are Create defaults, not PATCH defaults or an authority bypass.
+        handler = read("internal/api/security_tokens.go")
+        self.assertIn("if raw == nil {\n\t\treturn []string{config.ScopeWildcard}, nil", handler)
+        self.assertIn("if len(requested) == 0 {\n\t\treturn nil, fmt.Errorf", handler)
+        self.assertEqual(read("frontend-modern/public/docs/API.md"), self.doc)
+
+    def test_token_edit_keeps_scope_changes_distinct_from_rename_and_rotation(self) -> None:
+        edit = self.doc.split("### Edit API Token\n", 1)[1].split("### Rotate API Token\n", 1)[0]
+        prose = " ".join(edit.split())
+        for rule in (
+            "Sending neither returns `400`",
+            "A rename keeps scopes when `scopes` is omitted or `null`",
+            "mixing `*` with other scopes return `400`",
+            "API-token callers changing scopes must hold every existing and requested scope",
+            "Changes apply on the token's next request",
+            "ID, secret, expiry and organization bindings stay unchanged",
+        ):
+            self.assertIn(rule, prose)
+        rotate = self.doc.split("### Rotate API Token\n", 1)[1].split("### Revoke Token\n", 1)[0]
+        self.assertIn("the old token stops working", rotate)
+        self.assertIn("metadata and expiry", rotate)
 
     def test_negative_controls_fail_when_reference_or_code_drift(self) -> None:
         # An invented scope on a route line is reported.
