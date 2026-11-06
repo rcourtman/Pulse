@@ -413,7 +413,7 @@ export function installProviderPlan(deps: ProviderPlanDeps): ProviderPlanControl
       if (manual) {
         deps.showToast(result.status === 'active'
           ? 'The updated plan could not be confirmed yet. Try again shortly.'
-          : 'No payment has reached this platform yet. It can take a minute after checkout.');
+          : 'No updated plan could be confirmed. If you just paid, it can take a minute after checkout.');
       }
       return false;
     } catch (error) {

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "parent": "eff066e7c665b9d3e199c72a507e729eab6ce55b",
+  "content_fingerprint": "56215c7bce784080",
+  "verified_blobs": {
+    "internal/cloudcp/portal/frontend/src/provider_plan.ts": "6f69010680786a7c2f577e156d70e7a428bc1983",
+    "internal/cloudcp/portal/dist/portal_app.js": "86d8cfaa8dcf4385b641af2e5b90fcec57b18aaf",
+    "internal/cloudcp/portal/dist/build_manifest.json": "92e2ab01d622de39899cd9210262fc6f8391b923"
+  },
+  "verified_at": "2026-11-06T22:25:18.286280+00:00",
+  "surface": "Embedded provider Plan manual-refresh feedback for paid and evaluation states",
+  "command": "pulse-worker-browser tmp/plan-refresh-proof/browser.cjs",
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "cases": {
+    "before": 8,
+    "after": 8
+  },
+  "result": "passed",
+  "fixture": "Actual portal.html and production-built portal_app.js/CSS. Synthetic authenticated bootstrap, plan and HTTP200 no_paid_subscription refresh via the real PortalAPI/controller. No live licence, provider, purchase or customer operation.",
+  "comparisons": "Same fixture, viewport, theme, scroll state and user click. One pending POST; Apply disabled then restored; entire plan markup retained. All16 captures opened with native view_image. The two-line toast has unchanged geometry; no control or detail moved or hidden.",
+  "captures": {
+    "count": 16,
+    "pairs": "Current Web outcome CAPTURE-PAIRS.json; original PNGs under captures/."
+  },
+  "limits": "No installed or original-client recovery, payment status, production exposure, provider operation, delivery or release is established. Portal lies outside the main-frontend guard classifier; its skip is not this browser proof."
+}

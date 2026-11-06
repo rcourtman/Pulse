@@ -243,6 +243,51 @@ describe('installProviderPlan', () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
+  it.each(['no_paid_subscription', 'unknown', undefined])(
+    'does not infer payment history or discard a saved paid plan from refresh status %s',
+    async (status) => {
+      const paid = evaluationPlan({ plan_version: 'msp_solo', evaluation: false, license_id: 'lic_paid', workspace_limit: 3 });
+      api.fetchPlan = vi.fn().mockResolvedValue(paid);
+      api.refreshLicense = vi.fn().mockResolvedValue({ status });
+      const { controller } = install(providerBootstrap());
+      await controller.load();
+      const savedHTML = document.getElementById(PROVIDER_PLAN_ROOT_ID)!.innerHTML;
+      click('[data-provider-plan-action="refresh"]');
+      await flush();
+      expect(toast).toHaveBeenCalledExactlyOnceWith('No updated plan could be confirmed. If you just paid, it can take a minute after checkout.');
+      expect(controller.view().plan).toEqual(paid);
+      expect(document.getElementById(PROVIDER_PLAN_ROOT_ID)!.innerHTML).toBe(savedHTML);
+      expect(api.refreshLicense).toHaveBeenCalledExactlyOnceWith('a_1');
+      expect(api.fetchPlan).toHaveBeenCalledTimes(1);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(timers).toHaveLength(0);
+    },
+  );
+
+  it('keeps the checkout-delay hint and evaluation offers after an unconfirmed manual refresh', async () => {
+    const { controller } = install(providerBootstrap());
+    await controller.load();
+    const savedHTML = document.getElementById(PROVIDER_PLAN_ROOT_ID)!.innerHTML;
+    click('[data-provider-plan-action="refresh"]');
+    await flush();
+    expect(toast).toHaveBeenCalledExactlyOnceWith('No updated plan could be confirmed. If you just paid, it can take a minute after checkout.');
+    expect(controller.view().plan).toEqual(evaluationPlan());
+    expect(document.getElementById(PROVIDER_PLAN_ROOT_ID)!.innerHTML).toBe(savedHTML);
+    expect(api.refreshLicense).toHaveBeenCalledExactlyOnceWith('a_1');
+    expect(timers).toHaveLength(0);
+  });
+
+  it('keeps the existing retry message when an active refresh cannot be confirmed', async () => {
+    api.refreshLicense = vi.fn().mockResolvedValue({ status: 'active' });
+    const { controller } = install(providerBootstrap());
+    await controller.load();
+    click('[data-provider-plan-action="refresh"]');
+    await flush();
+    expect(toast).toHaveBeenCalledExactlyOnceWith('The updated plan could not be confirmed yet. Try again shortly.');
+    expect(controller.view().plan).toEqual(evaluationPlan());
+    expect(timers).toHaveLength(0);
+  });
+
   it('applies a purchase after checkout returns and shows the new plan once the platform restarts', async () => {
     api.refreshLicense = vi.fn()
       .mockResolvedValueOnce({ status: 'no_paid_subscription' })
