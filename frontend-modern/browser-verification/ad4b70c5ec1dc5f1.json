@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "c992227132c08d9d738cc2f40373564657239e92",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "1d67e47de077be4ec3a4671177609d06d27c60d71fc9e47ae874d2eb748fb8dd"
+  },
+  "routes": [
+    "Settings > Access > Single Sign-On Providers (production panel in inert shell)"
+  ],
+  "states": [
+    "Persisted save, toggle and delete followed by502, blocked repeat, failed inventory read and successful saved-state check",
+    "Warning punctuation before/after at desktop1440x1000/light+narrow320x844/dark Chromium and desktop1440x1000/dark+narrow320x844/light WebKit"
+  ],
+  "interactions": [
+    "12 final cases keep writes at one while explicit failed then valid inventory reads reach three total",
+    "Safe HTTP fixture uses real production hook/API client, saved result, modal, controls and CSS",
+    "All18 retained before/after captures opened with native view_image. No viewport information/control loss. Four failed-read pairs byte-identical."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-06T06:25:32.720883Z",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0",
+    "Playwright 1.56.1 (integration lock parity)"
+  ],
+  "limits": "Current copy correction acceptance; imported uncertainty hook/browser receipt is unchanged. Safe fixture shell, not installed Settings, IdP sign-in, original Authentik recovery or release acceptance. Previous failed fixture attempt retained; no check relaxed. One narrow-save pair differs in bytes without a discernible loss and is retained without a diagnosis."
+}
