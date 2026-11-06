@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createEffect, onCleanup } from 'solid-js';
 import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -70,6 +70,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     providers,
     loading,
     loadError,
+    unconfirmedChange,
     loadProviders,
     loadingDetails,
     canEdit,
@@ -106,6 +107,42 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     fetchMetadataPreview,
   } = useSSOProvidersState(props);
   let metadataPreviewButton: HTMLButtonElement | undefined;
+  let recoveryNotice: HTMLDivElement | undefined;
+  let recoveryFocusTimer: number | undefined;
+  createEffect(() => {
+    const unconfirmed = unconfirmedChange();
+    // A cancelled draft/confirmation reveals the same recovery in the panel.
+    showModal();
+    deleteConfirm();
+    window.clearTimeout(recoveryFocusTimer);
+    if (unconfirmed) {
+      recoveryFocusTimer = window.setTimeout(() => {
+        if (unconfirmedChange()) recoveryNotice?.focus();
+      }, 0);
+    }
+  });
+  onCleanup(() => window.clearTimeout(recoveryFocusTimer));
+
+  const InventoryCheckNotice: Component<{ lastRead?: boolean }> = (notice) => (
+    <InlineNotice ref={recoveryNotice} tabindex={-1} role="alert" tone="warning">
+      <p>{unconfirmedChange()}</p>
+      <Show when={notice.lastRead && providers().length > 0}>
+        <p class="text-xs">
+          Providers below are from the last successful read; their current settings are unknown.
+        </p>
+      </Show>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        class="min-h-11 underline underline-offset-2 sm:min-h-0"
+        disabled={loading() || mutating()}
+        onClick={() => void loadProviders()}
+      >
+        {loading() ? 'Checking saved providers…' : 'Check saved providers'}
+      </Button>
+    </InlineNotice>
+  );
 
   return (
     <div class="space-y-6">
@@ -148,6 +185,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         </Show>
 
         {/* Content */}
+        <Show when={unconfirmedChange() && !showModal() && !deleteConfirm()}>
+          <InventoryCheckNotice lastRead />
+        </Show>
         <Show when={loading()}>
           <div class="flex items-center gap-3 text-sm text-muted">
             <LoadingSpinner size="md" tone="current" />
@@ -160,7 +200,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             role="alert"
             tone="danger"
             layout="banner"
-            actionLabel="Retry"
+            actionLabel={unconfirmedChange() ? undefined : 'Retry'}
             actionOnClick={() => void loadProviders()}
           >
             {getSSOProvidersLoadErrorMessage()} Configured providers are unknown.
@@ -317,7 +357,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             </div>
 
             <fieldset
-              disabled={saving()}
+              disabled={saving() || !!unconfirmedChange()}
               class="min-w-0 min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6"
             >
               {/* Common fields */}
@@ -828,6 +868,16 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
             {/* Keep feedback and recovery actions inside the active modal, clear of toasts. */}
             <div class="relative z-10 shrink-0 space-y-3 border-t border-border bg-surface p-4 sm:px-6">
+              <Show when={unconfirmedChange()}>
+                <p
+                  ref={recoveryNotice}
+                  tabindex={-1}
+                  role="alert"
+                  class="text-sm text-amber-800 dark:text-amber-200"
+                >
+                  Save unconfirmed. It may already have been applied.
+                </p>
+              </Show>
               <Show when={editorFeedback()} keyed>
                 {(feedback) => (
                   <p
@@ -853,15 +903,34 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  isLoading={saving()}
-                  disabled={saving() || testing() || loadingPreview()}
+                <Show
+                  when={unconfirmedChange()}
+                  fallback={
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="md"
+                      isLoading={saving()}
+                      disabled={saving() || testing() || loadingPreview()}
+                    >
+                      {saving()
+                        ? 'Saving...'
+                        : editingProvider()
+                          ? 'Save Changes'
+                          : 'Create Provider'}
+                    </Button>
+                  }
                 >
-                  {saving() ? 'Saving...' : editingProvider() ? 'Save Changes' : 'Create Provider'}
-                </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    disabled={loading() || mutating()}
+                    onClick={() => void loadProviders()}
+                  >
+                    Close draft and check providers
+                  </Button>
+                </Show>
               </div>
             </div>
           </form>
@@ -882,6 +951,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               This will permanently delete this SSO provider. Users will no longer be able to sign
               in using this provider.
             </p>
+            <Show when={unconfirmedChange()}>
+              <div class="mb-4">
+                <InventoryCheckNotice />
+              </div>
+            </Show>
             <div class="flex justify-end gap-3">
               <Button
                 type="button"
@@ -895,7 +969,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Button
                 type="button"
                 onClick={() => handleDelete(deleteConfirm()!)}
-                disabled={mutating()}
+                disabled={mutating() || !!unconfirmedChange()}
                 variant="danger"
                 size="md"
               >

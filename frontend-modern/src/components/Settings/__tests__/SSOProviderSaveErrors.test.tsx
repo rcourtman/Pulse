@@ -15,6 +15,7 @@ vi.mock('@/stores/notifications', () => ({
 const guidance =
   'Could not initialise the sign-in provider. Check its settings, metadata and TLS trust, then try again. No configuration was saved.';
 const fallback = 'Unable to save the SSO provider. Check the connection and try saving again.';
+const unconfirmedMessage = 'Save unconfirmed. It may already have been applied.';
 const canary = 'SYNTHETIC_PRIVATE_RESPONSE_DETAIL';
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -51,12 +52,14 @@ const scenarios = [
   {
     name: 'HTML gateway error',
     response: () => new Response(`<html><body>${canary}</body></html>`, { status: 502 }),
-    expected: 'Unable to save the SSO provider: Request failed with status 502',
+    expected: unconfirmedMessage,
+    unconfirmed: true,
   },
   {
     name: 'malformed JSON',
     response: () => new Response('{"error":', { status: 500 }),
-    expected: fallback,
+    expected: unconfirmedMessage,
+    unconfirmed: true,
   },
   {
     name: 'oversized message',
@@ -68,7 +71,8 @@ const scenarios = [
     response: () => {
       throw new Error(canary);
     },
-    expected: fallback,
+    expected: unconfirmedMessage,
+    unconfirmed: true,
   },
   {
     name: 'CSRF refusal without hidden replay',
@@ -98,7 +102,9 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
   });
 
   for (const editing of [false, true]) {
-    it.each(scenarios)(`${editing ? 'edit' : 'create'}: $name`, async ({ response, expected }) => {
+    it.each(scenarios)(`${editing ? 'edit' : 'create'}: $name`, async (scenario) => {
+      const { response, expected } = scenario;
+      const unconfirmed = 'unconfirmed' in scenario && scenario.unconfirmed;
       const provider = {
         id: 'recovery',
         name: 'Original provider',
@@ -154,10 +160,11 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       const form = save.closest('form')!;
       fireEvent.submit(form);
       expect(await dialog.findByRole('alert')).toHaveTextContent(expected);
-      expect(dialog.getByRole('alert').textContent).toBe(expected);
+      if (!unconfirmed) expect(dialog.getByRole('alert').textContent).toBe(expected);
       expect(dialog.getByRole('alert')).not.toHaveTextContent(canary);
       expect(name.value).toBe('Retained draft');
-      expect(save).toBeEnabled();
+      if (unconfirmed) expect(save).not.toBeInTheDocument();
+      else expect(save).toBeEnabled();
       expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled();
       expect(successMock).not.toHaveBeenCalled();
       const writes = () =>
@@ -167,6 +174,16 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       expect(JSON.stringify(loggerErrorMock.mock.calls)).not.toContain('initialization_error');
 
       reject = false;
+      if (unconfirmed) {
+        fireEvent.submit(form);
+        expect(writes()).toHaveLength(1);
+        fireEvent.click(dialog.getByRole('button', { name: 'Close draft and check providers' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Add OIDC' })).toBeEnabled());
+        expect(writes()).toHaveLength(1);
+        expect(successMock).not.toHaveBeenCalled();
+        return;
+      }
       fireEvent.submit(form);
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
       expect(writes()).toHaveLength(2);

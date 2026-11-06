@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d03ec8e19b5f4b3e62f0486caf52ca2f1dc0e48f",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "e896760a5f8fdf2eb5579cb4347262090c1945efa636c1ffbd44f61d7a118cae",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "e93e73f7edf848b7c3f3e1450ee91d71ac957a3bd7e973087cea470ce24dd660"
+  },
+  "routes": [
+    "Settings > Access > Single Sign-On Providers (production panel in inert Access shell)"
+  ],
+  "states": [
+    "Current saved provider inventory; unconfirmed edit, enable/disable and deletion; failed saved-inventory check; valid read of persisted rename, disabled provider and confirmed empty inventory",
+    "Desktop1440x1000/light and narrow320x844/dark Chromium; desktop1440x1000/dark and narrow320x844/light WebKit",
+    "Same initial states byte-identical; narrow edit retains Provider Name, Display Name, callback, Issuer URL and Client ID at their original positions"
+  ],
+  "interactions": [
+    "Real production hook and API client submit one mutation; secret-free HTTP fixture persists it before returning502",
+    "No repeat mutation from stale submit/click, no automatic inventory read, and no private-response text",
+    "Explicit saved-inventory check closes the draft without resubmission; failed read keeps mutations blocked; next valid read restores accurate controls",
+    "New details read uses saved provider, omits saved secret, and closes through native Cancel",
+    "12 native alert focus observations and native inspection of16 before/40 after captures;16 comparable pairs"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-06T05:01:07.361908Z",
+  "browsers": [
+    "141.0.7390.37",
+    "26.0",
+    "Playwright 1.56.1 (integration lock parity)"
+  ],
+  "limits": "Production panel/hook/API client/shared modal/toast/controls/CSS with secret-free HTTP in a fixture shell, not complete installed Settings, native IdP sign-in, persistence/restart or existing-client recovery. Earlier larger-warning pixels rejected; retained separately."
+}

@@ -62,6 +62,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [loadingPreview, setLoadingPreview] = createSignal(false);
 
   const [loadError, setLoadError] = createSignal(false);
+  const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
   const [providersLoaded, setProvidersLoaded] = createSignal(false);
   const [loadingDetails, setLoadingDetails] = createSignal(false);
   const [mutating, setMutating] = createSignal(false);
@@ -87,7 +88,12 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     selectedManagement() === managementAllowed();
   const canManage = () => contextIsCurrent() && managementAllowed();
   const canEdit = () =>
-    canManage() && providersLoaded() && !loading() && !loadError() && !mutating();
+    canManage() &&
+    providersLoaded() &&
+    !loading() &&
+    !loadError() &&
+    !unconfirmedChange() &&
+    !mutating();
   const isCurrentProvider = (provider: SSOProvider) => providers().includes(provider);
   const requestOptions = (controller: AbortController) => ({
     signal: controller.signal,
@@ -149,7 +155,13 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   );
 
   const loadProviders = async () => {
-    if (!contextIsCurrent() || readController) return;
+    if (!contextIsCurrent() || readController || (unconfirmedChange() && mutating())) return;
+    // Only an explicit inventory check releases an uncertain write's draft.
+    // Reading never resubmits it, and a failed read must keep writes blocked.
+    if (unconfirmedChange()) {
+      clearEditor();
+      setDeleteConfirmValue(null);
+    }
     const version = contextVersion;
     const controller = new AbortController();
     const isCurrent = () =>
@@ -188,6 +200,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         throw new Error('Invalid provider inventory');
       setProviders(data.providers);
       setProvidersLoaded(true);
+      setUnconfirmedChange(null);
       setPublicUrl(window.location.origin);
       // The optional public URL is not evidence that a provider read failed.
       try {
@@ -224,6 +237,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       clearEditor();
       setProviders([]);
       setProvidersLoaded(false);
+      setUnconfirmedChange(null);
       setPublicUrl('');
       setDeleteConfirmValue(null);
       setSaving(false);
@@ -311,6 +325,21 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     };
   };
 
+  const isDefiniteRefusal = (status: number) =>
+    [400, 401, 403, 404, 409, 422, 429].includes(status);
+  const requireInventoryCheck = (operation: 'save' | 'deletion' | 'update') => {
+    // A network/gateway/server failure is not evidence of server-side rollback.
+    // Retain the draft and last-read cards, but do not invite another write.
+    clearPreviewAndTest();
+    batch(() => {
+      setEditorFeedback(null);
+      setProvidersLoaded(false);
+      setUnconfirmedChange(
+        `The provider ${operation} could not be confirmed. It may already have been applied. Check saved providers before making another change.`,
+      );
+    });
+  };
+
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
     if (!showModal() || testing() || loadingPreview()) return;
@@ -335,7 +364,15 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       );
       if (!mutation.isCurrent()) return;
       if (!response.ok) {
-        const error = await apiErrorFromResponse(response);
+        if (!isDefiniteRefusal(response.status)) {
+          requireInventoryCheck('save');
+          logger.error('[SSOProvidersPanel] Provider save could not be confirmed.', {
+            status: response.status,
+          });
+          return;
+        }
+        // The refusal is known even if its optional guidance cannot be read.
+        const error = await apiErrorFromResponse(response).catch(() => undefined);
         if (!mutation.isCurrent()) return;
         setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage(error) });
         logger.error('[SSOProvidersPanel] Failed to save provider.', { status: response.status });
@@ -349,7 +386,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       if (!mutation.isCurrent()) return;
       // A lost response cannot establish whether the server saved the change.
       logger.error('[SSOProvidersPanel] Failed to save provider.');
-      setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage() });
+      requireInventoryCheck('save');
     } finally {
       mutation.finish();
     }
@@ -372,7 +409,12 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         },
       );
       if (!mutation.isCurrent()) return;
-      if (!response.ok) throw new Error('Provider deletion refused');
+      if (!response.ok) {
+        if (isDefiniteRefusal(response.status))
+          notificationStore.error(getSSOProviderDeleteErrorMessage());
+        else requireInventoryCheck('deletion');
+        return;
+      }
       notificationStore.success(getSSOProviderDeleteSuccessMessage());
       setDeleteConfirmValue(null);
       await loadProviders();
@@ -380,7 +422,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     } catch {
       if (!mutation.isCurrent()) return;
       logger.error('[SSOProvidersPanel] Failed to delete provider.');
-      notificationStore.error(getSSOProviderDeleteErrorMessage());
+      requireInventoryCheck('deletion');
     } finally {
       mutation.finish();
     }
@@ -416,14 +458,19 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         },
       );
       if (!mutation.isCurrent()) return;
-      if (!response.ok) throw new Error('Provider update refused');
+      if (!response.ok) {
+        if (isDefiniteRefusal(response.status))
+          notificationStore.error(getSSOProviderToggleErrorMessage());
+        else requireInventoryCheck('update');
+        return;
+      }
       notificationStore.success(getSSOProviderToggleSuccessMessage(!provider.enabled));
       await loadProviders();
       if (mutation.isCurrent()) props.onConfigUpdated?.();
     } catch {
       if (!mutation.isCurrent()) return;
       logger.error('[SSOProvidersPanel] Failed to toggle provider.');
-      notificationStore.error(getSSOProviderToggleErrorMessage());
+      requireInventoryCheck('update');
     } finally {
       mutation.finish();
     }
@@ -563,6 +610,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     providers,
     loading,
     loadError,
+    unconfirmedChange,
     loadProviders,
     loadingDetails,
     canEdit,
