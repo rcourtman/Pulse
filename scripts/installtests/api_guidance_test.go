@@ -40,6 +40,7 @@ func pulseAPIRequestContracts() []pulseAPIRequestContract {
 		{"events", "pulse_api GET /api/audit/actions/act_.../events", "GET", "/api/audit/actions/act_.../events", ""},
 		{"add-node", `pulse_api POST /api/config/nodes < "$node_request_file"`, "POST", "/api/config/nodes", "file"},
 		{"validate-token", `pulse_api POST /api/security/validate-token < "$body_file"`, "POST", "/api/security/validate-token", "editor"},
+		{"token-inventory", "pulse_api GET /api/security/tokens", "GET", "/api/security/tokens", ""},
 	}
 }
 
@@ -158,6 +159,7 @@ func TestPulseAPIGuidanceRecipeCatalogueIsCompleteAndOrderIndependent(t *testing
 		{"changed node input", strings.Replace(doc, `pulse_api POST /api/config/nodes < "$node_request_file"`, "pulse_api POST /api/config/nodes", 1), "lacks a transport fixture"},
 		{"changed validation method", strings.Replace(doc, "pulse_api POST /api/security/validate-token", "pulse_api GET /api/security/validate-token", 1), "lacks a transport fixture"},
 		{"changed validation input", strings.Replace(doc, `pulse_api POST /api/security/validate-token < "$body_file"`, "pulse_api POST /api/security/validate-token", 1), "lacks a transport fixture"},
+		{"changed recovery method", strings.Replace(doc, "pulse_api GET /api/security/tokens\n", "pulse_api POST /api/security/tokens\n", 1), "lacks a transport fixture"},
 		{"extra compound request", strings.Replace(doc, "  pulse_api POST /api/security/validate-token", "  pulse_api GET /api/state/summary\n  pulse_api POST /api/security/validate-token", 1), "exactly one"},
 		{"missing compound request", strings.Replace(doc, `  pulse_api POST /api/security/validate-token < "$body_file"`, "  :", 1), "exactly one"},
 	}
