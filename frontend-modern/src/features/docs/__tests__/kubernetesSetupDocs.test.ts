@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { renderDocMarkdown } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const repoRoot = path.resolve(frontendRoot, '..');
@@ -29,11 +29,7 @@ function canReadMetrics(role: Role, resource: string) {
   );
 }
 
-function articleFor(name: string) {
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(readDoc(name), name);
-  return article;
-}
+const articleFor = createGuideFixture(readDoc);
 
 describe('Kubernetes credential setup and diagnosis', () => {
   it.each([

@@ -2,18 +2,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { renderDocMarkdown } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
-function renderGuide(name: string): HTMLElement {
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(
-    readFileSync(path.join(repoRoot, 'frontend-modern/public/docs', `${name}.md`), 'utf8'),
-    name,
-  );
-  return article;
-}
+const renderGuide = createGuideFixture((name) =>
+  readFileSync(path.join(repoRoot, 'frontend-modern/public/docs', `${name}.md`), 'utf8'),
+);
 
 function section(article: HTMLElement, id: string): HTMLElement {
   const heading = article.querySelector(`#${id}`);

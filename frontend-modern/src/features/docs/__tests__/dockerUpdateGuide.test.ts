@@ -3,15 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { renderDocMarkdown } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const guide = readFileSync(path.join(repoRoot, 'docs/DOCKER.md'), 'utf8');
 
-function renderGuide(): HTMLElement {
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(guide, 'DOCKER');
-  return article;
-}
+const renderDocument = createGuideFixture(() => guide);
+const renderGuide = () => renderDocument('DOCKER');
 
 function section(article: HTMLElement, id: string): string {
   const heading = article.querySelector(`#${id}`);
