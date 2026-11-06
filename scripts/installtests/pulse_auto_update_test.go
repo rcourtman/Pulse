@@ -163,6 +163,38 @@ func TestAutoUpdateDownloadFailures(t *testing.T) {
 	}
 }
 
+// Competing invocations use the same real installation-directory lock, even
+// through an alias. No host manager, network or published installer is used.
+func TestAutoUpdateTransactionLock(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_auto_update_service_state.py"), "-v", "UpdateTransactionLock")
+	cmd.Env = append(os.Environ(), "PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("updater transaction lock controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_same_directory_refuses_competing_transaction",
+		"test_directory_alias_cannot_start_a_second_transaction",
+		"test_independent_installations_do_not_block_each_other",
+		"test_lock_is_released_after_success_and_failed_installation",
+		"test_unavailable_or_missing_lock_has_no_service_or_installer_action",
+		"test_service_observation_refusal_releases_the_early_lock",
+		"test_non_directory_or_missing_installation_never_starts_a_transaction",
+	} {
+		passed := false
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, name+" (") && strings.HasSuffix(line, " ... ok") {
+				passed = true
+			}
+		}
+		if !passed {
+			t.Fatalf("required updater transaction control %s did not pass:\n%s", name, out)
+		}
+	}
+}
+
 // Service-state admission is independent of the signed/metadata transaction
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {

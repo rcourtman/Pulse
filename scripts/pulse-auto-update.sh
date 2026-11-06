@@ -591,6 +591,29 @@ perform_update() {
         log error "Refusing to install prerelease version $new_version via unattended updater"
         return 1
     fi
+
+    # systemd serializes one unit, not direct invocations or differently named
+    # timers using the same installation. Hold its directory inode through
+    # backup, replacement and recovery. This also covers symlink aliases,
+    # creates no stale lock file and never waits behind another transaction.
+    local update_lock_fd=""
+    if ! command -v flock >/dev/null 2>&1; then
+        log error "flock is required for the auto-update lock; no update attempted"
+        return 1
+    fi
+    if [[ ! -d "$INSTALL_DIR" ]] || ! { exec {update_lock_fd}< "$INSTALL_DIR"; } 2>/dev/null; then
+        log error "Cannot open the installed Pulse directory for locking; no update attempted"
+        return 1
+    fi
+    if ! flock --exclusive --nonblock "$update_lock_fd"; then
+        exec {update_lock_fd}<&-
+        log error "Auto-update directory lock is busy or unavailable; no update attempted"
+        return 1
+    fi
+    # Early service-state refusals must release the descriptor too. The full
+    # transaction trap below takes over only after that observation succeeds.
+    trap 'trap - RETURN; exec {update_lock_fd}<&-' RETURN
+
     local installer_tmp=""
     local signature_tmp=""
     local backup_dir=""
@@ -619,7 +642,7 @@ perform_update() {
     # trap is not scoped to the function that set it, so leaving it installed
     # makes it re-run when any later function returns — with these locals gone
     # that aborted the updater under set -u after a successful update (#2128).
-    trap 'trap - RETURN; rm -f -- "${installer_tmp:-}" "${signature_tmp:-}" "${restore_files[@]}"; if [[ -n "$backup_dir" && "$retain_backup" == "false" ]]; then rm -rf -- "$backup_dir"; fi; if [[ "$restart_allowed" == "true" ]]; then ensure_service_restarted "$service_name" "$service_was_active"; fi' RETURN
+    trap 'trap - RETURN; rm -f -- "${installer_tmp:-}" "${signature_tmp:-}" "${restore_files[@]}"; if [[ -n "$backup_dir" && "$retain_backup" == "false" ]]; then rm -rf -- "$backup_dir"; fi; if [[ "$restart_allowed" == "true" ]]; then ensure_service_restarted "$service_name" "$service_was_active"; fi; exec {update_lock_fd}<&-' RETURN
 
     log info "Starting update to $new_version"
     
@@ -693,7 +716,7 @@ perform_update() {
            "PULSE_SERVICE_NAME=$service_name" \
            "PULSE_INSTALL_DIR=$INSTALL_DIR" \
            "PULSE_CONFIG_DIR=$CONFIG_DIR" \
-           bash "$installer_tmp" "${installer_args[@]}" 2>&1 | (
+           bash "$installer_tmp" "${installer_args[@]}" {update_lock_fd}<&- 2>&1 | (
            collector_status=0
            line=""
            # Drain even after a failed log write: closing this pipe early can

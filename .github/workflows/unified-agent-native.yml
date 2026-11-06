@@ -395,7 +395,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install bash gnu-tar gawk
+          brew install bash gnu-tar gawk flock
           linux_bash="$(brew --prefix bash)/bin/bash"
           test -x "$linux_bash"
           "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
@@ -419,6 +419,11 @@ jobs:
           test -x "$gnu_awk"
           "$gnu_awk" --version | grep -F 'GNU Awk' > /dev/null
           ln -s "$gnu_awk" "$fixture_bin/awk"
+          # The standalone systemd updater locks its installation directory.
+          # Supply the same flock interface only to these Linux-script fixtures.
+          fixture_flock="$(brew --prefix flock)/bin/flock"
+          test -x "$fixture_flock"
+          ln -s "$fixture_flock" "$fixture_bin/flock"
           printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
 
       # Observe the existing generated NAS watchdog/collector control before
