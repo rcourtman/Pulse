@@ -1,9 +1,13 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"reflect"
+	"regexp"
 	"testing"
 	"time"
 
@@ -72,6 +76,9 @@ func TestHistoryReadFilterPreservesSemantics(t *testing.T) {
 }
 
 func TestHistoryReadFilterAllocationBudget(t *testing.T) {
+	if historyReadAllocationTestInChild(t) {
+		return
+	}
 	for _, tc := range []struct {
 		name           string
 		size, retained int
@@ -99,9 +106,24 @@ func TestHistoryReadFilterAllocationBudget(t *testing.T) {
 			}
 		})
 	}
+	t.Run("extra-copy-control", func(t *testing.T) {
+		data, cutoff := historyReadFixture(2880, 2880, false)
+		var snapshot []MetricPoint
+		allocs := testing.AllocsPerRun(25, func() {
+			snapshot = filterMetricsByTime(data, cutoff)
+			snapshot = filterMetricsByTime(snapshot, cutoff)
+		})
+		t.Logf("intentional extra copy: retained=%d allocations=%.0f", len(snapshot), allocs)
+		if allocs <= 1 {
+			t.Fatal("allocation control did not detect a second snapshot")
+		}
+	})
 }
 
 func TestHistoryReadPublicAllocationBudget(t *testing.T) {
+	if historyReadAllocationTestInChild(t) {
+		return
+	}
 	history := NewMetricsHistory(1024, 4*time.Hour)
 	now := time.Now()
 	for i := 0; i < 512; i++ {
@@ -147,6 +169,31 @@ func TestHistoryReadPublicAllocationBudget(t *testing.T) {
 			}
 		})
 	}
+}
+
+// AllocsPerRun reads the process-wide Mallocs counter, not just allocations
+// made by its callback. Background work from other monitoring tests can run
+// even with GOMAXPROCS=1. Keep the original budgets and sample count, but run
+// each allocation test alone in this same binary, including its -race build.
+// Return true in the parent, which has already checked the child's result.
+func historyReadAllocationTestInChild(t *testing.T) bool {
+	t.Helper()
+	const childEnv = "PULSE_HISTORY_READ_ALLOCATION_CHILD"
+	if os.Getenv(childEnv) == t.Name() {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0],
+		"-test.run=^"+regexp.QuoteMeta(t.Name())+"$",
+		"-test.count=1", "-test.v", "-test.timeout=20s")
+	cmd.Env = append(os.Environ(), childEnv+"="+t.Name())
+	output, err := cmd.CombinedOutput()
+	t.Logf("isolated History allocation check:\n%s", output)
+	if err != nil {
+		t.Fatalf("isolated History allocation check: %v", err)
+	}
+	return true
 }
 
 func TestHistoryReadSnapshotsEverySeries(t *testing.T) {
