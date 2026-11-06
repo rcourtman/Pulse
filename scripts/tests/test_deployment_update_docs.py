@@ -23,6 +23,21 @@ def overview():
 
 
 class DeploymentUpdateDocsTest(unittest.TestCase):
+    def test_docker_summary_routes_to_recreation_not_a_restart(self):
+        summary = overview().split("## Summary\n", 1)[1].split("\n## ", 1)[0]
+        rows = [line for line in summary.splitlines() if line.startswith("| Docker |")]
+        self.assertEqual(len(rows), 1)
+        cells = [cell.strip() for cell in rows[0].strip("|").split("|")]
+        self.assertEqual(cells[:3], ["Docker", "Quick evaluation and container stacks",
+                                     "`/data` (bind mount / volume)"])
+        self.assertEqual(cells[3], "[Pull + recreate](#docker)")
+        # Keep the short entry connected to the existing state-preserving
+        # procedure rather than adding a second update recipe to the table.
+        docker = overview().split("### Docker\n", 1)[1].split("\n### ", 1)[0]
+        self.assertIn("](DOCKER.md#-updates)", docker)
+        self.assertIn("Pull and recreate only the Pulse service", docker)
+        self.assertIn("stopping if the pull fails", docker)
+
     def test_shipped_overview_matches_the_reviewed_guide(self):
         self.assertEqual(overview(), (ROOT / "frontend-modern/public/docs/DEPLOYMENT_MODELS.md")
                          .read_text(encoding="utf-8"))

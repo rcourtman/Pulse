@@ -8,7 +8,7 @@ Pulse supports multiple deployment models. This page clarifies what differs betw
 | --- | --- | --- | --- |
 | Proxmox VE LXC (installer) | Proxmox-first deployments | `/etc/pulse` | In-app updates supported |
 | systemd (bare metal / VM) | Traditional Linux hosts | `/etc/pulse` | In-app updates supported |
-| Docker | Quick evaluation and container stacks | `/data` (bind mount / volume) | Image pull + restart |
+| Docker | Quick evaluation and container stacks | `/data` (bind mount / volume) | [Pull + recreate](#docker) |
 | Kubernetes (Helm) | Cluster operators | `/data` (PVC) | Helm upgrade |
 | Provider-hosted MSP | Managed service providers, request-assisted | Provider control plane data plus one tenant data directory per client runtime | Provider control plane rollout plus per-client runtime rollout |
 
