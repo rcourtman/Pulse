@@ -15,6 +15,37 @@
 
 ## Purpose
 
+### Directory refreshes preserve pending access and sharing outcomes
+
+Organization Access and Sharing hold same-reader events, repeated effective
+presentation-policy updates and direct reloads behind a dispatched mutation.
+The accepted snapshot remains visible with Saving and disabled mutation controls;
+a refresh cannot undo server work or establish that it is safe to submit again.
+Success emits the existing organizations-changed event, obtaining one fresh
+snapshot. An uncertain or mismatched ownership response keeps the existing
+unavailable state and explicit Reload recovery, not an automatic write retry.
+A never-settled write remains pending rather than being presented as rolled back.
+
+Observed organization switches, reactive principal/entitlement or surface
+withdrawal, read-only posture and disposal still invalidate and cancel immediately.
+A silent organization-field change fails the live reader check at the next load
+or completion; this repair adds no observer for that pre-existing path. Old-reader
+feedback is suppressed; local cancellation does not undo a server-applied write.
+Expected organization, session/CSRF binding, no-retry requests, server authority
+and deliberate ownership confirmation remain unchanged. A production
+`org_switched` event clears runtime capabilities even for the same ID: that
+unknown-authority interval is withdrawal, not an equal-reader directory refresh.
+The runtime capability reset remains intact. A failed forced capability refresh
+also cancels through the existing fail-closed Community fallback.
+
+The registered Access and Sharing panel tests exercise all ten plain mutation
+paths plus ownership confirmation, successful and uncertain completion, explicit
+recovery, blocked repeats, direct reloads and true authority/lifetime withdrawal.
+Browser fixtures consume the production panels, state and HTTP client with
+delayed safe responses at desktop/narrow viewports. These are source safeguards,
+not original SSO, secret, tenant or installed-client recovery. Organization
+Overview display-name saving remains outside this bounded two-panel repair.
+
 ### Invitation decisions identify the exact organization
 
 Your Invitations shows each organization's display name **and** ID beside its

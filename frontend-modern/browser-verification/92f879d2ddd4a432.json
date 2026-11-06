@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "289ef78a3b73e8699941432adb48814ab2f5474c",
+  "verified_at": "2026-11-06T14:47:59.607Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "2c7f6318885ebd01729d718d8bd26294233f16843d32859f53172d9c455234bb",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "bdf7e77a9bfa336278a0154dcb904cd26f1fec3694f1608799a5f56e497ef22f"
+  },
+  "routes": [
+    "/proof-preview/index.html?panel=access: real OrganizationAccessPanel/hook/OrgsAPI/apiClient and ToastContainer, consuming same source as existing settings surface; not full-App navigation",
+    "/proof-preview/index.html?panel=sharing: real OrganizationSharingPanel/hook/OrgsAPI/apiClient/resource recovery and ToastContainer with safe HTTP/passive-WebSocket fixtures; not full-App navigation"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Comparable desktop/light and narrow/dark pending and successful or uncertain completion in both panels",
+    "Saved invitation/member/role and shared resource/recipient/pending approval distinctions remain in actual rendered source",
+    "Real read-only, org/principal, hidden-surface and same-ID capability rebind withdrawal; WebKit read-only"
+  ],
+  "interactions": [
+    "Before: unchanged-reader directory events abort/discard the pending outcome and restore stale submit controls.",
+    "After: pending snapshot and Saving retained, repeat disabled, one exact POST with selected-org and CSRF binding; success gives one post-completion read and visible saved row/toast.",
+    "Uncertain503 after synthetic apply keeps existing unavailable state; explicit Reload reads saved result without repeating write.",
+    "Real capability/policy store and HTTP client exercised. Same-ID org_switched is separately tested as unknown-authority withdrawal, never a preservation event.",
+    "Organization, principal, read-only, hidden demo and same-ID rebind suppress late old-reader feedback, without automatic replay; WebKit read-only cases also complete."
+  ],
+  "browser_versions": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "source_build": "289ef78a3b73e8699941432adb48814ab2f5474c / source-_rqa4j3h; exact assigned-base archive and final builds with identical explicit input",
+  "browser_execution": "Before-v3 completes8/8. After-v3 completes15 cases then fails a forbidden-select observation; corrected v4 tail completes remaining5 only. Same source/bundles/fixture and complete cleanup records retained.",
+  "pixel_review": "All40 final captures and18 superseded captures opened with native view_image. Observations in PIXEL-OBSERVATIONS.md; independent coordinator review remains required.",
+  "limits": [
+    "Safe local producer/consumer fixtures, not full-App navigation, original saved-client/secret recovery, server authorization qualification or installed tenant acceptance.",
+    "No new rendering/styles/roles/controls. Uncertainty replaces misleading stale administration through the existing recovery card; saved data is reached by its real Reload read.",
+    "Original timeouts, outer143 and command-observation failure remain separate; fresh proof does not clear them."
+  ]
+}

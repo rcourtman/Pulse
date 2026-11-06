@@ -993,6 +993,78 @@ describe('sharing changes require an admitted current snapshot', () => {
   );
 
   it.each(actions)(
+    'keeps pending $name serialized across same-reader refreshes until success',
+    async ({ mock, run }) => {
+      populate();
+      const pending = deferred<unknown>();
+      mock.mockReturnValueOnce(pending.promise);
+      const { state } = renderState();
+      await accepted(state);
+      const change = run(state);
+      const signal = mock.mock.calls[0].at(-1).signal;
+
+      emit('organizations_changed');
+      emit('organizations_changed');
+      await state.loadSharingData();
+      syncSessionPresentationPolicy({
+        presentationPolicy: {
+          demoMode: false,
+          readOnly: false,
+          hideCommercial: false,
+          hideUpgrade: true,
+        },
+      });
+      expect(signal.aborted).toBe(false);
+      expect(state.saving()).toBe(true);
+      expect(orgGetMock).toHaveBeenCalledTimes(1);
+      await run(state);
+      expect(mock).toHaveBeenCalledTimes(1);
+
+      // Only a post-completion read may replace the accepted snapshot.
+      listSharesMock.mockResolvedValue([]);
+      listIncomingSharesMock.mockResolvedValue([]);
+      pending.resolve({});
+      await change;
+      await accepted(state);
+      expect(orgGetMock).toHaveBeenCalledTimes(2);
+      expect(state.outgoingShares()).toEqual([]);
+      expect(state.incomingShares()).toEqual([]);
+      expect(notificationSuccessMock).toHaveBeenCalledTimes(1);
+      expect(mock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(actions)(
+    'keeps uncertain $name blocked after an intervening refresh until explicit recovery',
+    async ({ mock, run }) => {
+      populate();
+      const pending = deferred<unknown>();
+      mock.mockReturnValueOnce(pending.promise);
+      const { state } = renderState();
+      await accepted(state);
+      const change = run(state);
+      emit('organizations_changed');
+      await state.loadSharingData();
+      pending.reject(new Error('response lost after the server applied the change'));
+      await change;
+
+      expect(state.loadError()).toContain('could not be confirmed');
+      expect(state.canManageCurrentOrg()).toBe(false);
+      expect(state.outgoingShares()).toEqual([]);
+      expect(state.incomingShares()).toEqual([]);
+      expect(orgGetMock).toHaveBeenCalledTimes(1);
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+      await run(state);
+      expect(mock).toHaveBeenCalledTimes(1);
+
+      await state.loadSharingData();
+      await accepted(state);
+      expect(orgGetMock).toHaveBeenCalledTimes(2);
+      expect(mock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(actions)(
     'does not replay $name or use a late result after switching organizations',
     async ({ mock, run }) => {
       populate();
@@ -1048,7 +1120,7 @@ describe('sharing changes require an admitted current snapshot', () => {
     },
   );
 
-  it.each(['user', 'capability', 'read-only', 'disposal'])(
+  it.each(['user', 'anonymous', 'capability', 'read-only', 'hidden', 'disposal'])(
     'invalidates an in-flight write on %s change',
     async (kind) => {
       populate();
@@ -1059,8 +1131,19 @@ describe('sharing changes require an admitted current snapshot', () => {
       const { state, setUser, unmount } = renderState();
       await accepted(state);
       const change = actions[0].run(state);
+      emit('organizations_changed');
       const signal = createShareMock.mock.calls[0].at(-1).signal;
       if (kind === 'user') setUser('other-user');
+      if (kind === 'anonymous') setUser(undefined);
+      if (kind === 'hidden')
+        syncSessionPresentationPolicy({
+          presentationPolicy: {
+            demoMode: true,
+            readOnly: true,
+            hideCommercial: true,
+            hideUpgrade: true,
+          },
+        });
       if (kind === 'capability') setEnabled(false);
       if (kind === 'read-only')
         syncSessionPresentationPolicy({

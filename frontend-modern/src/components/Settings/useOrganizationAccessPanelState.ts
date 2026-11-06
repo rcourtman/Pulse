@@ -123,6 +123,10 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
 
   const loadOrganizationAccess = async () => {
     if (disposed) return;
+    // A same-reader refresh cannot undo a dispatched write. Retain its outcome
+    // and disabled controls; success reloads, uncertainty requires recovery.
+    // Actual reader or authority withdrawal must still invalidate immediately.
+    if (mutationController && selectionIsCurrent() && !presentationPolicyIsReadOnly()) return;
     invalidateRequests();
     const orgId = activeOrgId();
     const user = props.currentUser;
