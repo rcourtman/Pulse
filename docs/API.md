@@ -1203,7 +1203,7 @@ instance-wide token. Browser sessions are not limited this way.
 `GET /api/security/tokens`
 
 ### Create API Token
-`POST /api/security/tokens`
+`POST /api/security/tokens` — Omitting `scopes` or sending `null` requests full access (`*`). `[]` returns `400`.
 ```json
 { "name": "ansible-script", "scopes": ["monitoring:read"] }
 ```
@@ -1214,14 +1214,11 @@ instance-wide token. Browser sessions are not limited this way.
 { "scopes": ["monitoring:read", "settings:read"] }
 ```
 
-Send `scopes`, `name`, or both; a body with neither returns 400. A rename-only
-body such as `{ "name": "new-name" }` leaves the scopes unchanged, and a blank
-`name` returns 400. When `scopes` is sent it must contain at least one known
-scope, and wildcard access (`"*"`) cannot be combined with other scopes.
-API-token callers that change scopes must already hold every existing scope on
-the target token and every scope they request. The update takes effect on the
-token's next request without changing its ID, secret, expiry, or organization
-bindings.
+Send `name`, `scopes` or both. Sending neither returns `400`. A rename keeps
+scopes when `scopes` is omitted or `null`. Blank names, empty or unknown scopes,
+or mixing `*` with other scopes return `400`. API-token callers changing scopes
+must hold every existing and requested scope. Changes apply on the token's next
+request. ID, secret, expiry and organization bindings stay unchanged.
 
 ### Rotate API Token
 `POST /api/security/tokens/<id>/rotate`
