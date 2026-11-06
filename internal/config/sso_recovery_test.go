@@ -17,7 +17,9 @@ func TestLoadPersistedSSOConfigDoesNotMigrateLegacy(t *testing.T) {
 			if !encrypted {
 				cp.crypto = nil
 			}
-			legacy := &OIDCConfig{Enabled: true, IssuerURL: "https://legacy.example.test", ClientID: "legacy", ClientSecret: "synthetic-legacy-secret", AllowedGroups: []string{"old-ops"}, GroupRoleMappings: map[string]string{"old-ops": "viewer"}}
+			// Nonempty restrictions exercise saved authority without equating
+			// optional empty lists with their omitted JSON representation.
+			legacy := &OIDCConfig{Enabled: true, IssuerURL: "https://legacy.example.test", ClientID: "legacy", ClientSecret: "synthetic-legacy-secret", AllowedGroups: []string{"old-ops"}, AllowedDomains: []string{"example.test"}, AllowedEmails: []string{"operator@example.test"}, GroupRoleMappings: map[string]string{"old-ops": "viewer"}}
 			raw, err := json.Marshal(legacy)
 			require.NoError(t, err)
 			if encrypted {
