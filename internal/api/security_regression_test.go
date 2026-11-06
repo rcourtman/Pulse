@@ -6375,9 +6375,9 @@ func newBasicWriteOriginRouter(t *testing.T) (*Router, *config.Config) {
 	return router, cfg
 }
 
-// A reverse proxy that adds Basic credentials to every request, such as an
-// Authentik proxy provider, attaches them to a form another site's page submits
-// too. No session cookie arrives, so CheckCSRF skips the request and the proxy's
+// A reverse proxy that adds Basic credentials to every request attaches them to
+// a form another site's page submits too, unless its own login stops the request
+// first. No session cookie arrives, so CheckCSRF skips the request and the proxy's
 // credentials used to admit the write. The cases naming a token cover a proxy that
 // adds an API token instead. A page may send its own token under "*", and it cannot
 // without a grant, so only a grant separates the two.
