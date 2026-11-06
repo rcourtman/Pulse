@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "base_sha": "9b3baa7b7fb62476e1b63b5e79ff0ee268433e70",
+  "verified_at": "2026-11-06T21:10:46.654Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "2e9db733b0eb9e76f4155c69496bd1c291f7a3af19d005636bf113eca63c7532"
+  },
+  "routes": [
+    "/proof-preview/index.html (evidence-only production UserAssignmentsPanel for existing Settings User Access, with Dynamic security-status props, real feature gate/RBACAPI/apiClient and synthetic HTTP peers)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Equal readiness/authority/principal object refresh while editing roles and search",
+    "Equal refresh after save/removal dispatch, before held server response",
+    "Confirmed save and saved inventory read",
+    "503 after server-applied save or removal: local uncertainty and explicit saved-read recovery",
+    "True principal, authority, same-org rebind, organization and disposal withdrawal; old completions suppressed"
+  ],
+  "interactions": [
+    "Select an additional role; retain both selected choices, saved permissions and search after equal refresh without extra requests",
+    "Keyboard Enter dispatches one bound PUT or DELETE, keeps disabled pending controls through refresh and never repeats writes",
+    "Resolve held success or 503; check truthful confirmed/uncertain UI and alert focus",
+    "Check saved access performs one explicit read with no write replay",
+    "Withdraw actual reader and settle late response without resurrecting private UI",
+    "WebKit narrow uncertainty/read-only recovery and confirmed removal; interaction proof, not retained WebKit pixels"
+  ],
+  "playwright_version": "1.56.1",
+  "browser_versions": {
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "before_source": "c3a7caa4953abf7c46385302ec4e22c06069004e",
+  "after_source": "9b3baa7b7fb62476e1b63b5e79ff0ee268433e70",
+  "source_binding": "Current invocation BROWSER-BEFORE-INTENT.json/BROWSER-AFTER-INTENT.json bind tracked source copies, identical fixture and CSS, compiled assets and script hashes. Browser rechecks assets before serving.",
+  "pixel_review": "All 32 current before/after captures opened with native view_image. Before refresh closes the draft/pending dialogs, clears search and loses completion/uncertainty feedback. After refresh retains visible role choices, saved read:nodes, identity, Close/Cancel/Save or pending controls at desktop and 390px; completed success shows saved roles and clear notice, while uncertainty has a focused readable warning and Check saved access wholly in view. Removal keeps its consequence and SSO warning while pending. No per-item information is aggregated, removed or moved behind hover. Existing narrow grid horizontal scrolling is unchanged.",
+  "expected_console_observations": "Five after cases retain the intentional synthetic HTTP 503 console error, one per uncertain response; no page errors. Before requests were cancelled on the equal refresh. No error was suppressed.",
+  "evidence": "RECEIPTS.md, BROWSER-BEFORE-RESULT.json and BROWSER-AFTER-RESULT.json in the current lane outcome; 16 comparable pairs linked by name. Evidence-only fixture, scripts and captures are not source.",
+  "capture_sha256": {
+    "after-desktop-dark-delete-uncertain-outcome.png": "780a54e69023a2ca84af85bb5b93da5c385a9f2c9f72169cc01364e7cc962857",
+    "after-desktop-dark-delete-uncertain-pending-refreshed.png": "8a35d77340e2dcf3b66c9d5ef35b88f4b74a34855072aed83489dd0934ca5493",
+    "after-desktop-dark-save-success-outcome.png": "e46ba3b4c555cd92de0c92f9394a510ae6a538ba8c9aa6fc569fce15a8d6b6de",
+    "after-desktop-dark-save-success-pending-refreshed.png": "2f1a6ac37da7207d16c87d619cc63f96091512470431e5806a4e2b4d38a8ba3e",
+    "after-desktop-light-draft-initial.png": "4899213aad20e1f40d78c18624cf5a36148e4c9289b4142bf7f89ed072267f34",
+    "after-desktop-light-draft-refreshed.png": "4899213aad20e1f40d78c18624cf5a36148e4c9289b4142bf7f89ed072267f34",
+    "after-desktop-light-save-uncertain-outcome.png": "f65ca112348755254ca39c114410079a099535a43e12d00c23bc4a432fa60bab",
+    "after-desktop-light-save-uncertain-pending-refreshed.png": "6fe7769527d1328908b00c2ab702fd4e1665dde18c760720e320ae79c3b6029d",
+    "after-narrow-dark-draft-initial.png": "64961e00a8c0734df213afde7e44d9d2e760ebbdc4eefab925d4e34e42b26f66",
+    "after-narrow-dark-draft-refreshed.png": "64961e00a8c0734df213afde7e44d9d2e760ebbdc4eefab925d4e34e42b26f66",
+    "after-narrow-dark-save-uncertain-outcome.png": "92ed04ab1d3f37e9f75c93cf7b1f872f4209c7df19c8046df4c6a61aeba6d011",
+    "after-narrow-dark-save-uncertain-pending-refreshed.png": "d6f3a493c9ff4b5986a893693c08a59ee85875bf44a7e17eb29c4b0a62abfc93",
+    "after-narrow-light-delete-uncertain-outcome.png": "0634495ab0feac6f3fca293b87d3d2ff4de864a3d79df8d9fc948ff21f904a47",
+    "after-narrow-light-delete-uncertain-pending-refreshed.png": "14f85f1a85adea118f4e944c4356833d7fab9345dbb4d36062b76e91a82bd11f",
+    "after-narrow-light-save-success-outcome.png": "514ca48cf1707d9cf029e3451411f54756ed6206b1b5c64cc9886bb410ba4dce",
+    "after-narrow-light-save-success-pending-refreshed.png": "6c01831bfecb9c87a8ebd1a38d9cc7716dfc99a9486d59747678c3de84bd8737",
+    "before-desktop-dark-delete-uncertain-outcome.png": "019c6f21b68a13653564e7d05e975c8a9dbfcc7029344099ac9343373a5e0a05",
+    "before-desktop-dark-delete-uncertain-pending-refreshed.png": "019c6f21b68a13653564e7d05e975c8a9dbfcc7029344099ac9343373a5e0a05",
+    "before-desktop-dark-save-success-outcome.png": "51ef9baac6bfad4b8dadf53ffa1ac13d1eca56479325262a0bacbf3da3639dbc",
+    "before-desktop-dark-save-success-pending-refreshed.png": "51ef9baac6bfad4b8dadf53ffa1ac13d1eca56479325262a0bacbf3da3639dbc",
+    "before-desktop-light-draft-initial.png": "4899213aad20e1f40d78c18624cf5a36148e4c9289b4142bf7f89ed072267f34",
+    "before-desktop-light-draft-refreshed.png": "dfdfe375f2942c2c496f4413bd20e55bdb43d81a184f6155bc85d3da3b966dd9",
+    "before-desktop-light-save-uncertain-outcome.png": "4dfd7f67ee1fc1b3bf21360e789707343bdc080dad234a0e954e04dacaf9c524",
+    "before-desktop-light-save-uncertain-pending-refreshed.png": "4dfd7f67ee1fc1b3bf21360e789707343bdc080dad234a0e954e04dacaf9c524",
+    "before-narrow-dark-draft-initial.png": "64961e00a8c0734df213afde7e44d9d2e760ebbdc4eefab925d4e34e42b26f66",
+    "before-narrow-dark-draft-refreshed.png": "b199802a72ebdf194c7b3eea30665017a183bf243227fe70abcb2ac964eac35f",
+    "before-narrow-dark-save-uncertain-outcome.png": "9aa5323490825c282dd9d6974bb2460eb0081f2716c9317f4f4e1919857de7d4",
+    "before-narrow-dark-save-uncertain-pending-refreshed.png": "9aa5323490825c282dd9d6974bb2460eb0081f2716c9317f4f4e1919857de7d4",
+    "before-narrow-light-delete-uncertain-outcome.png": "d12e845e43f1cc8f5168ae8a22228d3613e9a70a394fd84559e1c03faf10ab94",
+    "before-narrow-light-delete-uncertain-pending-refreshed.png": "d12e845e43f1cc8f5168ae8a22228d3613e9a70a394fd84559e1c03faf10ab94",
+    "before-narrow-light-save-success-outcome.png": "39ad053b437c42e27ec3f2636629b9598ece555f7ae64658d387fcc376736399",
+    "before-narrow-light-save-success-pending-refreshed.png": "39ad053b437c42e27ec3f2636629b9598ece555f7ae64658d387fcc376736399"
+  }
+}
