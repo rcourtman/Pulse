@@ -118,6 +118,26 @@ class AdminDocsTest(unittest.TestCase):
                 self.assertEqual((DOCS / f"{name}.md").read_bytes(),
                                  (ROOT / "frontend-modern/public/docs" / f"{name}.md").read_bytes())
 
+    def test_api_reference_uses_its_custom_role_and_links_full_policy_guidance(self):
+        reference = (DOCS / "API.md").read_text()
+
+        def section(heading):
+            return reference.split(f"### {heading}\n", 1)[1].split("\n### ", 1)[0]
+
+        create = json.loads(re.search(r"```json\n(.*?)```", section("Create Role"), re.S)[1])
+        assignment = json.loads(re.search(r"```json\n(.*?)```", section("Set User Roles"), re.S)[1])
+        self.assertEqual(create["id"], EXPECTED["RBAC"][0][2]["id"])
+        self.assertNotIn(create["id"], ("admin", "operator", "viewer", "auditor"))
+        self.assertEqual(assignment["roleIds"], [create["id"], "viewer"])
+        self.assertEqual(create["permissions"], [
+            {"action": "read", "resource": "alerts"},
+            {"action": "write", "resource": "alerts"},
+        ])
+        update = section("Update Role")
+        self.assertIn("Full policy replacement.", update)
+        self.assertIn("[Preserve saved fields](RBAC.md#before-using-the-api)", update)
+        self.assertNotIn("name, description, or permissions", update)
+
     def test_rbac_setup_guidance_matches_navigation_and_failure_states(self):
         guide = (DOCS / "RBAC.md").read_text()
         readable = " ".join(guide.replace("**", "").split())

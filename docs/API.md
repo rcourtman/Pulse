@@ -1516,8 +1516,8 @@ Returns all defined roles.
 `POST /api/admin/roles`
 ```json
 {
-  "id": "operator",
-  "name": "Operator",
+  "id": "alert-manager",
+  "name": "Alert Manager",
   "description": "Can view and manage alerts",
   "permissions": [
     { "action": "read", "resource": "alerts" },
@@ -1528,7 +1528,7 @@ Returns all defined roles.
 
 ### Update Role
 `PUT /api/admin/roles/{id}`
-Update an existing role's name, description, or permissions.
+Full policy replacement. [Preserve saved fields](RBAC.md#before-using-the-api).
 
 ### Delete Role
 `DELETE /api/admin/roles/{id}`
@@ -1540,7 +1540,7 @@ Returns all users with their role assignments and, when available, mutable SSO p
 ### Set User Roles
 `PUT /api/admin/users/{username}/roles`
 ```json
-{ "roleIds": ["operator", "viewer"] }
+{ "roleIds": ["alert-manager", "viewer"] }
 ```
 
 ### Remove User Access

@@ -48,6 +48,57 @@ func adminDocBodies(t *testing.T, name, heading string) [][]byte {
 	return bodies
 }
 
+func TestAPIReferenceCustomRoleLifecycle(t *testing.T) {
+	// Exercise the reference's JSON against the same tenant-backed handlers as
+	// the product. This is not route authentication or installed access proof.
+	provider := NewTenantRBACProvider(t.TempDir())
+	t.Cleanup(func() { _ = provider.Close() })
+	manager, err := provider.GetManager("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewRBACHandlers(&config.Config{AuthUser: "alice"}, provider)
+	create := adminDocBodies(t, "API", "Create Role")[0]
+	assign := adminDocBodies(t, "API", "Set User Roles")[0]
+	var expected auth.Role
+	if err := json.Unmarshal(create, &expected); err != nil {
+		t.Fatal(err)
+	}
+	builtInBefore, ok := manager.GetRole("operator")
+	if !ok || !builtInBefore.IsBuiltIn {
+		t.Fatal("missing built-in operator control")
+	}
+	call := func(method, path string, body []byte, handler http.HandlerFunc, status int) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		handler(rec, withUser(httptest.NewRequest(method, path, bytes.NewReader(body)), "alice"))
+		if rec.Code != status {
+			t.Fatalf("documented %s %s: got %d, want %d: %s", method, path, rec.Code, status, rec.Body.String())
+		}
+	}
+	call(http.MethodPost, "/api/admin/roles", create, h.HandleRoles, http.StatusOK)
+	saved, ok := manager.GetRole(expected.ID)
+	if !ok || saved.IsBuiltIn || saved.Name != expected.Name || len(saved.Permissions) != len(expected.Permissions) {
+		t.Fatalf("reference did not create the documented custom role: %+v", saved)
+	}
+	for i, permission := range expected.Permissions {
+		if saved.Permissions[i].Action != permission.Action || saved.Permissions[i].Resource != permission.Resource || saved.Permissions[i].GetEffect() != permission.GetEffect() {
+			t.Fatalf("reference permission %d changed: %+v", i, saved.Permissions[i])
+		}
+	}
+	call(http.MethodPut, "/api/admin/users/jane/roles", assign, h.HandleUserRoleActions, http.StatusNoContent)
+	assignment, ok := manager.GetUserAssignment("jane")
+	if !ok || strings.Join(assignment.RoleIDs, ",") != expected.ID+",viewer" {
+		t.Fatalf("reference did not assign its custom role and viewer: %+v", assignment)
+	}
+	builtInAfter, ok := manager.GetRole("operator")
+	before, _ := json.Marshal(builtInBefore)
+	after, _ := json.Marshal(builtInAfter)
+	if !ok || !bytes.Equal(before, after) {
+		t.Fatal("reference changed the built-in operator role")
+	}
+}
+
 func TestAdminDocsCustomRoleLifecycle(t *testing.T) {
 	dataPath := t.TempDir()
 	resetPersistentAuthStoresForTests()
