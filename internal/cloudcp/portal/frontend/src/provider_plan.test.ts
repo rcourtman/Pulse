@@ -166,8 +166,17 @@ describe('installProviderPlan', () => {
   let navigate: ReturnType<typeof vi.fn<(url: string) => void>>;
   let toast: ReturnType<typeof vi.fn<(message: string, isError?: boolean) => void>>;
   let timers: Array<() => void>;
+  let clickListeners: EventListenerOrEventListenerObject[];
 
   beforeEach(() => {
+    // Controllers bind document clicks for the lifetime of a page. Each test
+    // starts a new page fixture, so remove its handlers before the next one.
+    clickListeners = [];
+    const addEventListener = document.addEventListener.bind(document);
+    vi.spyOn(document, 'addEventListener').mockImplementation((type, listener, options) => {
+      addEventListener(type, listener, options);
+      if (type === 'click') clickListeners.push(listener);
+    });
     document.body.innerHTML = '<div id="' + PROVIDER_PLAN_ROOT_ID + '"></div>';
     navigate = vi.fn<(url: string) => void>();
     toast = vi.fn<(message: string, isError?: boolean) => void>();
@@ -181,6 +190,8 @@ describe('installProviderPlan', () => {
   });
 
   afterEach(() => {
+    clickListeners.forEach((listener) => document.removeEventListener('click', listener));
+    vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
 
