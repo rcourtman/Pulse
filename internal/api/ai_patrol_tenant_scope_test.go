@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -256,8 +258,34 @@ func TestStartPatrolForContextKeepsTenantFindingsOffInstanceRelay(t *testing.T) 
 	defer router.ShutdownAIIntelligence()
 
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-1")
+	// A resolved finding can already be older than Patrol's 24-hour cleanup
+	// when it is loaded. Startup must harvest its receipt before the first run,
+	// rather than relying on a later hourly notification sweep to see it.
+	notificationDir := t.TempDir()
+	nm := notifications.NewNotificationManagerWithDeferredQueue("", notificationDir)
+	t.Cleanup(nm.Stop)
+	setUnexportedField(t, tenantMonitor, "notificationMgr", nm)
+	start := time.Now().Add(-40 * 24 * time.Hour).Round(0)
+	end := time.Now().Add(-31 * 24 * time.Hour).Round(0)
+	f := &ai.Finding{ID: "settled-startup-fixture", ResourceID: "tenant-host", Title: "Space above threshold",
+		Severity: ai.FindingSeverityWarning, Category: ai.FindingCategoryCapacity, DetectedAt: start, ResolvedAt: &end}
+	if err := ai.NewFindingsPersistenceAdapter(router.persistenceForOrg(ctx)).SaveFindings(map[string]*ai.Finding{f.ID: f}); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", filepath.Join(notificationDir, "notification_queue.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`INSERT INTO notification_delivery_receipts(alert_id,alert_start_nanos,destination_key,delivered_at) VALUES(?,?,?,?)`, patrolFindingAlertIDPrefix+f.ID, start.UnixNano(), "webhook:startup-fixture", start.Unix()); err != nil {
+		t.Fatal(err)
+	}
 	if ok := router.startPatrolForContext(ctx, "tenant-1"); !ok {
 		t.Fatal("expected tenant-1 patrol start to succeed")
+	}
+	var receipts int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM notification_delivery_receipts WHERE alert_id=?`, patrolFindingAlertIDPrefix+f.ID).Scan(&receipts); err != nil || receipts != 0 {
+		t.Fatalf("startup did not settle the loaded terminal finding: receipts=%d error=%v", receipts, err)
 	}
 	patrol := reflect.ValueOf(router.aiSettingsHandler.GetAIService(ctx).GetPatrolService()).Elem()
 	if patrol.FieldByName("findingNotifyCallback").IsNil() {

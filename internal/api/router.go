@@ -2387,6 +2387,9 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 					alertLifecycle = owner.NotificationOccurrenceLifecycle
 				}
 				nm.SetOccurrenceLifecycleProvider(patrolFindingNotificationLifecycle(patrol.GetFindings(), alertLifecycle))
+				// Patrol can discard a loaded resolved finding in its first run.
+				// Persist its positive receipt fact before starting that run.
+				nm.ReconcileOccurrenceReceipts()
 			}
 		}
 		if unifiedStore := r.aiSettingsHandler.GetUnifiedStoreForOrg(orgID); unifiedStore != nil {

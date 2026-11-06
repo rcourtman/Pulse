@@ -351,6 +351,21 @@ func (n *NotificationManager) SetOccurrenceLifecycleProvider(provider func(strin
 	}
 }
 
+// ReconcileOccurrenceReceipts captures already-known terminal facts before a
+// producer starts compacting its own state. Hourly cleanup then uses the same
+// existing rules; unknown occurrences and pinned recoveries remain retained.
+func (n *NotificationManager) ReconcileOccurrenceReceipts() {
+	n.mu.RLock()
+	queue := n.queue
+	admitted := queue != nil && n.lifecycle.join()
+	n.mu.RUnlock()
+	if !admitted {
+		return
+	}
+	defer n.lifecycle.release()
+	queue.cleanupDeliveryReceipts()
+}
+
 // Never invoke the alerts owner while holding queue locks. Revalidate the
 // receipt under a write lock before deletion, protecting concurrent completions.
 func (q *NotificationQueue) cleanupDeliveryReceipts() {
