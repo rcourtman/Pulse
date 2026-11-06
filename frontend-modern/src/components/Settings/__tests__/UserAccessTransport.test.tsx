@@ -54,21 +54,26 @@ function deferred<T>() {
 }
 
 function mount() {
-  const [user, setUser] = createSignal<string | undefined>('operator-a');
-  const [allowed, setAllowed] = createSignal(true);
+  const [status, setStatus] = createSignal<{ user: string | undefined; allowed: boolean }>({
+    user: 'operator-a',
+    allowed: true,
+  });
+  const setUser = (user: string | undefined) => setStatus((current) => ({ ...current, user }));
+  const setAllowed = (allowed: boolean) => setStatus((current) => ({ ...current, allowed }));
+  const refresh = () => setStatus((current) => ({ ...current }));
   let state!: ReturnType<typeof useUserAssignmentsPanelState>;
   const view = render(() => {
     state = useUserAssignmentsPanelState({
       get currentUser() {
-        return user();
+        return status().user;
       },
       get canManage() {
-        return allowed();
+        return status().allowed;
       },
     });
     return <div />;
   });
-  return { state, setUser, setAllowed, view };
+  return { state, setUser, setAllowed, refresh, view };
 }
 type State = ReturnType<typeof useUserAssignmentsPanelState>;
 
@@ -161,6 +166,71 @@ afterEach(() => {
 });
 
 describe('User Access through the real RBAC transport', () => {
+  it.each(
+    operations.flatMap((operation) =>
+      ['confirmed', 'uncertain'].map((outcome) => ({ operation, outcome })),
+    ),
+  )(
+    'keeps one $operation and its $outcome outcome through equal refreshes before and after dispatch',
+    async ({ operation, outcome }) => {
+      const csrf = deferred<Response>();
+      const response = deferred<Response>();
+      healthReply = () => csrf.promise;
+      mutationReply = (options) => {
+        applyMutation(options);
+        return response.promise;
+      };
+      const { state, refresh } = mount();
+      await prepare(state, operation);
+      const pending = confirm(state, operation);
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.some(([url]) => url === '/api/health')).toBe(true),
+      );
+      refresh();
+      await Promise.resolve();
+      expect(operation === 'save' ? state.saving() : state.deletingUser()).toBe(true);
+      expect(state.canEdit()).toBe(false);
+      csrf.resolve(json({}));
+      await waitFor(() => expect(mutations()).toHaveLength(1));
+      const request = mutations()[0][1];
+      expect(request?.headers).toMatchObject({
+        'X-Pulse-Org-ID': 'north',
+        'X-CSRF-Token': 'synthetic-csrf',
+      });
+      refresh();
+      await Promise.resolve();
+      expect(request?.signal?.aborted).toBe(false);
+      expect(operation === 'save' ? state.showModal() : !!state.userPendingDeletion()).toBe(true);
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/admin/users')).toHaveLength(1);
+      await state.handleSaveAssignments();
+      await state.handleDeleteUser();
+      expect(mutations()).toHaveLength(1);
+      response.resolve(
+        outcome === 'confirmed'
+          ? new Response(null, { status: 204 })
+          : json({ error: 'synthetic-lost-confirmation' }, 503),
+      );
+      await pending;
+      if (outcome === 'confirmed') {
+        expect(state.successNotice()).toBeTruthy();
+        expect(state.unconfirmedChange()).toBeNull();
+      } else {
+        expect(state.unconfirmedChange()).toContain('may already have been applied');
+        expect(state.successNotice()).toBeNull();
+        refresh();
+        await Promise.resolve();
+        expect(state.unconfirmedChange()).toContain('may already have been applied');
+        expect(state.canEdit()).toBe(false);
+        expect(fetchMock.mock.calls.filter(([url]) => url === '/api/admin/users')).toHaveLength(1);
+        await state.loadData();
+      }
+      await loaded(state);
+      expect(state.filteredAssignments()).toEqual(savedUsers);
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/admin/users')).toHaveLength(2);
+      expect(mutations()).toHaveLength(1);
+    },
+  );
+
   it.each(operations)(
     'dispatches one correctly bound %s after cold CSRF preparation and rereads saved access',
     async (operation) => {

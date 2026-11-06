@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 import { RolesPanel } from '../RolesPanel';
 import { UserAssignmentsPanel } from '../UserAssignmentsPanel';
@@ -317,6 +318,39 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
     expect(deleteRoleMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the rendered pending User Access dialog across unchanged status and shows its uncertain outcome', async () => {
+    const [status, setStatus] = createSignal({ user: 'operator-a', allowed: true });
+    const pending = deferred<void>();
+    updateUserRolesMock.mockReturnValueOnce(pending.promise);
+    const panelProps = () => ({ currentUser: status().user, canManage: status().allowed });
+    render(() => <Dynamic component={UserAssignmentsPanel} {...panelProps()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Manage access: alice' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+    expect(within(dialog).getByRole('button', { name: 'Applying...' })).toBeDisabled();
+    const signal = updateUserRolesMock.mock.calls[0][2].signal;
+    setStatus({ user: 'operator-a', allowed: true });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Applying...' })).toBeDisabled(),
+    );
+    expect(dialog).toBeInTheDocument();
+    expect(signal.aborted).toBe(false);
+    expect(getUsersMock).toHaveBeenCalledTimes(1);
+    pending.reject(Object.assign(new Error('Synthetic lost reply'), { status: 503 }));
+    const warning = await screen.findByRole('alert');
+    expect(warning).toHaveTextContent('could not be confirmed');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    setStatus({ user: 'operator-a', allowed: true });
+    await waitFor(() => expect(warning).toHaveFocus());
+    expect(screen.getByRole('button', { name: 'Check saved access' })).toBeInTheDocument();
+    expect(getUsersMock).toHaveBeenCalledTimes(1);
+    getUsersMock.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Check saved access' }));
+    expect(await screen.findByText('No users yet')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(updateUserRolesMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows the user assignments paywall for free entitlements and does not load users', async () => {

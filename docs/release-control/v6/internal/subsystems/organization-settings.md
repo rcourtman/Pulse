@@ -15,6 +15,32 @@
 
 ## Purpose
 
+### Equal security-status values keep the User Access reader
+
+User Access compares effective runtime readiness, RBAC/user-management admission
+and principal values before replacing its reader. A new security-status object
+with identical values preserves search, role selections, saved-permission reads,
+removal confirmation and any pending assignment or removal request. Controls
+remain disabled until that request's real outcome; a refresh neither rolls back
+a server-applied change nor permits another write. Confirmed success obtains one
+fresh inventory. An uncertain outcome retains its warning across equal refreshes
+and requires **Check saved access**, a read-only recovery. Definite rejections
+retain their correctable draft and local error.
+
+Actual principal, runtime readiness, entitlement or management-capability changes,
+organization rebinds (including the same ID) and disposal still withdraw and abort
+immediately and suppress obsolete completions. Existing organization binding,
+CSRF, no-retry transport, endpoints, JSON payloads and backend authorization are
+unchanged. `UserAccessReaderLifetime.test.tsx` pins equal-value refreshes during
+drafts, saved-permission reads, both mutations and their success/uncertain/refused
+outcomes, plus true withdrawal. `RBACPaywallPanels.test.tsx` exercises the rendered
+pending dialog, local uncertainty/focus and read-only recovery. Comparable
+production-panel/client browser proof covers desktop/narrow and both themes.
+`UserAccessTransport.test.tsx` keeps the real RBAC client and CSRF preparation,
+preserving one save or removal across equal refreshes before and after dispatch;
+it checks both confirmed outcomes and explicit read-only uncertainty recovery.
+This safeguard is not original saved-account, SSO or installed recovery.
+
 ### Overview explains the current session's write restriction
 
 When organization details are visible but session presentation policy is
