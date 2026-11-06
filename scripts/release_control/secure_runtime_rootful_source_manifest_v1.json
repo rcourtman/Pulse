@@ -87,6 +87,8 @@
     "scripts/installtests/unraid_go_update_test.go",
     "scripts/installtests/windows_native_acceptance_test.go",
     "scripts/installtests/windows_saved_removal_test.go",
+    "scripts/installtests/windows_signed_update_contract_test.go",
+    "scripts/installtests/windows_signed_update_test.go",
     "scripts/installtests/windows_uninstall_registration_test.go",
     "scripts/release_control/secure_runtime_rootful_attestation_v1.py",
     "scripts/secure-runtime-rootful-runtime.sh",
@@ -172,7 +174,8 @@
     "pkg/pmg",
     "pkg/proxmox",
     "pkg/securityutil",
-    "pkg/tlsutil"
+    "pkg/tlsutil",
+    "scripts/installtests/windowsupdatepacket"
   ],
   "include_suffixes": [
     ".go",

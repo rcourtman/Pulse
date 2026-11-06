@@ -175,7 +175,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $head -cne $env:EXPECTED_SOURCE_SHA) { throw 'Windows source identity differs.' }
           git diff --exit-code HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Windows source is dirty.' }
-          go test -count=1 -timeout 10m -v ./scripts/installtests -run '^TestWindowsSignedAutomaticUpdate$'
+          go test -count=1 -failfast -timeout 10m -v ./scripts/installtests -run '^TestWindowsSigned(AutomaticUpdate|UpdatePowerShellExitContract)$'
           if ($LASTEXITCODE -ne 0) { throw "Signed Windows automatic update failed (exit $LASTEXITCODE)." }
           $receipt = Get-Content $env:PULSE_WINDOWS_UPDATE_RECEIPT -Raw -ErrorAction Stop | ConvertFrom-Json
           if ($receipt.source -cne $head -or $receipt.passed -ne $true -or $receipt.owned_scm_cleanup -ne $true -or $receipt.cases.Count -ne 3) { throw 'Native terminal receipt is incomplete.' }

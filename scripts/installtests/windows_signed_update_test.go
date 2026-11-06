@@ -31,12 +31,19 @@ func signedWindowsPS(t *testing.T, script string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
-		"$ErrorActionPreference = 'Stop'; "+script)
+		signedWindowsPSCommand(script))
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("owned Windows fixture operation failed: %v\n%s", err, output)
 	}
 	return output
+}
+
+func signedWindowsPSCommand(script string) string {
+	// A handled Get-Service ObjectNotFound followed by return leaves $? false
+	// in Windows PowerShell 5.1. Isolate that return, then explicitly report a
+	// successful script. An unhandled observation or cleanup error still fails.
+	return "$ErrorActionPreference = 'Stop'; try { & {\n" + script + "\n}; exit 0 } catch { Write-Error -ErrorRecord $_ -ErrorAction Continue; exit 1 }"
 }
 
 func signedWindowsQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
@@ -62,13 +69,104 @@ $s | Select-Object ProcessId,PathName,State,StartMode | ConvertTo-Json -Compress
 
 type signedWindowsCase struct {
 	Name          string `json:"name"`
+	Completed     bool   `json:"completed"`
 	Downloads     int    `json:"canonical_downloads"`
+	VersionChecks int    `json:"authenticated_version_checks"`
+	Reports       int    `json:"authenticated_identity_reports"`
+	Unexpected    int    `json:"unexpected_requests"`
 	BeforePID     uint32 `json:"before_pid"`
 	AfterPID      uint32 `json:"after_pid"`
 	Executable    string `json:"executable_sha256"`
 	SavedRetained bool   `json:"saved_state_retained"`
 	Connected     bool   `json:"authenticated_exact_identity_report"`
 	UpdatedFrom   string `json:"updated_from,omitempty"`
+}
+
+// The Windows fixture and its portable transport test share the same handler.
+// Do not replace the updater's canonical route with a look-alike version API.
+type signedWindowsTransport struct {
+	mu                                   sync.Mutex
+	input                                *packet.Packet
+	bodies                               map[string][]byte
+	mode                                 string
+	versionReady                         chan struct{}
+	downloads, versionChecks, unexpected int
+	reports                              []host.AgentInfo
+}
+
+func (p *signedWindowsTransport) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Header.Get("X-API-Token") != signedWindowsToken {
+		p.mu.Lock()
+		p.unexpected++
+		p.mu.Unlock()
+		http.Error(w, "fixture requires the saved token", http.StatusUnauthorized)
+		return
+	}
+	if r.URL.Path == "/api/agent/version" {
+		p.mu.Lock()
+		ready := p.versionReady
+		version := r.URL.Query().Get("agentVersion")
+		if r.Method != http.MethodGet || (version != packet.Before && version != packet.After) || r.URL.Query().Get("check") == "" {
+			p.unexpected++
+			p.mu.Unlock()
+			http.Error(w, "fixture version request differs", http.StatusBadRequest)
+			return
+		}
+		p.versionChecks++
+		p.mu.Unlock()
+		// Do not let replacement outrun the independent original SCM PID read.
+		select {
+		case <-ready:
+		case <-r.Context().Done():
+			return
+		case <-time.After(30 * time.Second):
+			http.Error(w, "baseline observation missing", http.StatusServiceUnavailable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": packet.After})
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	switch r.URL.Path {
+	case "/download/pulse-agent":
+		if r.Method != http.MethodGet || r.URL.Query().Get("arch") != "windows-amd64" || r.URL.Query().Get("serverVersion") != packet.After {
+			p.unexpected++
+			http.NotFound(w, r)
+			return
+		}
+		responseName := p.mode
+		if p.mode == "wrong-identity" {
+			responseName = "initial"
+		}
+		response := p.input.Responses[responseName]
+		p.downloads++
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("X-Checksum-Sha256", response.Checksum)
+		w.Header().Set("X-Signature-Ed25519", response.Signature)
+		w.Header().Set("X-Signature-SSHSIG", response.SSHSIG)
+		_, _ = w.Write(p.bodies[responseName])
+	case "/api/agents/agent/report":
+		reader, err := gzip.NewReader(http.MaxBytesReader(w, r.Body, 1024*1024))
+		if err != nil {
+			p.unexpected++
+			http.Error(w, "invalid fixture report compression", http.StatusBadRequest)
+			return
+		}
+		defer reader.Close()
+		var report host.Report
+		if r.Method != http.MethodPost || r.Header.Get("Content-Encoding") != "gzip" || json.NewDecoder(io.LimitReader(reader, 4*1024*1024)).Decode(&report) != nil || report.Agent.ID != signedWindowsID || report.Host.Hostname != signedWindowsID {
+			p.unexpected++
+			http.Error(w, "fixture identity differs", http.StatusBadRequest)
+			return
+		}
+		p.reports = append(p.reports, report.Agent)
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "agentId": signedWindowsID})
+	default:
+		// Remote-config polling is not part of this updater fixture.
+		http.NotFound(w, r)
+	}
 }
 
 func signedWindowsResult(refusal string, report host.AgentInfo) bool {
@@ -121,6 +219,9 @@ if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable('PUL
 	// Retain the final result after owned service/directory cleanup.
 	t.Cleanup(func() {
 		receipt.Passed = !t.Failed() && receipt.Cleanup && len(receipt.Cases) == 3
+		for _, result := range receipt.Cases {
+			receipt.Passed = receipt.Passed && result.Completed
+		}
 		encoded, err := json.MarshalIndent(receipt, "", "  ")
 		if err != nil {
 			t.Error(err)
@@ -154,7 +255,7 @@ if ($s.ProcessId -ne 0) {
  $process = Get-Process -Id $s.ProcessId -ErrorAction Stop;
  if ($process.Path -ine `+signedWindowsQuote(filepath.Join(root, "pulse-agent.exe"))+`) { throw 'Owned cleanup process identity differs.' }
 };
-if ($s.State -ne 'Stopped') { Stop-Service PulseAgent -ErrorAction Stop; (Get-Service PulseAgent -ErrorAction Stop).WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,[TimeSpan]::FromSeconds(30)) };
+if ($s.State -ne 'Stopped') { Stop-Service PulseAgent -ErrorAction Stop; $controller = Get-Service PulseAgent -ErrorAction Stop; try { $controller.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,[TimeSpan]::FromSeconds(30)) } finally { $controller.Dispose() } };
 if ($null -ne $process) { if (-not $process.WaitForExit(10000)) { throw 'Owned cleanup process remains.' }; $process.Dispose() };
 & sc.exe delete PulseAgent | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Owned SCM deletion failed.' };
 for ($i=0; $i -lt 30; $i++) {
@@ -172,79 +273,8 @@ for ($i=0; $i -lt 30; $i++) {
 			receipt.Cleanup = true
 		}
 	})
-	var mu sync.Mutex
-	mode := ""
-	var versionReady chan struct{}
-	downloads, unexpected := 0, 0
-	var reports []host.AgentInfo
-	peer = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Hold only the first version response until the observer has the
-		// original SCM PID. A slow PowerShell query cannot miss the replacement.
-		if r.URL.Path == "/api/version" && r.Header.Get("X-API-Token") == signedWindowsToken {
-			mu.Lock()
-			ready := versionReady
-			mu.Unlock()
-			select {
-			case <-ready:
-			case <-r.Context().Done():
-				return
-			case <-time.After(30 * time.Second):
-				http.Error(w, "baseline observation missing", http.StatusServiceUnavailable)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]string{"version": packet.After})
-			return
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		if r.Header.Get("X-API-Token") != signedWindowsToken {
-			unexpected++
-			http.Error(w, "fixture requires the saved token", http.StatusUnauthorized)
-			return
-		}
-		switch r.URL.Path {
-		case "/download/pulse-agent":
-			if r.Method != http.MethodGet || r.URL.Query().Get("arch") != "windows-amd64" || r.URL.Query().Get("serverVersion") != packet.After {
-				unexpected++
-				http.NotFound(w, r)
-				return
-			}
-			responseName := mode
-			if mode == "wrong-identity" {
-				responseName = "initial"
-			}
-			response := input.Responses[responseName]
-			downloads++
-			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Header().Set("X-Checksum-Sha256", response.Checksum)
-			w.Header().Set("X-Signature-Ed25519", response.Signature)
-			w.Header().Set("X-Signature-SSHSIG", response.SSHSIG)
-			_, _ = w.Write(bodies[responseName])
-		case "/api/agents/agent/report":
-			// Exercise real collector reports (which are gzip-compressed), not
-			// a fixture's hand-written uncompressed acknowledgement witness.
-			reader, err := gzip.NewReader(http.MaxBytesReader(w, r.Body, 1024*1024))
-			if err != nil {
-				unexpected++
-				http.Error(w, "invalid fixture report compression", http.StatusBadRequest)
-				return
-			}
-			defer reader.Close()
-			var report host.Report
-			if r.Method != http.MethodPost || r.Header.Get("Content-Encoding") != "gzip" || json.NewDecoder(io.LimitReader(reader, 4*1024*1024)).Decode(&report) != nil || report.Agent.ID != signedWindowsID || report.Host.Hostname != signedWindowsID {
-				unexpected++
-				http.Error(w, "fixture identity differs", http.StatusBadRequest)
-				return
-			}
-			reports = append(reports, report.Agent)
-			_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "agentId": signedWindowsID})
-		default:
-			// Remote-config polling is not part of this updater fixture.
-			http.NotFound(w, r)
-		}
-	}))
+	transport := &signedWindowsTransport{input: input, bodies: bodies}
+	peer = httptest.NewTLSServer(transport)
 	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: peer.Certificate().Raw})
 	binary := filepath.Join(root, "pulse-agent.exe")
 	state := filepath.Join(root, "state")
@@ -274,34 +304,51 @@ for ($i=0; $i -lt 30; $i++) {
 	for _, scenario := range []struct{ name, refusal string }{
 		{"bad-signature", "signature verification failed"}, {"wrong-identity", "downloaded executable identity:"}, {"valid", ""},
 	} {
-		mu.Lock()
-		mode, downloads, unexpected, reports = scenario.name, 0, 0, nil
-		versionReady = make(chan struct{})
-		mu.Unlock()
+		transport.mu.Lock()
+		transport.mode, transport.downloads, transport.versionChecks, transport.unexpected, transport.reports = scenario.name, 0, 0, 0, nil
+		transport.versionReady = make(chan struct{})
+		transport.mu.Unlock()
+		receipt.Cases = append(receipt.Cases, signedWindowsCase{Name: scenario.name})
+		current := &receipt.Cases[len(receipt.Cases)-1]
+		// Preserve bounded progress on a failed case as well as a completed one.
+		// No raw reports, errors, saved token, connection or host logs are retained.
+		observe := func() {
+			transport.mu.Lock()
+			defer transport.mu.Unlock()
+			current.Downloads, current.VersionChecks, current.Reports, current.Unexpected = transport.downloads, transport.versionChecks, len(transport.reports), transport.unexpected
+		}
+		// This also runs before the terminal receipt writer on a failed case.
+		t.Cleanup(func() {
+			if !current.Completed {
+				observe()
+			}
+		})
 		signedWindowsPS(t, `Start-Service PulseAgent -ErrorAction Stop`)
 		before := signedWindowsServiceState(t)
 		if before.PID == 0 || before.Path != serviceCommand || before.State != "Running" || before.StartMode != "Auto" {
 			t.Fatal("SCM did not start the exact saved connection")
 		}
-		close(versionReady)
+		current.BeforePID = before.PID
+		close(transport.versionReady)
 		deadline := time.Now().Add(100 * time.Second)
 		var observed host.AgentInfo
 		complete := false
 		for time.Now().Before(deadline) {
-			mu.Lock()
-			for _, report := range reports {
+			transport.mu.Lock()
+			for _, report := range transport.reports {
 				if signedWindowsResult(scenario.refusal, report) {
 					observed, complete = report, true
 				}
 			}
-			mu.Unlock()
+			transport.mu.Unlock()
 			if complete {
 				break
 			}
 			time.Sleep(250 * time.Millisecond)
 		}
+		observe()
 		if !complete {
-			t.Fatalf("%s: no exact connected updater result before deadline", scenario.name)
+			t.Fatalf("%s: no exact connected updater result before deadline (version checks=%d, downloads=%d, identity reports=%d, unexpected=%d)", scenario.name, current.VersionChecks, current.Downloads, current.Reports, current.Unexpected)
 		}
 		after := signedWindowsServiceState(t)
 		if after.Path != serviceCommand || after.State != "Running" || after.StartMode != "Auto" || after.PID == 0 {
@@ -338,19 +385,17 @@ for ($i=0; $i -lt 30; $i++) {
 				t.Fatal("saved identity, token, CA or seeded state changed")
 			}
 		}
-		mu.Lock()
-		count, wrong := downloads, unexpected
-		mu.Unlock()
-		if count != 1 || wrong != 0 {
+		observe()
+		if current.Downloads != 1 || current.VersionChecks < 1 || current.Unexpected != 0 {
 			t.Fatal("canonical request/authentication count differs; fallback is not acceptance")
 		}
-		receipt.Cases = append(receipt.Cases, signedWindowsCase{Name: scenario.name, Downloads: count, BeforePID: before.PID, AfterPID: after.PID, Executable: expected, SavedRetained: true, Connected: true, UpdatedFrom: observed.UpdatedFrom})
+		current.Completed, current.AfterPID, current.Executable, current.SavedRetained, current.Connected, current.UpdatedFrom = true, after.PID, expected, true, true, observed.UpdatedFrom
 		t.Logf("%s: one authenticated canonical download, exact SCM executable and connected identity; saved token/CA/state retained", scenario.name)
 		signedWindowsPS(t, `$s = Get-CimInstance Win32_Service -Filter "Name='PulseAgent'" -ErrorAction Stop;
 if ($null -eq $s -or $s.PathName -cne `+signedWindowsQuote(serviceCommand)+` -or $s.ProcessId -eq 0) { throw 'Owned process is unknown.' };
 $process = Get-Process -Id $s.ProcessId -ErrorAction Stop;
 if ($process.Path -ine `+signedWindowsQuote(binary)+`) { throw 'Owned process executable differs.' };
-Stop-Service PulseAgent -ErrorAction Stop; (Get-Service PulseAgent -ErrorAction Stop).WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,[TimeSpan]::FromSeconds(30));
+Stop-Service PulseAgent -ErrorAction Stop; $controller = Get-Service PulseAgent -ErrorAction Stop; try { $controller.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,[TimeSpan]::FromSeconds(30)) } finally { $controller.Dispose() };
 if (-not $process.WaitForExit(10000)) { throw 'Owned process did not quiesce.' }; $process.Dispose()`)
 	}
 }
