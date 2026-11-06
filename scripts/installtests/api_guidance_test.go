@@ -361,9 +361,9 @@ func TestPulseAPIGuidanceHelperStopsBeforeCurlOnUnsafeFilesOrPreparation(t *test
 			call := "pulse_api GET /api/state/summary"
 			switch mode {
 			case "unsupported method":
-				// DELETE and PUT are supported by the existing RBAC recipes.
-				// Keep the rejection control outside that reviewed method set.
-				call = "pulse_api PATCH /api/actions/act_example"
+				// Use a sentinel rather than a standard HTTP verb: existing
+				// token-edit and RBAC recipes legitimately support PATCH/PUT/DELETE.
+				call = "pulse_api UNSUPPORTED /api/actions/act_example"
 			case "full URL":
 				call = "pulse_api GET https://not-this-instance.invalid/api/state"
 			case "extra argument":
@@ -373,6 +373,9 @@ func TestPulseAPIGuidanceHelperStopsBeforeCurlOnUnsafeFilesOrPreparation(t *test
 			// The documented helper must still stop on chmod/mktemp failure.
 			script := helper + "\nif " + call + "; then exit 0; else exit $?; fi\n"
 			_, exit := runPulseAPIRecipe(t, script, home, bin, "API_CALLED="+called)
+			if mode == "unsupported method" && exit != 2 {
+				t.Fatalf("unsupported method exit %d, want usage rejection 2", exit)
+			}
 			_, err := os.Stat(called)
 			if exit == 0 || !os.IsNotExist(err) {
 				t.Fatal("invalid input or failed preparation reached curl")
