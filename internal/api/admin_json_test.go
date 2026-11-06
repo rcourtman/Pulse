@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -8,6 +9,19 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDecodeAdminJSONObjectEmptyBodyIsEOF(t *testing.T) {
+	for _, body := range []string{"", " \n\t"} {
+		provider := config.SSOProvider{Name: "retained"}
+		err := decodeAdminJSONObject(httptest.NewRecorder(), httptest.NewRequest("POST", "/", strings.NewReader(body)), &provider, 1024)
+		require.ErrorIs(t, err, io.EOF)
+		require.Equal(t, "retained", provider.Name)
+	}
+	request := httptest.NewRequest("POST", "/", nil)
+	request.Body = nil
+	var provider config.SSOProvider
+	require.ErrorIs(t, decodeAdminJSONObject(httptest.NewRecorder(), request, &provider, 1024), io.EOF)
+}
 
 func TestDecodeAdminJSONObject(t *testing.T) {
 	tests := []struct {
@@ -33,6 +47,9 @@ func TestDecodeAdminJSONObject(t *testing.T) {
 		{"null root", `null`, false},
 		{"array root", `[]`, false},
 		{"empty", ``, false},
+		{"non-JSON whitespace", "\u00a0", false},
+		{"non-JSON leading whitespace", "\u00a0{}", false},
+		{"non-JSON trailing whitespace", "{}\u00a0", false},
 		{"incomplete", `{"name":"SSO"`, false},
 		{"second object", `{"name":"SSO"}{}`, false},
 		{"trailing junk", `{"name":"SSO"}x`, false},

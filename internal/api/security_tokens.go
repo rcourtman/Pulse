@@ -30,6 +30,8 @@ const apiTokenMetadataOwnerUserID = "owner_user_id"
 const apiTokenMetadataPurpose = "purpose"
 const apiTokenPurposeRelayMobileAccess = "relay_mobile_access"
 
+const maxAPITokenRequestBodySize = 64 * 1024
+
 func mergeAPITokenMetadata(record *config.APITokenRecord, metadata map[string]string) error {
 	if record == nil || len(metadata) == 0 {
 		return nil
@@ -398,9 +400,11 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 	}
 
 	var payload createTokenRequest
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
+	// Keep legacy bodyless creation, but validate every supplied object before
+	// generating or saving a credential. A prefix is not a complete request.
+	if err := decodeAdminJSONObject(w, req, &payload, maxAPITokenRequestBodySize); err != nil && err != io.EOF {
 		r.auditTokenEvent(req, "token_created", false, "Failed to decode create token request body")
-		log.Warn().Err(err).Msg("Failed to decode API token create request")
+		log.Warn().Msg("Failed to decode API token create request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -473,9 +477,9 @@ func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) 
 	}
 
 	var payload updateTokenRequest
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+	if err := decodeAdminJSONObject(w, req, &payload, maxAPITokenRequestBodySize); err != nil {
 		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Failed to decode token update for token id=%s", tokenID))
-		log.Warn().Err(err).Str("token_id", tokenID).Msg("Failed to decode API token update request")
+		log.Warn().Str("token_id", tokenID).Msg("Failed to decode API token update request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
