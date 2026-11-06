@@ -4292,6 +4292,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 		// Add CORS headers if configured
 		originMayUseCredentials := false
+		originHasCORSGrant := false
 		if r.config.AllowedOrigins != "" {
 			reqOrigin := req.Header.Get("Origin")
 			allowedOrigin := ""
@@ -4318,6 +4319,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 
 			if allowedOrigin != "" {
+				originHasCORSGrant = true
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Token, X-CSRF-Token, X-Setup-Token")
@@ -4562,6 +4564,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !originMayUseCredentials && isCrossSiteBasicAuthWrite(req) {
 			http.Error(w, "CSRF origin validation failed", http.StatusForbidden)
 			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Cross-site browser mutation blocked for Basic auth")
+			return
+		}
+		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !originHasCORSGrant && isCrossSiteAPITokenWrite(req) {
+			http.Error(w, "CSRF origin validation failed", http.StatusForbidden)
+			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Cross-site browser mutation blocked for API token")
 			return
 		}
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !skipSessionCSRFToken && !CheckCSRF(w, req) {
@@ -4987,7 +4994,8 @@ func sameOrigin(left, right string) bool {
 // did not make. It is the CSRF boundary for sessionless proxy-auth flows: the
 // forward-auth proxy attaches the identity to every request that carries its
 // sign-in cookie, so there is no Pulse session to bind a CSRF token to. Basic
-// credentials added by a proxy are the same case; see isCrossSiteBasicAuthWrite.
+// credentials or an API token added by a proxy are the same case; see
+// isCrossSiteBasicAuthWrite and isCrossSiteAPITokenWrite.
 //
 // Sec-Fetch-Site "same-site" only says the initiator shares the registrable
 // domain; a sibling subdomain or another port on the same host is same-site
@@ -5071,8 +5079,25 @@ func isCrossSiteBasicAuthWrite(req *http.Request) bool {
 		return false
 	}
 	// An explicit API token outranks Basic in checkAuth, so Basic is not the
-	// credential here, and a page can only send one after passing CORS.
+	// credential here; isCrossSiteAPITokenWrite judges the token.
 	if _, hasToken := explicitAPITokenFromRequest(req); hasToken {
+		return false
+	}
+	return isCrossSiteBrowserRequest(req)
+}
+
+// isCrossSiteAPITokenWrite reports a write carrying an API token and another origin's
+// browser metadata. A proxy that adds a token to every request attaches it to a form
+// from any site, so the token arrives like a cookie and that page gets to spend it.
+// The router admits any origin with a CORS grant before asking, "*" included, because
+// a page there may send its own token. Without a grant a browser stops a page setting
+// that header at preflight, so no page sending its own token is refused. A client that
+// sets a foreign Origin or Referer itself is judged as a browser.
+func isCrossSiteAPITokenWrite(req *http.Request) bool {
+	if req == nil || isSafeBrowserMethod(req.Method) {
+		return false
+	}
+	if _, hasToken := explicitAPITokenFromRequest(req); !hasToken {
 		return false
 	}
 	return isCrossSiteBrowserRequest(req)

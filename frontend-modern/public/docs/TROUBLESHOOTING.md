@@ -463,6 +463,12 @@ needs a browser session cookie. Do not disable authentication, CSRF protection
 or TLS verification to make such a request work. Iframe embedding and proxy
 authentication have separate settings; CORS is not their trust boundary.
 
+A write through your own forwarder that adds an API token returns 403
+`CSRF origin validation failed` when it passes on the browser's `Origin`, `Referer`
+or `Sec-Fetch-Site`. List the page's exact origin above. A forwarder that
+authenticates its callers can remove those headers instead. One that adds the token
+for anyone must not, because any site's page could then spend that token.
+
 Keep cookies, authorization headers, API tokens and full network exports
 private. A report needs only the redacted error, HTTP status and relevant
 origins, not a credential-bearing request or HAR file.

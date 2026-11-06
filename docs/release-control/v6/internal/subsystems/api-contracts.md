@@ -11898,7 +11898,9 @@ the cookie. Successful unmarked Basic use is audited once per organization, user
 client address per day; a failed attempt counts toward lockout and is always
 audited. A write carrying Basic credentials and browser metadata from another origin
 gets 403 `CSRF origin validation failed` unless that exact origin is on the CORS list,
-because a reverse proxy can attach those credentials for the browser.
+because a reverse proxy can attach those credentials for the browser. A write carrying
+an API token and that metadata gets the same 403 unless the origin has a CORS grant,
+`*` included, since a page can only send its own token after one.
 
 Basic credentials are verified after `TenantMiddleware` has admitted the
 request organization, so that admission saw no principal. Immediately after

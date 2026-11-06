@@ -71,9 +71,9 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 
 	// Get session from cookie. No cookie => purely header-authenticated (or
 	// unauthenticated) request that downstream auth will accept or reject on
-	// its own merits; CSRF does not apply. A reverse proxy can attach proxy-auth
-	// or Basic headers on the browser's behalf, so the router checks the origin
-	// of those requests before this runs.
+	// its own merits; CSRF does not apply. A reverse proxy can attach proxy-auth,
+	// Basic or API token headers on the browser's behalf, so the router checks the
+	// origin of those requests before this runs.
 	cookie, err := readSessionCookie(r)
 	if err != nil {
 		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: no session cookie")

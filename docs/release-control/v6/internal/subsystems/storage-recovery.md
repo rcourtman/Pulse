@@ -9711,7 +9711,7 @@ session store on every call. No backup, restore or storage data is read or writt
 and no storage or recovery path changes. `isCrossSiteBasicAuthWrite` refuses a
 cross-site Basic write before its handler runs, which now includes a config import
 reached through a proxy attaching Basic credentials; it opens no storage or recovery
-path.
+path. `isCrossSiteAPITokenWrite` does the same for a proxy attaching an API token.
 
 ### Same-named machines hold their own command sessions
 
