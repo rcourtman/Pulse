@@ -157,11 +157,8 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Limit request body size
-		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
-
 		var role auth.Role
-		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
+		if err := decodeAdminJSONObject(w, r, &role, 64*1024); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid role data", nil)
 			return
 		}
@@ -184,11 +181,8 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(role)
 
 	case http.MethodPut:
-		// Limit request body size
-		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
-
 		var role auth.Role
-		if err := json.NewDecoder(r.Body).Decode(&role); err != nil {
+		if err := decodeAdminJSONObject(w, r, &role, 64*1024); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid role data", nil)
 			return
 		}
@@ -365,13 +359,10 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		// Limit request body size
-		r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
-
 		var req struct {
 			RoleIDs []string `json:"roleIds"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeAdminJSONObject(w, r, &req, 64*1024); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid request body", nil)
 			return
 		}
