@@ -210,7 +210,8 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 		Str("level", string(alert.Level)).
 		Msg("Alert raised, sending to notification manager")
 	if m.notificationMgr != nil {
-		go m.notificationMgr.SendAlert(alert)
+		snapshot := alert.Clone()
+		m.notificationProducers.start(func() { m.notificationMgr.SendAlert(snapshot) })
 	}
 	m.mu.RLock()
 	pushCallback := m.alertPushCallback
@@ -278,7 +279,8 @@ func (m *Monitor) handleResolvedAlert(resolvedAlert *alerts.ResolvedAlert) {
 				// Only occurrence/destination receipts establish who saw the
 				// firing. A pending retry or lost in-memory cooldown marker
 				// after restart must not suppress recovery for other recipients.
-				go m.notificationMgr.SendResolvedAlert(resolvedAlert)
+				snapshot := &alerts.ResolvedAlert{Alert: resolvedAlert.Alert.Clone(), ResolvedTime: resolvedAlert.ResolvedTime}
+				m.notificationProducers.start(func() { m.notificationMgr.SendResolvedAlert(snapshot) })
 			}
 		} else {
 			log.Info().

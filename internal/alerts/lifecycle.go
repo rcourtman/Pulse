@@ -15,6 +15,14 @@ func (m *Manager) Stop() {
 
 		m.workerWG.Wait()
 
+		// A goroutine being scheduled is not notification admission. Keep the
+		// downstream notification manager and this manager's stores alive until
+		// every callback accepted by the producer has actually returned.
+		m.stopMu.Lock()
+		m.callbacksClosed = true
+		m.stopMu.Unlock()
+		m.callbackWG.Wait()
+
 		if m.historyManager != nil {
 			m.historyManager.Stop()
 		}
