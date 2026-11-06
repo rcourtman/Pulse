@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import shutil
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
@@ -793,6 +794,213 @@ class RunningExecutable(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertEqual(observations, 1)
         self.assertLess(elapsed, 8)
+
+
+# Exclusion uses real file locks, independent of the manager double above.
+LOCK_HARNESS = r'''
+source "$UPDATER"
+log() { printf '[%s] %s\n' "$1" "${*:2}"; }
+detect_service_name() { echo pulse-fixture; }
+read_update_service_state() {
+    echo observed >> "$FIXTURE/manager-$LABEL"
+    if [[ "$STATE_FAULT" == true ]]; then return 1; fi
+    echo inactive
+}
+verify_release_signature() { :; }
+download_update_asset() {
+    echo downloaded >> "$FIXTURE/download-$LABEL"
+    if [[ "$1" == *.sshsig ]]; then printf 'fixture signature\n' > "$2"
+    else cp "$FIXTURE/installer" "$2"; fi
+}
+mktemp() {
+    local -a args=("$@")
+    local last=$((${#args[@]} - 1))
+    if [[ "${args[last]}" == /tmp/* ]]; then
+        args[last]="$FIXTURE/tmp/${args[last]##*/}"
+    fi
+    command mktemp "${args[@]}"
+}
+if [[ "$LOCK_FAULT" == unavailable ]]; then
+    flock() { return 69; }
+elif [[ "$LOCK_FAULT" == missing ]]; then
+    command() {
+        if [[ "$1" == -v && "$2" == flock ]]; then return 1; fi
+        builtin command "$@"
+    }
+fi
+status=0
+perform_update v6.6.0 || status=$?
+printf 'STATUS=%s\n' "$status"
+[[ -z "$(trap -p RETURN)" ]] || { echo 'RETURN trap leaked'; exit 98; }
+exit "$status"
+'''
+
+LOCK_INSTALLER = r'''#!/bin/bash
+set -euo pipefail
+# A long-lived installer child must not inherit the updater's lock descriptor.
+python3 - <<'CHECK'
+import os
+from pathlib import Path
+installed = Path(os.environ["PULSE_INSTALL_DIR"])
+descriptors = Path('/proc/self/fd') if Path('/proc/self/fd').is_dir() else Path('/dev/fd')
+for item in descriptors.iterdir():
+    try:
+        if item.samefile(installed):
+            raise SystemExit('installer inherited the update directory lock')
+    except FileNotFoundError:
+        pass
+CHECK
+printf '%s\n' "$LABEL" >> "$FIXTURE/entered"
+if [[ "$BLOCK" == true ]]; then
+    touch "$FIXTURE/ready"
+    # Bounded even if its test controller fails; all owned children are reaped.
+    for ((i=0; i<250; i++)); do
+        [[ -f "$FIXTURE/release" ]] && break
+        sleep 0.02
+    done
+    [[ -f "$FIXTURE/release" ]] || exit 97
+fi
+cp "$FIXTURE/new-pulse" "$PULSE_INSTALL_DIR/bin/pulse"
+printf 'v6.6.0\n' > "$PULSE_INSTALL_DIR/VERSION"
+exit "$INSTALLER_EXIT"
+'''
+
+
+class UpdateTransactionLock(unittest.TestCase):
+    def setUp(self):
+        self.assertIsNotNone(shutil.which("flock"), "flock is required for the actual directory-lock controls")
+        self.temporary = tempfile.TemporaryDirectory(prefix="pulse-update-lock-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.processes = []
+        self.addCleanup(self.stop_children)
+        self.first = self.fixture("first")
+
+    def stop_children(self):
+        for process in self.processes:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.communicate(timeout=5)
+
+    def fixture(self, name):
+        f = self.root / name
+        for directory in (f / "install/bin", f / "config", f / "tmp"):
+            directory.mkdir(parents=True)
+        for path, content in ((f / "install/bin/pulse", "#!/bin/sh\necho 'Pulse v6.5.0'\n"),
+                              (f / "new-pulse", "#!/bin/sh\necho 'Pulse v6.6.0'\n"),
+                              (f / "installer", LOCK_INSTALLER)):
+            path.write_text(content)
+            path.chmod(0o700)
+        (f / "install/VERSION").write_text("v6.5.0\n")
+        (f / "config/system.json").write_text("saved settings\n")
+        (f / "config/agent-id").write_text("saved identity\n")
+        return f
+
+    def start(self, fixture, label, *, block=False, install=None, installer_exit=0, lock_fault="", state_fault=False):
+        env = dict(os.environ, UPDATER=str(UPDATER), FIXTURE=str(fixture), LABEL=label,
+                   BLOCK="true" if block else "false", INSTALLER_EXIT=str(installer_exit),
+                   LOCK_FAULT=lock_fault, STATE_FAULT="true" if state_fault else "false", PULSE_INSTALL_DIR=str(install or fixture / "install"),
+                   PULSE_CONFIG_DIR=str(fixture / "config"), PULSE_SERVICE_NAME="pulse-fixture")
+        process = subprocess.Popen(["bash", "-c", LOCK_HARNESS], env=env, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, start_new_session=True)
+        self.processes.append(process)
+        return process
+
+    def finish(self, process, expected):
+        output, error = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, expected, output + error)
+        self.assertIn(f"STATUS={expected}", output)
+        self.assertNotIn("trap leaked", output)
+        return output + error
+
+    def wait_ready(self):
+        deadline = time.monotonic() + 4
+        while not (self.first / "ready").exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertTrue((self.first / "ready").exists(), "first transaction did not enter its private installer")
+
+    def release(self, process):
+        (self.first / "release").touch()
+        self.finish(process, 0)
+
+    def assert_saved(self, fixture):
+        self.assertEqual((fixture / "config/system.json").read_text(), "saved settings\n")
+        self.assertEqual((fixture / "config/agent-id").read_text(), "saved identity\n")
+        self.assertEqual(list((fixture / "tmp").iterdir()), [])
+
+    def competing(self, alias=False):
+        first = self.start(self.first, "holder", block=True)
+        self.wait_ready()
+        destination = self.first / "install"
+        if alias:
+            destination = self.root / "same directory alias"
+            destination.symlink_to(self.first / "install", target_is_directory=True)
+        second = self.start(self.first, "contender", install=destination)
+        output = self.finish(second, 1)
+        self.assertIn("lock", output)
+        self.assertFalse((self.first / "manager-contender").exists())
+        self.assertFalse((self.first / "download-contender").exists())
+        self.assertEqual((self.first / "entered").read_text().splitlines(), ["holder"])
+        self.assertEqual((self.first / "install/VERSION").read_text(), "v6.5.0\n")
+        self.release(first)
+        self.assertEqual((self.first / "install/VERSION").read_text(), "v6.6.0\n")
+        self.assert_saved(self.first)
+
+    def test_same_directory_refuses_competing_transaction(self):
+        self.competing()
+
+    def test_directory_alias_cannot_start_a_second_transaction(self):
+        self.competing(alias=True)
+
+    def test_independent_installations_do_not_block_each_other(self):
+        first = self.start(self.first, "holder", block=True)
+        self.wait_ready()
+        independent = self.fixture("independent")
+        self.finish(self.start(independent, "independent"), 0)
+        self.assertIsNone(first.poll())
+        self.assertEqual((independent / "install/VERSION").read_text(), "v6.6.0\n")
+        self.release(first)
+        self.assert_saved(self.first)
+        self.assert_saved(independent)
+
+    def test_lock_is_released_after_success_and_failed_installation(self):
+        for status in (0, 23):
+            with self.subTest(installer_exit=status):
+                f = self.fixture("sequential-" + str(status))
+                self.finish(self.start(f, "first", installer_exit=status), 0 if status == 0 else 1)
+                self.assertEqual((f / "install/VERSION").read_text(), "v6.6.0\n" if status == 0 else "v6.5.0\n")
+                self.finish(self.start(f, "next"), 0)
+                self.assertEqual((f / "entered").read_text().splitlines(), ["first", "next"])
+                self.assert_saved(f)
+
+    def test_service_observation_refusal_releases_the_early_lock(self):
+        self.finish(self.start(self.first, "unobserved", state_fault=True), 1)
+        self.assertFalse((self.first / "download-unobserved").exists())
+        self.assertFalse((self.first / "entered").exists())
+        self.assertEqual((self.first / "install/VERSION").read_text(), "v6.5.0\n")
+        self.finish(self.start(self.first, "next"), 0)
+        self.assert_saved(self.first)
+
+    def test_non_directory_or_missing_installation_never_starts_a_transaction(self):
+        for destination in (self.first / "config/agent-id", self.first / "missing"):
+            with self.subTest(destination=destination.name):
+                self.finish(self.start(self.first, "refused", install=destination), 1)
+                for marker in ("manager-refused", "download-refused", "entered"):
+                    self.assertFalse((self.first / marker).exists(), marker)
+                self.assertEqual((self.first / "install/VERSION").read_text(), "v6.5.0\n")
+                self.assert_saved(self.first)
+
+    def test_unavailable_or_missing_lock_has_no_service_or_installer_action(self):
+        for fault in ("unavailable", "missing"):
+            with self.subTest(fault=fault):
+                f = self.fixture(fault)
+                output = self.finish(self.start(f, "refused", lock_fault=fault), 1)
+                self.assertIn("lock", output)
+                for marker in ("manager-refused", "download-refused", "entered"):
+                    self.assertFalse((f / marker).exists(), marker)
+                self.assertEqual((f / "install/VERSION").read_text(), "v6.5.0\n")
+                self.assert_saved(f)
+
 
 if __name__ == "__main__":
     unittest.main()
