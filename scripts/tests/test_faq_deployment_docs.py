@@ -97,6 +97,31 @@ class FAQDeploymentDocsTest(unittest.TestCase):
         self.assertIn('props.envOverrides().discoveryEnabled || props.savingDiscoverySettings()', form)
         self.assertIn('sectionPresentation().environmentOverrideMessage', form)
 
+    def test_token_forwarder_keeps_browser_origin_checks(self):
+        text = " ".join((ROOT / "docs/TROUBLESHOOTING.md").read_text().split(
+            "### CORS errors\n", 1)[1].split("\n---", 1)[0].split())
+        for phrase in ("`CSRF origin validation failed`", "different origin",
+                       "Keep `Origin`, `Referer` and `Sec-Fetch-Site` intact",
+                       "trusted page's exact origin above, not `*`",
+                       "authentication alone is not a CSRF check",
+                       "prevents Pulse from detecting that write"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn("authenticates its callers can remove those headers", text)
+
+    def test_cors_repair_is_shipped_without_weakening_other_boundaries(self):
+        source = (ROOT / "docs/TROUBLESHOOTING.md").read_bytes()
+        self.assertEqual(source,
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
+        text = " ".join(source.decode().split("### CORS errors\n", 1)[1].split(
+            "\n---", 1)[0].split())
+        for phrase in ("does not replace authentication, CSRF protection or TLS",
+                       "needs a browser session cookie", "not their trust boundary",
+                       "Keep cookies, authorization headers, API tokens",
+                       "not a credential-bearing request or HAR file"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
     def test_shipped_copy_and_detailed_destinations_exist(self):
         self.assertEqual(faq(), (ROOT / "frontend-modern/public/docs/FAQ.md").read_text())
         for guide, heading in (("TROUBLESHOOTING", "### Port change didn't take effect"),
