@@ -340,7 +340,7 @@ esac
 			}
 			// Exercise the actual workflow step's local PATH boundary, replacing
 			// only Python's containing suite to avoid recursively starting Go.
-			probe := `#!/bin/sh
+			probe := `#!/usr/bin/env bash
 set -eu
 test "$*" = "scripts/installtests/run_unix_contracts.py --phase $EXPECTED_PHASE" || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
