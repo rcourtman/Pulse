@@ -172,6 +172,10 @@ func TestSSOLoadFailureAnonymousAdmissionCannotSurviveRecovery(t *testing.T) {
 					require.Equal(t, enabled, hasEnabledSSOProvidersForAuth(r.config))
 					require.Contains(t, recovered.Body.String(), `"id":"saved"`)
 					require.NotContains(t, recovered.Body.String(), "synthetic-retained-secret")
+					// Middleware cannot turn fallback admission into identity by
+					// replacing the response headers while this request is paused.
+					w.Header().Set("X-Authenticated-User", user)
+					w.Header().Set("X-Auth-Method", "session")
 					resume()
 					select {
 					case <-done:
@@ -192,6 +196,56 @@ func TestSSOLoadFailureAnonymousAdmissionCannotSurviveRecovery(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestSSOManagementRecordsActualAuthentication(t *testing.T) {
+	t.Setenv("PULSE_TEST_BCRYPT_COST", "4")
+	InitSessionStore(t.TempDir())
+	const token = "synthetic-sso-admission-token.12345678"
+	const session = "synthetic-sso-admission-session"
+	GetSessionStore().CreateSession(session, time.Hour, "fixture", "127.0.0.1", "operator")
+	hash, err := auth.HashPassword("synthetic-admission-password")
+	require.NoError(t, err)
+	for _, mode := range []string{"token", "bearer", "session", "proxy", "basic", "anonymous", "invalid-explicit-token"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := &config.Config{}
+			req := httptest.NewRequest(http.MethodGet, "/api/security/sso/providers", nil)
+			req.RemoteAddr = "127.0.0.1:1234"
+			switch mode {
+			case "token", "bearer":
+				cfg.APITokens = []config.APITokenRecord{newTokenRecord(t, token, []string{config.ScopeSettingsRead}, nil)}
+				if mode == "token" {
+					req.Header.Set("X-API-Token", token)
+				} else {
+					req.Header.Set("Authorization", "Bearer "+token)
+				}
+			case "session", "invalid-explicit-token":
+				req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+				if mode == "invalid-explicit-token" {
+					req.Header.Set("X-API-Token", "invalid")
+				}
+			case "proxy":
+				cfg.ProxyAuthSecret = "synthetic-proxy-secret"
+				cfg.ProxyAuthUserHeader = "X-Remote-User"
+				req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+				req.Header.Set("X-Remote-User", "operator")
+			case "basic":
+				cfg.AuthUser, cfg.AuthPass = "operator", hash
+				req.SetBasicAuth("operator", "synthetic-admission-password")
+			}
+			admission := &ssoManagementAdmission{unknown: true, authenticated: true}
+			req = req.WithContext(context.WithValue(req.Context(), ssoManagementAdmissionKey{}, admission))
+			w := httptest.NewRecorder()
+			w.Header().Set("X-Auth-Method", "session")
+			require.Equal(t, mode != "invalid-explicit-token", CheckAuth(cfg, w, req))
+			require.Equal(t, mode != "anonymous" && mode != "invalid-explicit-token", admission.authenticated)
+			// A second failed authentication cannot retain the earlier admission.
+			req.Header.Set("X-API-Token", "invalid")
+			req.Header.Del("X-Proxy-Secret")
+			require.False(t, CheckAuth(cfg, httptest.NewRecorder(), req))
+			require.False(t, admission.authenticated)
+		})
 	}
 }
 
