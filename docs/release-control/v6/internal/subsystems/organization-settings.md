@@ -15,6 +15,31 @@
 
 ## Purpose
 
+### Directory refreshes preserve pending access and sharing outcomes
+
+Organization Access and Sharing hold same-reader events, repeated effective
+presentation-policy updates and direct reloads behind a dispatched mutation.
+The accepted snapshot remains visible with Saving and disabled mutation controls;
+a refresh cannot undo server work or establish that it is safe to submit again.
+Success emits the existing organizations-changed event, obtaining one fresh
+snapshot. An uncertain or mismatched ownership response keeps the existing
+unavailable state and explicit Reload recovery, not an automatic write retry.
+A never-settled write remains pending rather than being presented as rolled back.
+
+Actual organization/principal changes, entitlement or surface withdrawal,
+read-only posture and disposal still invalidate and cancel immediately. Old-reader
+feedback is suppressed; local cancellation does not undo a server-applied write.
+Expected organization, session/CSRF binding, no-retry requests, server authority
+and deliberate ownership confirmation remain unchanged.
+
+The registered Access and Sharing panel tests exercise all ten plain mutation
+paths plus ownership confirmation, successful and uncertain completion, explicit
+recovery, blocked repeats, direct reloads and true authority/lifetime withdrawal.
+Browser fixtures consume the production panels, state and HTTP client with
+delayed safe responses at desktop/narrow viewports. These are source safeguards,
+not original SSO, secret, tenant or installed-client recovery. Organization
+Overview display-name saving remains outside this bounded two-panel repair.
+
 ### Invitation decisions identify the exact organization
 
 Your Invitations shows each organization's display name **and** ID beside its

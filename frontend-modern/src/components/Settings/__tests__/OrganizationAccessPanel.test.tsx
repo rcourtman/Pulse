@@ -133,9 +133,9 @@ beforeEach(() => {
   setReadOnly = updateReadOnly;
   isMultiTenantEnabledMock.mockImplementation(enabled);
   readOnlyMock.mockImplementation(readOnly);
-  const [hidden, updateHidden] = createSignal(false);
-  setHidden = updateHidden;
-  hideOrganizationsMock.mockImplementation(hidden);
+  const [hidden, updateHidden] = createSignal({ value: false });
+  setHidden = (value) => updateHidden({ value });
+  hideOrganizationsMock.mockImplementation(() => hidden().value);
   vi.stubGlobal(
     'confirm',
     vi.fn(() => true),
@@ -564,7 +564,11 @@ const renderState = () => {
   let state!: ReturnType<typeof useOrganizationAccessPanelState>;
   const [user, setUser] = createSignal<string | undefined>('user-1');
   const view = render(() => {
-    state = useOrganizationAccessPanelState({ get currentUser() { return user(); } });
+    state = useOrganizationAccessPanelState({
+      get currentUser() {
+        return user();
+      },
+    });
     return <div />;
   });
   return { state, setUser, ...view };
@@ -853,6 +857,7 @@ describe('Organization Access change safety', () => {
       eventBusEmitMock('organizations_changed');
       eventBusEmitMock('org_switched');
       await state.loadOrganizationAccess();
+      setHidden(false); // A new policy object with unchanged effective authority.
       expect(signal.aborted).toBe(false);
       expect(state.saving()).toBe(true);
       expect(orgGetMock).toHaveBeenCalledTimes(1);
@@ -910,6 +915,57 @@ describe('Organization Access change safety', () => {
       expect(notificationSuccessMock).not.toHaveBeenCalled();
       expect(notificationErrorMock).not.toHaveBeenCalled();
       expect(inviteMemberMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['success', 'uncertain', 'mismatched confirmation'])(
+    'retains a confirmed ownership transfer through equal-reader refreshes: %s',
+    async (outcome) => {
+      const { state } = renderState();
+      await ready(state);
+      const member = state.members()[1];
+      await state.updateRole(member, 'owner');
+      const transfer = state.ownershipTransfer()!;
+      expect(transfer.member).toBe(member);
+      const result = deferred<unknown>();
+      updateMemberRoleMock.mockReturnValueOnce(result.promise);
+      const change = state.confirmOwnershipTransfer(transfer);
+      const signal = updateMemberRoleMock.mock.calls[0].at(-1).signal;
+      eventBusEmitMock('organizations_changed');
+      await state.loadOrganizationAccess();
+      setHidden(false);
+      expect(state.saving()).toBe(true);
+      expect(signal.aborted).toBe(false);
+      expect(orgGetMock).toHaveBeenCalledTimes(1);
+      await state.confirmOwnershipTransfer(transfer);
+      await exerciseAllChanges(state, member);
+      expect(writes().reduce((sum, write) => sum + write.mock.calls.length, 0)).toBe(1);
+      orgGetMock.mockResolvedValue({ ...baseOrg, ownerUserId: member.userId });
+      listMembersMock.mockResolvedValue([
+        { ...baseMembers[0], role: 'admin' },
+        { ...member, role: 'owner' },
+      ]);
+      if (outcome === 'uncertain') result.reject(new Error('Response lost after apply'));
+      else result.resolve({ kind: 'member', member: { ...member, role: outcome === 'success' ? 'owner' : 'viewer' } });
+      await change;
+      if (outcome === 'success') {
+        await ready(state);
+        expect(notificationSuccessMock).toHaveBeenCalledTimes(1);
+      } else {
+        expect(state.loadError()).toContain('could not be confirmed');
+        expect(notificationSuccessMock).not.toHaveBeenCalled();
+        expect(orgGetMock).toHaveBeenCalledTimes(1);
+        await state.loadOrganizationAccess();
+        await ready(state);
+      }
+      expect(state.org()?.ownerUserId).toBe(member.userId);
+      expect(state.members()[1].role).toBe('owner');
+      expect(updateMemberRoleMock).toHaveBeenCalledExactlyOnceWith(
+        'org-a',
+        { userId: member.userId, role: 'owner' },
+        expect.objectContaining({ expectedOrgID: 'org-a', retry: false, signal }),
+      );
+      expect(orgGetMock).toHaveBeenCalledTimes(2);
     },
   );
 

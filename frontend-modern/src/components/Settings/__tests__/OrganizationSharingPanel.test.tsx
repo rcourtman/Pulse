@@ -1007,6 +1007,9 @@ describe('sharing changes require an admitted current snapshot', () => {
       emit('organizations_changed');
       emit('org_switched'); // An equal selection is not a new reader.
       await state.loadSharingData();
+      syncSessionPresentationPolicy({
+        presentationPolicy: { demoMode: false, readOnly: false, hideCommercial: false, hideUpgrade: true },
+      });
       expect(signal.aborted).toBe(false);
       expect(state.saving()).toBe(true);
       expect(orgGetMock).toHaveBeenCalledTimes(1);
@@ -1128,7 +1131,10 @@ describe('sharing changes require an admitted current snapshot', () => {
       const signal = createShareMock.mock.calls[0].at(-1).signal;
       if (kind === 'user') setUser('other-user');
       if (kind === 'anonymous') setUser(undefined);
-      if (kind === 'hidden') syncSessionPresentationPolicy({ presentationPolicy: { demoMode: true, readOnly: true, hideCommercial: true, hideUpgrade: true } });
+      if (kind === 'hidden')
+        syncSessionPresentationPolicy({
+          presentationPolicy: { demoMode: true, readOnly: true, hideCommercial: true, hideUpgrade: true },
+        });
       if (kind === 'capability') setEnabled(false);
       if (kind === 'read-only')
         syncSessionPresentationPolicy({
