@@ -1802,9 +1802,10 @@ jobs:
   # publication boundary. The separate run waits for release-activation.json,
   # so it cannot mutate a customer surface until public verification commits.
   # Successful jobs survive Actions' failed-jobs retry. Dispatch only once
-  # all qualification and immutable version staging has passed; otherwise an
+  # candidate qualification has passed; otherwise an
   # early waiter can exit with the first failed attempt and leave a later
-  # successful retry holding that same terminal convergence owner.
+  # successful retry holding that same terminal convergence owner. Prewarm
+  # before public version writers; activation still judges their results.
   dispatch_release_convergence:
     needs:
       - prepare
@@ -1821,10 +1822,7 @@ jobs:
       - validate_release_assets
       - install_sh_smoke
       - stage_private_pro_runtime
-      - publish_release_tag
-      - publish_docker
-      - publish_helm_chart
-    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && needs.publish_release_tag.result == 'success' && needs.publish_docker.result == 'success' && needs.publish_helm_chart.result == 'success' }}
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.build_release_candidate.result == 'success' && needs.qualify_release_containers.result == 'success' && needs.frontend_bundle.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

@@ -582,9 +582,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             'require_result "publication trust preflight"', commit_verdict
         )
         self.assertIn("- dispatch_release_convergence", activation)
-        for dependency in ("publish_release_tag", "publish_docker", "publish_helm_chart"):
-            self.assertIn(f"- {dependency}", dispatch)
-            self.assertIn(f"needs.{dependency}.result == 'success'", dispatch)
+        for writer in ("publish_release_tag", "publish_docker", "publish_helm_chart", "activate_release"):
+            self.assertNotIn(f"- {writer}", dispatch)
         self.assertIn("- create_release", dispatch)
         self.assertIn("- stage_private_pro_runtime", dispatch)
         self.assertIn("github.event.inputs.draft_only != 'true'", dispatch)
@@ -3788,13 +3787,13 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
         # The draft is created only after the prepare gate can refuse the run.
         self.assertIn("prepare", self.jobs["create_release"]["needs"])
 
-    def condition(self, job: str, results: dict[str, str], *, draft: bool = False, cancelled: bool = False) -> bool:
+    def condition(self, job: str, results: dict[str, str], *, draft: bool = False, cancelled: bool = False, backfill: bool = False) -> bool:
         # Execute the workflow's Boolean condition with explicit job outcomes.
         # This intentionally fails if the workflow adds an unsupported expression.
         expression = self.jobs[job]["if"].removeprefix("${{").removesuffix("}}").strip()
         expression = re.sub(r"needs\.([a-z_]+)\.result", lambda m: repr(results[m[1]]), expression)
         expression = expression.replace("needs.prepare.outputs.version", repr("6.4.4-beta.9"))
-        expression = expression.replace("needs.prepare.outputs.historical_asset_backfill_only", repr("false"))
+        expression = expression.replace("needs.prepare.outputs.historical_asset_backfill_only", repr(str(backfill).lower()))
         expression = expression.replace("github.event.inputs.draft_only", repr(str(draft).lower()))
         expression = expression.replace("cancelled()", repr(cancelled))
         expression = expression.replace("always()", "True").replace("&&", " and ").replace("||", " or ")
@@ -3828,19 +3827,26 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
                     with self.subTest(writer=name, dependency=dependency, state=state):
                         self.assertFalse(self.condition(name, outcomes | {dependency: state}))
 
-    def test_convergence_owner_waits_for_every_candidate_and_version_surface(self) -> None:
+    def test_qualified_convergence_owner_prewarms_before_public_version_writes(self) -> None:
         # A successful dispatch is not rerun by Actions' failed-jobs retry.
         # It must not create an owner that can die while a prerequisite fails.
         dispatch = self.jobs["dispatch_release_convergence"]
-        prerequisites = self.CANDIDATE_CHECKS | {
-            "publish_release_tag", "publish_docker", "publish_helm_chart",
-        }
+        prerequisites = self.CANDIDATE_CHECKS
         self.assertEqual(set(dispatch["needs"]), prerequisites)
+        for writer in self.PUBLIC_WRITERS:
+            self.assertNotIn(writer, dispatch["needs"])
+            self.assertNotIn(f"needs.{writer}.", dispatch["if"])
         good = dict.fromkeys(self.jobs, "success")
         good["integration_tests"] = "skipped"  # Normal beta policy.
         self.assertTrue(self.condition("dispatch_release_convergence", good))
         self.assertFalse(self.condition("dispatch_release_convergence", good, draft=True))
         self.assertFalse(self.condition("dispatch_release_convergence", good, cancelled=True))
+        self.assertFalse(self.condition("dispatch_release_convergence", good, backfill=True))
+        # Public writes have not started when the qualified owner prewarms.
+        # They are still independently required by activation, not dispatch.
+        before_publication = good | dict.fromkeys(self.PUBLIC_WRITERS, "queued")
+        self.assertTrue(self.condition("dispatch_release_convergence", before_publication))
+        self.assertFalse(self.condition("activate_release", before_publication))
         for dependency in prerequisites:
             for state in ("failure", "cancelled", "skipped", "in_progress", "queued"):
                 if dependency == "integration_tests" and state == "skipped":
@@ -3850,18 +3856,17 @@ class CandidatePublicationBoundaryTest(unittest.TestCase):
                         "dispatch_release_convergence", good | {dependency: state}
                     ))
 
-    def test_failed_jobs_retry_creates_a_fresh_convergence_owner(self) -> None:
+    def test_candidate_failure_retry_creates_a_fresh_convergence_owner(self) -> None:
         # Model the actual Actions retry rule: keep successful jobs, rerun
         # failed/skipped ones. Evaluate the workflow's own predicates, not a
         # second dispatch-admission implementation. The old graph dispatched
-        # before backend completion; its waiter then died with attempt one's
-        # failure, leaving attempt two to reuse a terminal owner.
-        writers = ("publish_release_tag", "publish_docker", "publish_helm_chart",
-                   "dispatch_release_convergence", "activate_release")
-        for failed in self.CANDIDATE_CHECKS | {"publish_release_tag", "publish_docker",
-                                             "publish_helm_chart"}:
-            if failed == "prepare":
-                continue  # Its missing outputs already stop draft preparation.
+        # despite a failed backend; its waiter then died with attempt one's
+        # failure, leaving attempt two to reuse a terminal owner. This covers
+        # candidate failures, not owner renewal after a public-write failure:
+        # the unchanged live-owner check safely refuses that separate case.
+        writers = ("dispatch_release_convergence", "publish_release_tag",
+                   "publish_docker", "publish_helm_chart", "activate_release")
+        for failed in self.CANDIDATE_CHECKS:
             with self.subTest(failed=failed):
                 first = dict.fromkeys(self.jobs, "success")
                 first["integration_tests"] = "skipped"
