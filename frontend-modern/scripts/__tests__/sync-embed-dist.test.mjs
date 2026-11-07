@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   cpSync,
@@ -94,6 +94,131 @@ function fixture(files, { previous = true } = {}) {
 function expectNoDebris(f) {
   expect(readdirSync(path.dirname(f.target)).sort()).toEqual(existsSync(f.target) ? ['dist'] : []);
   expect(existsSync(path.join(f.root, 'tmp', 'locks', 'frontend-embed-sync.lock'))).toBe(false);
+  expect(existsSync(path.join(f.root, 'tmp', 'locks', 'frontend-embed-build.lock'))).toBe(false);
+}
+
+function startNode(root, args) {
+  const child = spawn(process.execPath, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  const result = { code: null, signal: null, error: null, stdout: '', stderr: '' };
+  let settled = false;
+  child.stdout.on('data', (data) => (result.stdout += data));
+  child.stderr.on('data', (data) => (result.stderr += data));
+  const done = new Promise((resolve) => {
+    child.on('error', (error) => (result.error = error));
+    child.on('close', (code, signal) => {
+      clearTimeout(timeout);
+      settled = true;
+      Object.assign(result, { code, signal });
+      resolve(result);
+    });
+  });
+  const timeout = setTimeout(() => child.kill('SIGKILL'), 15_000);
+  return { done, result, settled: () => settled };
+}
+
+async function waitForMarker(file, command) {
+  const deadline = Date.now() + 5_000;
+  while (!existsSync(file) && !command.settled() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  expect(command.result.error).toBeNull();
+  expect(existsSync(file), JSON.stringify(command.result)).toBe(true);
+}
+
+function prepareGatedCompiler(f, { initial, fail }) {
+  for (const name of ['build-embed-assets.mjs', 'sync-public-docs.mjs']) {
+    cpSync(
+      path.join(repository, 'frontend-modern', 'scripts', name),
+      path.join(f.root, 'frontend-modern', 'scripts', name),
+    );
+  }
+  // Use the real docs producer too. Only Vite is replaced: a gated compiler
+  // makes the normally fleeting, partially written output deterministic.
+  writeFiles(
+    f.root,
+    Object.fromEntries(
+      [
+        'docs/README.md',
+        'docs/MIGRATION_UNIFIED_NAV.md',
+        'docs/PRIVACY.md',
+        'docs/CONFIGURATION.md',
+        'docs/UNIFIED_AGENT.md',
+        'docs/AGENT_SECURITY.md',
+        'docs/PROXY_AUTH.md',
+        'docs/TRUENAS.md',
+        'SECURITY.md',
+        'TERMS.md',
+      ].map((name) => [name, `Synthetic local help for ${name}\n`]),
+    ),
+  );
+  const started = path.join(f.root, 'compiler-started');
+  const release = path.join(f.root, 'compiler-continue');
+  const blocked = path.join(f.root, 'sync-observed-build-lock');
+  const partialFiles = { ...validFiles, 'assets/app.js': 'console.log("unfinished compiler");\n' };
+  const finalFiles = fail
+    ? { 'assets/app.js': 'console.log("failed compiler without an entry");\n' }
+    : validFiles;
+  writeFiles(f.root, {
+    'compiler-fixture.json': JSON.stringify({
+      source: f.source,
+      started,
+      release,
+      initialFiles: initial === 'present' ? partialFiles : {},
+      finalFiles,
+      fail,
+    }),
+    'frontend-modern/node_modules/vite/bin/vite.js': `
+const fs = require('node:fs');
+const path = require('node:path');
+const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), '..', 'compiler-fixture.json')));
+const write = (files) => {
+  fs.rmSync(config.source, { recursive: true, force: true });
+  for (const [name, content] of Object.entries(files)) {
+    const file = path.join(config.source, name);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
+  }
+};
+(async () => {
+  write(config.initialFiles);
+  fs.writeFileSync(config.started, 'compiler holds the production build lock');
+  const deadline = Date.now() + 10000;
+  while (!fs.existsSync(config.release)) {
+    if (Date.now() > deadline) throw new Error('Fixture compiler gate timed out');
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  write(config.finalFiles);
+  process.exitCode = config.fail ? 17 : 0;
+})();
+`,
+    // Observe the real filesystem refusal; never supply a fake lock result
+    // or run a second selection algorithm. --import leaves the actual CLI
+    // entry point, process.argv and its lock helper unchanged.
+    'observe-build-lock.mjs': `
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const mkdir = fs.promises.mkdir;
+fs.promises.mkdir = async (...args) => {
+  try { return await mkdir(...args); }
+  catch (error) {
+    if (args[0] === ${JSON.stringify(path.join(f.root, 'tmp', 'locks', 'frontend-embed-build.lock'))}
+        && error.code === 'EEXIST') {
+      fs.writeFileSync(${JSON.stringify(blocked)}, 'observed EEXIST from the occupied production build lock');
+    }
+    throw error;
+  }
+};
+syncBuiltinESMExports();
+`,
+  });
+  return {
+    started,
+    release,
+    blocked,
+    builder: path.join(f.root, 'frontend-modern', 'scripts', 'build-embed-assets.mjs'),
+    sync: path.join(f.root, 'frontend-modern', 'scripts', 'sync-embed-dist.mjs'),
+    observer: path.join(f.root, 'observe-build-lock.mjs'),
+  };
 }
 
 afterEach(() => {
@@ -267,4 +392,66 @@ describe('copy failures and irregular staged output', () => {
       expectNoDebris(f);
     },
   );
+});
+
+describe('standalone sync waits for its actual build producer', () => {
+  it.each(['present', 'absent'])(
+    'does not inspect or publish %s intermediate output while Vite owns the build lock',
+    async (initial) => {
+      const f = fixture(validFiles);
+      const previous = tree(f.target);
+      const gate = prepareGatedCompiler(f, { initial, fail: false });
+      const build = startNode(f.root, [gate.builder]);
+      let sync;
+      try {
+        await waitForMarker(gate.started, build);
+        expect(existsSync(f.source)).toBe(initial === 'present');
+        sync = startNode(f.root, ['--import', pathToFileURL(gate.observer).href, gate.sync]);
+        await waitForMarker(gate.blocked, sync);
+        expect(sync.settled()).toBe(false);
+        expect(tree(f.target)).toEqual(previous);
+        expect(readdirSync(path.dirname(f.target))).toEqual(['dist']);
+      } finally {
+        writeFileSync(gate.release, 'finish the owned fixture compiler');
+        await Promise.all([build.done, sync?.done]);
+      }
+      expect(build.result).toMatchObject({ code: 0, signal: null, error: null });
+      expect(sync.result).toMatchObject({ code: 0, signal: null, error: null });
+      expect(build.result.stdout).toContain('Synced frontend embed assets');
+      expect(sync.result.stdout).toContain('Synced frontend embed assets');
+      expect(tree(f.target)).toEqual(tree(f.source));
+      expect(readFileSync(path.join(f.target, 'assets', 'app.js'), 'utf8')).toBe(
+        validFiles['assets/app.js'],
+      );
+      expectNoDebris(f);
+    },
+    20_000,
+  );
+
+  it('retains the usable embed when the held compiler fails and leaves incomplete output', async () => {
+    const f = fixture(validFiles);
+    const previous = tree(f.target);
+    const gate = prepareGatedCompiler(f, { initial: 'present', fail: true });
+    const build = startNode(f.root, [gate.builder]);
+    let sync;
+    try {
+      await waitForMarker(gate.started, build);
+      sync = startNode(f.root, ['--import', pathToFileURL(gate.observer).href, gate.sync]);
+      await waitForMarker(gate.blocked, sync);
+      expect(sync.settled()).toBe(false);
+      expect(tree(f.target)).toEqual(previous);
+    } finally {
+      writeFileSync(gate.release, 'finish the failing owned fixture compiler');
+      await Promise.all([build.done, sync?.done]);
+    }
+    expect(build.result).toMatchObject({ code: 1, signal: null, error: null });
+    expect(build.result.stderr).toContain('exited with code 17');
+    expect(sync.result).toMatchObject({ code: 1, signal: null, error: null });
+    expect(sync.result.stderr).toContain('frontend build output incomplete');
+    expect(sync.result.stderr).toContain('index.html');
+    expect(build.result.stdout).not.toContain('Synced frontend embed assets');
+    expect(sync.result.stdout).not.toContain('Synced frontend embed assets');
+    expect(tree(f.target)).toEqual(previous);
+    expectNoDebris(f);
+  }, 20_000);
 });
