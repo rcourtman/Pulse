@@ -113,7 +113,7 @@ def run_local_recipe(root, block, secure_port, plain_port, *, trust=True):
         f'output = "{root / "unexpected-download"}"\n'
     )
     public_key = (root / "signer.pub").read_text().split()[1]
-    command = block.replace("vX.Y.Z", "v6.4.5-rc.2").replace(
+    command = re.sub(r"(?<=export PULSE_VERSION=)\S+", "v6.4.5-rc.2", block).replace(
         "https://github.com/rcourtman/Pulse/releases/download",
         f"https://127.0.0.1:{secure_port}"
     )
@@ -243,7 +243,7 @@ esac
                     receipt = root / "executed"
                     env = {**os.environ, "PATH": f"{commands}:{os.environ['PATH']}",
                            "FAILURE": failure, "INSTALL_RECEIPT": str(receipt)}
-                    result = subprocess.run(["bash", "-c", block.replace("vX.Y.Z", "v6.4.5-rc.2")],
+                    result = subprocess.run(["bash", "-c", re.sub(r"(?<=export PULSE_VERSION=)\S+", "v6.4.5-rc.2", block)],
                                             cwd=root, env=env, capture_output=True, text=True)
                     if failure == "none":
                         self.assertEqual(result.returncode, 0, result.stderr)

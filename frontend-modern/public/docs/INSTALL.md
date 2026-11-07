@@ -75,12 +75,13 @@ and the [recovery instructions](RECOVERY.md) before another attempt.
 ### Proxmox VE (LXC installer)
 If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the official installer which creates and configures a lightweight LXC container.
 
-Replace `vX.Y.Z` with the exact release tag you want, then run this on your Proxmox host:
+This installs the current stable version. To install another, change
+`PULSE_VERSION`. Run this on your Proxmox host:
 
 ```bash
 (
 set -e
-export PULSE_VERSION=vX.Y.Z
+export PULSE_VERSION=v6.7.0
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"
@@ -101,7 +102,7 @@ bash install.sh --version "${PULSE_VERSION}"
 )
 ```
 
-The signed server installer uses the `vX.Y.Z` Pulse release, which contains the
+The signed server installer uses that Pulse release, which contains the
 Linux server archive; it does not ask for a GitHub personal access token. A
 `helm-chart-*` release contains a Kubernetes chart, not that archive. If a
 different helper selects a Helm-chart release or asks for a GitHub token, stop
@@ -121,7 +122,7 @@ docker run -d \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  rcourtman/pulse:v6.7.0
 ```
 
 For a new container, continue with [bootstrap-token setup](#step-1-get-the-token)
@@ -133,7 +134,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   pulse:
-    image: ${PULSE_IMAGE:-rcourtman/pulse:vX.Y.Z}
+    image: ${PULSE_IMAGE:-rcourtman/pulse:v6.7.0}
     container_name: pulse
     restart: unless-stopped
     ports:
@@ -192,7 +193,7 @@ For Linux servers (VM or bare metal), use the official installer:
 ```bash
 (
 set -e
-export PULSE_VERSION=vX.Y.Z
+export PULSE_VERSION=v6.7.0
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"
