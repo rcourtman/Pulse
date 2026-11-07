@@ -1144,6 +1144,12 @@ func cloneZFSPool(src *ZFSPool) *ZFSPool {
 		return nil
 	}
 	dest := *src
+	if src.ScanDetails != nil {
+		scan := *src.ScanDetails
+		scan.StartedAt = cloneTimePtr(src.ScanDetails.StartedAt)
+		scan.EndedAt = cloneTimePtr(src.ScanDetails.EndedAt)
+		dest.ScanDetails = &scan
+	}
 	dest.Devices = append([]ZFSDevice(nil), src.Devices...)
 	dest.Datasets = append([]ZFSDataset(nil), src.Datasets...)
 	normalized := dest.NormalizeCollections()
