@@ -9131,3 +9131,62 @@ func TestPVEPollKeepsNATNodeAgentLinkThroughTheGuestPoll(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyHostReportRetainsSiblingSensorsInsideMaximumLease(t *testing.T) {
+	monitor := newTestMonitor(t)
+	monitor.clusterSensorsCache = make(map[string]clusterSensorsCacheEntry)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+	monitor.state.UpdateNodesForInstance("siteA", []models.Node{readStateTestNode("siteA", "px1"), readStateTestNode("siteA", "px2")})
+	adapter.PopulateFromSnapshot(monitor.state.GetSnapshot())
+	host, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent:          agentshost.AgentInfo{ID: "agent-px2", IntervalSeconds: 300},
+		Host:           agentshost.HostInfo{ID: "machine-px2", Hostname: "px2", Platform: "linux"},
+		ClusterSensors: clusterSensorReport("px1", 62), Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.LinkedNodeID != "siteA-px2" {
+		t.Fatalf("reporter link = %q", host.LinkedNodeID)
+	}
+	// Age only the sensor observation. A later report without sibling sensors
+	// must neither renew its timestamp nor apply the old five-minute eviction.
+	observation := time.Now().Add(-6 * time.Minute)
+	monitor.clusterSensorsMu.Lock()
+	for key, entry := range monitor.clusterSensorsCache {
+		entry.updatedAt = observation
+		monitor.clusterSensorsCache[key] = entry
+	}
+	monitor.clusterSensorsMu.Unlock()
+	_, err = monitor.ApplyHostReport(agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-px2", IntervalSeconds: 300},
+		Host:  agentshost.HostInfo{ID: "machine-px2", Hostname: "px2", Platform: "linux"}, Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := readStateTestNode("siteA", "px1")
+	got := monitor.getHostAgentTemperatureForNode(target)
+	if got == nil || got.CPUPackage != 62 || !got.LastUpdate.Equal(observation) {
+		t.Fatalf("valid sibling observation lost or renewed: %#v", got)
+	}
+	// Maximum-lease cleanup still happens on ordinary ingestion, even when
+	// the reporter remains online and no replacement sensor reading arrives.
+	monitor.clusterSensorsMu.Lock()
+	for key, entry := range monitor.clusterSensorsCache {
+		entry.updatedAt = time.Now().Add(-hostMaximumHealthWindow - time.Minute)
+		monitor.clusterSensorsCache[key] = entry
+	}
+	monitor.clusterSensorsMu.Unlock()
+	monitor.applyClusterSensors(host.ID, nil, time.Now())
+	monitor.clusterSensorsMu.RLock()
+	remaining := len(monitor.clusterSensorsCache)
+	monitor.clusterSensorsMu.RUnlock()
+	if remaining != 0 {
+		t.Fatalf("past-lease cache entries retained: %d", remaining)
+	}
+	if got := monitor.getHostAgentTemperatureForNode(target); got != nil {
+		t.Fatalf("evicted temperature survived: %#v", got)
+	}
+}

@@ -222,12 +222,12 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 		}
 	})
 
-	t.Run("stale cpu only host agent temp does not skip", func(t *testing.T) {
+	t.Run("cpu temp beyond maximum agent lease does not skip", func(t *testing.T) {
 		host := &models.Temperature{
 			Available:  true,
 			HasCPU:     true,
 			CPUPackage: 55,
-			LastUpdate: time.Now().Add(-3 * time.Minute),
+			LastUpdate: time.Now().Add(-hostMaximumHealthWindow - time.Second),
 		}
 		if shouldSkipTemperatureSSHCollection(host) {
 			t.Fatal("expected stale CPU-only host agent temp not to skip SSH collection")
@@ -272,7 +272,7 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 	})
 }
 
-func TestIsHostAgentTemperatureRecent(t *testing.T) {
+func TestTemperatureWithinMaximumAgentLease(t *testing.T) {
 	tests := []struct {
 		name     string
 		lastSeen time.Time
@@ -289,9 +289,9 @@ func TestIsHostAgentTemperatureRecent(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "stale - 3 minutes ago",
+			name:     "inside maximum - 3 minutes ago",
 			lastSeen: time.Now().Add(-3 * time.Minute),
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "stale - 1 hour ago",
@@ -302,9 +302,9 @@ func TestIsHostAgentTemperatureRecent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isHostAgentTemperatureRecent(tt.lastSeen)
+			result := temperatureWithinMaximumAgentLease(tt.lastSeen)
 			if result != tt.expected {
-				t.Errorf("isHostAgentTemperatureRecent() = %v, want %v", result, tt.expected)
+				t.Errorf("temperatureWithinMaximumAgentLease() = %v, want %v", result, tt.expected)
 			}
 		})
 	}

@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Peer-temperature cache lifetime is not reporter liveness (7 November 2026)
+
+Host-report ingestion retains cluster-sibling sensor observations only up to the
+existing maximum agent health lease, rather than evicting a valid slow reporter's
+observation after five minutes. The observation keeps its original server report
+time when a later report omits sibling sensors. The temperature consumer checks
+both that time and the reporter's own agent-source sighting against the
+reporter's individual capped lease; a live Proxmox view is not agent liveness.
+Connection/link admission remains unchanged. No report identity, enrollment,
+deleted-agent barrier, token authority or offline-grace rule changes.
+
+`TestApplyHostReportRetainsSiblingSensorsInsideMaximumLease` drives accepted host
+reports, omission without renewal and maximum-lease cleanup. Existing
+`TestApplyHostReportScopesClusterSensorsToReportersConnection` continues to bind
+sibling readings to their reporter's connection.
+
+
 ### Command channel backoff restarts after a healthy session (5 November 2026)
 
 `CommandClient.Run` counted every disconnect as a failure, so each Pulse restart

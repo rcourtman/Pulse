@@ -27,7 +27,7 @@ func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool 
 		return false
 	}
 
-	if !hostAgentTemp.Available || !isHostAgentTemperatureRecent(hostAgentTemp.LastUpdate) {
+	if !hostAgentTemp.Available || !temperatureWithinMaximumAgentLease(hostAgentTemp.LastUpdate) {
 		return false
 	}
 
@@ -419,19 +419,31 @@ func (m *Monitor) getClusterSensorTemperature(hosts []*unifiedresources.HostView
 		return nil
 	}
 
-	// Reuse the same staleness threshold as direct host agents (2 minutes)
+	// A peer observation has the reporting agent's lease, not a fixed
+	// two-minute lifetime. Recheck the agent source below: a merged PVE row
+	// staying online cannot renew a silent reporter or an omitted reading.
 	var candidates []clusterSensorsCacheEntry
 	m.clusterSensorsMu.RLock()
 	for _, entry := range m.clusterSensorsCache {
-		if entry.nodeName == name && isHostAgentTemperatureRecent(entry.updatedAt) {
+		if entry.nodeName == name {
 			candidates = append(candidates, entry)
 		}
 	}
 	m.clusterSensorsMu.RUnlock()
 
 	var newest *clusterSensorsCacheEntry
+	now := time.Now()
 	for i := range candidates {
-		reporterInstance := proxmoxNodeInstance(nodes, linkedNodeIDForAgent(hosts, candidates[i].reporterID))
+		reporter := hostViewForAgent(hosts, candidates[i].reporterID)
+		if reporter == nil {
+			continue
+		}
+		agentStatus, ok := reporter.SourceStatus(unifiedresources.SourceAgent)
+		if !ok || !hostAgentReportCurrent(agentStatus.LastSeen, reporter.IntervalSeconds(), now) ||
+			!hostAgentReportCurrent(candidates[i].updatedAt, reporter.IntervalSeconds(), now) {
+			continue
+		}
+		reporterInstance := proxmoxNodeInstance(nodes, reporter.LinkedNodeID())
 		if reporterInstance == "" ||
 			(!slot.hasInstance(reporterInstance) && !m.nodeHasProvenViewInConnection(node, reporterInstance)) {
 			continue
@@ -446,18 +458,18 @@ func (m *Monitor) getClusterSensorTemperature(hosts []*unifiedresources.HostView
 	return convertHostSensorsToTemperature(newest.sensors, newest.updatedAt)
 }
 
-// linkedNodeIDForAgent returns the Proxmox source node ID the agent with the
-// given agent ID (models.Host.ID) is linked to, or "".
-func linkedNodeIDForAgent(hosts []*unifiedresources.HostView, agentID string) string {
+// hostViewForAgent returns the reporter's agent view, including its source
+// sighting and cadence. A retained cache entry cannot supply its own liveness.
+func hostViewForAgent(hosts []*unifiedresources.HostView, agentID string) *unifiedresources.HostView {
 	if agentID == "" {
-		return ""
+		return nil
 	}
 	for _, host := range hosts {
-		if host.AgentID() == agentID {
-			return host.LinkedNodeID()
+		if host != nil && host.AgentID() == agentID {
+			return host
 		}
 	}
-	return ""
+	return nil
 }
 
 // convertHostSensorsToTemperature converts HostSensorSummary to the Temperature model.
@@ -636,8 +648,6 @@ func canonicalSMARTDevicePath(device string) string {
 	return "/dev/" + normalized
 }
 
-// isHostAgentTemperatureRecent checks if the host agent temperature data is recent enough to use.
-// We consider data stale if the host hasn't reported in more than 2 minutes.
 // hostAgentReportCurrent reports whether an agent's last report is still inside
 // the reporting lease that keeps the agent online (evaluateHostAgents uses the
 // same window), so its sensor readings still describe the machine.
@@ -645,9 +655,12 @@ func hostAgentReportCurrent(lastSeen time.Time, intervalSeconds int, now time.Ti
 	return !lastSeen.IsZero() && now.Sub(lastSeen) <= hostAgentHealthWindow(intervalSeconds)
 }
 
-func isHostAgentTemperatureRecent(lastSeen time.Time) bool {
-	const staleDuration = 2 * time.Minute
-	return time.Since(lastSeen) < staleDuration
+// temperatureWithinMaximumAgentLease is only the downstream SSH-skip sanity
+// bound. getHostAgentTemperatureForNode already admits direct and sibling
+// readings against the reporting agent's own (possibly shorter) lease. A second
+// fixed cutoff here would send a healthy slow reporter back through SSH.
+func temperatureWithinMaximumAgentLease(lastSeen time.Time) bool {
+	return !lastSeen.IsZero() && time.Since(lastSeen) <= hostMaximumHealthWindow
 }
 
 // mergeTemperatureData merges host agent temperature with existing/proxy temperature data.

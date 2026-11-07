@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2055,5 +2056,122 @@ func TestGuestConfigPlacementConcurrentSnapshot(t *testing.T) {
 	wg.Wait()
 	if client.calls.Load() != 100 {
 		t.Fatal("concurrent reads were replayed or lost")
+	}
+}
+
+// Slow reporters share one temperature lease through admission and collection.
+func temperatureCadenceFixture(t *testing.T, interval int, age time.Duration, cluster bool) (*Monitor, models.Node, *mockCommandRunner, time.Time) {
+	t.Helper()
+	now := time.Now()
+	reportTime := now.Add(-age)
+	nodes := []models.Node{readStateTestNode("siteA", "px1"), readStateTestNode("siteA", "px2"), readStateTestNode("siteB", "px1")}
+	target := nodes[0]
+	target.Type = "node"
+	target.Host = "px1.invalid"
+	target.PVEVersion = "pve-manager/9.0.1"
+	target.Memory = models.Memory{Total: 8 << 30, Used: 2 << 30, Free: 6 << 30, Usage: 25}
+	reporterNode, cpu := "siteA-px1", 62.0
+	if cluster {
+		reporterNode, cpu = "siteA-px2", 0
+	}
+	reporter := reportingTestHost("agent-reporter", "reporter", reporterNode, cpu)
+	reporter.IntervalSeconds, reporter.LastSeen = interval, reportTime
+	m := readStateMonitor(nodes, []models.Host{reporter})
+	m.config = &config.Config{TemperatureMonitoringEnabled: true}
+	if cluster {
+		m.applyClusterSensors(reporter.ID, clusterSensorReport("px1", 62), reportTime)
+	}
+	key := t.TempDir() + "/fixture-key"
+	if err := os.WriteFile(key, []byte("fixture-only, never used for authentication"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &mockCommandRunner{outputs: map[string]string{"sensors -j": `{"coretemp-isa-0000":{"Package id 0":{"temp1_input":45}}}`}}
+	m.tempCollector = &TemperatureCollector{sshKeyPath: key, sshUser: "pulse-monitor", sshPort: 22, runner: runner}
+	return m, target, runner, reportTime
+}
+
+func collectTemperatureCadenceFixture(m *Monitor, target models.Node) models.Node {
+	m.collectNodeTemperatureData(context.Background(), target.Instance, &config.PVEInstance{Name: target.Instance}, proxmox.Node{Node: target.Name}, &target, nil, "online")
+	return target
+}
+
+func TestNodeTemperatureUsesReporterCadence(t *testing.T) {
+	for _, cluster := range []bool{false, true} {
+		source := "direct"
+		if cluster {
+			source = "sibling"
+		}
+		for _, tc := range []struct {
+			name      string
+			interval  int
+			age       time.Duration
+			wantAgent bool
+		}{
+			{"default-fresh", 30, time.Minute, true},
+			{"120-second-cadence", 120, 140 * time.Second, true},
+			{"180-second-cadence", 180, 160 * time.Second, true},
+			{"long-cadence", 300, 6 * time.Minute, true},
+			{"short-cadence-expired", 30, 4 * time.Minute, false},
+			{"capped-cadence-expired", 3600, 11 * time.Minute, false},
+		} {
+			t.Run(source+"/"+tc.name, func(t *testing.T) {
+				m, target, runner, reportTime := temperatureCadenceFixture(t, tc.interval, tc.age, cluster)
+				got := collectTemperatureCadenceFixture(m, target)
+				if got.Temperature == nil || !got.Temperature.Available {
+					t.Fatalf("no usable result: %#v", got.Temperature)
+				}
+				if tc.wantAgent {
+					if runner.callCount != 0 {
+						t.Errorf("valid report triggered %d unnecessary SSH commands", runner.callCount)
+					}
+					if got.Temperature.CPUPackage != 62 || !got.Temperature.LastUpdate.Equal(reportTime) {
+						t.Errorf("report changed or restamped: %#v, report %s", got.Temperature, reportTime)
+					}
+				} else {
+					if runner.callCount != 1 || got.Temperature.CPUPackage != 45 {
+						t.Errorf("expired report must allow one ordinary fallback: calls=%d temp=%#v", runner.callCount, got.Temperature)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestClusterTemperatureDoesNotRenewOldReadingWithFreshReporter(t *testing.T) {
+	m, target, _, _ := temperatureCadenceFixture(t, 30, time.Minute, true)
+	for key, entry := range m.clusterSensorsCache {
+		entry.updatedAt = time.Now().Add(-4 * time.Minute)
+		m.clusterSensorsCache[key] = entry
+	}
+	if got := m.getHostAgentTemperatureForNode(target); got != nil {
+		t.Fatalf("fresh reporter renewed stale sensor reading: %#v", got)
+	}
+}
+
+func TestClusterTemperatureDoesNotBorrowMergedNodeLiveness(t *testing.T) {
+	m, target, _, _ := temperatureCadenceFixture(t, 30, 4*time.Minute, true)
+	// The PVE view of px2 is current, but the reporting agent is not.
+	m.applyClusterSensors("agent-reporter", clusterSensorReport("px1", 95), time.Now())
+	if got := m.getHostAgentTemperatureForNode(target); got != nil {
+		t.Fatalf("stale reporter borrowed its live PVE node: %#v", got)
+	}
+}
+
+func TestClusterTemperatureCadenceKeepsConnectionAndReporterIdentity(t *testing.T) {
+	m, target, _, _ := temperatureCadenceFixture(t, 300, 6*time.Minute, true)
+	if got := m.getHostAgentTemperatureForNode(target); got == nil || got.CPUPackage != 62 {
+		t.Fatalf("valid slow sibling lost: %#v", got)
+	}
+	if got := m.getHostAgentTemperatureForNode(readStateTestNode("siteB", "px1")); got != nil {
+		t.Fatalf("namesake site borrowed reading: %#v", got)
+	}
+	m.applyClusterSensors("missing-agent", clusterSensorReport("px1", 99), time.Now())
+	if got := m.getHostAgentTemperatureForNode(target); got == nil || got.CPUPackage != 62 {
+		t.Fatalf("newer orphan displaced valid reporter: %#v", got)
+	}
+	// An unrelated report must not evict the still-live six-minute sibling row.
+	m.applyClusterSensors("unrelated-agent", nil, time.Now())
+	if got := m.getHostAgentTemperatureForNode(target); got == nil || got.CPUPackage != 62 {
+		t.Fatalf("unrelated report evicted valid slow sibling: %#v", got)
 	}
 }
