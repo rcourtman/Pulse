@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
+	gorillaws "github.com/gorilla/websocket"
+	pulsews "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -607,5 +610,53 @@ func TestNewRouterSharesOrgAccessPolicy(t *testing.T) {
 	}
 	if router.orgAccess.CheckAccess(nil, "bob", "default").Allowed {
 		t.Fatal("a user without membership must not reach the default organization")
+	}
+}
+
+func TestMonitoringWebSocketMembershipWithdrawalPreservesAuthentication(t *testing.T) {
+	installTestRBACManager(t)
+	enableSharedMultiOrgForTest(t)
+	t.Setenv("PULSE_DEV", "true")
+	previous := orgAccessRecheckInterval
+	orgAccessRecheckInterval = 0
+	t.Cleanup(func() { orgAccessRecheckInterval = previous })
+	router, cfg, server, hub := newMonitoringWebSocketRouter(t)
+	cfg.AuthUser = "operator"
+	const raw = "synthetic-org-websocket-session"
+	const user = "socket-member"
+	GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", user)
+	saveDefaultOrgMembers(t, router.multiTenant, user)
+	primary := openMonitoringWebSocket(t, server, raw, "session")
+	control := openMonitoringWebSocket(t, server, monitoringWebSocketControl, "header")
+	before := GetSessionStore().GetSession(raw)
+	revokeMetricHistoryOrgMembership(t, &metricAuthorityFixture{router: router, server: server}, user)
+	hub.BroadcastMessageToTenant("default", pulsews.Message{Type: "notification", Data: "post-withdrawal-private"})
+	primary.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, body, err := primary.ReadMessage()
+	var closed *gorillaws.CloseError
+	if !errors.As(err, &closed) || closed.Code != pulsews.CloseOrganizationAccessEnded || closed.Text != "Organization access ended" {
+		t.Fatalf("membership-withdrawn socket = %s %v", body, err)
+	}
+	if frame := nextMonitoringWebSocketFrame(t, control); frame.Data != "post-withdrawal-private" {
+		t.Fatal("independent reader lost its frame")
+	}
+	after := GetSessionStore().GetSession(raw)
+	if after == nil || after.Username != before.Username || !after.CreatedAt.Equal(before.CreatedAt) || !after.ExpiresAt.Equal(before.ExpiresAt) {
+		t.Fatal("membership withdrawal changed saved authentication")
+	}
+	address, headers := monitoringWebSocketAddress(server, raw, "session")
+	conn, response, err := gorillaws.DefaultDialer.Dial(address, headers)
+	if conn != nil {
+		conn.Close()
+	}
+	if err == nil || response == nil || response.StatusCode != http.StatusForbidden {
+		t.Fatal("fresh withdrawn socket did not fail closed")
+	}
+	response.Body.Close()
+	saveDefaultOrgMembers(t, router.multiTenant, user)
+	regranted := openMonitoringWebSocket(t, server, raw, "session")
+	hub.BroadcastMessageToTenant("default", pulsews.Message{Type: "notification", Data: "fresh-regrant"})
+	if frame := nextMonitoringWebSocketFrame(t, regranted); frame.Data != "fresh-regrant" {
+		t.Fatal("same credential did not regain deliberate access")
 	}
 }

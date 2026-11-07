@@ -55,7 +55,9 @@ const makeTrueNASResource = (id = 'truenas-1'): Resource => ({
 
 describe('useAppRuntimeState', () => {
   let useAppRuntimeState: UseAppRuntimeStateModule['useAppRuntimeState'];
-  let apiFetchMock: ReturnType<typeof vi.fn<(url: string) => Promise<Response>>>;
+  let apiFetchMock: ReturnType<
+    typeof vi.fn<(url: string, options?: { recoverDefaultOrg?: boolean }) => Promise<Response>>
+  >;
   let orgsListMock: ReturnType<typeof vi.fn>;
   let loadLicenseStatusMock: ReturnType<typeof vi.fn>;
   let loadCommercialPostureMock: ReturnType<typeof vi.fn>;
@@ -587,6 +589,48 @@ describe('useAppRuntimeState', () => {
       'Failed to load organizations. Using default.',
     );
 
+    dispose();
+  });
+
+  it('opts into unbound default recovery then activates membership before acquiring the socket', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
+    const fallbackFetch = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url, options) => {
+      if (url !== '/api/state/summary') return fallbackFetch(url);
+      expect(options?.recoverDefaultOrg).toBe(true);
+      // The API client owns the tested clear/retry. The hook must discard the
+      // summary body, then activate the actual membership before live data.
+      getOrgIDMock.mockReturnValue(null);
+      return new Response('{}', { status: 200 });
+    });
+    const acquired = vi.fn(() => expect(setOrgIDMock).toHaveBeenLastCalledWith('acme'));
+    onStoreAcquired = acquired;
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+    expect(hookState.bootstrapFailed()).toBe(false);
+    expect(hookState.activeOrgID()).toBe('acme');
+    expect(hookState.needsAuth()).toBe(false);
+    expect(acquired).toHaveBeenCalledOnce();
+    expect(clearAuthMock).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('does not acquire monitoring when the unbound summary still denies every organization', async () => {
+    const fallbackFetch = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url, options) => {
+      if (url !== '/api/state/summary') return fallbackFetch(url);
+      expect(options?.recoverDefaultOrg).toBe(true);
+      return new Response(JSON.stringify({ error: 'default_org_access_denied' }), { status: 403 });
+    });
+    const acquired = vi.fn();
+    onStoreAcquired = acquired;
+    const { hookState, dispose } = mountHook();
+    await waitFor(() => expect(hookState.isLoading()).toBe(false));
+    expect(hookState.bootstrapFailed()).toBe(true);
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(acquired).not.toHaveBeenCalled();
+    expect(orgsListMock).not.toHaveBeenCalled();
+    expect(clearAuthMock).not.toHaveBeenCalled();
     dispose();
   });
 
