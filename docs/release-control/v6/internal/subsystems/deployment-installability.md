@@ -9696,6 +9696,13 @@ GO-2026-6909 moved `github.com/crewjam/saml` to v0.5.2 on 7 November 2026, with 
 requirements explicit in `go.mod`. `go.sum` adds their exact checksum records. No
 toolchain, image or install path changes.
 
+Since 7 November 2026 `stage_private_pro_runtime` in `create-release.yml` waits
+up to 180 minutes for the private Pro build, inside a 190-minute job. Healthy
+builds took 80 to 114 minutes from v6.7.0-beta.2 to v6.8.0-beta.1, about a third
+of it queued behind other private CI, so the earlier two-hour limit could fail a
+release whose Pro build later succeeded. A frozen `pulse-ci` still fails the
+release. `TestCreateReleasePublishesPrivateProRuntime` pins both limits.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry

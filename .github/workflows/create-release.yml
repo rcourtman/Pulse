@@ -1676,7 +1676,9 @@ jobs:
       - publication_trust_preflight
     if: ${{ always() && needs.prepare.result == 'success' && needs.publication_trust_preflight.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # The private Pro build alone waits up to 180 minutes below; ten more
+    # cover dispatch and the output write around it.
+    timeout-minutes: 190
     outputs:
       r2_prefix: ${{ steps.publish.outputs.r2_prefix }}
     steps:
@@ -1796,7 +1798,10 @@ jobs:
                 --input -
           )"
           build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"
-          wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build" 7200
+          # Healthy builds took 80 to 114 minutes from v6.7.0-beta.2 to
+          # v6.8.0-beta.1, about a third of it queued behind other private CI.
+          # A two-hour limit failed releases whose Pro build later succeeded.
+          wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build" 10800
 
   # Durably enqueue customer convergence before crossing the irreversible
   # publication boundary. The separate run waits for release-activation.json,

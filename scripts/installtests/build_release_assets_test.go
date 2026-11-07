@@ -4793,7 +4793,8 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`allow_stable_ga_publish: $allow_stable_ga_publish`,
 		`repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches`,
 		`build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"`,
-		`wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build"`,
+		`wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build" 10800`,
+		`timeout-minutes: 190`,
 		`write_github_output.py r2_prefix "${r2_prefix}"`,
 	} {
 		if !strings.Contains(stageJob, needle) {
