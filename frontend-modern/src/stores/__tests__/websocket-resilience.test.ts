@@ -121,9 +121,16 @@ describe('websocket store resilience', () => {
     const { store, dispose } = await createStoreHarness();
     try {
       vi.advanceTimersByTime(0);
-      currentInstance!.onmessage?.({ data: JSON.stringify({ type: 'initialState', data: {
-        activeAlerts: [], resources: [], lastUpdate: Date.now(),
-      } }) } as MessageEvent);
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'initialState',
+          data: {
+            activeAlerts: [],
+            resources: [],
+            lastUpdate: Date.now(),
+          },
+        }),
+      } as MessageEvent);
       const reads = apiFetchJSONMock.mock.calls.length;
       currentInstance!.onclose?.({ code: 4403, reason: 'Organization access ended' } as CloseEvent);
       vi.advanceTimersByTime(60000);
@@ -136,11 +143,15 @@ describe('websocket store resilience', () => {
       expect({ ...sessionStorage }).toEqual(before);
       expect(localStorage.getItem('just_logged_out')).toBeNull();
       expect(notificationMocks.warning).toHaveBeenCalledWith(
-        'Access to this organization ended. Select another organization or reload after access is restored.', 10000,
+        'Access to this organization ended. Select another organization or reload after access is restored.',
+        10000,
       );
       store.reconnect();
       expect(instances).toHaveLength(2);
-    } finally { dispose(); sessionStorage.clear(); }
+    } finally {
+      dispose();
+      sessionStorage.clear();
+    }
   });
 
   it('still forces Login after actual authentication withdrawal1008', async () => {
@@ -151,7 +162,10 @@ describe('websocket store resilience', () => {
       expect(localStorage.getItem('just_logged_out')).toBe('true');
       vi.advanceTimersByTime(60000);
       expect(instances).toHaveLength(1);
-    } finally { dispose(); localStorage.removeItem('just_logged_out'); }
+    } finally {
+      dispose();
+      localStorage.removeItem('just_logged_out');
+    }
   });
 
   it('uses exponential reconnect backoff with deterministic jitter', async () => {

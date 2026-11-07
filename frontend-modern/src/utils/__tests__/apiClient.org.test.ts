@@ -38,15 +38,24 @@ describe('apiClient org context', () => {
       setApiToken('synthetic-saved-history-token');
       sessionStorage.setItem('pulse_auth_user', JSON.stringify({ username: 'viewer' }));
       const before = { ...sessionStorage };
-      mockFetch.mockResolvedValue(new Response(JSON.stringify({ error: code }), {
-        status: 403, headers: { 'Content-Type': 'application/json' },
-      }));
-      await expect(ChartsAPI.getMetricsHistory({
-        resourceType: 'disk', resourceId: 'shared-disk-id', range: '1h',
-      })).rejects.toMatchObject({ status: 403 });
+      mockFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: code }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      await expect(
+        ChartsAPI.getMetricsHistory({
+          resourceType: 'disk',
+          resourceId: 'shared-disk-id',
+          range: '1h',
+        }),
+      ).rejects.toMatchObject({ status: 403 });
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('default');
-      expect(mockFetch.mock.calls[0][1].headers['X-API-Token']).toBe('synthetic-saved-history-token');
+      expect(mockFetch.mock.calls[0][1].headers['X-API-Token']).toBe(
+        'synthetic-saved-history-token',
+      );
       expect({ ...sessionStorage }).toEqual(before);
       expect(localStorage.getItem('just_logged_out')).toBeNull();
       expect(getOrgID()).toBe('default');
@@ -55,11 +64,24 @@ describe('apiClient org context', () => {
   );
 
   it('lets History without a saved org keep the server landing choice', async () => {
-    mockFetch.mockResolvedValue(new Response(JSON.stringify({
-      resourceType: 'disk', resourceId: 'disk-one', range: '1h', start: 1, end: 2,
-      metrics: {}, source: 'store',
-    })));
-    await ChartsAPI.getMetricsHistory({ resourceType: 'disk', resourceId: 'disk-one', range: '1h' });
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          resourceType: 'disk',
+          resourceId: 'disk-one',
+          range: '1h',
+          start: 1,
+          end: 2,
+          metrics: {},
+          source: 'store',
+        }),
+      ),
+    );
+    await ChartsAPI.getMetricsHistory({
+      resourceType: 'disk',
+      resourceId: 'disk-one',
+      range: '1h',
+    });
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBeUndefined();
   });
@@ -393,9 +415,12 @@ describe('apiClient org context', () => {
   });
 
   it('preserves a refused default selection for background reads without retargeting', async () => {
-    mockFetch.mockResolvedValue(new Response(JSON.stringify({ error: 'default_org_access_denied' }), {
-      status: 403, headers: { 'Content-Type': 'application/json' },
-    }));
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'default_org_access_denied' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
     setOrgID('default');
     const response = await apiFetch('/api/state/summary');
     expect(response.status).toBe(403);
