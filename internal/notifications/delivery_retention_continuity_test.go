@@ -759,9 +759,9 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 	}
 	for retry := 0; retry < 4; retry++ {
 		beforeRetryCalls := calls.Load()
-		retryContinuitySettlementNow(t, q)
+		deadline = time.Now().Add(5 * time.Second)
+		retryContinuitySettlementNow(t, q, deadline)
 		q.processBatch()
-		deadline := time.Now().Add(5 * time.Second)
 		for {
 			mu.Lock()
 			observed := count
@@ -894,13 +894,31 @@ func TestNotificationDestinationGenerationFailureDefersProvider(t *testing.T) {
 	}
 }
 
-func retryContinuitySettlementNow(t *testing.T, q *NotificationQueue) {
+func retryContinuitySettlementNow(t *testing.T, q *NotificationQueue, deadlines ...time.Time) {
 	t.Helper()
-	q.mu.Lock()
-	_, err := q.db.Exec(`UPDATE notification_queue SET next_retry_at=? WHERE status='pending' AND last_error=?`, time.Now().Add(-time.Second).Unix(), notificationSettlementPendingMessage)
-	q.mu.Unlock()
-	if err != nil {
-		t.Fatal(err)
+	deadline := time.Now().Add(5 * time.Second)
+	if len(deadlines) > 0 {
+		deadline = deadlines[0]
+	}
+	for {
+		q.mu.Lock()
+		owned := len(q.processingNotifications)
+		if owned == 0 {
+			// Check ownership and advance the clock under one lock. An idle
+			// snapshot taken earlier cannot prevent a selected worker from
+			// starting and then overwriting this clock with its final deferral.
+			_, err := q.db.Exec(`UPDATE notification_queue SET next_retry_at=? WHERE status='pending' AND last_error=?`, time.Now().Add(-time.Second).Unix(), notificationSettlementPendingMessage)
+			q.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		q.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatalf("local settlement worker did not return before retry: owned=%d", owned)
+		}
+		time.Sleep(time.Millisecond)
 	}
 	select {
 	case q.notifyChan <- struct{}{}:
