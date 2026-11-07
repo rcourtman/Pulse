@@ -191,28 +191,32 @@ func (m *Manager) evaluateFilterStack(guest any, stack FilterStack) bool {
 	if len(stack.Filters) == 0 {
 		return true
 	}
+	metrics, ok := extractGuestMetrics(guest)
+	return evaluateGuestFilterStack(metrics, ok, stack)
+}
 
-	results := make([]bool, len(stack.Filters))
-	for i, filter := range stack.Filters {
-		results[i] = m.evaluateFilterCondition(guest, filter)
-	}
-
-	// Apply logical operator
-	if stack.LogicalOperator == "AND" {
-		for _, result := range results {
-			if !result {
-				return false
-			}
-		}
+// evaluateGuestFilterStack reads one guest projection without retaining it.
+// An empty stack matches even an unsupported guest; a non-empty one does not.
+func evaluateGuestFilterStack(metrics guestMetrics, hasGuest bool, stack FilterStack) bool {
+	if len(stack.Filters) == 0 {
 		return true
 	}
-	// OR
-	for _, result := range results {
-		if result {
-			return true
+	if !hasGuest {
+		return false
+	}
+	and := stack.LogicalOperator == "AND"
+	matched := and
+	for _, filter := range stack.Filters {
+		// Preserve eager condition evaluation, but do not allocate a results
+		// slice or copy the guest's disk/tag inventory for every condition.
+		result := evaluateGuestCondition(metrics, filter)
+		if and {
+			matched = matched && result
+		} else {
+			matched = matched || result
 		}
 	}
-	return false
+	return matched
 }
 
 // getGuestThresholds returns the appropriate thresholds for a guest

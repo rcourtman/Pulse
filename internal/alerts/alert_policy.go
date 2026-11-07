@@ -101,12 +101,20 @@ func (m *Manager) customRuleThresholdsNoLock(base ThresholdConfig, guest any) Th
 	}
 	var applicable *CustomAlertRule
 	highestPriority := -1
+	var metrics guestMetrics
+	var metricsReady, hasGuest bool
 	for i := range m.config.CustomRules {
 		rule := &m.config.CustomRules[i]
 		if !rule.Enabled {
 			continue
 		}
-		if m.evaluateFilterStack(guest, rule.FilterConditions) {
+		// Share one projection across the rules in this resolution only. Do
+		// not copy guest collections for disabled rules or empty stacks.
+		if !metricsReady && len(rule.FilterConditions.Filters) > 0 {
+			metrics, hasGuest = extractGuestMetrics(guest)
+			metricsReady = true
+		}
+		if evaluateGuestFilterStack(metrics, hasGuest, rule.FilterConditions) {
 			if rule.Priority > highestPriority {
 				applicable = rule
 				highestPriority = rule.Priority
