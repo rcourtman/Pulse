@@ -182,7 +182,7 @@ class APIReferenceRoutesTest(unittest.TestCase):
 
     def test_token_lifetime_explains_existing_opt_in_and_non_expiring_default(self) -> None:
         lifetime = self.doc.split("### Token lifetime\n", 1)[1].split("### List API Tokens\n", 1)[0]
-        prose = " ".join(lifetime.split())
+        prose = " ".join(re.sub(r"\[([^]]+)\]\([^)]+\)", r"\1", lifetime).split())
         for rule in (
             '"expiresIn": "24h"',
             "minimum of `1m`",
@@ -209,6 +209,55 @@ class APIReferenceRoutesTest(unittest.TestCase):
             self.assertIn(code, handler)
         update = handler.split("type updateTokenRequest struct {", 1)[1].split("}", 1)[0]
         self.assertNotIn("Expires", update)
+
+    def test_saved_token_expiry_check_is_private_read_only_and_source_bound(self) -> None:
+        section = self.doc.split("## Checking a saved token’s expiry\n", 1)[1]
+        prose = " ".join(section.split())
+        self.assertEqual(re.findall(r"```bash\n(.*?)\n```", section, re.S),
+                         ["pulse_api GET /api/security/tokens"])
+        for rule in (
+            "working, independent administrator session",
+            "separate, already authorised administrator credential",
+            "exact record ID, not its name",
+            "`expiresAt`",
+            "RFC 3339 timestamp",
+            "Pulse server’s clock",
+            "no longer authenticates",
+            "absent from that record, the token has no configured expiry",
+            "failed, partial or hidden record leaves expiry unknown",
+            "Do not widen access",
+            "**Created** (`createdAt`) and **Last used** (`lastUsedAt`) are not expiry dates",
+            "A future expiry does not prove",
+            "no edit, rotation or test request",
+            "response file and token metadata out of reports",
+            "`action-runner:<host>` tokens",
+            "Pulse clears on activation",
+        ):
+            self.assertIn(rule, prose)
+        # The list has no expiry filter. It returns metadata snapshots only,
+        # so absence and a past timestamp are distinct from a failed read.
+        handler = read("internal/api/security_tokens.go")
+        self.assertIn('ExpiresAt   *time.Time `json:"expiresAt,omitempty"`', handler)
+        self.assertIn("dto.ExpiresAt = &expires", handler)
+        listing = handler.split("func (r *Router) handleListAPITokens(", 1)[1].split(
+            "func (r *Router) handleGetAPIToken(", 1)[0]
+        self.assertIn('"tokens": tokens', listing)
+        self.assertIn("callerTokenMayManage", listing)
+        self.assertIn("toAPITokenDTO(record)", listing)
+        self.assertNotIn("IsExpired", listing)
+        token_config = read("internal/config/api_tokens.go")
+        self.assertIn("return time.Now().UTC().After(*r.ExpiresAt)", token_config)
+        self.assertIn("if c.APITokens[idx].IsExpired() {\n\t\t\t\treturn nil, false", token_config)
+        install = read("internal/api/agenttokens/install.go")
+        self.assertIn('tokenName = "action-runner:" + hostname', install)
+        self.assertIn("record.ExpiresAt = nil", install)
+        # Link without inserting new blocks ahead of the existing edit/rotate
+        # reference, which must remain in its established reading position.
+        lifetime = self.doc.split("### Token lifetime\n", 1)[1].split("### List API Tokens\n", 1)[0]
+        self.assertIn("[expiry](#checking-a-saved-tokens-expiry)", lifetime)
+        self.assertTrue(self.doc.index("## Checking a saved token’s expiry") >
+                        self.doc.index("## When a token change times out"))
+        self.assertEqual(read("frontend-modern/public/docs/API.md"), self.doc)
 
     def test_token_edit_keeps_scope_changes_distinct_from_rename_and_rotation(self) -> None:
         edit = self.doc.split("### Edit API Token\n", 1)[1].split("### Rotate API Token\n", 1)[0]
