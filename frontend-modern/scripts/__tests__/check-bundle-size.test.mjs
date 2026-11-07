@@ -168,16 +168,17 @@ describe('built JavaScript integrity checks', () => {
     expect(result.stdout).toMatch(/(?:integrity.*mismatch|invalid or unsupported integrity)/i);
   });
 
-  it.each([null, [], 'not an object', { integrity: [] }, { integrity: 'not an object' }])(
-    'rejects malformed import-map shape %j with a bounded diagnostic',
-    (map) => {
-      const f = fixture();
-      f.map = map;
-      const result = f.run();
-      expect(result.status).toBe(1);
-      expect(result.stdout).toMatch(/importmap.*integrity/i);
-    },
-  );
+  it.each(
+    [null, [], 'not an object', { integrity: [] }, { integrity: 'not an object' }].map((value) => [
+      value,
+    ]),
+  )('rejects malformed import-map shape %j with a bounded diagnostic', (map) => {
+    const f = fixture();
+    f.map = map;
+    const result = f.run();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toMatch(/importmap.*integrity/i);
+  });
 
   it('does not let a matching weaker digest override a stale stronger digest', () => {
     const f = fixture();
