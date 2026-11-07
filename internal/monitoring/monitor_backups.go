@@ -287,8 +287,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	deniedReads := map[pveLocalBackupStorage]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
+	// Tasks and carry-forward storage rows must share one primary-state read,
+	// but neither needs a copy of guests or unrelated provider inventories.
+	previousBackups := m.state.GetPVEBackups()
 	// Build guest lookup map to find actual node for each VMID
-	snapshot := m.state.GetSnapshot()
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
 	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
@@ -303,7 +305,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// not to the guest's current placement. Shared/remote repositories and
 	// tasks without a node retain the conservative instance/VMID fallback.
 	runningVzdumpStart := make(map[int]map[string]time.Time) // VMID -> task node -> earliest start
-	for _, task := range snapshot.PVEBackups.BackupTasks {
+	for _, task := range previousBackups.BackupTasks {
 		if task.Instance != instanceName || task.VMID <= 0 || !task.EndTime.IsZero() {
 			continue
 		}
@@ -678,7 +680,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Carry-forward serves the live inventory, not a new provider observation.
 	// Only rows actually returned this poll may renew point-level evidence.
 	observedBackups := allBackups
-	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, pveBackupReadFailures{
+	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, previousBackups.StorageBackups, pveBackupReadFailures{
 		storages:      storagePreserveNeeded,
 		nodes:         unreadNodes,
 		local:         failedLocalStorages,
@@ -1013,7 +1015,7 @@ func (f pveBackupReadFailures) preserves(backup models.StorageBackup) bool {
 	return false
 }
 
-func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, failures pveBackupReadFailures, current []models.StorageBackup) ([]models.StorageBackup, []string) {
+func preserveFailedStorageBackups(instanceName string, previous []models.StorageBackup, failures pveBackupReadFailures, current []models.StorageBackup) ([]models.StorageBackup, []string) {
 	if len(failures.storages) == 0 && len(failures.nodes) == 0 && len(failures.local) == 0 {
 		return current, nil
 	}
@@ -1024,7 +1026,7 @@ func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnap
 	}
 
 	preserved := make(map[string]struct{})
-	for _, backup := range snapshot.PVEBackups.StorageBackups {
+	for _, backup := range previous {
 		if backup.Instance != instanceName {
 			continue
 		}
@@ -1290,8 +1292,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 	previousSnapshots := make([]models.GuestSnapshot, 0)
 	if m.state != nil {
-		snapshot := m.state.GetSnapshot()
-		for _, snap := range snapshot.PVEBackups.GuestSnapshots {
+		for _, snap := range m.state.GetPVEBackups().GuestSnapshots {
 			if snap.Instance == instanceName {
 				previousSnapshots = append(previousSnapshots, snap)
 			}
@@ -2434,9 +2435,8 @@ func runningPBSTaskMatchesBackup(tasks []pbs.RunningDataTask, backup models.PBSB
 }
 
 func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
-	snapshot := m.state.GetSnapshot()
 	cache := make(map[pbsBackupGroupKey]cachedPBSGroup)
-	for _, backup := range snapshot.PBSBackups {
+	for _, backup := range m.state.GetPBSBackups() {
 		if backup.Instance != instanceName {
 			continue
 		}
