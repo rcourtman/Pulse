@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Request-owned HTTP transports release completed connections
+
+HTTP Apprise creates a client for each delivery. A webhook request also owns
+its client when the manager has no shared client or the request needs a different
+timeout. These clients close their idle connections after the response body is
+read and closed, on success and failure. No later delivery can reuse these
+private transports, so completed sockets must not wait for the 90-second idle
+timeout. The manager's ordinary webhook pool stays reusable until shutdown.
+
+`http_client_lifecycle_test.go` observes real receiver-side connection closure
+for repeated Apprise, fallback and timeout-override webhook requests, retaining
+complete response metadata, HTTP verdicts and one request per send. Its mixed
+shared/override/shared control proves that cleanup leaves ordinary connection
+reuse intact. Payloads, retries, deadlines, DNS/IP admission, TLS, redirects,
+queue receipts and frontend state are unchanged. This is source resource-lifetime
+proof, not installed-provider recovery or a measured fleet CPU/RSS improvement.
+
 ### Removing a webhook revokes its identified queued work
 
 Before queued firing or recovery delivery, a saved webhook ID must still name

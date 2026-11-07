@@ -3010,6 +3010,8 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 		validatedBaseURL.Scheme == "https" && cfg.SkipTLSVerify,
 		appriseDiagnosticURL,
 	)
+	// This client owns one delivery, not a reusable manager pool.
+	defer client.CloseIdleConnections()
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -3808,6 +3810,8 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 	client := n.webhookClient
 	if client == nil || (opts.timeout > 0 && opts.timeout != WebhookTimeout) {
 		client = n.createSecureWebhookClient(opts.timeout)
+		// Release only the request-owned transport; ordinary sends reuse n.webhookClient.
+		defer client.CloseIdleConnections()
 	}
 
 	resp, err := client.Do(req)
