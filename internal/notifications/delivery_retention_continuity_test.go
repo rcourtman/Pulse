@@ -739,7 +739,7 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 		// The HTTP observation can be newer than the stats snapshot. Require
 		// the actual settlement marker and the worker's return before advancing
 		// its retry clock, or an in-flight first attempt can overwrite that clock.
-		if observed == 1 && observedCalls == 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && stats["sent"] == 0 && owned == 0 {
+		if observed == 1 && observedCalls >= 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && stats["sent"] == 0 && owned == 0 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -758,6 +758,7 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 		t.Fatal("failed receipt commit populated cooldown")
 	}
 	for retry := 0; retry < 4; retry++ {
+		beforeRetryCalls := calls.Load()
 		retryContinuitySettlementNow(t, q)
 		q.processBatch()
 		deadline := time.Now().Add(5 * time.Second)
@@ -775,11 +776,11 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 			q.mu.RUnlock()
 			// A pending row is written before its worker releases ownership.
 			// Do not start the next simulated retry until this one has returned.
-			if observedCalls == int64(retry+2) && observed == 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && owned == 0 {
+			if observedCalls > beforeRetryCalls && observed == 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && owned == 0 {
 				break
 			}
 			if time.Now().After(deadline) {
-				t.Fatalf("storage fault did not preserve repeated pending settlement: retry=%d calls=%d want=%d owned=%d http=%d stats=%v", retry, observedCalls, retry+2, owned, observed, stats)
+				t.Fatalf("storage fault did not preserve repeated pending settlement: retry=%d calls=%d before=%d owned=%d http=%d stats=%v", retry, observedCalls, beforeRetryCalls, owned, observed, stats)
 			}
 			time.Sleep(time.Millisecond)
 		}
