@@ -40,8 +40,7 @@ const licenseFor = (org: string): LicenseStatus => ({
 });
 const dataFor = (source: Source, org: string) => {
   if (source === 'license') return licenseFor(org);
-  if (source === 'organizations')
-    return [north, south].map((id) => ({ id, displayName: id }));
+  if (source === 'organizations') return [north, south].map((id) => ({ id, displayName: id }));
   return Array.from({ length: org === north ? 3 : 1 }, (_, index) => ({
     userId: `synthetic-member-${index}`,
     role: 'viewer',
@@ -87,9 +86,7 @@ const accepted = async (org = north) => {
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 };
 function expectUnknown() {
-  expect(screen.getByRole('alert')).toHaveTextContent(
-    'Unable to load billing and plan details.',
-  );
+  expect(screen.getByRole('alert')).toHaveTextContent('Unable to load billing and plan details.');
   expect(screen.queryByText('Plan Tier')).not.toBeInTheDocument();
   expect(screen.queryByText('Not configured')).not.toBeInTheDocument();
   expect(screen.queryByText(emailFor(north))).not.toBeInTheDocument();
@@ -135,7 +132,9 @@ beforeEach(async () => {
       return json({ capabilities: capabilityAvailable ? ['multi_tenant'] : [], limits: [] });
     }
     const source = sources.find((candidate) =>
-      candidate === 'members' ? /^\/api\/orgs\/[^/]+\/members$/.test(url) : url === pathFor(candidate),
+      candidate === 'members'
+        ? /^\/api\/orgs\/[^/]+\/members$/.test(url)
+        : url === pathFor(candidate),
     );
     if (!source) throw new Error(`Unexpected synthetic billing request: ${url}`);
     return reply(source, new Headers(options.headers).get('X-Pulse-Org-ID') ?? 'default');
@@ -161,56 +160,63 @@ describe('organization billing through its real read transport', () => {
     expect(screen.getByText('2 / 17')).toBeInTheDocument();
   });
 
-  it.each(sources)('does not publish a partial snapshot while the %s body is still unread', async (held) => {
-    const body = deferred<string>();
-    reply = async (source, org) => {
-      const response = json(dataFor(source, org));
-      if (source === held) vi.spyOn(response, 'text').mockReturnValueOnce(body.promise);
-      return response;
-    };
-    mount();
-    await waitFor(() => expect(billingReads()).toHaveLength(3));
-    await settle();
-    expect(screen.getByLabelText('Loading organization billing')).toBeInTheDocument();
-    expect(screen.queryByText('Plan Tier')).not.toBeInTheDocument();
-    expect(screen.queryByText(emailFor(north))).not.toBeInTheDocument();
-    body.resolve(JSON.stringify(dataFor(held, north)));
-    await accepted();
-    expectBoundReads();
-  });
+  it.each(sources)(
+    'does not publish a partial snapshot while the %s body is still unread',
+    async (held) => {
+      const body = deferred<string>();
+      reply = async (source, org) => {
+        const response = json(dataFor(source, org));
+        if (source === held) vi.spyOn(response, 'text').mockReturnValueOnce(body.promise);
+        return response;
+      };
+      mount();
+      await waitFor(() => expect(billingReads()).toHaveLength(3));
+      await settle();
+      expect(screen.getByLabelText('Loading organization billing')).toBeInTheDocument();
+      expect(screen.queryByText('Plan Tier')).not.toBeInTheDocument();
+      expect(screen.queryByText(emailFor(north))).not.toBeInTheDocument();
+      body.resolve(JSON.stringify(dataFor(held, north)));
+      await accepted();
+      expectBoundReads();
+    },
+  );
 
-  it.each(
-    sources.flatMap((source) => [400, 403, 429, 503].map((status) => ({ source, status }))),
-  )('keeps HTTP $status from $source unknown without retry or workspace fallback', async ({ source, status }) => {
-    reply = async (candidate, org) =>
-      candidate === source
-        ? json(
-            {
-              error: status === 400 ? 'invalid_org' : 'default_org_access_denied',
-              detail: 'SYNTHETIC_PRIVATE_FAILURE',
-            },
-            status,
-            { 'X-CSRF-Token': 'synthetic-refreshed-csrf', 'Retry-After': '0.001' },
-          )
-        : json(dataFor(candidate, org));
-    mount();
-    await screen.findByRole('alert');
-    await settle();
-    expectUnknown();
-    expectBoundReads();
-    for (const [, options] of billingReads()) expect(options?.signal?.aborted).toBe(true);
-  });
+  it.each(sources.flatMap((source) => [400, 403, 429, 503].map((status) => ({ source, status }))))(
+    'keeps HTTP $status from $source unknown without retry or workspace fallback',
+    async ({ source, status }) => {
+      reply = async (candidate, org) =>
+        candidate === source
+          ? json(
+              {
+                error: status === 400 ? 'invalid_org' : 'default_org_access_denied',
+                detail: 'SYNTHETIC_PRIVATE_FAILURE',
+              },
+              status,
+              { 'X-CSRF-Token': 'synthetic-refreshed-csrf', 'Retry-After': '0.001' },
+            )
+          : json(dataFor(candidate, org));
+      mount();
+      await screen.findByRole('alert');
+      await settle();
+      expectUnknown();
+      expectBoundReads();
+      for (const [, options] of billingReads()) expect(options?.signal?.aborted).toBe(true);
+    },
+  );
 
-  it.each(sources)('does not turn malformed %s JSON into a free plan or empty count', async (broken) => {
-    reply = async (source, org) =>
-      source === broken
-        ? new Response('{"SYNTHETIC_PRIVATE_FAILURE":', { status: 200 })
-        : json(dataFor(source, org));
-    mount();
-    await screen.findByRole('alert');
-    expectUnknown();
-    expectBoundReads();
-  });
+  it.each(sources)(
+    'does not turn malformed %s JSON into a free plan or empty count',
+    async (broken) => {
+      reply = async (source, org) =>
+        source === broken
+          ? new Response('{"SYNTHETIC_PRIVATE_FAILURE":', { status: 200 })
+          : json(dataFor(source, org));
+      mount();
+      await screen.findByRole('alert');
+      expectUnknown();
+      expectBoundReads();
+    },
+  );
 
   it('aborts unread siblings on failure and accepts genuine free/zero data only on explicit reload', async () => {
     const sibling = deferred<void>();
@@ -230,10 +236,7 @@ describe('organization billing through its real read transport', () => {
     expectUnknown();
     expect(billingReads()).toHaveLength(3);
     const next = deferred<Response>();
-    reply = async (source) =>
-      source === 'license'
-        ? next.promise
-        : json([]);
+    reply = async (source) => (source === 'license' ? next.promise : json([]));
     const reload = screen.getByRole('button', { name: 'Reload billing' });
     fireEvent.click(reload);
     fireEvent.click(reload);
@@ -321,21 +324,35 @@ describe('organization billing through its real read transport', () => {
     },
   );
 
-  it('does not refetch or hide readable billing on an unchanged capability or read-only policy refresh', async () => {
-    const pending = deferred<Response>();
-    reply = async (source, org) =>
-      source === 'license' ? pending.promise : json(dataFor(source, org));
-    mount();
-    await waitFor(() => expect(billingReads()).toHaveLength(3));
-    const signal = billingReads()[0][1]?.signal;
-    await loadRuntimeCapabilities(true);
-    setPolicy({ readOnly: true });
-    expect(signal?.aborted).toBe(false);
-    expect(billingReads()).toHaveLength(3);
-    pending.resolve(json(licenseFor(north)));
-    await accepted();
-    expectBoundReads();
-  });
+  it.each(['capability', 'read-only policy'] as const)(
+    'keeps billing readable across an equal %s refresh without accepting the obsolete read',
+    async (refresh) => {
+      const pending = deferred<Response>();
+      let held = false;
+      reply = async (source, org) => {
+        if (source === 'license' && !held) {
+          held = true;
+          return pending.promise;
+        }
+        return json(dataFor(source, org));
+      };
+      mount();
+      await waitFor(() => expect(billingReads()).toHaveLength(3));
+      const signal = billingReads()[0][1]?.signal;
+      if (refresh === 'capability') await loadRuntimeCapabilities(true);
+      else setPolicy({ readOnly: true });
+      // These are replaceable reads, not pending writes. A refresh may start a
+      // new snapshot; read-only policy does not withdraw permission to read it.
+      await accepted();
+      expect(signal?.aborted).toBe(true);
+      expect(billingReads()).toHaveLength(6);
+      pending.resolve(json({ ...licenseFor(north), email: 'obsolete@example.test' }));
+      await settle();
+      expect(screen.queryByText('obsolete@example.test')).not.toBeInTheDocument();
+      expect(screen.getByText(emailFor(north))).toBeInTheDocument();
+      expectBoundReads(north, billingReads().slice(3));
+    },
+  );
 
   it('detaches a disposed consumer without accepting late data or starting more billing reads', async () => {
     const pending = deferred<Response>();
