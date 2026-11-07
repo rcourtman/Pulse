@@ -49,12 +49,13 @@ for (const [name, summary, evidence] of [
       "Several hosts or clusters: preserve which names and IDs repeat",
       "Notification delivery: Test versus ordinary alerts",
       "Pulse CPU, memory or disk writes: comparable measurements",
+      "Saved access or plans: failed read versus unconfirmed change",
       "VM or LXC memory: guest versus hypervisor readings",
     ].sort());
     for (const [id, titles] of [
       ["upgrade_context", ["Failed upgrade:"]],
       [summary, ["Several hosts or clusters:"]],
-      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "VM or LXC memory:"]],
+      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "Saved access or plans:", "VM or LXC memory:"]],
     ]) {
       const guidance = fieldGuidance(form, id);
       for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
