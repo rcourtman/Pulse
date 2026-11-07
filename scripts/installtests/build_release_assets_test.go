@@ -4782,6 +4782,8 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`return_run_details: true`,
 		`pulse_ref: $pulse_ref`,
 		`pulse_checkout_ref: $pulse_checkout_ref`,
+		`--arg public_release_run_id "${GITHUB_RUN_ID}"`,
+		`public_release_run_id: $public_release_run_id`,
 		`version: $version`,
 		`upload_actions_artifact: "false"`,
 		`upload_to_r2: "true"`,

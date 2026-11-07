@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Sequence
 
 
-TEST_NAME_PATTERN = re.compile(r"^Test[A-Za-z0-9_]+$")
+# -test.run runs a fuzz test's seed corpus and an example like any test.
+TEST_NAME_PATTERN = re.compile(r"^(?:Test|Fuzz|Example)[A-Za-z0-9_]+$")
 MAX_SAFE_REGEX_BYTES = 120_000
 DEFAULT_MAX_REGEX_BYTES = 64 * 1024
 
