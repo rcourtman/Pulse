@@ -26,12 +26,13 @@ type pulseAPIRequestContract struct {
 }
 
 // Match each copied request to its own transport contract, not its position in
-// the guide. New examples must gain a fixture rather than disabling every
-// existing check with an unexplained recipe-count mismatch.
+// the guide. Each independent copy needs a contract, even when two sections use
+// the same read. Do not deduplicate them out of the executable transport proof.
 func pulseAPIRequestContracts() []pulseAPIRequestContract {
 	return []pulseAPIRequestContract{
 		{"summary", "pulse_api GET /api/state/summary", "GET", "/api/state/summary", ""},
 		{"tokens", "pulse_api GET /api/security/tokens", "GET", "/api/security/tokens", ""},
+		{"token-expiry", "pulse_api GET /api/security/tokens", "GET", "/api/security/tokens", ""},
 		{"connections", "pulse_api GET /api/connections", "GET", "/api/connections", ""},
 		{"capabilities", "pulse_api GET /api/agent/resource-capabilities/vm%3A42", "GET", "/api/agent/resource-capabilities/vm%3A42", ""},
 		{"plan", "pulse_api POST /api/actions/plan <<'JSON'", "POST", "/api/actions/plan", "heredoc"},
@@ -66,11 +67,11 @@ func pulseAPIRecipeRequestLine(block string) (string, error) {
 }
 
 func pulseAPIRecipes(doc string) (preparation, helper string, calls []pulseAPIRecipe, err error) {
-	contracts := make(map[string]pulseAPIRequestContract)
+	contracts := make(map[string][]pulseAPIRequestContract)
 	for _, contract := range pulseAPIRequestContracts() {
-		contracts[contract.firstLine] = contract
+		contracts[contract.firstLine] = append(contracts[contract.firstLine], contract)
 	}
-	seen := make(map[string]bool)
+	seen := make(map[string]int)
 	for _, match := range regexp.MustCompile("(?s)```bash\n(.*?)```").FindAllStringSubmatch(doc, -1) {
 		block := match[1]
 		switch {
@@ -89,14 +90,15 @@ func pulseAPIRecipes(doc string) (preparation, helper string, calls []pulseAPIRe
 			if lineErr != nil {
 				return "", "", nil, lineErr
 			}
-			contract, ok := contracts[firstLine]
+			matches, ok := contracts[firstLine]
 			if !ok {
 				return "", "", nil, fmt.Errorf("request example lacks a transport fixture: %s", firstLine)
 			}
-			if seen[firstLine] {
-				return "", "", nil, fmt.Errorf("duplicate request example: %s", contract.name)
+			if seen[firstLine] == len(matches) {
+				return "", "", nil, fmt.Errorf("duplicate request example: %s", matches[0].name)
 			}
-			seen[firstLine] = true
+			contract := matches[seen[firstLine]]
+			seen[firstLine]++
 			calls = append(calls, pulseAPIRecipe{contract, block})
 		case strings.Contains(block, "pulse_api "):
 			return "", "", nil, fmt.Errorf("request example must start with the private-response helper")
@@ -107,9 +109,9 @@ func pulseAPIRecipes(doc string) (preparation, helper string, calls []pulseAPIRe
 	if preparation == "" || helper == "" {
 		return "", "", nil, fmt.Errorf("missing credential preparation or private-response helper")
 	}
-	for _, contract := range pulseAPIRequestContracts() {
-		if !seen[contract.firstLine] {
-			return "", "", nil, fmt.Errorf("missing request example: %s", contract.name)
+	for firstLine, matches := range contracts {
+		if seen[firstLine] != len(matches) {
+			return "", "", nil, fmt.Errorf("missing request example: %s", matches[seen[firstLine]].name)
 		}
 	}
 	return
@@ -145,6 +147,15 @@ func TestPulseAPIGuidanceRecipeCatalogueIsCompleteAndOrderIndependent(t *testing
 	for i := len(calls) - 1; i >= 0; i-- {
 		reordered += fence(calls[i].command)
 	}
+	// Change the second copy specifically. A valid recovery read must not hide
+	// an unsafe expiry example just because both normally call the same route.
+	beforeExpiry, expiry, found := strings.Cut(doc, "## Checking a saved token’s expiry\n")
+	if !found {
+		t.Fatal("saved-expiry section is missing")
+	}
+	withExpiry := func(section string) string {
+		return beforeExpiry + "## Checking a saved token’s expiry\n" + section
+	}
 	cases := []struct{ name, doc, wantError string }{
 		{"current", doc, ""},
 		{"reordered", reordered, ""},
@@ -158,6 +169,9 @@ func TestPulseAPIGuidanceRecipeCatalogueIsCompleteAndOrderIndependent(t *testing
 		{"changed method", strings.Replace(doc, "pulse_api GET /api/state/summary\n", "pulse_api PUT /api/state/summary\n", 1), "lacks a transport fixture"},
 		{"changed recovery method", strings.Replace(doc, "pulse_api GET /api/security/tokens\n", "pulse_api POST /api/security/tokens\n", 1), "lacks a transport fixture"},
 		{"changed recovery endpoint", strings.Replace(doc, "pulse_api GET /api/security/tokens\n", "pulse_api GET /api/security/tokens/another-id\n", 1), "lacks a transport fixture"},
+		{"changed expiry method", withExpiry(strings.Replace(expiry, "pulse_api GET /api/security/tokens\n", "pulse_api POST /api/security/tokens\n", 1)), "lacks a transport fixture"},
+		{"changed expiry endpoint", withExpiry(strings.Replace(expiry, "pulse_api GET /api/security/tokens\n", "pulse_api GET /api/security/tokens/another-id\n", 1)), "lacks a transport fixture"},
+		{"missing expiry read", withExpiry(strings.Replace(expiry, "pulse_api GET /api/security/tokens\n", "", 1)), "missing request example"},
 		{"changed node input", strings.Replace(doc, `pulse_api POST /api/config/nodes < "$node_request_file"`, "pulse_api POST /api/config/nodes", 1), "lacks a transport fixture"},
 		{"changed validation method", strings.Replace(doc, "pulse_api POST /api/security/validate-token", "pulse_api GET /api/security/validate-token", 1), "lacks a transport fixture"},
 		{"changed validation input", strings.Replace(doc, `pulse_api POST /api/security/validate-token < "$body_file"`, "pulse_api POST /api/security/validate-token", 1), "lacks a transport fixture"},
