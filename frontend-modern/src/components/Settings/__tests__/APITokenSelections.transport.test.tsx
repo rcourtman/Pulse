@@ -161,7 +161,7 @@ beforeEach(() => {
     // Return an unsorted inventory so tests cannot rely on fixture array index
     // matching the visible, creation-sorted row or card position.
     if (path === '/api/security/tokens' && method === 'GET')
-      return json({ tokens: [...saved.slice(1), ...saved.slice(0, 1)] });
+      return json({ tokens: [...saved.slice(-1), ...saved.slice(0, -1)] });
     const selected = saved.find((token) => tokenPath(token.id) === path);
     // Derive the fixture's saved result from the dispatched path and body, not
     // the identity or values the test intended to submit.
