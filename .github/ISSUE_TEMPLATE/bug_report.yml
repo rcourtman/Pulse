@@ -195,6 +195,15 @@ body:
 
         </details>
 
+        <details>
+        <summary>Saved access or plans: failed read versus unconfirmed change</summary>
+
+        For membership, invitation, role or plan problems, say which page or action failed and what you expected that account to be allowed to do. Use consistent aliases such as reader A and workspace B, not names, email addresses or account IDs.
+        Distinguish loading saved access from submitting a change. Give the original time, HTTP status and redacted error only if already known. A failed read does not mean saved access was removed. A lost response can follow a saved invitation, role change, ownership transfer or activation.
+        Keep any working administrator session open. Use existing observations; blank or "unknown" is valid. Do not run Diagnostics, reset passwords, widen permissions or repeat the change just to complete this report. Keep cookies, tokens, keys, permission exports and purchase or account evidence private. Use the [private security disclosure route](https://github.com/rcourtman/Pulse/security/policy) for suspected exposure or another workspace's private data, not a public reproduction. Keep payment and licence-ownership disputes in your private account/support conversation.
+
+        </details>
+
   - type: textarea
     id: logs
     attributes:

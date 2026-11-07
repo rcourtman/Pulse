@@ -2202,6 +2202,47 @@ else:
                     self.assertIn(distinction, context)
                 self.assertTrue(fields["pulse_version"]["validations"]["required"])
 
+    def test_saved_access_intake_distinguishes_reads_from_uncertain_changes(self) -> None:
+        contexts = []
+        for name, summary_id, evidence_id in (
+            ("bug_report.yml", "bug_description", "logs"),
+            ("v6_rc_feedback.yml", "summary", "evidence"),
+        ):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                self.assertEqual(len(fields), sum("id" in field for field in form["body"]))
+                context = expandable_intake_context(
+                    form, evidence_id, "Saved access or plans: failed read versus unconfirmed change",
+                )
+                contexts.append(context)
+                for distinction in (
+                    "membership, invitation, role or plan problems",
+                    "which page or action failed", "expected that account to be allowed",
+                    "consistent aliases such as reader A and workspace B",
+                    "not names, email addresses or account IDs",
+                    "Distinguish loading saved access from submitting a change",
+                    "original time, HTTP status and redacted error only if already known",
+                    "failed read does not mean saved access was removed",
+                    "lost response can follow a saved invitation, role change, ownership transfer or activation",
+                    "Keep any working administrator session open",
+                    'Use existing observations; blank or "unknown" is valid',
+                    "Do not run Diagnostics, reset passwords, widen permissions or repeat the change",
+                    "Keep cookies, tokens, keys, permission exports and purchase or account evidence private",
+                    "private security disclosure route", "not a public reproduction",
+                    "Keep payment and licence-ownership disputes in your private account/support conversation",
+                ):
+                    self.assertIn(distinction, context)
+                self.assertIn("https://github.com/rcourtman/Pulse/security/policy", context)
+                self.assertTrue(fields[summary_id]["validations"]["required"])
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+                self.assertFalse(fields[evidence_id].get("validations", {}).get("required", False))
+                # Safe access context is optional prose, never another required
+                # identity field or a request for a diagnostic/config export.
+                for field in ("account_id", "workspace_id", "permission_export", "purchase_evidence"):
+                    self.assertNotIn(field, fields)
+        self.assertEqual(contexts[0], contexts[1])
+
     def test_expandable_intake_context_cannot_be_hidden_or_detached(self) -> None:
         for name, summary_id, evidence_id in (
             ("bug_report.yml", "bug_description", "logs"),
@@ -2210,6 +2251,7 @@ else:
             for field_id, heading in (
                 (summary_id, "Several hosts or clusters: preserve which names and IDs repeat"),
                 (evidence_id, "Notification delivery: Test versus ordinary alerts"),
+                (evidence_id, "Saved access or plans: failed read versus unconfirmed change"),
             ):
                 with self.subTest(form=name, field=field_id):
                     form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
