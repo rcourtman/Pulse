@@ -106,6 +106,18 @@ function controlsFor(layout: Layout, token: APITokenRecord) {
   return within(container! as HTMLElement);
 }
 
+function expectUnchangedSiblings(selected: APITokenRecord) {
+  for (const sibling of originals.filter((token) => token.id !== selected.id)) {
+    for (const layout of ['desktop row', 'compact card'] as const) {
+      const controls = controlsFor(layout, sibling);
+      expect(controls.getByText(sibling.name)).toBeInTheDocument();
+      expect(
+        controls.getByText(sibling.scopes!.includes('*') ? 'Full' : 'Agent reporting'),
+      ).toBeInTheDocument();
+    }
+  }
+}
+
 async function openPanel() {
   const view = render(() => (
     <APITokenManager currentUser="token-maintainer" canManage onTokensChanged={changed} />
@@ -149,7 +161,7 @@ beforeEach(() => {
     // Return an unsorted inventory so tests cannot rely on fixture array index
     // matching the visible, creation-sorted row or card position.
     if (path === '/api/security/tokens' && method === 'GET')
-      return json({ tokens: [...saved].reverse() });
+      return json({ tokens: [...saved.slice(1), ...saved.slice(0, 1)] });
     const selected = saved.find((token) => tokenPath(token.id) === path);
     // Derive the fixture's saved result from the dispatched path and body, not
     // the identity or values the test intended to submit.
@@ -207,6 +219,7 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       expect(JSON.parse(String(writes()[0][1]?.body))).toEqual({ scopes: [MONITORING_READ_SCOPE] });
       const scoped = { ...selected, scopes: [MONITORING_READ_SCOPE] };
       expect(saved).toEqual([originals[0], scoped, originals[2]]);
+      expectUnchangedSiblings(selected);
       for (const surface of ['desktop row', 'compact card'] as const) {
         expect(
           controlsFor(surface, selected).getByText('Monitoring & alerts (read)'),
@@ -232,6 +245,7 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       expect(JSON.parse(String(writes()[1][1]?.body))).toEqual({ name: 'North collector' });
       const renamed = { ...scoped, name: 'North collector' };
       expect(saved).toEqual([originals[0], renamed, originals[2]]);
+      expectUnchangedSiblings(selected);
       expect(changed).toHaveBeenCalledTimes(2);
       expect(runtime.markAgents).not.toHaveBeenCalled();
       expect(runtime.markRuntimes).not.toHaveBeenCalled();
