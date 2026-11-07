@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -49,7 +50,11 @@ func newOrgAccessFixture(t *testing.T, hosted bool) (*config.MultiTenantPersiste
 
 func saveDefaultOrgMembers(t *testing.T, persistence *config.MultiTenantPersistence, userIDs ...string) {
 	t.Helper()
-	org := &models.Organization{ID: "default", DisplayName: "default"}
+	current, err := persistence.LoadOrganization("default")
+	if err != nil {
+		t.Fatalf("load default org: %v", err)
+	}
+	org := &models.Organization{ID: "default", DisplayName: "default", PersistenceVersion: current.PersistenceVersion}
 	for _, userID := range userIDs {
 		org.Members = append(org.Members, models.OrganizationMember{UserID: userID, Role: models.OrgRoleViewer})
 	}
@@ -511,7 +516,7 @@ func TestOrgHandlers_DefaultOrgMembersInSharedMultiOrgMode(t *testing.T) {
 	}
 }
 
-func TestOrgHandlers_DefaultOrgOwnerIsRevocableAndStaleSavesKeepMembers(t *testing.T) {
+func TestOrgHandlers_DefaultOrgOwnerIsRevocableAndStaleSavesConflict(t *testing.T) {
 	installTestRBACManager(t)
 	enableSharedMultiOrgForTest(t)
 	t.Setenv("PULSE_DEV", "true")
@@ -557,14 +562,22 @@ func TestOrgHandlers_DefaultOrgOwnerIsRevocableAndStaleSavesKeepMembers(t *testi
 	}
 	saveDefaultOrgMembers(t, persistence)
 	stale.SharedResources = append(stale.SharedResources, models.OrganizationShare{ID: "share-1", TargetOrgID: "acme", ResourceType: "vm", ResourceID: "vm-1"})
-	if err := h.saveOrganization(stale); err != nil {
-		t.Fatalf("save stale snapshot: %v", err)
+	if err := h.saveOrganization(stale); !errors.Is(err, config.ErrOrganizationChanged) {
+		t.Fatalf("save stale snapshot = %v, want conflict", err)
 	}
 	if checker.CheckAccess(nil, "dave", "default").Allowed {
 		t.Fatal("a stale default snapshot restored a removed member")
 	}
 	saved, err := persistence.LoadOrganizationStrict("default")
-	if err != nil || len(saved.SharedResources) != 1 {
-		t.Fatalf("share change was lost: %+v (%v)", saved, err)
+	if err != nil || len(saved.SharedResources) != 0 {
+		t.Fatalf("conflicting share change was published: %+v (%v)", saved, err)
+	}
+	// A fresh intentional share edit still succeeds, without restoring dave.
+	saved.SharedResources = stale.SharedResources
+	if err := h.saveOrganization(saved); err != nil {
+		t.Fatalf("save reviewed share change: %v", err)
+	}
+	if checker.CheckAccess(nil, "dave", "default").Allowed {
+		t.Fatal("fresh share edit restored a removed member")
 	}
 }
