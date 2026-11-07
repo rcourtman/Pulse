@@ -7,12 +7,12 @@ workflow job deadlines remain unchanged. The NAS boot-owner preflight runs
 before frontend preparation; the remaining phase requires that identity too
 and excludes only the check already executed by preflight. Run at most two
 independent processes together, retaining complete, discovery-ordered output.
-A failed wave drains both checks and starts no subsequent wave.
+Refill a free slot without waiting for its sibling. An observed failure stops
+admission and drains every already-started check before returning failure.
 """
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 import re
 import shutil
@@ -24,7 +24,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "./scripts/installtests"
 PREFLIGHT = ("TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure",)
-CHECKS_PER_WAVE = 2
+MAX_CHECKS = 2
 
 
 def partition(output):
@@ -66,33 +66,50 @@ def run_check(binary, name, *, cwd, timeout="10m", output=None):
 def run_checks(binary, names, *, cwd):
     # Separate processes retain each check's Go alarm and process-local state
     # (including cwd/environment). Do not combine roots into one Go invocation
-    # or overlap workflow phases. Disk-backed logs bound parent memory and keep
-    # simultaneous Go streams from corrupting one another's result identities.
-    with ThreadPoolExecutor(max_workers=CHECKS_PER_WAVE) as executor:
-        for start in range(0, len(names), CHECKS_PER_WAVE):
-            wave = names[start:start + CHECKS_PER_WAVE]
-            with ExitStack() as stack:
-                logs = [stack.enter_context(tempfile.TemporaryFile(mode="w+t", encoding="utf-8"))
-                        for _ in wave]
-                for index, name in enumerate(wave, start + 1):
-                    print(f"Native Unix installer {index}/{len(names)}: {name}", flush=True)
-                futures = [executor.submit(run_check, binary, name, cwd=cwd, output=log)
-                           for name, log in zip(wave, logs)]
-                failures = []
-                # Observe every already-started check before closing its log or
-                # raising. A sibling's pass never erases an earlier failure.
-                for name, future, log in zip(wave, futures, logs):
-                    try:
-                        future.result()
-                    except Exception as error:
-                        failures.append(error)
-                        print(f"Native Unix installer check failed: {name}: {error}", file=sys.stderr)
-                    finally:
-                        log.seek(0)
-                        shutil.copyfileobj(log, sys.stdout)
-                        sys.stdout.flush()
-                if failures:
-                    raise failures[0]
+    # or overlap workflow phases. Disk-backed logs keep simultaneous Go streams
+    # separate. Open them only while running or emitting, so a slow first check
+    # cannot retain one descriptor per later completed check.
+    with tempfile.TemporaryDirectory(prefix="pulse-native-check-logs-") as directory, \
+            ThreadPoolExecutor(max_workers=MAX_CHECKS) as executor:
+        def logged_check(name, path):
+            with path.open("w", encoding="utf-8") as output:
+                run_check(binary, name, cwd=cwd, output=output)
+
+        running, completed, failures = {}, {}, {}
+        admitted, emitted = 0, 0
+        while running or (admitted < len(names) and not failures):
+            # Never enqueue the whole inventory: at most MAX_CHECKS roots are
+            # admitted, and no new root starts after a failure is observed.
+            while not failures and admitted < len(names) and len(running) < MAX_CHECKS:
+                name = names[admitted]
+                path = Path(directory) / f"{admitted}.log"
+                print(f"Native Unix installer {admitted + 1}/{len(names)}: {name}", flush=True)
+                future = executor.submit(logged_check, name, path)
+                running[future] = (admitted, name, path)
+                admitted += 1
+            wait(running, return_when=FIRST_COMPLETED)
+            # Inspect every completed result, not just the first returned one.
+            # A fast later failure must stop admission even while an earlier
+            # check still owns the next discovery-ordered output position.
+            for future in list(running):
+                if not future.done():
+                    continue
+                index, name, path = running.pop(future)
+                try:
+                    future.result()
+                except Exception as error:
+                    failures[index] = error
+                    print(f"Native Unix installer check failed: {name}: {error}", file=sys.stderr)
+                completed[index] = path
+            while emitted in completed:
+                path = completed.pop(emitted)
+                with path.open(encoding="utf-8") as log:
+                    shutil.copyfileobj(log, sys.stdout)
+                path.unlink()
+                sys.stdout.flush()
+                emitted += 1
+        if failures:
+            raise failures[min(failures)]
 
 
 def main(phase="all"):

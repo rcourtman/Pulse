@@ -102,7 +102,7 @@ class InventoryControls(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("invalid choice", result.stderr)
 
-    def test_all_keeps_preflight_out_of_the_first_remaining_wave(self):
+    def test_all_finishes_preflight_before_admitting_remaining_checks(self):
         with patch.object(runner.subprocess, "run", return_value=SimpleNamespace(stdout=self.inventory)), \
                 patch.object(runner, "run_checks") as checks, contextlib.redirect_stdout(io.StringIO()):
             runner.main("all")
@@ -112,12 +112,13 @@ class InventoryControls(unittest.TestCase):
                          [name for name in self.names if name not in runner.PREFLIGHT])
 
 
-class WaveControls(unittest.TestCase):
-    def test_two_checks_overlap_but_next_wave_waits_and_output_stays_ordered(self):
+class SchedulerControls(unittest.TestCase):
+    def test_free_slot_refills_while_first_is_blocked_and_output_stays_ordered(self):
         barrier = threading.Barrier(2)
+        tail_finished = threading.Event()
         lock = threading.Lock()
         active, peak, finished = set(), [0], set()
-        names = ["TestFirst", "TestSecond", "TestLast"]
+        names = ["TestFirst", "TestSecond", "TestThird", "TestFourth", "TestLast"]
         output = io.StringIO()
         def check(binary, name, *, cwd, output):
             self.assertEqual(binary, "exact-binary")
@@ -125,14 +126,19 @@ class WaveControls(unittest.TestCase):
             with lock:
                 active.add(name)
                 peak[0] = max(peak[0], len(active))
-                if name == "TestLast":
-                    self.assertEqual(finished, set(names[:2]))
-            if name != "TestLast":
+                if name not in names[:2]:
+                    self.assertIn("TestFirst", active)
+                    self.assertIn(names[names.index(name) - 1], finished)
+            if name in names[:2]:
                 barrier.wait(timeout=5)
+            if name == "TestFirst":
+                self.assertTrue(tail_finished.wait(timeout=5), "free slot was not refilled")
             output.write(f"complete {name}\n")
             with lock:
                 active.remove(name)
                 finished.add(name)
+            if name == "TestLast":
+                tail_finished.set()
         with patch.object(runner, "run_check", side_effect=check), contextlib.redirect_stdout(output):
             runner.run_checks("exact-binary", names, cwd="exact-cwd")
         self.assertEqual(peak[0], 2)
@@ -140,22 +146,31 @@ class WaveControls(unittest.TestCase):
         self.assertEqual([line for line in output.getvalue().splitlines() if line.startswith("complete")],
                          [f"complete {name}" for name in names])
 
-    def test_failed_wave_drains_sibling_and_starts_no_later_check(self):
+    def test_observed_failure_drains_sibling_and_starts_no_later_check(self):
         # Fail either position, including a fast second result while the first
         # is still active. Both outputs survive before the failure is raised.
         for failed in ("TestFirst", "TestSecond"):
             with self.subTest(failed=failed):
                 barrier = threading.Barrier(2)
+                failure_observed = threading.Event()
                 names, finished = [], set()
                 output, errors = io.StringIO(), io.StringIO()
+                actual_wait = runner.wait
+                def wait(*args, **kwargs):
+                    result = actual_wait(*args, **kwargs)
+                    if any(future.exception() for future in result[0]):
+                        failure_observed.set()
+                    return result
                 def check(binary, name, *, cwd, output):
                     names.append(name)
                     barrier.wait(timeout=5)
+                    if name != failed:
+                        self.assertTrue(failure_observed.wait(timeout=5))
                     output.write(f"observed {name}\n")
                     finished.add(name)
                     if name == failed:
                         raise subprocess.CalledProcessError(23, [binary, name])
-                with patch.object(runner, "run_check", side_effect=check), \
+                with patch.object(runner, "run_check", side_effect=check), patch.object(runner, "wait", side_effect=wait), \
                         contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), \
                         self.assertRaises(subprocess.CalledProcessError) as raised:
                     runner.run_checks("exact-binary", ["TestFirst", "TestSecond", "TestNever"], cwd="exact-cwd")
@@ -165,6 +180,39 @@ class WaveControls(unittest.TestCase):
                 self.assertIn("observed TestFirst\nobserved TestSecond\n", output.getvalue())
                 self.assertIn("check failed: " + failed, errors.getvalue())
                 self.assertNotIn("TestNever", output.getvalue() + errors.getvalue())
+
+    def test_refilled_slot_failure_is_observed_before_earlier_output_can_finish(self):
+        first_started, failure_observed = threading.Event(), threading.Event()
+        started, finished = [], []
+        output, errors = io.StringIO(), io.StringIO()
+        actual_wait = runner.wait
+        def wait(*args, **kwargs):
+            result = actual_wait(*args, **kwargs)
+            if any(future.exception() for future in result[0]):
+                failure_observed.set()
+            return result
+        def check(binary, name, *, cwd, output):
+            started.append(name)
+            if name == "TestFirst":
+                first_started.set()
+                self.assertTrue(failure_observed.wait(timeout=5), "later failure was hidden by output order")
+            else:
+                self.assertTrue(first_started.wait(timeout=5))
+            output.write(f"complete {name}\n")
+            finished.append(name)
+            if name == "TestRefilledFailure":
+                raise subprocess.CalledProcessError(31, [binary, name])
+        with patch.object(runner, "run_check", side_effect=check), patch.object(runner, "wait", side_effect=wait), \
+                contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), \
+                self.assertRaises(subprocess.CalledProcessError) as raised:
+            runner.run_checks("binary", ["TestFirst", "TestSecond", "TestRefilledFailure", "TestNever"], cwd="cwd")
+        self.assertEqual(raised.exception.returncode, 31)
+        self.assertEqual(set(started), {"TestFirst", "TestSecond", "TestRefilledFailure"})
+        self.assertEqual(set(finished), set(started))
+        self.assertEqual([line for line in output.getvalue().splitlines() if line.startswith("complete")],
+                         ["complete TestFirst", "complete TestSecond", "complete TestRefilledFailure"])
+        self.assertIn("check failed: TestRefilledFailure", errors.getvalue())
+        self.assertNotIn("TestNever", output.getvalue() + errors.getvalue())
 
     def test_both_failures_and_complete_output_are_retained(self):
         output, errors = io.StringIO(), io.StringIO()
@@ -207,6 +255,14 @@ func TestSkip(t *testing.T) { t.Skip("explicit platform skip") }
 func TestFail(t *testing.T) { t.Fatal("real failure") }
 func TestExitZero(t *testing.T) { os.Exit(0) }
 func TestTimeout(t *testing.T) { time.Sleep(time.Hour) }
+func TestDrain(t *testing.T) {
+    deadline := time.Now().Add(5 * time.Second)
+    for {
+        if _, err := os.Stat("release-drain"); err == nil { return }
+        if time.Now().After(deadline) { t.Fatal("sibling was not drained after observed failure") }
+        time.Sleep(time.Millisecond)
+    }
+}
 func TestConcurrentA(t *testing.T) { concurrent(t, "A", "B") }
 func TestConcurrentB(t *testing.T) { concurrent(t, "B", "A") }
 func concurrent(t *testing.T, own, peer string) {
@@ -260,16 +316,22 @@ func Example_output() { fmt.Println("installer"); /* Output: installer */ }
 
     def test_actual_failure_does_not_erase_sibling_or_run_a_later_check(self):
         for failed in ("TestFail", "TestExitZero", "TestTimeout", "TestMissing"):
-            with self.subTest(failed=failed):
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory(dir=self.cwd) as directory:
                 output, errors = io.StringIO(), io.StringIO()
                 actual = runner.run_check
+                actual_wait = runner.wait
+                def wait(*args, **kwargs):
+                    result = actual_wait(*args, **kwargs)
+                    if any(future.exception() for future in result[0]):
+                        (Path(directory) / "release-drain").write_text("observed failure")
+                    return result
                 def bounded(binary, name, **kwargs):
-                    return actual(binary, name, timeout="100ms", **kwargs)
-                with patch.object(runner, "run_check", side_effect=bounded), \
+                    return actual(binary, name, timeout="5s" if name == "TestDrain" else "100ms", **kwargs)
+                with patch.object(runner, "run_check", side_effect=bounded), patch.object(runner, "wait", side_effect=wait), \
                         contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), \
                         self.assertRaises((subprocess.CalledProcessError, RuntimeError)):
-                    runner.run_checks(self.binary, [failed, "TestPass", "TestPassExtra"], cwd=self.cwd)
-                self.assertIn("--- PASS: TestPass (", output.getvalue())
+                    runner.run_checks(self.binary, [failed, "TestDrain", "TestPassExtra"], cwd=directory)
+                self.assertIn("--- PASS: TestDrain (", output.getvalue())
                 self.assertNotIn("=== RUN   TestPassExtra", output.getvalue())
                 self.assertIn("check failed: " + failed, errors.getvalue())
 
