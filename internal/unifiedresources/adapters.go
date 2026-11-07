@@ -158,6 +158,19 @@ func HostIngestRecord(host models.Host) IngestRecord {
 	}
 }
 
+// hostReportSourceStatus keeps the cadence of the report that delivered a host
+// and its disk/storage inventory. Reuse the registry's per-sighting freshness
+// rule instead of increasing a source-wide threshold for every agent. Missing
+// or invalid cadence retains the existing source default.
+func hostReportSourceStatus(host models.Host) map[DataSource]SourceStatus {
+	if host.IntervalSeconds <= 0 {
+		return nil
+	}
+	return map[DataSource]SourceStatus{
+		SourceAgent: {ExpectedUpdateIntervalSeconds: int64(host.IntervalSeconds)},
+	}
+}
+
 func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	name := host.Hostname
 	if host.DisplayName != "" {
@@ -578,6 +591,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	metrics := metricsFromHost(host)
 
 	resource := Resource{
+		SourceStatus: hostReportSourceStatus(host),
 		Type:         ResourceTypeAgent,
 		Technology:   strings.TrimSpace(platform),
 		Name:         name,
@@ -724,13 +738,14 @@ func resourceFromHostUnraidStorage(host models.Host) (Resource, ResourceIdentity
 
 	path := unraidStoragePath(host)
 	resource := Resource{
-		Type:       ResourceTypeStorage,
-		Technology: "unraid",
-		Name:       name,
-		Status:     storageStatus(statusFromString(host.Status), storageRiskFromAssessment(assessment)),
-		LastSeen:   host.LastSeen,
-		UpdatedAt:  time.Now().UTC(),
-		Metrics:    metricsFromUnraidStorage(host),
+		SourceStatus: hostReportSourceStatus(host),
+		Type:         ResourceTypeStorage,
+		Technology:   "unraid",
+		Name:         name,
+		Status:       storageStatus(statusFromString(host.Status), storageRiskFromAssessment(assessment)),
+		LastSeen:     host.LastSeen,
+		UpdatedAt:    time.Now().UTC(),
+		Metrics:      metricsFromUnraidStorage(host),
 		Storage: &StorageMeta{
 			Type:         "unraid-array",
 			Content:      "files",
@@ -780,13 +795,14 @@ func resourceFromHostUnraidCacheStorage(host models.Host, disk models.HostUnraid
 	}
 	total, used, _, percent := unraidDiskCapacityForHost(host, disk)
 	resource := Resource{
-		Type:       ResourceTypeStorage,
-		Technology: "unraid",
-		Name:       name,
-		Status:     statusFromString(firstNonEmpty(disk.Status, host.Status)),
-		LastSeen:   host.LastSeen,
-		UpdatedAt:  time.Now().UTC(),
-		Metrics:    metricsFromUnraidDiskCapacity(total, used, percent),
+		SourceStatus: hostReportSourceStatus(host),
+		Type:         ResourceTypeStorage,
+		Technology:   "unraid",
+		Name:         name,
+		Status:       statusFromString(firstNonEmpty(disk.Status, host.Status)),
+		LastSeen:     host.LastSeen,
+		UpdatedAt:    time.Now().UTC(),
+		Metrics:      metricsFromUnraidDiskCapacity(total, used, percent),
 		Storage: &StorageMeta{
 			Type:         "unraid-cache-pool",
 			Content:      "files",
@@ -826,11 +842,12 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 	sizeBytes := unraidDiskSizeBytes(host, disk)
 	temperature, collection := HostUnraidDiskTemperature(host, disk)
 	resource := Resource{
-		Type:      ResourceTypePhysicalDisk,
-		Name:      name,
-		Status:    physicalDiskStatus(model, health, assessment),
-		LastSeen:  host.LastSeen,
-		UpdatedAt: time.Now().UTC(),
+		SourceStatus: hostReportSourceStatus(host),
+		Type:         ResourceTypePhysicalDisk,
+		Name:         name,
+		Status:       physicalDiskStatus(model, health, assessment),
+		LastSeen:     host.LastSeen,
+		UpdatedAt:    time.Now().UTC(),
 		PhysicalDisk: &PhysicalDiskMeta{
 			DevPath:      strings.TrimSpace(disk.Device),
 			Model:        model,
@@ -990,11 +1007,12 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	}
 
 	resource := Resource{
-		Type:      ResourceTypePhysicalDisk,
-		Name:      firstNonEmpty(model, name),
-		Status:    physicalDiskStatus(model, health, assessment),
-		LastSeen:  host.LastSeen,
-		UpdatedAt: time.Now().UTC(),
+		SourceStatus: hostReportSourceStatus(host),
+		Type:         ResourceTypePhysicalDisk,
+		Name:         firstNonEmpty(model, name),
+		Status:       physicalDiskStatus(model, health, assessment),
+		LastSeen:     host.LastSeen,
+		UpdatedAt:    time.Now().UTC(),
 		PhysicalDisk: &PhysicalDiskMeta{
 			DevPath:      strings.TrimSpace(disk.Device),
 			Model:        model,
