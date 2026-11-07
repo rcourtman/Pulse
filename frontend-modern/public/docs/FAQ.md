@@ -3,7 +3,7 @@
 ## 🛠️ Installation & Setup
 
 ### What's the easiest way to install?
-If you run Proxmox VE, use the signed LXC installer flow in [INSTALL.md](INSTALL.md) and replace `vX.Y.Z` with the exact release tag you want.
+If you run Proxmox VE, use the signed LXC installer flow in [INSTALL.md](INSTALL.md).
 
 If you prefer Docker:
 

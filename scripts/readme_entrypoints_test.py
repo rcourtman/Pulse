@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import shutil
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +19,14 @@ ROOT = Path(__file__).resolve().parents[1]
 def read_repo_text(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
+
+SPEC = importlib.util.spec_from_file_location(
+    "stamp_install_version", ROOT / "scripts" / "stamp_install_version.py"
+)
+assert SPEC is not None and SPEC.loader is not None
+stamp_install_version = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = stamp_install_version
+SPEC.loader.exec_module(stamp_install_version)
 
 ENTRYPOINTS = (
     "README.md",
@@ -117,6 +128,7 @@ class ReadmeEntrypointsTest(unittest.TestCase):
                     self.assertEqual(code, expected_exit)
 
     def test_verified_install_keeps_pinned_version_and_signer(self) -> None:
+        version = stamp_install_version.current_version()
         for relative_path in ENTRYPOINTS:
             with self.subTest(page=relative_path):
                 commands = installer_commands(read_repo_text(relative_path))
@@ -130,8 +142,8 @@ class ReadmeEntrypointsTest(unittest.TestCase):
                 self.assertEqual(
                     [event["argv"][-1] for event in events[:2]],
                     [
-                        "https://github.com/rcourtman/Pulse/releases/download/vX.Y.Z/install.sh",
-                        "https://github.com/rcourtman/Pulse/releases/download/vX.Y.Z/install.sh.sshsig",
+                        f"https://github.com/rcourtman/Pulse/releases/download/{version}/install.sh",
+                        f"https://github.com/rcourtman/Pulse/releases/download/{version}/install.sh.sshsig",
                     ],
                 )
                 self.assertTrue(all(event["argv"][0] == "-fsSLO" for event in events[:2]))
@@ -143,7 +155,59 @@ class ReadmeEntrypointsTest(unittest.TestCase):
                     ("-s", "install.sh.sshsig"),
                 ):
                     self.assertEqual(verify[verify.index(option) + 1], value)
-                self.assertEqual(events[3]["argv"], ["install.sh", "--version", "vX.Y.Z"])
+                self.assertEqual(events[3]["argv"], ["install.sh", "--version", version])
+
+    def stamped_copy(self, directory: str) -> Path:
+        root = Path(directory)
+        for page in stamp_install_version.PAGES:
+            for path in (page, f"{stamp_install_version.SHIPPED_DOCS}/{page.removeprefix('docs/')}"):
+                if (ROOT / path).is_file():
+                    (root / path).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(ROOT / path, root / path)
+        return root
+
+    def test_every_install_command_uses_one_stable_version(self) -> None:
+        version = stamp_install_version.current_version()
+        stamp_install_version.version_key(version)
+        for page in stamp_install_version.PAGES:
+            with self.subTest(page=page):
+                self.assertIn(version, read_repo_text(page))
+        for relative_path in ENTRYPOINTS:
+            with self.subTest(page=relative_path):
+                self.assertNotIn("export PULSE_VERSION=vX.Y.Z", read_repo_text(relative_path))
+                self.assertNotIn("rcourtman/pulse:vX.Y.Z", read_repo_text(relative_path))
+
+    def test_stamp_moves_only_the_install_commands_and_their_shipped_copies(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="pulse-stamp-") as directory:
+            root = self.stamped_copy(directory)
+            before = stamp_install_version.current_version(root)
+            placeholders = (root / "docs/DOCKER.md").read_text(encoding="utf-8").count("vX.Y.Z")
+            changed = stamp_install_version.stamp("v99.0.0", root)
+            self.assertEqual(stamp_install_version.current_version(root), "v99.0.0")
+            self.assertIn("README.md", changed)
+            self.assertIn("frontend-modern/public/docs/INSTALL.md", changed)
+            docker = (root / "docs/DOCKER.md").read_text(encoding="utf-8")
+            self.assertEqual(docker.count("vX.Y.Z"), placeholders)
+            self.assertNotIn(before, docker)
+            for page in stamp_install_version.PAGES:
+                if page.startswith("docs/"):
+                    shipped = f"{stamp_install_version.SHIPPED_DOCS}/{page.removeprefix('docs/')}"
+                    self.assertEqual((root / page).read_bytes(), (root / shipped).read_bytes())
+            self.assertEqual(stamp_install_version.stamp("v99.0.0", root), [])
+
+    def test_stamp_refuses_prereleases_downgrades_and_disagreement(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="pulse-stamp-") as directory:
+            root = self.stamped_copy(directory)
+            stamp_install_version.stamp("v99.0.0", root)
+            for refused in ("v99.1.0-rc.1", "v99.1.0-beta.1", "helm-chart-99.1.0", "v98.9.9"):
+                with self.subTest(version=refused):
+                    with self.assertRaises(stamp_install_version.StampError):
+                        stamp_install_version.stamp(refused, root)
+            readme = root / "README.md"
+            readme.write_text(readme.read_text(encoding="utf-8").replace(
+                "rcourtman/pulse:v99.0.0", "rcourtman/pulse:v98.0.0"), encoding="utf-8")
+            with self.assertRaises(stamp_install_version.StampError):
+                stamp_install_version.current_version(root)
 
     def test_installer_failure_remains_nonzero(self) -> None:
         for relative_path in ENTRYPOINTS:

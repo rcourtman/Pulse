@@ -61,9 +61,9 @@ sample data and signs you in automatically.
 
 ## Install
 
-Pulse is one container or service listening on port 7655. Pick an exact
-version from the [latest release](https://github.com/rcourtman/Pulse/releases/latest)
-and use it in place of `vX.Y.Z` below.
+Pulse is one container or service listening on port 7655. The commands below
+install the current stable version. If a [newer release](https://github.com/rcourtman/Pulse/releases/latest)
+is out, use its tag instead.
 
 ### Docker
 
@@ -74,7 +74,7 @@ docker run -d \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  rcourtman/pulse:v6.7.0
 ```
 
 The Pulse container does not need the Docker socket. Docker hosts are
@@ -86,7 +86,7 @@ The installer is signed. This block downloads it, verifies it against the
 pinned `pulse-installer` key, and only then runs it:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
+export PULSE_VERSION=v6.7.0
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
