@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import type { OrganizationRole } from '@/api/orgs';
+import type { OrganizationMember, OrganizationRole } from '@/api/orgs';
 import type { SecurityStatusPresentationPolicy } from '@/types/config';
 import { eventBus } from '@/stores/events';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -66,25 +66,28 @@ let reply: ReturnType<typeof deferred<Response>>;
 function snapshot(id = selectedOrg) {
   const changed = applied && id === selectedOrg;
   const transferred = changed && operation === 'transfer';
+  const memberRole: OrganizationRole = transferred
+    ? 'owner'
+    : changed && operation === 'role'
+      ? 'editor'
+      : 'viewer';
+  const members: OrganizationMember[] = [
+    { userId: owner, role: transferred ? 'admin' : 'owner', addedAt: '2026-11-01T12:00:00Z' },
+    ...(changed && operation === 'remove'
+      ? []
+      : [{ userId: member, role: memberRole, addedAt: '2026-11-02T12:00:00Z' }]),
+  ];
   return {
     organization: {
       id,
       displayName: id === south ? 'South support' : 'North operations',
       ownerUserId: transferred ? member : owner,
       canManageMembers: id === 'default',
+      // Manager admission uses GET /org's membership, not only /members.
+      // The former owner remains an admin after the confirmed transfer.
+      members,
     },
-    members: [
-      { userId: owner, role: transferred ? 'admin' : 'owner', addedAt: '2026-11-01T12:00:00Z' },
-      ...(changed && operation === 'remove'
-        ? []
-        : [
-            {
-              userId: member,
-              role: transferred ? 'owner' : changed && operation === 'role' ? 'editor' : 'viewer',
-              addedAt: '2026-11-02T12:00:00Z',
-            },
-          ]),
-    ],
+    members,
     pending: [
       ...(changed && operation === 'revoke'
         ? []
