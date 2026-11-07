@@ -732,11 +732,18 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 		mu.Lock()
 		observed := count
 		mu.Unlock()
-		if observed > 0 && stats["pending"] == 1 && stats["sending"] == 0 && stats["sent"] == 0 {
+		observedCalls := calls.Load()
+		q.mu.RLock()
+		owned := len(q.processingNotifications)
+		q.mu.RUnlock()
+		// The HTTP observation can be newer than the stats snapshot. Require
+		// the actual settlement marker and the worker's return before advancing
+		// its retry clock, or an in-flight first attempt can overwrite that clock.
+		if observed == 1 && observedCalls == 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && stats["sent"] == 0 && owned == 0 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("accepted but unsettled delivery did not retain retry: %v, http=%d", stats, observed)
+			t.Fatalf("accepted but unsettled delivery did not retain retry: stats=%v http=%d calls=%d owned=%d", stats, observed, observedCalls, owned)
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -762,11 +769,17 @@ func TestNotificationReceiptCommitFailureRetainsRetryObligation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if calls.Load() >= int64(retry+2) && observed == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 {
+			observedCalls := calls.Load()
+			q.mu.RLock()
+			owned := len(q.processingNotifications)
+			q.mu.RUnlock()
+			// A pending row is written before its worker releases ownership.
+			// Do not start the next simulated retry until this one has returned.
+			if observedCalls == int64(retry+2) && observed == 1 && stats["pending"] == 1 && stats["settlement_pending"] == 1 && stats["sending"] == 0 && owned == 0 {
 				break
 			}
 			if time.Now().After(deadline) {
-				t.Fatalf("storage fault did not preserve repeated pending settlement: http=%d stats=%v", observed, stats)
+				t.Fatalf("storage fault did not preserve repeated pending settlement: retry=%d calls=%d want=%d owned=%d http=%d stats=%v", retry, observedCalls, retry+2, owned, observed, stats)
 			}
 			time.Sleep(time.Millisecond)
 		}
