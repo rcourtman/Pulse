@@ -135,8 +135,8 @@ function expectUnknownSnapshot() {
     'No members found.',
     'No organization members found.',
     'No pending invitations for this organization.',
-    'No outgoing shares.',
-    'No incoming shares.',
+    'No outgoing shares configured.',
+    'No incoming shares from other organizations.',
   ])
     expect(screen.queryByText(empty)).not.toBeInTheDocument();
 }
@@ -384,6 +384,9 @@ describe('organization save conflict recovery through real controls and transpor
       } else {
         await expectWinningSnapshot(panel);
       }
+      expect(reads()).toHaveLength(
+        originalReads + (panel === 'access' && next === 'denied' ? 1 : originalReads),
+      );
       expect(writes()).toHaveLength(1);
       expect(notices.success).not.toHaveBeenCalled();
       expectBoundRequests();
