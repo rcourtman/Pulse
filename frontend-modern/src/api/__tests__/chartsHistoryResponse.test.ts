@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI, type MetricsHistoryParams, type ResourceType } from '@/api/charts';
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 
-vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: vi.fn() }));
+vi.mock('@/utils/apiClient', () => ({
+  apiFetchJSON: vi.fn(),
+  getOrgID: vi.fn(() => null),
+}));
 
 const request: MetricsHistoryParams = {
   resourceType: 'agent',
@@ -23,9 +26,33 @@ const read = async (body: unknown, params = request) => {
   return ChartsAPI.getMetricsHistory(params);
 };
 
-beforeEach(() => vi.mocked(apiFetchJSON).mockReset());
+beforeEach(() => {
+  vi.mocked(apiFetchJSON).mockReset();
+  vi.mocked(getOrgID).mockReset().mockReturnValue(null);
+});
 
 describe('metrics History response admission', () => {
+  it.each([null, 'history-workspace'])(
+    'preserves response validation and the issued workspace context %s',
+    async (orgID) => {
+      vi.mocked(getOrgID).mockReturnValue(orgID);
+      const controller = new AbortController();
+      const params = { ...request, signal: controller.signal };
+
+      await expect(read({ ...all(), resourceId: 'wrong-resource' }, params)).rejects.toThrow(
+        'Invalid metrics history response.',
+      );
+      expect(await read(all(), params)).toEqual(all());
+      expect(apiFetchJSON).toHaveBeenCalledTimes(2);
+      for (const call of vi.mocked(apiFetchJSON).mock.calls) {
+        expect(call).toEqual([
+          '/api/metrics-store/history?resourceType=agent&resourceId=pbs-current&range=24h',
+          { signal: controller.signal, ...(orgID ? { expectedOrgID: orgID } : {}) },
+        ]);
+      }
+    },
+  );
+
   it.each([
     ['another resource', { resourceId: 'private-predecessor' }],
     ['another type', { resourceType: 'node' }],

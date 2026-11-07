@@ -591,6 +591,7 @@ export function createWebSocketStore(url: string) {
   let isReconnecting = false;
   let isDisposed = false;
   let activeAlertsRecoveryRequestId = 0;
+  let organizationAccessEnded = false;
   let activeAlertsRecoveryInFlight: Promise<boolean> | null = null;
   let lastActiveAlertsRecoveryAt = 0;
   let activeAlertsColdHydrationTimeout = 0;
@@ -621,6 +622,7 @@ export function createWebSocketStore(url: string) {
   // the socket-owned keyed-delta baseline. A revision fence prevents a late
   // HTTP response from replacing newer WebSocket truth.
   const recoverActiveAlertsFromREST = (force = false): Promise<boolean> => {
+    if (organizationAccessEnded) return Promise.resolve(false);
     if (isDisposed) return Promise.resolve(false);
     if (activeAlertsRecoveryInFlight) return activeAlertsRecoveryInFlight;
 
@@ -1108,6 +1110,7 @@ export function createWebSocketStore(url: string) {
 
   const connect = () => {
     if (isDisposed) return;
+    organizationAccessEnded = false;
     clearReconnectDelayTimeout();
     const connectionId = beginConnection();
 
@@ -1781,7 +1784,27 @@ export function createWebSocketStore(url: string) {
         return;
       }
 
-      // If we get a 1008 (policy violation) close code, it's likely an auth failure
+      // Valid authentication can outlive an organisation membership. The server
+      // checks credentials first and uses4403 only for that separate denial.
+      // Keep saved credentials/context and the last-known snapshot, but stop
+      // automatic recovery until an intentional reconnect or organisation change.
+      if (event.code === 4403) {
+        organizationAccessEnded = true;
+        activeAlertsRecoveryRequestId += 1;
+        activeAlertsRecoveryInFlight = null;
+        clearReconnectTimeout();
+        clearReconnectDelayTimeout();
+        isReconnecting = false;
+        setReconnecting(false);
+        if (!hasActiveAlertsSnapshot) setActiveAlertsHydrationStatus('unavailable');
+        notificationStore.warning(
+          'Access to this organization ended. Select another organization or reload after access is restored.',
+          10000,
+        );
+        return;
+      }
+
+      // If we get a 1008 (policy violation) close code, it's an auth failure.
       // Redirect to login page to re-authenticate
       if (event.code === 1008) {
         logger.warn('WebSocket closed due to authentication failure, redirecting to login');

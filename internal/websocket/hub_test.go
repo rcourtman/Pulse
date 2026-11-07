@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -1617,5 +1618,46 @@ func TestHandleWebSocket_SkipsDefaultOrgCheckWithoutPrincipal(t *testing.T) {
 	}
 	if rec.Code == http.StatusForbidden {
 		t.Fatal("unauthenticated installation must not be refused by the org check")
+	}
+}
+
+func TestClientWriterDistinguishesMembershipFromAuthenticationWithdrawal(t *testing.T) {
+	for _, authValid := range []bool{true, false} {
+		t.Run(fmt.Sprint(authValid), func(t *testing.T) {
+			var orgChecks atomic.Int32
+			done := make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer close(done)
+				conn, err := (&gorillawebsocket.Upgrader{}).Upgrade(w, r, nil)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				c := &Client{conn: conn, send: make(chan []byte, 2), authorizeWrite: func() bool { return authValid }, authorizeOrganization: func() bool { orgChecks.Add(1); return false }}
+				c.send <- []byte("private queued frame")
+				c.send <- []byte("private queued tail")
+				c.writePump()
+			}))
+			defer server.Close()
+			conn, _, err := gorillawebsocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			_, body, err := conn.ReadMessage()
+			var closed *gorillawebsocket.CloseError
+			code, reason := gorillawebsocket.ClosePolicyViolation, "Monitoring access ended"
+			if authValid {
+				code, reason = CloseOrganizationAccessEnded, "Organization access ended"
+			}
+			if !errors.As(err, &closed) || closed.Code != code || closed.Text != reason {
+				t.Fatalf("queued frame = %s %v", body, err)
+			}
+			<-done
+			if !authValid && orgChecks.Load() != 0 {
+				t.Fatal("organization denial masked authentication failure")
+			}
+		})
 	}
 }

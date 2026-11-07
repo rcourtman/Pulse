@@ -100,6 +100,17 @@ var orgAccessRecheckInterval = 10 * time.Second
 // credential revalidation, which already rechecks organization bindings.
 // It returns nil when the request has no user to recheck.
 func orgAccessRevalidator(req *http.Request) func() bool {
+	return orgAccessRevalidatorWithInterval(req, orgAccessRecheckInterval)
+}
+
+// orgResponseAccessRevalidator follows the same admitted user and organization
+// policy as live streams, but cannot reuse an admission-time grant. A result
+// may finish inside the stream cache window after membership was withdrawn.
+func orgResponseAccessRevalidator(req *http.Request) func() bool {
+	return orgAccessRevalidatorWithInterval(req, 0)
+}
+
+func orgAccessRevalidatorWithInterval(req *http.Request, interval time.Duration) func() bool {
 	if req == nil {
 		return nil
 	}
@@ -131,7 +142,7 @@ func orgAccessRevalidator(req *http.Request) func() bool {
 		if denied {
 			return false
 		}
-		if !checkedAt.IsZero() && time.Since(checkedAt) < orgAccessRecheckInterval {
+		if !checkedAt.IsZero() && time.Since(checkedAt) < interval {
 			return true
 		}
 		if !checker.CheckAccessContext(ctx, nil, userID, orgID).Allowed {

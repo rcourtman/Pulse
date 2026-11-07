@@ -11,7 +11,10 @@ import { GUEST_DRAWER_HISTORY_POLL_MS } from '../guestDrawerHistoryQuery';
 
 // Mock the transport, not ChartsAPI: every production consumer uses the real
 // response-admission boundary and its existing retention/error policy.
-vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: vi.fn() }));
+vi.mock('@/utils/apiClient', () => ({
+  apiFetchJSON: vi.fn(),
+  getOrgID: vi.fn(() => null),
+}));
 vi.mock('@/stores/license', () => ({
   loadRuntimeCapabilities: vi.fn(),
   maxHistoryDays: () => 7,

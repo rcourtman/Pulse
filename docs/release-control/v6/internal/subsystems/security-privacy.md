@@ -1791,6 +1791,21 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+Valid-user organization withdrawal is authorization denial, not expired login:
+protected synchronous results use403/access_denied and monitoring sockets4403.
+Credential withdrawal still uses401/1008, evaluated first. Handler-private bytes
+and headers remain withheld, and denied partial results cannot reopen after
+regrant. Browser clients preserve saved authority/selection and do not retarget
+established403 reads; History also pins a saved selection against invalid-org
+recovery. Only unbound bootstrap summary GET/HEAD probes may discard a stale
+saved default selection and retry `default_org_access_denied` through the
+authorized server landing, before activating a workspace or its socket. They
+never discard authentication or retry a generic pending-result `access_denied`.
+The API contract owns this transport detail and its native HTTP/WS and consumer
+regressions; no new permission, public surface or independent-work cancellation
+is introduced. Regrant recovery uses the existing reload or organization switch.
+
+
 The Router agent artifact cache contains validated executable package/release/target and digest metadata tied to file identity, size, modification time and filesystem change time. Platforms without a reliable change clock revalidate each download. It caches no authentication or tenant decisions and serves the descriptor validated for that request. Runtime activation additionally checks the bounded embedded release identity after checksum and required signature verification.
 
 ### Requested change history retains its disclosure authority
