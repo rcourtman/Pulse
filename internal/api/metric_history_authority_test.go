@@ -158,7 +158,11 @@ func readMetricAuthorityResult(t *testing.T, result <-chan historyAuthorityResul
 			t.Errorf("metric history status = %d, want %d: %s", got.response.StatusCode, status, body)
 		}
 		if status != http.StatusOK {
-			if string(body) != "Authentication required\n" || strings.Contains(got.response.Header.Get("Content-Type"), "json") || strings.Contains(string(body), metricAuthorityID) {
+			validDenial := status == http.StatusUnauthorized && string(body) == "Authentication required\n" && !strings.Contains(got.response.Header.Get("Content-Type"), "json")
+			if status == http.StatusForbidden {
+				validDenial = strings.Contains(string(body), `"error":"access_denied"`) && got.response.Header.Get("Content-Type") == "application/json"
+			}
+			if !validDenial || strings.Contains(string(body), metricAuthorityID) {
 				t.Error("withdrawn history disclosed data or implied successful empty JSON")
 			}
 			return metricAuthorityWire{got.response.StatusCode, got.response.Header, string(body)}

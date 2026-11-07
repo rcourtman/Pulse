@@ -5838,6 +5838,40 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Organization withdrawal preserves valid authentication
+
+Synchronous protected replies distinguish an invalid admitted credential (401)
+from a still-authenticated user's lost organization entitlement (403 with the
+stable `access_denied` JSON envelope). The latter never uses the stale-selection
+recovery code: a pending response cannot be retried in a different organization.
+Private response headers and bytes remain withheld; after an admitted prefix,
+withdrawal only stops further writes. Regrant admits a fresh request, never a
+previously denied response. Token identity/scope/binding denials retain401.
+
+The monitoring WebSocket writer checks credentials before organization policy
+on each frame, including queued frames and idle pings. Invalid credentials keep
+1008; a valid user's lost organization access closes with private code4403 and
+fixed reason `Organization access ended`. The client branches on the code, not
+reason text. It stops automatic reconnect/REST recovery, leaves last-known data
+disconnected rather than inventing empty success, and preserves saved auth and
+organization context. An existing warning directs the user to select another
+organization or reload after deliberate regrant; selecting the same org alone
+does not reconnect. Older clients may reconnect with backoff until reloaded.
+
+The API client does not clear/retry a selected organization on403, including
+fresh background reads denied in default. History pins a saved selection even
+for invalid-org recovery, but an absent selection keeps server landing-org
+resolution. Missing non-default organization400 recovery remains unchanged.
+These are withdrawal semantics, not new grants, cancellation of independent
+work, or protection against every unrelated in-flight UI organization switch.
+Native HTTP/WS and media tests cover withdrawal, credential precedence,
+independent membership/readers and same-session fresh regrant; frontend tests
+cover saved credentials/context, background reads, explicit recovery and actual
+1008 authentication handling. Browser evidence additionally exercises the real
+History, API client, WebSocket store and existing warning at desktop/narrow
+light/dark viewports with synthetic source-bound transport data.
+
+
 ### Requested change history retains its disclosure authority
 
 `GET /api/agent/changes` retains the admitted token identity, principal,

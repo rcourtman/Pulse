@@ -109,6 +109,48 @@ describe('websocket store resilience', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps saved authority and stops recovery after organisation withdrawal4403', async () => {
+    sessionStorage.setItem('pulse_auth', 'synthetic-saved-authority');
+    sessionStorage.setItem('pulse_auth_user', 'synthetic-saved-user');
+    sessionStorage.setItem('pulse_org_id', 'acme');
+    localStorage.removeItem('just_logged_out');
+    const before = { ...sessionStorage };
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(0);
+      currentInstance!.onmessage?.({ data: JSON.stringify({ type: 'initialState', data: {
+        activeAlerts: [], resources: [], lastUpdate: Date.now(),
+      } }) } as MessageEvent);
+      const reads = apiFetchJSONMock.mock.calls.length;
+      currentInstance!.onclose?.({ code: 4403, reason: 'Organization access ended' } as CloseEvent);
+      vi.advanceTimersByTime(60000);
+      await flushMicrotasks();
+      expect(store.connected()).toBe(false);
+      expect(store.reconnecting()).toBe(false);
+      expect(instances).toHaveLength(1);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(reads);
+      expect(await store.refreshActiveAlerts()).toBe(false);
+      expect({ ...sessionStorage }).toEqual(before);
+      expect(localStorage.getItem('just_logged_out')).toBeNull();
+      expect(notificationMocks.warning).toHaveBeenCalledWith(
+        'Access to this organization ended. Select another organization or reload after access is restored.', 10000,
+      );
+      store.reconnect();
+      expect(instances).toHaveLength(2);
+    } finally { dispose(); sessionStorage.clear(); }
+  });
+
+  it('still forces Login after actual authentication withdrawal1008', async () => {
+    localStorage.removeItem('just_logged_out');
+    const { dispose } = await createStoreHarness();
+    try {
+      currentInstance!.onclose?.({ code: 1008, reason: 'Monitoring access ended' } as CloseEvent);
+      expect(localStorage.getItem('just_logged_out')).toBe('true');
+      vi.advanceTimersByTime(60000);
+      expect(instances).toHaveLength(1);
+    } finally { dispose(); localStorage.removeItem('just_logged_out'); }
+  });
+
   it('uses exponential reconnect backoff with deterministic jitter', async () => {
     autoOpenSockets = false;
     vi.spyOn(Math, 'random').mockReturnValue(0.5);

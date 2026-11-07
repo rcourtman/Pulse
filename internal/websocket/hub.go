@@ -298,7 +298,8 @@ type Client struct {
 	maxInboundBytes atomic.Int64
 	// authorizeWrite is immutable after admission and called only by writePump.
 	// Authentication remains owned by the API, not this transport package.
-	authorizeWrite func() bool
+	authorizeWrite        func() bool
+	authorizeOrganization func() bool
 }
 
 func (c *Client) inboundLimitBytes() int64 {
@@ -1048,6 +1049,12 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 // current authority. The callback runs only on its writer, before every frame
 // (including queued frames and idle pings). Nil preserves existing callers.
 func (h *Hub) HandleWebSocketWithAuthorization(w http.ResponseWriter, r *http.Request, authorize func() bool) {
+	h.HandleWebSocketWithOrganizationAuthorization(w, r, authorize, nil)
+}
+
+// HandleWebSocketWithOrganizationAuthorization separates lost membership from
+// expired credentials. Both callbacks are immutable and run only on the writer.
+func (h *Hub) HandleWebSocketWithOrganizationAuthorization(w http.ResponseWriter, r *http.Request, authorize, authorizeOrganization func() bool) {
 	log.Info().
 		Str("origin", r.Header.Get("Origin")).
 		Str("host", r.Host).
@@ -1174,10 +1181,11 @@ func (h *Hub) HandleWebSocketWithAuthorization(w http.ResponseWriter, r *http.Re
 		conn:  conn,
 		orgID: orgID,
 		// Keep buffer bounded to avoid holding large state snapshots indefinitely if a client stalls.
-		send:           make(chan []byte, 128),
-		id:             clientID,
-		lastPing:       time.Now(),
-		authorizeWrite: authorize,
+		send:                  make(chan []byte, 128),
+		id:                    clientID,
+		lastPing:              time.Now(),
+		authorizeWrite:        authorize,
+		authorizeOrganization: authorizeOrganization,
 	}
 	// This must be captured from the upgrade URL before registration: initial
 	// state construction begins as soon as the hub accepts the client.
@@ -1971,16 +1979,22 @@ func (c *Client) readPump() {
 	}
 }
 
-// allowWrite checks current authority without disclosing authentication detail.
+// CloseOrganizationAccessEnded is a fixed private-use close code. Authentication
+// failures keep1008; membership withdrawal must not force Login for a valid user.
+const CloseOrganizationAccessEnded = 4403
+
+// allowWrite checks credentials before organization policy and never discloses a
+// queued frame after either ends. No HTTP error is written after the upgrade.
 func (c *Client) allowWrite() bool {
+	code, reason := websocket.ClosePolicyViolation, "Monitoring access ended"
 	if c.authorizeWrite == nil || c.authorizeWrite() {
-		return true
+		if c.authorizeOrganization == nil || c.authorizeOrganization() {
+			return true
+		}
+		code, reason = CloseOrganizationAccessEnded, "Organization access ended"
 	}
-	// Never send an HTTP error or queued data after authority ends. The fixed
-	// policy close is understood by the existing frontend authentication path.
 	_ = c.conn.WriteControl(websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Monitoring access ended"),
-		time.Now().Add(10*time.Second))
+		websocket.FormatCloseMessage(code, reason), time.Now().Add(10*time.Second))
 	return false
 }
 

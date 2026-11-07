@@ -5,7 +5,7 @@
  * The backend maintains proper historical data with 30s sample intervals.
  */
 
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
 // Types matching backend response format
@@ -395,9 +395,14 @@ export class ChartsAPI {
       searchParams.set('maxPoints', Math.round(selection.maxPoints).toString());
     }
     const url = `${this.baseUrl}/metrics-store/history?${searchParams.toString()}`;
-    const response: unknown = selection.signal
-      ? await apiFetchJSON(url, { signal: selection.signal })
-      : await apiFetchJSON(url);
+    // History belongs to the selected resource's organisation. A refusal must
+    // not clear that selection and retry the same resource ID in another org.
+    // With no saved selection, retain the server's normal landing-org choice.
+    const orgID = getOrgID();
+    const response: unknown = await apiFetchJSON(url, {
+      signal: selection.signal,
+      ...(orgID ? { expectedOrgID: orgID } : {}),
+    });
     return parseMetricsHistoryResponse(response, selection);
   }
 

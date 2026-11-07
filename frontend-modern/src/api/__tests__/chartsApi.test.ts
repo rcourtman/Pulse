@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
+  getOrgID: vi.fn(() => null),
 }));
 
 import {
@@ -87,6 +88,7 @@ describe('ChartsAPI', () => {
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/metrics-store/history?resourceType=agent&resourceId=agent-1&metric=cpu&range=14d&maxPoints=321',
+      { signal: undefined },
     );
   });
 
@@ -110,6 +112,7 @@ describe('ChartsAPI', () => {
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/metrics-store/history?resourceType=disk&resourceId=SERIAL884006359727&metric=diskread&range=30m',
+      { signal: undefined },
     );
   });
 
@@ -133,6 +136,7 @@ describe('ChartsAPI', () => {
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/metrics-store/history?resourceType=agent&resourceId=agent-1&metric=cpu&range=24h',
+      { signal: undefined },
     );
   });
 
@@ -156,6 +160,7 @@ describe('ChartsAPI', () => {
 
     expect(apiFetchJSONMock).toHaveBeenCalledWith(
       '/api/metrics-store/history?resourceType=k8s&resourceId=k8s%3Acluster-a%3Apod%3Aapi-1&metric=cpu&range=24h',
+      { signal: undefined },
     );
     expect(toMetricsHistoryAPIResourceType('k8s-cluster')).toBe('k8s');
     expect(toMetricsHistoryAPIResourceType('k8s-node')).toBe('k8s');

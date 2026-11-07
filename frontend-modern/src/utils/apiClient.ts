@@ -694,18 +694,13 @@ class ApiClient {
       });
     }
 
-    // Handle stale/invalid org context by clearing it and retrying once. The
-    // server then resolves the organization: default where the user may use
-    // it, otherwise the first organization they belong to. A refused default
-    // selection is stale context too: multi-organization mode limits the
-    // default organization to instance administrators and its members. Only
-    // reads recover that way: retrying a write would silently apply it to the
-    // organization the server picks instead of the one the user was viewing.
+    // Only a missing organisation is stale context. A membership refusal is
+    // not permission to erase a valid selection and fetch another tenant's
+    // data, including background pollers after a monitoring4403 close.
     const staleOrgStatus =
-      (response.status === 400 &&
-        !!finalHeaders[ORG_HEADER_NAME] &&
-        finalHeaders[ORG_HEADER_NAME] !== 'default') ||
-      (response.status === 403 && (method === 'GET' || method === 'HEAD'));
+      response.status === 400 &&
+      !!finalHeaders[ORG_HEADER_NAME] &&
+      finalHeaders[ORG_HEADER_NAME] !== 'default';
     if (
       staleOrgStatus &&
       retry &&
@@ -717,10 +712,7 @@ class ApiClient {
       let isInvalidOrg = false;
       try {
         const parsed = JSON.parse(text);
-        isInvalidOrg =
-          response.status === 400
-            ? parsed?.error === 'invalid_org'
-            : parsed?.error === 'default_org_access_denied';
+        isInvalidOrg = parsed?.error === 'invalid_org';
       } catch {
         isInvalidOrg = false;
       }

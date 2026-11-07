@@ -9,6 +9,7 @@ import {
   setApiToken,
   setOrgID,
 } from '@/utils/apiClient';
+import { ChartsAPI } from '@/api/charts';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 
 const mockFetch = vi.fn();
@@ -28,6 +29,39 @@ describe('apiClient org context', () => {
   afterEach(() => {
     clearApiToken();
     setOrgID(null);
+  });
+
+  it.each(['access_denied', 'default_org_access_denied'])(
+    'keeps selected History and saved authority after %s without cross-org retry',
+    async (code) => {
+      setOrgID('default');
+      setApiToken('synthetic-saved-history-token');
+      sessionStorage.setItem('pulse_auth_user', JSON.stringify({ username: 'viewer' }));
+      const before = { ...sessionStorage };
+      mockFetch.mockResolvedValue(new Response(JSON.stringify({ error: code }), {
+        status: 403, headers: { 'Content-Type': 'application/json' },
+      }));
+      await expect(ChartsAPI.getMetricsHistory({
+        resourceType: 'disk', resourceId: 'shared-disk-id', range: '1h',
+      })).rejects.toMatchObject({ status: 403 });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('default');
+      expect(mockFetch.mock.calls[0][1].headers['X-API-Token']).toBe('synthetic-saved-history-token');
+      expect({ ...sessionStorage }).toEqual(before);
+      expect(localStorage.getItem('just_logged_out')).toBeNull();
+      expect(getOrgID()).toBe('default');
+      expect(getApiToken()).toBe('synthetic-saved-history-token');
+    },
+  );
+
+  it('lets History without a saved org keep the server landing choice', async () => {
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({
+      resourceType: 'disk', resourceId: 'disk-one', range: '1h', start: 1, end: 2,
+      metrics: {}, source: 'store',
+    })));
+    await ChartsAPI.getMetricsHistory({ resourceType: 'disk', resourceId: 'disk-one', range: '1h' });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBeUndefined();
   });
 
   it('propagates selected org via X-Pulse-Org-ID header', async () => {
@@ -358,29 +392,16 @@ describe('apiClient org context', () => {
     expect(getOrgID()).toBeNull();
   });
 
-  it('clears a refused default selection and retries without org context', async () => {
-    mockFetch
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            error: 'default_org_access_denied',
-            message: 'User is not a member of the default organization',
-          }),
-          { status: 403, headers: { 'Content-Type': 'application/json' } },
-        ),
-      )
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
-
+  it('preserves a refused default selection for background reads without retargeting', async () => {
+    mockFetch.mockResolvedValue(new Response(JSON.stringify({ error: 'default_org_access_denied' }), {
+      status: 403, headers: { 'Content-Type': 'application/json' },
+    }));
     setOrgID('default');
     const response = await apiFetch('/api/state/summary');
-
-    expect(response.status).toBe(200);
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    const [, firstOptions] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect((firstOptions.headers as Record<string, string>)['X-Pulse-Org-ID']).toBe('default');
-    const [, secondOptions] = mockFetch.mock.calls[1] as [string, RequestInit];
-    expect((secondOptions.headers as Record<string, string>)['X-Pulse-Org-ID']).toBeUndefined();
-    expect(getOrgID()).toBeNull();
+    expect(response.status).toBe(403);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][1].headers['X-Pulse-Org-ID']).toBe('default');
+    expect(getOrgID()).toBe('default');
   });
 
   it('does not retarget a write refused in the default organization', async () => {

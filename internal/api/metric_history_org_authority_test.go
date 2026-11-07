@@ -84,7 +84,7 @@ func TestMetricHistoryWithdrawnOrganizationCannotDisclose(t *testing.T) {
 					t.Fatalf("new withdrawn read = %d", response.StatusCode)
 				}
 				f.provider.unblock()
-				readMetricAuthorityResult(t, primary, http.StatusUnauthorized)
+				readMetricAuthorityResult(t, primary, http.StatusForbidden)
 				readMetricAuthorityResult(t, control, http.StatusOK)
 				session := GetSessionStore().GetSession(raw)
 				if session == nil || !session.ExpiresAt.Equal(before.ExpiresAt) || !session.CreatedAt.Equal(before.CreatedAt) || session.Username != before.Username {

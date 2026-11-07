@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -67,7 +68,7 @@ func TestOrgResponseAuthorityWithdrawsWithoutStreamCache(t *testing.T) {
 							t.Errorf("withdrawn write = %d %v", n, err)
 						}
 					})(writer, req)
-					if writer.Code != http.StatusUnauthorized || writer.Body.String() != "Authentication required\n" || writer.Header().Get("X-Private-Result") != "" {
+					if writer.Code != http.StatusForbidden || !strings.Contains(writer.Body.String(), `"error":"access_denied"`) || writer.Header().Get("X-Private-Result") != "" {
 						t.Fatalf("withdrawn response = %d %v %s", writer.Code, writer.Header(), writer.Body)
 					}
 					if principal == "session" && !sessionReadRevalidator(req)() {
@@ -131,7 +132,7 @@ func TestOrgResponseAuthorityWithholdsBodylessAndErrorResults(t *testing.T) {
 				}
 				return
 			}
-			if writer.Code != http.StatusUnauthorized || writer.Body.String() != "Authentication required\n" || writer.Header().Get("X-Private-Result") != "" {
+			if writer.Code != http.StatusForbidden || !strings.Contains(writer.Body.String(), `"error":"access_denied"`) || writer.Header().Get("X-Private-Result") != "" {
 				t.Fatalf("withdrawn %s result = %d %v %s", mode, writer.Code, writer.Header(), writer.Body)
 			}
 		})
@@ -158,7 +159,7 @@ func TestOrgResponseAuthorityRetainsCredentialAndOrganizationIdentity(t *testing
 		}
 		io.WriteString(w, "private")
 	})(writer, req)
-	if writer.Code != http.StatusUnauthorized {
+	if writer.Code != http.StatusForbidden {
 		t.Fatalf("withdrawn inherited admin = %d %s", writer.Code, writer.Body)
 	}
 
@@ -181,7 +182,7 @@ func TestOrgResponseAuthorityRetainsCredentialAndOrganizationIdentity(t *testing
 		*r = *r.WithContext(ctx)
 		io.WriteString(w, "private")
 	})(writer, req)
-	if writer.Code != http.StatusUnauthorized {
+	if writer.Code != http.StatusForbidden {
 		t.Fatalf("retargeted read = %d %s", writer.Code, writer.Body)
 	}
 }
@@ -218,5 +219,59 @@ func TestOrgResponseAuthorityKeepsAuthorizedAndUnboundControls(t *testing.T) {
 				t.Fatalf("control %s changed: %d %s", mode, writer.Code, writer.Body)
 			}
 		})
+	}
+}
+
+func TestOrgResponseAuthorityAuthenticationPrecedesMembershipDenial(t *testing.T) {
+	for _, beforeWork := range []bool{false, true} {
+		t.Run(fmt.Sprint(beforeWork), func(t *testing.T) {
+			installTestRBACManager(t)
+			enableSharedMultiOrgForTest(t)
+			persistence, checker := newOrgAccessFixture(t, false)
+			saveDefaultOrgMembers(t, persistence, "viewer")
+			InitSessionStore(t.TempDir())
+			const raw = "synthetic-dual-withdrawal-session"
+			GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", "viewer")
+			req := orgResponseRequest(t, checker, "default", "viewer")
+			attachSessionReadAdmission(req, raw, GetSessionStore().GetSession(raw))
+			withdraw := func() { GetSessionStore().DeleteSession(raw); saveDefaultOrgMembers(t, persistence) }
+			if beforeWork {
+				withdraw()
+			}
+			writer := httptest.NewRecorder()
+			called := false
+			retainTokenResponseAuthority(&config.Config{}, config.ScopeMonitoringRead, false, func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				withdraw()
+				io.WriteString(w, "private")
+			})(writer, req)
+			if writer.Code != http.StatusUnauthorized || writer.Body.String() != "Authentication required\n" || (beforeWork && called) {
+				t.Fatalf("real authentication withdrawal = %d %s called=%v", writer.Code, writer.Body, called)
+			}
+		})
+	}
+}
+
+func TestOrgResponseAuthorityPreservesUnrelatedMembership(t *testing.T) {
+	installTestRBACManager(t)
+	enableSharedMultiOrgForTest(t)
+	persistence, checker := newOrgAccessFixture(t, false)
+	saveDefaultOrgMembers(t, persistence, "bob")
+	saveDefaultOrgMembers(t, persistence)
+	// Bob's independent acme membership comes from newOrgAccessFixture. Losing
+	// default membership must neither retarget that denied read nor revoke acme.
+	for _, orgID := range []string{"default", "acme"} {
+		rec := httptest.NewRecorder()
+		retainResponseAuthority(&config.Config{}, config.ScopeMonitoringRead, false, responseMediaAudit, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/csv")
+			io.WriteString(w, "synthetic authorized audit\n")
+		})(rec, orgResponseRequest(t, checker, orgID, "bob"))
+		want := http.StatusOK
+		if orgID == "default" {
+			want = http.StatusForbidden
+		}
+		if rec.Code != want {
+			t.Fatalf("%s audit = %d %s", orgID, rec.Code, rec.Body)
+		}
 	}
 }

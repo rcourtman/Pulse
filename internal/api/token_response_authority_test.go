@@ -157,3 +157,32 @@ func TestTokenResponseWriterKeepsTransportFailure(t *testing.T) {
 		t.Fatal("transport failure did not close result writer")
 	}
 }
+
+func TestTokenResponseWriterSeparatesAuthenticationAndOrganizationDenial(t *testing.T) {
+	for _, validAuth := range []bool{false, true} {
+		t.Run(fmt.Sprint(validAuth), func(t *testing.T) {
+			base := httptest.NewRecorder()
+			orgChecks := 0
+			writer := &tokenResponseWriter{writer: base, header: base.Header().Clone(), allowed: func() bool { return validAuth }, orgAllowed: func() bool { orgChecks++; return false }}
+			writer.Header().Set("X-Private-Result", "private")
+			writer.Header().Set("Content-Length", "9999")
+			writer.WriteHeader(http.StatusOK)
+			if n, err := writer.Write([]byte("private")); n != 0 || !errors.Is(err, io.ErrClosedPipe) {
+				t.Fatal("private body escaped")
+			}
+			want := http.StatusUnauthorized
+			if validAuth {
+				want = http.StatusForbidden
+			}
+			if base.Code != want || base.Header().Get("X-Private-Result") != "" || base.Header().Get("Content-Length") != "" {
+				t.Fatalf("denial = %d %v %s", base.Code, base.Header(), base.Body)
+			}
+			if validAuth && !strings.Contains(base.Body.String(), `"error":"access_denied"`) {
+				t.Fatal("membership denial lost stable code")
+			}
+			if !validAuth && orgChecks != 0 {
+				t.Fatal("org denial hid invalid authentication")
+			}
+		})
+	}
+}
