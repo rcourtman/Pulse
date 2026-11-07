@@ -19,6 +19,7 @@
  */
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
@@ -100,8 +101,8 @@ function measureBuild() {
 /**
  * Verify the deployment-installability preload invariant against the built
  * index.html (see the subsystem contract clause on modulepreload posture):
- *   - the import map integrity block exists and covers every JS asset in
- *     dist/assets, so dynamic-import SRI stays enforced without preloading;
+ *   - the import map integrity block covers every JS asset in dist/assets,
+ *     and its values and entry/preload attributes match the actual bytes;
  *   - modulepreload links reference only the entry chunk's static imports —
  *     preloading lazy route chunks (preloadDynamicChunks: true) would fetch
  *     the whole app at cold start and defeat route-level code splitting.
@@ -117,56 +118,117 @@ function checkPreloadPosture() {
     return errors;
   }
 
-  const importmapMatch = html.match(/<script type="importmap">([\s\S]*?)<\/script>/);
+  // Only inventory filenames may be read, never a path supplied by HTML.
+  // Hash raw bytes: decoding a chunk as UTF-8 can replace invalid sequences.
+  const assets = new Map(
+    readdirSync(DIST_ASSETS)
+      .filter((file) => file.endsWith('.js'))
+      .map((file) => [file, readFileSync(join(DIST_ASSETS, file))]),
+  );
+  const hashes = new Map();
+  function checkIntegrity(file, value, context) {
+    if (!assets.has(file)) {
+      errors.push(`${context} references a missing or invalid JS asset`);
+      return;
+    }
+    const tokens = typeof value === 'string' && value.trim() ? value.trim().split(/\s+/) : [];
+    if (
+      tokens.length === 0 ||
+      tokens.some((token) => !/^(sha256|sha384|sha512)-[A-Za-z0-9+/]+={0,2}$/.test(token))
+    ) {
+      errors.push(`${context} has invalid or unsupported integrity metadata`);
+      return;
+    }
+    // Generated output uses one digest. If it ever supplies alternatives,
+    // require all of them to match, not just a weaker matching algorithm.
+    // This deliberately validates a strict subset of browser SRI metadata.
+    for (const token of tokens) {
+      const algorithm = token.slice(0, token.indexOf('-'));
+      const key = `${file}:${algorithm}`;
+      if (!hashes.has(key)) {
+        hashes.set(
+          key,
+          `${algorithm}-${createHash(algorithm).update(assets.get(file)).digest('base64')}`,
+        );
+      }
+      if (token !== hashes.get(key)) {
+        errors.push(`${context} integrity mismatch against built asset bytes`);
+        return;
+      }
+    }
+  }
+
+  // This checks Vite's generated HTML, not arbitrary HTML. A comment cannot
+  // stand in for an actual import map, nor can one of several maps be selected.
+  html = html.replace(/<!--[\s\S]*?-->/g, '');
+  const importmaps = [
+    ...html.matchAll(/<script\b(?=[^>]*\stype="importmap"(?=[\s>]))[^>]*>([\s\S]*?)<\/script>/g),
+  ];
   let integrity = null;
-  if (!importmapMatch) {
+  if (importmaps.length === 0) {
     errors.push('importmap script block missing from index.html (dynamic-import SRI unenforced)');
+  } else if (importmaps.length !== 1) {
+    errors.push('index.html must contain exactly one importmap script block');
   } else {
     let parsed;
     try {
-      parsed = JSON.parse(importmapMatch[1]);
+      parsed = JSON.parse(importmaps[0][1]);
     } catch {
       errors.push('importmap block in index.html is not valid JSON');
     }
-    if (parsed) {
-      if (!parsed.integrity || typeof parsed.integrity !== 'object' || Object.keys(parsed.integrity).length === 0) {
-        errors.push('importmap in index.html has no integrity block (dynamic-import SRI unenforced)');
+    if (parsed !== undefined) {
+      if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        Array.isArray(parsed) ||
+        !parsed.integrity ||
+        typeof parsed.integrity !== 'object' ||
+        Array.isArray(parsed.integrity) ||
+        Object.keys(parsed.integrity).length === 0
+      ) {
+        errors.push(
+          'importmap in index.html has no integrity block (dynamic-import SRI unenforced)',
+        );
       } else {
         integrity = parsed.integrity;
       }
     }
   }
   if (integrity) {
-    for (const file of readdirSync(DIST_ASSETS)) {
-      if (!file.endsWith('.js')) continue;
-      if (!(`/assets/${file}` in integrity)) {
+    for (const file of assets.keys()) {
+      if (!Object.hasOwn(integrity, `/assets/${file}`)) {
         errors.push(`importmap integrity missing entry for /assets/${file}`);
+      } else {
+        checkIntegrity(file, integrity[`/assets/${file}`], `importmap /assets/${file}`);
       }
     }
   }
 
-  const entryMatch = html.match(/<script type="module"[^>]*\bsrc="\/assets\/([^"]+\.js)"[^>]*>/);
+  const entryMatch = html.match(
+    /<script\b(?=[^>]*\stype="module"(?=[\s>]))[^>]*\ssrc="\/assets\/([^"]+\.js)"[^>]*>/,
+  );
   if (!entryMatch) {
     errors.push('module entry script not found in index.html');
     return errors;
   }
   const entryFile = entryMatch[1];
-  if (!/\bintegrity="/.test(entryMatch[0])) {
-    errors.push(`entry script /assets/${entryFile} missing integrity attribute`);
-  }
+  checkIntegrity(
+    entryFile,
+    entryMatch[0].match(/\sintegrity="([^"]*)"/)?.[1],
+    `entry script /assets/${entryFile}`,
+  );
 
-  let entrySource;
-  try {
-    entrySource = readFileSync(join(DIST_ASSETS, entryFile), 'utf8');
-  } catch {
+  if (!assets.has(entryFile)) {
     errors.push(`entry chunk ${entryFile} not found in dist/assets/`);
     return errors;
   }
+  const entrySource = assets.get(entryFile).toString('utf8');
 
   // Static imports/re-exports in Rollup output: import ... from"./x.js",
   // import"./x.js", export ... from"./x.js". Dynamic imports never match:
   // their specifier follows an opening parenthesis, not the keyword.
-  const staticImportRe = /\b(?:import|export)\s*(?:[\w$*{},\s]+?\s*from\s*)?["']\.\/([^"']+\.js)["']/g;
+  const staticImportRe =
+    /\b(?:import|export)\s*(?:[\w$*{},\s]+?\s*from\s*)?["']\.\/([^"']+\.js)["']/g;
   function staticImportsOf(source) {
     const specifiers = [];
     let m;
@@ -184,18 +246,15 @@ function checkPreloadPosture() {
     const file = queue.pop();
     if (allowedPreloads.has(file)) continue;
     allowedPreloads.add(file);
-    let source;
-    try {
-      source = readFileSync(join(DIST_ASSETS, file), 'utf8');
-    } catch {
+    if (!assets.has(file)) {
       errors.push(`statically imported chunk ${file} not found in dist/assets/`);
       continue;
     }
-    queue.push(...staticImportsOf(source));
+    queue.push(...staticImportsOf(assets.get(file).toString('utf8')));
   }
 
-  for (const tag of html.match(/<link rel="modulepreload"[^>]*>/g) ?? []) {
-    const href = tag.match(/\bhref="\/assets\/([^"]+)"/);
+  for (const tag of html.match(/<link\b(?=[^>]*\srel="modulepreload"(?=[\s>]))[^>]*>/g) ?? []) {
+    const href = tag.match(/\shref="\/assets\/([^"]+)"/);
     if (!href) {
       errors.push(`modulepreload link with unrecognized href in index.html: ${tag}`);
       continue;
@@ -205,9 +264,11 @@ function checkPreloadPosture() {
         `modulepreload of lazy chunk /assets/${href[1]} — only the entry's static imports may be preloaded (keep preloadDynamicChunks: false in vite.config.ts)`,
       );
     }
-    if (!/\bintegrity="/.test(tag)) {
-      errors.push(`modulepreload of /assets/${href[1]} missing integrity attribute`);
-    }
+    checkIntegrity(
+      href[1],
+      tag.match(/\sintegrity="([^"]*)"/)?.[1],
+      `modulepreload of /assets/${href[1]}`,
+    );
   }
 
   return errors;
@@ -393,7 +454,7 @@ function check() {
   console.log('index.html preload posture');
   console.log('==========================');
   if (postureErrors.length === 0) {
-    console.log('ok: modulepreload limited to entry static imports; importmap integrity covers all JS assets.');
+    console.log('ok: modulepreload limited to entry static imports; importmap, entry and preload integrity match JS asset bytes.');
   } else {
     for (const message of postureErrors) {
       console.log(`  ${message}`);
