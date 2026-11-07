@@ -22,6 +22,7 @@ export const isNoOrganizationAccessResponse = async (response: Response): Promis
 export const probeNoOrganizationAccess = async (): Promise<boolean> => {
   try {
     const response = await apiFetch('/api/state/summary', {
+      recoverDefaultOrg: true,
       headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
     });
     return await isNoOrganizationAccessResponse(response);

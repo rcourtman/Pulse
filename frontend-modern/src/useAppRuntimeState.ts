@@ -355,6 +355,7 @@ export const useAppRuntimeState = () => {
   // recovery path for a snapshot too large for a websocket frame.
   const loadAuthenticatedBootstrapState = async (): Promise<boolean> => {
     const summaryResponse = await apiFetch('/api/state/summary', {
+      recoverDefaultOrg: true,
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
         Accept: 'application/json',

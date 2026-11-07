@@ -1796,7 +1796,11 @@ protected synchronous results use403/access_denied and monitoring sockets4403.
 Credential withdrawal still uses401/1008, evaluated first. Handler-private bytes
 and headers remain withheld, and denied partial results cannot reopen after
 regrant. Browser clients preserve saved authority/selection and do not retarget
-403 reads; History also pins a saved selection against invalid-org recovery.
+established403 reads; History also pins a saved selection against invalid-org
+recovery. Only unbound bootstrap summary GET/HEAD probes may discard a stale
+saved default selection and retry `default_org_access_denied` through the
+authorized server landing, before activating a workspace or its socket. They
+never discard authentication or retry a generic pending-result `access_denied`.
 The API contract owns this transport detail and its native HTTP/WS and consumer
 regressions; no new permission, public surface or independent-work cancellation
 is introduced. Regrant recovery uses the existing reload or organization switch.

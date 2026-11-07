@@ -5858,8 +5858,16 @@ organization context. An existing warning directs the user to select another
 organization or reload after deliberate regrant; selecting the same org alone
 does not reconnect. Older clients may reconnect with backoff until reloaded.
 
-The API client does not clear/retry a selected organization on403, including
-fresh background reads denied in default. History pins a saved selection even
+The API client does not clear/retry an established selection on403, including
+fresh background reads denied in default. Only the two unbound session-bootstrap
+summary probes opt into recovering a stale saved default on
+`default_org_access_denied`: GET/HEAD only, before activating an organization or
+acquiring its socket. They discard the summary body, clear only the org selection
+and retry once through the server's authorized landing. Generic `access_denied`,
+bound reads, writes and org-neutral requests never use this recovery. A user with
+no authorized organization still sees the existing no-access state. The recovered
+membership is activated by the ordinary organization list before the socket opens.
+History pins a saved selection even
 for invalid-org recovery, but an absent selection keeps server landing-org
 resolution. Missing non-default organization400 recovery remains unchanged.
 These are withdrawal semantics, not new grants, cancellation of independent
@@ -13952,8 +13960,10 @@ deny precedence, or a proxy principal admitted with the admin role) or as an
 explicit default member. A request that names no organization lands in the
 user's first organization, and `resolveTenantOrgID` returns the authorized
 organization so handlers agree with that decision. Other refusals of the
-default organization answer `default_org_access_denied`; the browser client
-clears that stale selection and retries reads only. WebSocket and SSE reads
+default organization answer `default_org_access_denied`; only the unbound browser
+bootstrap summary probes may clear a stale saved default and retry GET/HEAD once
+before entering an organization. Established readers retain their selection and
+the refusal. WebSocket and SSE reads
 re-check the policy every 10 seconds. API-token bindings are unchanged.
 
 The hosted `402 subscription_required` payload applies to Pulse Cloud tenants. A

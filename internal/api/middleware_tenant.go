@@ -250,8 +250,9 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 						Msg("Unauthorized access attempt to organization")
 					code := "access_denied"
 					if orgID == "default" && token == nil {
-						// Clients clear a stale default selection on this
-						// code and retry, landing in the user's own org.
+						// An unbound app-bootstrap read may clear a stale
+						// default selection and land in the user's own org.
+						// Established reads must retain their selected org.
 						code = "default_org_access_denied"
 					}
 					writeJSONError(w, http.StatusForbidden, code, result.Reason)

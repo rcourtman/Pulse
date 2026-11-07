@@ -76,6 +76,10 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   preferSessionAuth?: boolean;
   skipAuth?: boolean;
   skipOrgContext?: boolean;
+  // Only the two unbound session-bootstrap summary probes may recover a
+  // stale default selection. Established readers must never change tenants
+  // merely because access to their selected organization ended.
+  recoverDefaultOrg?: boolean;
   // Reviewed destructive operations can opt out of auth/CSRF/rate-limit
   // retries and bind dispatch to the organisation whose data was confirmed.
   retry?: boolean;
@@ -600,6 +604,7 @@ class ApiClient {
       preferSessionAuth = false,
       skipAuth = false,
       skipOrgContext = false,
+      recoverDefaultOrg = false,
       retry = true,
       expectedOrgID,
       headers = {},
@@ -694,30 +699,41 @@ class ApiClient {
       });
     }
 
-    // Only a missing organisation is stale context. A membership refusal is
-    // not permission to erase a valid selection and fetch another tenant's
-    // data, including background pollers after a monitoring4403 close.
-    const staleOrgStatus =
+    // Recover a missing org as before. A default-membership refusal is only
+    // recoverable during the unbound session-bootstrap summary check, before
+    // the shell activates an organization or acquires its socket. Never
+    // retarget established readers, including polls after monitoring4403.
+    // This precedes CSRF retry, which otherwise returns the same denial early.
+    const missingOrg =
       response.status === 400 &&
       !!finalHeaders[ORG_HEADER_NAME] &&
       finalHeaders[ORG_HEADER_NAME] !== 'default';
+    const bootstrapDefaultDenied =
+      recoverDefaultOrg &&
+      url === '/api/state/summary' &&
+      (method === 'GET' || method === 'HEAD') &&
+      response.status === 403 &&
+      finalHeaders[ORG_HEADER_NAME] === 'default' &&
+      this.getOrgID() === 'default';
     if (
-      staleOrgStatus &&
+      (missingOrg || bootstrapDefaultDenied) &&
       retry &&
       expectedOrgID === undefined &&
       !skipOrgContext &&
       url.startsWith('/api/')
     ) {
       const text = await response.clone().text();
-      let isInvalidOrg = false;
+      let recoverableOrg = false;
       try {
         const parsed = JSON.parse(text);
-        isInvalidOrg = parsed?.error === 'invalid_org';
+        recoverableOrg = missingOrg
+          ? parsed?.error === 'invalid_org'
+          : parsed?.error === 'default_org_access_denied';
       } catch {
-        isInvalidOrg = false;
+        recoverableOrg = false;
       }
 
-      if (isInvalidOrg) {
+      if (recoverableOrg) {
         this.setOrgID(null);
         const retryHeaders: Record<string, string> = { ...finalHeaders };
         delete retryHeaders[ORG_HEADER_NAME];
