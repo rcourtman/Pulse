@@ -39,6 +39,22 @@ func (s *State) GetPBSBackups() []PBSBackup {
 	return backups
 }
 
+// GetPMGBackupsForInstance returns the same ordered primary backup rows as
+// filtering GetSnapshot().PMGBackups by exact Instance. PMGBackup contains only
+// value fields, so the returned slice is detached without copying unrelated
+// gateways, backup sources or resource inventory. Keep empty reads non-nil.
+func (s *State) GetPMGBackupsForInstance(instance string) []PMGBackup {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	backups := []PMGBackup{}
+	for _, backup := range s.PMGBackups {
+		if backup.Instance == instance {
+			backups = append(backups, backup)
+		}
+	}
+	return backups
+}
+
 func (s *State) GetReplicationJobs() []ReplicationJob {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
