@@ -1,13 +1,16 @@
 package installtests
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Windows proof is specifically the supported legacy engine. Missing or newer
@@ -37,20 +40,77 @@ func nativeInstallerPowerShell(t *testing.T) string {
 	return powerShell
 }
 
+// Observe the same process that parses the installer, not a separate version
+// probe that could succeed while the parser fails. Only fixed runtime fields
+// are emitted: no environment, command history, machine name or filesystem paths.
+const powerShellParserCommand = `try {
+  $pulseParserEngine = [System.Management.Automation.PSObject].Assembly
+  $pulseParserIdentity = [ordered]@{
+    powershell_version = $PSVersionTable.PSVersion.ToString()
+    edition = $PSVersionTable.PSEdition
+    dotnet_version = [Environment]::Version.ToString()
+    process_bits = [IntPtr]::Size * 8
+    process_architecture = if ($PSVersionTable.PSEdition -eq 'Core') { [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString() } else { 'unavailable' }
+    engine_version = $pulseParserEngine.GetName().Version.ToString()
+    engine_mvid = $pulseParserEngine.ManifestModule.ModuleVersionId.ToString()
+    engine_sha256 = (Get-FileHash -LiteralPath $pulseParserEngine.Location -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+  }
+  [Console]::Out.WriteLine('PULSE_PARSER_RUNTIME ' + (ConvertTo-Json -InputObject $pulseParserIdentity -Compress))
+} catch {
+  [Console]::Out.WriteLine('PULSE_PARSER_RUNTIME unavailable')
+}
+[Console]::Out.Flush()
+$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:PULSE_PARSER_CHECK_PATH, [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }`
+
+func newPowerShellParserCheck(powerShell, scriptPath string) *exec.Cmd {
+	cmd := exec.Command(powerShell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", powerShellParserCommand)
+	// The path stays data even when a checkout name contains PowerShell syntax.
+	cmd.Env = append(os.Environ(), "PULSE_PARSER_CHECK_PATH="+scriptPath)
+	return cmd
+}
+
+func parserFileIdentity(path string) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return "unavailable"
+	}
+	defer file.Close()
+	digest := sha256.New()
+	size, err := io.Copy(digest, file)
+	if err != nil {
+		return "unavailable"
+	}
+	return fmt.Sprintf("sha256=%x bytes=%d", digest.Sum(nil), size)
+}
+
+func observePowerShellParser(cmd *exec.Cmd, scriptPath string, logf func(string, ...any)) error {
+	// These on-disk identities survive a failure before PowerShell can report
+	// its loaded engine. They do not claim that the engine started or parsed.
+	logf("PowerShell parser input: os=%s arch=%s executable=(%s) script=(%s)",
+		runtime.GOOS, runtime.GOARCH, parserFileIdentity(cmd.Path), parserFileIdentity(scriptPath))
+	started := time.Now()
+	output, err := cmd.CombinedOutput()
+	state := "unavailable"
+	exitCode := -1
+	if cmd.ProcessState != nil {
+		state = cmd.ProcessState.String()
+		exitCode = cmd.ProcessState.ExitCode()
+	}
+	logf("PowerShell parser completion: elapsed_ms=%d exit_code=%d state=%s output_bytes=%d",
+		time.Since(started).Milliseconds(), exitCode, state, len(output))
+	if len(output) > 0 {
+		logf("%s", output)
+	}
+	// Diagnostics neither retry a failed process nor replace its actual result.
+	return err
+}
+
 func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
 	pwsh := nativeInstallerPowerShell(t)
 
 	scriptPath := repoFile("scripts", "install.ps1")
-	cmd := exec.Command(pwsh,
-		"-NoLogo",
-		"-NoProfile",
-		"-NonInteractive",
-		"-Command",
-		`$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:PULSE_INSTALL_PS1_PATH, [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }`,
-	)
-	cmd.Env = append(os.Environ(), "PULSE_INSTALL_PS1_PATH="+scriptPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("install.ps1 failed PowerShell parser check: %v\n%s", err, output)
+	if err := observePowerShellParser(newPowerShellParserCheck(pwsh, scriptPath), scriptPath, t.Logf); err != nil {
+		t.Fatalf("install.ps1 failed PowerShell parser check: %v", err)
 	}
 }
 
@@ -88,16 +148,8 @@ func TestWindowsAgentLifecycleHarnessParsesWithPowerShell(t *testing.T) {
 	pwsh := nativeInstallerPowerShell(t)
 
 	scriptPath := repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1")
-	cmd := exec.Command(pwsh,
-		"-NoLogo",
-		"-NoProfile",
-		"-NonInteractive",
-		"-Command",
-		`$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:PULSE_WINDOWS_LIFECYCLE_PATH, [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }`,
-	)
-	cmd.Env = append(os.Environ(), "PULSE_WINDOWS_LIFECYCLE_PATH="+scriptPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Windows lifecycle harness failed PowerShell parser check: %v\n%s", err, output)
+	if err := observePowerShellParser(newPowerShellParserCheck(pwsh, scriptPath), scriptPath, t.Logf); err != nil {
+		t.Fatalf("Windows lifecycle harness failed PowerShell parser check: %v", err)
 	}
 }
 
