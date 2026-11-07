@@ -91,7 +91,6 @@ function rowAction(operation: Operation, share = selectedShare(operation)) {
         : operation === 'accept incoming'
           ? 'Accept'
           : 'Decline',
-    exact: true,
   });
 }
 function selectedShare(operation: Operation) {
@@ -163,7 +162,6 @@ function expectSavedRows(operation: Operation, applied: boolean) {
     expect(
       within(rowFor(sibling)).getByRole('button', {
         name: operation === 'remove outgoing' ? 'Remove' : 'Accept',
-        exact: true,
       }),
     ).toBeEnabled();
   }
@@ -174,10 +172,8 @@ function expectSavedRows(operation: Operation, applied: boolean) {
     expect(row).toHaveTextContent(applied ? 'Accepted' : 'Pending approval');
     if (operation === 'accept incoming' || operation === 'decline incoming') {
       if (applied)
-        expect(
-          within(row).queryByRole('button', { name: 'Accept', exact: true }),
-        ).not.toBeInTheDocument();
-      else expect(within(row).getByRole('button', { name: 'Accept', exact: true })).toBeEnabled();
+        expect(within(row).queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+      else expect(within(row).getByRole('button', { name: 'Accept' })).toBeEnabled();
     }
   }
   const otherDirection = operation === 'remove outgoing' ? incomingRows() : outgoingRows();
