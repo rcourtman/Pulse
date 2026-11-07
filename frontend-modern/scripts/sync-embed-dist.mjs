@@ -106,19 +106,45 @@ async function publishDirAtomically() {
 
     await rename(stagingDir, targetDir);
   } catch (error) {
-    await rm(stagingDir, { force: true, recursive: true });
+    const failures = [error];
+    const message = (failure) =>
+      failure instanceof Error ? failure.message : String(failure);
+    const details = [message(error)];
+    // Restore usable output before fallible scratch cleanup. A cleanup error
+    // must not strand the only good build under its backup name.
     if (replacedExistingTarget) {
       try {
         await rename(backupDir, targetDir);
-      } catch {
-        // Leave the original failure intact; cleanup best effort only.
+      } catch (restoreError) {
+        failures.push(restoreError);
+        details.push(
+          `previous embedded build could not be restored; backup at ${backupDir}: ${message(restoreError)}`,
+        );
       }
+    }
+    try {
+      await rm(stagingDir, { force: true, recursive: true });
+    } catch (cleanupError) {
+      failures.push(cleanupError);
+      details.push(
+        `staging cleanup failed at ${stagingDir}: ${message(cleanupError)}`,
+      );
+    }
+    if (failures.length > 1) {
+      throw new AggregateError(failures, `Frontend embed publication failed: ${details.join('; ')}`);
     }
     throw error;
   }
 
   if (replacedExistingTarget) {
-    await rm(backupDir, { force: true, recursive: true });
+    try {
+      await rm(backupDir, { force: true, recursive: true });
+    } catch (error) {
+      throw new Error(
+        `Frontend embed published at ${targetDir}, but backup cleanup failed at ${backupDir}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
   }
 }
 

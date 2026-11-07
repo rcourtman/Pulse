@@ -57,7 +57,7 @@ function tree(directory, prefix = '') {
   return files;
 }
 
-function fixture(files, { previous = true } = {}) {
+function fixture(files, { previous = true, failure } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'pulse-embed-sync-'));
   roots.push(root);
   // Execute the unmodified production CLI/helper at their real relative paths,
@@ -76,19 +76,73 @@ function fixture(files, { previous = true } = {}) {
   writeFiles(source, files);
   if (previous) writeFiles(target, oldFiles);
   const script = path.join(root, 'frontend-modern', 'scripts', 'sync-embed-dist.mjs');
+  const operationsFile = path.join(root, 'observed-operations.json');
+  const preload = path.join(root, 'publication-failure.mjs');
+  if (failure) {
+    writeFileSync(preload, `
+import fs from 'node:fs';
+import path from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+const failure = ${JSON.stringify(failure)};
+const target = ${JSON.stringify(target)};
+const operations = [];
+const record = (operation, from, to) => {
+  operations.push({ operation, from, to });
+  fs.writeFileSync(${JSON.stringify(operationsFile)}, JSON.stringify(operations));
+};
+const fail = (operation) => {
+  throw Object.assign(new Error('Synthetic filesystem failure: ' + operation), { code: 'EACCES' });
+};
+const rename = fs.promises.rename;
+fs.promises.rename = async (from, to) => {
+  const operation = from === target ? 'backup' : to === target
+    ? (from.endsWith('.backup') ? 'restore' : 'promote') : 'otherRename';
+  record(operation, from, to);
+  if (failure[operation]) fail(operation);
+  return rename(from, to);
+};
+const rm = fs.promises.rm;
+fs.promises.rm = async (file, options) => {
+  // Pre-copy removals have no output to remove. Inject only real cleanup,
+  // never the preparation of a path that the production script will own.
+  if (fs.existsSync(file) && path.dirname(file) === path.dirname(target)
+      && (file.endsWith('.staging') || file.endsWith('.backup'))) {
+    const operation = file.endsWith('.staging') ? 'stageCleanup' : 'backupCleanup';
+    record(operation, file);
+    if (failure[operation]) fail(operation);
+  }
+  return rm(file, options);
+};
+const cp = fs.promises.cp;
+fs.promises.cp = async (from, to, options) => {
+  record('copy', from, to);
+  if (failure.copy) {
+    // Leave an actual partial copy before returning a deterministic error.
+    await fs.promises.mkdir(to, { recursive: true });
+    await fs.promises.copyFile(path.join(from, 'index.html'), path.join(to, 'index.html'));
+    fail('copy');
+  }
+  return cp(from, to, options);
+};
+syncBuiltinESMExports();
+`);
+  }
   const run = (mode = 'CLI') =>
     spawnSync(
       process.execPath,
-      mode === 'CLI'
+      [...(failure ? ['--import', pathToFileURL(preload).href] : []), ...(mode === 'CLI'
         ? [script]
         : [
             '--input-type=module',
             '-e',
             `import { syncEmbedDir } from ${JSON.stringify(pathToFileURL(script).href)}; await syncEmbedDir({ lock: false });`,
-          ],
+          ])],
       { cwd: root, encoding: 'utf8', timeout: 15_000 },
     );
-  return { root, source, target, run };
+  return {
+    root, source, target, run,
+    operations: () => JSON.parse(readFileSync(operationsFile, 'utf8')),
+  };
 }
 
 function expectNoDebris(f) {
@@ -335,6 +389,123 @@ describe.each(['CLI', 'builder'])('%s embed publication preserves usable output'
     expect(accepted.run(mode).status).toBe(0);
     expect(tree(accepted.target)).toEqual(tree(accepted.source));
     expectNoDebris(accepted);
+  });
+});
+
+describe.each(['CLI', 'builder'])('%s publication failure recovery', (mode) => {
+  function expectFailed(result, f) {
+    expect(result.error).toBeUndefined();
+    expect(result.signal).toBeNull();
+    expect(result.status).toBe(1);
+    expect(result.stdout).not.toContain('Synced frontend embed assets');
+    expect(existsSync(path.join(f.root, 'tmp', 'locks', 'frontend-embed-build.lock'))).toBe(false);
+  }
+
+  it.each(['copy', 'backup', 'promote'])('preserves both trees after a %s failure', (operation) => {
+    const f = fixture(validFiles, { failure: { [operation]: true } });
+    const previous = tree(f.target);
+    const source = tree(f.source);
+    const result = f.run(mode);
+    expectFailed(result, f);
+    expect(result.stderr).toContain(`Synthetic filesystem failure: ${operation}`);
+    expect(tree(f.target)).toEqual(previous);
+    expect(tree(f.source)).toEqual(source);
+    if (operation === 'promote') {
+      expect(f.operations().map((entry) => entry.operation)).toEqual([
+        'copy', 'backup', 'promote', 'restore', 'stageCleanup',
+      ]);
+    }
+    expectNoDebris(f);
+  });
+
+  it.each(['copy', 'validation', 'backup', 'promote'])(
+    'keeps the %s error and restores usable output even when staging cleanup fails',
+    (operation) => {
+      const f = fixture(operation === 'validation' ? { 'index.html': validFiles['index.html'] } : validFiles, {
+        failure: { [operation]: true, stageCleanup: true },
+      });
+      const previous = tree(f.target);
+      const source = tree(f.source);
+      const result = f.run(mode);
+      expectFailed(result, f);
+      expect(result.stderr).toContain(operation === 'validation'
+        ? 'frontend build output incomplete'
+        : `Synthetic filesystem failure: ${operation}`);
+      expect(result.stderr).toContain('Synthetic filesystem failure: stageCleanup');
+      const operations = f.operations();
+      const staging = operations.find((entry) => entry.operation === 'stageCleanup').from;
+      expect(result.stderr).toContain(`staging cleanup failed at ${staging}`);
+      expect(existsSync(staging)).toBe(true);
+      expect(tree(f.source)).toEqual(source);
+      expect(tree(f.target)).toEqual(previous);
+      expect(readdirSync(path.dirname(f.target)).sort()).toEqual(['dist', path.basename(staging)].sort());
+      if (operation === 'promote') {
+        expect(operations.map((entry) => entry.operation)).toEqual([
+          'copy', 'backup', 'promote', 'restore', 'stageCleanup',
+        ]);
+      }
+    },
+  );
+
+  it.each([false, true])('names and preserves the old backup on restore failure (cleanup failure: %s)', (stageCleanup) => {
+    const f = fixture(validFiles, { failure: { promote: true, restore: true, stageCleanup } });
+    const previous = tree(f.target);
+    const source = tree(f.source);
+    const result = f.run(mode);
+    expectFailed(result, f);
+    expect(result.stderr).toContain('Synthetic filesystem failure: promote');
+    expect(result.stderr).toContain('Synthetic filesystem failure: restore');
+    const operations = f.operations();
+    const backup = operations.find((entry) => entry.operation === 'backup').to;
+    const staging = operations.find((entry) => entry.operation === 'stageCleanup').from;
+    expect(result.stderr).toContain(`previous embedded build could not be restored; backup at ${backup}`);
+    if (stageCleanup) {
+      expect(result.stderr).toContain(`staging cleanup failed at ${staging}`);
+      expect(result.stderr).toContain('Synthetic filesystem failure: stageCleanup');
+    }
+    expect(tree(f.source)).toEqual(source);
+    expect(tree(f.target)).toBeNull();
+    expect(tree(backup)).toEqual(previous);
+    expect(existsSync(staging)).toBe(stageCleanup);
+    expect(readdirSync(path.dirname(f.target)).sort()).toEqual([
+      path.basename(backup), ...(stageCleanup ? [path.basename(staging)] : []),
+    ].sort());
+    expect(operations.map((entry) => entry.operation)).toEqual([
+      'copy', 'backup', 'promote', 'restore', 'stageCleanup',
+    ]);
+  });
+
+  it.each([false, true])('does not invent an old embed on first-publication failure (cleanup failure: %s)', (stageCleanup) => {
+    const f = fixture(validFiles, { previous: false, failure: { promote: true, stageCleanup } });
+    const source = tree(f.source);
+    const result = f.run(mode);
+    expectFailed(result, f);
+    expect(result.stderr).toContain('Synthetic filesystem failure: promote');
+    expect(tree(f.source)).toEqual(source);
+    expect(tree(f.target)).toBeNull();
+    expect(f.operations().some((entry) => entry.operation === 'restore')).toBe(false);
+    if (stageCleanup) {
+      const staging = f.operations().find((entry) => entry.operation === 'stageCleanup').from;
+      expect(result.stderr).toContain(`staging cleanup failed at ${staging}`);
+      expect(readdirSync(path.dirname(f.target))).toEqual([path.basename(staging)]);
+    } else {
+      expectNoDebris(f);
+    }
+  });
+
+  it('reports already-published output separately from a failed backup cleanup', () => {
+    const f = fixture(validFiles, { failure: { backupCleanup: true } });
+    const previous = tree(f.target);
+    const source = tree(f.source);
+    const result = f.run(mode);
+    expectFailed(result, f);
+    const backup = f.operations().find((entry) => entry.operation === 'backup').to;
+    expect(result.stderr).toContain(`Frontend embed published at ${f.target}, but backup cleanup failed at ${backup}`);
+    expect(result.stderr).toContain('Synthetic filesystem failure: backupCleanup');
+    expect(tree(f.target)).toEqual(source);
+    expect(tree(f.source)).toEqual(source);
+    expect(tree(backup)).toEqual(previous);
+    expect(readdirSync(path.dirname(f.target)).sort()).toEqual(['dist', path.basename(backup)].sort());
   });
 });
 
