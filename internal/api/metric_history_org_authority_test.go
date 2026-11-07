@@ -40,15 +40,20 @@ func TestMetricHistoryWithdrawnOrganizationCannotDisclose(t *testing.T) {
 				enableSharedMultiOrgForTest(t)
 				t.Setenv("PULSE_DEV", "true")
 				f := newMetricAuthorityFixture(t, entry, nil)
+				// With no role header configured proxy authentication deliberately
+				// grants administration. This fixture instead needs a viewer whose
+				// membership is the only default-organization entitlement.
+				f.router.config.ProxyAuthRoleHeader = "X-Remote-Role"
+				f.router.config.ProxyAuthAdminRole = "admin"
 				const raw = "synthetic-org-history-session"
 				const user = "organization-history-viewer"
 				saveDefaultOrgMembers(t, f.router.multiTenant, user)
 				GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", user)
-				before := GetSessionStore().GetSession(raw).ExpiresAt
 				control := f.begin(t, metricAuthorityControl, "header")
 				req := f.request(t, raw, transport)
 				if transport == "proxy" {
 					req.Header.Set("X-Remote-User", user)
+					req.Header.Set("X-Remote-Role", "viewer")
 				}
 				primary := make(chan historyAuthorityResult, 1)
 				go func() { response, err := f.server.Client().Do(req); primary <- historyAuthorityResult{response, err} }()
@@ -62,6 +67,9 @@ func TestMetricHistoryWithdrawnOrganizationCannotDisclose(t *testing.T) {
 				case <-time.After(5 * time.Second):
 					t.Fatal("history never reached its provider gate")
 				}
+				// Authentication normally slides expiry. Snapshot after admission,
+				// so only the withdrawal/result step is under comparison.
+				before := GetSessionStore().GetSession(raw)
 				revokeMetricHistoryOrgMembership(t, f, user)
 				// The pending result was already admitted. A new request must also be
 				// denied by TenantMiddleware, not be silently retargeted elsewhere.
@@ -79,7 +87,7 @@ func TestMetricHistoryWithdrawnOrganizationCannotDisclose(t *testing.T) {
 				readMetricAuthorityResult(t, primary, http.StatusUnauthorized)
 				readMetricAuthorityResult(t, control, http.StatusOK)
 				session := GetSessionStore().GetSession(raw)
-				if session == nil || !session.ExpiresAt.Equal(before) {
+				if session == nil || !session.ExpiresAt.Equal(before.ExpiresAt) || !session.CreatedAt.Equal(before.CreatedAt) || session.Username != before.Username {
 					t.Fatal("organization removal altered saved session authority")
 				}
 				// A deliberate regrant admits a fresh read, not the already-denied
