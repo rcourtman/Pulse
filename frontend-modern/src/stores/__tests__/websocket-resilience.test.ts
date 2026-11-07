@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEffect, createRoot } from 'solid-js';
+import type { Alert } from '@/types/api';
 
 // Mirrors MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES in the store under test.
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 32 * 1024 * 1024;
@@ -89,6 +90,21 @@ const createStoreHarness = async () => {
   return { store, dispose };
 };
 
+const withdrawalAlert: Alert = {
+  id: 'agent:retained-host-cpu',
+  type: 'cpu',
+  level: 'critical',
+  resourceId: 'agent:retained-host',
+  resourceName: 'retained-host',
+  node: 'retained-host',
+  instance: 'retained-host',
+  message: 'Last-known CPU above threshold',
+  value: 96,
+  threshold: 90,
+  startTime: '2026-05-14T07:59:00Z',
+  acknowledged: false,
+};
+
 describe('websocket store resilience', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -98,6 +114,7 @@ describe('websocket store resilience', () => {
     instances.length = 0;
     vi.setSystemTime(new Date('2026-05-14T08:00:00.000Z'));
     notificationMocks.success.mockClear();
+    notificationMocks.warning.mockClear();
     apiFetchJSONMock.mockReset();
     installWebSocketMock();
   });
@@ -151,6 +168,156 @@ describe('websocket store resilience', () => {
     } finally {
       dispose();
       sessionStorage.clear();
+    }
+  });
+
+  it.each(['empty', 'nonempty'] as const)(
+    'withdrawal recovery: keeps a cold read unavailable after a late %s response',
+    async (response) => {
+      let resolveRecovery!: (alerts: Alert[]) => void;
+      apiFetchJSONMock.mockReturnValueOnce(
+        new Promise<Alert[]>((resolve) => {
+          resolveRecovery = resolve;
+        }),
+      );
+      const { store, dispose } = await createStoreHarness();
+      try {
+        vi.advanceTimersByTime(1);
+        const recovery = store.refreshActiveAlerts();
+        expect(apiFetchJSONMock).toHaveBeenCalledExactlyOnceWith('/api/alerts/active');
+        expect(store.activeAlertsHydrationStatus()).toBe('pending');
+
+        currentInstance!.readyState = MockWebSocketClass.CLOSED;
+        currentInstance!.onclose?.({
+          code: 4403,
+          reason: 'Organization access ended',
+        } as CloseEvent);
+        expect(store.activeAlertsHydrationStatus()).toBe('unavailable');
+
+        resolveRecovery(response === 'empty' ? [] : [withdrawalAlert]);
+        await expect(recovery).resolves.toBe(false);
+        expect(store.activeAlertsHydrationStatus()).toBe('unavailable');
+        expect(Object.keys(store.activeAlerts)).toEqual([]);
+        expect(store.state.activeAlerts).toEqual([]);
+        expect(store.resourceSnapshotReceived()).toBe(false);
+        vi.advanceTimersByTime(60_000);
+        await flushMicrotasks();
+        await expect(store.refreshActiveAlerts()).resolves.toBe(false);
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+        expect(instances).toHaveLength(1);
+        expect(store.connected()).toBe(false);
+        expect(store.reconnecting()).toBe(false);
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it('withdrawal recovery: preserves nonempty last-known alerts instead of accepting a late empty list', async () => {
+    let resolveRecovery!: (alerts: Alert[]) => void;
+    apiFetchJSONMock.mockReturnValueOnce(
+      new Promise<Alert[]>((resolve) => {
+        resolveRecovery = resolve;
+      }),
+    );
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const snapshotTime = Date.now();
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'initialState',
+          data: {
+            resources: [{ id: 'agent:retained-host', type: 'agent', name: 'retained-host' }],
+            activeAlerts: [withdrawalAlert],
+            recentlyResolved: [],
+            lastUpdate: snapshotTime,
+          },
+        }),
+      } as MessageEvent);
+      expect(store.activeAlerts[withdrawalAlert.id]).toMatchObject(withdrawalAlert);
+      const recovery = store.refreshActiveAlerts();
+      expect(apiFetchJSONMock).toHaveBeenCalledExactlyOnceWith('/api/alerts/active');
+
+      currentInstance!.readyState = MockWebSocketClass.CLOSED;
+      currentInstance!.onclose?.({ code: 4403, reason: 'Organization access ended' } as CloseEvent);
+      resolveRecovery([]);
+      await expect(recovery).resolves.toBe(false);
+
+      expect(store.connected()).toBe(false);
+      expect(store.reconnecting()).toBe(false);
+      expect(store.initialDataReceived()).toBe(false);
+      expect(store.resourceSnapshotReceived()).toBe(true);
+      expect(store.activeAlertsHydrationStatus()).toBe('ready');
+      expect(Object.keys(store.activeAlerts)).toEqual([withdrawalAlert.id]);
+      expect(store.activeAlerts[withdrawalAlert.id]).toMatchObject(withdrawalAlert);
+      expect(store.state.activeAlerts).toEqual([withdrawalAlert]);
+      expect(store.state.resources.map((resource) => resource.id)).toEqual(['agent:retained-host']);
+      expect(store.state.lastUpdate).toBe(snapshotTime);
+      await expect(store.refreshActiveAlerts()).resolves.toBe(false);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('withdrawal recovery: lets deliberate reconnect recover independently of the withdrawn pending read', async () => {
+    let resolveObsolete!: (alerts: Alert[]) => void;
+    let resolveCurrent!: (alerts: Alert[]) => void;
+    apiFetchJSONMock
+      .mockReturnValueOnce(
+        new Promise<Alert[]>((resolve) => {
+          resolveObsolete = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise<Alert[]>((resolve) => {
+          resolveCurrent = resolve;
+        }),
+      );
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const withdrawnSocket = currentInstance!;
+      const obsolete = store.refreshActiveAlerts();
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+      withdrawnSocket.readyState = MockWebSocketClass.CLOSED;
+      withdrawnSocket.onclose?.({ code: 4403, reason: 'Organization access ended' } as CloseEvent);
+      expect(store.activeAlertsHydrationStatus()).toBe('unavailable');
+
+      store.reconnect();
+      vi.advanceTimersByTime(1);
+      expect(instances).toHaveLength(2);
+      const current = store.refreshActiveAlerts();
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+      expect(current).not.toBe(obsolete);
+      expect(store.activeAlertsHydrationStatus()).toBe('pending');
+
+      const currentAlert = {
+        ...withdrawalAlert,
+        value: 98,
+        message: 'Current recovery after reconnect',
+      };
+      resolveCurrent([currentAlert]);
+      await expect(current).resolves.toBe(true);
+      expect(store.activeAlertsHydrationStatus()).toBe('ready');
+      expect(store.state.activeAlerts).toEqual([currentAlert]);
+      // The older promise must not overwrite even the same alert ID, and an
+      // obsolete socket callback must not withdraw the replacement connection.
+      resolveObsolete([withdrawalAlert]);
+      await expect(obsolete).resolves.toBe(false);
+      withdrawnSocket.onclose?.({ code: 4403, reason: 'Late old close' } as CloseEvent);
+      expect(store.connected()).toBe(true);
+      expect(store.reconnecting()).toBe(false);
+      expect(store.activeAlerts[withdrawalAlert.id]).toMatchObject(currentAlert);
+      expect(store.state.activeAlerts).toEqual([currentAlert]);
+      expect(notificationMocks.warning).toHaveBeenCalledTimes(1);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+      resolveObsolete([]);
+      resolveCurrent([]);
+      await flushMicrotasks();
     }
   });
 
