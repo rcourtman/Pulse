@@ -110,7 +110,10 @@ describe('websocket store resilience', () => {
   });
 
   it('keeps saved authority and stops recovery after organisation withdrawal4403', async () => {
-    sessionStorage.setItem('pulse_auth', 'synthetic-saved-authority');
+    sessionStorage.setItem(
+      'pulse_auth',
+      JSON.stringify({ type: 'token', value: 'synthetic-saved-authority' }),
+    );
     sessionStorage.setItem('pulse_auth_user', 'synthetic-saved-user');
     sessionStorage.setItem('pulse_org_id', 'acme');
     localStorage.removeItem('just_logged_out');
