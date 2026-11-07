@@ -55,6 +55,7 @@
     "scripts/installtests/native_unix_contract_runner_test.go",
     "scripts/installtests/native_windows_exit_test.go",
     "scripts/installtests/pbs_api_guidance_test.go",
+    "scripts/installtests/powershell_parser_diagnostics_test.go",
     "scripts/installtests/private_bootstrap_test.go",
     "scripts/installtests/provider_msp_deploy_test.go",
     "scripts/installtests/provider_msp_startup_command_test.go",
